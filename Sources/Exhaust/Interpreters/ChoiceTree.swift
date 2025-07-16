@@ -19,3 +19,23 @@ enum ChoiceTree: Equatable {
     /// Represents a nested group of choices that don't have a specific semantic meaning.
     indirect case group([ChoiceTree])
 }
+
+extension ChoiceTree {
+    var complexity: UInt64 {
+        switch self {
+        case .choice(let uInt64):
+            return uInt64
+        case .sequence(_, var elements, _), .branch(_, var elements), .group(var elements):
+            var complexity = UInt64(0)
+            while elements.isEmpty == false {
+                let element = elements.removeLast()
+                let elementComplexity = element.complexity
+                if complexity &+ elementComplexity < complexity {
+                    return UInt64.max
+                }
+                complexity += elementComplexity
+            }
+            return complexity
+        }
+    }
+}
