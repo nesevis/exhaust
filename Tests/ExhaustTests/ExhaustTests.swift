@@ -19,14 +19,8 @@ import Testing
         let age: Int
         let height: Double
     }
-    let ageGen = Gen.choose(in: 0...150)
-    let heightGen = Gen.choose(in: Double(120)...180)
-    let keypath = \Person.age
-    
-    let lensedAge = Gen.lens(into: \Person.age, ageGen)
-    let lensedHeight = Gen.lens(into: \Person.height, heightGen)
-//    let zipped = Gen.zip(lensedAge, lensedHeight)
-//        .map { Person(age: $0, height: $1) }
+    let lensedAge = Gen.lens(into: \Person.age, Gen.choose(in: 0...150))
+    let lensedHeight = Gen.lens(into: \Person.height, Gen.choose(in: Double(120)...180))
     let zipped = lensedAge.bind { age in
         lensedHeight.map { height in
             Person(age: age, height: height)
@@ -40,4 +34,68 @@ import Testing
         #expect(replayed! == result)
     }
     #expect(true)
+}
+
+@Test("Shrinker finds minimal failing Person")
+func testPersonShrinking() {
+    struct Person: Equatable {
+        let age: Int
+        let height: Int
+    }
+    let shrinker = Shrinker()
+    
+    let lensedAge = Gen.lens(into: \Person.age, Gen.choose(in: 0...1500))
+    let lensedHeight = Gen.lens(into: \Person.height, Gen.choose(in: 25...250))
+    let personGen = lensedAge.bind { age in
+        lensedHeight.map { height in
+            Person(age: age, height: height)
+        }
+    }
+    
+    // The test property: fails if the age is over 50 AND the height is under 150.
+    let isFailing: (Person) -> Bool = { person in
+        person.age >= 51 && person.height < 150 && person.height >= 99
+    }
+    
+    // An initial, large failing value.
+    let initialFailingValue = Person(age: 997, height: 140)
+    
+    // Pre-condition: make sure our initial value actually fails.
+    #expect(isFailing(initialFailingValue))
+    
+    // Act: Run the shrinker.
+    let shrunkenValue = shrinker.shrink(
+        initialFailingValue,
+        using: personGen,
+        where: isFailing
+    )
+    
+    // Assert: The shrinker should find the minimal boundary case.
+    // The shrinker will try ages 0, 50, 75, etc., and will find that 51 is the smallest age that fails.
+    // The height cannot be shrunk further without making the test pass.
+    let expectedMinimalValue = Person(age: 51, height: 99)
+    #expect(shrunkenValue == expectedMinimalValue)
+}
+
+@Test("Shrinking something with strings!")
+func testStringObjectShrinking() {
+    struct Thing: Equatable {
+        let name: String
+    }
+    let shrinker = Shrinker()
+    
+    let thingGen = Gen.lens(into: \Thing.name, Gen.arrayOf(Gen.choose(type: Character.self)))
+        .map { String($0) }
+        .map { Thing(name: $0) }
+    
+    let property: (Thing) -> Bool = { thing in
+        thing.name.contains(where: { $0.isUppercase })
+    }
+    let result = Interpreters.generate(thingGen)!
+    
+    let failing = Thing(name: "aleXander kolbu")
+    let expectedMinimumValue = Thing(name: "A")
+    let shrunken = shrinker.shrink(failing, using: thingGen, where: property)
+    #expect(expectedMinimumValue == shrunken)
+    
 }

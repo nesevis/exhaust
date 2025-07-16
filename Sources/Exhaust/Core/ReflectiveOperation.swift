@@ -15,11 +15,13 @@ enum ReflectiveOperation<Input> {
     // In Swift, you might need another layer of erasure.
     // ... other cases like chooseInteger, getSize etc.
     
-    /// Gets the current size parameter from the context. The Output must be Int.
+    /// Gets the current size parameter from the context. The Output must be UInt64.
+    /// TODO: Remove. Does not work with reflect
     case getSize
     
     /// Executes a sub-generator with a modified size.
-    case resize(to: Int, next: ReflectiveGen<Input, Any>)
+    /// TODO: Remove. Does not work with reflect
+    case resize(to: UInt64, next: ReflectiveGen<Input, Any>)
     
     // TODO: add `from`?
     case chooseBits(min: UInt64, max: UInt64)

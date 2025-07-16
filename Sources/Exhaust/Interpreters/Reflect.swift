@@ -95,8 +95,6 @@ extension Interpreters {
             return reflectRecursive(next, onFinalOutput: subValue)
                 .map { ($0.value, $0.path) }
         case .chooseBits(let min, let max):
-            // CHOOSE's JOB: Try to cast the final output to a comparable primitive.
-            // Kolbu We have an instance of the output here, but we don't know what part of the output object this generator corresponds to
             guard let convertibleValue = finalOutput as? any BitPatternConvertible else {
                 return []
             }

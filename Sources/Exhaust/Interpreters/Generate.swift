@@ -7,10 +7,10 @@
 
 enum Interpreters {
     final class GenerationContext {
-        var size: Int
+        var size: UInt64
         var randomNumberGenerator: any RandomNumberGenerator
         
-        init(size: Int, using rng: any RandomNumberGenerator) {
+        init(size: UInt64, using rng: any RandomNumberGenerator) {
             self.size = size
             self.randomNumberGenerator = rng
         }
@@ -25,7 +25,7 @@ enum Interpreters {
     
     public static func generate<Output>(
         _ gen: ReflectiveGen<Void, Output>, // Constrained to Input == Void
-        initialSize: Int = 10,
+        initialSize: UInt64 = 10,
         using rng: (any RandomNumberGenerator)? = nil
     ) -> Output? {
         // Delegate to the main generate function, providing the placeholder input.
@@ -35,7 +35,7 @@ enum Interpreters {
     public static func generate<Input, Output>(
         _ gen: ReflectiveGen<Input, Output>,
         with input: Input,
-        initialSize: Int = 10,
+        initialSize: UInt64 = 10,
         using rng: (any RandomNumberGenerator)? = nil
     ) -> Output? {
         // Use the provided PRNG or default to the system's.
