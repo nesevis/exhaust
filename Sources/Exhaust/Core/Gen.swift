@@ -70,8 +70,6 @@ enum Gen {
                 return transform(typedInput)
             }
             return .lmap(transform: newTransform, next: next)
-        case .getSize:
-            return .getSize
         case let .lens(path, next):
             return .lens(path, next: next.mapOperation(eraseInputType(from:)))
         case let .chooseBits(min, max):
@@ -176,11 +174,6 @@ enum Gen {
         return comap({ (inputValue: Value) -> Value? in
             inputValue == value ? inputValue : nil
         }, baseGenerator)
-    }
-    
-    /// Creates a generator that produces the current size from the interpreter's context.
-    static func getSize() -> ReflectiveGen<Void, UInt64> {
-        liftF(.getSize)
     }
     
     /// Creates a generator for an array of random values.

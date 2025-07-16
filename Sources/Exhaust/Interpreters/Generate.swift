@@ -109,9 +109,6 @@ enum Interpreters {
                 
                 // Should be unreachable if totalWeight > 0
                 return nil
-                
-            case .getSize:
-                return runContinuation(context.size)
             case let .lens(_, next):
                 // The path is not used in the forward pass
                 return runContinuation(next)

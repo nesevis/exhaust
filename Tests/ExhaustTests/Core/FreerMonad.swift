@@ -113,11 +113,11 @@ func monadAssociativity() {
     let monad: LoggingFreerMonad<String> = log("Start").map { "Value from m" }
 
     let function1: (String) -> LoggingFreerMonad<Int> = { val in
-        log("function received '\(val)'").map { 42 }
+        log("function1 received '\(val)'").map { 42 }
     }
     
     let function2: (Int) -> LoggingFreerMonad<Bool> = { val in
-        log("result received \(val)").map { true }
+        log("function2 received \(val)").map { true }
     }
     
     // Act

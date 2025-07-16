@@ -135,8 +135,6 @@ extension Interpreters {
             }
             let finalTree = ChoiceTree.sequence(length: length, elements: combinedPath)
             return [(resultForContinuation: combinedResults, path: [finalTree])]
-        case .getSize:
-            fatalError("Should not be included!")
         }
     }
 }

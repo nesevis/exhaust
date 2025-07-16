@@ -13,11 +13,6 @@ enum ReflectiveOperation<Input> {
     case prune(next: ReflectiveGen<Any, Any>)
     // This is tricky. In Haskell, prune changes the `b` parameter to `Maybe b`.
     // In Swift, you might need another layer of erasure.
-    // ... other cases like chooseInteger, getSize etc.
-    
-    /// Gets the current size parameter from the context. The Output must be UInt64.
-    /// TODO: Remove. Does not work with reflect
-    case getSize
     
     // TODO: add `from`?
     case chooseBits(min: UInt64, max: UInt64)
