@@ -21,5 +21,8 @@ enum ReflectiveOperation<Input> {
     /// Executes a sub-generator with a modified size.
     case resize(to: Int, next: ReflectiveGen<Input, Any>)
     
-    // TODO: add `from`? and `choose`
+    // TODO: add `from`?
+    case chooseBits(min: UInt64, max: UInt64)
+    
+    case zip(_ genA: ReflectiveGen<Input, Any>, _ genB: ReflectiveGen<Input, Any>)
 }

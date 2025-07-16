@@ -55,6 +55,65 @@ enum Gen {
         case let .resize(to, next):
             let newNext = next.mapOperation(eraseInputType(from:))
             return .resize(to: to, next: newNext)
+        case let .chooseBits(min, max):
+            return .chooseBits(min: min, max: max)
+        case let .zip(a, b):
+            return .zip(
+                a.mapOperation(eraseInputType(from:)),
+                b.mapOperation(eraseInputType(from:))
+            )
+        }
+    }
+    
+    static func choose<T: BitPatternConvertible & Strideable>(
+        in range: Range<T>
+    ) -> ReflectiveGen<Void, T> where T.Stride : SignedInteger {
+        
+        // 1. Determine the effective upper bound. For a range `a..<b`, the last
+        //    integer value is `b - 1`. The `advanced(by: -1)` method is the
+        //    generic way to do this for any Strideable type.
+        let inclusiveUpperBound = range.upperBound.advanced(by: -1)
+        
+        // 2. Check that the resulting range is valid.
+        precondition(range.lowerBound <= inclusiveUpperBound, "The range is empty or invalid")
+        
+        // 3. Create a new *ClosedRange* from the calculated bounds.
+        let inclusiveRange = range.lowerBound...inclusiveUpperBound
+        
+        // 4. Delegate to the existing `choose(in: ClosedRange<T>)` function.
+        //    This avoids code duplication and keeps the core logic in one place.
+        return choose(in: inclusiveRange)
+    }
+    
+    static func choose<T: BitPatternConvertible>(in range: ClosedRange<T>? = nil, type: T.Type = T.self) -> ReflectiveGen<Void, T> {
+        
+        // 1. Determine the range of raw UInt64 bits to generate.
+        //    This logic delegates the responsibility of defining the range to the type `T` itself.
+        //    For example, for `Int`, this will now be the full `UInt64` range to support negatives.
+        let minBits = range?.lowerBound.bitPattern64 ?? T.bitPatternRange.lowerBound
+        let maxBits = range?.upperBound.bitPattern64 ?? T.bitPatternRange.upperBound
+
+        // 2. Create the unified, type-agnostic operation. The interpreter only needs to know
+        //    how to generate a UInt64 within these bounds.
+        let op = ReflectiveOperation<Void>.chooseBits(min: minBits, max: maxBits)
+        
+        // 3. Construct the FreerMonad by embedding the type-specific decoding logic
+        //    inside the continuation. This is the core of the design.
+        return .impure(operation: op) { result in
+            // a. The interpreter will execute the operation and pass the raw `UInt64` result here.
+            guard let convertible = result as? (any BitPatternConvertible) else {
+                // This signifies a bug in the interpreter, not user code.
+                fatalError("Interpreter failed to provide a UInt64 for a chooseBits operation.")
+            }
+            
+            // b. The continuation uses the protocol's required initializer to convert the
+            //    raw bits back into the final, strongly-typed `T`. This is where the
+            //    magic of two's complement or IEEE 754 happens, specific to type `T`.
+            // Kolbu: This works both in generate and reflect
+            let finalValue = T(bitPattern: convertible.bitPattern64)
+            
+            // c. Wrap the final value in `.pure` to complete this branch of the monadic computation.
+            return .pure(finalValue)
         }
     }
     
@@ -115,5 +174,33 @@ enum Gen {
         
         // The continuation simply passes through the result of the inner generator.
         return liftF(op)
+    }
+    
+    static func zip<Input, A, B>(
+        _ genA: ReflectiveGen<Input, A>,
+        _ genB: ReflectiveGen<Input, B>
+    ) -> ReflectiveGen<Input, (A, B)> {
+        
+        // 1. Erase the output types of the sub-generators to `Any` so they can be
+        //    stored in the `.zip` operation case.
+        let erasedGenA = genA.map { $0 as Any }
+        let erasedGenB = genB.map { $0 as Any }
+
+        // 2. Create the `.zip` operation.
+        let op = ReflectiveOperation<Input>.zip(erasedGenA, erasedGenB)
+        
+        let intermediate: ReflectiveGen<Input, (Any,Any)> = liftF(op)
+        
+        // 3. Lift the operation into a FreerMonad. The continuation defines how the
+        //    interpreter's result (which will be `(Any, Any)`) is decoded.
+        return intermediate.map { anyTuple -> (A, B) in
+            // The interpreter will produce a tuple of `(Any, Any)`.
+            // The continuation's job is to cast it back to the strong types `(A, B)`.
+            guard let a = anyTuple.0 as? A,
+                  let b = anyTuple.1 as? B else {
+                fatalError("Type mismatch in zip continuation. This is an interpreter bug.")
+            }
+            return (a, b)
+        }
     }
 }

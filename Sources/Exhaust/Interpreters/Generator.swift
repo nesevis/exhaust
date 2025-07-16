@@ -119,9 +119,25 @@ enum Interpreters {
                 guard let result = self.generateRecursive(nextGen, with: inputValue, context: resizedContext) else { return nil }
                 return runContinuation(result)
                 
-                //                case .chooseInteger(let min, let max):
-                //                    let result = Int.random(in: min...max, using: &context.randomNumberGenerator)
-                //                    return runContinuation(result)
+            case .chooseBits(let min, let max):
+                // 1. Generate the raw, random bits. The interpreter's only job
+                //    is to produce entropy within the specified bounds. It has
+                //    no knowledge of the final `Output` type (e.g., Int, Float).
+                let randomBits = UInt64.random(in: min...max, using: &context.randomNumberGenerator)
+                
+                // 2. Pass the raw UInt64 bits to the continuation.
+                //    The `continuation` for a `FreeFunctions.choose<T>()` call was
+                //    constructed to specifically expect a `UInt64` and perform
+                //    the `T(bitPattern:)` decoding itself before continuing the chain.
+                return runContinuation(randomBits)
+            case let .zip(a, b):
+                guard
+                    let resultA = generateRecursive(a, with: inputValue, context: context),
+                    let resultB = generateRecursive(b, with: inputValue, context: context)
+                else {
+                    return nil
+                }
+                return runContinuation((resultA, resultB))
             }
         }
     }
