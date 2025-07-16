@@ -239,32 +239,6 @@ struct Shrinker {
         }
     }
     
-    private func shrinkNumberConservatively(_ n: UInt64) -> [UInt64] {
-        var shrinks: [UInt64] = []
-        
-        // For character values, try meaningful shrinks
-        if (33...125).contains(n) {
-            // Try common minimal characters first
-            let commonChars: [UInt64] = [65, 97, 48] // 'A', 'a', '0'
-            for char in commonChars {
-                if char < n {
-                    shrinks.append(char)
-                }
-            }
-        }
-        
-        // Then try standard binary search shrinking
-        if n > 0 {
-            var x = n / 2
-            while x > 0 {
-                shrinks.append(n - x)
-                x /= 2
-            }
-        }
-        
-        return shrinks
-    }
-    
     private func shrinkNumberAggressively(_ number: UInt64, validRange: ClosedRange<UInt64>) -> [UInt64] {
         var shrinks: [UInt64] = []
         
