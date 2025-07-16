@@ -33,7 +33,6 @@ extension Interpreters {
         _ gen: ReflectiveGen<Input, Output>,
         onFinalOutput finalOutput: Any
     ) -> [(value: Output, path: [String])] { // Still returns typed Output and path
-        
         switch gen {
         case .pure(let value):
             // The pure value is the result for this path. No check needed here.
@@ -44,7 +43,7 @@ extension Interpreters {
             let intermediateResults = interpretOperationBackward(operation, onFinalOutput: finalOutput)
             
             // 2. For each successful intermediate result...
-            return intermediateResults.flatMap { (intermediateValue: Any, partialPath: [String]) in
+            let results = intermediateResults.flatMap { (intermediateValue: Any, partialPath: [String]) in
                 let nextGen = continuation(intermediateValue)
                 // The `finalOutput` is passed down UNCHANGED. This is the crucial part.
                 let finalResults = reflectRecursive(nextGen, onFinalOutput: finalOutput)
@@ -52,6 +51,7 @@ extension Interpreters {
                     (finalValue, partialPath + restOfPath)
                 }
             }
+            return results
         }
     }
     
@@ -63,7 +63,6 @@ extension Interpreters {
         _ op: ReflectiveOperation<Input>,
         onFinalOutput finalOutput: Any
     ) -> [(resultForContinuation: Any, path: [String])] {
-        
         switch op {
         case .lmap(let transform, let nextGen):
             // LMAP's JOB: Try to cast the final output to its expected Input type.
@@ -89,7 +88,12 @@ extension Interpreters {
                     (value, (label.map { [$0] } ?? []) + path)
                 }
             }
-
+        case let .lens(path, next):
+            guard let subValue = path.extract(from: finalOutput) else {
+                return []
+            }
+            return reflectRecursive(next, onFinalOutput: subValue)
+                .map { ($0.value, $0.path) }
         case .chooseBits(let min, let max):
             // CHOOSE's JOB: Try to cast the final output to a comparable primitive.
             // Kolbu We have an instance of the output here, but we don't know what part of the output object this generator corresponds to
@@ -97,43 +101,14 @@ extension Interpreters {
                 return []
             }
             let bitPattern = convertibleValue.bitPattern64
-            guard (min...max).contains(bitPattern) else { return [] }
-            
-            // Success! The result for the continuation is the value itself.
-            return [(resultForContinuation: finalOutput, path: [String(bitPattern)])]
-        case .zip(let genA, let genB):
-            // 1. The `targetValue` for a zip operation must be a tuple of two elements.
-            //    We use reflection to destructure it.
-            let mirror = Mirror(reflecting: finalOutput)
-            guard mirror.displayStyle == .tuple, mirror.children.count == 2 else {
-                // This zip operation could not have produced a non-tuple target.
+            guard (min...max).contains(bitPattern) else {
                 return []
             }
             
-            let targetA = mirror.children[AnyIndex(0)].value
-            let targetB = mirror.children[AnyIndex(1)].value
-            
-            // 2. Recursively reflect on each sub-generator with its corresponding target value.
-            let pathsA = reflectRecursive(genA, onFinalOutput: targetA)
-            let pathsB = reflectRecursive(genB, onFinalOutput: targetB)
-            
-            // 3. Combine all possible successful paths.
-            //    This creates a cartesian product of the successful paths from each side.
-            var combinedPaths: [(resultForContinuation: Any, path: [String])] = []
-            for (valA, pathA) in pathsA {
-                for (valB, pathB) in pathsB {
-                    // The combined result is a tuple of the sub-results.
-                    let combinedValue = (valA, valB)
-                    // The combined path is the concatenation of the sub-paths.
-                    let combinedPath = pathA + pathB
-                    combinedPaths.append((combinedValue, combinedPath))
-                }
-            }
-            
-            return combinedPaths
-        // ... other cases ...
-        default:
-            fatalError("Unsupported reflection operation: \(op)")
+            // Success! The result for the continuation is the value itself.
+            return [(resultForContinuation: finalOutput, path: [bitPattern.description])]
+        case .getSize, .resize:
+            fatalError("Should not be included!")
         }
     }
 }

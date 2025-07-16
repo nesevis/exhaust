@@ -21,9 +21,19 @@ import Testing
     }
     let ageGen = Gen.choose(in: 0...150)
     let heightGen = Gen.choose(in: Double(120)...180)
-    let zipped = Gen.zip(ageGen, heightGen)
+    let keypath = \Person.age
     
-    let results = Interpreters.generate(zipped)
-    let choices = Interpreters.reflect(zipped, with: results!, where: { _ in true })
+    let lensedAge = Gen.lens(into: \Person.age, ageGen)
+    let lensedHeight = Gen.lens(into: \Person.height, heightGen)
+//    let zipped = Gen.zip(lensedAge, lensedHeight)
+//        .map { Person(age: $0, height: $1) }
+    let zipped = lensedAge.bind { age in
+        lensedHeight.map { height in
+            Person(age: age, height: height)
+        }
+    }    
+    let result = Interpreters.generate(zipped)!
+//    let result = Person(age: 42, height: 178)
+    let choices = Interpreters.reflect(zipped, with: result)
     #expect(true)
 }

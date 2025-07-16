@@ -10,6 +10,26 @@ enum Gen {
         }
     }
     
+    static func lens<Input, Output>(
+        into path: some PartialPath, // <Person, Int>
+        _ next: ReflectiveGen<Input, Output>
+    ) -> ReflectiveGen<Input, Output> {
+        let nextErased = next
+            .map { $0 as Any }
+        let op = ReflectiveOperation<Input>.lens(path, next: nextErased)
+        
+        return .impure(operation: op) { result in
+            if let typed = result as? Output {
+                // Forward pass
+                return .pure(typed)
+                
+            } else if let gen = result as? ReflectiveGen<Input, Any> {
+                return gen.map { $0 as! Output }
+            }
+            fatalError("Interpreter error in handling of Op.lens case")
+        }
+    }
+    
     static func pick<Output>(
         choices: [(weight: Int, choice: String?, generator: ReflectiveGen<Void, Output>)]
     ) -> ReflectiveGen<Void, Output> {
@@ -55,13 +75,10 @@ enum Gen {
         case let .resize(to, next):
             let newNext = next.mapOperation(eraseInputType(from:))
             return .resize(to: to, next: newNext)
+        case let .lens(path, next):
+            return .lens(path, next: next.mapOperation(eraseInputType(from:)))
         case let .chooseBits(min, max):
             return .chooseBits(min: min, max: max)
-        case let .zip(a, b):
-            return .zip(
-                a.mapOperation(eraseInputType(from:)),
-                b.mapOperation(eraseInputType(from:))
-            )
         }
     }
     
@@ -174,33 +191,5 @@ enum Gen {
         
         // The continuation simply passes through the result of the inner generator.
         return liftF(op)
-    }
-    
-    static func zip<Input, A, B>(
-        _ genA: ReflectiveGen<Input, A>,
-        _ genB: ReflectiveGen<Input, B>
-    ) -> ReflectiveGen<Input, (A, B)> {
-        
-        // 1. Erase the output types of the sub-generators to `Any` so they can be
-        //    stored in the `.zip` operation case.
-        let erasedGenA = genA.map { $0 as Any }
-        let erasedGenB = genB.map { $0 as Any }
-
-        // 2. Create the `.zip` operation.
-        let op = ReflectiveOperation<Input>.zip(erasedGenA, erasedGenB)
-        
-        let intermediate: ReflectiveGen<Input, (Any,Any)> = liftF(op)
-        
-        // 3. Lift the operation into a FreerMonad. The continuation defines how the
-        //    interpreter's result (which will be `(Any, Any)`) is decoded.
-        return intermediate.map { anyTuple -> (A, B) in
-            // The interpreter will produce a tuple of `(Any, Any)`.
-            // The continuation's job is to cast it back to the strong types `(A, B)`.
-            guard let a = anyTuple.0 as? A,
-                  let b = anyTuple.1 as? B else {
-                fatalError("Type mismatch in zip continuation. This is an interpreter bug.")
-            }
-            return (a, b)
-        }
     }
 }

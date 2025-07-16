@@ -24,5 +24,6 @@ enum ReflectiveOperation<Input> {
     // TODO: add `from`?
     case chooseBits(min: UInt64, max: UInt64)
     
-    case zip(_ genA: ReflectiveGen<Input, Any>, _ genB: ReflectiveGen<Input, Any>)
+    // Provides reflective capabilities for how to extract a partial value from the input
+    case lens(any PartialPath, next: ReflectiveGen<Input, Any>)
 }
