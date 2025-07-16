@@ -61,9 +61,9 @@ extension Interpreters {
                 
             case .chooseBits:
                 // This operation expects a primitive `.choice` node from the script.
-                guard case .choice(let stringValue) = script,
-                      let bits = UInt64(stringValue) else { return nil }
-                
+                guard case .choice(let bits) = script else {
+                    return nil
+                }
                 return runContinuation(bits)
 
             case .pick(let choices):
@@ -71,7 +71,7 @@ extension Interpreters {
                 guard case .branch(let label, let children) = script else { return nil }
                 
                 // Find the sub-generator that matches the label from the script.
-                guard let chosenGen = choices.first(where: { $0.choice == label })?.generator else { return nil }
+                guard let chosenGen = choices.first(where: { $0.label == label })?.generator else { return nil }
                 
                 // Recursively replay the chosen sub-generator with the children of this branch node.
                 // A group of children is replayed as a single unit.

@@ -13,7 +13,7 @@ extension Interpreters {
         with outputValue: Output,
         /// Optional validation check
         where check: (Output) -> Bool = { _ in true }
-    ) -> [ChoiceTree] {
+    ) -> ChoiceTree {
         // The public API doesn't need to change. We start the process here.
         // We only care about the final output of the generator for the check.
         let allPossibleOutcomes = reflectRecursive(gen, onFinalOutput: outputValue)
@@ -22,7 +22,7 @@ extension Interpreters {
             return check(outputValue) ? path : nil
         }.flatMap { $0 }
         
-        return matchingPaths
+        return .group(matchingPaths)
     }
 
     // MARK: - Private Recursive Engine (Signature is Key)
@@ -106,9 +106,8 @@ extension Interpreters {
             }
             
             // Success! The result for the continuation is the value itself.
-            return [(resultForContinuation: finalOutput, path: [.choice(bitPattern.description)])]
+            return [(resultForContinuation: finalOutput, path: [.choice(bitPattern)])]
         case let .sequence(length, gen):
-            let count = Int(length)
             // 1. The target value for a sequence MUST be an array.
             guard
                 let targetArray = ((finalOutput as? [Any]) ?? (Array((finalOutput as? String) ?? "") as? [Any])),
@@ -118,7 +117,7 @@ extension Interpreters {
             }
             
             // 2. The count must match exactly.
-            guard targetArray.count == count else { return [] }
+            guard targetArray.count == Int(length) else { return [] }
             
             var combinedPath: [ChoiceTree] = []
             var combinedResults: [Any] = []
@@ -134,7 +133,7 @@ extension Interpreters {
                 combinedResults.append(value)
                 combinedPath.append(contentsOf: path)
             }
-            let finalTree = ChoiceTree.sequence(length: count, elements: combinedPath)
+            let finalTree = ChoiceTree.sequence(length: length, elements: combinedPath)
             return [(resultForContinuation: combinedResults, path: [finalTree])]
         case .getSize:
             fatalError("Should not be included!")

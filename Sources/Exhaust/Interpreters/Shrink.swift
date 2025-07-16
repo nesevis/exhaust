@@ -25,7 +25,7 @@ struct Shrinker {
     ) -> Output {
         
         // 1. Get the initial script for the failing value.
-        let paths = ChoiceTree.group(Interpreters.reflect(generator, with: value))
+        let paths = Interpreters.reflect(generator, with: value)
 //        guard let initialPath = paths.first else {
 //            // The generator couldn't have produced this value, so we can't shrink it.
 //            print("Shrinker Warning: Could not reflect on initial value. Returning original.")
@@ -48,8 +48,10 @@ struct Shrinker {
                 // 3. Replay the simplified path to get a new value.
                 guard let candidateValue = Interpreters.replay(generator, using: candidatePath) else {
                     // This path was invalid for the generator, skip it.
+                    print("shrink - invalid candidate")
                     continue
                 }
+                print("shrink - valid candidate")
                 
                 // 4. Run the test on the new, smaller value.
                 if testIsFailing(candidateValue) {
@@ -78,11 +80,9 @@ struct Shrinker {
         var shrinks: [ChoiceTree] = []
         
         switch tree {
-        case .choice(let stringValue):
+        case .choice(let bits):
             // It's a primitive value. If it's a number, shrink it.
-            if let number = UInt64(stringValue) {
-                shrinks.append(contentsOf: shrinkNumber(number).map { .choice(String($0)) })
-            }
+            shrinks.append(contentsOf: shrinkNumber(bits).map { .choice($0) })
 
         case .sequence(let length, let elements):
             // --- THIS IS THE MAGIC ---
@@ -90,9 +90,9 @@ struct Shrinker {
 
             // Strategy 1: Shrink the length.
             // For each smaller length, create a new sequence node with a truncated element list.
-            for shrunkLength in shrinkNumber(UInt64(length)).map({ Int($0) }) {
-                let prefix = Array(elements.prefix(shrunkLength))
-                let suffix = Array(elements.suffix(shrunkLength))
+            for shrunkLength in shrinkNumber(length) {
+                let prefix = Array(elements.prefix(Int(shrunkLength)))
+                let suffix = Array(elements.suffix(Int(shrunkLength)))
                 shrinks.append(.sequence(length: shrunkLength, elements: prefix))
                 shrinks.append(.sequence(length: shrunkLength, elements: suffix))
             }

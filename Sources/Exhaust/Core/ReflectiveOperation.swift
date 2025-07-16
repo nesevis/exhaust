@@ -5,7 +5,7 @@ enum ReflectiveOperation<Input> {
     case lmap(transform: (Input) -> Any, next: ReflectiveGen<Any, Any>)
     
     // A case for Pick.
-    case pick(choices: [(weight: Int, choice: String, generator: ReflectiveGen<Input, Any>)])
+    case pick(choices: [(weight: UInt64, label: UInt64, generator: ReflectiveGen<Input, Any>)])
     
     // A case for Prune.
     // Handles failures in the backwards/reflect pass

@@ -31,12 +31,12 @@ enum Gen {
     }
     
     static func pick<Output>(
-        choices: [(weight: Int, choice: String, generator: ReflectiveGen<Void, Output>)]
+        choices: [(weight: UInt64, generator: ReflectiveGen<Void, Output>)]
     ) -> ReflectiveGen<Void, Output> {
         // The nested generators must all have the same Output type.
         // We erase it to `Any` for the operation, but the `liftF` call
         // ensures the final monad has bthe correct `Output` type.
-        let erasedChoices = choices.map { ($0.weight, $0.choice, $0.generator.map { $0 as Any }) }
+        let erasedChoices = zip(choices, UInt64(1)...).map { ($0.0.weight, $0.1, $0.0.generator.map { $0 as Any }) }
         return liftF(.pick(choices: erasedChoices))
     }
     
@@ -55,7 +55,7 @@ enum Gen {
     static func eraseInputType<Input>(from op: ReflectiveOperation<Input>) -> ReflectiveOperation<Any> {
         switch op {
         case .pick(let choices):
-            let result = choices.map { ($0.weight, $0.choice, $0.generator.mapOperation(eraseInputType(from:))) }
+            let result = choices.map { ($0.weight, $0.label, $0.generator.mapOperation(eraseInputType(from:))) }
             return .pick(choices: result)
         case let .prune(next):
             return .prune(next: next)

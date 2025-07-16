@@ -29,10 +29,8 @@ import Testing
     let result = Interpreters.generate(zipped)!
 //    let result = Person(age: 42, height: 178)
     let choices = Interpreters.reflect(zipped, with: result)
-    if let first = choices.first {
-        let replayed = Interpreters.replay(zipped, using: first)
-        #expect(replayed! == result)
-    }
+    let replayed = Interpreters.replay(zipped, using: choices)
+    #expect(replayed! == result)
     #expect(true)
 }
 

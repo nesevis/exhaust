@@ -97,7 +97,7 @@ enum Interpreters {
                     return runContinuation(result)
                 }
                 
-                var randomRoll = Int.random(in: 1...totalWeight, using: &context.randomNumberGenerator)
+                var randomRoll = UInt64.random(in: 1...totalWeight, using: &context.randomNumberGenerator)
                 
                 for choice in choices {
                     if randomRoll <= choice.weight {
