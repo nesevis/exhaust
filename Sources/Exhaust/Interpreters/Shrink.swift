@@ -26,11 +26,6 @@ struct Shrinker {
         
         // 1. Get the initial script for the failing value.
         let paths = Interpreters.reflect(generator, with: value)
-//        guard let initialPath = paths.first else {
-//            // The generator couldn't have produced this value, so we can't shrink it.
-//            print("Shrinker Warning: Could not reflect on initial value. Returning original.")
-//            return value
-//        }
         
         var bestPath = paths
         var smallestValue = value
@@ -48,17 +43,12 @@ struct Shrinker {
                 // 3. Replay the simplified path to get a new value.
                 guard let candidateValue = Interpreters.replay(generator, using: candidatePath) else {
                     // This path was invalid for the generator, skip it.
-                    print("shrink - invalid candidate")
                     continue
                 }
-                print("shrink - valid candidate")
                 
                 // 4. Run the test on the new, smaller value.
                 if testIsFailing(candidateValue) {
                     // Success! We found a smaller value that still fails.
-                    // TODO: Implement count for ChoiceTree?
-//                    print("Shrinker found smaller failing value. Path length: \(candidatePath.count)")
-                    print("Shrinker found smaller failing value!")
                     bestPath = candidatePath
                     smallestValue = candidateValue
                     foundSmallerInPass = true
@@ -81,83 +71,40 @@ struct Shrinker {
         
         switch tree {
         case .choice(let bits):
-            // It's a primitive value. If it's a number, shrink it.
+            // Simple shrinking for primitive values
             shrinks.append(contentsOf: shrinkNumber(bits).map { .choice($0) })
-
+            
         case .sequence(let length, let elements):
-            // --- THIS IS THE MAGIC ---
-            // We KNOW this is a sequence. We can apply targeted strategies.
-
-            // Strategy 1: Shrink the length.
-            // For each smaller length, create a new sequence node with a truncated element list.
-            for shrunkLength in shrinkNumber(length) {
-                let prefix = Array(elements.prefix(Int(shrunkLength)))
-                let suffix = Array(elements.suffix(Int(shrunkLength)))
-                shrinks.append(.sequence(length: shrunkLength, elements: prefix))
-                shrinks.append(.sequence(length: shrunkLength, elements: suffix))
-            }
-
-            // Strategy 2: Shrink individual elements, keeping length the same.
-            for i in 0..<elements.count {
-                let elementToShrink = elements[i]
-                // Recursively generate shrinks for just this one element.
-                let shrunkenSubTrees = generateShrinks(for: elementToShrink)
-                for shrunkSubTree in shrunkenSubTrees {
-                    var newElements = elements
-                    newElements[i] = shrunkSubTree
-                    shrinks.append(.sequence(length: length, elements: newElements))
+            // Only shrink sequences by reducing length
+            for shrunkLength in shrinkNumber(length).filter({ $0 > 0 && $0 < length }) {
+                let targetCount = Int(shrunkLength)
+                if elements.count >= targetCount {
+                    let prefix = Array(elements.prefix(targetCount))
+                    if prefix.count == targetCount {
+                        shrinks.append(.sequence(length: shrunkLength, elements: prefix))
+                    }
                 }
             }
             
-            // Strategy 3: Try removing elements from the sequence.
-            for i in 0..<elements.count {
-                var newElements = elements
-                newElements.remove(at: i)
-                shrinks.append(.sequence(length: length - 1, elements: newElements))
-            }
-
-        case .branch(let label, let children):
-            // For a branch, there are two primary shrinking strategies:
-            
-            // Strategy 1: "Flatten" the branch.
-            // Try replacing the entire branch node with just its children. This is an
-            // aggressive shrink that removes one level of semantic nesting.
-            // This is only valid if the branch has children.
-            if !children.isEmpty {
-                shrinks.append(.group(children))
-            }
-
-            // Strategy 2: Shrink the children.
-            // Recursively shrink each child individually, keeping the branch structure intact.
-            for i in 0..<children.count {
-                let childToShrink = children[i]
-                let shrunkenChildren = generateShrinks(for: childToShrink)
-                for shrunkChild in shrunkenChildren {
-                    var newChildren = children
-                    newChildren[i] = shrunkChild
-                    shrinks.append(.branch(label: label, children: newChildren))
-                }
-            }
-
         case .group(let children):
-            // A group is a list of sub-trees. We can try several strategies.
-
-            // Strategy 1: Shrink the group to a single child.
-            // This is useful for things like `zip` where you want to see if only one
-            // part of the zipped structure was necessary for the failure.
-            for child in children {
-                shrinks.append(child)
-            }
-            
-            // Strategy 2: Recursively shrink each child individually.
-            // (This logic is identical to the .branch child shrinking)
+            // Recursively shrink each child
             for i in 0..<children.count {
-                let childToShrink = children[i]
-                let shrunkenChildren = generateShrinks(for: childToShrink)
-                for shrunkChild in shrunkenChildren {
+                let childShrinks = generateShrinks(for: children[i])
+                for shrunkChild in childShrinks {
                     var newChildren = children
                     newChildren[i] = shrunkChild
                     shrinks.append(.group(newChildren))
+                }
+            }
+            
+        case .branch(let label, let children):
+            // Recursively shrink each child
+            for i in 0..<children.count {
+                let childShrinks = generateShrinks(for: children[i])
+                for shrunkChild in childShrinks {
+                    var newChildren = children
+                    newChildren[i] = shrunkChild
+                    shrinks.append(.branch(label: label, children: newChildren))
                 }
             }
         }
@@ -228,6 +175,43 @@ struct Shrinker {
 //        
 //        return shrinks
 //    }
+    
+    // Helper functions for constraint validation
+    private func isValidElementForSequence(_ element: ChoiceTree) -> Bool {
+        switch element {
+        case .choice(let bits):
+            // For Character elements, ensure they're in valid ASCII range
+            return (33...125).contains(bits)
+        default:
+            return true
+        }
+    }
+    
+    private func shrinkNumberConservatively(_ n: UInt64) -> [UInt64] {
+        var shrinks: [UInt64] = []
+        
+        // For character values, try meaningful shrinks
+        if (33...125).contains(n) {
+            // Try common minimal characters first
+            let commonChars: [UInt64] = [65, 97, 48] // 'A', 'a', '0'
+            for char in commonChars {
+                if char < n {
+                    shrinks.append(char)
+                }
+            }
+        }
+        
+        // Then try standard binary search shrinking
+        if n > 0 {
+            var x = n / 2
+            while x > 0 {
+                shrinks.append(n - x)
+                x /= 2
+            }
+        }
+        
+        return shrinks
+    }
     
     /// A simple algorithm to shrink a number towards zero.
     private func shrinkNumber(_ n: UInt64) -> [UInt64] {

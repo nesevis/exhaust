@@ -32,10 +32,95 @@ extension Interpreters {
 
     // MARK: - Private Recursive Replay Engine
     
+    private static func replayWithChoices<Input, Output>(
+        _ gen: ReflectiveGen<Input, Output>,
+        choices: [ChoiceTree]
+    ) -> Output? {
+        var remainingChoices = choices
+        return replayWithChoicesHelper(gen, choices: &remainingChoices)
+    }
+    
+    private static func replayWithChoicesHelper<Input, Output>(
+        _ gen: ReflectiveGen<Input, Output>,
+        choices: inout [ChoiceTree]
+    ) -> Output? {
+        
+        switch gen {
+        case .pure(let value):
+            // Base case: return the value
+            return value
+
+        case .impure(let operation, let continuation):
+            // Handle each operation by consuming appropriate choices
+            switch operation {
+                
+            case .chooseBits:
+                // Consume the next choice
+                guard !choices.isEmpty else { return nil }
+                let choice = choices.removeFirst()
+                guard case .choice(let bits) = choice else { return nil }
+                
+                let nextGen = continuation(bits)
+                return self.replayWithChoicesHelper(nextGen, choices: &choices)
+
+            case .pick(let pickChoices):
+                // Consume the next choice which should be a branch
+                guard !choices.isEmpty else { return nil }
+                let choice = choices.removeFirst()
+                guard case .branch(let label, let children) = choice else { return nil }
+                
+                // Find the sub-generator that matches the label
+                guard let chosenGen = pickChoices.first(where: { $0.label == label })?.generator else { return nil }
+                
+                // Process the chosen sub-generator with its children
+                guard let result = replayWithChoices(chosenGen, choices: children) else { return nil }
+                
+                let nextGen = continuation(result)
+                return self.replayWithChoicesHelper(nextGen, choices: &choices)
+
+            case .sequence(let count, let elementGenerator):
+                // Consume the next choice which should be a sequence
+                guard !choices.isEmpty else { return nil }
+                let choice = choices.removeFirst()
+                guard case .sequence(let length, let elements) = choice else { return nil }
+                guard count == length else { return nil }
+                
+                var accumulatedValues: [Any] = []
+                for elementScript in elements {
+                    guard let elementValue = self.replayRecursive(elementGenerator, with: elementScript) else {
+                        return nil
+                    }
+                    accumulatedValues.append(elementValue)
+                }
+                
+                let nextGen = continuation(accumulatedValues)
+                return self.replayWithChoicesHelper(nextGen, choices: &choices)
+
+            case .lens(_, let subGenerator):
+                // A lens doesn't consume choices, just passes them to the sub-generator
+                guard let subResult = self.replayWithChoicesHelper(subGenerator, choices: &choices) else {
+                    return nil
+                }
+                
+                // For lens operations, call the continuation with the sub-generator result
+                let nextGen = continuation(subResult)
+                return self.replayWithChoicesHelper(nextGen, choices: &choices)
+                
+            default:
+                fatalError("Cannot replay a generator containing forward-only operations like getSize or from.")
+            }
+        }
+    }
+    
     private static func replayRecursive<Input, Output>(
         _ gen: ReflectiveGen<Input, Output>,
         with script: ChoiceTree
     ) -> Output? {
+        
+        // Handle group scripts by distributing choices to the generator
+        if case .group(let choices) = script {
+            return replayWithChoices(gen, choices: choices)
+        }
         
         switch gen {
         case .pure(let value):
@@ -100,16 +185,6 @@ extension Interpreters {
                  // A lens is a wrapper. It doesn't consume a node from the script itself.
                  // The choices are consumed by its sub-generator. We pass the same script down.
                 return self.replayRecursive(subGenerator, with: script) as? Output
-                
-//            case .group(let children) where operation is ReflectiveOperation<Any>.group: // Fictitious .group op for this to work
-//                 // When replaying a group, we must consume it.
-//                 guard case .group(let scriptChildren) = script, children.count == scriptChildren.count else { return nil }
-//                 
-//                 var results = []
-//                 for (i, childGen) in children.enumerated() {
-//                     results.append(replayRecursive(childGen, with: scriptChildren[i]))
-//                 }
-//                 return runContinuation(results)
                  
             // Forward-only ops don't consume choices. Their presence in a reflectable
             // generator is an error.
