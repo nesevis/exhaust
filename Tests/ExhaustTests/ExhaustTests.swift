@@ -94,7 +94,7 @@ func testStringObjectShrinking() {
         .map { Thing(name: $0) }
     
     let property: (Thing) -> Bool = { thing in
-        thing.name.contains(where: { $0.isLowercase })
+        thing.name.contains(where: { $0.isUppercase })
     }
     
 //    let generated = Interpreters.generate(gen)
@@ -102,7 +102,7 @@ func testStringObjectShrinking() {
 //    let failingExample1 = Thing(name: "颚䑊໷Ê遍䖄㖒⍼幪⤡즪↛⭚৸怴컄")
     let failingExample2 = Thing(name: "妱뿵봉尠䳝䊙됇輐௽촦䠴ϑ洫峏윅Ⲛ㖧儬藍㑌␷┫ᔍ뉤櫂౥삸뤗㵋㦥䇝饸㰈炇崾ꎐƽ豇莊䁀귷矆噉鮸婸♀雃끜ࡒ唕飀຅࿶쁾ꄹ垔㷙潧ꌎ튿鳖퇂쾶ଠ鶰솛쩱鄆霒ⴄ凌ꡮ螇₾ㅖ铟Ꙍᯰ踙큍ݯ稞췘種묙ꢥ涶␸뗔臈葋᭯氶桢–ꁩ௝빩雵앂藅摊ퟺ⭄␷くᩬ뺤넱㆐銶䈅ꊀ轷帆湡㈬䵂쒡⚄汑᧵഼൱ヘⴔ붧琼漱䩓㭍༮ẋ솏ꃋ럓諍곶䊄퓄ᰖꌷ㖣쾳妾臧퍜䏫섾몏")
 //    let failingExample = Thing(name: "aleXander koLbu")
-    let expectedMinimumCounterExample = Thing(name: "Ꙁ")
+    let expectedMinimumCounterExample = Thing(name: "A")
 
     // Act
 //    let shrunken1 = shrinker.shrink(failingExample1, using: gen, where: property)

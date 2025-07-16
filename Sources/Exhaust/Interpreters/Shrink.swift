@@ -240,7 +240,7 @@ struct Shrinker {
     }
     
     private func shrinkNumberAggressively(_ number: UInt64, validRange: ClosedRange<UInt64>) -> [UInt64] {
-        var shrinks: [UInt64] = []
+        var shrinks: Set<UInt64> = []
         
         // Use the valid range's lower bound instead of 0
         let effectiveMin = validRange.lowerBound
@@ -251,7 +251,7 @@ struct Shrinker {
             let commonChars: [UInt64] = [65, 97, 48, 32] // 'A', 'a', '0', ' '
             for char in commonChars {
                 if char < number && validRange.contains(char) {
-                    shrinks.append(char)
+                    shrinks.insert(char)
                 }
             }
         }
@@ -259,7 +259,7 @@ struct Shrinker {
         // For small numbers, try every integer down to effective minimum
         if number <= 10 {
             for i in (validRange.lowerBound..<number).reversed() {
-                shrinks.append(i)
+                shrinks.insert(i)
             }
         } else {
             // For larger numbers, use more aggressive steps but respect valid range
@@ -268,7 +268,7 @@ struct Shrinker {
                 if step <= number { // Prevent underflow
                     let candidate = number - step
                     if candidate >= effectiveMin && validRange.upperBound >= candidate {
-                        shrinks.append(candidate)
+                        shrinks.insert(candidate)
                     }
                 }
             }
@@ -279,13 +279,13 @@ struct Shrinker {
                 if x <= number { // Prevent underflow
                     let candidate = number - x
                     if candidate >= effectiveMin && validRange.upperBound >= candidate {
-                        shrinks.append(candidate)
+                        shrinks.insert(candidate)
                     }
                 }
                 x /= 2
             }
         }
-        let result = Array(shrinks.sorted().reversed())
+        let result = shrinks.sorted(by: >)
         return result // Return in descending order for better performance
     }
     
