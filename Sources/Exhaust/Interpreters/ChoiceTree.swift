@@ -11,7 +11,7 @@ enum ChoiceTree: Equatable {
     
     /// A node that represents the generation of a sequence. It explicitly
     /// captures the length and the choice trees for each of its elements.
-    indirect case sequence(length: UInt64, elements: [ChoiceTree])
+    indirect case sequence(length: UInt64, elements: [ChoiceTree], validRange: ClosedRange<UInt64>)
     
     /// A node that represents a branching choice made via `pick`.
     indirect case branch(label: UInt64, children: [ChoiceTree])

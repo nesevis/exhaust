@@ -74,6 +74,18 @@ struct Shrinker {
     
     // MARK: - Private Shrinking Helpers
     
+    /// Generates shrinks for a single element with a specific valid range
+    private func generateShrinksForElement(_ tree: ChoiceTree, validRange: ClosedRange<UInt64>) -> [ChoiceTree] {
+        switch tree {
+        case .choice(let bits):
+            // Use the valid range to filter shrinks
+            return shrinkNumberAggressively(bits, validRange: validRange).map { .choice($0) }
+        default:
+            // For non-choice elements, use regular shrinking
+            return generateShrinks(for: tree)
+        }
+    }
+    
     // In Shrinker
     // In Shrinker
     private func generateShrinks(for tree: ChoiceTree) -> [ChoiceTree] {
@@ -81,11 +93,24 @@ struct Shrinker {
         
         switch tree {
         case .choice(let bits):
-            // Aggressive shrinking for primitive values
+            // Aggressive shrinking for primitive values - no valid range available at this level
             shrinks.append(contentsOf: shrinkNumberAggressively(bits).map { .choice($0) })
             
-        case .sequence(let length, let elements):
+        case .sequence(let length, let elements, let range):
             // AGGRESSIVE SEQUENCE SHRINKING
+            
+            // Strategy 0: Filter out invalid elements entirely
+            let validElements = elements.filter { element in
+                if case .choice(let bits) = element {
+                    return range.contains(bits)
+                }
+                return true
+            }
+            
+            // If we have fewer valid elements, create a shorter sequence
+            if validElements.count < elements.count && !validElements.isEmpty {
+                shrinks.append(.sequence(length: UInt64(validElements.count), elements: validElements, validRange: range))
+            }
             
             // Strategy 1: Try progressively smaller lengths (most aggressive)
             // Start with very small sizes and work up
@@ -93,25 +118,25 @@ struct Shrinker {
             for targetLength in 1...maxTries {
                 if targetLength < length {
                     let targetCount = targetLength
-                    if elements.count >= targetCount {
+                    if validElements.count >= targetCount {
                         // Try prefix (keeping first elements)
-                        let prefix = Array(elements.prefix(targetCount))
+                        let prefix = Array(validElements.prefix(targetCount))
                         if prefix.count == targetCount {
-                            shrinks.append(.sequence(length: UInt64(targetLength), elements: prefix))
+                            shrinks.append(.sequence(length: UInt64(targetLength), elements: prefix, validRange: range))
                         }
                         
                         // Try suffix (keeping last elements)
-                        let suffix = Array(elements.suffix(targetCount))
+                        let suffix = Array(validElements.suffix(targetCount))
                         if suffix.count == targetCount && suffix != prefix {
-                            shrinks.append(.sequence(length: UInt64(targetLength), elements: suffix))
+                            shrinks.append(.sequence(length: UInt64(targetLength), elements: suffix, validRange: range))
                         }
                         
                         // Try middle section
-                        if elements.count > targetCount {
-                            let startIndex = (elements.count - targetCount) / 2
-                            let middle = Array(elements[startIndex..<(startIndex + targetCount)])
+                        if validElements.count > targetCount {
+                            let startIndex = (validElements.count - targetCount) / 2
+                            let middle = Array(validElements[startIndex..<(startIndex + targetCount)])
                             if middle.count == targetCount && middle != prefix && middle != suffix {
-                                shrinks.append(.sequence(length: UInt64(targetLength), elements: middle))
+                                shrinks.append(.sequence(length: UInt64(targetLength), elements: middle, validRange: range))
                             }
                         }
                     }
@@ -122,22 +147,22 @@ struct Shrinker {
             let binarySearchShrinks = shrinkNumber(length).filter({ $0 > maxTries && $0 < length })
             for shrunkLength in binarySearchShrinks {
                 let targetCount = Int(shrunkLength)
-                if elements.count >= targetCount {
-                    let prefix = Array(elements.prefix(targetCount))
+                if validElements.count >= targetCount {
+                    let prefix = Array(validElements.prefix(targetCount))
                     if prefix.count == targetCount {
-                        shrinks.append(.sequence(length: shrunkLength, elements: prefix))
+                        shrinks.append(.sequence(length: shrunkLength, elements: prefix, validRange: range))
                     }
                 }
             }
             
             // Strategy 3: Element-wise shrinking (for sequences that can't be shortened much)
             if length <= 20 { // Only for reasonably sized sequences
-                for i in 0..<elements.count {
-                    let elementShrinks = generateShrinks(for: elements[i])
+                for i in 0..<validElements.count {
+                    let elementShrinks = generateShrinksForElement(validElements[i], validRange: range)
                     for shrunkElement in elementShrinks {
-                        var newElements = elements
+                        var newElements = validElements
                         newElements[i] = shrunkElement
-                        shrinks.append(.sequence(length: length, elements: newElements))
+                        shrinks.append(.sequence(length: UInt64(newElements.count), elements: newElements, validRange: range))
                     }
                 }
             }
@@ -203,41 +228,12 @@ struct Shrinker {
         return []
     }
     
-    /// Generates a list of candidate "smaller" choice paths from a given path.
-    ///
-    /// The strategies are ordered from most aggressive (deletion) to most subtle (element-wise).
-//    private func generateShrinks(for path: [String]) -> [[String]] {
-//        var shrinks: [[String]] = []
-//        
-//        // Strategy 1: Deletion. Try removing each element one by one.
-//        for i in 0..<path.count {
-//            var newPath = path
-//            newPath.remove(at: i)
-//            shrinks.append(newPath)
-//        }
-//        
-//        // Strategy 2: Element-wise shrinking.
-//        for (i, element) in path.enumerated() {
-//            // Try to shrink the element if it's a number.
-//            if let number = UInt64(element) {
-//                let shrunkenNumbers = shrinkNumber(number)
-//                for shrunkNum in shrunkenNumbers {
-//                    var newPath = path
-//                    newPath[i] = String(shrunkNum)
-//                    shrinks.append(newPath)
-//                }
-//            }
-//        }
-//        
-//        return shrinks
-//    }
-    
     // Helper functions for constraint validation
     private func isValidElementForSequence(_ element: ChoiceTree) -> Bool {
         switch element {
         case .choice(let bits):
             // For Character elements, ensure they're in valid ASCII range
-            return (33...125).contains(bits)
+            return (32...125).contains(bits)
         default:
             return true
         }
@@ -269,32 +265,51 @@ struct Shrinker {
         return shrinks
     }
     
-    private func shrinkNumberAggressively(_ n: UInt64) -> [UInt64] {
+    private func shrinkNumberAggressively(_ n: UInt64, validRange: ClosedRange<UInt64>) -> [UInt64] {
         var shrinks: [UInt64] = []
         
-        // Always try 0 first if not already 0
-        if n > 0 {
-            shrinks.append(0)
+        // Use the valid range's lower bound instead of 0
+        let effectiveMin = validRange.lowerBound
+        
+        // For Character values, try meaningful character values first
+        if (32...125).contains(n) {
+            // Common minimal characters in ascending order of preference
+            let commonChars: [UInt64] = [65, 97, 48, 32] // 'A', 'a', '0', ' '
+            for char in commonChars {
+                if char < n && validRange.contains(char) {
+                    shrinks.append(char)
+                }
+            }
         }
         
-        // For small numbers, try every integer down to 0
+        // For small numbers, try every integer down to effective minimum
         if n <= 10 {
-            for i in (0..<n).reversed() {
-                shrinks.append(i)
+            for i in (effectiveMin..<n).reversed() {
+                if validRange.contains(i) {
+                    shrinks.append(i)
+                }
             }
         } else {
-            // For larger numbers, use more aggressive steps
+            // For larger numbers, use more aggressive steps but respect valid range
             let steps: [UInt64] = [1, 2, 3, 5, 10, 25, 50, 100]
             for step in steps {
-                if step < n {
-                    shrinks.append(n - step)
+                if step <= n { // Prevent underflow
+                    let candidate = n - step
+                    if candidate >= effectiveMin && validRange.contains(candidate) {
+                        shrinks.append(candidate)
+                    }
                 }
             }
             
             // Then use binary search approach
             var x = n / 2
             while x > 100 {
-                shrinks.append(n - x)
+                if x <= n { // Prevent underflow
+                    let candidate = n - x
+                    if candidate >= effectiveMin && validRange.contains(candidate) {
+                        shrinks.append(candidate)
+                    }
+                }
                 x /= 2
             }
         }
@@ -302,12 +317,17 @@ struct Shrinker {
         return shrinks.sorted().reversed() // Return in descending order for better performance
     }
     
+    // Keep the original function for backward compatibility
+    private func shrinkNumberAggressively(_ n: UInt64) -> [UInt64] {
+        return shrinkNumberAggressively(n, validRange: UInt64.min...UInt64.max)
+    }
+    
     /// Estimates the complexity of a ChoiceTree for sorting shrink candidates
     private func estimateComplexity(_ tree: ChoiceTree) -> Int {
         switch tree {
         case .choice(let bits):
             return Int(bits) // Lower numbers are simpler
-        case .sequence(let length, let elements):
+        case .sequence(let length, let elements, let range):
             return Int(length) * 10 + elements.reduce(0) { $0 + estimateComplexity($1) }
         case .group(let children):
             return children.reduce(0) { $0 + estimateComplexity($1) }

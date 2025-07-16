@@ -81,24 +81,22 @@ extension Double: BitPatternConvertible {
 extension Character: BitPatternConvertible {
     /// Defines the range for standard ASCII characters.
     public static var bitPatternRange: ClosedRange<UInt64> {
-        32...125
+        0x000000...0x00D7FF // Basic Multilingual Plane before surrogates
     }
 
     /// Creates a `Character` from a `UInt64` by assuming it represents an ASCII value.
     public init(bitPattern: UInt64) {
-        self.init(UnicodeScalar(UInt8(bitPattern)))
+        self.init(Unicode.Scalar(UInt32(bitPattern))!)
     }
 
     /// The ASCII value of the `Character`, promoted to `UInt64`.
     /// This property will be `nil` for non-ASCII characters, so a production implementation
     /// would need to be more robust or use `unicodeScalars` for a wider range.
     public var bitPattern64: UInt64 {
-        guard let asciiValue = self.asciiValue else {
-            // This can happen if the Character is not representable in ASCII.
-            // Returning 0 is a safe default, but indicates a potential mismatch
-            // between the generator and the values it might be asked to reflect on.
-            return 0
+        guard let scalarValue = self.unicodeScalars.first?.value else {
+            return 0 // Return a default for empty or invalid characters.
         }
-        return UInt64(asciiValue)
+        
+        return UInt64(scalarValue)
     }
 }

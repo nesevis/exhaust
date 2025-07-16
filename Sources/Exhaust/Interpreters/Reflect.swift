@@ -122,6 +122,7 @@ extension Interpreters {
             
             var combinedPath: [ChoiceTree] = []
             var combinedResults: [Any] = []
+            var validRange: ClosedRange<UInt64>?
             
             // 3. Iterate over the elements of the target array.
             for elementTarget in targetArray {
@@ -133,8 +134,11 @@ extension Interpreters {
                 }
                 combinedResults.append(value)
                 combinedPath.append(contentsOf: path)
+                if validRange == nil, let convertible = value as? any BitPatternConvertible {
+                    validRange = type(of: convertible).bitPatternRange
+                }
             }
-            let finalTree = ChoiceTree.sequence(length: length, elements: combinedPath)
+            let finalTree = ChoiceTree.sequence(length: length, elements: combinedPath, validRange: validRange ?? UInt64.bitPatternRange)
             return [(resultForContinuation: combinedResults, path: [finalTree])]
         }
     }

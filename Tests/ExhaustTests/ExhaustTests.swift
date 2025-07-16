@@ -84,7 +84,7 @@ func testStringObjectShrinking() {
         let name: String
     }
     let shrinker = Shrinker()
-    let gen = Gen.lens(into: \Thing.name.count, Gen.choose(in: 1...150))
+    let gen = Gen.lens(into: \Thing.name.count, Gen.choose(in: 15...150))
         .bind { length in
             Gen.lens(
                 into: \Thing.name,
@@ -97,13 +97,19 @@ func testStringObjectShrinking() {
         thing.name.contains(where: { $0.isUppercase })
     }
     
-//    let failingExample = Thing(name: "`L4f&RdT){DV1Hf(%bYZ0k+HW|(e+1)16^Twes;XU@BZ[-*9FRR+s#W5Bl_e?DEYDw;o0-jp_&LO:^l9qYWSC5?yue?wMG:c%sIfS{jOl{mJ6:[l6FKNZQfztz,k6M)/!N$:D0nDtH'@L*I'J")
-    let failingExample = Thing(name: "aleXander koLbu")
+//    let generated = Interpreters.generate(gen)
+    
+//    let failingExample1 = Thing(name: "颚䑊໷Ê遍䖄㖒⍼幪⤡즪↛⭚৸怴컄")
+    let failingExample2 = Thing(name: "颚䑊໷Ê遍䖄㖒⍼幪⤡즪↛⭚৸怴컄颚䑊໷Ê遍䖄㖒⍼幪⤡즪↛⭚৸怴컄")
+//    let failingExample = Thing(name: "aleXander koLbu")
     let expectedMinimumCounterExample = Thing(name: "A")
 
     // Act
-    let shrunken = shrinker.shrink(failingExample, using: gen, where: property)
+//    let shrunken1 = shrinker.shrink(failingExample1, using: gen, where: property)
+    let shrunken2 = shrinker.shrink(failingExample2, using: gen, where: property)
     
     // Assert
-    #expect(expectedMinimumCounterExample == shrunken)
+    print()
+//    #expect(expectedMinimumCounterExample == shrunken1)
+    #expect(expectedMinimumCounterExample == shrunken2)
 }

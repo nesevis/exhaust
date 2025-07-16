@@ -82,7 +82,7 @@ extension Interpreters {
                 // Consume the next choice which should be a sequence
                 guard !choices.isEmpty else { return nil }
                 let choice = choices.removeFirst()
-                guard case .sequence(let length, let elements) = choice else { return nil }
+                guard case .sequence(let length, let elements, let range) = choice else { return nil }
                 guard count == length else { return nil }
                 
                 var accumulatedValues: [Any] = []
@@ -165,7 +165,7 @@ extension Interpreters {
 
             case .sequence(let count, let elementGenerator):
                 // This operation expects a `.sequence` node from the script.
-                guard case .sequence(let length, let elements) = script else { return nil }
+                guard case .sequence(let length, let elements, let range) = script else { return nil }
                 
                 // The counts must match.
                 guard count == length else { return nil }
