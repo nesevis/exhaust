@@ -15,7 +15,7 @@ import Testing
 }
 
 @Test func example3() async throws {
-    struct Person {
+    struct Person: Equatable {
         let age: Int
         let height: Double
     }
@@ -35,5 +35,9 @@ import Testing
     let result = Interpreters.generate(zipped)!
 //    let result = Person(age: 42, height: 178)
     let choices = Interpreters.reflect(zipped, with: result)
+    if let first = choices.first {
+        let replayed = Interpreters.replay(zipped, using: first)
+        #expect(replayed! == result)
+    }
     #expect(true)
 }
