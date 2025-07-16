@@ -7,38 +7,62 @@ struct Shrinker {
         where testIsFailing: (Output) -> Bool
     ) -> Output {
         
-        let initialPath = Interpreters.reflect(generator, with: value)
-        guard var bestPath = initialPath else {
-            fatalError("Could not shrink initial value!")
+        guard var bestPath = Interpreters.reflect(generator, with: value) else {
+            fatalError("Could not reflect initial value!")
         }
         
         var smallestValue = value
-        var passHasFoundSmaller: Bool = true
 
-        while passHasFoundSmaller {
-            passHasFoundSmaller = false
+        // Main loop: will run the greedy algorithm at least once.
+        while true {
+            var didFindSmallerInGreedyPass = false
             
-            // 1. Create a new lazy iterator for the current best path.
-            let candidateIterator = ShrinkCandidateIterator(tree: bestPath)
-            
-            // 2. Loop through candidates one-by-one, in order of simplicity.
-            while let candidatePath = candidateIterator.next() {
-                guard let candidateValue = Interpreters.replay(generator, using: candidatePath) else {
-                    continue
-                }
-                
-                if testIsFailing(candidateValue) {
-                    // Success! We found a smaller failing value.
-                    bestPath = candidatePath
+            // --- PHASE 1: Fast Greedy Pass ---
+            let greedyIterator = ShrinkCandidateIterator(tree: bestPath)
+            while let candidate = greedyIterator.next() {
+                if let candidateValue = Interpreters.replay(generator, using: candidate), testIsFailing(candidateValue) {
+                    bestPath = candidate
                     smallestValue = candidateValue
-                    passHasFoundSmaller = true
-                    
-                    // Greedy approach: break and restart the whole process
-                    // with a new iterator for our new, smaller 'bestPath'.
-                    break
+                    didFindSmallerInGreedyPass = true
+                    break // Found a shrink, restart the greedy search
                 }
             }
+            
+            // If the fast pass found a smaller value, we loop again to be greedy.
+            if didFindSmallerInGreedyPass {
+                continue
+            }
+
+            // --- PHASE 2: Final Exhaustive Polish Pass ---
+            // The greedy pass completed without finding anything. Let's be certain.
+            var passBestPath = bestPath
+            var foundBetterInPolish = false
+
+            // This iterator is not designed to be a Sequence, but for demonstration:
+            let allCandidates = ShrinkCandidateSequence(tree: bestPath) // Materialize all shrinks
+            for candidate in allCandidates {
+                // Is this candidate potentially better than the best we've found in this polish pass?
+                if candidate.complexity < passBestPath.complexity {
+                    if let candidateValue = Interpreters.replay(generator, using: candidate), testIsFailing(candidateValue) {
+                        passBestPath = candidate
+                        smallestValue = candidateValue
+                        foundBetterInPolish = true
+                    }
+                }
+            }
+            
+            // If the exhaustive pass squeezed out a final improvement, update the bestPath
+            // and run the whole process again from that even better starting point.
+            if foundBetterInPolish {
+                bestPath = passBestPath
+                continue
+            }
+            
+            // If we get here, neither the greedy nor the exhaustive pass could find an improvement.
+            // We are truly done.
+            break
         }
+        
         return smallestValue
     }
 }

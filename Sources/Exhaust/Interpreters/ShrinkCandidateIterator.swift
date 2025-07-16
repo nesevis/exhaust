@@ -16,7 +16,7 @@ final class ShrinkCandidateIterator: IteratorProtocol {
 
         // Shrinking a sequence. This is a multi-stage process.
         // Stage 1: Shrink the sequence's length.
-        case shrinkingSequenceLength(originalElements: [ChoiceTree], lengthShrinks: [UInt64], nextIndex: Int, validRange: ClosedRange<UInt64>)
+        case shrinkingSequenceLength(originalElements: [ChoiceTree], lengthShrinks: [UInt64], nextIndex: Int, validRange: ClosedRange<UInt64>, prefix: Bool)
         // Stage 2: Shrink the elements within the sequence, one by one.
         // This is recursive: the elementIterator is another ShrinkCandidateIterator!
         case shrinkingSequenceElement(originalElements: [ChoiceTree], currentElementIndex: Int, elementIterator: ShrinkCandidateIterator, validRange: ClosedRange<UInt64>)
@@ -64,7 +64,7 @@ final class ShrinkCandidateIterator: IteratorProtocol {
                 case .sequence(_, let elements, let range):
                     // The first strategy for a sequence is to shrink its length.
                     let lengthShrinks = shrinkNumber(UInt64(elements.count)).sorted()
-                    state = .shrinkingSequenceLength(originalElements: elements, lengthShrinks: lengthShrinks, nextIndex: 0, validRange: range)
+                    state = .shrinkingSequenceLength(originalElements: elements, lengthShrinks: lengthShrinks, nextIndex: 0, validRange: range, prefix: true)
                 case .group(let children):
                     if children.isEmpty {
                         state = .finished // Nothing to shrink
@@ -105,7 +105,7 @@ final class ShrinkCandidateIterator: IteratorProtocol {
                 // Yield the current shrink.
                 return .choice(shrinks[index])
 
-            case .shrinkingSequenceLength(let elements, let shrinks, let index, let range):
+            case .shrinkingSequenceLength(let elements, let shrinks, let index, let range, let usePrefix):
                 if index >= shrinks.count {
                     // Finished shrinking length. NOW we start shrinking individual elements.
                     // Transition to the next state, starting with the first element (index 0).
@@ -120,10 +120,10 @@ final class ShrinkCandidateIterator: IteratorProtocol {
 
                 // Get the next shrunk length
                 let newLength = Int(shrinks[index])
-                state = .shrinkingSequenceLength(originalElements: elements, lengthShrinks: shrinks, nextIndex: index + 1, validRange: range)
+                state = .shrinkingSequenceLength(originalElements: elements, lengthShrinks: shrinks, nextIndex: index + 1, validRange: range, prefix: !usePrefix)
                 
                 // Yield a new sequence with the shorter length (taking the prefix).
-                let newElements = Array(elements.prefix(newLength))
+                let newElements = Array(usePrefix ? elements.prefix(newLength) : elements.suffix(newLength))
                 return .sequence(length: UInt64(newLength), elements: newElements, validRange: range)
 
             case .shrinkingSequenceElement(let originalElements, let elementIndex, let elementIterator, let range):
@@ -285,5 +285,19 @@ final class ShrinkCandidateIterator: IteratorProtocol {
             x /= 2
         }
         return shrinks
+    }
+}
+
+struct ShrinkCandidateSequence: Sequence {
+    let tree: ChoiceTree
+
+    init(tree: ChoiceTree) {
+        self.tree = tree
+    }
+
+    /// Conformance to the Sequence protocol.
+    /// - Returns: A new, independent iterator for this sequence.
+    func makeIterator() -> ShrinkCandidateIterator {
+        return ShrinkCandidateIterator(tree: tree)
     }
 }
