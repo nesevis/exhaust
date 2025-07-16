@@ -99,17 +99,16 @@ func testStringObjectShrinking() {
     
 //    let generated = Interpreters.generate(gen)
     
-//    let failingExample1 = Thing(name: "颚䑊໷Ê遍䖄㖒⍼幪⤡즪↛⭚৸怴컄")
+    let failingExample1 = Thing(name: "颚䑊໷Ê遍䖄㖒⍼幪⤡즪↛⭚৸怴컄")
     let failingExample2 = Thing(name: "颚䑊໷Ê遍䖄㖒⍼幪⤡즪↛⭚৸怴컄颚䑊໷Ê遍䖄㖒⍼幪⤡즪↛⭚৸怴컄")
 //    let failingExample = Thing(name: "aleXander koLbu")
     let expectedMinimumCounterExample = Thing(name: "A")
 
     // Act
-//    let shrunken1 = shrinker.shrink(failingExample1, using: gen, where: property)
+    let shrunken1 = shrinker.shrink(failingExample1, using: gen, where: property)
     let shrunken2 = shrinker.shrink(failingExample2, using: gen, where: property)
     
     // Assert
-    print()
-//    #expect(expectedMinimumCounterExample == shrunken1)
+    #expect(expectedMinimumCounterExample == shrunken1)
     #expect(expectedMinimumCounterExample == shrunken2)
 }

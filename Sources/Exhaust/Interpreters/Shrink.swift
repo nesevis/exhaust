@@ -52,8 +52,10 @@ struct Shrinker {
                 // 3. Replay the simplified path to get a new value.
                 guard let candidateValue = Interpreters.replay(generator, using: candidatePath) else {
                     // This path was invalid for the generator, skip it.
+                    print("replay: invalid candidate \(candidatePath)!")
                     continue
                 }
+                print("replay: valid candidate \(candidatePath)!")
                 
                 // 4. Run the test on the new, smaller value.
                 if testIsFailing(candidateValue) {

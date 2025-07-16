@@ -83,7 +83,10 @@ extension Interpreters {
                 guard !choices.isEmpty else { return nil }
                 let choice = choices.removeFirst()
                 guard case .sequence(let length, let elements, let range) = choice else { return nil }
-                guard count == length else { return nil }
+                // Do we need this?
+//                guard count == length else {
+//                    return nil
+//                }
                 
                 var accumulatedValues: [Any] = []
                 for elementScript in elements {
