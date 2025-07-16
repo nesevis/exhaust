@@ -27,6 +27,10 @@ struct Shrinker {
         // 1. Get the initial script for the failing value.
         let paths = Interpreters.reflect(generator, with: value)
         
+        guard let paths else {
+            fatalError("Could not shrink initial value!")
+        }
+        
         var bestPath = paths
         var smallestValue = value
         
@@ -39,7 +43,12 @@ struct Shrinker {
             // Generate all possible "one-step" shrinks from the current best path.
             let candidatePaths = generateShrinks(for: bestPath)
             
-            for candidatePath in candidatePaths {
+            // Sort candidates by potential effectiveness (smaller/simpler first)
+            let sortedCandidates = candidatePaths.sorted { lhs, rhs in
+                return estimateComplexity(lhs) < estimateComplexity(rhs)
+            }
+            
+            for candidatePath in sortedCandidates {
                 // 3. Replay the simplified path to get a new value.
                 guard let candidateValue = Interpreters.replay(generator, using: candidatePath) else {
                     // This path was invalid for the generator, skip it.
@@ -49,6 +58,7 @@ struct Shrinker {
                 // 4. Run the test on the new, smaller value.
                 if testIsFailing(candidateValue) {
                     // Success! We found a smaller value that still fails.
+                    // Success! Found a smaller failing value
                     bestPath = candidatePath
                     smallestValue = candidateValue
                     foundSmallerInPass = true
@@ -71,17 +81,63 @@ struct Shrinker {
         
         switch tree {
         case .choice(let bits):
-            // Simple shrinking for primitive values
-            shrinks.append(contentsOf: shrinkNumber(bits).map { .choice($0) })
+            // Aggressive shrinking for primitive values
+            shrinks.append(contentsOf: shrinkNumberAggressively(bits).map { .choice($0) })
             
         case .sequence(let length, let elements):
-            // Only shrink sequences by reducing length
-            for shrunkLength in shrinkNumber(length).filter({ $0 > 0 && $0 < length }) {
+            // AGGRESSIVE SEQUENCE SHRINKING
+            
+            // Strategy 1: Try progressively smaller lengths (most aggressive)
+            // Start with very small sizes and work up
+            let maxTries = min(10, Int(length))
+            for targetLength in 1...maxTries {
+                if targetLength < length {
+                    let targetCount = targetLength
+                    if elements.count >= targetCount {
+                        // Try prefix (keeping first elements)
+                        let prefix = Array(elements.prefix(targetCount))
+                        if prefix.count == targetCount {
+                            shrinks.append(.sequence(length: UInt64(targetLength), elements: prefix))
+                        }
+                        
+                        // Try suffix (keeping last elements)
+                        let suffix = Array(elements.suffix(targetCount))
+                        if suffix.count == targetCount && suffix != prefix {
+                            shrinks.append(.sequence(length: UInt64(targetLength), elements: suffix))
+                        }
+                        
+                        // Try middle section
+                        if elements.count > targetCount {
+                            let startIndex = (elements.count - targetCount) / 2
+                            let middle = Array(elements[startIndex..<(startIndex + targetCount)])
+                            if middle.count == targetCount && middle != prefix && middle != suffix {
+                                shrinks.append(.sequence(length: UInt64(targetLength), elements: middle))
+                            }
+                        }
+                    }
+                }
+            }
+            
+            // Strategy 2: Binary search style shrinking (for larger sequences)
+            let binarySearchShrinks = shrinkNumber(length).filter({ $0 > maxTries && $0 < length })
+            for shrunkLength in binarySearchShrinks {
                 let targetCount = Int(shrunkLength)
                 if elements.count >= targetCount {
                     let prefix = Array(elements.prefix(targetCount))
                     if prefix.count == targetCount {
                         shrinks.append(.sequence(length: shrunkLength, elements: prefix))
+                    }
+                }
+            }
+            
+            // Strategy 3: Element-wise shrinking (for sequences that can't be shortened much)
+            if length <= 20 { // Only for reasonably sized sequences
+                for i in 0..<elements.count {
+                    let elementShrinks = generateShrinks(for: elements[i])
+                    for shrunkElement in elementShrinks {
+                        var newElements = elements
+                        newElements[i] = shrunkElement
+                        shrinks.append(.sequence(length: length, elements: newElements))
                     }
                 }
             }
@@ -211,6 +267,53 @@ struct Shrinker {
         }
         
         return shrinks
+    }
+    
+    private func shrinkNumberAggressively(_ n: UInt64) -> [UInt64] {
+        var shrinks: [UInt64] = []
+        
+        // Always try 0 first if not already 0
+        if n > 0 {
+            shrinks.append(0)
+        }
+        
+        // For small numbers, try every integer down to 0
+        if n <= 10 {
+            for i in (0..<n).reversed() {
+                shrinks.append(i)
+            }
+        } else {
+            // For larger numbers, use more aggressive steps
+            let steps: [UInt64] = [1, 2, 3, 5, 10, 25, 50, 100]
+            for step in steps {
+                if step < n {
+                    shrinks.append(n - step)
+                }
+            }
+            
+            // Then use binary search approach
+            var x = n / 2
+            while x > 100 {
+                shrinks.append(n - x)
+                x /= 2
+            }
+        }
+        
+        return shrinks.sorted().reversed() // Return in descending order for better performance
+    }
+    
+    /// Estimates the complexity of a ChoiceTree for sorting shrink candidates
+    private func estimateComplexity(_ tree: ChoiceTree) -> Int {
+        switch tree {
+        case .choice(let bits):
+            return Int(bits) // Lower numbers are simpler
+        case .sequence(let length, let elements):
+            return Int(length) * 10 + elements.reduce(0) { $0 + estimateComplexity($1) }
+        case .group(let children):
+            return children.reduce(0) { $0 + estimateComplexity($1) }
+        case .branch(_, let children):
+            return 1000 + children.reduce(0) { $0 + estimateComplexity($1) } // Branches are complex
+        }
     }
     
     /// A simple algorithm to shrink a number towards zero.

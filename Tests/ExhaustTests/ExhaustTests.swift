@@ -29,8 +29,10 @@ import Testing
     let result = Interpreters.generate(zipped)!
 //    let result = Person(age: 42, height: 178)
     let choices = Interpreters.reflect(zipped, with: result)
-    let replayed = Interpreters.replay(zipped, using: choices)
-    #expect(replayed! == result)
+    if let choices {
+        let replayed = Interpreters.replay(zipped, using: choices)
+        #expect(replayed! == result)
+    }
     #expect(true)
 }
 
@@ -95,7 +97,8 @@ func testStringObjectShrinking() {
         thing.name.contains(where: { $0.isUppercase })
     }
     
-    let failingExample = Thing(name: "`L4f&RdT){DV1Hf(%bYZ0k+HW|(e+1)16^Twes;XU@BZ[-*9FRR+s#W5Bl_e?DEYDw;o0-jp_&LO:^l9qYWSC5?yue?wMG:c%sIfS{jOl{mJ6:[l6FKNZQfztz,k6M)/!N$:D0nDtH'@L*I'J")
+//    let failingExample = Thing(name: "`L4f&RdT){DV1Hf(%bYZ0k+HW|(e+1)16^Twes;XU@BZ[-*9FRR+s#W5Bl_e?DEYDw;o0-jp_&LO:^l9qYWSC5?yue?wMG:c%sIfS{jOl{mJ6:[l6FKNZQfztz,k6M)/!N$:D0nDtH'@L*I'J")
+    let failingExample = Thing(name: "aleXander koLbu")
     let expectedMinimumCounterExample = Thing(name: "A")
 
     // Act

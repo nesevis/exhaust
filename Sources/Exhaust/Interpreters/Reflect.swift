@@ -13,7 +13,7 @@ extension Interpreters {
         with outputValue: Output,
         /// Optional validation check
         where check: (Output) -> Bool = { _ in true }
-    ) -> ChoiceTree {
+    ) -> ChoiceTree? {
         // The public API doesn't need to change. We start the process here.
         // We only care about the final output of the generator for the check.
         let allPossibleOutcomes = reflectRecursive(gen, onFinalOutput: outputValue)
@@ -21,6 +21,10 @@ extension Interpreters {
         let matchingPaths = allPossibleOutcomes.compactMap { (outputValue, path) -> [ChoiceTree]? in
             return check(outputValue) ? path : nil
         }.flatMap { $0 }
+        
+        guard matchingPaths.isEmpty == false else {
+            return nil
+        }
         
         return .group(matchingPaths)
     }
@@ -111,13 +115,10 @@ extension Interpreters {
             // 1. The target value for a sequence MUST be an array.
             guard
                 let targetArray = ((finalOutput as? [Any]) ?? (Array((finalOutput as? String) ?? "") as? [Any])),
-                targetArray.isEmpty == false
+                targetArray.count == Int(length)
             else {
                 return []
             }
-            
-            // 2. The count must match exactly.
-            guard targetArray.count == Int(length) else { return [] }
             
             var combinedPath: [ChoiceTree] = []
             var combinedResults: [Any] = []

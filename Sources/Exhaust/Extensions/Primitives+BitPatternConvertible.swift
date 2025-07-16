@@ -81,7 +81,7 @@ extension Double: BitPatternConvertible {
 extension Character: BitPatternConvertible {
     /// Defines the range for standard ASCII characters.
     public static var bitPatternRange: ClosedRange<UInt64> {
-        33...125
+        32...125
     }
 
     /// Creates a `Character` from a `UInt64` by assuming it represents an ASCII value.
