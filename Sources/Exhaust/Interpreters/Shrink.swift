@@ -52,10 +52,8 @@ struct Shrinker {
                 // 3. Replay the simplified path to get a new value.
                 guard let candidateValue = Interpreters.replay(generator, using: candidatePath) else {
                     // This path was invalid for the generator, skip it.
-                    print("replay: invalid candidate \(candidatePath)!")
                     continue
                 }
-                print("replay: valid candidate \(candidatePath)!")
                 
                 // 4. Run the test on the new, smaller value.
                 if testIsFailing(candidateValue) {
@@ -267,56 +265,54 @@ struct Shrinker {
         return shrinks
     }
     
-    private func shrinkNumberAggressively(_ n: UInt64, validRange: ClosedRange<UInt64>) -> [UInt64] {
+    private func shrinkNumberAggressively(_ number: UInt64, validRange: ClosedRange<UInt64>) -> [UInt64] {
         var shrinks: [UInt64] = []
         
         // Use the valid range's lower bound instead of 0
         let effectiveMin = validRange.lowerBound
         
         // For Character values, try meaningful character values first
-        if (32...125).contains(n) {
+        if (32...125).contains(number) {
             // Common minimal characters in ascending order of preference
             let commonChars: [UInt64] = [65, 97, 48, 32] // 'A', 'a', '0', ' '
             for char in commonChars {
-                if char < n && validRange.contains(char) {
+                if char < number && validRange.contains(char) {
                     shrinks.append(char)
                 }
             }
         }
         
         // For small numbers, try every integer down to effective minimum
-        if n <= 10 {
-            for i in (effectiveMin..<n).reversed() {
-                if validRange.contains(i) {
-                    shrinks.append(i)
-                }
+        if number <= 10 {
+            for i in (validRange.lowerBound..<number).reversed() {
+                shrinks.append(i)
             }
         } else {
             // For larger numbers, use more aggressive steps but respect valid range
             let steps: [UInt64] = [1, 2, 3, 5, 10, 25, 50, 100]
             for step in steps {
-                if step <= n { // Prevent underflow
-                    let candidate = n - step
-                    if candidate >= effectiveMin && validRange.contains(candidate) {
+                if step <= number { // Prevent underflow
+                    let candidate = number - step
+                    if candidate >= effectiveMin && validRange.upperBound >= candidate {
                         shrinks.append(candidate)
                     }
                 }
             }
             
             // Then use binary search approach
-            var x = n / 2
+            var x = number / 2
             while x > 100 {
-                if x <= n { // Prevent underflow
-                    let candidate = n - x
-                    if candidate >= effectiveMin && validRange.contains(candidate) {
+                if x <= number { // Prevent underflow
+                    let candidate = number - x
+                    if candidate >= effectiveMin && validRange.upperBound >= candidate {
                         shrinks.append(candidate)
                     }
                 }
                 x /= 2
             }
         }
-        
-        return shrinks.sorted().reversed() // Return in descending order for better performance
+        let result = Array(shrinks.sorted().reversed())
+        return result // Return in descending order for better performance
     }
     
     // Keep the original function for backward compatibility
