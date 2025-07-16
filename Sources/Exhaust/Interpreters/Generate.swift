@@ -112,12 +112,6 @@ enum Interpreters {
                 
             case .getSize:
                 return runContinuation(context.size)
-                
-            case .resize(let newSize, let nextGen):
-                let resizedContext = context.copy()
-                resizedContext.size = newSize
-                guard let result = self.generateRecursive(nextGen, with: inputValue, context: resizedContext) else { return nil }
-                return runContinuation(result)
             case let .lens(_, next):
                 // The path is not used in the forward pass
                 return runContinuation(next)
@@ -132,6 +126,24 @@ enum Interpreters {
                 //    constructed to specifically expect a `UInt64` and perform
                 //    the `T(bitPattern:)` decoding itself before continuing the chain.
                 return runContinuation(randomBits)
+            case let .sequence(length, gen):
+                let count = Int(length)
+                var results: [Any] = []
+                    results.reserveCapacity(count)
+                    
+                    // An iterative loop, not a recursive one. This will never overflow the stack.
+                    for _ in 0..<count {
+                        // Run the element generator once for each item.
+                        // It's a self-contained generator, so its input is `()`.
+                        guard let element = self.generateRecursive(gen, with: () as! Input, context: context) else {
+                            // If any element fails to generate, the whole sequence fails.
+                            return nil
+                        }
+                        results.append(element)
+                    }
+                    
+                    // Pass the completed array to the continuation.
+                    return runContinuation(results)
             }
         }
     }

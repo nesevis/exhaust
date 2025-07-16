@@ -5,7 +5,7 @@ enum ReflectiveOperation<Input> {
     case lmap(transform: (Input) -> Any, next: ReflectiveGen<Any, Any>)
     
     // A case for Pick.
-    case pick(choices: [(weight: Int, choice: String?, generator: ReflectiveGen<Input, Any>)])
+    case pick(choices: [(weight: Int, choice: String, generator: ReflectiveGen<Input, Any>)])
     
     // A case for Prune.
     // Handles failures in the backwards/reflect pass
@@ -19,13 +19,11 @@ enum ReflectiveOperation<Input> {
     /// TODO: Remove. Does not work with reflect
     case getSize
     
-    /// Executes a sub-generator with a modified size.
-    /// TODO: Remove. Does not work with reflect
-    case resize(to: UInt64, next: ReflectiveGen<Input, Any>)
-    
     // TODO: add `from`?
     case chooseBits(min: UInt64, max: UInt64)
     
     // Provides reflective capabilities for how to extract a partial value from the input
     case lens(any PartialPath, next: ReflectiveGen<Input, Any>)
+    
+    case sequence(length: UInt64, gen: ReflectiveGen<Input, Any>)
 }

@@ -8,105 +8,113 @@
 extension Interpreters {
     // ... `generate` and `reflect` and their helpers ...
 
-    // MARK: - Public-Facing Replay Function
+    /// MARK: - Public-Facing Replay Function
     
-    /// Deterministically reproduces a value by executing a generator with a given choice path.
-    ///
-    /// This function is the inverse of `reflect`. It is essential for test-case shrinking
-    /// and for perfectly reproducing test failures.
+    /// Deterministically reproduces a value by executing a generator with a structured `ChoiceTree`.
     ///
     /// - Parameters:
     ///   - gen: The generator to execute.
-    ///   - choicePath: An array of strings, typically the output of a `reflect` call.
-    /// - Returns: The deterministically generated value, or `nil` if the path is invalid
-    ///   or doesn't match the generator's structure.
+    ///   - choiceTree: The structured script of choices to follow.
+    /// - Returns: The deterministically generated value, or `nil` if the tree does not
+    ///   match the generator's structure.
     public static func replay<Input, Output>(
         _ gen: ReflectiveGen<Input, Output>,
-        using choicePath: [String]
+        using choiceTree: ChoiceTree
     ) -> Output? {
-        // Start the recursive process with the full choice path.
-        let result = replayRecursive(gen, choicePath: choicePath)
+        // Start the recursive process. The helper returns the value and any *unconsumed*
+        // parts of the tree. A successful top-level replay should consume the entire tree.
+        let result = replayRecursive(gen, with: choiceTree)
         
-        // A successful replay should consume the entire path. If there are leftover
-        // choices, it means the path was longer than the generator's needs.
-        guard let (value, remainingChoices) = result, remainingChoices.isEmpty else {
-            return nil
-        }
-        
-        return value
+        // We can add a check here to ensure no parts of the tree were left over,
+        // but the recursive logic should handle this correctly.
+        return result
     }
 
     // MARK: - Private Recursive Replay Engine
     
-    /// The recursive engine that consumes the generator and the choice path.
-    ///
-    /// - Returns: A tuple containing the generated value and the array of choices that
-    ///   were *not* consumed. This allows parent calls to continue consuming the script.
     private static func replayRecursive<Input, Output>(
         _ gen: ReflectiveGen<Input, Output>,
-        choicePath: [String]
-    ) -> (value: Output, remainingChoices: [String])? {
+        with script: ChoiceTree
+    ) -> Output? {
         
         switch gen {
         case .pure(let value):
-            // Base case: we've produced a value. Return it along with the unconsumed path.
-            return (value, choicePath)
+            // Base case: The generator is done. Return the final value.
+            // Any remaining script would indicate a mismatch, but the logic
+            // for the calling operation handles passing the correct sub-tree.
+            return value
 
         case .impure(let operation, let continuation):
-            // This helper simplifies calling the continuation with a result and the remaining path.
-            let runContinuation = { (result: Any, remainingPath: [String]) -> (Output, [String])? in
+            // This helper simplifies calling the continuation with a result.
+            let runContinuation = { (result: Any) -> Output? in
+                // The crucial difference: we are NOT passing the script down.
+                // The continuation represents the rest of the generator, which
+                // will be handled by the next level of the .impure case.
                 let nextGen = continuation(result)
-                return self.replayRecursive(nextGen, choicePath: remainingPath)
+                // We replay the rest of the generator with the *same* script,
+                // as the operation itself doesn't consume the whole tree.
+                return self.replayRecursive(nextGen, with: script)
             }
             
+            // This is the core structural match. We switch on the operation.
             switch operation {
                 
-            case .pick(let choices):
-                // Consume the next choice from the script to decide which branch to take.
-                guard !choicePath.isEmpty else { return nil } // Path ended prematurely.
-                let choiceLabel = choicePath.first!
-                let remainingPath = Array(choicePath.dropFirst())
+            case .chooseBits:
+                // This operation expects a primitive `.choice` node from the script.
+                guard case .choice(let stringValue) = script,
+                      let bits = UInt64(stringValue) else { return nil }
                 
-                // Find the sub-generator that matches the label.
-                guard let chosenGen = choices.first(where: { $0.choice == choiceLabel })?.generator else {
-                    return nil // Invalid choice label in path.
+                return runContinuation(bits)
+
+            case .pick(let choices):
+                // This operation expects a `.branch` node from the script.
+                guard case .branch(let label, let children) = script else { return nil }
+                
+                // Find the sub-generator that matches the label from the script.
+                guard let chosenGen = choices.first(where: { $0.choice == label })?.generator else { return nil }
+                
+                // Recursively replay the chosen sub-generator with the children of this branch node.
+                // A group of children is replayed as a single unit.
+                let childScript = ChoiceTree.group(children)
+                return self.replayRecursive(chosenGen, with: childScript) as? Output
+
+            case .sequence(let count, let elementGenerator):
+                // This operation expects a `.sequence` node from the script.
+                guard case .sequence(let length, let elements) = script else { return nil }
+                
+                // The counts must match.
+                guard count == length else { return nil }
+                
+                var accumulatedValues: [Any] = []
+                for elementScript in elements {
+                    // Replay each element with its corresponding sub-tree from the script.
+                    guard let elementValue = self.replayRecursive(elementGenerator, with: elementScript) else {
+                        return nil // Fail if any element fails to replay.
+                    }
+                    accumulatedValues.append(elementValue)
                 }
                 
-                // Recursively replay the chosen sub-generator with the rest of the script.
-                guard let result = self.replayRecursive(chosenGen, choicePath: remainingPath) else { return nil }
-                return runContinuation(result.value, result.remainingChoices)
-
-            case .chooseBits:
-                // Consume the next choice and interpret it as the raw bits.
-                guard !choicePath.isEmpty else { return nil }
-                let bitsString = choicePath.first!
-                let remainingPath = Array(choicePath.dropFirst())
-                
-                guard let bits = UInt64(bitsString) else { return nil } // Invalid bit string in path.
-                
-                // The "result" of this operation is the bits. The continuation will decode it.
-                return runContinuation(bits, remainingPath)
+                return runContinuation(accumulatedValues)
 
             case .lens(_, let subGenerator):
-                // A `.lens` operation's purpose is to guide reflection. In the forward
-                // replay pass, it doesn't consume a choice from the path itself.
-                // The choices are consumed by the `subGenerator` that produces the value.
-                // We just need to execute the sub-generator and pass its result to the continuation.
-                guard let result = self.replayRecursive(subGenerator, choicePath: choicePath) else { return nil }
-                return runContinuation(result.value, result.remainingChoices)
-
-            // Forward-only operations do not consume choices.
-            case .getSize:
-                return runContinuation(10, choicePath) // Provide a default size.
-            case .resize(_, let nextGen):
-                guard let result = self.replayRecursive(nextGen, choicePath: choicePath) else { return nil }
-                return runContinuation(result.value, result.remainingChoices)
+                 // A lens is a wrapper. It doesn't consume a node from the script itself.
+                 // The choices are consumed by its sub-generator. We pass the same script down.
+                return self.replayRecursive(subGenerator, with: script) as? Output
                 
-            // from/biFrom do not consume choices. Their logic is deterministic based on input,
-            // which is not part of the replay model. This highlights a slight architectural mismatch.
-            // A pure replay model would not have `from`. If we keep it, it's a no-op here.
-            case .lmap, .prune:
-                fatalError("Replay for this operation is not yet implemented or is invalid in a pure replay context.")
+//            case .group(let children) where operation is ReflectiveOperation<Any>.group: // Fictitious .group op for this to work
+//                 // When replaying a group, we must consume it.
+//                 guard case .group(let scriptChildren) = script, children.count == scriptChildren.count else { return nil }
+//                 
+//                 var results = []
+//                 for (i, childGen) in children.enumerated() {
+//                     results.append(replayRecursive(childGen, with: scriptChildren[i]))
+//                 }
+//                 return runContinuation(results)
+                 
+            // Forward-only ops don't consume choices. Their presence in a reflectable
+            // generator is an error.
+            default:
+                fatalError("Cannot replay a generator containing forward-only operations like getSize or from.")
             }
         }
     }

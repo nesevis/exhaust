@@ -13,14 +13,14 @@ extension Interpreters {
         with outputValue: Output,
         /// Optional validation check
         where check: (Output) -> Bool = { _ in true }
-    ) -> [[String]] {
+    ) -> [ChoiceTree] {
         // The public API doesn't need to change. We start the process here.
         // We only care about the final output of the generator for the check.
         let allPossibleOutcomes = reflectRecursive(gen, onFinalOutput: outputValue)
         
-        let matchingPaths = allPossibleOutcomes.compactMap { (outputValue, path) -> [String]? in
+        let matchingPaths = allPossibleOutcomes.compactMap { (outputValue, path) -> [ChoiceTree]? in
             return check(outputValue) ? path : nil
-        }
+        }.flatMap { $0 }
         
         return matchingPaths
     }
@@ -32,7 +32,7 @@ extension Interpreters {
     private static func reflectRecursive<Input, Output>(
         _ gen: ReflectiveGen<Input, Output>,
         onFinalOutput finalOutput: Any
-    ) -> [(value: Output, path: [String])] { // Still returns typed Output and path
+    ) -> [(value: Output, path: [ChoiceTree])] { // Still returns typed Output and path
         switch gen {
         case .pure(let value):
             // The pure value is the result for this path. No check needed here.
@@ -43,7 +43,7 @@ extension Interpreters {
             let intermediateResults = interpretOperationBackward(operation, onFinalOutput: finalOutput)
             
             // 2. For each successful intermediate result...
-            let results = intermediateResults.flatMap { (intermediateValue: Any, partialPath: [String]) in
+            let results = intermediateResults.flatMap { (intermediateValue: Any, partialPath: [ChoiceTree]) in
                 let nextGen = continuation(intermediateValue)
                 // The `finalOutput` is passed down UNCHANGED. This is the crucial part.
                 let finalResults = reflectRecursive(nextGen, onFinalOutput: finalOutput)
@@ -62,7 +62,8 @@ extension Interpreters {
     private static func interpretOperationBackward<Input>(
         _ op: ReflectiveOperation<Input>,
         onFinalOutput finalOutput: Any
-    ) -> [(resultForContinuation: Any, path: [String])] {
+    ) -> [(resultForContinuation: Any, path: [ChoiceTree])] {
+        print("\(#function) for \(String(describing: op).prefix(while: { $0 != "(" }))")
         switch op {
         case .lmap(let transform, let nextGen):
             // LMAP's JOB: Try to cast the final output to its expected Input type.
@@ -82,11 +83,12 @@ extension Interpreters {
 
         case .pick(let choices):
             // PICK's JOB: Try all branches against the same final output value.
-            return choices.flatMap { (_, label, generator) -> [(resultForContinuation: Any, path: [String])] in
+            return choices.flatMap { (_, label, generator) -> [(resultForContinuation: Any, path: [ChoiceTree])] in
                 let subPaths = reflectRecursive(generator, onFinalOutput: finalOutput)
-                return subPaths.map { (value, path) in
-                    (value, (label.map { [$0] } ?? []) + path)
+                let labeledPaths = subPaths.map { (value, pathTree) in
+                    (value, [ChoiceTree.branch(label: label, children: pathTree)])
                 }
+                return labeledPaths
             }
         case let .lens(path, next):
             guard let subValue = path.extract(from: finalOutput) else {
@@ -104,8 +106,37 @@ extension Interpreters {
             }
             
             // Success! The result for the continuation is the value itself.
-            return [(resultForContinuation: finalOutput, path: [bitPattern.description])]
-        case .getSize, .resize:
+            return [(resultForContinuation: finalOutput, path: [.choice(bitPattern.description)])]
+        case let .sequence(length, gen):
+            let count = Int(length)
+            // 1. The target value for a sequence MUST be an array.
+            guard
+                let targetArray = ((finalOutput as? [Any]) ?? (Array((finalOutput as? String) ?? "") as? [Any])),
+                targetArray.isEmpty == false
+            else {
+                return []
+            }
+            
+            // 2. The count must match exactly.
+            guard targetArray.count == count else { return [] }
+            
+            var combinedPath: [ChoiceTree] = []
+            var combinedResults: [Any] = []
+            
+            // 3. Iterate over the elements of the target array.
+            for elementTarget in targetArray {
+                // Reflect on the element generator with the corresponding element as the target.
+                // We assume reflection on an element is non-ambiguous and produces one path.
+                guard let (value, path) = self.reflectRecursive(gen, onFinalOutput: elementTarget).first else {
+                    // If any element cannot be reflected, the whole sequence fails.
+                    return []
+                }
+                combinedResults.append(value)
+                combinedPath.append(contentsOf: path)
+            }
+            let finalTree = ChoiceTree.sequence(length: count, elements: combinedPath)
+            return [(resultForContinuation: combinedResults, path: [finalTree])]
+        case .getSize:
             fatalError("Should not be included!")
         }
     }

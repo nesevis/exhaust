@@ -79,23 +79,30 @@ func testPersonShrinking() {
 
 @Test("Shrinking something with strings!")
 func testStringObjectShrinking() {
+    // Arrange
     struct Thing: Equatable {
         let name: String
     }
     let shrinker = Shrinker()
-    
-    let thingGen = Gen.lens(into: \Thing.name, Gen.arrayOf(Gen.choose(type: Character.self)))
-        .map { String($0) }
+    let gen = Gen.lens(into: \Thing.name.count, Gen.choose(in: 1...150))
+        .bind { length in
+            Gen.lens(
+                into: \Thing.name,
+                Gen.arrayOf(Gen.choose(type: Character.self), length).map { String($0) }
+            )
+        }
         .map { Thing(name: $0) }
     
     let property: (Thing) -> Bool = { thing in
         thing.name.contains(where: { $0.isUppercase })
     }
-    let result = Interpreters.generate(thingGen)!
     
-    let failing = Thing(name: "aleXander kolbu")
-    let expectedMinimumValue = Thing(name: "A")
-    let shrunken = shrinker.shrink(failing, using: thingGen, where: property)
-    #expect(expectedMinimumValue == shrunken)
+    let failingExample = Thing(name: "`L4f&RdT){DV1Hf(%bYZ0k+HW|(e+1)16^Twes;XU@BZ[-*9FRR+s#W5Bl_e?DEYDw;o0-jp_&LO:^l9qYWSC5?yue?wMG:c%sIfS{jOl{mJ6:[l6FKNZQfztz,k6M)/!N$:D0nDtH'@L*I'J")
+    let expectedMinimumCounterExample = Thing(name: "A")
+
+    // Act
+    let shrunken = shrinker.shrink(failingExample, using: gen, where: property)
     
+    // Assert
+    #expect(expectedMinimumCounterExample == shrunken)
 }

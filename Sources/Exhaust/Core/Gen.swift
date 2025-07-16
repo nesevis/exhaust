@@ -31,11 +31,11 @@ enum Gen {
     }
     
     static func pick<Output>(
-        choices: [(weight: Int, choice: String?, generator: ReflectiveGen<Void, Output>)]
+        choices: [(weight: Int, choice: String, generator: ReflectiveGen<Void, Output>)]
     ) -> ReflectiveGen<Void, Output> {
         // The nested generators must all have the same Output type.
         // We erase it to `Any` for the operation, but the `liftF` call
-        // ensures the final monad has the correct `Output` type.
+        // ensures the final monad has bthe correct `Output` type.
         let erasedChoices = choices.map { ($0.weight, $0.choice, $0.generator.map { $0 as Any }) }
         return liftF(.pick(choices: erasedChoices))
     }
@@ -72,13 +72,12 @@ enum Gen {
             return .lmap(transform: newTransform, next: next)
         case .getSize:
             return .getSize
-        case let .resize(to, next):
-            let newNext = next.mapOperation(eraseInputType(from:))
-            return .resize(to: to, next: newNext)
         case let .lens(path, next):
             return .lens(path, next: next.mapOperation(eraseInputType(from:)))
         case let .chooseBits(min, max):
             return .chooseBits(min: min, max: max)
+        case let .sequence(length, gen):
+            return .sequence(length: length, gen: gen.mapOperation(eraseInputType(from:)))
         }
     }
     
@@ -180,16 +179,35 @@ enum Gen {
     }
     
     /// Creates a generator that produces the current size from the interpreter's context.
-    static func getSize() -> ReflectiveGen<Void, Int> {
+    static func getSize() -> ReflectiveGen<Void, UInt64> {
         liftF(.getSize)
     }
     
-    /// Creates a generator that runs a sub-generator within a context with a new size.
-    static func resize<Input, Output>(to size: Int, _ generator: ReflectiveGen<Input, Output>) -> ReflectiveGen<Input, Output> {
-        // Wrap the provided generator in the resize operation.
-        let op = ReflectiveOperation<Input>.resize(to: size, next: generator.map { $0 as Any })
-        
-        // The continuation simply passes through the result of the inner generator.
-        return liftF(op)
+    /// Creates a generator for an array of random values.
+    ///
+    /// This implementation is stack-safe and can generate very large arrays without overflowing.
+    /// It works by first generating a random length, then using a primitive `.sequence` operation
+    /// which the interpreter can execute iteratively.
+    ///
+    /// - Parameters:
+    ///   - elementGenerator: A self-contained (`<Void, Element>`) generator for the elements of the array.
+    ///   - lengthRange: The desired range for the array's length. Defaults to `0...size`.
+    /// - Returns: A generator that produces an array of elements.
+    public static func arrayOf<Output>(
+        _ elementGenerator: ReflectiveGen<Void, Output>,
+        _ length: UInt64
+    ) -> ReflectiveGen<Void, [Output]> {
+        // 2. Use `bind` to get the result of the length generator.
+        let sequenceOp = ReflectiveOperation<Void>.sequence(
+            length: length,
+            gen: elementGenerator.map { $0 as Any }
+        )
+        // 4. Lift the operation. The continuation will decode the `[Any]` result.
+        return .impure(operation: sequenceOp) { result in
+            guard let array = result as? [Output] else {
+                fatalError("Oh no!")
+            }
+            return .pure(array)
+        }
     }
 }
