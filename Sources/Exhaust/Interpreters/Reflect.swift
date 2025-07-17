@@ -9,7 +9,7 @@ extension Interpreters {
     // MARK: - Public-Facing Reflect Function (Unchanged, but now correct)
 
     public static func reflect<Input, Output>(
-        _ gen: ReflectiveGen<Input, Output>,
+        _ gen: ReflectiveGenerator<Input, Output>,
         with outputValue: Output,
         /// Optional validation check
         where check: (Output) -> Bool = { _ in true }
@@ -34,7 +34,7 @@ extension Interpreters {
     /// The main recursive engine for reflection.
     /// It now takes the *final output value* as a constant target throughout the recursion.
     private static func reflectRecursive<Input, Output>(
-        _ gen: ReflectiveGen<Input, Output>,
+        _ gen: ReflectiveGenerator<Input, Output>,
         onFinalOutput finalOutput: Any
     ) -> [(value: Output, path: [ChoiceTree])] { // Still returns typed Output and path
         switch gen {
@@ -109,7 +109,16 @@ extension Interpreters {
                 return labeledPaths
             }
         case let .chooseBits(min, max):
-            guard let convertibleValue = finalOutput as? any BitPatternConvertible else {
+            // In the reverse pass of a [[Char]] we'll be passed the array here and it will represent the length of the list. How can we know that?
+            var convertibleValue: (any BitPatternConvertible)?
+            if let convertible = finalOutput as? any BitPatternConvertible {
+                convertibleValue = convertible
+            }
+            // This is awful. What about triply nested arrays?
+            if let convertible = finalOutput as? any Sequence {
+                convertibleValue = convertible.underestimatedCount
+            }
+            guard let convertibleValue else {
                 return []
             }
             let bitPattern = convertibleValue.bitPattern64

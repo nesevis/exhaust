@@ -111,3 +111,50 @@ func testStringObjectShrinking() {
 //    #expect(expectedMinimumCounterExample == shrunken1)
     #expect(expectedMinimumCounterExample == shrunken2)
 }
+
+@Test("Sequence with steps")
+func testSequenceWithSteps() {
+    let shrinker = Shrinker()
+    let gen = UInt.arbitrary.map { $0 * 10 }
+    let counterExample: UInt = 1330
+    let property: (UInt) -> Bool = { thing in
+        thing == counterExample
+    }
+    
+    let shrunken = shrinker.shrink(counterExample, using: gen, where: property)
+    #expect(counterExample == shrunken)
+}
+
+@Test("Sequence with picks")
+func testSequenceWithPicks() {
+    struct Receipt: Equatable {
+        let items: [[String]]
+        let cost: UInt64
+    }
+    let shrinker = Shrinker()
+    
+    // Our problem is that this is [[Char]] under the hood, and if we lens into the count we're too deep to lens out.
+    // I don't want to add specific handling to the reflect or replay interpreters to handle this, in the case of multiply nested arrays in the future. Look into `getSize`?
+    let gen = Gen.lens(into: \Receipt.items, String.arbitrary.proliferate(with: 5...10).proliferate(with: 1...2))
+        .bind { items in
+            Gen.lens(into: \Receipt.cost, Gen.choose(in: 1...100)).map { cost in
+                Receipt(items: items, cost: cost)
+            }
+        }
+//    let genned = Interpreters.generate(gen)
+    let counterExample = Receipt(items: [["ham", "cheese", "a", "b", "c"]], cost: 75)
+    let property: (Receipt) -> Bool = { thing in
+        guard thing.items.isEmpty == false else {
+            return false
+        }
+        let costPerItem = thing.cost / UInt64(thing.items.flatMap(\.self).count)
+        print("Cost per item is \(costPerItem)")
+        return costPerItem > 1
+    }
+    let minimalCounterExample = Receipt(items: [["a"]], cost: 2)
+    #expect(property(counterExample))
+    
+    let shrunken = shrinker.shrink(counterExample, using: gen, where: property)
+    print()
+    #expect(minimalCounterExample == shrunken)
+}

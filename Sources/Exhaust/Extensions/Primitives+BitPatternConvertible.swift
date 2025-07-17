@@ -7,6 +7,48 @@
 
 import Foundation
 
+extension UInt8: BitPatternConvertible {
+    init(bitPattern: UInt64) {
+        self = UInt8(bitPattern)
+    }
+    
+    static var bitPatternRange: ClosedRange<UInt64> {
+        UInt64(UInt8.min)...UInt64(UInt8.max)
+    }
+    
+    var bitPattern64: UInt64 {
+        UInt64(self)
+    }
+}
+
+extension UInt16: BitPatternConvertible {
+    init(bitPattern: UInt64) {
+        self = UInt16(bitPattern)
+    }
+    
+    static var bitPatternRange: ClosedRange<UInt64> {
+        UInt64(UInt8.min)...UInt64(UInt8.max)
+    }
+    
+    var bitPattern64: UInt64 {
+        UInt64(self)
+    }
+}
+
+extension UInt32: BitPatternConvertible {
+    init(bitPattern: UInt64) {
+        self = UInt32(bitPattern)
+    }
+    
+    static var bitPatternRange: ClosedRange<UInt64> {
+        UInt64(UInt8.min)...UInt64(UInt8.max)
+    }
+    
+    var bitPattern64: UInt64 {
+        UInt64(self)
+    }
+}
+
 /// Implemented for bidirectionality
 extension UInt64: BitPatternConvertible {
     static var bitPatternRange: ClosedRange<UInt64> {
@@ -22,9 +64,23 @@ extension UInt64: BitPatternConvertible {
     }
 }
 
+extension UInt: BitPatternConvertible {
+    static var bitPatternRange: ClosedRange<UInt64> {
+        UInt64(UInt.min)...UInt64(UInt.max)
+    }
+    
+    init(bitPattern: UInt64) {
+        self = UInt(bitPattern)
+    }
+    
+    var bitPattern64: UInt64 {
+        UInt64(self)
+    }
+}
+
 extension Int: BitPatternConvertible {
     public init(bitPattern: UInt64) {
-        self = Int(bitPattern: UInt(bitPattern))
+        self = Int(bitPattern)
     }
     
     /// Defines the range of `Int` values that can be safely represented by `UInt64`.
@@ -55,9 +111,7 @@ extension Float: BitPatternConvertible {
     
     /// Creates a `Float` from a `UInt64` by first converting to `UInt32`.
     public init(bitPattern: UInt64) {
-        // Assumes the bit pattern fits within a UInt32, consistent with the range.
-        let bitPattern32 = UInt32(truncatingIfNeeded: bitPattern)
-        self.init(bitPattern: bitPattern32)
+        self.init(bitPattern)
     }
     
     /// The underlying IEEE 754 bits of the `Float`, promoted to a `UInt64`.
@@ -89,8 +143,6 @@ extension Character: BitPatternConvertible {
         self.init(Unicode.Scalar(UInt32(bitPattern))!)
     }
 
-    /// The ASCII value of the `Character`, promoted to `UInt64`.
-    /// This property will be `nil` for non-ASCII characters, so a production implementation
     /// would need to be more robust or use `unicodeScalars` for a wider range.
     public var bitPattern64: UInt64 {
         guard let scalarValue = self.unicodeScalars.first?.value else {

@@ -1,5 +1,8 @@
+protocol AnyFreerMonad {
+    associatedtype Value
+}
 
-enum FreerMonad<Operation, Value> {
+enum FreerMonad<Operation, Value>: AnyFreerMonad {
     /// A pure value — the termination point of this operation
     case pure(Value)
     /// An impure value representing a suspended operation

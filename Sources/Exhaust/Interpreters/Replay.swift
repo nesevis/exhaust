@@ -18,7 +18,7 @@ extension Interpreters {
     /// - Returns: The deterministically generated value, or `nil` if the tree does not
     ///   match the generator's structure.
     public static func replay<Input, Output>(
-        _ gen: ReflectiveGen<Input, Output>,
+        _ gen: ReflectiveGenerator<Input, Output>,
         using choiceTree: ChoiceTree
     ) -> Output? {
         // Start the recursive process. The helper returns the value and any *unconsumed*
@@ -33,7 +33,7 @@ extension Interpreters {
     // MARK: - Private Recursive Replay Engine
     
     private static func replayWithChoices<Input, Output>(
-        _ gen: ReflectiveGen<Input, Output>,
+        _ gen: ReflectiveGenerator<Input, Output>,
         choices: [ChoiceTree]
     ) -> Output? {
         var remainingChoices = choices
@@ -41,7 +41,7 @@ extension Interpreters {
     }
     
     private static func replayWithChoicesHelper<Input, Output>(
-        _ gen: ReflectiveGen<Input, Output>,
+        _ gen: ReflectiveGenerator<Input, Output>,
         choices: inout [ChoiceTree]
     ) -> Output? {
         
@@ -107,7 +107,7 @@ extension Interpreters {
     }
     
     private static func replayRecursive<Input, Output>(
-        _ gen: ReflectiveGen<Input, Output>,
+        _ gen: ReflectiveGenerator<Input, Output>,
         with script: ChoiceTree
     ) -> Output? {
         

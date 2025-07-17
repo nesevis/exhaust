@@ -1,7 +1,7 @@
 enum Gen {
     static func liftF<Input, Output>(
         _ op: ReflectiveOperation<Input>
-    ) -> ReflectiveGen<Input, Output> {
+    ) -> ReflectiveGenerator<Input, Output> {
         return .impure(operation: op) { result in
             guard let typedResult = result as? Output else {
                 fatalError("Interpreter provided wrong type. Expected \(Output.self), got \(type(of: result))")
@@ -12,15 +12,15 @@ enum Gen {
     
     static func lens<Input, Output, NewInput>(
         into path: some PartialPath<NewInput, Input>,
-        _ next: ReflectiveGen<Input, Output>
-    ) -> ReflectiveGen<Any, Output> {
+        _ next: ReflectiveGenerator<Any, Output>
+    ) -> ReflectiveGenerator<Any, Output> {
         comap(path.extract(from:), next)
             .mapOperation(eraseInputType(from:))
     }
     
     static func pick<Input, Output>(
-        choices: [(weight: UInt64, generator: ReflectiveGen<Input, Output>)]
-    ) -> ReflectiveGen<Input, Output> {
+        choices: [(weight: UInt64, generator: ReflectiveGenerator<Input, Output>)]
+    ) -> ReflectiveGenerator<Input, Output> {
         // The nested generators must all have the same Output type.
         // We erase it to `Any` for the operation, but the `liftF` call
         // ensures the final monad has bthe correct `Output` type.
@@ -28,7 +28,7 @@ enum Gen {
         return liftF(.pick(choices: erasedChoices))
     }
     
-    static func prune<Input, Output>(_ generator: ReflectiveGen<Input, Output>) -> ReflectiveGen<Optional<Input>, Output> {
+    static func prune<Input, Output>(_ generator: ReflectiveGenerator<Input, Output>) -> ReflectiveGenerator<Optional<Input>, Output> {
         // The implementation is very similar to lmap: it uses mapOperation to erase
         // the input type and wraps the generator in the .prune operation.
         let erasedGenerator = generator.mapOperation(eraseInputType).map { $0 as Any }
@@ -55,7 +55,7 @@ enum Gen {
                 guard let typedInput = anyInput as? Input else {
                     fatalError("Type mismatch during lmap erasure.")
                 }
-                return transform(typedInput)
+                return transform(typedInput) ?? ()
             }
             return .lmap(transform: newTransform, next: next)
         case let .chooseBits(min, max):
@@ -86,7 +86,7 @@ enum Gen {
 //        return choose(in: inclusiveRange)
 //    }
     
-    static func choose<Input, Output: BitPatternConvertible>(in range: ClosedRange<Output>? = nil, type: Output.Type = Output.self, input: Input.Type = Input.self) -> ReflectiveGen<Input, Output> {
+    static func choose<Input, Output: BitPatternConvertible>(in range: ClosedRange<Output>? = nil, type: Output.Type = Output.self, input: Input.Type = Input.self) -> ReflectiveGenerator<Input, Output> {
         
         // 1. Determine the range of raw UInt64 bits to generate.
         //    This logic delegates the responsibility of defining the range to the type `T` itself.
@@ -102,23 +102,35 @@ enum Gen {
         //    inside the continuation. This is the core of the design.
         return .impure(operation: op) { result in
             // a. The interpreter will execute the operation and pass the raw `UInt64` result here.
-            guard let convertible = result as? (any BitPatternConvertible) else {
-                // This signifies a bug in the interpreter, not user code.
+            var convertibleValue: (any BitPatternConvertible)?
+            if let convertible = result as? (any BitPatternConvertible) {
+                convertibleValue = convertible
+            }
+            else if let convertible = result as? (any Sequence) {
+                convertibleValue = convertible.underestimatedCount
+            }
+            
+            if let convertibleValue {
+                return .pure(Output(bitPattern: convertibleValue.bitPattern64))
+            } else {
                 fatalError("Interpreter failed to provide a UInt64 for a chooseBits operation.")
             }
+//            guard let convertible = result as? (any BitPatternConvertible) else {
+//                // This signifies a bug in the interpreter, not user code.
+//            }
             
             // b. The continuation uses the protocol's required initializer to convert the
             //    raw bits back into the final, strongly-typed `T`. This is where the
             //    magic of two's complement or IEEE 754 happens, specific to type `T`.
             // Kolbu: This works both in generate and reflect
-            let finalValue = Output(bitPattern: convertible.bitPattern64)
+//            let finalValue = Output(bitPattern: convertible.bitPattern64)
             
             // c. Wrap the final value in `.pure` to complete this branch of the monadic computation.
-            return .pure(finalValue)
+//            return .pure(finalValue)
         }
     }
     
-    static func lmap<NewInput, Input, Output>(_ transform: @escaping (NewInput) -> Input, _ generator: ReflectiveGen<Input, Output>) -> ReflectiveGen<NewInput, Output> {
+    static func lmap<NewInput, Input, Output>(_ transform: @escaping (NewInput) -> Input, _ generator: ReflectiveGenerator<Input, Output>) -> ReflectiveGenerator<NewInput, Output> {
         
         let erasedTransform: (Any) -> Any = { newInput in
             return transform(newInput as! NewInput) as Any
@@ -133,7 +145,7 @@ enum Gen {
                 // Forward pass
                 return .pure(typed)
                 
-            } else if let gen = result as? ReflectiveGen<NewInput, Any> {
+            } else if let gen = result as? ReflectiveGenerator<NewInput, Any> {
                 // Backward pass
                 return gen.map { $0 as! Output }
             }
@@ -143,18 +155,18 @@ enum Gen {
     
     static func comap<NewInput, Input, Output>(
         _ transform: @escaping (NewInput) -> Input?,
-        _ generator: ReflectiveGen<Input, Output>
-    ) -> ReflectiveGen<NewInput, Output> {
+        _ generator: ReflectiveGenerator<Input, Output>
+    ) -> ReflectiveGenerator<NewInput, Output> {
         lmap(transform, prune(generator))
     }
     
     // A base generator that produces a single, constant value.
-    static func just<Output>(_ value: Output) -> ReflectiveGen<Any, Output> {
+    static func just<Output>(_ value: Output) -> ReflectiveGenerator<Any, Output> {
         return .pure(value)
     }
 
     // exact is the canonical leaf generator. It generates a constant value and, crucially, in the backward pass, it fails if the input doesn't match that constant.
-    static func exact<Value: Equatable>(_ value: Value) -> ReflectiveGen<Value, Value> {
+    static func exact<Value: Equatable>(_ value: Value) -> ReflectiveGenerator<Value, Value> {
         // 1. Start with a generator that just produces the value.
         let baseGenerator = just(value)
         
@@ -176,9 +188,9 @@ enum Gen {
     ///   - lengthRange: The desired range for the array's length. Defaults to `0...size`.
     /// - Returns: A generator that produces an array of elements.
     public static func arrayOf<Input, Output>(
-        _ elementGenerator: ReflectiveGen<Input, Output>,
+        _ elementGenerator: ReflectiveGenerator<Input, Output>,
         _ length: UInt64
-    ) -> ReflectiveGen<Input, [Output]> {
+    ) -> ReflectiveGenerator<Input, [Output]> {
         // 2. Use `bind` to get the result of the length generator.
         let sequenceOp = ReflectiveOperation<Input>.sequence(
             length: length,

@@ -3,7 +3,7 @@ import Foundation
 struct Shrinker {
     public func shrink<Input, Output>(
         _ value: Output,
-        using generator: ReflectiveGen<Input, Output>,
+        using generator: ReflectiveGenerator<Input, Output>,
         where testIsFailing: (Output) -> Bool
     ) -> Output {
         
@@ -20,7 +20,8 @@ struct Shrinker {
             // --- PHASE 1: Fast Greedy Pass ---
             let greedyIterator = ShrinkCandidateIterator(tree: bestPath)
             while let candidate = greedyIterator.next() {
-                if let candidateValue = Interpreters.replay(generator, using: candidate), testIsFailing(candidateValue) {
+                let candidateValue = Interpreters.replay(generator, using: candidate)
+                if let candidateValue, testIsFailing(candidateValue) {
                     bestPath = candidate
                     smallestValue = candidateValue
                     didFindSmallerInGreedyPass = true

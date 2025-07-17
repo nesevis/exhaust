@@ -24,7 +24,7 @@ enum Interpreters {
     }
     
     public static func generate<Output>(
-        _ gen: ReflectiveGen<Any, Output>,
+        _ gen: ReflectiveGenerator<Any, Output>,
         initialSize: UInt64 = 10,
         using rng: (any RandomNumberGenerator)? = nil
     ) -> Output? {
@@ -33,7 +33,7 @@ enum Interpreters {
     }
     
     public static func generate<Output>(
-        _ gen: ReflectiveGen<Void, Output>, // Constrained to Input == Void
+        _ gen: ReflectiveGenerator<Void, Output>, // Constrained to Input == Void
         initialSize: UInt64 = 10,
         using rng: (any RandomNumberGenerator)? = nil
     ) -> Output? {
@@ -42,7 +42,7 @@ enum Interpreters {
     }
 
     public static func generate<Input, Output>(
-        _ gen: ReflectiveGen<Input, Output>,
+        _ gen: ReflectiveGenerator<Input, Output>,
         with input: Input,
         initialSize: UInt64 = 10,
         using rng: (any RandomNumberGenerator)? = nil
@@ -57,7 +57,7 @@ enum Interpreters {
     // MARK: - Recursive Engine
     
     private static func generateRecursive<Input, Output>(
-        _ gen: ReflectiveGen<Input, Output>,
+        _ gen: ReflectiveGenerator<Input, Output>,
         with inputValue: Input,
         context: GenerationContext
     ) -> Output? {
@@ -123,15 +123,14 @@ enum Interpreters {
                 //    the `T(bitPattern:)` decoding itself before continuing the chain.
                 return runContinuation(randomBits)
             case let .sequence(length, gen):
-                let count = Int(length)
                 var results: [Any] = []
-                    results.reserveCapacity(count)
+//                    results.reserveCapacity(count)
                     
                     // An iterative loop, not a recursive one. This will never overflow the stack.
-                    for _ in 0..<count {
+                    for _ in 0..<length {
                         // Run the element generator once for each item.
                         // It's a self-contained generator, so its input is `()`.
-                        guard let element = self.generateRecursive(gen, with: () as! Input, context: context) else {
+                        guard let element = self.generateRecursive(gen, with: length as! Input, context: context) else {
                             // If any element fails to generate, the whole sequence fails.
                             return nil
                         }
