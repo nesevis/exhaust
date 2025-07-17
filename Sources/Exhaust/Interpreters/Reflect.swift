@@ -108,12 +108,6 @@ extension Interpreters {
                 }
                 return labeledPaths
             }
-        case let .lens(path, next):
-            guard let subValue = path.extract(from: finalOutput) else {
-                return []
-            }
-            return reflectRecursive(next, onFinalOutput: subValue)
-                .map { ($0.value, $0.path) }
         case .chooseBits(let min, let max):
             guard let convertibleValue = finalOutput as? any BitPatternConvertible else {
                 return []

@@ -58,8 +58,6 @@ enum Gen {
                 return transform(typedInput)
             }
             return .lmap(transform: newTransform, next: next)
-        case let .lens(path, next):
-            return .lens(path, next: next.mapOperation(eraseInputType(from:)))
         case let .chooseBits(min, max):
             return .chooseBits(min: min, max: max)
         case let .sequence(length, gen):

@@ -95,16 +95,6 @@ extension Interpreters {
                 let nextGen = continuation(accumulatedValues)
                 return self.replayWithChoicesHelper(nextGen, choices: &choices)
 
-            case .lens(_, let subGenerator):
-                // A lens doesn't consume choices, just passes them to the sub-generator
-                guard let subResult = self.replayWithChoicesHelper(subGenerator, choices: &choices) else {
-                    return nil
-                }
-                
-                // For lens operations, call the continuation with the sub-generator result
-                let nextGen = continuation(subResult)
-                return self.replayWithChoicesHelper(nextGen, choices: &choices)
-                
             case let .lmap(_, subGenerator), let .prune(subGenerator):
                 // A left map or prune doesn't consume choices, just passes them to the sub-generator
                 guard let subResult = self.replayWithChoicesHelper(subGenerator, choices: &choices) else {
@@ -184,11 +174,6 @@ extension Interpreters {
                 }
                 
                 return runContinuation(accumulatedValues)
-
-            case .lens(_, let subGenerator):
-                 // A lens is a wrapper. It doesn't consume a node from the script itself.
-                 // The choices are consumed by its sub-generator. We pass the same script down.
-                return self.replayRecursive(subGenerator, with: script) as? Output
                  
             // Forward-only ops don't consume choices. Their presence in a reflectable
             // generator is an error.

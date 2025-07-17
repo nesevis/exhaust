@@ -74,18 +74,10 @@ enum Interpreters {
             }
             
             switch operation {
-                
-                //                case .from(let transform):
-                //                    // Apply the transform. If it returns nil, the generation path fails.
-                //                    guard let result = transform(inputValue) else { return nil }
-                //                    return runContinuation(result)
-                
-            case .lmap(let transform, let nextGen):
-                let nextInput = transform(inputValue)
-                // The nested generator has its Input erased to `Any`, so this call is valid.
-                guard let result = self.generateRecursive(nextGen, with: nextInput, context: context) else { return nil }
-                return runContinuation(result)
-                
+            case .lmap(_, let nextGen):
+                // The lmap transform is not used in the forward pass
+                return runContinuation(nextGen)
+
             case .prune(let nextGen):
                 guard let optional = .some(inputValue as Optional<Any>), let wrappedValue = optional else {
                     return nil // Pruned!
@@ -118,9 +110,7 @@ enum Interpreters {
                 
                 // Should be unreachable if totalWeight > 0
                 return nil
-            case let .lens(_, next):
-                // The path is not used in the forward pass
-                return runContinuation(next)
+
             case .chooseBits(let min, let max):
                 // 1. Generate the raw, random bits. The interpreter's only job
                 //    is to produce entropy within the specified bounds. It has
