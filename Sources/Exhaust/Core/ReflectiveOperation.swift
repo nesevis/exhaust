@@ -2,7 +2,7 @@
 enum ReflectiveOperation<Input> {
     // A case for Lmap.
     // We need type erasure here because Swift enums can't change type parameters across cases.
-    case lmap(transform: (Input) -> Any, next: ReflectiveGen<Any, Any>)
+    case lmap(transform: (Any) -> Any?, next: ReflectiveGen<Any, Any>)
     
     // A case for Pick.
     case pick(choices: [(weight: UInt64, label: UInt64, generator: ReflectiveGen<Input, Any>)])

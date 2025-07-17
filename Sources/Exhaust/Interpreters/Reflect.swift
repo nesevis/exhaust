@@ -44,15 +44,20 @@ extension Interpreters {
 
         case .impure(let operation, let continuation):
             // 1. Interpret the operation against the final output value.
-            let intermediateResults = interpretOperationBackward(operation, onFinalOutput: finalOutput)
+            let intermediateResults = interpretOperationBackward(operation, onFinalOutput: finalOutput, outputType: Output.self)
             
             // 2. For each successful intermediate result...
             let results = intermediateResults.flatMap { (intermediateValue: Any, partialPath: [ChoiceTree]) in
-                let nextGen = continuation(intermediateValue)
-                // The `finalOutput` is passed down UNCHANGED. This is the crucial part.
-                let finalResults = reflectRecursive(nextGen, onFinalOutput: finalOutput)
-                return finalResults.map { (finalValue, restOfPath) in
-                    (finalValue, partialPath + restOfPath)
+                if case .lmap = operation, false {
+                    // Do not execute the continuation
+                    return [(value: finalOutput as! Output, path: partialPath)]
+                } else {
+                    let nextGen = continuation(intermediateValue)
+                    // The `finalOutput` is passed down UNCHANGED. This is the crucial part.
+                    let finalResults = reflectRecursive(nextGen, onFinalOutput: finalOutput)
+                    return finalResults.map { (finalValue, restOfPath) in
+                        (finalValue, partialPath + restOfPath)
+                    }
                 }
             }
             return results
@@ -63,20 +68,29 @@ extension Interpreters {
 
     /// This helper interprets a single operation. It receives the overall final output
     /// and determines what to do based on its own semantics.
-    private static func interpretOperationBackward<Input>(
+    private static func interpretOperationBackward<Input, Output>(
         _ op: ReflectiveOperation<Input>,
-        onFinalOutput finalOutput: Any
-    ) -> [(resultForContinuation: Any, path: [ChoiceTree])] {
-//        print("\(#function) for \(String(describing: op).prefix(while: { $0 != "(" }))")
+        onFinalOutput finalOutput: Any,
+        outputType: Output.Type
+    ) -> [(value: Any, path: [ChoiceTree])] {
         switch op {
         case .lmap(let transform, let nextGen):
-            // LMAP's JOB: Try to cast the final output to its expected Input type.
-            guard let typedFinalOutput = finalOutput as? Input else {
-                return [] // This path is impossible if the types don't align.
+            guard let subValue = transform(finalOutput) else {
+                return []
             }
-            // "Zoom in": Apply the transform to create a new, local target for the sub-generator.
-            let nextTarget = transform(typedFinalOutput)
-            return reflectRecursive(nextGen, onFinalOutput: nextTarget).map { ($0.value, $0.path) }
+            return reflectRecursive(nextGen, onFinalOutput: subValue)
+                .map { ($0.value, $0.path) }
+//            // LMAP's JOB: Try to cast the final output to its expected Input type.
+//            guard let typedFinalOutput = finalOutput as? Output else {
+//                return [] // This path is impossible if the types don't align.
+//            }
+//            // "Zoom in": Apply the transform to create a new, local target for the sub-generator.
+//            let inputValue = transform(typedFinalOutput)
+//            if let convertible = inputValue as? any BitPatternConvertible {
+//                return [(inputValue, [.choice(convertible.bitPattern64)])]
+//            }
+//            return []
+//            return reflectRecursive(nextGen, onFinalOutput: inputValue).map { ($0.value, $0.path) }
 
         case .prune(let nextGen):
             // PRUNE's JOB: Try to cast the final output to an Optional and check if it's nil.
@@ -87,7 +101,7 @@ extension Interpreters {
 
         case .pick(let choices):
             // PICK's JOB: Try all branches against the same final output value.
-            return choices.flatMap { (_, label, generator) -> [(resultForContinuation: Any, path: [ChoiceTree])] in
+            return choices.flatMap { (_, label, generator) -> [(value: Any, path: [ChoiceTree])] in
                 let subPaths = reflectRecursive(generator, onFinalOutput: finalOutput)
                 let labeledPaths = subPaths.map { (value, pathTree) in
                     (value, [ChoiceTree.branch(label: label, children: pathTree)])
@@ -110,7 +124,7 @@ extension Interpreters {
             }
             
             // Success! The result for the continuation is the value itself.
-            return [(resultForContinuation: finalOutput, path: [.choice(bitPattern)])]
+            return [(value: finalOutput, path: [.choice(bitPattern)])]
         case let .sequence(length, gen):
             // 1. The target value for a sequence MUST be an array.
             guard
@@ -139,7 +153,7 @@ extension Interpreters {
                 }
             }
             let finalTree = ChoiceTree.sequence(length: length, elements: combinedPath, validRange: validRange ?? UInt64.bitPatternRange)
-            return [(resultForContinuation: combinedResults, path: [finalTree])]
+            return [(value: combinedResults, path: [finalTree])]
         }
     }
 }

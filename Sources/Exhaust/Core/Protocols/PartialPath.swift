@@ -5,7 +5,7 @@
 //  Created by Chris Kolbu on 16/7/2025.
 //
 
-protocol PartialPath {
+protocol PartialPath<Root, Value> {
     associatedtype Root
     associatedtype Value
     

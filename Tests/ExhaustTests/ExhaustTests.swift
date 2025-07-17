@@ -8,7 +8,7 @@ import Testing
 }
 
 @Test func example2() async throws {
-    let gen = Gen.choose(in: 1...5)
+    let gen = Gen.choose(in: 1...5, input: Void.self)
     let results = Interpreters.generate(gen)
     let choices = Interpreters.reflect(gen, with: results!, where: { _ in true })
     #expect(true)
@@ -27,7 +27,6 @@ import Testing
         }
     }    
     let result = Interpreters.generate(zipped)!
-//    let result = Person(age: 42, height: 178)
     let choices = Interpreters.reflect(zipped, with: result)
     if let choices {
         let replayed = Interpreters.replay(zipped, using: choices)

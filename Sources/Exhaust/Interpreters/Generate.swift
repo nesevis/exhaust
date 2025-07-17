@@ -24,6 +24,15 @@ enum Interpreters {
     }
     
     public static func generate<Output>(
+        _ gen: ReflectiveGen<Any, Output>,
+        initialSize: UInt64 = 10,
+        using rng: (any RandomNumberGenerator)? = nil
+    ) -> Output? {
+        // Delegate to the main generate function, providing the placeholder input.
+        return self.generate(gen, with: (), initialSize: initialSize, using: rng)
+    }
+    
+    public static func generate<Output>(
         _ gen: ReflectiveGen<Void, Output>, // Constrained to Input == Void
         initialSize: UInt64 = 10,
         using rng: (any RandomNumberGenerator)? = nil

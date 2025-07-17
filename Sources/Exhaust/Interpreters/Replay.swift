@@ -83,10 +83,6 @@ extension Interpreters {
                 guard !choices.isEmpty else { return nil }
                 let choice = choices.removeFirst()
                 guard case .sequence(let length, let elements, let range) = choice else { return nil }
-                // Do we need this?
-//                guard count == length else {
-//                    return nil
-//                }
                 
                 var accumulatedValues: [Any] = []
                 for elementScript in elements {
@@ -109,8 +105,13 @@ extension Interpreters {
                 let nextGen = continuation(subResult)
                 return self.replayWithChoicesHelper(nextGen, choices: &choices)
                 
-            default:
-                fatalError("Cannot replay a generator containing forward-only operations like getSize or from.")
+            case let .lmap(_, subGenerator), let .prune(subGenerator):
+                // A left map or prune doesn't consume choices, just passes them to the sub-generator
+                guard let subResult = self.replayWithChoicesHelper(subGenerator, choices: &choices) else {
+                    return nil
+                }
+                let nextGen = continuation(subResult)
+                return self.replayWithChoicesHelper(nextGen, choices: &choices)
             }
         }
     }
@@ -168,7 +169,7 @@ extension Interpreters {
 
             case .sequence(let count, let elementGenerator):
                 // This operation expects a `.sequence` node from the script.
-                guard case .sequence(let length, let elements, let range) = script else { return nil }
+                guard case .sequence(let length, let elements, _) = script else { return nil }
                 
                 // The counts must match.
                 guard count == length else { return nil }
@@ -191,8 +192,10 @@ extension Interpreters {
                  
             // Forward-only ops don't consume choices. Their presence in a reflectable
             // generator is an error.
-            default:
-                fatalError("Cannot replay a generator containing forward-only operations like getSize or from.")
+            case let .lmap(_, subGenerator), let .prune(subGenerator):
+                // A lens is a wrapper. It doesn't consume a node from the script itself.
+                // The choices are consumed by its sub-generator. We pass the same script down.
+                return self.replayRecursive(subGenerator, with: script) as? Output
             }
         }
     }
