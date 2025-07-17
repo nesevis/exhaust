@@ -84,11 +84,11 @@ typealias ReflectiveGen<Input, Output> = FreerMonad<ReflectiveOperation<Input>, 
 extension ReflectiveGen {
     func mapOperation<NewOperation>(_ transform: @escaping (Operation) -> NewOperation) -> FreerMonad<NewOperation, Value> {
             switch self {
-            case .pure(let value):
+            case let .pure(value):
                 // If we're at a pure value, there's no operation to transform. Return as is.
                 return .pure(value)
                 
-            case .impure(let operation, let continuation):
+            case let .impure(operation, continuation):
                 // If we have a suspended operation:
                 // 1. Transform the current operation.
                 let newOperation = transform(operation)

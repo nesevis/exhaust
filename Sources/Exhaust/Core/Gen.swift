@@ -42,12 +42,12 @@ enum Gen {
     // This function needs to be defined recursively for the `.pick` case.
     static func eraseInputType<Input>(from op: ReflectiveOperation<Input>) -> ReflectiveOperation<Any> {
         switch op {
-        case .pick(let choices):
+        case let .pick(choices):
             let result = choices.map { ($0.weight, $0.label, $0.generator.mapOperation(eraseInputType(from:))) }
             return .pick(choices: result)
         case let .prune(next):
             return .prune(next: next)
-        case .lmap(let transform, let next):
+        case let .lmap(transform, next):
             // This case is tricky because it's already partially erased.
             // A simple way to handle it is to create a new transform from Any.
             // Note: This reveals a slight awkwardness in the enum design, but it works.

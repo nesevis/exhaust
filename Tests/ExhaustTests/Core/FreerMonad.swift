@@ -150,13 +150,13 @@ func interpret<Value>(_ monad: LoggingFreerMonad<Value>) -> (value: Value?, log:
 private func interpretLogRecursive<Value>(_ monad: LoggingFreerMonad<Value>, log: inout [String]) -> Value? {
     switch monad {
     // Base case: We've reached a pure value. Return it.
-    case .pure(let value):
+    case let .pure(value):
         return value
 
     // Recursive step: We have an operation to perform.
-    case .impure(let operation, let continuation):
+    case let .impure(operation, continuation):
         switch operation {
-        case .log(let message):
+        case let .log(message):
             // 1. Perform the side-effect (mutate the log).
             log.append(message)
             

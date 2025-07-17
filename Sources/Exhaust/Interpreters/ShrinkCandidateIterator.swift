@@ -56,7 +56,7 @@ final class ShrinkCandidateIterator: IteratorProtocol {
             case .initial:
                 // When we start, determine what kind of tree we have and move to the first logical state.
                 switch originalTree {
-                case .choice(let bits):
+                case let .choice(bits):
                     // Generate the simple -> complex list of numeric shrinks ONCE.
                     let shrinks = shrinkNumberAggressively(bits).sorted() // Sort ascending!
                     state = .shrinkingChoice(shrinks: shrinks, nextIndex: 0)
@@ -65,7 +65,7 @@ final class ShrinkCandidateIterator: IteratorProtocol {
                     // The first strategy for a sequence is to shrink its length.
                     let lengthShrinks = shrinkNumber(UInt64(elements.count)).sorted()
                     state = .shrinkingSequenceLength(originalElements: elements, lengthShrinks: lengthShrinks, nextIndex: 0, validRange: range, prefix: true)
-                case .group(let children):
+                case let .group(children):
                     if children.isEmpty {
                         state = .finished // Nothing to shrink
                     } else {
@@ -79,7 +79,7 @@ final class ShrinkCandidateIterator: IteratorProtocol {
                     }
 
                 // NEW: Handle .branch
-                case .branch(let label, let children):
+                case let .branch(label, children):
                     if children.isEmpty {
                         state = .finished
                     } else {
@@ -94,7 +94,7 @@ final class ShrinkCandidateIterator: IteratorProtocol {
                     }
                 }
 
-            case .shrinkingChoice(let shrinks, let index):
+            case let .shrinkingChoice(shrinks, index):
                 if index >= shrinks.count {
                     // We've exhausted all numeric shrinks. We're done.
                     state = .finished
@@ -105,7 +105,7 @@ final class ShrinkCandidateIterator: IteratorProtocol {
                 // Yield the current shrink.
                 return .choice(shrinks[index])
 
-            case .shrinkingSequenceLength(let elements, let shrinks, let index, let range, let usePrefix):
+            case let .shrinkingSequenceLength(elements, shrinks, index, range, usePrefix):
                 if index >= shrinks.count {
                     // Finished shrinking length. NOW we start shrinking individual elements.
                     // Transition to the next state, starting with the first element (index 0).
@@ -126,7 +126,7 @@ final class ShrinkCandidateIterator: IteratorProtocol {
                 let newElements = Array(usePrefix ? elements.prefix(newLength) : elements.suffix(newLength))
                 return .sequence(length: UInt64(newLength), elements: newElements, validRange: range)
 
-            case .shrinkingSequenceElement(let originalElements, let elementIndex, let elementIterator, let range):
+            case let .shrinkingSequenceElement(originalElements, elementIndex, elementIterator, range):
                 // Try to get the next shrink from the CURRENT element's iterator.
                 if let shrunkElement = elementIterator.next() {
                     // Success! We got a smaller version of the element.
@@ -152,7 +152,7 @@ final class ShrinkCandidateIterator: IteratorProtocol {
                     state = .shrinkingSequenceElement(originalElements: originalElements, currentElementIndex: nextElementIndex, elementIterator: nextIterator, validRange: range)
                     continue // Re-enter loop to process the new state.
                 }
-            case .shrinkingGroup(let originalChildren, let childIndex, let childIterator):
+            case let .shrinkingGroup(originalChildren, childIndex, childIterator):
             // Try to get the next shrink from the CURRENT child's iterator.
             if let shrunkChild = childIterator.next() {
                 // We got a smaller version of the child.
@@ -185,7 +185,7 @@ final class ShrinkCandidateIterator: IteratorProtocol {
             }
 
         // NEW: Logic for shrinking a branch
-        case .shrinkingBranch(let label, let originalChildren, let childIndex, var childIterator):
+        case let .shrinkingBranch(label, originalChildren, childIndex, childIterator):
             // This logic is identical to .shrinkingGroup, just with a different return type.
             if let shrunkChild = childIterator.next() {
                 var newChildren = originalChildren

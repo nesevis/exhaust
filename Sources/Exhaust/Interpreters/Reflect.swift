@@ -38,11 +38,11 @@ extension Interpreters {
         onFinalOutput finalOutput: Any
     ) -> [(value: Output, path: [ChoiceTree])] { // Still returns typed Output and path
         switch gen {
-        case .pure(let value):
+        case let .pure(value):
             // The pure value is the result for this path. No check needed here.
             return [(value, [])]
 
-        case .impure(let operation, let continuation):
+        case let .impure(operation, continuation):
             // 1. Interpret the operation against the final output value.
             let intermediateResults = interpretOperationBackward(operation, onFinalOutput: finalOutput, outputType: Output.self)
             
@@ -74,7 +74,7 @@ extension Interpreters {
         outputType: Output.Type
     ) -> [(value: Any, path: [ChoiceTree])] {
         switch op {
-        case .lmap(let transform, let nextGen):
+        case let .lmap(transform, nextGen):
             guard let subValue = transform(finalOutput) else {
                 return []
             }
@@ -92,14 +92,14 @@ extension Interpreters {
 //            return []
 //            return reflectRecursive(nextGen, onFinalOutput: inputValue).map { ($0.value, $0.path) }
 
-        case .prune(let nextGen):
+        case let .prune(nextGen):
             // PRUNE's JOB: Try to cast the final output to an Optional and check if it's nil.
             guard let optionalTarget = .some(finalOutput as Optional<Any>), let wrappedTarget = optionalTarget else {
                 return [] // Pruned!
             }
             return reflectRecursive(nextGen, onFinalOutput: wrappedTarget).map { ($0.value, $0.path) }
 
-        case .pick(let choices):
+        case let .pick(choices):
             // PICK's JOB: Try all branches against the same final output value.
             return choices.flatMap { (_, label, generator) -> [(value: Any, path: [ChoiceTree])] in
                 let subPaths = reflectRecursive(generator, onFinalOutput: finalOutput)
@@ -108,7 +108,7 @@ extension Interpreters {
                 }
                 return labeledPaths
             }
-        case .chooseBits(let min, let max):
+        case let .chooseBits(min, max):
             guard let convertibleValue = finalOutput as? any BitPatternConvertible else {
                 return []
             }

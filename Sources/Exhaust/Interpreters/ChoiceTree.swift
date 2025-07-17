@@ -23,7 +23,7 @@ enum ChoiceTree: Equatable {
 extension ChoiceTree {
     var complexity: UInt64 {
         switch self {
-        case .choice(let uInt64):
+        case let .choice(uInt64):
             return uInt64
         case .sequence(_, var elements, _), .branch(_, var elements), .group(var elements):
             var complexity = UInt64(0)

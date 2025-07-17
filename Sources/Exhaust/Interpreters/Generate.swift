@@ -63,10 +63,10 @@ enum Interpreters {
     ) -> Output? {
         
         switch gen {
-        case .pure(let value):
+        case let .pure(value):
             return value
             
-        case .impure(let operation, let continuation):
+        case let .impure(operation, continuation):
             
             let runContinuation = { (result: Any) -> Output? in
                 let nextGen = continuation(result)
@@ -78,14 +78,14 @@ enum Interpreters {
                 // The lmap transform is not used in the forward pass
                 return runContinuation(nextGen)
 
-            case .prune(let nextGen):
+            case let .prune(nextGen):
                 guard let optional = .some(inputValue as Optional<Any>), let wrappedValue = optional else {
                     return nil // Pruned!
                 }
                 guard let result = self.generateRecursive(nextGen, with: wrappedValue, context: context) else { return nil }
                 return runContinuation(result)
                 
-            case .pick(let choices):
+            case let .pick(choices):
                 // --- Production-Ready Weighted Choice ---
                 guard !choices.isEmpty else { return nil }
                 
@@ -111,7 +111,7 @@ enum Interpreters {
                 // Should be unreachable if totalWeight > 0
                 return nil
 
-            case .chooseBits(let min, let max):
+            case let .chooseBits(min, max):
                 // 1. Generate the raw, random bits. The interpreter's only job
                 //    is to produce entropy within the specified bounds. It has
                 //    no knowledge of the final `Output` type (e.g., Int, Float).

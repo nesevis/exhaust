@@ -46,11 +46,11 @@ extension Interpreters {
     ) -> Output? {
         
         switch gen {
-        case .pure(let value):
+        case let .pure(value):
             // Base case: return the value
             return value
 
-        case .impure(let operation, let continuation):
+        case let .impure(operation, continuation):
             // Handle each operation by consuming appropriate choices
             switch operation {
                 
@@ -58,16 +58,16 @@ extension Interpreters {
                 // Consume the next choice
                 guard !choices.isEmpty else { return nil }
                 let choice = choices.removeFirst()
-                guard case .choice(let bits) = choice else { return nil }
+                guard case let .choice(bits) = choice else { return nil }
                 
                 let nextGen = continuation(bits)
                 return self.replayWithChoicesHelper(nextGen, choices: &choices)
 
-            case .pick(let pickChoices):
+            case let .pick(pickChoices):
                 // Consume the next choice which should be a branch
                 guard !choices.isEmpty else { return nil }
                 let choice = choices.removeFirst()
-                guard case .branch(let label, let children) = choice else { return nil }
+                guard case let .branch(label, children) = choice else { return nil }
                 
                 // Find the sub-generator that matches the label
                 guard let chosenGen = pickChoices.first(where: { $0.label == label })?.generator else { return nil }
@@ -78,11 +78,11 @@ extension Interpreters {
                 let nextGen = continuation(result)
                 return self.replayWithChoicesHelper(nextGen, choices: &choices)
 
-            case .sequence(let count, let elementGenerator):
+            case let .sequence(count, elementGenerator):
                 // Consume the next choice which should be a sequence
                 guard !choices.isEmpty else { return nil }
                 let choice = choices.removeFirst()
-                guard case .sequence(let length, let elements, let range) = choice else { return nil }
+                guard case let .sequence(length, elements, range) = choice else { return nil }
                 
                 var accumulatedValues: [Any] = []
                 for elementScript in elements {
@@ -112,18 +112,18 @@ extension Interpreters {
     ) -> Output? {
         
         // Handle group scripts by distributing choices to the generator
-        if case .group(let choices) = script {
+        if case let .group(choices) = script {
             return replayWithChoices(gen, choices: choices)
         }
         
         switch gen {
-        case .pure(let value):
+        case let .pure(value):
             // Base case: The generator is done. Return the final value.
             // Any remaining script would indicate a mismatch, but the logic
             // for the calling operation handles passing the correct sub-tree.
             return value
 
-        case .impure(let operation, let continuation):
+        case let .impure(operation, continuation):
             // This helper simplifies calling the continuation with a result.
             let runContinuation = { (result: Any) -> Output? in
                 // The crucial difference: we are NOT passing the script down.
@@ -140,12 +140,12 @@ extension Interpreters {
                 
             case .chooseBits:
                 // This operation expects a primitive `.choice` node from the script.
-                guard case .choice(let bits) = script else {
+                guard case let .choice(bits) = script else {
                     return nil
                 }
                 return runContinuation(bits)
 
-            case .pick(let choices):
+            case let .pick(choices):
                 // This operation expects a `.branch` node from the script.
                 guard case .branch(let label, let children) = script else { return nil }
                 
@@ -157,9 +157,9 @@ extension Interpreters {
                 let childScript = ChoiceTree.group(children)
                 return self.replayRecursive(chosenGen, with: childScript) as? Output
 
-            case .sequence(let count, let elementGenerator):
+            case let .sequence(count, elementGenerator):
                 // This operation expects a `.sequence` node from the script.
-                guard case .sequence(let length, let elements, _) = script else { return nil }
+                guard case let .sequence(length, elements, _) = script else { return nil }
                 
                 // The counts must match.
                 guard count == length else { return nil }
