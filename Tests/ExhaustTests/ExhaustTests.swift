@@ -109,6 +109,11 @@ func testStringObjectShrinking() {
 
     // Act
 //    let shrunken1 = shrinker.shrink(failingExample1, using: gen, where: property)
+    let recipe = Interpreters.reflect(gen, with: failingExample2)
+    let replayed = Interpreters.replay(gen, using: recipe!)
+    print("Original: \(failingExample2.name)")
+    print("Replayed: \(replayed?.name ?? "nil")")
+    #expect(replayed!.name == failingExample2.name)
     let shrunken2 = shrinker.shrink(failingExample2, using: gen, where: property)
     
     // Assert

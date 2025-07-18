@@ -127,23 +127,35 @@ extension Double: BitPatternConvertible {
     }
 }
 
+extension Unicode.Scalar: BitPatternConvertible {
+    public static var bitPatternRange: ClosedRange<UInt64> {
+        0x000000...0x00D7FF // Basic Multilingual Plane before surrogates
+    }
+    
+    init(bitPattern: UInt64) {
+        self = Unicode.Scalar(UInt32(bitPattern))!
+    }
+    
+    var bitPattern64: UInt64 {
+        UInt64(self.value)
+    }
+}
+
 extension Character: BitPatternConvertible {
     /// Defines the range for standard ASCII characters.
     public static var bitPatternRange: ClosedRange<UInt64> {
         0x000000...0x00D7FF // Basic Multilingual Plane before surrogates
     }
 
-    /// Creates a `Character` from a `UInt64` by assuming it represents an ASCII value.
+    /// Creates a `Character` from a `UInt64` by assuming it represents a Unicode scalar value.
     public init(bitPattern: UInt64) {
-        self.init(Unicode.Scalar(UInt32(bitPattern))!)
+        let scalar = Unicode.Scalar(UInt32(bitPattern))!
+        self.init(scalar)
     }
 
-    /// would need to be more robust or use `unicodeScalars` for a wider range.
+    /// Returns the value of the first Unicode scalar in the character.
+    /// Note: This may not roundtrip perfectly for multi-scalar characters.
     public var bitPattern64: UInt64 {
-        guard let scalarValue = self.unicodeScalars.first?.value else {
-            return 0 // Return a default for empty or invalid characters.
-        }
-        
-        return UInt64(scalarValue)
+        UInt64(self.unicodeScalars.first!.value)
     }
 }

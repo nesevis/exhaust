@@ -53,9 +53,17 @@ extension Double: Arbitrary {
     }
 }
 
+extension Unicode.Scalar: Arbitrary {
+    static var arbitrary: ReflectiveGenerator<Any, Unicode.Scalar> {
+        Gen.choose(in: self.bitPatternRange)
+            .map { Unicode.Scalar(UInt32($0))! }
+    }
+}
+
 extension Character: Arbitrary {
     static var arbitrary: ReflectiveGenerator<Any, Character> {
-        Gen.choose(type: Character.self)
+        Unicode.Scalar.arbitrary
+            .map { Character($0) }
     }
 }
 

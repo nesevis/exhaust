@@ -111,7 +111,8 @@ extension Interpreters {
             }
             // This is awful. What about triply nested arrays?
             if let convertible = finalOutput as? any Sequence {
-                convertibleValue = convertible.underestimatedCount
+                // Due to the mapping on Ints, this number's bitPattern64 will be an outrageously high number.
+                convertibleValue = UInt64(convertible.underestimatedCount)
             }
             guard let convertibleValue else {
                 return []

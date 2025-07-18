@@ -304,9 +304,9 @@ func testComplexComposition() {
 @Test("Generate-Reflect-Replay cycle consistency")
 func testGenerateReflectReplayConsistency() {
     let generators: [ReflectiveGenerator<Any, String>] = [
-//        String.arbitrary,
+        String.arbitrary,
 //        Gen.just("constant"),
-        String.arbitrary.proliferate(with: 1...5).map { $0.joined() }
+//        String.arbitrary.proliferate(with: 1...5).map { $0.joined() }
     ]
     
     for (index, gen) in generators.enumerated() {
@@ -315,7 +315,7 @@ func testGenerateReflectReplayConsistency() {
             if let recipe = Interpreters.reflect(gen, with: generated) {
                 if let replayed = Interpreters.replay(gen, using: recipe) {
                     print()
-                    #expect(generated.map(\.bitPattern64) == replayed.map(\.bitPattern64), "Generator \(index), iteration \(iteration): \(generated) != \(replayed)")
+                    #expect(generated == replayed, "Generator \(index), iteration \(iteration): \(generated) != \(replayed)")
                 } else {
                     #expect(false, "Replay failed for generator \(index), iteration \(iteration)")
                 }
