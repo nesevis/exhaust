@@ -203,14 +203,12 @@ func testNestedLensedProperties() {
         .map { Inner(id: $0) }
         .proliferate(with: 1...1)
     
-    // This doesn't crash, but the inners array is empty
-    let intArrayGen = UInt.arbitrary
-        .map { Inner(id: $0) }
-        .proliferate(with: 1...1)
-    let innerGen3 = Gen.lens(extract: \Inner.id, intArrayGen)
+    // This would now cause a compile error due to type safety:
+//     let badArrayGen = UInt.arbitrary.map { Inner(id: $0) }.proliferate(with: 1...1) 
+//     let badInnerGen = Gen.lens(extract: \Inner.id, badArrayGen)  // Type error!
     
-    // Test all three approaches
-    for (index, gen) in [innerGen, innerGen2, innerGen3].enumerated() {
+    // Test the two type-safe approaches
+    for (index, gen) in [innerGen, innerGen2].enumerated() {
         print("Testing composition with innerGen\(index + 1)...")
         
         // Test the outer generator with each inner generator

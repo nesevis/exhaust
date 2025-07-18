@@ -10,12 +10,11 @@ enum Gen {
         }
     }
     
-    static func lens<Input, Output, NewInput>(
+    static func lens<Input, NewInput>(
         extract path: some PartialPath<NewInput, Input>,
-        _ next: ReflectiveGenerator<Any, Output>
-    ) -> ReflectiveGenerator<Any, Output> {
+        _ next: ReflectiveGenerator<Any, Input>
+    ) -> ReflectiveGenerator<Any, Input> {
         comap(path.extract(from:), next)
-            .mapOperation(eraseInputType(from:))
     }
     
     static func pick<Input, Output>(
