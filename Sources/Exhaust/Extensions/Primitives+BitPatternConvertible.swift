@@ -79,26 +79,21 @@ extension UInt: BitPatternConvertible {
 }
 
 extension Int: BitPatternConvertible {
+    private static let signBitMask: UInt64 = 0x8000000000000000
     public init(bitPattern: UInt64) {
-        self = Int(bitPattern)
+        // Map UInt64 directly to Int using bit pattern, which handles the full range safely
+        self = Int(Int64(bitPattern: bitPattern ^ Self.signBitMask))
     }
     
-    /// Defines the range of `Int` values that can be safely represented by `UInt64`.
-    ///
-    /// For simplicity, this implementation only considers non-negative integers. A more
-    /// advanced implementation could use the full `UInt64` range and handle two's
-    // complement for negative numbers, but that significantly complicates the logic.
+    /// Maps the full Int range to the full UInt64 range.
     public static var bitPatternRange: ClosedRange<UInt64> {
-        UInt64.min...UInt64.max // Safest cross-platform range
+        UInt64.min...UInt64.max
     }
     
-    // Swift provides `init(bitPattern: UInt64)` for Int when the bit widths match
-    // or when converting from a smaller integer type. This conformance relies on that.
-    
-    /// The `UInt64` representation of this `Int`.
+    /// Maps Int to UInt64 using bit pattern conversion
     public var bitPattern64: UInt64 {
-        // This assumes the Int is non-negative, consistent with `bitPatternRange`.
-        return UInt64(bitPattern: Int64(self))
+        // Use bit pattern conversion which handles the full Int range safely
+        return UInt64(bitPattern: Int64(self)) ^ Self.signBitMask
     }
 }
 
