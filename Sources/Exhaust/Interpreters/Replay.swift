@@ -102,6 +102,8 @@ extension Interpreters {
                 }
                 let nextGen = continuation(subResult)
                 return self.replayWithChoicesHelper(nextGen, choices: &choices)
+            case let .just(value):
+                return continuation(value) as? Output
             }
         }
     }
@@ -144,6 +146,8 @@ extension Interpreters {
                     return nil
                 }
                 return runContinuation(bits)
+            case let .just(value):
+                return runContinuation(value)
 
             case let .pick(choices):
                 // This operation expects a `.branch` node from the script.

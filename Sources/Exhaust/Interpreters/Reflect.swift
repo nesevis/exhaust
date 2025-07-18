@@ -25,8 +25,14 @@ extension Interpreters {
         guard matchingPaths.isEmpty == false else {
             return nil
         }
-        
-        return .group(matchingPaths)
+        switch matchingPaths.count {
+        case 0:
+            return nil
+        case 1:
+            return matchingPaths[0]
+        default:
+            return .group(matchingPaths)
+        }
     }
 
     // MARK: - Private Recursive Engine (Signature is Key)
@@ -117,6 +123,8 @@ extension Interpreters {
             
             // Success! The result for the continuation is the value itself.
             return [(value: finalOutput, path: [.choice(bitPattern)])]
+        case let .just(value):
+            return [(value: value, path: [.just])]
         case let .sequence(lengthGen, elementGen):
             // 1. The target value for a sequence MUST be an array.
             guard

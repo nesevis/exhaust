@@ -60,6 +60,8 @@ final class ShrinkCandidateIterator: IteratorProtocol {
                     // Generate the simple -> complex list of numeric shrinks ONCE.
                     let shrinks = shrinkNumberAggressively(bits).sorted() // Sort ascending!
                     state = .shrinkingChoice(shrinks: shrinks, nextIndex: 0)
+                case .just:
+                    state = .finished
                 
                 case .sequence(_, let elements, let range):
                     // The first strategy for a sequence is to shrink its length.

@@ -38,4 +38,6 @@ enum ReflectiveOperation<Input>: AnyReflectiveOperation {
     /// The length is fixed at operation creation time, and the element generator
     /// is applied iteratively to build the complete sequence.
     case sequence(length: ReflectiveGenerator<Input, UInt64>, gen: ReflectiveGenerator<Input, Any>)
+    
+    case just(Input)
 }

@@ -142,6 +142,8 @@ enum Interpreters {
                 
                 // Pass the completed array to the continuation.
                 return runContinuation(results)
+            case let .just(value):
+                return runContinuation(value)
             }
         }
     }

@@ -64,6 +64,8 @@ enum Gen {
                 length: length.mapOperation(eraseInputType(from:)),
                 gen: gen.mapOperation(eraseInputType(from:))
             )
+        case let .just(value):
+            return .just(value as Any)
         }
     }
     
@@ -172,8 +174,13 @@ enum Gen {
     
     // A base generator that produces a single, constant value.
     static func just<Output>(_ value: Output) -> ReflectiveGenerator<Any, Output> {
-        return .pure(value)
+        // 1. Create the specific `.just` operation, erasing the value's type for storage.
+        let op = ReflectiveOperation<Output>.just(value)
+        
+        return liftF(op)
+            .mapOperation(eraseInputType(from:))
     }
+
 
     // exact is the canonical leaf generator. It generates a constant value and, crucially, in the backward pass, it fails if the input doesn't match that constant.
     static func exact<Value: Equatable>(_ value: Value) -> ReflectiveGenerator<Value, Value> {

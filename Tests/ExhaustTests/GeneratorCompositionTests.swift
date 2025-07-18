@@ -304,9 +304,9 @@ func testComplexComposition() {
 @Test("Generate-Reflect-Replay cycle consistency")
 func testGenerateReflectReplayConsistency() {
     let generators: [ReflectiveGenerator<Any, String>] = [
-        String.arbitrary,
+//        String.arbitrary,
 //        Gen.just("constant"),
-//        String.arbitrary.proliferate(with: 1...5).map { $0.joined() }
+        String.arbitrary.proliferate(with: 1...5).map { $0.joined() }
     ]
     
     for (index, gen) in generators.enumerated() {

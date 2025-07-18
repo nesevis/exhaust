@@ -9,6 +9,8 @@ enum ChoiceTree: Equatable {
     /// A primitive choice, typically a number or a high-level semantic label.
     case choice(UInt64)
     
+    case just
+    
     /// A node that represents the generation of a sequence. It explicitly
     /// captures the length and the choice trees for each of its elements.
     indirect case sequence(length: UInt64, elements: [ChoiceTree], validRange: ClosedRange<UInt64>)
@@ -25,6 +27,8 @@ extension ChoiceTree {
         switch self {
         case let .choice(uInt64):
             return uInt64
+        case .just:
+            return 0
         case .sequence(_, var elements, _), .branch(_, var elements), .group(var elements):
             var complexity = UInt64(0)
             while elements.isEmpty == false {
