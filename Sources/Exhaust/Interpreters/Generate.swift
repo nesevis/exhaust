@@ -5,6 +5,8 @@
 //  Created by Chris Kolbu on 15/7/2025.
 //
 
+import Foundation
+
 enum Interpreters {
     final class GenerationContext {
         var size: UInt64
@@ -51,7 +53,22 @@ enum Interpreters {
         let initialRNG = rng ?? SystemRandomNumberGenerator()
         let context = GenerationContext(size: initialSize, using: initialRNG)
         
-        return generateRecursive(gen, with: input, context: context)
+        let startTime = Date()
+        let result = generateRecursive(gen, with: input, context: context)
+        let duration = Date().timeIntervalSince(startTime)
+        
+        // Report generation event if Tyche reporting is enabled
+        if let result = result {
+            let metadata = GenerationMetadata(
+                operationType: "generate",
+                generatorType: String(describing: type(of: gen)),
+                size: initialSize,
+                duration: duration
+            )
+            TycheReportContext.safeRecordGeneration(result, metadata: metadata)
+        }
+        
+        return result
     }
 
     // MARK: - Recursive Engine
@@ -89,20 +106,49 @@ enum Interpreters {
                 // --- Production-Ready Weighted Choice ---
                 guard !choices.isEmpty else { return nil }
                 
+                let startTime = Date()
                 let totalWeight = choices.reduce(0) { $0 + $1.weight }
                 guard totalWeight > 0 else {
                     // If all weights are 0, pick uniformly.
                     let randomIndex = Int.random(in: 0..<choices.count, using: &context.randomNumberGenerator)
                     let chosenGenerator = choices[randomIndex].generator
                     guard let result = self.generateRecursive(chosenGenerator, with: inputValue, context: context) else { return nil }
+                    
+                    // Report pick event
+                    if TycheReportContext.isReportingEnabled {
+                        let duration = Date().timeIntervalSince(startTime)
+                        let metadata = GenerationMetadata(
+                            operationType: "pick-uniform",
+                            generatorType: "Choice[\(choices.count)]",
+                            size: context.size,
+                            entropy: UInt64(randomIndex),
+                            duration: duration
+                        )
+                        TycheReportContext.safeRecordGeneration(randomIndex, metadata: metadata)
+                    }
+                    
                     return runContinuation(result)
                 }
                 
                 var randomRoll = UInt64.random(in: 1...totalWeight, using: &context.randomNumberGenerator)
                 
-                for choice in choices {
+                for (index, choice) in choices.enumerated() {
                     if randomRoll <= choice.weight {
                         guard let result = self.generateRecursive(choice.generator, with: inputValue, context: context) else { return nil }
+                        
+                        // Report weighted pick event
+                        if TycheReportContext.isReportingEnabled {
+                            let duration = Date().timeIntervalSince(startTime)
+                            let metadata = GenerationMetadata(
+                                operationType: "pick-weighted",
+                                generatorType: "Choice[\(choices.count)]",
+                                size: context.size,
+                                entropy: UInt64(index),
+                                duration: duration
+                            )
+                            TycheReportContext.safeRecordGeneration(index, metadata: metadata)
+                        }
+                        
                         return runContinuation(result)
                     }
                     randomRoll -= choice.weight
@@ -115,7 +161,21 @@ enum Interpreters {
                 // 1. Generate the raw, random bits. The interpreter's only job
                 //    is to produce entropy within the specified bounds. It has
                 //    no knowledge of the final `Output` type (e.g., Int, Float).
+                let startTime = Date()
                 let randomBits = UInt64.random(in: min...max, using: &context.randomNumberGenerator)
+                let duration = Date().timeIntervalSince(startTime)
+                
+                // Report fine-grained generation event if Tyche reporting is enabled
+                if TycheReportContext.isReportingEnabled {
+                    let metadata = GenerationMetadata(
+                        operationType: "chooseBits",
+                        generatorType: "UInt64",
+                        size: context.size,
+                        entropy: randomBits,
+                        duration: duration
+                    )
+                    TycheReportContext.safeRecordGeneration(randomBits, metadata: metadata)
+                }
                 
                 // 2. Pass the raw UInt64 bits to the continuation.
                 //    The `continuation` for a `FreeFunctions.choose<T>()` call was
