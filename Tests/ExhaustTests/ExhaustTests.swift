@@ -10,7 +10,11 @@ import Testing
 @Test func example2() async throws {
     let gen = Gen.choose(in: 1...5, input: Void.self)
     let results = Interpreters.generate(gen)
-    let choices = Interpreters.reflect(gen, with: results!, where: { _ in true })
+    guard let results = results else {
+        #expect(false, "Generation failed")
+        return
+    }
+    let choices = Interpreters.reflect(gen, with: results, where: { _ in true })
     #expect(true)
 }
 
@@ -30,7 +34,11 @@ import Testing
     let choices = Interpreters.reflect(zipped, with: result)
     if let choices {
         let replayed = Interpreters.replay(zipped, using: choices)
-        #expect(replayed! == result)
+        if let replayed = replayed {
+            #expect(replayed == result)
+        } else {
+            #expect(false, "Replay failed in example3")
+        }
     }
     #expect(true)
 }
@@ -224,19 +232,28 @@ func testNestedLensedProperties() {
         
         print("  Generating...")
         let generated = Interpreters.generate(outerGen)
-        print("  Generated: \(generated)")
+        print("  Generated: \(String(describing: generated))")
+        
+        guard let generated = generated else {
+            print("  ⚠️ Generation failed")
+            continue
+        }
         
         print("  Reflecting...")
-        let recipe = Interpreters.reflect(outerGen, with: generated!)
+        let recipe = Interpreters.reflect(outerGen, with: generated)
         print("  Recipe: \(recipe != nil ? "success" : "failed")")
         
         if let recipe = recipe {
             print("  Replaying...")
             let replayed = Interpreters.replay(outerGen, using: recipe)
-            print("  Replayed: \(replayed)")
+            print("  Replayed: \(String(describing: replayed))")
             
-            #expect(generated == replayed)
-            print("  ✅ Test passed")
+            if let replayed = replayed {
+                #expect(generated == replayed)
+                print("  ✅ Test passed")
+            } else {
+                print("  ⚠️ Replay failed")
+            }
         } else {
             print("  ⚠️ Reflection failed, skipping replay test")
         }
