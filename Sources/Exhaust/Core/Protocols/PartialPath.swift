@@ -34,6 +34,7 @@ protocol PartialPath<Root, Value> {
 extension KeyPath: PartialPath {
     func extract(from root: Any) -> Value? {
         guard let root = root as? Root else {
+            print("KeyPath.extract expected \(Root.self) -> \(Value.self), but root type is \(type(of: root.self))")
             return nil
         }
         return root[keyPath: self]

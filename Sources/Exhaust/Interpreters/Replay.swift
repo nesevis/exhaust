@@ -155,7 +155,8 @@ extension Interpreters {
                 // Recursively replay the chosen sub-generator with the children of this branch node.
                 // A group of children is replayed as a single unit.
                 let childScript = ChoiceTree.group(children)
-                return self.replayRecursive(chosenGen, with: childScript) as? Output
+                guard let result = self.replayRecursive(chosenGen, with: childScript) else { return nil }
+                return result as? Output
 
             case let .sequence(lengthGen, elementGenerator):
                 // This operation expects a `.sequence` node from the script.
@@ -178,10 +179,20 @@ extension Interpreters {
                  
             // Forward-only ops don't consume choices. Their presence in a reflectable
             // generator is an error.
-            case let .lmap(_, subGenerator), let .prune(subGenerator):
-                // A lens is a wrapper. It doesn't consume a node from the script itself.
+            case let .lmap(_, subGenerator):
+                // A lens/lmap is a wrapper. It doesn't consume a node from the script itself.
                 // The choices are consumed by its sub-generator. We pass the same script down.
-                return self.replayRecursive(subGenerator, with: script) as? Output
+                guard let subResult = self.replayRecursive(subGenerator, with: script) else { return nil }
+                
+                // Call the continuation with the subResult to handle the transformation
+                let nextGen = continuation(subResult)
+                return self.replayRecursive(nextGen, with: script)
+                
+            case let .prune(subGenerator):
+                // A prune is a wrapper. It doesn't consume a node from the script itself.
+                // The choices are consumed by its sub-generator. We pass the same script down.
+                guard let result = self.replayRecursive(subGenerator, with: script) else { return nil }
+                return result as? Output
             }
         }
     }

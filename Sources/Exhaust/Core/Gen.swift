@@ -145,14 +145,22 @@ enum Gen {
 
         return .impure(operation: ReflectiveOperation.lmap(transform: erasedTransform, next: erasedGen)) { result in
             if let typed = result as? Output {
-                // Forward pass
+                // Forward pass - direct value
                 return .pure(typed)
                 
             } else if let gen = result as? ReflectiveGenerator<NewInput, Any> {
-                // Backward pass
+                // Backward pass - generator
                 return gen.map { $0 as! Output }
+                
+            } else {
+                // Backward pass - raw value that needs to be converted
+                // This handles cases where replay provides a raw value instead of a generator
+                // Try to convert the raw value to the expected output type
+                if let convertedValue = result as? Output {
+                    return .pure(convertedValue)
+                }
+                fatalError("Interpreter error in handling of Op.lmap case: unexpected result type \(type(of: result))")
             }
-            fatalError("Interpreter error in handling of Op.lens case")
         }
     }
     
