@@ -89,7 +89,7 @@ extension Int: BitPatternConvertible {
     /// advanced implementation could use the full `UInt64` range and handle two's
     // complement for negative numbers, but that significantly complicates the logic.
     public static var bitPatternRange: ClosedRange<UInt64> {
-        0...UInt64(bitPattern: Int64.max) // Safest cross-platform range
+        UInt64.min...UInt64.max // Safest cross-platform range
     }
     
     // Swift provides `init(bitPattern: UInt64)` for Int when the bit widths match
@@ -98,7 +98,7 @@ extension Int: BitPatternConvertible {
     /// The `UInt64` representation of this `Int`.
     public var bitPattern64: UInt64 {
         // This assumes the Int is non-negative, consistent with `bitPatternRange`.
-        return UInt64(self)
+        return UInt64(bitPattern: Int64(self))
     }
 }
 

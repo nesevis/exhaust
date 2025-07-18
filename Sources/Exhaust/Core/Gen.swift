@@ -201,9 +201,10 @@ enum Gen {
         )
         // 4. Lift the operation. The continuation will decode the `[Any]` result.
         return .impure(operation: sequenceOp) { result in
-            guard let array = result as? [Output] else {
-                fatalError("Oh no!")
-            }
+            let array = result as! [Output]
+//            guard let array = result as! [Output] else {
+//                fatalError("Oh no!")
+//            }
             return .pure(array)
         }
     }

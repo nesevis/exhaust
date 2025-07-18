@@ -186,35 +186,35 @@ func testSimpleNestedStringArray() {
 func testNestedLensedProperties() {
     struct Outer: Equatable {
         let inners: [Inner]
-        let id: Int
+        let id: UInt
     }
     struct Inner: Equatable {
-        let id: Int
+        let id: UInt
     }
     
     // This works
-    let innerGen = Gen.lens(extract: \Inner.id, Gen.choose(type: Int.self))
-        .proliferate(with: 1...1)
+    let innerGen = Gen.lens(extract: \Inner.id, Gen.choose(type: UInt.self))
+        .proliferate(with: 1...100)
         // Casting to the type needs to be the last thing in the chain
         .map { ints in ints.map { Inner(id: $0) }}
     
     // This crashes
-    let innerGen2 = Gen.lens(extract: \Inner.id, Gen.choose(type: Int.self))
+    let innerGen2 = Gen.lens(extract: \Inner.id, Gen.choose(type: UInt.self))
         .map { Inner(id: $0) }
         .proliferate(with: 1...1)
     
-    // This?
-    let intArrayGen = Int.arbitrary
+    // This doesn't crash, but the inners array is empty
+    let intArrayGen = UInt.arbitrary
         .map { Inner(id: $0) }
         .proliferate(with: 1...1)
     let innerGen3 = Gen.lens(extract: \Inner.id, intArrayGen)
     
     let outerGen = Gen.lens(
         extract: \Outer.inners,
-        innerGen3
+        innerGen
     )
         .bind { inners in
-            Gen.lens(extract: \Outer.id, Gen.choose(type: Int.self)).map { id in
+            Gen.lens(extract: \Outer.id, Gen.choose(type: UInt.self)).map { id in
                 Outer(inners: inners, id: id)
             }
         }

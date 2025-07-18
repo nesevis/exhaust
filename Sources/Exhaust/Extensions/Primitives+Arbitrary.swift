@@ -35,6 +35,12 @@ extension UInt: Arbitrary {
     }
 }
 
+extension Int: Arbitrary {
+    static var arbitrary: ReflectiveGenerator<Any, Self> {
+        Gen.choose(in: Int.min...Int.max)
+    }
+}
+
 extension Float: Arbitrary {
     static var arbitrary: ReflectiveGenerator<Any, Float> {
         Gen.choose(in: -Float.greatestFiniteMagnitude...Float.greatestFiniteMagnitude)

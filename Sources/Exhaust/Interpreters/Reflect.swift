@@ -120,7 +120,8 @@ extension Interpreters {
         case let .sequence(lengthGen, elementGen):
             // 1. The target value for a sequence MUST be an array.
             guard
-                let targetArray = ((finalOutput as? [Any]) ?? (Array((finalOutput as? String) ?? "") as? [Any]))
+                let targetArray = finalOutput as? any Sequence
+//                let targetArray = ((finalOutput as? [Any]) ?? (Array((finalOutput as? String) ?? "") as? [Any]))
             else {
                 return []
             }
