@@ -19,8 +19,8 @@ import Testing
         let age: Int
         let height: Double
     }
-    let lensedAge = Gen.lens(into: \Person.age, Gen.choose(in: 0...150))
-    let lensedHeight = Gen.lens(into: \Person.height, Gen.choose(in: Double(120)...180))
+    let lensedAge = Gen.lens(extract: \Person.age, Gen.choose(in: 0...150))
+    let lensedHeight = Gen.lens(extract: \Person.height, Gen.choose(in: Double(120)...180))
     let zipped = lensedAge.bind { age in
         lensedHeight.map { height in
             Person(age: age, height: height)
@@ -43,8 +43,8 @@ func testPersonShrinking() {
     }
     let shrinker = Shrinker()
     
-    let lensedAge = Gen.lens(into: \Person.age, Gen.choose(in: 0...1500))
-    let lensedHeight = Gen.lens(into: \Person.height, Gen.choose(in: 25...250))
+    let lensedAge = Gen.lens(extract: \Person.age, Gen.choose(in: 0...1500))
+    let lensedHeight = Gen.lens(extract: \Person.height, Gen.choose(in: 25...250))
     let personGen = lensedAge.bind { age in
         lensedHeight.map { height in
             Person(age: age, height: height)
@@ -85,7 +85,7 @@ func testStringObjectShrinking() {
         let name: String
     }
     let shrinker = Shrinker()
-    let gen = Gen.lens(into: \Thing.name, String.arbitrary)
+    let gen = Gen.lens(extract: \Thing.name, String.arbitrary)
         .map { Thing(name: $0) }
     
     let property: (Thing) -> Bool = { thing in
@@ -131,9 +131,13 @@ func testSequenceWithPicks() {
     
     // Our problem is that this is [[Char]] under the hood, and if we lens into the count we're too deep to lens out.
     // I don't want to add specific handling to the reflect or replay interpreters to handle this, in the case of multiply nested arrays in the future. Look into `getSize`?
-    let gen = Gen.lens(into: \Receipt.items, String.arbitrary.proliferate(with: 5...10).proliferate(with: 1...2))
+    let stringArrGen = String.arbitrary.proliferate(with: 5...10).proliferate(with: 1...2)
+    let gen = Gen.lens(
+        extract: \Receipt.items,
+        stringArrGen
+    )
         .bind { items in
-            Gen.lens(into: \Receipt.cost, Gen.choose(in: 1...100)).map { cost in
+            Gen.lens(extract: \Receipt.cost, Gen.choose(in: 1...100)).map { cost in
                 Receipt(items: items, cost: cost)
             }
         }
@@ -176,4 +180,47 @@ func testSimpleNestedStringArray() {
         $0.first?.first?.contains(where: { $0.isUppercase }) ?? false
     })
     print()
+}
+
+@Test("Nested lensed properties")
+func testNestedLensedProperties() {
+    struct Outer: Equatable {
+        let inners: [Inner]
+        let id: Int
+    }
+    struct Inner: Equatable {
+        let id: Int
+    }
+    
+    // This works
+    let innerGen = Gen.lens(extract: \Inner.id, Gen.choose(type: Int.self))
+        .proliferate(with: 1...1)
+        // Casting to the type needs to be the last thing in the chain
+        .map { ints in ints.map { Inner(id: $0) }}
+    
+    // This crashes
+    let innerGen2 = Gen.lens(extract: \Inner.id, Gen.choose(type: Int.self))
+        .map { Inner(id: $0) }
+        .proliferate(with: 1...1)
+    
+    // This?
+    let intArrayGen = Int.arbitrary
+        .map { Inner(id: $0) }
+        .proliferate(with: 1...1)
+    let innerGen3 = Gen.lens(extract: \Inner.id, intArrayGen)
+    
+    let outerGen = Gen.lens(
+        extract: \Outer.inners,
+        innerGen3
+    )
+        .bind { inners in
+            Gen.lens(extract: \Outer.id, Gen.choose(type: Int.self)).map { id in
+                Outer(inners: inners, id: id)
+            }
+        }
+    let generated = Interpreters.generate(outerGen)
+    let recipe = Interpreters.reflect(outerGen, with: generated!)
+    let replayed = Interpreters.replay(outerGen, using: recipe!)
+    print()
+    #expect(generated == replayed)
 }

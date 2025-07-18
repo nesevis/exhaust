@@ -11,7 +11,7 @@ enum Gen {
     }
     
     static func lens<Input, Output, NewInput>(
-        into path: some PartialPath<NewInput, Input>,
+        extract path: some PartialPath<NewInput, Input>,
         _ next: ReflectiveGenerator<Any, Output>
     ) -> ReflectiveGenerator<Any, Output> {
         comap(path.extract(from:), next)
