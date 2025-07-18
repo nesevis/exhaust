@@ -13,6 +13,9 @@ final class ShrinkCandidateIterator: IteratorProtocol {
         // Shrinking a primitive UInt64 value.
         // We store all potential shrinks and an index to the next one to yield.
         case shrinkingChoice(shrinks: [UInt64], nextIndex: Int)
+        
+        // Shrinking a Character choice by shrinking its Unicode scalar value.
+        case shrinkingCharacterChoice(originalCharacter: Character, shrinks: [UInt64], nextIndex: Int)
 
         // Shrinking a sequence. This is a multi-stage process.
         // Stage 1: Shrink the sequence's length.
@@ -60,6 +63,11 @@ final class ShrinkCandidateIterator: IteratorProtocol {
                     // Generate the simple -> complex list of numeric shrinks ONCE.
                     let shrinks = shrinkNumberAggressively(bits).sorted() // Sort ascending!
                     state = .shrinkingChoice(shrinks: shrinks, nextIndex: 0)
+                case let .characterChoice(character):
+                    // Shrink Character by shrinking its first Unicode scalar value
+                    let firstScalar = character.unicodeScalars.first?.value ?? 0
+                    let shrinks = shrinkNumberAggressively(UInt64(firstScalar)).sorted()
+                    state = .shrinkingCharacterChoice(originalCharacter: character, shrinks: shrinks, nextIndex: 0)
                 case .just:
                     state = .finished
                 
@@ -106,6 +114,25 @@ final class ShrinkCandidateIterator: IteratorProtocol {
                 state = .shrinkingChoice(shrinks: shrinks, nextIndex: index + 1)
                 // Yield the current shrink.
                 return .choice(shrinks[index])
+            
+            case let .shrinkingCharacterChoice(originalCharacter, shrinks, index):
+                if index >= shrinks.count {
+                    // We've exhausted all Character shrinks. We're done.
+                    state = .finished
+                    return nil
+                }
+                // Move state to the next index for the next call.
+                state = .shrinkingCharacterChoice(originalCharacter: originalCharacter, shrinks: shrinks, nextIndex: index + 1)
+                // Create a new Character from the shrunk scalar value
+                let shrunkScalar = shrinks[index]
+                if let unicodeScalar = Unicode.Scalar(UInt32(shrunkScalar)) {
+                    let shrunkCharacter = Character(unicodeScalar)
+                    return .characterChoice(shrunkCharacter)
+                } else {
+                    // If invalid scalar, skip this shrink
+                    state = .shrinkingCharacterChoice(originalCharacter: originalCharacter, shrinks: shrinks, nextIndex: index + 1)
+                    return next() // Recursively try the next one
+                }
 
             case let .shrinkingSequenceLength(elements, shrinks, index, range, usePrefix):
                 if index >= shrinks.count {

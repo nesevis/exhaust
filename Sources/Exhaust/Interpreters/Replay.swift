@@ -62,6 +62,15 @@ extension Interpreters {
                 
                 let nextGen = continuation(bits)
                 return self.replayWithChoicesHelper(nextGen, choices: &choices)
+            
+            case .chooseCharacter:
+                // Consume the next choice which should be a Character
+                guard !choices.isEmpty else { return nil }
+                let choice = choices.removeFirst()
+                guard case let .characterChoice(character) = choice else { return nil }
+                
+                let nextGen = continuation(character)
+                return self.replayWithChoicesHelper(nextGen, choices: &choices)
 
             case let .pick(pickChoices):
                 // Consume the next choice which should be a branch
@@ -146,6 +155,13 @@ extension Interpreters {
                     return nil
                 }
                 return runContinuation(bits)
+            
+            case .chooseCharacter:
+                // This operation expects a primitive `.characterChoice` node from the script.
+                guard case let .characterChoice(character) = script else {
+                    return nil
+                }
+                return runContinuation(character)
             case let .just(value):
                 return runContinuation(value)
 

@@ -124,6 +124,21 @@ extension Interpreters {
             
             // Success! The result for the continuation is the value itself.
             return [(value: finalOutput, path: [.choice(bitPattern)])]
+        
+        case let .chooseCharacter(min, max):
+            // Handle Character-specific reflection
+            guard let character = finalOutput as? Character else {
+                return []
+            }
+            // Validate that the character is within the expected range
+            let firstScalar = character.unicodeScalars.first?.value ?? 0
+            guard (min...max).contains(UInt64(firstScalar)) else {
+                return []
+            }
+            
+            // Store the exact Character representation
+            return [(value: finalOutput, path: [.characterChoice(character)])]
+        
         case let .just(value):
             return [(value: value, path: [.just])]
         case let .sequence(lengthGen, elementGen):

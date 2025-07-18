@@ -62,8 +62,7 @@ extension Unicode.Scalar: Arbitrary {
 
 extension Character: Arbitrary {
     static var arbitrary: ReflectiveGenerator<Any, Character> {
-        Unicode.Scalar.arbitrary
-            .map { Character($0) }
+        Gen.chooseCharacter()
     }
 }
 

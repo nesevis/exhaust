@@ -33,6 +33,11 @@ enum ReflectiveOperation<Input>: AnyReflectiveOperation {
     /// This unified approach supports all BitPatternConvertible types (Int, Float, etc.).
     case chooseBits(min: UInt64, max: UInt64)
     
+    /// Generates a Character from Unicode scalar values.
+    /// Used specifically for Character generation to preserve exact representation.
+    /// Stores the complete Unicode scalar array to avoid normalization issues.
+    case chooseCharacter(min: UInt64, max: UInt64)
+    
     /// Generates a sequence of values using a repeated element generator.
     /// Used by `Gen.arrayOf` to create arrays of random length and content.
     /// The length is fixed at operation creation time, and the element generator

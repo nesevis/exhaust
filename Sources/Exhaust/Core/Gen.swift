@@ -59,6 +59,8 @@ enum Gen {
             return .lmap(transform: newTransform, next: next)
         case let .chooseBits(min, max):
             return .chooseBits(min: min, max: max)
+        case let .chooseCharacter(min, max):
+            return .chooseCharacter(min: min, max: max)
         case let .sequence(length, gen):
             return .sequence(
                 length: length.mapOperation(eraseInputType(from:)),
@@ -89,6 +91,19 @@ enum Gen {
 //        //    This avoids code duplication and keeps the core logic in one place.
 //        return choose(in: inclusiveRange)
 //    }
+    
+    static func chooseCharacter<Input>(in range: ClosedRange<UInt64>? = nil, input: Input.Type = Input.self) -> ReflectiveGenerator<Input, Character> {
+        let actualRange = range ?? Character.bitPatternRange
+        let op = ReflectiveOperation<Input>.chooseCharacter(min: actualRange.lowerBound, max: actualRange.upperBound)
+        
+        return .impure(operation: op) { result in
+            if let character = result as? Character {
+                return .pure(character)
+            } else {
+                fatalError("Interpreter failed to provide a Character for a chooseCharacter operation.")
+            }
+        }
+    }
     
     static func choose<Input, Output: BitPatternConvertible>(in range: ClosedRange<Output>? = nil, type: Output.Type = Output.self, input: Input.Type = Input.self) -> ReflectiveGenerator<Input, Output> {
         

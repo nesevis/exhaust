@@ -122,6 +122,14 @@ enum Interpreters {
                 //    constructed to specifically expect a `UInt64` and perform
                 //    the `T(bitPattern:)` decoding itself before continuing the chain.
                 return runContinuation(randomBits)
+            
+            case let .chooseCharacter(min, max):
+                // Generate a random Unicode scalar value and create a Character
+                let randomScalar = UInt64.random(in: min...max, using: &context.randomNumberGenerator)
+                let unicodeScalar = Unicode.Scalar(UInt32(randomScalar))!
+                let character = Character(unicodeScalar)
+                
+                return runContinuation(character)
             case let .sequence(lengthGen, elementGen):
                 var results: [Any] = []
 //                    results.reserveCapacity(count)
