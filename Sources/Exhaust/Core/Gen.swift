@@ -61,7 +61,10 @@ enum Gen {
         case let .chooseBits(min, max):
             return .chooseBits(min: min, max: max)
         case let .sequence(length, gen):
-            return .sequence(length: length, gen: gen.mapOperation(eraseInputType(from:)))
+            return .sequence(
+                length: length.mapOperation(eraseInputType(from:)),
+                gen: gen.mapOperation(eraseInputType(from:))
+            )
         }
     }
     
@@ -189,7 +192,7 @@ enum Gen {
     /// - Returns: A generator that produces an array of elements.
     public static func arrayOf<Input, Output>(
         _ elementGenerator: ReflectiveGenerator<Input, Output>,
-        _ length: UInt64
+        _ length: ReflectiveGenerator<Input, UInt64>
     ) -> ReflectiveGenerator<Input, [Output]> {
         // 2. Use `bind` to get the result of the length generator.
         let sequenceOp = ReflectiveOperation<Input>.sequence(

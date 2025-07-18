@@ -122,23 +122,26 @@ enum Interpreters {
                 //    constructed to specifically expect a `UInt64` and perform
                 //    the `T(bitPattern:)` decoding itself before continuing the chain.
                 return runContinuation(randomBits)
-            case let .sequence(length, gen):
+            case let .sequence(lengthGen, elementGen):
                 var results: [Any] = []
 //                    results.reserveCapacity(count)
-                    
-                    // An iterative loop, not a recursive one. This will never overflow the stack.
-                    for _ in 0..<length {
-                        // Run the element generator once for each item.
-                        // It's a self-contained generator, so its input is `()`.
-                        guard let element = self.generateRecursive(gen, with: length as! Input, context: context) else {
-                            // If any element fails to generate, the whole sequence fails.
-                            return nil
-                        }
-                        results.append(element)
+                
+                // An iterative loop, not a recursive one. This will never overflow the stack.
+                guard let length = self.generateRecursive(lengthGen, with: () as! Input, context: context) else {
+                    return nil
+                }
+                for _ in 0..<length {
+                    // Run the element generator once for each item.
+                    // It's a self-contained generator, so its input is `()`.
+                    guard let element = self.generateRecursive(elementGen, with: () as! Input, context: context) else {
+                        // If any element fails to generate, the whole sequence fails.
+                        return nil
                     }
-                    
-                    // Pass the completed array to the continuation.
-                    return runContinuation(results)
+                    results.append(element)
+                }
+                
+                // Pass the completed array to the continuation.
+                return runContinuation(results)
             }
         }
     }

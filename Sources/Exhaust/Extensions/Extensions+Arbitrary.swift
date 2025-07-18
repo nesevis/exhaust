@@ -9,10 +9,7 @@
 extension FreerMonad where Operation: AnyReflectiveOperation {
     func proliferate<Input>(with range: ClosedRange<UInt64>) -> ReflectiveGenerator<Input, [Value]> 
     where Operation == ReflectiveOperation<Input> {
-        Gen.choose(in: range, input: Input.self)
-            .bind { length in
-                Gen.arrayOf(self, length)
-            }
+        Gen.arrayOf(self, Gen.choose(in: range, input: Input.self))
     }
 }
 //

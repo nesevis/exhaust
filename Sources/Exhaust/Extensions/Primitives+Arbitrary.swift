@@ -55,10 +55,7 @@ extension Character: Arbitrary {
 
 extension String: Arbitrary {
     static var arbitrary: ReflectiveGenerator<Any, String> {
-        Gen.choose(in: 0...800)
-            .bind { length in
-                Gen.arrayOf(Character.arbitrary, length)
-                    .map { String($0) }
-            }
+        Gen.arrayOf(Character.arbitrary, Gen.choose(in: 0...800))
+            .map { String($0) }
     }
 }

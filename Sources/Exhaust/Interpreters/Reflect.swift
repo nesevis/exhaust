@@ -80,18 +80,7 @@ extension Interpreters {
             }
             return reflectRecursive(nextGen, onFinalOutput: subValue)
                 .map { ($0.value, $0.path) }
-//            // LMAP's JOB: Try to cast the final output to its expected Input type.
-//            guard let typedFinalOutput = finalOutput as? Output else {
-//                return [] // This path is impossible if the types don't align.
-//            }
-//            // "Zoom in": Apply the transform to create a new, local target for the sub-generator.
-//            let inputValue = transform(typedFinalOutput)
-//            if let convertible = inputValue as? any BitPatternConvertible {
-//                return [(inputValue, [.choice(convertible.bitPattern64)])]
-//            }
-//            return []
-//            return reflectRecursive(nextGen, onFinalOutput: inputValue).map { ($0.value, $0.path) }
-
+            
         case let .prune(nextGen):
             // PRUNE's JOB: Try to cast the final output to an Optional and check if it's nil.
             guard let optionalTarget = .some(finalOutput as Optional<Any>), let wrappedTarget = optionalTarget else {
@@ -128,11 +117,10 @@ extension Interpreters {
             
             // Success! The result for the continuation is the value itself.
             return [(value: finalOutput, path: [.choice(bitPattern)])]
-        case let .sequence(length, gen):
+        case let .sequence(lengthGen, elementGen):
             // 1. The target value for a sequence MUST be an array.
             guard
-                let targetArray = ((finalOutput as? [Any]) ?? (Array((finalOutput as? String) ?? "") as? [Any])),
-                targetArray.count == Int(length)
+                let targetArray = ((finalOutput as? [Any]) ?? (Array((finalOutput as? String) ?? "") as? [Any]))
             else {
                 return []
             }
@@ -141,11 +129,14 @@ extension Interpreters {
             var combinedResults: [Any] = []
             var validRange: ClosedRange<UInt64>?
             
+//            let length = UInt64(5)
+            let lengthResult = self.reflectRecursive(lengthGen, onFinalOutput: finalOutput)
+            
             // 3. Iterate over the elements of the target array.
             for elementTarget in targetArray {
                 // Reflect on the element generator with the corresponding element as the target.
                 // We assume reflection on an element is non-ambiguous and produces one path.
-                guard let (value, path) = self.reflectRecursive(gen, onFinalOutput: elementTarget).first else {
+                guard let (value, path) = self.reflectRecursive(elementGen, onFinalOutput: elementTarget).first else {
                     // If any element cannot be reflected, the whole sequence fails.
                     return []
                 }
@@ -155,7 +146,12 @@ extension Interpreters {
                     validRange = type(of: convertible).bitPatternRange
                 }
             }
-            let finalTree = ChoiceTree.sequence(length: length, elements: combinedPath, validRange: validRange ?? UInt64.bitPatternRange)
+            
+            let finalTree = ChoiceTree.sequence(
+                length: lengthResult.first?.value ?? 0,
+                elements: combinedPath,
+                validRange: validRange ?? UInt64.bitPatternRange
+            )
             return [(value: combinedResults, path: [finalTree])]
         }
     }

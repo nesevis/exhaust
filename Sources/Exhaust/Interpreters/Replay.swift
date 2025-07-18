@@ -157,12 +157,13 @@ extension Interpreters {
                 let childScript = ChoiceTree.group(children)
                 return self.replayRecursive(chosenGen, with: childScript) as? Output
 
-            case let .sequence(count, elementGenerator):
+            case let .sequence(lengthGen, elementGenerator):
                 // This operation expects a `.sequence` node from the script.
                 guard case let .sequence(length, elements, _) = script else { return nil }
                 
-                // The counts must match.
-                guard count == length else { return nil }
+                guard let count = self.replayRecursive(lengthGen, with: .choice(length)) else {
+                    return nil
+                }
                 
                 var accumulatedValues: [Any] = []
                 for elementScript in elements {

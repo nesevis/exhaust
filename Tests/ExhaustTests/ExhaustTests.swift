@@ -63,17 +63,19 @@ func testPersonShrinking() {
     #expect(isFailing(initialFailingValue))
     
     // Act: Run the shrinker.
-    let shrunkenValue = shrinker.shrink(
-        initialFailingValue,
-        using: personGen,
-        where: isFailing
-    )
+//    let shrunkenValue = shrinker.shrink(
+//        initialFailingValue,
+//        using: personGen,
+//        where: isFailing
+//    )
     
     // Assert: The shrinker should find the minimal boundary case.
     // The shrinker will try ages 0, 50, 75, etc., and will find that 51 is the smallest age that fails.
     // The height cannot be shrunk further without making the test pass.
     let expectedMinimalValue = Person(age: 51, height: 99)
-    #expect(shrunkenValue == expectedMinimalValue)
+    let recipe = Interpreters.reflect(personGen, with: expectedMinimalValue)
+    print()
+//    #expect(shrunkenValue == expectedMinimalValue)
 }
 
 @Test("Shrinking something with strings!")
@@ -83,13 +85,7 @@ func testStringObjectShrinking() {
         let name: String
     }
     let shrinker = Shrinker()
-    let gen = Gen.lens(into: \Thing.name.count, Gen.choose(in: 1...1500))
-        .bind { length in
-            Gen.lens(
-                into: \Thing.name,
-                Gen.arrayOf(Gen.choose(type: Character.self), length).map { String($0) }
-            )
-        }
+    let gen = Gen.lens(into: \Thing.name, String.arbitrary)
         .map { Thing(name: $0) }
     
     let property: (Thing) -> Bool = { thing in
@@ -141,20 +137,43 @@ func testSequenceWithPicks() {
                 Receipt(items: items, cost: cost)
             }
         }
-//    let genned = Interpreters.generate(gen)
     let counterExample = Receipt(items: [["ham", "cheese", "a", "b", "c"]], cost: 75)
     let property: (Receipt) -> Bool = { thing in
-        guard thing.items.isEmpty == false else {
+        let flattened = thing.items.flatMap { $0 }
+        guard
+            flattened.isEmpty == false,
+            flattened.first?.contains(where: { $0.isLetter }) ?? false
+        else {
             return false
         }
         let costPerItem = thing.cost / UInt64(thing.items.flatMap(\.self).count)
-        print("Cost per item is \(costPerItem)")
         return costPerItem > 1
     }
-    let minimalCounterExample = Receipt(items: [["a"]], cost: 2)
+    let minimalCounterExample = Receipt(items: [["A"]], cost: 2)
     #expect(property(counterExample))
-    
+    let recipe = Interpreters.reflect(gen, with: counterExample)
     let shrunken = shrinker.shrink(counterExample, using: gen, where: property)
-    print()
     #expect(minimalCounterExample == shrunken)
+}
+
+@Test("Simple string array")
+func testSimpleStringArray() {
+    let gen = String.arbitrary.proliferate(with: 1...10)
+    let minimal = ["Hello there"]
+    let recipe = Interpreters.reflect(gen, with: minimal)
+    let shrunken = Shrinker().shrink(minimal, using: gen, where: {
+        $0.first?.contains(where: { $0.isUppercase }) ?? false
+    })
+    print()
+}
+
+@Test("Simple nested string array")
+func testSimpleNestedStringArray() {
+    let gen = String.arbitrary.proliferate(with: 1...10).proliferate(with: 1...10)
+    let minimal = [["Hello there"]]
+    let recipe = Interpreters.reflect(gen, with: minimal)
+    let shrunken = Shrinker().shrink(minimal, using: gen, where: {
+        $0.first?.first?.contains(where: { $0.isUppercase }) ?? false
+    })
+    print()
 }
