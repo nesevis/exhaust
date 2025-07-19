@@ -101,7 +101,9 @@ extension Interpreters {
 
             case let .sequence(count, elementGenerator):
                 // Consume the next choice which should be a sequence
-                guard !choices.isEmpty else { return nil }
+                guard !choices.isEmpty else { 
+                    return nil 
+                }
                 let choice = choices.removeFirst()
                 
                 guard case let .sequence(length, elements, range) = choice else {
@@ -127,7 +129,15 @@ extension Interpreters {
                 let nextGen = continuation(subResult)
                 return self.replayWithChoicesHelper(nextGen, choices: &choices)
             case let .just(value):
-                return continuation(value) as? Output
+                // Consume the next choice which should be a just
+                guard !choices.isEmpty else { return nil }
+                let choice = choices.removeFirst()
+                guard case .just = choice else {
+                    return nil
+                }
+                
+                let nextGen = continuation(value)
+                return self.replayWithChoicesHelper(nextGen, choices: &choices)
             }
         }
     }
@@ -178,6 +188,10 @@ extension Interpreters {
                 }
                 return runContinuation(character)
             case let .just(value):
+                // This operation expects a `.just` node from the script.
+                guard case .just = script else {
+                    return nil
+                }
                 return runContinuation(value)
 
             case let .pick(choices):

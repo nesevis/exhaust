@@ -49,3 +49,51 @@ extension ChoiceTree {
         }
     }
 }
+
+extension ChoiceTree: CustomDebugStringConvertible {
+    var debugDescription: String {
+        treeDescription(prefix: "", isLast: true)
+    }
+    
+    private func treeDescription(prefix: String, isLast: Bool) -> String {
+        let connector = isLast ? "└── " : "├── "
+        let childPrefix = prefix + (isLast ? "    " : "│   ")
+        
+        switch self {
+        case let .choice(value):
+            switch value {
+            case let .character(char):
+                return prefix + connector + "choice(char: '\(char)')"
+            case let .uint(uint):
+                return prefix + connector + "choice(uint: \(uint))"
+            }
+            
+        case .just:
+            return prefix + connector + "just"
+            
+        case let .sequence(length, elements, range):
+            var result = prefix + connector + "sequence(length: \(length), range: \(range.lowerBound)...\(range.upperBound))"
+            for (index, element) in elements.enumerated() {
+                let isLastElement = index == elements.count - 1
+                result += "\n" + element.treeDescription(prefix: childPrefix, isLast: isLastElement)
+            }
+            return result
+            
+        case let .branch(label, children):
+            var result = prefix + connector + "branch(label: \(label))"
+            for (index, child) in children.enumerated() {
+                let isLastChild = index == children.count - 1
+                result += "\n" + child.treeDescription(prefix: childPrefix, isLast: isLastChild)
+            }
+            return result
+            
+        case let .group(children):
+            var result = prefix + connector + "group"
+            for (index, child) in children.enumerated() {
+                let isLastChild = index == children.count - 1
+                result += "\n" + child.treeDescription(prefix: childPrefix, isLast: isLastChild)
+            }
+            return result
+        }
+    }
+}

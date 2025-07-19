@@ -165,7 +165,12 @@ extension Interpreters {
                     return []
                 }
                 combinedResults.append(value)
-                combinedPath.append(contentsOf: path)
+                // Group each element's path choices instead of flattening them
+                if path.count == 1 {
+                    combinedPath.append(path[0])
+                } else {
+                    combinedPath.append(.group(path))
+                }
                 if validRange == nil, let convertible = value as? any BitPatternConvertible {
                     validRange = type(of: convertible).bitPatternRange
                 }
