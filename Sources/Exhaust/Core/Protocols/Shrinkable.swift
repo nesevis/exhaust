@@ -5,6 +5,8 @@
 //  Created by Chris Kolbu on 20/7/2025.
 //
 
+// Not used anywhere - ignore
+
 extension UInt64: Shrinkable {
     var shrinkingStrategies: ShrinkingStrategies {
         [.binary, .decimal, .deletion, .minimal]

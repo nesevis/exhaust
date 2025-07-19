@@ -3,10 +3,19 @@ enum Gen {
         _ op: ReflectiveOperation<Input>
     ) -> ReflectiveGenerator<Input, Output> {
         return .impure(operation: op) { result in
-            guard let typedResult = result as? Output else {
-                fatalError("Interpreter provided wrong type. Expected \(Output.self), got \(type(of: result))")
+            // Forward pass
+            if let typedResult = result as? Output {
+                return .pure(typedResult)
             }
-            return .pure(typedResult)
+            // Backward pass
+            if
+                let gen = result as? ReflectiveGenerator<Any, Any>,
+                case let .pure(value) = gen
+            {
+                return .pure(value as! Output)
+            }
+            
+            fatalError("Interpreter provided wrong type. Expected \(Output.self), got \(type(of: result))")
         }
     }
     
@@ -71,27 +80,6 @@ enum Gen {
         }
     }
     
-//    static func choose<Input, Output: BitPatternConvertible & Strideable>(
-//        in range: Range<Output>,
-//        input: Input.Type = Input.self
-//    ) -> ReflectiveGen<Input, Output> where Output.Stride : SignedInteger {
-//        
-//        // 1. Determine the effective upper bound. For a range `a..<b`, the last
-//        //    integer value is `b - 1`. The `advanced(by: -1)` method is the
-//        //    generic way to do this for any Strideable type.
-//        let inclusiveUpperBound = range.upperBound.advanced(by: -1)
-//        
-//        // 2. Check that the resulting range is valid.
-//        precondition(range.lowerBound <= inclusiveUpperBound, "The range is empty or invalid")
-//        
-//        // 3. Create a new *ClosedRange* from the calculated bounds.
-//        let inclusiveRange = range.lowerBound...inclusiveUpperBound
-//        
-//        // 4. Delegate to the existing `choose(in: ClosedRange<T>)` function.
-//        //    This avoids code duplication and keeps the core logic in one place.
-//        return choose(in: inclusiveRange)
-//    }
-    
     static func chooseCharacter<Input>(in range: ClosedRange<UInt64>? = nil, input: Input.Type = Input.self) -> ReflectiveGenerator<Input, Character> {
         let actualRange = range ?? Character.bitPatternRange
         let op = ReflectiveOperation<Input>.chooseCharacter(min: actualRange.lowerBound, max: actualRange.upperBound)
@@ -122,11 +110,16 @@ enum Gen {
         return .impure(operation: op) { result in
             // a. The interpreter will execute the operation and pass the raw `UInt64` result here.
             var convertibleValue: (any BitPatternConvertible)?
+            // Forward pass
             if let convertible = result as? (any BitPatternConvertible) {
                 convertibleValue = convertible
             }
+            // Backward pass
+            else if let convertible = (result as? ChoiceValue)?.convertible {
+                convertibleValue = convertible
+            }
             else if let convertible = result as? (any Sequence) {
-                convertibleValue = convertible.underestimatedCount
+                convertibleValue = UInt64(convertible.underestimatedCount)
             }
             
             if let convertibleValue {
@@ -134,18 +127,6 @@ enum Gen {
             } else {
                 fatalError("Interpreter failed to provide a UInt64 for a chooseBits operation.")
             }
-//            guard let convertible = result as? (any BitPatternConvertible) else {
-//                // This signifies a bug in the interpreter, not user code.
-//            }
-            
-            // b. The continuation uses the protocol's required initializer to convert the
-            //    raw bits back into the final, strongly-typed `T`. This is where the
-            //    magic of two's complement or IEEE 754 happens, specific to type `T`.
-            // Kolbu: This works both in generate and reflect
-//            let finalValue = Output(bitPattern: convertible.bitPattern64)
-            
-            // c. Wrap the final value in `.pure` to complete this branch of the monadic computation.
-//            return .pure(finalValue)
         }
     }
     
@@ -189,10 +170,7 @@ enum Gen {
     
     // A base generator that produces a single, constant value.
     static func just<Output>(_ value: Output) -> ReflectiveGenerator<Any, Output> {
-        // 1. Create the specific `.just` operation, erasing the value's type for storage.
-        let op = ReflectiveOperation<Output>.just(value)
-        
-        return liftF(op)
+        liftF(ReflectiveOperation<Output>.just(value))
             .mapOperation(eraseInputType(from:))
     }
 
