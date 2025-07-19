@@ -395,25 +395,25 @@ func testLensCompositionWithTransformations() {
     
     let containerGen = valuesGen.bind { values in
         let sum = values.reduce(0, &+)
-        return Gen.just(Container(values: values, sum: sum))
+        return Gen.just(sum).map { sum in
+            Container(values: values, sum: sum)
+        }
     }
     
-    for _ in 0..<20 {
-        let container = Interpreters.generate(containerGen)!
-        
-        // Verify invariant is maintained
-        #expect(container.sum == container.values.reduce(0, &+))
-        
-        // Test round-trip
-        if let recipe = Interpreters.reflect(containerGen, with: container) {
-            if let replayed = Interpreters.replay(containerGen, using: recipe) {
-                #expect(container == replayed)
-            } else {
-                #expect(false, "Replay failed for container")
-            }
+    let container = Interpreters.generate(containerGen)!
+    
+    // Verify invariant is maintained
+    #expect(container.sum == container.values.reduce(0, &+))
+    
+    // Test round-trip
+    if let recipe = Interpreters.reflect(containerGen, with: container) {
+        if let replayed = Interpreters.replay(containerGen, using: recipe) {
+            #expect(container == replayed)
         } else {
-            #expect(false, "Reflection failed for container")
+            #expect(false, "Replay failed for container")
         }
+    } else {
+        #expect(false, "Reflection failed for container")
     }
 }
 

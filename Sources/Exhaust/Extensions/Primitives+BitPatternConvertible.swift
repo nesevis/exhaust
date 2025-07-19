@@ -142,7 +142,7 @@ extension Unicode.Scalar: BitPatternConvertible {
 }
 
 extension Character: BitPatternConvertible {
-    /// Defines the range for standard ASCII characters.
+    /// Defines the range for characters.
     public static var bitPatternRange: ClosedRange<UInt64> {
         0x000000...0x00D7FF // Basic Multilingual Plane before surrogates
     }

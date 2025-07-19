@@ -59,11 +59,11 @@ final class ShrinkCandidateIterator: IteratorProtocol {
             case .initial:
                 // When we start, determine what kind of tree we have and move to the first logical state.
                 switch originalTree {
-                case let .choice(bits):
+                case let .choice(.uint(bits)):
                     // Generate the simple -> complex list of numeric shrinks ONCE.
                     let shrinks = shrinkNumberAggressively(bits).sorted() // Sort ascending!
                     state = .shrinkingChoice(shrinks: shrinks, nextIndex: 0)
-                case let .characterChoice(character):
+                case let .choice(.character(character)):
                     // Shrink Character by shrinking its first Unicode scalar value
                     let firstScalar = character.unicodeScalars.first?.value ?? 0
                     let shrinks = shrinkNumberAggressively(UInt64(firstScalar)).sorted()
@@ -113,7 +113,7 @@ final class ShrinkCandidateIterator: IteratorProtocol {
                 // Move state to the next index for the next call.
                 state = .shrinkingChoice(shrinks: shrinks, nextIndex: index + 1)
                 // Yield the current shrink.
-                return .choice(shrinks[index])
+                return .choice(.init(shrinks[index]))
             
             case let .shrinkingCharacterChoice(originalCharacter, shrinks, index):
                 if index >= shrinks.count {
@@ -127,7 +127,7 @@ final class ShrinkCandidateIterator: IteratorProtocol {
                 let shrunkScalar = shrinks[index]
                 if let unicodeScalar = Unicode.Scalar(UInt32(shrunkScalar)) {
                     let shrunkCharacter = Character(unicodeScalar)
-                    return .characterChoice(shrunkCharacter)
+                    return .choice(.init(shrunkCharacter))
                 } else {
                     // If invalid scalar, skip this shrink
                     state = .shrinkingCharacterChoice(originalCharacter: originalCharacter, shrinks: shrinks, nextIndex: index + 1)

@@ -56,9 +56,13 @@ extension Interpreters {
                 
             case .chooseBits:
                 // Consume the next choice
-                guard !choices.isEmpty else { return nil }
+                guard !choices.isEmpty else {
+                    return nil
+                }
                 let choice = choices.removeFirst()
-                guard case let .choice(bits) = choice else { return nil }
+                guard case let .choice(bits) = choice else {
+                    return nil
+                }
                 
                 let nextGen = continuation(bits)
                 return self.replayWithChoicesHelper(nextGen, choices: &choices)
@@ -67,7 +71,9 @@ extension Interpreters {
                 // Consume the next choice which should be a Character
                 guard !choices.isEmpty else { return nil }
                 let choice = choices.removeFirst()
-                guard case let .characterChoice(character) = choice else { return nil }
+                guard case let .choice(.character(character)) = choice else {
+                    return nil
+                }
                 
                 let nextGen = continuation(character)
                 return self.replayWithChoicesHelper(nextGen, choices: &choices)
@@ -76,13 +82,19 @@ extension Interpreters {
                 // Consume the next choice which should be a branch
                 guard !choices.isEmpty else { return nil }
                 let choice = choices.removeFirst()
-                guard case let .branch(label, children) = choice else { return nil }
+                guard case let .branch(label, children) = choice else {
+                    return nil
+                }
                 
                 // Find the sub-generator that matches the label
-                guard let chosenGen = pickChoices.first(where: { $0.label == label })?.generator else { return nil }
+                guard let chosenGen = pickChoices.first(where: { $0.label == label })?.generator else {
+                    return nil
+                }
                 
                 // Process the chosen sub-generator with its children
-                guard let result = replayWithChoices(chosenGen, choices: children) else { return nil }
+                guard let result = replayWithChoices(chosenGen, choices: children) else {
+                    return nil
+                }
                 
                 let nextGen = continuation(result)
                 return self.replayWithChoicesHelper(nextGen, choices: &choices)
@@ -91,7 +103,10 @@ extension Interpreters {
                 // Consume the next choice which should be a sequence
                 guard !choices.isEmpty else { return nil }
                 let choice = choices.removeFirst()
-                guard case let .sequence(length, elements, range) = choice else { return nil }
+                
+                guard case let .sequence(length, elements, range) = choice else {
+                    return nil
+                }
                 
                 var accumulatedValues: [Any] = []
                 for elementScript in elements {
@@ -158,7 +173,7 @@ extension Interpreters {
             
             case .chooseCharacter:
                 // This operation expects a primitive `.characterChoice` node from the script.
-                guard case let .characterChoice(character) = script else {
+                guard case let .choice(.character(character)) = script else {
                     return nil
                 }
                 return runContinuation(character)
@@ -167,22 +182,30 @@ extension Interpreters {
 
             case let .pick(choices):
                 // This operation expects a `.branch` node from the script.
-                guard case .branch(let label, let children) = script else { return nil }
+                guard case .branch(let label, let children) = script else {
+                    return nil
+                }
                 
                 // Find the sub-generator that matches the label from the script.
-                guard let chosenGen = choices.first(where: { $0.label == label })?.generator else { return nil }
+                guard let chosenGen = choices.first(where: { $0.label == label })?.generator else {
+                    return nil
+                }
                 
                 // Recursively replay the chosen sub-generator with the children of this branch node.
                 // A group of children is replayed as a single unit.
                 let childScript = ChoiceTree.group(children)
-                guard let result = self.replayRecursive(chosenGen, with: childScript) else { return nil }
+                guard let result = self.replayRecursive(chosenGen, with: childScript) else {
+                    return nil
+                }
                 return result as? Output
 
             case let .sequence(lengthGen, elementGenerator):
                 // This operation expects a `.sequence` node from the script.
-                guard case let .sequence(length, elements, _) = script else { return nil }
+                guard case let .sequence(length, elements, _) = script else {
+                    return nil
+                }
                 
-                guard let count = self.replayRecursive(lengthGen, with: .choice(length)) else {
+                guard let count = self.replayRecursive(lengthGen, with: .choice(.uint(length))) else {
                     return nil
                 }
                 
@@ -202,7 +225,9 @@ extension Interpreters {
             case let .lmap(_, subGenerator):
                 // A lens/lmap is a wrapper. It doesn't consume a node from the script itself.
                 // The choices are consumed by its sub-generator. We pass the same script down.
-                guard let subResult = self.replayRecursive(subGenerator, with: script) else { return nil }
+                guard let subResult = self.replayRecursive(subGenerator, with: script) else {
+                    return nil
+                }
                 
                 // Call the continuation with the subResult to handle the transformation
                 let nextGen = continuation(subResult)
@@ -211,7 +236,9 @@ extension Interpreters {
             case let .prune(subGenerator):
                 // A prune is a wrapper. It doesn't consume a node from the script itself.
                 // The choices are consumed by its sub-generator. We pass the same script down.
-                guard let result = self.replayRecursive(subGenerator, with: script) else { return nil }
+                guard let result = self.replayRecursive(subGenerator, with: script) else {
+                    return nil
+                }
                 return result as? Output
             }
         }

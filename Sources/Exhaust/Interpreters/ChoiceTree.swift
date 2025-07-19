@@ -7,12 +7,9 @@
 
 enum ChoiceTree: Equatable {
     /// A primitive choice, typically a number or a high-level semantic label.
-    case choice(UInt64)
+    case choice(ChoiceValue)
     
-    /// A Character-specific choice that stores the exact Character representation.
-    /// Preserves the complete Unicode scalar composition to avoid normalization issues.
-    case characterChoice(Character)
-    
+    /// A deterministic or constant value that can't be shrunk
     case just
     
     /// A node that represents the generation of a sequence. It explicitly
@@ -29,11 +26,13 @@ enum ChoiceTree: Equatable {
 extension ChoiceTree {
     var complexity: UInt64 {
         switch self {
-        case let .choice(uInt64):
-            return uInt64
-        case let .characterChoice(character):
-            // Use the first Unicode scalar value for complexity
-            return UInt64(character.unicodeScalars.first?.value ?? 0)
+        case let .choice(value):
+            switch value {
+            case let .character(char):
+                return char.bitPattern64
+            case let .uint(uint):
+                return uint
+            }
         case .just:
             return 0
         case .sequence(_, var elements, _), .branch(_, var elements), .group(var elements):

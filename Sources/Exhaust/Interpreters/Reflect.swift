@@ -123,7 +123,7 @@ extension Interpreters {
             }
             
             // Success! The result for the continuation is the value itself.
-            return [(value: finalOutput, path: [.choice(bitPattern)])]
+            return [(value: finalOutput, path: [.choice(.init(bitPattern))])]
         
         case let .chooseCharacter(min, max):
             // Handle Character-specific reflection
@@ -137,7 +137,7 @@ extension Interpreters {
             }
             
             // Store the exact Character representation
-            return [(value: finalOutput, path: [.characterChoice(character)])]
+            return [(value: finalOutput, path: [.choice(.init(character))])]
         
         case let .just(value):
             return [(value: value, path: [.just])]

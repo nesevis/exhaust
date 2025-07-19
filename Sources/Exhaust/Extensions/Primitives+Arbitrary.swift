@@ -72,3 +72,12 @@ extension String: Arbitrary {
             .map { String($0) }
     }
 }
+
+extension Optional: Arbitrary where Wrapped: Arbitrary {
+    static var arbitrary: ReflectiveGenerator<Any, Optional<Wrapped>> {
+        Gen.pick(choices: [
+            (1, Gen.just(.none)),
+            (5, Wrapped.arbitrary.map { .some($0) })
+        ])
+    }
+}
