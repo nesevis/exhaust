@@ -156,16 +156,33 @@ enum Gen {
     }
 
 
-    // exact is the canonical leaf generator. It generates a constant value and, crucially, in the backward pass, it fails if the input doesn't match that constant.
+    /// Creates a generator that produces an exact constant value with validation during reflection.
+    ///
+    /// **Key difference from `Gen.just`:**
+    /// - **`Gen.just`**: Always succeeds during reflection regardless of target value
+    /// - **`Gen.exact`**: Only succeeds during reflection if target value exactly matches the constant
+    ///
+    /// **Forward pass (generation):** Always produces the constant value
+    /// **Backward pass (reflection):** Fails if the target value doesn't match exactly
+    ///
+    /// This validation behavior makes `Gen.exact` essential for property-based testing
+    /// where you need to verify that generated structures contain specific expected values.
+    ///
+    /// - Parameter value: The constant value to generate and validate against
+    /// - Returns: A generator that produces the constant and validates during reflection
     static func exact<Value: Equatable>(_ value: Value) -> ReflectiveGenerator<Value, Value> {
-        // 1. Start with a generator that just produces the value.
-        let baseGenerator = just(value)
+        // Use lmap with a transform that validates the target value during reflection.
+        // The transform returns nil for mismatches, causing reflection to fail.
+        let baseGenerator = just(value).mapOperation(eraseInputType).map { $0 as Any }
         
-        // 2. Use `comap` to check for equality.
-        // The transform returns the value if it matches, or nil otherwise.
-        return comap({ (inputValue: Value) -> Value? in
-            inputValue == value ? inputValue : nil
-        }, baseGenerator)
+        let transform: (Any) -> Any? = { inputValue in
+            guard let typedInput = inputValue as? Value, typedInput == value else {
+                return nil  // Reflection fails for non-matching values
+            }
+            return typedInput
+        }
+        
+        return liftF(ReflectiveOperation<Value>.lmap(transform: transform, next: baseGenerator))
     }
     
     /// Creates a generator for an array of random values.
