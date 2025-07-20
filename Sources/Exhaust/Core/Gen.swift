@@ -3,18 +3,9 @@ enum Gen {
         _ op: ReflectiveOperation<Input>
     ) -> ReflectiveGenerator<Input, Output> {
         return .impure(operation: op) { result in
-            // Forward pass
             if let typedResult = result as? Output {
                 return .pure(typedResult)
             }
-            // Backward pass
-            if
-                let gen = result as? ReflectiveGenerator<Any, Any>,
-                case let .pure(value) = gen
-            {
-                return .pure(value as! Output)
-            }
-            
             fatalError("Interpreter provided wrong type. Expected \(Output.self), got \(type(of: result))")
         }
     }
@@ -114,10 +105,11 @@ enum Gen {
             if let convertible = result as? (any BitPatternConvertible) {
                 convertibleValue = convertible
             }
-            // Backward pass
+            // Backward pass through reflect, passing a `ChoiceValue`
             else if let convertible = (result as? ChoiceValue)?.convertible {
                 convertibleValue = convertible
             }
+            // Forward pass, sequence
             else if let convertible = result as? (any Sequence) {
                 convertibleValue = UInt64(convertible.underestimatedCount)
             }
@@ -142,22 +134,11 @@ enum Gen {
 
         return .impure(operation: ReflectiveOperation.lmap(transform: erasedTransform, next: erasedGen)) { result in
             if let typed = result as? Output {
-                // Forward pass - direct value
+                // Backward pass - direct value
                 return .pure(typed)
                 
-            } else if let gen = result as? ReflectiveGenerator<NewInput, Any> {
-                // Backward pass - generator
-                return gen.map { $0 as! Output }
-                
-            } else {
-                // Backward pass - raw value that needs to be converted
-                // This handles cases where replay provides a raw value instead of a generator
-                // Try to convert the raw value to the expected output type
-                if let convertedValue = result as? Output {
-                    return .pure(convertedValue)
-                }
-                fatalError("Interpreter error in handling of Op.lmap case: unexpected result type \(type(of: result))")
             }
+            fatalError("Interpreter error in handling of Op.lmap case: unexpected result type \(type(of: result))")
         }
     }
     

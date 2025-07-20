@@ -93,7 +93,9 @@ enum Interpreters {
             switch operation {
             case .lmap(_, let nextGen):
                 // The lmap transform is not used in the forward pass
-                return runContinuation(nextGen)
+                // Run the nested generator and pass its result to the continuation
+                guard let result = self.generateRecursive(nextGen, with: inputValue, context: context) else { return nil }
+                return runContinuation(result)
 
             case let .prune(nextGen):
                 guard let optional = .some(inputValue as Optional<Any>), let wrappedValue = optional else {
