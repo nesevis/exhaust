@@ -74,7 +74,7 @@ struct CoreGeneratorTests {
         @Test("Empty range handling")
         func testEmptyRangeHandling() {
             // Single value range
-            let gen = Gen.choose(in: 42...42, input: Any.self)
+            let gen = Gen.choose(in: 42...42)
             
             for _ in 0..<10 {
                 let value = Interpreters.generate(gen)!
