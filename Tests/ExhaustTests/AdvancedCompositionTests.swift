@@ -7,6 +7,7 @@
 //
 
 import Testing
+import CasePaths
 @testable import Exhaust
 
 // MARK: - Advanced Data Structures
@@ -32,12 +33,6 @@ struct TestEdge: Equatable {
     let weight: Double
 }
 
-indirect enum TestVariant: Equatable {
-    case simple(Int)
-    case complex(String, [Int])
-    case nested(TestVariant)
-}
-
 // MARK: - Recursive Structure Tests
 
 @Test("Recursive tree generation with depth control")
@@ -45,11 +40,11 @@ func testRecursiveTreeGeneration() {
     func treeGen(depth: Int) -> ReflectiveGenerator<Any, TestTree<Int>> {
         if depth <= 0 {
             // Leaf node
-            return Gen.lens(extract: \TestTree<Int>.value, Gen.choose(in: 1...100, input: Any.self))
+            return Gen.lens(extract: \TestTree<Int>.value, Gen.choose(in: 1...100))
                 .map { value in TestTree(value: value, children: []) }
         } else {
             // Internal node with children
-            let valueGen = Gen.lens(extract: \TestTree<Int>.value, Gen.choose(in: 1...100, input: Any.self))
+            let valueGen = Gen.lens(extract: \TestTree<Int>.value, Gen.choose(in: 1...100))
             let childrenGen = Gen.lens(extract: \TestTree<Int>.children, 
                                      treeGen(depth: depth - 1).proliferate(with: 0...3))
             
@@ -89,18 +84,36 @@ func testRecursiveTreeGeneration() {
 
 // MARK: - Enum Variant Generation
 
+@CasePathable
+indirect enum TestVariant: Equatable {
+    case simple(Int)
+    case complex(String, [Int])
+    case nested(TestVariant)
+}
+
 @Test("Complex enum variant generation")
 func testComplexEnumGeneration() {
-    let simpleGen = Gen.choose(in: 1...10, input: Any.self).map(TestVariant.simple)
+    let simpleGen = Gen.lens(extract: /TestVariant.simple.self,
+                            Gen.choose(in: 1...10))
+        .map(TestVariant.simple)
     
-    let complexGen = String.arbitrary.bind { str in
-        Int.arbitrary.proliferate(with: 1...5).map { ints in
+    let complexGen = Gen.lens(extract: /TestVariant.complex.self,
+                             Gen.just("test").bind { str in
+                                 Gen.just([42]).map { ints in
+                                     (str, ints)
+                                 }
+                             })
+        .map { (str, ints) in
             TestVariant.complex(str, ints)
         }
-    }
     
     // Recursive case with limited depth
-    let nestedGen = simpleGen.map(TestVariant.nested)
+    let nestedGen = Gen.lens(
+        extract: /TestVariant.nested.self,
+        Gen.lens(extract: /TestVariant.simple.self, Gen.just(99))
+            .map(TestVariant.simple)
+    )
+    .map(TestVariant.nested)
     
     let variantGen = Gen.pick(choices: [
         (weight: UInt64(2), generator: simpleGen),
@@ -146,16 +159,16 @@ func testComplexEnumGeneration() {
 
 @Test("Connected graph generation with constraints")
 func testConnectedGraphGeneration() {
-    let nodeGen = Gen.lens(extract: \TestNode.id, Gen.choose(in: 0...9, input: Any.self))
+    let nodeGen = Gen.lens(extract: \TestNode.id, Gen.choose(in: 0...9))
         .bind { id in
             Gen.lens(extract: \TestNode.label, String.arbitrary).map { label in
                 TestNode(id: id, label: label)
             }
         }
     
-    let edgeGen = Gen.lens(extract: \TestEdge.from, Gen.choose(in: 0...9, input: Any.self))
+    let edgeGen = Gen.lens(extract: \TestEdge.from, Gen.choose(in: 0...9))
         .bind { from in
-            Gen.lens(extract: \TestEdge.to, Gen.choose(in: 0...9, input: Any.self))
+            Gen.lens(extract: \TestEdge.to, Gen.choose(in: 0...9))
                 .bind { to in
                     Gen.lens(extract: \TestEdge.weight, Gen.choose(in: 0.1...10.0)).map { weight in
                         TestEdge(from: from, to: to, weight: weight)

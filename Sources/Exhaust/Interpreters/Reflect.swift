@@ -88,11 +88,14 @@ extension Interpreters {
                 .map { ($0.value, $0.path) }
             
         case let .prune(nextGen):
-            // PRUNE's JOB: Try to cast the final output to an Optional and check if it's nil.
-            guard let optionalTarget = .some(finalOutput as Optional<Any>), let wrappedTarget = optionalTarget else {
-                return [] // Pruned!
+            // PRUNE's JOB: Check if the final output is nil and should be pruned.
+            // When case path extraction fails on wrong enum cases, it produces nil wrapped in Optional<Any>
+            // This needs to be filtered out to prevent invalid branches in reflection recipes
+            if let optionalValue = finalOutput as? Optional<Any>, optionalValue == nil {
+                return [] // Prune nil values from failed case path extractions
             }
-            return reflectRecursive(nextGen, onFinalOutput: wrappedTarget).map { ($0.value, $0.path) }
+            
+            return reflectRecursive(nextGen, onFinalOutput: finalOutput).map { ($0.value, $0.path) }
 
         case let .pick(choices):
             // PICK's JOB: Try all branches against the same final output value.
