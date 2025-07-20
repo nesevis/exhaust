@@ -5,6 +5,8 @@
 //  Created by Chris Kolbu on 16/7/2025.
 //
 
+import CasePaths
+
 protocol PartialPath<Root, Value> {
     associatedtype Root
     associatedtype Value
@@ -31,10 +33,40 @@ protocol PartialPath<Root, Value> {
     // Not needed for our reflective case?
 }
 
+
+extension AnyCasePath: PartialPath {
+    func extract(from root: Any) -> Value? {
+        // Handle nil case
+        if case Optional<Any>.none = root {
+            return nil
+        }
+        
+        // Unwrap if wrapped in Optional
+        let actualRoot: Any
+        let mirror = Mirror(reflecting: root)
+        if mirror.displayStyle == .optional,
+           let child = mirror.children.first {
+            if child.label == "some" {
+                actualRoot = child.value
+            } else {
+                return nil // nil case
+            }
+        } else {
+            actualRoot = root
+        }
+        
+        guard let typedRoot = actualRoot as? Root else {
+            return nil
+        }
+        
+        return self.extract(from: typedRoot)
+    }
+}
+
 extension KeyPath: PartialPath {
     func extract(from root: Any) -> Value? {
         guard let root = root as? Root else {
-            print("KeyPath.extract expected \(Root.self) -> \(Value.self), but root type is \(type(of: root.self))")
+            print("PartialKeyPath.extract expected \(Root.self), but root type is \(type(of: root.self))")
             return nil
         }
         return root[keyPath: self]
