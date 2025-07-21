@@ -130,7 +130,7 @@ extension Interpreters {
                 validRanges: [type(of: convertibleValue).bitPatternRange],
                 strategies: (type(of: convertibleValue) as? any Arbitrary.Type)?.strategies ?? []
             )
-            return [(value: finalOutput, path: [.choice(.init(bitPattern), metadata)])]
+            return [(value: finalOutput, path: [.choice(.init(convertibleValue), metadata)])]
         
         case let .chooseCharacter(min, max):
             // Handle Character-specific reflection

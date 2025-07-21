@@ -223,7 +223,7 @@ extension Interpreters {
                     validRanges: [UInt64.bitPatternRange],
                     strategies: UInt64.strategies
                 )
-                guard let _ = self.replayRecursive(lengthGen, with: .choice(.uint(length), lengthMetadata)) else {
+                guard let _ = self.replayRecursive(lengthGen, with: .choice(.unsigned(length), lengthMetadata)) else {
                     return nil
                 }
                 

@@ -27,13 +27,8 @@ enum ChoiceTree: Equatable {
 extension ChoiceTree {
     var complexity: UInt64 {
         switch self {
-        case let .choice(value, metadata):
-            switch value {
-            case let .character(char):
-                return char.bitPattern64
-            case let .uint(uint):
-                return metadata.semanticComplexity(for: uint)
-            }
+        case let .choice(value, _):
+            return value.complexity
         case .just:
             return 0
         case .sequence(_, var elements, _), .branch(_, var elements), .group(var elements):
@@ -65,8 +60,12 @@ extension ChoiceTree: CustomDebugStringConvertible {
             switch value {
             case let .character(char):
                 return prefix + connector + "choice(char: '\(char)')"
-            case let .uint(uint):
-                return prefix + connector + "choice(uint: \(uint))"
+            case let .unsigned(uint):
+                return prefix + connector + "choice(unsigned: \(uint))"
+            case let .signed(int):
+                return prefix + connector + "choice(signed: \(int))"
+            case let .floating(float):
+                return prefix + connector + "choice(float: \(float))"
             }
             
         case .just:
