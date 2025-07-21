@@ -70,6 +70,193 @@ struct CompositionTests {
             }
         }
         
+        @Test("Gen.lens with zip of two values")
+        func testLensWithZip() throws {
+            let gen = Gen.zip(
+                String.arbitrary,
+                Gen.just("foo")
+            )
+            
+            let generated = try #require(Interpreters.generate(gen))
+            let recipe = try #require(Interpreters.reflect(gen, with: generated))
+            let replayed = try #require(Interpreters.replay(gen, using: recipe))
+            #expect(generated == replayed)
+        }
+        
+        @Test("Gen.lens with zip of three values")
+        func testLensWithZip3() throws {
+            let gen = Gen.zip(
+                String.arbitrary,
+                Gen.just("foo"),
+                String.arbitrary
+            )
+            
+            let generated = try #require(Interpreters.generate(gen))
+            let recipe = try #require(Interpreters.reflect(gen, with: generated))
+            let replayed = try #require(Interpreters.replay(gen, using: recipe))
+            #expect(generated == replayed)
+        }
+        
+        @Test("Gen.lens with zip of four values")
+        func testLensWithZip4() throws {
+            let gen = Gen.zip(
+                String.arbitrary,
+                Gen.just("foo"),
+                String.arbitrary,
+                Gen.choose(in: 1...100, input: Any.self)
+            )
+            
+            let generated = try #require(Interpreters.generate(gen))
+            let recipe = try #require(Interpreters.reflect(gen, with: generated))
+            let replayed = try #require(Interpreters.replay(gen, using: recipe))
+            #expect(generated == replayed)
+        }
+        
+        @Test("Gen.lens with zip of five values")
+        func testLensWithZip5() throws {
+            let gen = Gen.zip(
+                String.arbitrary,
+                Gen.just("foo"),
+                String.arbitrary,
+                Gen.choose(in: 1...100, input: Any.self),
+                Gen.just(true)
+            )
+            
+            let generated = try #require(Interpreters.generate(gen))
+            let recipe = try #require(Interpreters.reflect(gen, with: generated))
+            let replayed = try #require(Interpreters.replay(gen, using: recipe))
+            #expect(generated == replayed)
+        }
+        
+        @Test("Gen.lens with zip of six values")
+        func testLensWithZip6() throws {
+            let gen = Gen.zip(
+                String.arbitrary,
+                Gen.just("foo"),
+                String.arbitrary,
+                Gen.choose(in: 1...100, input: Any.self),
+                Gen.just(true),
+                Gen.choose(in: 0.0...1.0, input: Any.self)
+            )
+            
+            let generated = try #require(Interpreters.generate(gen))
+            let recipe = try #require(Interpreters.reflect(gen, with: generated))
+            let replayed = try #require(Interpreters.replay(gen, using: recipe))
+            #expect(generated == replayed)
+        }
+        
+        @Test("Gen.lens with zip of seven values")
+        func testLensWithZip7() throws {
+            let gen = Gen.zip(
+                String.arbitrary,
+                Gen.just("foo"),
+                String.arbitrary,
+                Gen.choose(in: 1...100, input: Any.self),
+                Gen.just(true),
+                Gen.choose(in: 0.0...1.0, input: Any.self),
+                Gen.just("bar")
+            )
+            
+            let generated = try #require(Interpreters.generate(gen))
+            let recipe = try #require(Interpreters.reflect(gen, with: generated))
+            let replayed = try #require(Interpreters.replay(gen, using: recipe))
+            
+            #expect(generated.0 == replayed.0)
+            #expect(generated.1 == replayed.1)
+            #expect(generated.2 == replayed.2)
+            #expect(generated.3 == replayed.3)
+            #expect(generated.4 == replayed.4)
+            #expect(generated.5 == replayed.5)
+            #expect(generated.6 == replayed.6)
+        }
+        
+        @Test("Gen.lens with zip of eight values")
+        func testLensWithZip8() throws {
+            let gen = Gen.zip(
+                String.arbitrary,
+                Gen.just("foo"),
+                String.arbitrary,
+                Gen.choose(in: 1...100, input: Any.self),
+                Gen.just(true),
+                Gen.choose(in: 0.0...1.0, input: Any.self),
+                Gen.just("bar"),
+                Gen.choose(in: -50...50, input: Any.self)
+            )
+            
+            let generated = try #require(Interpreters.generate(gen))
+            let recipe = try #require(Interpreters.reflect(gen, with: generated))
+            let replayed = try #require(Interpreters.replay(gen, using: recipe))
+            
+            #expect(generated.0 == replayed.0)
+            #expect(generated.1 == replayed.1)
+            #expect(generated.2 == replayed.2)
+            #expect(generated.3 == replayed.3)
+            #expect(generated.4 == replayed.4)
+            #expect(generated.5 == replayed.5)
+            #expect(generated.6 == replayed.6)
+            #expect(generated.7 == replayed.7)
+        }
+        
+        @Test("Gen.lens with zip of nine values")
+        func testLensWithZip9() throws {
+            let gen = Gen.zip(
+                String.arbitrary,
+                Gen.just("foo"),
+                String.arbitrary,
+                Gen.choose(in: 1...100, input: Any.self),
+                Gen.just(true),
+                Gen.choose(in: 0.0...1.0, input: Any.self),
+                Gen.just("bar"),
+                Gen.choose(in: -50...50, input: Any.self),
+                Gen.just(false)
+            )
+            
+            let generated = try #require(Interpreters.generate(gen))
+            let recipe = try #require(Interpreters.reflect(gen, with: generated))
+            let replayed = try #require(Interpreters.replay(gen, using: recipe))
+            
+            #expect(generated.0 == replayed.0)
+            #expect(generated.1 == replayed.1)
+            #expect(generated.2 == replayed.2)
+            #expect(generated.3 == replayed.3)
+            #expect(generated.4 == replayed.4)
+            #expect(generated.5 == replayed.5)
+            #expect(generated.6 == replayed.6)
+            #expect(generated.7 == replayed.7)
+            #expect(generated.8 == replayed.8)
+        }
+        
+        @Test("Gen.lens with zip of ten values")
+        func testLensWithZip10() throws {
+            let gen = Gen.zip(
+                String.arbitrary,
+                Gen.just("foo"),
+                String.arbitrary,
+                Gen.choose(in: 1...100, input: Any.self),
+                Gen.just(true),
+                Gen.choose(in: 0.0...1.0, input: Any.self),
+                Gen.just("bar"),
+                Gen.choose(in: -50...50, input: Any.self),
+                Gen.just(false),
+                String.arbitrary
+            )
+            
+            let generated = try #require(Interpreters.generate(gen))
+            let recipe = try #require(Interpreters.reflect(gen, with: generated))
+            let replayed = try #require(Interpreters.replay(gen, using: recipe))
+            
+            #expect(generated.0 == replayed.0)
+            #expect(generated.1 == replayed.1)
+            #expect(generated.2 == replayed.2)
+            #expect(generated.3 == replayed.3)
+            #expect(generated.4 == replayed.4)
+            #expect(generated.5 == replayed.5)
+            #expect(generated.6 == replayed.6)
+            #expect(generated.7 == replayed.7)
+            #expect(generated.8 == replayed.8)
+            #expect(generated.9 == replayed.9)
+        }
+        
         @Test("Gen.lens with nested structures")
         func testNestedLens() {
             let pointGen = Gen.lens(extract: \TestPoint.x, Gen.choose(in: 0.0...100.0))
