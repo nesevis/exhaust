@@ -110,6 +110,20 @@ typealias ReflectiveGenerator<Input, Output> = FreerMonad<ReflectiveOperation<In
 
 typealias AlignedReflectiveGenerator<Value> = ReflectiveGenerator<Value, Value>
 
+extension ReflectiveGenerator where Operation: AnyReflectiveOperation {
+    var isLens: Bool {
+        switch self {
+        case .pure:
+            return false
+        case let .impure(op, _):
+            if let castOp = op as? ReflectiveOperation<Operation.Input>, case .lmap = castOp {
+                return true
+            }
+            return false
+        }
+    }
+}
+
 extension ReflectiveGenerator {
     
     func mapOperation<NewOperation>(_ transform: @escaping (Operation) -> NewOperation) -> FreerMonad<NewOperation, Value> {
