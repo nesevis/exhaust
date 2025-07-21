@@ -8,4 +8,5 @@ protocol Arbitrary {
     /// The `@Property` trait will use this generator by default for test function
     /// parameters of this type.
     static var arbitrary: ReflectiveGenerator<Any, Self> { get }
+    static var strategies: ShrinkingStrategies { get }
 }
