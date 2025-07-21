@@ -26,8 +26,7 @@ struct ShrinkingTests {
             let shrunken = shrinker.shrink(failingValue, using: gen, where: property)
             
             // Should shrink towards the boundary
-            #expect(shrunken < 100)
-            #expect(shrunken < failingValue)
+            #expect(shrunken == 101)
         }
         
         @Test("Shrinker with array generators")
