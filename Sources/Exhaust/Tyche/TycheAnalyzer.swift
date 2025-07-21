@@ -161,7 +161,7 @@ internal struct TycheAnalyzer {
         let boundaries = [UInt64.min, UInt64.max, minValue, maxValue]
         
         let boundaryHits = entropyEvents.filter { value in
-            boundaries.contains { abs(Int64(value) - Int64($0)) < 1000 }
+            boundaries.contains { value &- $0 < 1000 }
         }.count
         
         return Double(boundaryHits) / Double(entropyEvents.count)
@@ -298,7 +298,10 @@ internal struct TycheAnalyzer {
     }
     
     private func calculateEntropyConsumption(_ events: [GenerationEvent], totalDuration: TimeInterval) -> Double {
-        let totalEntropy = events.compactMap { $0.metadata.entropy }.reduce(0, +)
+        let totalEntropy = events.compactMap { $0.metadata.entropy }.reduce(UInt64(0), { total, value in
+            let added = total &+ value
+            return max(added, total)
+        })
         guard totalDuration > 0 else { return 0.0 }
         return Double(totalEntropy) / totalDuration
     }

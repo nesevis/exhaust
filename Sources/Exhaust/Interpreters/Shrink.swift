@@ -1,10 +1,16 @@
 import Foundation
 
 struct Shrinker {
+    /// Attempts to shrink the `value` according to the `property`
+    /// - Parameters:
+    ///   - value: The value
+    ///   - generator: The generator used to generate the value
+    ///   - property: A function that should return `true`, representing a an invariant relationship of the `value`
+    /// - Returns: A minimal counterexample to aid in debugging
     public func shrink<Input, Output>(
         _ value: Output,
         using generator: ReflectiveGenerator<Input, Output>,
-        where testIsFailing: (Output) -> Bool
+        where property: (Output) -> Bool
     ) -> Output {
         
         let shrinkingStartTime = Date()
@@ -28,7 +34,7 @@ struct Shrinker {
                 let stepDuration = Date().timeIntervalSince(stepStartTime)
                 totalShrinkSteps += 1
                 
-                if let candidateValue, testIsFailing(candidateValue) {
+                if let candidateValue, property(candidateValue) == false {
                     // Report successful shrink step
                     if TycheReportContext.isReportingEnabled {
                         let metadata = ShrinkingMetadata(
@@ -44,6 +50,7 @@ struct Shrinker {
                     bestPath = candidate
                     smallestValue = candidateValue
                     didFindSmallerInGreedyPass = true
+                    print("Found shrink in greedy pass \(candidateValue)")
                     break // Found a shrink, restart the greedy search
                 } else {
                     // Report failed shrink step
@@ -57,6 +64,7 @@ struct Shrinker {
                         )
                         TycheReportContext.safeRecordShrinkStep(from: smallestValue, to: candidateValue ?? "nil", metadata: metadata)
                     }
+                    print("Failed shrink")
                 }
             }
             
@@ -72,6 +80,7 @@ struct Shrinker {
 
             // This iterator is not designed to be a Sequence, but for demonstration:
             let allCandidates = ShrinkCandidateSequence(tree: bestPath) // Materialize all shrinks
+            print("Materialised \(allCandidates.underestimatedCount) shrinks")
             for candidate in allCandidates {
                 // Is this candidate potentially better than the best we've found in this polish pass?
                 if candidate.complexity < passBestPath.complexity {
@@ -80,7 +89,7 @@ struct Shrinker {
                     let stepDuration = Date().timeIntervalSince(stepStartTime)
                     totalShrinkSteps += 1
                     
-                    if let candidateValue, testIsFailing(candidateValue) {
+                    if let candidateValue, property(candidateValue) == false {
                         // Report successful exhaustive shrink step
                         if TycheReportContext.isReportingEnabled {
                             let metadata = ShrinkingMetadata(
@@ -92,6 +101,7 @@ struct Shrinker {
                             )
                             TycheReportContext.safeRecordShrinkStep(from: smallestValue, to: candidateValue, metadata: metadata)
                         }
+                        print("Found better shrink in polish \(candidateValue)")
                         
                         passBestPath = candidate
                         smallestValue = candidateValue
@@ -108,6 +118,7 @@ struct Shrinker {
                             )
                             TycheReportContext.safeRecordShrinkStep(from: smallestValue, to: candidateValue ?? "nil", metadata: metadata)
                         }
+                        print("failed polish shrink")
                     }
                 }
             }

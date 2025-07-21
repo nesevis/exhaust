@@ -61,7 +61,7 @@ final class ShrinkCandidateIterator: IteratorProtocol {
                 switch originalTree {
                 case let .choice(.uint(bits)):
                     // Generate the simple -> complex list of numeric shrinks ONCE.
-                    let shrinks = shrinkNumberAggressively(bits).sorted() // Sort ascending!
+                    let shrinks = shrinkNumberAggressively(bits) // Sort ascending!
                     state = .shrinkingChoice(shrinks: shrinks, nextIndex: 0)
                 case let .choice(.character(character)):
                     // Shrink Character by shrinking its first Unicode scalar value
@@ -259,15 +259,15 @@ final class ShrinkCandidateIterator: IteratorProtocol {
         let effectiveMin = validRange.lowerBound
         
         // For Character values, try meaningful character values first
-        if (48...255).contains(number) {
-            // Common minimal characters in ascending order of preference
-            let commonChars: [UInt64] = [65, 97, 48, 32] // 'A', 'a', '0', ' '
-            for char in commonChars {
-                if char < number && validRange.contains(char) {
-                    shrinks.insert(char)
-                }
-            }
-        }
+//        if (48...255).contains(number) {
+//            // Common minimal characters in ascending order of preference
+//            let commonChars: [UInt64] = [65, 97, 48, 32] // 'A', 'a', '0', ' '
+//            for char in commonChars {
+//                if char < number && validRange.contains(char) {
+//                    shrinks.insert(char)
+//                }
+//            }
+//        }
         
         // For small numbers, try every integer down to effective minimum
         if number <= 10 {
@@ -299,7 +299,7 @@ final class ShrinkCandidateIterator: IteratorProtocol {
             }
         }
         let result = shrinks.sorted(by: <)
-        return result // Return in descending order for better performance
+        return result
     }
     
     private func shrinkNumber(_ n: UInt64) -> [UInt64] {
