@@ -126,7 +126,11 @@ extension Interpreters {
             }
             
             // Success! The result for the continuation is the value itself.
-            return [(value: finalOutput, path: [.choice(.init(bitPattern))])]
+            let metadata = ChoiceMetadata(
+                validRanges: [type(of: convertibleValue).bitPatternRange],
+                strategies: (type(of: convertibleValue) as? any Arbitrary.Type)?.strategies ?? []
+            )
+            return [(value: finalOutput, path: [.choice(.init(bitPattern), metadata)])]
         
         case let .chooseCharacter(min, max):
             // Handle Character-specific reflection
@@ -140,7 +144,11 @@ extension Interpreters {
             }
             
             // Store the exact Character representation
-            return [(value: finalOutput, path: [.choice(.init(character))])]
+            let metadata = ChoiceMetadata(
+                validRanges: [min...max], // Character uses the provided range directly
+                strategies: Character.strategies
+            )
+            return [(value: finalOutput, path: [.choice(.init(character), metadata)])]
         
         case let .just(value):
             return [(value: value, path: [.just])]
@@ -179,10 +187,14 @@ extension Interpreters {
                 }
             }
             
+            let metadata = ChoiceMetadata(
+                validRanges: [validRange ?? UInt64.bitPatternRange],
+                strategies: .sequences // For sequences, use the sequences strategies
+            )
             let finalTree = ChoiceTree.sequence(
                 length: lengthResult.first?.value ?? 0,
                 elements: combinedPath,
-                validRange: validRange ?? UInt64.bitPatternRange
+                metadata
             )
             return [(value: combinedResults, path: [finalTree])]
         }

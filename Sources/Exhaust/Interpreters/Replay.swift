@@ -60,7 +60,7 @@ extension Interpreters {
                     return nil
                 }
                 let choice = choices.removeFirst()
-                guard case let .choice(bits) = choice else {
+                guard case let .choice(bits, _) = choice else {
                     return nil
                 }
                 
@@ -71,7 +71,7 @@ extension Interpreters {
                 // Consume the next choice which should be a Character
                 guard !choices.isEmpty else { return nil }
                 let choice = choices.removeFirst()
-                guard case let .choice(.character(character)) = choice else {
+                guard case let .choice(.character(character), _) = choice else {
                     return nil
                 }
                 
@@ -106,7 +106,7 @@ extension Interpreters {
                 }
                 let choice = choices.removeFirst()
                 
-                guard case let .sequence(length, elements, range) = choice else {
+                guard case let .sequence(_, elements, _) = choice else {
                     return nil
                 }
                 
@@ -176,14 +176,14 @@ extension Interpreters {
                 
             case .chooseBits:
                 // This operation expects a primitive `.choice` node from the script.
-                guard case let .choice(bits) = script else {
+                guard case let .choice(bits, _) = script else {
                     return nil
                 }
                 return runContinuation(bits)
             
             case .chooseCharacter:
                 // This operation expects a primitive `.characterChoice` node from the script.
-                guard case let .choice(.character(character)) = script else {
+                guard case let .choice(.character(character), _) = script else {
                     return nil
                 }
                 return runContinuation(character)
@@ -219,7 +219,11 @@ extension Interpreters {
                     return nil
                 }
                 
-                guard let count = self.replayRecursive(lengthGen, with: .choice(.uint(length))) else {
+                let lengthMetadata = ChoiceMetadata(
+                    validRanges: [UInt64.bitPatternRange],
+                    strategies: UInt64.strategies
+                )
+                guard let _ = self.replayRecursive(lengthGen, with: .choice(.uint(length), lengthMetadata)) else {
                     return nil
                 }
                 

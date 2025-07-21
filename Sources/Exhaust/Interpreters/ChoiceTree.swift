@@ -7,14 +7,15 @@
 
 enum ChoiceTree: Equatable {
     /// A primitive choice, typically a number or a high-level semantic label.
-    case choice(ChoiceValue)
+    case choice(ChoiceValue, ChoiceMetadata)
     
     /// A deterministic or constant value that can't be shrunk
+    /// This is encoded into the generator, and doesn't need to be part of the ``ChoiceTree``
     case just
     
     /// A node that represents the generation of a sequence. It explicitly
     /// captures the length and the choice trees for each of its elements.
-    indirect case sequence(length: UInt64, elements: [ChoiceTree], validRange: ClosedRange<UInt64>)
+    indirect case sequence(length: UInt64, elements: [ChoiceTree], ChoiceMetadata)
     
     /// A node that represents a branching choice made via `pick`.
     indirect case branch(label: UInt64, children: [ChoiceTree])
@@ -26,12 +27,12 @@ enum ChoiceTree: Equatable {
 extension ChoiceTree {
     var complexity: UInt64 {
         switch self {
-        case let .choice(value):
+        case let .choice(value, metadata):
             switch value {
             case let .character(char):
                 return char.bitPattern64
             case let .uint(uint):
-                return uint
+                return metadata.semanticComplexity(for: uint)
             }
         case .just:
             return 0
@@ -60,7 +61,7 @@ extension ChoiceTree: CustomDebugStringConvertible {
         let childPrefix = prefix + (isLast ? "    " : "│   ")
         
         switch self {
-        case let .choice(value):
+        case let .choice(value, _):
             switch value {
             case let .character(char):
                 return prefix + connector + "choice(char: '\(char)')"
@@ -71,8 +72,8 @@ extension ChoiceTree: CustomDebugStringConvertible {
         case .just:
             return prefix + connector + "just"
             
-        case let .sequence(length, elements, range):
-            var result = prefix + connector + "sequence(length: \(length), range: \(range.lowerBound)...\(range.upperBound))"
+        case let .sequence(length, elements, _):
+            var result = prefix + connector + "sequence(length: \(length))"
             for (index, element) in elements.enumerated() {
                 let isLastElement = index == elements.count - 1
                 result += "\n" + element.treeDescription(prefix: childPrefix, isLast: isLastElement)

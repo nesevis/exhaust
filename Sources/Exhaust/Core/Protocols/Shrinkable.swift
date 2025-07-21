@@ -13,17 +13,18 @@ extension UInt64: Shrinkable {
     }
 }
 
-struct ShrinkMetadata<T: Shrinkable> {
-    let validRanges: Array<ClosedRange<T>>
-}
 
 protocol Shrinkable: Comparable, Hashable, Equatable {
-    // `Character` has discontiguous ranges, and `RangeSet` isn't available for most users
     var shrinkingStrategies: ShrinkingStrategies { get }
 }
 
 struct ShrinkingStrategies: OptionSet, Equatable {
     var rawValue: UInt64
+    
+    static let unsignedIntegers: Self = [.binary, .minimal]
+    static let signedIntegers: Self = unsignedIntegers.union([.signed])
+    static let floatingPoints: Self = signedIntegers.union([.decimal])
+    static let sequences: Self = unsignedIntegers.union([.deletion])
     
     // Booleans
     static let signed = Self(rawValue: 1 << 1)
@@ -31,9 +32,11 @@ struct ShrinkingStrategies: OptionSet, Equatable {
     
     // Strategies
     static let binary = Self(rawValue: 1 << 3) // divide by two
-    static let decimal = Self(rawValue: 1 << 3) // round to powers of two
-    static let minimal = Self(rawValue: 1 << 3) // try 0, 1, -1 first)
-    static let deletion = Self(rawValue: 1 << 3) // can be removed?
+    static let decimal = Self(rawValue: 1 << 4) // round to powers of two
+    static let minimal = Self(rawValue: 1 << 5) // try 0, 1, -1 first)
+    
+    // Sequence-specific
+    static let deletion = Self(rawValue: 1 << 6) // can be removed?
     
     // Can shrink to zero
     // Is signed
