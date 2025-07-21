@@ -115,7 +115,7 @@ enum Gen {
             }
             
             if let convertibleValue {
-                return .pure(Output(bitPattern: convertibleValue.bitPattern64))
+                return .pure(Output(bitPattern64: convertibleValue.bitPattern64))
             } else {
                 fatalError("Interpreter failed to provide a UInt64 for a chooseBits operation.")
             }

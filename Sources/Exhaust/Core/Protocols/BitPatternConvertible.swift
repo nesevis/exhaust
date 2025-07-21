@@ -10,7 +10,7 @@ protocol BitPatternConvertible: Equatable {
 
     /// Creates an instance of this type from a raw `UInt64` bit pattern.
     /// This is the core decoding step used by the generator's `continuation`.
-    init(bitPattern: UInt64)
+    init(bitPattern64: UInt64)
 
     /// Provides the raw `UInt64` bit pattern for this specific instance.
     /// This is the core encoding step used by the `reflect` interpreter.

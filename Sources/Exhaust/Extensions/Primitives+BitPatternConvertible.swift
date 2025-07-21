@@ -8,8 +8,8 @@
 import Foundation
 
 extension UInt8: BitPatternConvertible {
-    init(bitPattern: UInt64) {
-        self = UInt8(bitPattern)
+    init(bitPattern64: UInt64) {
+        self = UInt8(bitPattern64)
     }
     
     static var bitPatternRange: ClosedRange<UInt64> {
@@ -22,12 +22,12 @@ extension UInt8: BitPatternConvertible {
 }
 
 extension UInt16: BitPatternConvertible {
-    init(bitPattern: UInt64) {
-        self = UInt16(bitPattern)
+    init(bitPattern64: UInt64) {
+        self = UInt16(bitPattern64)
     }
     
     static var bitPatternRange: ClosedRange<UInt64> {
-        UInt64(UInt8.min)...UInt64(UInt8.max)
+        UInt64(UInt16.min)...UInt64(UInt16.max)
     }
     
     var bitPattern64: UInt64 {
@@ -36,12 +36,12 @@ extension UInt16: BitPatternConvertible {
 }
 
 extension UInt32: BitPatternConvertible {
-    init(bitPattern: UInt64) {
-        self = UInt32(bitPattern)
+    init(bitPattern64: UInt64) {
+        self = UInt32(bitPattern64)
     }
     
     static var bitPatternRange: ClosedRange<UInt64> {
-        UInt64(UInt8.min)...UInt64(UInt8.max)
+        UInt64(UInt32.min)...UInt64(UInt32.max)
     }
     
     var bitPattern64: UInt64 {
@@ -55,8 +55,8 @@ extension UInt64: BitPatternConvertible {
         UInt64.min...UInt64.max
     }
     
-    init(bitPattern: UInt64) {
-        self = bitPattern
+    init(bitPattern64: UInt64) {
+        self = bitPattern64
     }
     
     var bitPattern64: UInt64 {
@@ -69,8 +69,8 @@ extension UInt: BitPatternConvertible {
         UInt64(UInt.min)...UInt64(UInt.max)
     }
     
-    init(bitPattern: UInt64) {
-        self = UInt(bitPattern)
+    init(bitPattern64: UInt64) {
+        self = UInt(bitPattern64)
     }
     
     var bitPattern64: UInt64 {
@@ -78,11 +78,75 @@ extension UInt: BitPatternConvertible {
     }
 }
 
+extension Int8: BitPatternConvertible {
+    private static let signBitMask: UInt8 = 0x80
+    
+    public init(bitPattern64: UInt64) {
+        self = Int8(Int8(bitPattern: UInt8(bitPattern64) ^ Self.signBitMask))
+    }
+    
+    public static var bitPatternRange: ClosedRange<UInt64> {
+        UInt64(UInt8.min)...UInt64(UInt8.max)
+    }
+    
+    public var bitPattern64: UInt64 {
+        return UInt64(UInt8(bitPattern: self) ^ Self.signBitMask)
+    }
+}
+
+extension Int16: BitPatternConvertible {
+    private static let signBitMask: UInt16 = 0x8000
+    
+    public init(bitPattern64: UInt64) {
+        self = Int16(Int16(bitPattern: UInt16(bitPattern64) ^ Self.signBitMask))
+    }
+    
+    public static var bitPatternRange: ClosedRange<UInt64> {
+        UInt64(UInt16.min)...UInt64(UInt16.max)
+    }
+    
+    public var bitPattern64: UInt64 {
+        return UInt64(UInt16(bitPattern: self) ^ Self.signBitMask)
+    }
+}
+
+extension Int32: BitPatternConvertible {
+    private static let signBitMask: UInt32 = 0x80000000
+    
+    public init(bitPattern64: UInt64) {
+        self = Int32(Int32(bitPattern: UInt32(bitPattern64) ^ Self.signBitMask))
+    }
+    
+    public static var bitPatternRange: ClosedRange<UInt64> {
+        UInt64(UInt32.min)...UInt64(UInt32.max)
+    }
+    
+    public var bitPattern64: UInt64 {
+        return UInt64(UInt32(bitPattern: self) ^ Self.signBitMask)
+    }
+}
+
+extension Int64: BitPatternConvertible {
+    private static let signBitMask: UInt64 = 0x8000000000000000
+    
+    public init(bitPattern64: UInt64) {
+        self = Int64(bitPattern: bitPattern64 ^ Self.signBitMask)
+    }
+    
+    public static var bitPatternRange: ClosedRange<UInt64> {
+        UInt64.min...UInt64.max
+    }
+    
+    public var bitPattern64: UInt64 {
+        return UInt64(bitPattern: self) ^ Self.signBitMask
+    }
+}
+
 extension Int: BitPatternConvertible {
     private static let signBitMask: UInt64 = 0x8000000000000000
-    public init(bitPattern: UInt64) {
+    public init(bitPattern64: UInt64) {
         // Map UInt64 directly to Int using bit pattern, which handles the full range safely
-        self = Int(Int64(bitPattern: bitPattern ^ Self.signBitMask))
+        self = Int(Int64(bitPattern: bitPattern64 ^ Self.signBitMask))
     }
     
     /// Maps the full Int range to the full UInt64 range.
@@ -98,32 +162,40 @@ extension Int: BitPatternConvertible {
 }
 
 extension Float: BitPatternConvertible {
+    private static let signBitMask: UInt32 = 0x80000000
+    
     /// A `Float` can use the entire `UInt32` space for its bit pattern.
-    /// We can map this to the lower half of the `UInt64` range.
     public static var bitPatternRange: ClosedRange<UInt64> {
-        0...UInt64(UInt32.max)
+        UInt64(UInt32.min)...UInt64(UInt32.max)
     }
     
     /// Creates a `Float` from a `UInt64` by first converting to `UInt32`.
-    public init(bitPattern: UInt64) {
-        self.init(bitPattern)
+    public init(bitPattern64: UInt64) {
+        self = Float(bitPattern: UInt32(bitPattern64) ^ Self.signBitMask)
     }
     
     /// The underlying IEEE 754 bits of the `Float`, promoted to a `UInt64`.
     public var bitPattern64: UInt64 {
-        return UInt64(self.bitPattern)
+        return UInt64(self.bitPattern ^ UInt32(Self.signBitMask))
     }
 }
 
-// You could provide a similar implementation for `Double`.
 extension Double: BitPatternConvertible {
+    private static let signBitMask: UInt64 = 0x8000000000000000
+    
     /// A `Double` uses the full `UInt64` space for its bit pattern.
     public static var bitPatternRange: ClosedRange<UInt64> { 0...UInt64.max }
     
-    // `init(bitPattern:)` is provided by Swift's standard library.
-    // `var bitPattern: UInt64` is also provided by Swift's standard library.
-    var bitPattern64: UInt64 {
-        self.bitPattern
+    /// Creates a `Double` from a `UInt64` with sign bit normalization.
+    public init(bitPattern64: UInt64) {
+        // // self = Int(Int64(bitPattern: bitPattern ^ Self.signBitMask))
+        let normalizedBitPattern = bitPattern64 ^ Self.signBitMask
+        self = Double(bitPattern: normalizedBitPattern)
+    }
+    
+    /// The underlying IEEE 754 bits of the `Double` with sign bit normalization.
+    public var bitPattern64: UInt64 {
+        self.bitPattern ^ Self.signBitMask
     }
 }
 
@@ -132,8 +204,8 @@ extension Unicode.Scalar: BitPatternConvertible {
         0x000000...0x00D7FF // Basic Multilingual Plane before surrogates
     }
     
-    init(bitPattern: UInt64) {
-        self = Unicode.Scalar(UInt32(bitPattern))!
+    init(bitPattern64: UInt64) {
+        self = Unicode.Scalar(UInt32(bitPattern64))!
     }
     
     var bitPattern64: UInt64 {
@@ -148,8 +220,8 @@ extension Character: BitPatternConvertible {
     }
 
     /// Creates a `Character` from a `UInt64` by assuming it represents a Unicode scalar value.
-    public init(bitPattern: UInt64) {
-        let scalar = Unicode.Scalar(UInt32(bitPattern))!
+    public init(bitPattern64: UInt64) {
+        let scalar = Unicode.Scalar(UInt32(bitPattern64))!
         self.init(scalar)
     }
 
