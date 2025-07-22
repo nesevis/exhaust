@@ -25,57 +25,61 @@ extension Interpreters {
         guard property(value) == false else {
             throw ShrinkError.counterExampleMustFail
         }
-        return self.shrinkImpl(value, using: generator, recipe: recipe, where: property)
+        return try self.shrinkImpl(value, using: generator, recipe: recipe, where: property)
     }
     
     private static func shrinkImpl<Input, Output>(
         _ value: Output,
         using generator: ReflectiveGenerator<Input, Output>,
         recipe: ChoiceTree,
-        where property: (Output) -> Bool,
-        runSecondStage: Bool = false
-    ) -> Output {
+        where property: (Output) -> Bool
+    ) throws -> Output {
         
-        var recipe = recipe
-        var recipeComplexity = recipe.complexity
+        var currentBestRecipe = recipe
+        var recipeComplexity = currentBestRecipe.complexity
         var steps = 0
         var counterExample = value
-        
+        var wheelsSpun = 0
         while true {
             var shrinkWasImproved = false
             // At this point we should reset the available shrinkers for the recipe
-            let iterator = HierarchicalTieredShrinker(recipe)
+            let iterator = HierarchicalTieredShrinker(currentBestRecipe)
             
-            while let candidate = iterator.next() {
-                let candidateValue = Interpreters.replay(generator, using: candidate)
+            while let candidateRecipe = iterator.next() {
+                guard let candidateValue = Interpreters.replay(generator, using: candidateRecipe) else {
+                    // This means the recipe is malformed, as any shrinks should return a valid recipe
+                    throw ShrinkError.couldNotReplayRecipe(original: recipe, failing: candidateRecipe)
+                }
                 steps += 1
+                guard wheelsSpun < 10 else {
+                    break
+                }
+                let candidateComplexity = candidateRecipe.complexity
+
+                let isValidShrink = property(candidateValue) == false
                 
-                if let candidateValue {
-                    if candidate.complexity < recipeComplexity, property(candidateValue) == false {
-                        // Successful shrink!
-                        recipe = candidate.resetStrategies()
-                        recipeComplexity = recipe.complexity
+                if isValidShrink {
+                    // Successful shrink!
+                    shrinkWasImproved = candidateComplexity < recipeComplexity
+                    if shrinkWasImproved {
+                        currentBestRecipe = candidateRecipe
+                        recipeComplexity = candidateComplexity
                         counterExample = candidateValue
-                        shrinkWasImproved = true
+                        wheelsSpun = 0
                         // Break inner loop to repeat the shrink process
                         break
                     }
                 }
+                wheelsSpun += isValidShrink == false ? 1 : 0
             }
             
             if shrinkWasImproved {
                 // Start from the top again with the shrunken recipe
                 continue
             }
-            
-            if runSecondStage {
-                counterExample = shrinkImpl(counterExample, using: generator, recipe: recipe.resetStrategies(), where: property, runSecondStage: false)
-            } else {
-                // If we are here, no improvement could be found
-                print("Returning counterexample after \(steps) steps and \(recipe.complexity) complexity. recipe:\n \(recipe)")
-            }
-            
 
+            // If we are here, no improvement could be found
+            print("Returning counterexample after \(steps) steps and \(currentBestRecipe.complexity) complexity. recipe:\n \(currentBestRecipe)")
             break
         }
         
@@ -85,5 +89,6 @@ extension Interpreters {
     enum ShrinkError: LocalizedError {
         case couldNotReflect
         case counterExampleMustFail
+        case couldNotReplayRecipe(original: ChoiceTree, failing: ChoiceTree)
     }
 }

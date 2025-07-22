@@ -190,7 +190,7 @@ final class ShrinkCandidateIterator: IteratorProtocol {
                 
                 // Yield a new sequence with the shorter length (taking the prefix).
                 let newElements = Array(usePrefix ? elements.prefix(newLength) : elements.suffix(newLength))
-                let metadata = ChoiceMetadata(validRanges: [range], strategies: .sequences)
+                let metadata = ChoiceMetadata(validRanges: [range], strategies: ShrinkingStrategy.sequences)
                 return .sequence(length: UInt64(newLength), elements: newElements, metadata)
 
             case let .shrinkingSequenceElement(originalElements, elementIndex, elementIterator, range):
@@ -204,7 +204,7 @@ final class ShrinkCandidateIterator: IteratorProtocol {
                     state = .shrinkingSequenceElement(originalElements: originalElements, currentElementIndex: elementIndex, elementIterator: elementIterator, validRange: range)
 
                     // Yield the whole sequence with just one element shrunk.
-                    let metadata = ChoiceMetadata(validRanges: [range], strategies: .sequences)
+                    let metadata = ChoiceMetadata(validRanges: [range], strategies: ShrinkingStrategy.sequences)
                     return .sequence(length: UInt64(newElements.count), elements: newElements, metadata)
                 } else {
                     // The iterator for the current element is exhausted. Move to the next one.

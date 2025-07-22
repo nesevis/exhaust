@@ -22,7 +22,7 @@ enum ChoiceTree: Equatable {
     /// A node that represents a branching choice made via `pick`.
     indirect case branch(label: UInt64, children: [ChoiceTree])
     
-    /// Represents a nested group of choices that don't have a specific semantic meaning.
+    /// Represents a nested group of choices that usually represent objects or tuples
     indirect case group([ChoiceTree])
 }
 

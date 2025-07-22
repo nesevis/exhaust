@@ -8,5 +8,5 @@
 struct ChoiceMetadata: Equatable {
     // `Character` has discontiguous ranges, and `RangeSet` isn't available until the very newest releases
     let validRanges: [ClosedRange<UInt64>]
-    let strategies: ShrinkingStrategies
+    let strategies: [ShrinkingStrategy]
 }

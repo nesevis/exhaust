@@ -140,10 +140,13 @@ struct ShrinkingTests {
                     }
                 }
             
+            // Returning counterexample after 547 steps and 443 complexity. recipe:
+
+            
 //            let generated = try #require(Interpreters.generate(personGen))
-//            let failingPerson = Thing(name: "圽苙➂颾꘬귕䞰霣퇨ꁼ趈₠ⵔ玮ᜏ⭅되ナ狾쬭닕䋉퉬ꤑგ阉簼ᬑ줙쒱룴驦欺㍖ࠑ胰ׂ瘅雯휘虌ǖ狓߶ꃫ䳵⹰禹掩ꥤ贼掯ᅄꂲ饟溱⻁꿸⮝儺춐㗏㤴ރ仄aa鷑朜舲棃峙쇄돱䟫́⪏쵑垭쏣캠鄨噉∧듼왬쿺ꠀ㕰㟛㲣᧤挽ꢚ볪䱫㣵憬뉣瓲죥̈́卽⭠퉿ٔѩ쨡⃴㧣兡᝺狢穧昽ቜೡꆫ䳪럖죩树ꕣ㤉❇ප", age: 47)
+            let failingPerson = Thing(name: "圽苙➂颾꘬귕䞰霣퇨ꁼ趈₠ⵔ玮ᜏ⭅되ナ狾쬭닕䋉퉬ꤑგ阉簼ᬑ줙쒱룴驦欺㍖ࠑ胰ׂ瘅雯휘虌ǖ狓߶ꃫ䳵⹰禹掩ꥤ贼掯ᅄꂲ饟溱⻁꿸⮝儺춐㗏㤴ރ仄aa鷑朜舲棃峙쇄돱䟫́⪏쵑垭쏣캠鄨噉∧듼왬쿺ꠀ㕰㟛㲣᧤挽ꢚ볪䱫㣵憬뉣瓲죥̈́卽⭠퉿ٔѩ쨡⃴㧣兡᝺狢穧昽ቜೡꆫ䳪럖죩树ꕣ㤉❇ප", age: 47)
 //
-            let failingPerson = Thing(name: "adibo adibee hello to you what is going on biancaa", age: 47)
+//            let failingPerson = Thing(name: "ancaa", age: 47)
             // Property: succeedes if age > 50 OR name length > 5
             let property: (Thing) -> Bool = { person in
                 // This is completely opaque. We don't know

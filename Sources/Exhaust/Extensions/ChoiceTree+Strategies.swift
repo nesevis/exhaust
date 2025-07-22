@@ -38,14 +38,15 @@ extension ChoiceTree {
             guard length > 0 else {
                 return []
             }
+//            let newMeta = ChoiceMetadata(validRanges: meta.validRanges, strategies: .sequences)
             return [
                 // No elements
                 .sequence(length: 0, elements: [], meta),
                 // The first element
-                .sequence(length: 1, elements: Array(elements.prefix(1)), meta),
+                .sequence(length: 1, elements: Array(elements.prefix(1)), meta).resetStrategies(),
                 // The last element
-                .sequence(length: 1, elements: Array(elements.suffix(1)), meta)
-            ].filter { sequence in meta.validRanges.contains(where: { $0.contains(sequence.length) })}
+                .sequence(length: 1, elements: Array(elements.suffix(1)), meta).resetStrategies()
+            ]
         default:
             fatalError("\(#function) should not be called directly for \(self)!")
         }
@@ -63,9 +64,10 @@ extension ChoiceTree {
             guard length > 1 else {
                 return []
             }
+//            let newMeta = ChoiceMetadata(validRanges: meta.validRanges, strategies: .sequences)
             return [
-                .sequence(length: length - 1, elements: Array(elements.dropFirst()), meta),
-                .sequence(length: length - 1, elements: Array(elements.dropLast()), meta)
+                .sequence(length: length - 1, elements: Array(elements.dropFirst()), meta).resetStrategies(),
+                .sequence(length: length - 1, elements: Array(elements.dropLast()), meta).resetStrategies()
             ]
         default:
             fatalError("\(#function) should not be called directly for \(self)!")
@@ -83,10 +85,11 @@ extension ChoiceTree {
                 return []
             }
             // Split the array in ~half
+//            let newMeta = ChoiceMetadata(validRanges: meta.validRanges, strategies: .sequences)
             let halvingPoint = length / 2
             return [
-                .sequence(length: halvingPoint, elements: Array(elements.prefix(Int(halvingPoint))), meta),
-                .sequence(length: length - halvingPoint, elements: Array(elements.dropFirst(Int(halvingPoint))), meta)
+                .sequence(length: halvingPoint, elements: Array(elements.prefix(Int(halvingPoint))), meta).resetStrategies(),
+                .sequence(length: length - halvingPoint, elements: Array(elements.dropFirst(Int(halvingPoint))), meta).resetStrategies()
             ]
             // TODO: The filter check above can be done on the lengths themselves
             
@@ -108,12 +111,12 @@ extension ChoiceTree {
             case .character:
                 .unsignedIntegers
             }
-            let newMeta = ChoiceMetadata(validRanges: meta.validRanges, strategies: strategies)
+            let newMeta = ChoiceMetadata(validRanges: meta.validRanges, strategies: ShrinkingStrategy.sequences)
             return .choice(value, newMeta)
         case .just:
             return self
         case let .sequence(length, elements, meta):
-            let newMeta = ChoiceMetadata(validRanges: meta.validRanges, strategies: .sequences)
+            let newMeta = ChoiceMetadata(validRanges: meta.validRanges, strategies: ShrinkingStrategy.sequences)
             return .sequence(length: length, elements: elements.map { $0.resetStrategies() }, newMeta)
         case let .branch(label, children):
             return .branch(label: label, children: children.map { $0.resetStrategies() })

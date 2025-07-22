@@ -188,7 +188,7 @@ extension Interpreters {
             
             let metadata = ChoiceMetadata(
                 validRanges: validRanges ?? UInt64.bitPatternRanges,
-                strategies: .sequences // For sequences, use the sequences strategies
+                strategies: ShrinkingStrategy.sequences // For sequences, use the sequences strategies
             )
             let finalTree = ChoiceTree.sequence(
                 length: lengthResult.first?.value ?? 0,

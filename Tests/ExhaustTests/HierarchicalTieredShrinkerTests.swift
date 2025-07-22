@@ -70,8 +70,8 @@ struct HierarchicalTieredShrinkerTests {
     
     @Test("Test multiple strategies")
     func testMultipleStrategies() throws {
-        let sequenceMeta = ChoiceMetadata(validRanges: [0...3], strategies: [.fundamentals, .boundary])
-        let choiceMeta = ChoiceMetadata(validRanges: UInt64.bitPatternRanges, strategies: [.fundamentals, .boundary])
+        let sequenceMeta = ChoiceMetadata(validRanges: [0...3], strategies: [.fundamentals, .boundaries])
+        let choiceMeta = ChoiceMetadata(validRanges: UInt64.bitPatternRanges, strategies: [.fundamentals, .boundaries])
         let values = [
             ChoiceTree.choice(.unsigned(1), choiceMeta),
             ChoiceTree.choice(.unsigned(2), choiceMeta),
