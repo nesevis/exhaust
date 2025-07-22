@@ -174,43 +174,44 @@ struct ShrinkingTests {
             let failing: (String, UInt64) = ("Kolbu", 45_000)
 
             let property: (String, UInt64) -> Bool = { name, num in
-                num != 80085 && name.count > 2
+                num < 47
             }
             
-            let shrunk = Shrinker().shrink(failing, using: gen, where: property)
+            let shrunk = try Interpreters.shrink(failing, using: gen, where: property)
             print(shrunk)
             #expect(shrunk.1 == 80085)
-            #expect(shrunk.0.count <= 2)
         }
         
         @Test("Test shrinking with six inputs")
         func testShrinkingWithSixInputs() throws {
-            try Tyche.withConsoleReporting {
-                // Swift synthesises Equatable conformance for tuples up to 6
-                typealias Tuple = (String, String, Int, UInt64, Double, Int)
-                let gen = Gen.zip(
-                    String.arbitrary,
-                    String.arbitrary,
-                    Gen.choose(in: -1_000_000...1_000_000),
-                    Gen.choose(in: UInt64(0)...100_000_000),
-                    Gen.choose(in: 0.0...1.0),
-                    Gen.choose(in: -50...50),
-                ).map { $0 as Tuple }
-                
-                let generated = try #require(Interpreters.generate(gen))
-                let recipe = try #require(Interpreters.reflect(gen, with: generated))
-                let replayed = try #require(Interpreters.replay(gen, using: recipe))
-                #expect(generated == replayed)
-                let property: (Tuple) -> Bool = { tuple in
-                    // TestIsFailing if this is true?
-                    tuple.3 < 100_000 && tuple.3 > 50_000
-                }
-                let failing: Tuple = ("Shonky", "Shabaka", 1, 75000, 0.35, -25)
-                #expect(property(failing))
-                let shrunk = Shrinker().shrink(failing, using: gen, where: property)
-                print(shrunk)
-                #expect(shrunk.2 >= 100_000)
+            // Swift synthesises Equatable conformance for tuples up to 6
+            typealias Tuple = (Int, UInt64, String, String, Double, Int)
+            let gen = Gen.zip(
+                Gen.choose(in: -1_000_000...1_000_000),
+                Gen.choose(in: UInt64(0)...100_000_000),
+                String.arbitrary,
+                String.arbitrary,
+                Gen.choose(in: 0.0...1.0),
+                Gen.choose(in: -50...50),
+            ).map { $0 as Tuple }
+            
+            let generated = try #require(Interpreters.generate(gen))
+            let recipe = try #require(Interpreters.reflect(gen, with: generated))
+            let replayed = try #require(Interpreters.replay(gen, using: recipe))
+            #expect(generated == replayed)
+            let property: (Tuple) -> Bool = { tuple in
+                // TestIsFailing if this is true?
+                tuple.1 < 100_000 && tuple.1 > 50_000
             }
+            // The issue here is that it's shrinking "complexity" overall, but isn't reducing the value
+            // that actually plays into the property failing
+            let failing: Tuple = (1_000_000, 1_050_000, "Shonky", "Shabaka", 0.35, -25)
+            #expect(property(failing) == false)
+            let shrunk = try Interpreters.shrink(failing, using: gen, where: property)
+            print(shrunk)
+            #expect(shrunk.1 >= 100_000)
+//            try Tyche.withConsoleReporting {
+//            }
         }
     }
     
