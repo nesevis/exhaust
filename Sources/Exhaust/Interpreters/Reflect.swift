@@ -127,7 +127,7 @@ extension Interpreters {
             
             // Success! The result for the continuation is the value itself.
             let metadata = ChoiceMetadata(
-                validRanges: [type(of: convertibleValue).bitPatternRange],
+                validRanges: type(of: convertibleValue).bitPatternRanges,
                 strategies: (type(of: convertibleValue) as? any Arbitrary.Type)?.strategies ?? []
             )
             return [(value: finalOutput, path: [.choice(.init(convertibleValue), metadata)])]
@@ -162,9 +162,8 @@ extension Interpreters {
             
             var combinedPath: [ChoiceTree] = []
             var combinedResults: [Any] = []
-            var validRange: ClosedRange<UInt64>?
+            var validRanges: [ClosedRange<UInt64>]?
             
-//            let length = UInt64(5)
             let lengthResult = self.reflectRecursive(lengthGen, onFinalOutput: finalOutput)
             
             // 3. Iterate over the elements of the target array.
@@ -182,13 +181,13 @@ extension Interpreters {
                 } else {
                     combinedPath.append(.group(path))
                 }
-                if validRange == nil, let convertible = value as? any BitPatternConvertible {
-                    validRange = type(of: convertible).bitPatternRange
+                if validRanges == nil, let convertible = value as? any BitPatternConvertible {
+                    validRanges = type(of: convertible).bitPatternRanges
                 }
             }
             
             let metadata = ChoiceMetadata(
-                validRanges: [validRange ?? UInt64.bitPatternRange],
+                validRanges: validRanges ?? UInt64.bitPatternRanges,
                 strategies: .sequences // For sequences, use the sequences strategies
             )
             let finalTree = ChoiceTree.sequence(

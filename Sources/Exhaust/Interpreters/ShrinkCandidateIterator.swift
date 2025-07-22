@@ -14,6 +14,12 @@ final class ShrinkCandidateIterator: IteratorProtocol {
         // We store all potential shrinks and an index to the next one to yield.
         case shrinkingChoice(shrinks: [UInt64], nextIndex: Int, metadata: ChoiceMetadata)
         
+        // Shrinking a signed integer using semantic interleaving
+        case shrinkingSignedChoice(originalBits: UInt64, originalMask: UInt64, shrinks: [UInt64], nextIndex: Int, metadata: ChoiceMetadata)
+        
+        // Shrinking a floating point value  
+        case shrinkingFloatingChoice(originalBits: UInt64, originalMask: UInt64, shrinks: [UInt64], nextIndex: Int, metadata: ChoiceMetadata)
+        
         // Shrinking a Character choice by shrinking its Unicode scalar value.
         case shrinkingCharacterChoice(originalCharacter: Character, shrinks: [UInt64], nextIndex: Int, metadata: ChoiceMetadata)
 
@@ -59,15 +65,27 @@ final class ShrinkCandidateIterator: IteratorProtocol {
             case .initial:
                 // When we start, determine what kind of tree we have and move to the first logical state.
                 switch originalTree {
-                case let .choice(.uint(bits), metadata):
-                    // Generate the simple -> complex list of numeric shrinks ONCE.
-                    let shrinks = shrinkNumberAggressively(bits) // Sort ascending!
-                    state = .shrinkingChoice(shrinks: shrinks, nextIndex: 0, metadata: metadata)
-                case let .choice(.character(character), metadata):
-                    // Shrink Character by shrinking its first Unicode scalar value
-                    let firstScalar = character.unicodeScalars.first?.value ?? 0
-                    let shrinks = shrinkNumberAggressively(UInt64(firstScalar)).sorted()
-                    state = .shrinkingCharacterChoice(originalCharacter: character, shrinks: shrinks, nextIndex: 0, metadata: metadata)
+                case let .choice(choiceValue, metadata):
+                    switch choiceValue {
+                    case .unsigned(let bits):
+                        // For unsigned integers, use direct bit pattern shrinking
+                        let shrinks = shrinkNumberAggressively(bits)
+                        state = .shrinkingChoice(shrinks: shrinks, nextIndex: 0, metadata: metadata)
+                    case .signed(let bits, let mask):
+                        // For signed integers, generate semantic shrinks directly
+                        let shrinks = shrinkSignedIntegerDirectly(bits: bits, mask: mask)
+                        state = .shrinkingSignedChoice(originalBits: bits, originalMask: mask, shrinks: shrinks, nextIndex: 0, metadata: metadata)
+                    case .floating(let bits, let mask):
+                        // For floating point, use direct bit pattern shrinking for now
+                        let shrinks = shrinkNumberAggressively(bits)  
+                        state = .shrinkingFloatingChoice(originalBits: bits, originalMask: mask, shrinks: shrinks, nextIndex: 0, metadata: metadata)
+                    case .character(_):
+                        // Handle characters separately as before
+                        let character = choiceValue.convertible as! Character
+                        let firstScalar = character.unicodeScalars.first?.value ?? 0
+                        let shrinks = shrinkNumberAggressively(UInt64(firstScalar)).sorted()
+                        state = .shrinkingCharacterChoice(originalCharacter: character, shrinks: shrinks, nextIndex: 0, metadata: metadata)
+                    }
                 case .just:
                     state = .finished
                 
@@ -116,6 +134,23 @@ final class ShrinkCandidateIterator: IteratorProtocol {
                 state = .shrinkingChoice(shrinks: shrinks, nextIndex: index + 1, metadata: metadata)
                 // Yield the current shrink.
                 return .choice(.init(shrinks[index]), metadata)
+            
+            case let .shrinkingSignedChoice(originalBits, originalMask, shrinks, index, metadata):
+                if index >= shrinks.count {
+                    state = .finished
+                    return nil
+                }
+                state = .shrinkingSignedChoice(originalBits: originalBits, originalMask: originalMask, shrinks: shrinks, nextIndex: index + 1, metadata: metadata)
+                // shrinks[index] is already the signed bit pattern
+                return .choice(.signed(shrinks[index], originalMask), metadata)
+            
+            case let .shrinkingFloatingChoice(originalBits, originalMask, shrinks, index, metadata):
+                if index >= shrinks.count {
+                    state = .finished
+                    return nil
+                }
+                state = .shrinkingFloatingChoice(originalBits: originalBits, originalMask: originalMask, shrinks: shrinks, nextIndex: index + 1, metadata: metadata)
+                return .choice(.floating(shrinks[index], originalMask), metadata)
             
             case let .shrinkingCharacterChoice(originalCharacter, shrinks, index, metadata):
                 if index >= shrinks.count {
@@ -318,6 +353,95 @@ final class ShrinkCandidateIterator: IteratorProtocol {
             x /= 2
         }
         return shrinks
+    }
+    
+    private func shrinkSignedIntegerDirectly(bits: UInt64, mask: UInt64) -> [UInt64] {
+        // Convert normalized bits back to actual signed integer value
+        let bitWidth = 64 - mask.leadingZeroBitCount
+        let signBit = UInt64(1) << (bitWidth - 1)
+        
+        let actualSignedValue: Int64
+        if bits >= signBit {
+            // Originally positive
+            actualSignedValue = Int64(bits - signBit)
+        } else {
+            // Originally negative  
+            actualSignedValue = -Int64(signBit - bits)
+        }
+        
+        // Generate candidate signed integers in semantic order: 1, 0, -1, 2, -2, 3, -3, ...
+        var candidates: [Int64] = []
+        
+        let absValue = abs(actualSignedValue)
+        
+        // For small numbers, enumerate systematically with 1 prioritized before 0
+        if absValue <= 100 && absValue > 0 {
+            // Special case: if we're already at 1, don't try to shrink to 0 
+            // (1 is often the desired boundary value)
+            if absValue == 1 {
+                // Don't generate any candidates for 1 - it's minimal enough
+                return []
+            }
+            
+            // Add 1 first (most common boundary case)
+            candidates.append(1)
+            
+            if absValue >= 2 {
+                for i in 2...absValue {
+                    candidates.append(Int64(i))      // 2, 3, 4, ...
+                    candidates.append(0)             // 0 after each positive (except 1)
+                    candidates.append(-Int64(i-1))   // -1, -2, -3, ...
+                }
+            }
+            
+            // Add 0 and -1 at the end for thoroughness
+            candidates.append(0)
+            candidates.append(-1)
+        } else {
+            // For larger numbers, use aggressive shrinking approach
+            let steps: [Int64] = [1, 2, 3, 5, 10, 25, 50, 100]
+            for step in steps {
+                if abs(actualSignedValue) > step {
+                    candidates.append(actualSignedValue > 0 ? actualSignedValue - step : actualSignedValue + step)
+                }
+            }
+            
+            // Add the key boundary values
+            candidates.append(1)
+            candidates.append(0)
+            candidates.append(-1)
+        }
+        
+        // Remove duplicates and values that are >= original in magnitude
+        let uniqueCandidates = Array(Set(candidates))
+            .filter { abs($0) < abs(actualSignedValue) }
+            .sorted { first, second in
+                // Prioritize 1 over 0 for boundary testing (1 is often more meaningful)
+                if first == 1 && second == 0 { return true }
+                if first == 0 && second == 1 { return false }
+                
+                // For other values, sort by absolute value (complexity), then positive over negative
+                let firstAbs = abs(first)
+                let secondAbs = abs(second)
+                if firstAbs != secondAbs {
+                    return firstAbs < secondAbs
+                }
+                // Same absolute value - prefer positive
+                return first > second
+            }
+        
+        // Convert back to normalized bit patterns
+        let result = uniqueCandidates.compactMap { candidate in
+            if candidate >= 0 {
+                return UInt64(candidate) + signBit
+            } else {
+                return signBit - UInt64(-candidate)
+            }
+        }
+        
+        // Debug output
+        print("Shrinking \(actualSignedValue) -> candidates: \(uniqueCandidates)")
+        return result
     }
 }
 

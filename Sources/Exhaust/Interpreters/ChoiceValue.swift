@@ -15,9 +15,9 @@ enum ChoiceValue: Comparable, Hashable, Equatable {
     init(_ value: any BitPatternConvertible) {
         switch value {
         case is Double, is Float:
-            self = .floating(value.bitPattern64, type(of: value).bitPatternRange.upperBound)
+            self = .floating(value.bitPattern64, type(of: value).bitPatternRanges[0].upperBound)
         case is Int64, is Int32, is Int16, is Int8, is Int:
-            self = .signed(value.bitPattern64, type(of: value).bitPatternRange.upperBound)
+            self = .signed(value.bitPattern64, type(of: value).bitPatternRanges[0].upperBound)
         case is Character:
             self = .character(value as! Character)
         default:
@@ -81,7 +81,7 @@ enum ChoiceValue: Comparable, Hashable, Equatable {
                 return UInt64(absValue)
             }
         case let .character(character):
-            return character.bitPattern64
+            return character.bitPattern64 + 100 // Encourages removing '\0' bits
         }
     }
 

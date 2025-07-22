@@ -12,8 +12,10 @@ extension UInt8: BitPatternConvertible {
         self = UInt8(bitPattern64)
     }
     
-    static var bitPatternRange: ClosedRange<UInt64> {
-        UInt64(UInt8.min)...UInt64(UInt8.max)
+    static var bitPatternRanges: [ClosedRange<UInt64>] {
+        [
+            UInt64(UInt8.min)...UInt64(UInt8.max)
+        ]
     }
     
     var bitPattern64: UInt64 {
@@ -26,8 +28,10 @@ extension UInt16: BitPatternConvertible {
         self = UInt16(bitPattern64)
     }
     
-    static var bitPatternRange: ClosedRange<UInt64> {
-        UInt64(UInt16.min)...UInt64(UInt16.max)
+    static var bitPatternRanges: [ClosedRange<UInt64>] {
+        [
+            UInt64(UInt16.min)...UInt64(UInt16.max)
+        ]
     }
     
     var bitPattern64: UInt64 {
@@ -40,8 +44,10 @@ extension UInt32: BitPatternConvertible {
         self = UInt32(bitPattern64)
     }
     
-    static var bitPatternRange: ClosedRange<UInt64> {
-        UInt64(UInt32.min)...UInt64(UInt32.max)
+    static var bitPatternRanges: [ClosedRange<UInt64>] {
+        [
+            UInt64(UInt32.min)...UInt64(UInt32.max)
+        ]
     }
     
     var bitPattern64: UInt64 {
@@ -51,8 +57,10 @@ extension UInt32: BitPatternConvertible {
 
 /// Implemented for bidirectionality
 extension UInt64: BitPatternConvertible {
-    static var bitPatternRange: ClosedRange<UInt64> {
-        UInt64.min...UInt64.max
+    static var bitPatternRanges: [ClosedRange<UInt64>] {
+        [
+            UInt64.min...UInt64.max
+        ]
     }
     
     init(bitPattern64: UInt64) {
@@ -65,8 +73,10 @@ extension UInt64: BitPatternConvertible {
 }
 
 extension UInt: BitPatternConvertible {
-    static var bitPatternRange: ClosedRange<UInt64> {
-        UInt64(UInt.min)...UInt64(UInt.max)
+    static var bitPatternRanges: [ClosedRange<UInt64>] {
+        [
+            UInt64(UInt.min)...UInt64(UInt.max)
+        ]
     }
     
     init(bitPattern64: UInt64) {
@@ -85,8 +95,10 @@ extension Int8: BitPatternConvertible {
         self = Int8(Int8(bitPattern: UInt8(bitPattern64) ^ Self.signBitMask))
     }
     
-    public static var bitPatternRange: ClosedRange<UInt64> {
-        UInt64(UInt8.min)...UInt64(UInt8.max)
+    public static var bitPatternRanges: [ClosedRange<UInt64>] {
+        [
+            UInt64(UInt8.min)...UInt64(UInt8.max)
+        ]
     }
     
     public var bitPattern64: UInt64 {
@@ -101,8 +113,10 @@ extension Int16: BitPatternConvertible {
         self = Int16(Int16(bitPattern: UInt16(bitPattern64) ^ Self.signBitMask))
     }
     
-    public static var bitPatternRange: ClosedRange<UInt64> {
-        UInt64(UInt16.min)...UInt64(UInt16.max)
+    public static var bitPatternRanges: [ClosedRange<UInt64>] {
+        [
+            UInt64(UInt16.min)...UInt64(UInt16.max)
+        ]
     }
     
     public var bitPattern64: UInt64 {
@@ -117,8 +131,10 @@ extension Int32: BitPatternConvertible {
         self = Int32(Int32(bitPattern: UInt32(bitPattern64) ^ Self.signBitMask))
     }
     
-    public static var bitPatternRange: ClosedRange<UInt64> {
-        UInt64(UInt32.min)...UInt64(UInt32.max)
+    public static var bitPatternRanges: [ClosedRange<UInt64>] {
+        [
+            UInt64(UInt32.min)...UInt64(UInt32.max)
+        ]
     }
     
     public var bitPattern64: UInt64 {
@@ -133,8 +149,10 @@ extension Int64: BitPatternConvertible {
         self = Int64(bitPattern: bitPattern64 ^ Self.signBitMask)
     }
     
-    public static var bitPatternRange: ClosedRange<UInt64> {
-        UInt64.min...UInt64.max
+    public static var bitPatternRanges: [ClosedRange<UInt64>] {
+        [
+            UInt64.min...UInt64.max
+        ]
     }
     
     public var bitPattern64: UInt64 {
@@ -150,8 +168,10 @@ extension Int: BitPatternConvertible {
     }
     
     /// Maps the full Int range to the full UInt64 range.
-    public static var bitPatternRange: ClosedRange<UInt64> {
-        UInt64.min...UInt64.max
+    public static var bitPatternRanges: [ClosedRange<UInt64>] {
+        [
+            UInt64.min...UInt64.max
+        ]
     }
     
     /// Maps Int to UInt64 using bit pattern conversion
@@ -165,8 +185,10 @@ extension Float: BitPatternConvertible {
     private static let signBitMask: UInt32 = 0x80000000
     
     /// A `Float` can use the entire `UInt32` space for its bit pattern.
-    public static var bitPatternRange: ClosedRange<UInt64> {
-        UInt64(UInt32.min)...UInt64(UInt32.max)
+    public static var bitPatternRanges: [ClosedRange<UInt64>] {
+        [
+            UInt64(UInt32.min)...UInt64(UInt32.max)
+        ]
     }
     
     /// Creates a `Float` from a `UInt64` by first converting to `UInt32`.
@@ -184,7 +206,11 @@ extension Double: BitPatternConvertible {
     private static let signBitMask: UInt64 = 0x8000000000000000
     
     /// A `Double` uses the full `UInt64` space for its bit pattern.
-    public static var bitPatternRange: ClosedRange<UInt64> { 0...UInt64.max }
+    public static var bitPatternRanges: [ClosedRange<UInt64>] {
+        [
+            UInt64.min...UInt64.max
+        ]
+    }
     
     /// Creates a `Double` from a `UInt64` with sign bit normalization.
     public init(bitPattern64: UInt64) {
@@ -200,8 +226,11 @@ extension Double: BitPatternConvertible {
 }
 
 extension Unicode.Scalar: BitPatternConvertible {
-    public static var bitPatternRange: ClosedRange<UInt64> {
-        0x000000...0x00D7FF // Basic Multilingual Plane before surrogates
+    public static var bitPatternRanges: [ClosedRange<UInt64> ]{
+        [
+            0x000000...0x00D7FF, // Basic Multilingual Plane before surrogates
+            0x00E000...0x10FFFF  // Everything after surrogates up to the max
+        ]
     }
     
     init(bitPattern64: UInt64) {
@@ -215,8 +244,11 @@ extension Unicode.Scalar: BitPatternConvertible {
 
 extension Character: BitPatternConvertible {
     /// Defines the range for characters.
-    public static var bitPatternRange: ClosedRange<UInt64> {
-        0x000000...0x00D7FF // Basic Multilingual Plane before surrogates
+    public static var bitPatternRanges: [ClosedRange<UInt64>] {
+        [
+            0x000000...0x00D7FF, // Basic Multilingual Plane before surrogates
+            0x00E000...0x10FFFF  // Everything after surrogates up to the max
+        ]
     }
 
     /// Creates a `Character` from a `UInt64` by assuming it represents a Unicode scalar value.

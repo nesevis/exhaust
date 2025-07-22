@@ -1,0 +1,269 @@
+//
+//  HierarchicalTieredShrinker.swift
+//  Exhaust
+//
+//  Created by Chris Kolbu on 21/7/2025.
+//
+
+final class HierarchicalTieredShrinker: IteratorProtocol, Equatable {
+    typealias Element = ChoiceTree
+    typealias Shrinks = [ChoiceTree].SubSequence
+    private typealias Shrink = (ChoiceTree?, State)
+    
+    /// The original candidate
+    private var origin: ChoiceTree
+    
+    /// The internal state of the iterator
+    private var state = State.idle
+    
+    init(_ candidate: ChoiceTree) {
+        //print("Creating new shrinker for \(candidate)")
+        self.origin = candidate
+    }
+    
+    private enum State: Equatable {
+        case idle
+        case exhausted
+        
+        /// Representing a ChoiceTree.choice
+        case choice(shrinks: Shrinks, metadata: ChoiceMetadata, strategy: ShrinkingStrategies)
+
+        /// Representing a ChoiceTree.sequence
+        case sequence(shrinks: Shrinks, metadata: ChoiceMetadata, strategy: ShrinkingStrategies)
+        
+        /// Representing the element of a ChoiceTree.sequence. `shrinks` is presented as a subsequence, but is never sliced beyond its original size
+        case element(shrinks: Shrinks, childIndex: Int, subIterator: HierarchicalTieredShrinker, sequenceMetadata: ChoiceMetadata, sequenceStrategy: ShrinkingStrategies)
+        
+        /// Representing a group that is being shrunk
+        case group(children: Shrinks, subIterator: HierarchicalTieredShrinker)
+        
+        /// Representing a branch in the ``ChoiceTree``
+        case branch(label: UInt64, children: Shrinks, subIterator: HierarchicalTieredShrinker)
+    }
+    
+    /// This kicks off the initial round of shrinks. It will go by strategy
+    private func handle(first: ChoiceTree) -> Shrink {
+        switch first {
+        case let .choice(_, meta):
+            let shrinks = self.shrinks(for: first, strategies: meta.strategies)
+            guard let first = shrinks.first else {
+                return (nil, .exhausted)
+            }
+            return (first, .choice(shrinks: shrinks.dropFirst(), metadata: meta, strategy: first.strategy))
+        case .just:
+            return (nil, .exhausted)
+        case let .sequence(_, _, meta):
+            let shrinks = self.shrinks(for: first, strategies: meta.strategies)
+            guard let first = shrinks.first else {
+                return (nil, .exhausted)
+            }
+            return (first, .sequence(shrinks: shrinks.dropFirst(), metadata: meta, strategy: first.strategy))
+        case let .branch(label, array):
+            guard let first = array.first else {
+                return (nil, .exhausted)
+            }
+            let subIterator = HierarchicalTieredShrinker(first)
+            return (first, .branch(label: label, children: array[...], subIterator: subIterator))
+        case let .group(array):
+            guard let first = array.first else {
+                return (nil, .exhausted)
+            }
+            let subIterator = HierarchicalTieredShrinker(first)
+            return (first, .group(children: array[...], subIterator: subIterator))
+        }
+    }
+    
+    private func shrinks(for path: ChoiceTree, strategies: ShrinkingStrategies) -> Shrinks {
+        let strategy = ShrinkingStrategies(rawValue: 1 << strategies.rawValue.trailingZeroBitCount)
+        //print("Shrinks: \(strategies) -> \(strategy) (\(strategies.rawValue.trailingZeroBitCount))")
+        switch strategy {
+        case .fundamentals:
+            //print("Shrinking fundamentals for:\n \(path)")
+            return path
+                .with(strategies: strategies.subtracting(strategy))
+                .fundamentalValues[...]
+        case .boundary:
+            //print("Shrinking boundaries for:\n \(path)")
+            return path
+                .with(strategies: strategies.subtracting(strategy))
+                .boundaries[...]
+        case .binary:
+            //print("Shrinking binary for:\n \(path)")
+            return path
+                .with(strategies: strategies.subtracting(strategy))
+                .binary[...]
+        default:
+            return [][...]
+        }
+    }
+    
+    // MARK: - IteratorProtocol
+    
+    func next() -> ChoiceTree? {
+        // Sequences will sometimes defer their work to the next cycle, so this is wrapped in a while
+        while true {
+            switch state {
+            case .idle:
+                let (result, state) = self.handle(first: origin)
+                self.state = state
+                return result
+            case .exhausted:
+                return nil
+            case let .sequence(shrinks, meta, strategy):
+                if let result = shrinks.first {
+                    //print("Sequence continuing strategy for:\n \(result)")
+                    // We still have shrinks left in this sequence strategy
+                    self.state = .sequence(shrinks: shrinks.dropFirst(), metadata: meta, strategy: strategy)
+                    return result
+                }
+                let updatedOrigin = origin.with(strategies: strategy)
+                let (result, state) = self.handle(first: updatedOrigin)
+                if let result {
+                    // We still have other sequence strategies to try
+                    //print("Sequence switching strategy for:\n \(result)")
+                    self.state = state
+                    return result
+                }
+                // Strategies are exhausted; move on to the children
+                // These are all the elements. We keep all the strategies from `origin` intact
+                let children = updatedOrigin.children
+                if let first = children.first {
+                    self.state = .element(
+                        shrinks: children[...],
+                        childIndex: 0,
+                        subIterator: .init(first),
+                        // This is interesting. These should belong to the child?
+                        sequenceMetadata: origin.metadata,
+                        sequenceStrategy: origin.strategy
+                    )
+                    continue
+                }
+                // Children are exhausted; go home
+                self.state = .exhausted
+                return nil
+                
+            case .element(var shrinks, var index, let subIterator, let sequenceMetadata, let sequenceStrategy):
+                // Try to get a shrink for this element
+                if let subResult = subIterator.next() {
+                    // Success! We got a smaller version of the element.
+                    //print("Element continuing strategy for index \(index):\n \(subResult)")
+                    shrinks[index] = subResult
+                    state = .element(
+                        shrinks: shrinks,
+                        childIndex: index,
+                        subIterator: subIterator,
+                        sequenceMetadata: sequenceMetadata,
+                        sequenceStrategy: sequenceStrategy
+                    )
+                    // We return a sequence here, so it's important that the metadata is that of the sequence
+                    return .sequence(
+                        length: UInt64(shrinks.count),
+                        elements: Array(shrinks),
+                        sequenceMetadata
+                    )
+                } else {
+                    // The iterator for the current element is exhausted. Move to the next one.
+                    index += 1
+                    if (index >= shrinks.count) {
+                        // We're done
+//                        print("Element shrink completed")
+                        state = .exhausted
+                        return nil
+                    }
+                    // Shrink the next element
+                    state = .element(
+                        shrinks: shrinks,
+                        childIndex: index,
+                        subIterator: HierarchicalTieredShrinker(shrinks[index]),
+                        sequenceMetadata: sequenceMetadata,
+                        sequenceStrategy: sequenceStrategy
+                    )
+                    continue
+                }
+            case let .choice(shrinks, meta, strategy):
+                guard let result = shrinks.first else {
+                    // Go to the next strategy, if available
+                    let (result, state) = self.handle(first: origin.with(strategies: strategy))
+                    if let result {
+//                        print("Choice switching strategy for:\n \(result)")
+                        self.state = state
+                        return result
+                    }
+//                    print("Choice exhausted")
+                    self.state = .exhausted
+                    return nil
+                }
+//                print("Choice continuing strategy for:\n \(result)")
+                self.state = .choice(shrinks: shrinks.dropFirst(), metadata: meta, strategy: strategy)
+                return result
+            case let .group(children, subIterator):
+                if let subResult = subIterator.next() {
+                    // There's still a result, keep working on the child
+                    state = .group(children: children, subIterator: subIterator)
+                    return ChoiceTree.group(CollectionOfOne(subResult) + Array(children))
+                } else {
+                    // We've exhausted this child
+                    guard let child = children.first else {
+                        state = .exhausted
+                        return nil
+                    }
+                    let nextIterator = HierarchicalTieredShrinker(child)
+                    state = .group(children: children.dropFirst(), subIterator: nextIterator)
+                    return ChoiceTree.group(Array(children.dropFirst()))
+                }
+            case let .branch(label, children, subIterator):
+                if let subResult = subIterator.next() {
+                    // There's still a result, keep working on the child
+                    state = .branch(label: label, children: children, subIterator: subIterator)
+                    return ChoiceTree.branch(label: label, children: CollectionOfOne(subResult) + Array(children))
+                } else {
+                    // We've exhausted this child
+                    guard let child = children.first else {
+                        state = .exhausted
+                        return nil
+                    }
+                    let nextIterator = HierarchicalTieredShrinker(child)
+                    state = .branch(label: label, children: children.dropFirst(), subIterator: nextIterator)
+                    return ChoiceTree.branch(label: label, children: Array(children.dropFirst()))
+                }
+            }
+        }
+    }
+    
+    // MARK: - Equatable
+    
+    static func == (lhs: HierarchicalTieredShrinker, rhs: HierarchicalTieredShrinker) -> Bool {
+        lhs.origin == rhs.origin &&
+        lhs.state == rhs.state
+    }
+}
+
+private extension ChoiceTree {
+    var metadata: ChoiceMetadata {
+        switch self {
+        case let .choice(_, meta), let .sequence(_, _, meta):
+            return meta
+        default:
+            fatalError("\(#function) should not be accessed directly by \(self)")
+        }
+    }
+    
+    var strategy: ShrinkingStrategies {
+        self.metadata.strategies
+    }
+    
+    func with(strategies: ShrinkingStrategies) -> ChoiceTree {
+        switch self {
+        case let .choice(value, meta):
+            let newMeta = ChoiceMetadata(validRanges: meta.validRanges, strategies: strategies)
+            return .choice(value, newMeta)
+        case let .sequence(length, elements, meta):
+            let newMeta = ChoiceMetadata(validRanges: meta.validRanges, strategies: strategies)
+            return .sequence(length: length, elements: elements, newMeta)
+        default:
+            fatalError("\(#function) should not be accessed directly by \(self)")
+        }
+    }
+}
+
+

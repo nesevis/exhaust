@@ -5,6 +5,8 @@
 //  Created by Chris Kolbu on 16/7/2025.
 //
 
+import Foundation
+
 enum ChoiceTree: Equatable {
     /// A primitive choice, typically a number or a high-level semantic label.
     case choice(ChoiceValue, ChoiceMetadata)
@@ -31,7 +33,22 @@ extension ChoiceTree {
             return value.complexity
         case .just:
             return 0
-        case .sequence(_, var elements, _), .branch(_, var elements), .group(var elements):
+        case .sequence(let length, var elements, _):
+            var complexity = UInt64(0)
+            while elements.isEmpty == false {
+                let element = elements.removeLast()
+                let elementComplexity = element.complexity
+                if complexity &+ elementComplexity < complexity {
+                    return UInt64.max
+                }
+                complexity += elementComplexity
+            }
+            let includingLength = complexity &+ length
+            if includingLength < complexity {
+                return UInt64.max
+            }
+            return includingLength
+        case .branch(_, var elements), .group(var elements):
             var complexity = UInt64(0)
             while elements.isEmpty == false {
                 let element = elements.removeLast()
@@ -47,6 +64,10 @@ extension ChoiceTree {
 }
 
 extension ChoiceTree: CustomDebugStringConvertible {
+    var prettyPrint: NSString {
+        NSString(string: debugDescription)
+    }
+    
     var debugDescription: String {
         treeDescription(prefix: "", isLast: true)
     }

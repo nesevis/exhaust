@@ -6,7 +6,7 @@ protocol BitPatternConvertible: Equatable {
     /// The valid range of this type, expressed as an inclusive `ClosedRange`
     /// of `UInt64` bit patterns. This is used by `choose()` as the default range
     /// if a more specific one is not provided.
-    static var bitPatternRange: ClosedRange<UInt64> { get }
+    static var bitPatternRanges: [ClosedRange<UInt64>] { get }
 
     /// Creates an instance of this type from a raw `UInt64` bit pattern.
     /// This is the core decoding step used by the generator's `continuation`.

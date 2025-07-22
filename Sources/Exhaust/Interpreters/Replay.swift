@@ -220,7 +220,7 @@ extension Interpreters {
                 }
                 
                 let lengthMetadata = ChoiceMetadata(
-                    validRanges: [UInt64.bitPatternRange],
+                    validRanges: UInt64.bitPatternRanges,
                     strategies: UInt64.strategies
                 )
                 guard let _ = self.replayRecursive(lengthGen, with: .choice(.unsigned(length), lengthMetadata)) else {

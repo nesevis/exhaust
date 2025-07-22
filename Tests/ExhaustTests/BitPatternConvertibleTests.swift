@@ -54,7 +54,7 @@ struct BitPatternConvertibleTests {
     
     @Test("Int BitPatternConvertible uses full UInt64 range")
     func testIntBitPatternUsesFullRange() {
-        #expect(Int.bitPatternRange == UInt64.min...UInt64.max)
+        #expect(Int.bitPatternRanges == [UInt64.min...UInt64.max])
     }
 
     @Test("UInt64 to Int mapping round-trip consistency")

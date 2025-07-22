@@ -91,8 +91,11 @@ extension Double: Arbitrary {
 
 extension Unicode.Scalar: Arbitrary {
     static var arbitrary: ReflectiveGenerator<Any, Unicode.Scalar> {
-        Gen.choose(in: self.bitPatternRange)
-            .map { Unicode.Scalar(UInt32($0))! }
+        Gen.pick(choices: [
+            (10, Gen.choose(in: self.bitPatternRanges[0])),
+//            (1, Gen.choose(in: self.bitPatternRanges[1])),
+        ])
+        .map { Unicode.Scalar(UInt32($0))! }
     }
     static var strategies: ShrinkingStrategies { .unsignedIntegers }
 }

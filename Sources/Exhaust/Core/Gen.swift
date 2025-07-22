@@ -72,7 +72,8 @@ enum Gen {
     }
     
     static func chooseCharacter<Input>(in range: ClosedRange<UInt64>? = nil, input: Input.Type = Input.self) -> ReflectiveGenerator<Input, Character> {
-        let actualRange = range ?? Character.bitPatternRange
+        // Default to the lower range
+        let actualRange = range ?? Character.bitPatternRanges[0]
         let op = ReflectiveOperation<Input>.chooseCharacter(min: actualRange.lowerBound, max: actualRange.upperBound)
         
         return .impure(operation: op) { result in
@@ -89,8 +90,8 @@ enum Gen {
         // 1. Determine the range of raw UInt64 bits to generate.
         //    This logic delegates the responsibility of defining the range to the type `T` itself.
         //    For example, for `Int`, this will now be the full `UInt64` range to support negatives.
-        let minBits = range?.lowerBound.bitPattern64 ?? Output.bitPatternRange.lowerBound
-        let maxBits = range?.upperBound.bitPattern64 ?? Output.bitPatternRange.upperBound
+        let minBits = range?.lowerBound.bitPattern64 ?? Output.bitPatternRanges[0].lowerBound
+        let maxBits = range?.upperBound.bitPattern64 ?? Output.bitPatternRanges[0].upperBound
 
         // 2. Create the unified, type-agnostic operation. The interpreter only needs to know
         //    how to generate a UInt64 within these bounds.

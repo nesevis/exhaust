@@ -43,15 +43,15 @@ struct ShrinkingTests {
         }
         
         @Test("Sequence with steps")
-        func testSequenceWithSteps() {
+        func testSequenceWithSteps() throws {
             let shrinker = Shrinker()
-            let gen = UInt.arbitrary.map { $0 * 10 }
+            let gen = UInt.arbitrary.map { $0 &* 10 }
             let counterExample: UInt = 1330
             let property: (UInt) -> Bool = { thing in
-                thing == counterExample
+                thing == counterExample || thing > 100
             }
             
-            let shrunken = shrinker.shrink(counterExample, using: gen, where: property)
+            let shrunken = try Interpreters.shrink(counterExample, using: gen, where: property)
             #expect(counterExample == shrunken)
         }
         
@@ -128,33 +128,33 @@ struct ShrinkingTests {
         }
         
         @Test("Shrinker with complex structures")
-        func testShrinkingComplexStructure() {
-            Tyche.withConsoleReporting {
-                let personGen = Gen.lens(extract: \TestPerson.name, String.arbitrary)
-                    .bind { name in
-                        Gen.lens(extract: \TestPerson.age, Gen.choose(in: 0...100))
-                            .map { age in
-                                TestPerson(name: name, age: age, height: 170.0)
-                            }
-                    }
-                
-                let shrinker = Shrinker()
-                let failingPerson = TestPerson(name: "Very Long Name", age: 37, height: 170.0)
-                
-                // Property: succeedes if age > 50 OR name length > 5
-                let property: (TestPerson) -> Bool = { person in
-                    person.age > 50 || person.name.count < 5
-                }
-                #expect(property(failingPerson) == false)
-                
-                let shrunken = shrinker.shrink(failingPerson, using: personGen, where: property)
-                
-                // Should shrink to minimal failing case
-                #expect(shrunken.age == 49)
-                #expect(shrunken.name.count >= 5)
-                #expect(shrunken.age <= failingPerson.age)
-                #expect(shrunken.name.count <= failingPerson.name.count)
+        func testShrinkingComplexStructure() throws {
+            struct Thing: Equatable {
+                let name: String
+                let age: UInt
             }
+            let personGen = Gen.lens(extract: \Thing.name, String.arbitrary)
+                .bind { name in
+                    Gen.lens(extract: \Thing.age, UInt.arbitrary).map { age in
+                        Thing(name: name, age: age)
+                    }
+                }
+            
+//            let generated = try #require(Interpreters.generate(personGen))
+//            let failingPerson = Thing(name: "圽苙➂颾꘬귕䞰霣퇨ꁼ趈₠ⵔ玮ᜏ⭅되ナ狾쬭닕䋉퉬ꤑგ阉簼ᬑ줙쒱룴驦欺㍖ࠑ胰ׂ瘅雯휘虌ǖ狓߶ꃫ䳵⹰禹掩ꥤ贼掯ᅄꂲ饟溱⻁꿸⮝儺춐㗏㤴ރ仄aa鷑朜舲棃峙쇄돱䟫́⪏쵑垭쏣캠鄨噉∧듼왬쿺ꠀ㕰㟛㲣᧤挽ꢚ볪䱫㣵憬뉣瓲죥̈́卽⭠퉿ٔѩ쨡⃴㧣兡᝺狢穧昽ቜೡꆫ䳪럖죩树ꕣ㤉❇ප", age: 47)
+//
+            let failingPerson = Thing(name: "adibo adibee hello to you what is going on biancaa", age: 47)
+            // Property: succeedes if age > 50 OR name length > 5
+            let property: (Thing) -> Bool = { person in
+                // This is completely opaque. We don't know
+                person.name.contains("aa") == false
+            }
+//            #expect(property(failingPerson) == false)
+            
+            let shrunken = try Interpreters.shrink(failingPerson, using: personGen, where: property)
+            
+            // Should shrink to minimal failing case
+            #expect(shrunken.name == "aa")
         }
         
         @Test("Text shrinking with zipped")
