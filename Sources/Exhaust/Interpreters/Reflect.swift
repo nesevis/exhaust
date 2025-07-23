@@ -127,7 +127,7 @@ extension Interpreters {
             
             // Success! The result for the continuation is the value itself.
             let metadata = ChoiceMetadata(
-                validRanges: type(of: convertibleValue).bitPatternRanges,
+                validRanges: op.associatedRange.map { [$0] } ?? type(of: convertibleValue).bitPatternRanges,
                 strategies: (type(of: convertibleValue) as? any Arbitrary.Type)?.strategies ?? []
             )
             return [(value: finalOutput, path: [.choice(.init(convertibleValue), metadata)])]
@@ -162,7 +162,7 @@ extension Interpreters {
             
             var combinedPath: [ChoiceTree] = []
             var combinedResults: [Any] = []
-            var validRanges = lengthGen.associatedRange.map { [$0] }
+            let validRanges = lengthGen.associatedRange.map { [$0] }
             
             let lengthResult = self.reflectRecursive(lengthGen, onFinalOutput: finalOutput)
             

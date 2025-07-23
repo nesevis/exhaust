@@ -108,6 +108,7 @@ extension Interpreters {
                     }
                     break
                 } else {
+                    previousInvalidRecipe = candidateRecipe
                     // It's possible
                     print("Invalid shrink, there has been no valid shrinks yet")
                 }

@@ -11,6 +11,8 @@ struct ChoiceMetadata: Hashable, Equatable {
     let strategies: [ShrinkingStrategy]
     
     func isValidForRange(_ value: UInt64) -> Bool {
+        // FIXME: This does not return correct results for doubles; it returns no negative values
+        // Check signed ints
         validRanges.contains(where: { $0.contains(value) })
     }
 }
