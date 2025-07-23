@@ -18,7 +18,7 @@ final class HierarchicalTieredShrinker: IteratorProtocol, Equatable {
     private var state = State.idle
     
     init(_ candidate: ChoiceTree) {
-//        print("Creating new \( candidate.isImportant ? "important " : "")shrinker for\n\(candidate)\nMeta: \(candidate.metadata)")
+        print("Creating new \( candidate.isImportant ? "important " : "")shrinker for\n\(candidate)\nMeta: \(candidate.metadata)")
         self.origin = candidate
         self.isImportant = candidate.isImportant
     }

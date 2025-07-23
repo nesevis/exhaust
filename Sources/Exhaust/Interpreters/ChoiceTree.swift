@@ -206,24 +206,25 @@ extension ChoiceTree {
                 guard lhsValue != rhsValue else {
                     return lhs
                 }
+                // TODO: Decorate with whether we need to go down or up
                 // 45_000 vs 0, so 0 triggered that this is important
                 // We need to build a range from rhs...lhs
                 let lhsRange = lhsValue.convertible.bitPattern64
                 let rhsRange = rhsValue.convertible.bitPattern64
                 let convertibleRange = min(lhsRange, rhsRange)...max(lhsRange, rhsRange)
-                let meta = ChoiceMetadata(validRanges: [convertibleRange], strategies: [.binary, .saturation, .ultraSaturation])
+                let meta = ChoiceMetadata(validRanges: [convertibleRange], strategies: [])
                 return .important(.choice(lhsValue, meta))
+                    .resetStrategies() // This will apply strategies based on the effective range
             case let (.sequence(lhsLength, lhsElements, lhsMeta), .sequence(rhsLength, rhsElements, _)):
                 // The sequence itself is important
                 if lhsLength != rhsLength {
+                    // TODO: Decorate with whether we need to go down or up
                     // We can now create a valid subrange for the length of this sequence
                     let newRange = min(lhsLength, rhsLength)...max(lhsLength, rhsLength)
-                    let meta = ChoiceMetadata(
-                        // We know that the range has to be between what what's allowable and what failed
-                        validRanges: [newRange],
-                        strategies: [.binary, .saturation, .ultraSaturation]
-                    )
+                    // We know that the range has to be between what what's allowable and what failed
+                    let meta = ChoiceMetadata(validRanges: [newRange], strategies: [])
                     return .important(.sequence(length: lhsLength, elements: lhsElements, meta))
+                        .resetStrategies() // This will apply strategies based on the effective range
                 }
                 // The sequence content is important
                 if lhsElements.elementsEqual(rhsElements) == false {
@@ -262,13 +263,13 @@ extension ChoiceTree: CustomDebugStringConvertible {
         case let .choice(value, _):
             switch value {
             case let .character(char):
-                return prefix + connector + "\(locked)choice(char: \(char))\(locked)"
+                return prefix + connector + "\(locked)choice(char: \"\(char)\")\(locked)"
             case let .unsigned(uint):
                 return prefix + connector + "\(locked)choice(unsigned: \(uint))\(locked)"
             case let .signed(int, mask):
-                return prefix + connector + "\(locked)choice(signed: \(Int64(bitPattern64: int ^ mask)))\(locked)"
+                return prefix + connector + "\(locked)choice(signed: \(Int64(bitPattern64: int)))\(locked))"
             case let .floating(float, mask):
-                return prefix + connector + "\(locked)choice(float: \(Double(bitPattern64: float ^ mask))\(locked)"
+                return prefix + connector + "\(locked)choice(float: \(Double(bitPattern64: float))\(locked))"
             }
             
         case .just:
@@ -319,16 +320,16 @@ extension ChoiceTree: CustomDebugStringConvertible {
             switch choiceValue {
             case .unsigned(let uInt64):
                 return uInt64.description
-            case .signed(let uInt64, let uInt642):
-                return Int64(uInt64 ^ uInt642).description
-            case .floating(let uInt64, let uInt642):
-                return Double(uInt64 ^ uInt642).description
+            case .signed(let uInt64, _):
+                return Int64(bitPattern64: uInt64).description
+            case .floating(let uInt64, _):
+                return Double(bitPattern64: uInt64).description
             case .character(let character):
                 return character.description
             }
         case .just:
             return "constant"
-        case .sequence(let length, let elements, let choiceMetadata):
+        case .sequence(let length, let elements, _):
             if case .choice(.character, _) = elements.first {
                 return "\"\(elements.map(\.elementDescription).joined())\""
             }

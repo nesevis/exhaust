@@ -11,6 +11,6 @@ struct ChoiceMetadata: Hashable, Equatable {
     let strategies: [ShrinkingStrategy]
     
     func isValidForRange(_ value: UInt64) -> Bool {
-        validRanges.contains(where: { $0.contains($0) })
+        validRanges.contains(where: { $0.contains(value) })
     }
 }

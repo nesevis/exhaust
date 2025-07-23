@@ -15,7 +15,7 @@ extension ChoiceValue {
             return [0, -1, 1, 2, -2]
                 .map { ChoiceValue.signed($0.bitPattern64, mask) }
         case let .floating(_, mask):
-            return [0, -0.1, -0.01, -0.001, -0.0001, 0.001, 0.01, 0.1]
+            return [0, -0.1, -0.01, -0.001, -Double.ulpOfOne, -0.0001, Double.ulpOfOne, 0.001, 0.01, 0.1]
                 .map { ChoiceValue.floating($0.bitPattern, mask)}
         case .character:
             // TODO: unicode band, invisible characters, etc (in a second tier?)
@@ -35,7 +35,22 @@ extension ChoiceValue {
                 .map { ChoiceValue.signed($0.bitPattern64, mask) }
         case let .floating(_, mask):
             // We'll lose the magical values here?
-            return [-Double.greatestFiniteMagnitude, Double.greatestFiniteMagnitude, Double.ulpOfOne, Double.nan, Double.infinity]
+            return [
+                Double.greatestFiniteMagnitude / 1000000,
+                Double.greatestFiniteMagnitude / 100000,
+                Double.greatestFiniteMagnitude / 10000,
+                Double.greatestFiniteMagnitude / 1000,
+                Double.greatestFiniteMagnitude / 100,
+                Double.greatestFiniteMagnitude,
+                -Double.greatestFiniteMagnitude,
+                -Double.greatestFiniteMagnitude / 100,
+                -Double.greatestFiniteMagnitude / 1000,
+                -Double.greatestFiniteMagnitude / 10000,
+                -Double.greatestFiniteMagnitude / 100000,
+                -Double.greatestFiniteMagnitude / 1000000,
+//                Double.nan,
+//                Double.infinity
+            ]
                 .map { ChoiceValue.floating($0.bitPattern, mask)}
         case .character:
             // TODO: unicode band, invisible characters, etc (in a second tier?)
@@ -58,10 +73,11 @@ extension ChoiceValue {
                 .map { ChoiceValue.unsigned($0) }
         case let .signed(value, mask):
             let divisor = Int64(divisor)
-            let signed = Int64(bitPattern64: value ^ mask)
+            let signed = Int64(bitPattern64: value)
             var decimation = [Int64]()
+            let lowerBound = Int64(bitPattern64: ranges[0].lowerBound)
             var candidate = signed / divisor
-            while candidate > ranges[0].lowerBound {
+            while candidate > lowerBound {
                 decimation.append(candidate)
                 candidate /= divisor
             }
@@ -69,10 +85,10 @@ extension ChoiceValue {
                 .map { ChoiceValue.signed($0.bitPattern64, mask) }
         case let .floating(value, mask):
             let divisor = Double(divisor)
-            let signed = Double(bitPattern64: value ^ mask)
+            let signed = Double(bitPattern64: value)
+            let lowerBound = Double(bitPattern64: ranges[0].lowerBound)
             var halvings = [Double]()
             var candidate = signed / divisor
-            let lowerBound = Double(ranges[0].lowerBound)
             while candidate > lowerBound {
                 halvings.append(candidate)
                 candidate /= divisor
@@ -83,8 +99,9 @@ extension ChoiceValue {
             guard let range = ranges.first(where: { $0.contains(character.bitPattern64) }) else {
                 return []
             }
-            let uints = ChoiceValue.unsigned(character.bitPattern64).binary(for: [range])
+            let uints = ChoiceValue.unsigned(character.bitPattern64).saturation(for: [range])
             // TODO: A lot of indirection here
+            print()
             return uints.map {
                 ChoiceValue.character(Character(bitPattern64: $0.convertible.bitPattern64))
             }
@@ -107,7 +124,7 @@ extension ChoiceValue {
             return values
                 .map { ChoiceValue.unsigned($0) }
         case let .signed(value, mask):
-            let signed = Int64(bitPattern64: value ^ mask)
+            let signed = Int64(bitPattern64: value)
             var values = [Int64]()
             var candidate = signed - 1
             let lowerBound = Int64(bitPattern: ranges[0].lowerBound)
@@ -120,14 +137,14 @@ extension ChoiceValue {
             return values
                 .map { ChoiceValue.signed($0.bitPattern64, mask) }
         case let .floating(value, mask):
-            let signed = Double(bitPattern64: value ^ mask)
+            let signed = Double(bitPattern64: value)
             var values = [Double]()
             var candidate = signed - 0.1
             let lowerBound = Double(bitPattern: ranges[0].lowerBound)
             var count = 0
             while count < limit, candidate > lowerBound {
                 values.append(candidate)
-                candidate -= 1
+                candidate -= 0.1
                 count += 1
             }
             return values
@@ -136,8 +153,9 @@ extension ChoiceValue {
             guard let range = ranges.first(where: { $0.contains(character.bitPattern64) }) else {
                 return []
             }
-            let uints = ChoiceValue.unsigned(character.bitPattern64).binary(for: [range])
+            let uints = ChoiceValue.unsigned(character.bitPattern64).ultraSaturation(for: [range])
             // TODO: A lot of indirection here
+            print()
             return uints.map {
                 ChoiceValue.character(Character(bitPattern64: $0.convertible.bitPattern64))
             }
@@ -156,7 +174,7 @@ extension ChoiceValue {
             return halvings
                 .map { ChoiceValue.unsigned($0) }
         case let .signed(value, mask):
-            let signed = Int64(bitPattern64: value ^ mask)
+            let signed = Int64(bitPattern64: value)
             var halvings = [Int64]()
             var candidate = signed / 2
             while candidate > ranges[0].lowerBound {
@@ -166,7 +184,7 @@ extension ChoiceValue {
             return halvings
                 .map { ChoiceValue.signed($0.bitPattern64, mask) }
         case let .floating(value, mask):
-            let signed = Double(bitPattern64: value ^ mask)
+            let signed = Double(bitPattern64: value)
             var halvings = [Double]()
             var candidate = signed / 2
             let lowerBound = Double(ranges[0].lowerBound)

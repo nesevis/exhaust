@@ -34,7 +34,7 @@ extension ChoiceTree {
         case let .choice(value, metadata):
             return value.fundamentalValues
                 // TODO: Optimise, though these are O(1) lookups
-                .filter { value in metadata.validRanges.contains(where: { $0.contains(value.convertible.bitPattern64) })}
+                .filter { metadata.isValidForRange($0.convertible.bitPattern64) }
                 .map { .choice($0, metadata) }
         case let .sequence(length, elements, meta):
             guard length > 0 else {
@@ -60,7 +60,7 @@ extension ChoiceTree {
         case let .choice(value, metadata):
             return value.boundaries
                 // TODO: Optimise, though these are O(1) lookups
-                .filter { value in metadata.validRanges.contains(where: { $0.contains(value.convertible.bitPattern64) })}
+                .filter { metadata.isValidForRange($0.convertible.bitPattern64) }
                 .map { .choice($0, metadata) }
         case let .sequence(length, elements, meta):
             guard length > 1 else {
@@ -127,9 +127,11 @@ extension ChoiceTree {
         switch self {
         case let .choice(value, metadata):
             return value.ultraSaturation(for: metadata.validRanges)
-                .map { .choice($0, metadata).setStrategies([.ultraSaturation]) }
-        case let .sequence(_, _, _):
-            return self.boundaries.map { $0.setStrategies([.ultraSaturation])}
+                .map { .choice($0, metadata) }
+//                .map { .choice($0, metadata).setStrategies([.ultraSaturation]) }
+        case .sequence:
+            return self.boundaries
+//                .map { $0.setStrategies([.ultraSaturation])}
         default:
             fatalError("\(#function) should not be called directly for \(self)!")
         }
@@ -178,8 +180,48 @@ extension ChoiceTree {
         case let .group(array):
             return .group(array.map { $0.resetStrategies() })
         case let .important(element):
-            let importantStrategies = [ShrinkingStrategy.binary, .saturation, .ultraSaturation]
+            var importantStrategies = [ShrinkingStrategy]()
+            if let range = element.effectiveRange {
+                switch range {
+                case 0..<1:
+                    importantStrategies.append(.ultraSaturation)
+                case 1:
+                    // This is exactly one
+                    break
+                case 1..<50:
+                    importantStrategies.append(contentsOf: [.saturation, .ultraSaturation])
+                default:
+                    importantStrategies.append(contentsOf: [.binary, .saturation, .ultraSaturation])
+                }
+            }
             return .important(element.setStrategies(importantStrategies) )
+        }
+    }
+    
+    private var effectiveRange: Double? {
+        switch self {
+        case .choice(let choiceValue, let choiceMetadata):
+            let range = choiceMetadata.validRanges[0]
+            switch choiceValue {
+            case .unsigned:
+                // Is this necessary?
+                return Double(UInt64(bitPattern64: range.upperBound - range.lowerBound))
+            case .signed:
+                return Double(UInt64(bitPattern64: range.upperBound - range.lowerBound))
+            case .floating:
+                let lower = Double(bitPattern64: range.lowerBound)
+                let upper = Double(bitPattern64: range.upperBound)
+                return upper - lower
+            case .character(let character):
+                guard let range = choiceMetadata.validRanges.first(where: { $0.contains(character.bitPattern64) }) else {
+                    fatalError("\(#function) this should not happen")
+                }
+                return Double(UInt32(bitPattern64: range.upperBound - range.lowerBound))
+            }
+        case .sequence(_, let elements, let choiceMetadata):
+            return Double(choiceMetadata.validRanges[0].count)
+        default:
+            return nil
         }
     }
 }

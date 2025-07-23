@@ -38,10 +38,13 @@ extension Interpreters {
         var currentBestRecipe = recipe
         var recipeComplexity = currentBestRecipe.complexity
         var steps = 0
+        var cacheHits = 0
         var counterExample = value
         var seen = [ChoiceTree: Bool]()
         var previousValid: (recipe: ChoiceTree, value: Output) = (recipe, value)
+        var previousInvalidRecipe: ChoiceTree? // Used to clamp the range of the locked recipe
         var isLockedIn = false
+        
         while true {
             var shrinkWasImproved = false
             // At this point we should reset the available shrinkers for the recipe
@@ -51,12 +54,19 @@ extension Interpreters {
                     // This means the recipe is malformed, as any shrinks should return a valid recipe
                     throw ShrinkError.couldNotReplayRecipe(original: recipe, failing: candidateRecipe)
                 }
+                steps += 1
                 guard seen[candidateRecipe] == nil else {
-                    print("Recipe seen already:\n\(candidateRecipe)")
+                    cacheHits += 1
+                    if cacheHits > 1000 {
+                        print("Cache hit limit reached; breaking")
+                        break
+                    }
                     continue
                 }
-                steps += 1
-                guard steps < (isLockedIn ? 100 : 1000) else {
+                if seen.isEmpty {
+                    seen[recipe] = false
+                }
+                guard steps < (isLockedIn ? 500 : 1000) else {
                     break
                 }
                 let candidateComplexity = candidateRecipe.complexity
@@ -65,18 +75,23 @@ extension Interpreters {
                 seen[candidateRecipe] = isValidShrink
                 
                 if isValidShrink {
-                    previousValid = (candidateRecipe, candidateValue)
                     // Successful shrink!
                     shrinkWasImproved = candidateComplexity < recipeComplexity
+                    var validCandidate = candidateRecipe
+                    if isLockedIn, let previousInvalidRecipe {
+                        validCandidate = ChoiceTree.diffAndLockChanges(in: candidateRecipe, from: previousInvalidRecipe)
+                    }
+                    previousValid = (validCandidate, candidateValue)
                     // Break inner loop to repeat the shrink process
                     if shrinkWasImproved {
-                        print("Improved shrink:\n\(candidateRecipe)")
-                        currentBestRecipe = candidateRecipe.resetStrategies()
+                        print("Improved shrink:\n\(validCandidate)")
+                        currentBestRecipe = validCandidate.resetStrategies()
                         recipeComplexity = candidateComplexity
                         counterExample = candidateValue
                         break
                     }
                 } else if previousValid.recipe != recipe {
+                    previousInvalidRecipe = candidateRecipe
                     // We now have a passing result, return the previous valid shrink?
                     // This when the property takes longer to get to. In cases where the fundamental shrink removes it we'd still like more detail about what's going wrong...
                     // This is a dead end I think.
@@ -92,11 +107,9 @@ extension Interpreters {
                         continue
                     }
                     break
-                    // Create a lock here
-//                    counterExample = previousValid.value
-//                    currentBestRecipe = previousValid.recipe
-//                    shrinkWasImproved = false
-//                    break
+                } else {
+                    // It's possible
+                    print("Invalid shrink, there has been no valid shrinks yet")
                 }
             }
             
@@ -106,7 +119,7 @@ extension Interpreters {
             }
 
             // If we are here, no improvement could be found
-            print("Returning counterexample after \(steps) steps and \(currentBestRecipe.complexity) complexity. There were \(seen.count) unique attempts and \(seen.values.count(where: { $0 })) valid shrinks. Recipe:\n \(currentBestRecipe)")
+            print("Returning counterexample after \(steps) steps, \(cacheHits) cache hits and \(currentBestRecipe.complexity) complexity. There were \(seen.count) unique attempts and \(seen.values.count(where: { $0 })) valid shrinks. Recipe:\n \(currentBestRecipe)")
             _ = currentBestRecipe.map { component in
                 if component.isImportant {
                     print("Of particular interest is the value: \(component.elementDescription)")

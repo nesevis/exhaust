@@ -12,6 +12,67 @@ import Testing
 @Suite("Shrinking Functionality")
 struct ShrinkingTests {
     
+    @Suite("Choice base type shrinks")
+    struct ChoiceBaseTypeShrinks {
+        
+        @Test("UInt shrinks from max to 6")
+        func testBasicUintShrink() throws {
+            typealias Shrink = UInt
+            let gen = Shrink.arbitrary
+            let failing: Shrink = .max
+            let target: Shrink = 6
+            let property: (Shrink) -> Bool = { value in
+                value < target
+            }
+            
+            let shrunken = try Interpreters.shrink(failing, using: gen, where: property)
+            #expect(shrunken == target)
+        }
+        
+        @Test("Int shrinks from max to 6")
+        func testBasicIntShrink() throws {
+            typealias Shrink = Int
+            let gen = Shrink.arbitrary
+            let failing: Shrink = .max
+            let target: Shrink = 6
+            let property: (Shrink) -> Bool = { value in
+                value < target
+            }
+            
+            // Goes to -1 as part of fundamentals, can't shrink up from there
+            let shrunken = try Interpreters.shrink(failing, using: gen, where: property)
+            #expect(shrunken == target)
+        }
+        
+        @Test("Double shrinks from max to 6")
+        func testBasicDoubleShrink() throws {
+            typealias Shrink = Double
+            let gen = Shrink.arbitrary
+            let failing: Shrink = 999
+            let target: Shrink = 6
+            let property: (Shrink) -> Bool = { value in
+                return value.isNaN == false && value < target
+            }
+
+            let shrunken = try Interpreters.shrink(failing, using: gen, where: property)
+            #expect(shrunken <= target + 0.1)
+        }
+        
+        @Test("Character shrinks from max to \0")
+        func testBasicCharacterShrink() throws {
+            typealias Shrink = Character
+            let gen = Shrink.arbitrary
+            let failing: Shrink = "圽"
+            let target: Shrink = "f"
+            let property: (Shrink) -> Bool = { value in
+                value.bitPattern64 < target.bitPattern64
+            }
+
+            let shrunken = try Interpreters.shrink(failing, using: gen, where: property)
+            #expect(shrunken == target)
+        }
+    }
+    
     @Suite("Basic Shrinking")
     struct BasicShrinkingTests {
         
@@ -69,17 +130,18 @@ struct ShrinkingTests {
         
         @Test("Sum of two numbers must be less than 100")
         func testWithSumOfTwoNumbers() throws {
-            let gen = Gen.zip(UInt.arbitrary, UInt.arbitrary)
+            let gen = Gen.choose(in: UInt(1)...1_000_000, input: Any.self)
+            let zipGen = Gen.zip(gen, gen)
             let counterExample: (UInt, UInt) = (150, 250)
             let property: ((UInt, UInt)) -> Bool = { thing in
                 let isTrue = thing.0 &+ thing.1 < 100
                 print("Testing \(thing) -> \(isTrue)")
                 return isTrue
             }
-            
+            let recipe = Interpreters.reflect(zipGen, with: counterExample)
             // This is just wrong at (127, 1) due to binary kicking in when it switched to `.important`
-            let shrunken = try Interpreters.shrink(counterExample, using: gen, where: property)
-            #expect(shrunken == (0, 100))
+            let shrunken = try Interpreters.shrink(counterExample, using: zipGen, where: property)
+            #expect(shrunken == (1, 99))
         }
     }
     
