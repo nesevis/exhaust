@@ -16,71 +16,69 @@ struct ShrinkingTests {
     struct BasicShrinkingTests {
         
         @Test("Shrinker with simple generators")
-        func testShrinkingSimpleGenerator() {
+        func testShrinkingSimpleGenerator() throws {
             let gen = Gen.choose(in: 1...1000, input: Any.self)
-            let shrinker = Shrinker()
             
             let failingValue = 500
             let property: (Int) -> Bool = { $0 <= 100 }
             
-            let shrunken = shrinker.shrink(failingValue, using: gen, where: property)
+            // This acts weird because of ints
+            let shrunken = try Interpreters.shrink(failingValue, using: gen, where: property)
             
             // Should shrink towards the boundary
             #expect(shrunken == 101)
         }
         
         @Test("Shrinker with array generators")
-        func testShrinkingArrayGenerator() {
+        func testShrinkingArrayGenerator() throws {
             let gen = UInt.arbitrary.proliferate(with: 1...20)
-            let shrinker = Shrinker()
             
             let largeArray = Array(1...15).map(UInt.init)
             let property: ([UInt]) -> Bool = { $0.count <= 5 }
             
-            let shrunken = shrinker.shrink(largeArray, using: gen, where: property)
+            // This deadlocks the shrinker
+            let shrunken = try Interpreters.shrink(largeArray, using: gen, where: property)
             
             #expect(shrunken.count > 5)
         }
         
         @Test("Sequence with steps")
         func testSequenceWithSteps() throws {
-            let shrinker = Shrinker()
             let gen = UInt.arbitrary.map { $0 &* 10 }
-            let counterExample: UInt = 1330
             let property: (UInt) -> Bool = { thing in
-                thing == counterExample || thing > 100
+                thing < 100
             }
             
-            let shrunken = try Interpreters.shrink(counterExample, using: gen, where: property)
-            #expect(counterExample == shrunken)
+            // This loses the `important` aspect. Perhaps single values shouldn't have them?
+            let shrunken = try Interpreters.shrink(1330, using: gen, where: property)
+            #expect(shrunken == 100)
         }
         
         @Test("Shrink to a small even number")
-        func testWithASmallShrunkenNumber() {
-            let shrinker = Shrinker()
+        func testWithASmallShrunkenNumber() throws {
             let gen = Int.arbitrary.map { $0 }
             let counterExample: Int = 33
             let property: (Int) -> Bool = { thing in
                 print("Testing \(thing) -> \(thing % 2 == 0 && thing < 10 && thing > 0)")
                 return thing % 2 == 0 && thing < 10 && thing > 0
             }
-            
-            let shrunken = shrinker.shrink(counterExample, using: gen, where: property)
+            // This deadlocks the shrinker. Int?
+            let shrunken = try Interpreters.shrink(counterExample, using: gen, where: property)
             #expect(shrunken == 1)
         }
         
         @Test("Sum of two numbers must be less than 100")
-        func testWithSumOfTwoNumbers() {
-            let shrinker = Shrinker()
+        func testWithSumOfTwoNumbers() throws {
             let gen = Gen.zip(UInt.arbitrary, UInt.arbitrary)
             let counterExample: (UInt, UInt) = (150, 250)
             let property: ((UInt, UInt)) -> Bool = { thing in
-                let isTrue = thing.0 + thing.1 < 100
+                let isTrue = thing.0 &+ thing.1 < 100
                 print("Testing \(thing) -> \(isTrue)")
                 return isTrue
             }
             
-            let shrunken = shrinker.shrink(counterExample, using: gen, where: property)
+            // This is just wrong at (127, 1) due to binary kicking in when it switched to `.important`
+            let shrunken = try Interpreters.shrink(counterExample, using: gen, where: property)
             #expect(shrunken == (0, 100))
         }
     }
@@ -95,12 +93,11 @@ struct ShrinkingTests {
         }
         
         @Test("Shrinker finds minimal failing Person")
-        func testPersonShrinking() {
+        func testPersonShrinking() throws {
             struct Person: Equatable {
                 let age: Int
                 let height: Int
             }
-            let shrinker = Shrinker()
             
             let lensedAge = Gen.lens(extract: \Person.age, Gen.choose(in: 0...1500))
             let lensedHeight = Gen.lens(extract: \Person.height, Gen.choose(in: 25...250))
@@ -127,6 +124,37 @@ struct ShrinkingTests {
             #expect(recipe != nil)
         }
         
+        @Test("Test Choice Tree merge")
+        func testChoiceTreeMerge() throws {
+            let char = ChoiceTree.choice(.character("F"), .init(validRanges: Character.bitPatternRanges, strategies: Character.strategies))
+            let left = ChoiceTree.group([.sequence(length: 10, elements: Array(repeating: char, count: 10), .init(validRanges: Character.bitPatternRanges, strategies: Character.strategies))])
+            let right = left.map { choice in
+                guard case let .choice(.character, meta) = choice else {
+                    return choice
+                }
+                return .choice(.character("G"), meta)
+            }
+            
+            let merged = left.merge(with: right) { lhs, rhs in
+                switch (lhs, rhs) {
+                case (.choice, .choice):
+                    return lhs != rhs ? .important(lhs) : lhs
+                case let (.sequence(lhsLength, lhsElements, _), .sequence(rhsLength, rhsElements, _)):
+                    if lhsLength != rhsLength {
+                        return .important(lhs)
+                    }
+                    if lhsElements.elementsEqual(rhsElements) == false {
+                        return .important(lhs)
+                    }
+                    return nil
+                default:
+                    return nil
+                }
+            }
+            
+            print()
+        }
+        
         @Test("Shrinker with complex structures")
         func testShrinkingComplexStructure() throws {
             struct Thing: Equatable {
@@ -139,20 +167,16 @@ struct ShrinkingTests {
                         Thing(name: name, age: age)
                     }
                 }
-            
-            // Returning counterexample after 547 steps and 443 complexity. recipe:
 
-            
 //            let generated = try #require(Interpreters.generate(personGen))
-            let failingPerson = Thing(name: "圽苙➂颾꘬귕䞰霣퇨ꁼ趈₠ⵔ玮ᜏ⭅되ナ狾쬭닕䋉퉬ꤑგ阉簼ᬑ줙쒱룴驦欺㍖ࠑ胰ׂ瘅雯휘虌ǖ狓߶ꃫ䳵⹰禹掩ꥤ贼掯ᅄꂲ饟溱⻁꿸⮝儺춐㗏㤴ރ仄aa鷑朜舲棃峙쇄돱䟫́⪏쵑垭쏣캠鄨噉∧듼왬쿺ꠀ㕰㟛㲣᧤挽ꢚ볪䱫㣵憬뉣瓲죥̈́卽⭠퉿ٔѩ쨡⃴㧣兡᝺狢穧昽ቜೡꆫ䳪럖죩树ꕣ㤉❇ප", age: 47)
+            let failingPerson = Thing(name: "圽苙➂颾꘬귕䞰霣퇨ꁼ趈₠ⵔ玮ᜏ⭅되ナ狾쬭닕䋉퉬ꤑგ阉簼ᬑ줙쒱룴驦欺㍖ࠑ胰ׂ瘅雯휘虌ǖ狓߶ꃫ䳵⹰禹掩ꥤ贼掯ᅄꂲ饟溱⻁꿸⮝儺춐㗏㤴ރ仄aa鷑朜舲棃峙쇄돱䟫́⪏쵑垭쏣캠鄨噉∧듼왬쿺ꠀ㕰㟛㲣᧤挽ꢚ볪䱫㣵憬뉣瓲죥̈́卽⭠퉿ٔѩaa쨡⃴㧣兡᝺狢穧昽ቜೡꆫ䳪럖죩树ꕣ㤉❇ප", age: 47)
 //
 //            let failingPerson = Thing(name: "ancaa", age: 47)
-            // Property: succeedes if age > 50 OR name length > 5
             let property: (Thing) -> Bool = { person in
                 // This is completely opaque. We don't know
                 person.name.contains("aa") == false
             }
-//            #expect(property(failingPerson) == false)
+            #expect(property(failingPerson) == false)
             
             let shrunken = try Interpreters.shrink(failingPerson, using: personGen, where: property)
             
@@ -179,7 +203,7 @@ struct ShrinkingTests {
             
             let shrunk = try Interpreters.shrink(failing, using: gen, where: property)
             print(shrunk)
-            #expect(shrunk.1 == 80085)
+            #expect(shrunk.1 == 47)
         }
         
         @Test("Test shrinking with six inputs")
@@ -201,7 +225,7 @@ struct ShrinkingTests {
             #expect(generated == replayed)
             let property: (Tuple) -> Bool = { tuple in
                 // TestIsFailing if this is true?
-                tuple.1 < 100_000 && tuple.1 > 50_000
+                tuple.1 < 100_000
             }
             // The issue here is that it's shrinking "complexity" overall, but isn't reducing the value
             // that actually plays into the property failing
@@ -224,7 +248,6 @@ struct ShrinkingTests {
             struct Thing: Equatable {
                 let name: String
             }
-            let shrinker = Shrinker()
             let gen = Gen.lens(extract: \Thing.name, String.arbitrary)
                 .map { Thing(name: $0) }
             
@@ -234,38 +257,38 @@ struct ShrinkingTests {
             #expect(replayed.name == failingExample.name)
             
             let property: (Thing) -> Bool = { thing in
-                thing.name.first?.isUppercase ?? false
+                thing.name.isEmpty == false && thing.name.first!.isUppercase
             }
             #expect(property(failingExample) == false)
             
             
-            let expectedMinimumCounterExample = Thing(name: "A")
+            let expectedMinimumCounterExample = Thing(name: "")
             
             // Act
-            let shrunken = shrinker.shrink(failingExample, using: gen, where: property)
+            let shrunken = try Interpreters.shrink(failingExample, using: gen, where: property)
             
             // Assert
             #expect(expectedMinimumCounterExample == shrunken)
         }
         
         @Test("Simple string array")
-        func testSimpleStringArray() {
+        func testSimpleStringArray() throws {
             let gen = String.arbitrary.proliferate(with: 1...10)
             let minimal = ["Hello there"]
             let recipe = Interpreters.reflect(gen, with: minimal)
-            let shrunken = Shrinker().shrink(minimal, using: gen, where: {
+            let shrunken = try Interpreters.shrink(minimal, using: gen, where: {
                 $0.first?.contains(where: { $0.isUppercase }) ?? false
             })
         }
         
         @Test("Simple nested string array")
-        func testSimpleNestedStringArray() {
+        func testSimpleNestedStringArray() throws {
             let gen = String.arbitrary.proliferate(with: 1...10).proliferate(with: 1...10)
-            let minimal = [["Hello there"]]
-            let recipe = Interpreters.reflect(gen, with: minimal)
-            let shrunken = Shrinker().shrink(minimal, using: gen, where: {
+            let minimal = [["hello there"]]
+            let shrunken = try Interpreters.shrink(minimal, using: gen) {
                 $0.first?.first?.contains(where: { $0.isUppercase }) ?? false
-            })
+            }
+            #expect(shrunken == [])
         }
     }
     
@@ -273,15 +296,14 @@ struct ShrinkingTests {
     struct AdvancedShrinkingTests {
         
         struct Receipt: Equatable {
-            let items: [[String]]
+            let items: [String]
             let cost: UInt64
         }
         
         @Test("Sequence with picks")
-        func testSequenceWithPicks() {
-            let shrinker = Shrinker()
+        func testSequenceWithPicks() throws {
             
-            let stringArrGen = String.arbitrary.proliferate(with: 5...10).proliferate(with: 1...2)
+            let stringArrGen = String.arbitrary.proliferate(with: 5...10)
             let gen = Gen.lens(
                 extract: \Receipt.items,
                 stringArrGen
@@ -292,7 +314,7 @@ struct ShrinkingTests {
                     }
                 }
             let property: (Receipt) -> Bool = { thing in
-                let flattened = thing.items.flatMap { $0 }
+                let flattened = thing.items
                 guard
                     flattened.isEmpty == false
                 else {
@@ -302,14 +324,13 @@ struct ShrinkingTests {
                 return costPerItem > 1
             }
             let counterExample = Receipt(
-                items: [["ham", "cheese", "a", "b", "c"]],
+                items: ["ham", "cheese", "a", "b", "c"],
                 cost: 4
             )
             #expect(property(counterExample) == false)
             
-            let recipe = Interpreters.reflect(gen, with: counterExample)
-            let shrunken = shrinker.shrink(counterExample, using: gen, where: property)
-            let minimalCounterExample = Receipt(items: [[""]], cost: 0)
+            let shrunken = try Interpreters.shrink(counterExample, using: gen, where: property)
+            let minimalCounterExample = Receipt(items: ["ham"], cost: 0)
             #expect(minimalCounterExample == shrunken)
         }
     }

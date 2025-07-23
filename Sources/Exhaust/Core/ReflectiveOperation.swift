@@ -1,11 +1,12 @@
 protocol AnyReflectiveOperation {
     associatedtype Input
+    var associatedRange: ClosedRange<UInt64>? { get }
 }
 
 /// The primitive operations that can be performed by the reflective generator system.
 /// These operations are only generic over their input types - the output type is managed
 /// by the continuation in the containing `ReflectiveGen` to enable the Freer Monad pattern.
-enum ReflectiveOperation<Input>: AnyReflectiveOperation {
+enum ReflectiveOperation<Input> {
     /// Transforms the input type of a generator using a lens-like function.
     /// Used by `Gen.lmap` and `Gen.comap` to focus on a specific part of the input.
     /// In the forward pass (generate), the transform is ignored.
@@ -45,4 +46,17 @@ enum ReflectiveOperation<Input>: AnyReflectiveOperation {
     case sequence(length: ReflectiveGenerator<Input, UInt64>, gen: ReflectiveGenerator<Input, Any>)
     
     case just(Input)
+}
+
+extension ReflectiveOperation: AnyReflectiveOperation {
+    var associatedRange: ClosedRange<UInt64>? {
+        switch self {
+        case .chooseBits(let min, let max):
+            return min...max
+        case .chooseCharacter(let min, let max):
+            return min...max
+        default:
+            return nil
+        }
+    }
 }

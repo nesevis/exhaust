@@ -107,8 +107,6 @@ final class ShrinkCandidateIterator: IteratorProtocol {
                             childIterator: firstChildIterator
                         )
                     }
-
-                // NEW: Handle .branch
                 case let .branch(label, children):
                     if children.isEmpty {
                         state = .finished
@@ -122,6 +120,8 @@ final class ShrinkCandidateIterator: IteratorProtocol {
                             childIterator: firstChildIterator
                         )
                     }
+                case .important:
+                    state = .finished
                 }
 
             case let .shrinkingChoice(shrinks, index, metadata):

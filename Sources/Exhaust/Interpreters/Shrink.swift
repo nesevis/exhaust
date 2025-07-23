@@ -1,6 +1,6 @@
 import Foundation
 
-struct Shrinker {
+struct DeprecatedShrinker {
     /// Attempts to shrink the `value` according to the `property`
     /// - Parameters:
     ///   - value: The value

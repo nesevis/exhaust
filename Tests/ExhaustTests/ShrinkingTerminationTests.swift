@@ -13,9 +13,8 @@ import Testing
 struct ShrinkingTerminationTests {
     
     @Test("Shrinking always terminates for integers")
-    func testIntegerShrinkingTermination() {
+    func testIntegerShrinkingTermination() throws {
         let gen = Int.arbitrary
-        let shrinker = Shrinker()
         
         let largeValue = 50000
         var stepCount = 0
@@ -24,39 +23,37 @@ struct ShrinkingTerminationTests {
         // Property that always fails to force maximum shrinking
         let property: (Int) -> Bool = { _ in false }
         
-        let shrunken = shrinker.shrink(largeValue, using: gen, where: property)
+        let shrunken = try Interpreters.shrink(largeValue, using: gen, where: property)
         
         // Should reach the minimal value (0 for integers)
         #expect(shrunken == 0)
     }
     
     @Test("Shrinking terminates for arrays")
-    func testArrayShrinkingTermination() {
+    func testArrayShrinkingTermination() throws {
         let gen = Int.arbitrary.proliferate(with: 1...50)
-        let shrinker = Shrinker()
         
         let largeArray = Array(1...30)
         
         // Property that always fails
         let property: ([Int]) -> Bool = { _ in false }
         
-        let shrunken = shrinker.shrink(largeArray, using: gen, where: property)
+        let shrunken = try Interpreters.shrink(largeArray, using: gen, where: property)
         
         // Should shrink to minimal failing case
         #expect(shrunken.count <= largeArray.count)
     }
     
     @Test("Shrinking produces progressively smaller values")
-    func testShrinkingMonotonicity() {
+    func testShrinkingMonotonicity() throws{
         let gen = UInt.arbitrary
-        let shrinker = Shrinker()
         
         let startValue: UInt = 1000
         
         // Property that fails for values > 10
         let property: (UInt) -> Bool = { $0 <= 10 }
         
-        let shrunken = shrinker.shrink(startValue, using: gen, where: property)
+        let shrunken = try Interpreters.shrink(startValue, using: gen, where: property)
         
         // Shrunk value should be closer to boundary
         #expect(shrunken > 10) // Still fails the property
@@ -64,16 +61,15 @@ struct ShrinkingTerminationTests {
     }
     
     @Test("String shrinking terminates")
-    func testStringShrinkingTermination() {
+    func testStringShrinkingTermination() throws {
         let gen = String.arbitrary
-        let shrinker = Shrinker()
         
         let longString = String(repeating: "x", count: 100)
         
         // Property that fails for strings with length > 5
         let property: (String) -> Bool = { $0.count <= 5 }
         
-        let shrunken = shrinker.shrink(longString, using: gen, where: property)
+        let shrunken = try Interpreters.shrink(longString, using: gen, where: property)
         
         // Should produce a smaller failing string
         #expect(shrunken.count > 5) // Still fails
@@ -81,7 +77,7 @@ struct ShrinkingTerminationTests {
     }
     
     @Test("Nested structure shrinking terminates")
-    func testNestedStructureShrinkingTermination() {
+    func testNestedStructureShrinkingTermination() throws {
         struct Container: Equatable {
             let items: [[String]]
         }
@@ -91,7 +87,6 @@ struct ShrinkingTerminationTests {
             String.arbitrary.proliferate(with: 1...5).proliferate(with: 1...3)
         ).map { Container(items: $0) }
         
-        let shrinker = Shrinker()
         
         let complex = Container(items: [
             ["a", "b", "c", "d"],
@@ -105,7 +100,7 @@ struct ShrinkingTerminationTests {
             return totalItems <= 2
         }
         
-        let shrunken = shrinker.shrink(complex, using: gen, where: property)
+        let shrunken = try Interpreters.shrink(complex, using: gen, where: property)
         let originalTotal = complex.items.flatMap { $0 }.count
         let shrunkenTotal = shrunken.items.flatMap { $0 }.count
         
@@ -114,25 +109,23 @@ struct ShrinkingTerminationTests {
     }
     
     @Test("Shrinking converges to minimal counterexample")
-    func testShrinkingConvergence() {
+    func testShrinkingConvergence() throws {
         let gen = Gen.choose(in: 1...1000, input: Any.self)
-        let shrinker = Shrinker()
         
         let value = 500
         
         // Property fails for values > 100
         let property: (Int) -> Bool = { $0 <= 100 }
         
-        let shrunken = shrinker.shrink(value, using: gen, where: property)
+        let shrunken = try Interpreters.shrink(value, using: gen, where: property)
         
         // Should converge to the boundary value
         #expect(shrunken == 101)
     }
     
     @Test("Tuple shrinking terminates")
-    func testTupleShrinkingTermination() {
+    func testTupleShrinkingTermination() throws {
         let gen = Gen.zip(UInt.arbitrary, String.arbitrary)
-        let shrinker = Shrinker()
         
         let tuple: (UInt, String) = (500, "hello world")
         
@@ -141,7 +134,7 @@ struct ShrinkingTerminationTests {
             num <= 10 && str.count <= 3
         }
         
-        let shrunken = shrinker.shrink(tuple, using: gen, where: property)
+        let shrunken = try Interpreters.shrink(tuple, using: gen, where: property)
         
         // Should shrink both components
         #expect(shrunken.0 <= tuple.0 || shrunken.1.count <= tuple.1.count)

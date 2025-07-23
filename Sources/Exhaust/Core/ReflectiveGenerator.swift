@@ -122,6 +122,15 @@ extension ReflectiveGenerator where Operation: AnyReflectiveOperation {
             return false
         }
     }
+    
+    var associatedRange: ClosedRange<UInt64>? {
+        switch self {
+        case .pure:
+            return nil
+        case let .impure(op, _):
+            return op.associatedRange
+        }
+    }
 }
 
 extension ReflectiveGenerator {

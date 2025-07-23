@@ -5,6 +5,13 @@
 //  Created by Chris Kolbu on 18/7/2025.
 //
 
+extension Bool: Arbitrary {
+    static var arbitrary: ReflectiveGenerator<Any, Bool> {
+        Gen.choose(in: 0...1).map { $0 == 1 ? true : false }
+    }
+    static var strategies: [ShrinkingStrategy] { ShrinkingStrategy.unsignedIntegers }
+}
+
 extension UInt8: Arbitrary {
     static var arbitrary: ReflectiveGenerator<Any, UInt8> {
         Gen.choose(in: UInt8.min...UInt8.max)

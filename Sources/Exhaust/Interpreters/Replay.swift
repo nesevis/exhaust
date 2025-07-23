@@ -45,6 +45,12 @@ extension Interpreters {
         choices: inout [ChoiceTree]
     ) -> Output? {
         
+        if let firstChoice = choices.first, firstChoice.isImportant {
+            // This is wrapped in .important for shrinking purposes; unwrap
+            if case let .important(choice) = firstChoice {
+                choices[0] = choice
+            }
+        }
         switch gen {
         case let .pure(value):
             // Base case: return the value
@@ -146,6 +152,11 @@ extension Interpreters {
         _ gen: ReflectiveGenerator<Input, Output>,
         with script: ChoiceTree
     ) -> Output? {
+        
+        var script = script
+        if case let .important(choice) = script {
+            script = choice
+        }
         
         // Handle group scripts by distributing choices to the generator
         if case let .group(choices) = script {

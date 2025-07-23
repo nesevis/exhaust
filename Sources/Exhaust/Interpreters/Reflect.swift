@@ -162,7 +162,7 @@ extension Interpreters {
             
             var combinedPath: [ChoiceTree] = []
             var combinedResults: [Any] = []
-            var validRanges: [ClosedRange<UInt64>]?
+            var validRanges = lengthGen.associatedRange.map { [$0] }
             
             let lengthResult = self.reflectRecursive(lengthGen, onFinalOutput: finalOutput)
             
@@ -180,9 +180,6 @@ extension Interpreters {
                     combinedPath.append(path[0])
                 } else {
                     combinedPath.append(.group(path))
-                }
-                if validRanges == nil, let convertible = value as? any BitPatternConvertible {
-                    validRanges = type(of: convertible).bitPatternRanges
                 }
             }
             

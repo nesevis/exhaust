@@ -5,7 +5,7 @@
 //  Created by Chris Kolbu on 22/7/2025.
 //
 
-enum ShrinkingStrategy: CaseIterable, Equatable {
+enum ShrinkingStrategy: CaseIterable, Hashable, Equatable {
     /// Magic custom values representing common error sources
     case fundamentals
     /// max, inf, nan, ulp, shearing off the prefix and suffix, ascii/unicode boundaries and special characters
@@ -17,7 +17,8 @@ enum ShrinkingStrategy: CaseIterable, Equatable {
     /// round to powers of two
     case decimal
     /// Exhaustive search around narrow range
-    case saturation // rename threshold?
+    case saturation // divide by 5
+    case ultraSaturation
     
     /// Handy in-order sets
     static let unsignedIntegers: [Self] = [.fundamentals, .boundaries, .binary]
