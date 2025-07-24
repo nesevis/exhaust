@@ -7,17 +7,19 @@
 
 enum ChoiceValue: Comparable, Hashable, Equatable {
     case unsigned(UInt64)
-    case signed(UInt64, UInt64)
-    case floating(UInt64, UInt64)
+    /// The UInt64 represents its hashable behaviour
+    case signed(Int64, UInt64)
+    case floating(Double, UInt64)
     case character(Character)
 
     // Make shrinkable?
+    // 0 returns Int even when we want UInt
     init(_ value: any BitPatternConvertible) {
         switch value {
         case is Double, is Float:
-            self = .floating(value.bitPattern64, type(of: value).bitPatternRanges[0].upperBound)
+            self = .floating(Double(bitPattern64: value.bitPattern64), value.bitPattern64)
         case is Int64, is Int32, is Int16, is Int8, is Int:
-            self = .signed(value.bitPattern64, type(of: value).bitPatternRanges[0].upperBound)
+            self = .signed(Int64(bitPattern64: value.bitPattern64), value.bitPattern64)
         case is Character:
             self = .character(value as! Character)
         default:
@@ -29,63 +31,51 @@ enum ChoiceValue: Comparable, Hashable, Equatable {
         switch self {
         case let .unsigned(value):
             return value
-        case let .signed(value, mask):
-            // Skip denormalization step and work directly with the normalized value
-            // Since we know the pattern, we can compute complexity more directly
-            let bitWidth = 64 - mask.leadingZeroBitCount
-            let signBit = UInt64(1) << (bitWidth - 1)
-            
-            // The normalized value has the sign bit flipped, so we can detect
-            // the original sign by checking if value >= signBit
-            if value >= signBit {
-                // Originally positive
-                return value - signBit
-            } else {
-                // Originally negative  
-                return signBit - value
+        case let .signed(value, bitPattern):
+            if bitPattern == 0 {
+                return bitPattern
             }
-        case let .floating(value, mask):
-            // Determine if this is Float or Double based on mask
-            if mask == UInt64(UInt32.max) {
-                // Float case - work with 32-bit IEEE 754 format
-                let floatBits = UInt32(value)
-                let exponent = (floatBits >> 23) & 0xFF
-                
-                // Check for special values (NaN or infinity)
-                if exponent == 0xFF {
-                    return UInt64.max
-                }
-                
-                // For normal complexity calculation, convert to float and take floor of abs
-                let floatValue = Float(bitPattern: floatBits)
-                let absValue = abs(floatValue)
-                if absValue >= Float(UInt64.max) {
-                    return UInt64.max
-                }
-                return UInt64(absValue)
-            } else {
-                // Double case - work with 64-bit IEEE 754 format
-                let exponent = (value >> 52) & 0x7FF
-                
-                // Check for special values (NaN or infinity)
-                if exponent == 0x7FF {
-                    return UInt64.max
-                }
-                
-                // For normal complexity calculation, convert to double and take floor of abs
-                let doubleValue = Double(bitPattern: value)
-                let absValue = abs(doubleValue)
-                if absValue >= Double(UInt64.max) {
-                    return UInt64.max
-                }
-                return UInt64(absValue)
+            return UInt64(abs(value))
+        case let .floating(value, _):
+            let absValue = abs(value) * 100
+            if absValue >= Double(UInt64.max) {
+                return UInt64.max
             }
+            // Complexity does not handle values below 1
+            return UInt64(absValue)
         case let .character(character):
             return character.bitPattern64 + 100 // Encourages removing '\0' bits
         }
     }
+    
+    func fits(in ranges: [ClosedRange<UInt64>]) -> Bool {
+        for range in ranges {
+            switch self {
+            case .unsigned(let uInt64):
+                if range.contains(uInt64) {
+                    return true
+                }
+            case .signed(let int64, _):
+                let lower = Int64(bitPattern64: range.lowerBound)
+                let upper = Int64(bitPattern64: range.upperBound)
+                if int64 >= lower && int64 <= upper {
+                    return true
+                }
+            case .floating(let double, _):
+                let lower = Double(bitPattern64: range.lowerBound)
+                let upper = Double(bitPattern64: range.upperBound)
+                if double >= lower && double <= upper {
+                    return true
+                }
+            case .character(let character):
+                if range.contains(character.bitPattern64) {
+                    return true
+                }
+            }
+        }
+        return false
+    }
 
-    // This is wrong now
     var convertible: any BitPatternConvertible {
         switch self {
         case .unsigned(let uInt64):
@@ -97,5 +87,22 @@ enum ChoiceValue: Comparable, Hashable, Equatable {
         case .character(let character):
             return character
         }
+    }
+    
+    func hash(into hasher: inout Hasher) {
+        switch self {
+        case .unsigned(let uInt64):
+            hasher.combine(uInt64)
+        case .signed(_, let uInt64):
+            hasher.combine(uInt64)
+        case .floating(_, let uInt64):
+            hasher.combine(uInt64)
+        case .character(let character):
+            hasher.combine(character)
+        }
+    }
+    
+    static func == (lhs: Self, rhs: Self) -> Bool {
+        lhs.hashValue == rhs.hashValue
     }
 }

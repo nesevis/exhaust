@@ -213,7 +213,8 @@ extension ChoiceTree {
                 let rhsRange = rhsValue.convertible.bitPattern64
                 let convertibleRange = min(lhsRange, rhsRange)...max(lhsRange, rhsRange)
                 let meta = ChoiceMetadata(validRanges: [convertibleRange], strategies: [])
-                return .important(.choice(lhsValue, meta))
+                let new = ChoiceTree.choice(lhsValue, meta)
+                return .important(new)
                     .resetStrategies() // This will apply strategies based on the effective range
             case let (.sequence(lhsLength, lhsElements, lhsMeta), .sequence(rhsLength, rhsElements, _)):
                 // The sequence itself is important
@@ -265,11 +266,11 @@ extension ChoiceTree: CustomDebugStringConvertible {
             case let .character(char):
                 return prefix + connector + "\(locked)choice(char: \"\(char)\")\(locked)"
             case let .unsigned(uint):
-                return prefix + connector + "\(locked)choice(unsigned: \(uint))\(locked)"
-            case let .signed(int, mask):
-                return prefix + connector + "\(locked)choice(signed: \(Int64(bitPattern64: int)))\(locked))"
-            case let .floating(float, mask):
-                return prefix + connector + "\(locked)choice(float: \(Double(bitPattern64: float))\(locked))"
+                return prefix + connector + "\(locked)choice(unsigned:\(uint))\(locked)"
+            case let .signed(int, _):
+                return prefix + connector + "\(locked)choice(signed: \(int))\(locked))"
+            case let .floating(float, _):
+                return prefix + connector + "\(locked)choice(float: \(float)\(locked))"
             }
             
         case .just:
@@ -280,10 +281,12 @@ extension ChoiceTree: CustomDebugStringConvertible {
             if case .choice(.character(_), _) = elements.first {
                 // A special case displaying all the characters in a string inline
                 let string = elements.map { choice in
-                    guard case let .choice(.character(char), _) = choice else {
+                    switch choice {
+                    case let .choice(.character(char), _), let .important(.choice(.character(char), _)):
+                        return char
+                    default:
                         fatalError("\(#function) Expected a homogenous array of characters!")
                     }
-                    return char
                 }
                 result += "\n\(childPrefix)└── choice([char]: \"\(String(string))\")"
             } else {
@@ -320,10 +323,10 @@ extension ChoiceTree: CustomDebugStringConvertible {
             switch choiceValue {
             case .unsigned(let uInt64):
                 return uInt64.description
-            case .signed(let uInt64, _):
-                return Int64(bitPattern64: uInt64).description
-            case .floating(let uInt64, _):
-                return Double(bitPattern64: uInt64).description
+            case .signed(let int, _):
+                return int.description
+            case .floating(let float, _):
+                return float.description
             case .character(let character):
                 return character.description
             }
