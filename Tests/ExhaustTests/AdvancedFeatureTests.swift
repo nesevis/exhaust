@@ -40,7 +40,7 @@ struct AdvancedFeatureTests {
     struct RecursiveTests {
         
         @Test("Recursive tree generation with depth control")
-        func testRecursiveTreeGeneration() {
+        func testRecursiveTreeGeneration() throws {
             func treeGen(depth: Int) -> ReflectiveGenerator<Any, TestTree<Int>> {
                 if depth <= 0 {
                     // Leaf node
@@ -74,7 +74,7 @@ struct AdvancedFeatureTests {
                 #expect(validateDepth(tree, maxDepth: 3))
                 
                 // Test round-trip
-                if let recipe = Interpreters.reflect(gen, with: tree) {
+                if let recipe = try Interpreters.reflect(gen, with: tree) {
                     if let replayed = Interpreters.replay(gen, using: recipe) {
                         #expect(tree == replayed)
                     } else {
@@ -87,7 +87,7 @@ struct AdvancedFeatureTests {
         }
         
         @Test("Nested lensed properties")
-        func testNestedLensedProperties() {
+        func testNestedLensedProperties() throws {
             struct Outer: Equatable {
                 let inners: [Inner]
                 let id: UInt
@@ -126,7 +126,7 @@ struct AdvancedFeatureTests {
                     continue
                 }
                 
-                let recipe = Interpreters.reflect(outerGen, with: generated)
+                let recipe = try Interpreters.reflect(outerGen, with: generated)
                 
                 if let recipe = recipe {
                     let replayed = Interpreters.replay(outerGen, using: recipe)
@@ -150,7 +150,7 @@ struct AdvancedFeatureTests {
         }
         
         @Test("Complex enum variant generation")
-        func testComplexEnumGeneration() {
+        func testComplexEnumGeneration() throws {
             let simpleGen = Gen.lens(extract: /TestVariant.simple.self,
                                     Gen.choose(in: 1...10))
                 .map(TestVariant.simple)
@@ -196,7 +196,7 @@ struct AdvancedFeatureTests {
                 }
                 
                 // Test round-trip for each variant
-                if let recipe = Interpreters.reflect(variantGen, with: variant) {
+                if let recipe = try Interpreters.reflect(variantGen, with: variant) {
                     if let replayed = Interpreters.replay(variantGen, using: recipe) {
                         #expect(variant == replayed)
                     } else {
@@ -218,7 +218,7 @@ struct AdvancedFeatureTests {
     struct GraphTests {
         
         @Test("Connected graph generation with constraints")
-        func testConnectedGraphGeneration() {
+        func testConnectedGraphGeneration() throws {
             let nodeGen = Gen.lens(extract: \TestNode.id, Gen.choose(in: 0...9))
                 .bind { id in
                     Gen.lens(extract: \TestNode.label, String.arbitrary).map { label in
@@ -263,7 +263,7 @@ struct AdvancedFeatureTests {
                 }
                 
                 // Test round-trip
-                if let recipe = Interpreters.reflect(graphGen, with: graph) {
+                if let recipe = try Interpreters.reflect(graphGen, with: graph) {
                     if let replayed = Interpreters.replay(graphGen, using: recipe) {
                         #expect(graph == replayed)
                     } else {
@@ -280,7 +280,7 @@ struct AdvancedFeatureTests {
     struct ConditionalTests {
         
         @Test("Conditional generation based on previous values")
-        func testConditionalGeneration() {
+        func testConditionalGeneration() throws {
             struct ConditionalData: Equatable {
                 let type: String
                 let value: Int
@@ -309,7 +309,7 @@ struct AdvancedFeatureTests {
                 }
                 
                 // Test round-trip (conditional generators may not support reflection)
-                if let recipe = Interpreters.reflect(conditionalGen, with: data) {
+                if let recipe = try Interpreters.reflect(conditionalGen, with: data) {
                     if let replayed = Interpreters.replay(conditionalGen, using: recipe) {
                         #expect(data == replayed)
                     }
@@ -322,7 +322,7 @@ struct AdvancedFeatureTests {
     struct ExtremeValueTests {
         
         @Test("Generator robustness with extreme values")
-        func testExtremeValueHandling() {
+        func testExtremeValueHandling() throws {
             let extremeGenerators: [ReflectiveGenerator<Any, Int>] = [
                 Gen.choose(in: Int.min...Int.min, input: Any.self),  // Minimum value
                 Gen.choose(in: Int.max...Int.max, input: Any.self),  // Maximum value
@@ -335,7 +335,7 @@ struct AdvancedFeatureTests {
                     let value = Interpreters.generate(gen)!
                     
                     // Test round-trip even with extreme values
-                    if let recipe = Interpreters.reflect(gen, with: value) {
+                    if let recipe = try Interpreters.reflect(gen, with: value) {
                         if let replayed = Interpreters.replay(gen, using: recipe) {
                             #expect(value == replayed, "Extreme generator \(index) failed round-trip")
                         } else {
@@ -349,7 +349,7 @@ struct AdvancedFeatureTests {
         }
         
         @Test("Large nested structure generation and memory efficiency")
-        func testLargeNestedStructures() {
+        func testLargeNestedStructures() throws {
             // Generate structures with significant nesting but reasonable memory usage
             let largeNestedGen = Int.arbitrary
                 .proliferate(with: 50...50)     // 50 elements
@@ -368,7 +368,7 @@ struct AdvancedFeatureTests {
             }
             
             // Test round-trip (this tests memory efficiency of reflection/replay)
-            if let recipe = Interpreters.reflect(largeNestedGen, with: large) {
+            if let recipe = try Interpreters.reflect(largeNestedGen, with: large) {
                 if let replayed = Interpreters.replay(largeNestedGen, using: recipe) {
                     #expect(large == replayed)
                 } else {

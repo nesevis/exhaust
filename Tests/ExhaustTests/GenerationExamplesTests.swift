@@ -22,7 +22,7 @@ struct GenerationExamplesTests {
                 #expect(false, "Generation failed")
                 return
             }
-            let choices = Interpreters.reflect(gen, with: results, where: { _ in true })
+            let choices = try Interpreters.reflect(gen, with: results, where: { _ in true })
             #expect(true)
         }
         
@@ -40,7 +40,7 @@ struct GenerationExamplesTests {
                 }
             }    
             let result = Interpreters.generate(zipped)!
-            let choices = Interpreters.reflect(zipped, with: result)
+            let choices = try Interpreters.reflect(zipped, with: result)
             if let choices {
                 let replayed = Interpreters.replay(zipped, using: choices)
                 if let replayed = replayed {
@@ -57,13 +57,13 @@ struct GenerationExamplesTests {
     struct DebugTests {
         
         @Test("Debug proliferate step by step")
-        func debugProliferateStepByStep() {
+        func debugProliferateStepByStep() throws {
             
             // 1. Test String.arbitrary alone
             let stringGen = String.arbitrary
             for i in 0..<3 {
                 let generated = Interpreters.generate(stringGen)!
-                if let recipe = Interpreters.reflect(stringGen, with: generated) {
+                if let recipe = try Interpreters.reflect(stringGen, with: generated) {
                     if let replayed = Interpreters.replay(stringGen, using: recipe) {
                         // Round-trip successful
                     } else {
@@ -78,7 +78,7 @@ struct GenerationExamplesTests {
             let proliferateGen = String.arbitrary.proliferate(with: 1...3)
             for i in 0..<3 {
                 let generated = Interpreters.generate(proliferateGen)!
-                if let recipe = Interpreters.reflect(proliferateGen, with: generated) {
+                if let recipe = try Interpreters.reflect(proliferateGen, with: generated) {
                     if let replayed = Interpreters.replay(proliferateGen, using: recipe) {
                         // Round-trip successful
                     } else {

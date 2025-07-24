@@ -36,16 +36,16 @@ struct CoreGeneratorTests {
         }
         
         @Test("Gen.exact produces exact value and reflects correctly")
-        func testGenExact() {
+        func testGenExact() throws {
             let value = 42
             let gen = Gen.exact(value)
             
             // Test reflection works with exact value
-            let recipe = Interpreters.reflect(gen, with: value)
+            let recipe = try Interpreters.reflect(gen, with: value)
             #expect(recipe != nil)
             
             // Test reflection fails with different value
-            let badRecipe = Interpreters.reflect(gen, with: 43)
+            let badRecipe = try Interpreters.reflect(gen, with: 43)
             #expect(badRecipe == nil)
             
             // Test replay
@@ -100,7 +100,7 @@ struct CoreGeneratorTests {
     struct InterpreterTests {
         
         @Test("Generate-Reflect-Replay cycle consistency")
-        func testGenerateReflectReplayConsistency() {
+        func testGenerateReflectReplayConsistency() throws {
             let generators: [ReflectiveGenerator<Any, String>] = [
                 String.arbitrary,
                 Gen.just("constant")
@@ -109,7 +109,7 @@ struct CoreGeneratorTests {
             for (index, gen) in generators.enumerated() {
                 for iteration in 0..<10 {
                     let generated = Interpreters.generate(gen)!
-                    if let recipe = Interpreters.reflect(gen, with: generated) {
+                    if let recipe = try Interpreters.reflect(gen, with: generated) {
                         if let replayed = Interpreters.replay(gen, using: recipe) {
                             #expect(generated == replayed, "Generator \(index), iteration \(iteration): \(generated) != \(replayed)")
                         } else {
@@ -123,9 +123,9 @@ struct CoreGeneratorTests {
         }
         
         @Test("Multiple generation consistency")
-        func testMultipleGenerationConsistency() {
+        func testMultipleGenerationConsistency() throws {
             let gen = Gen.choose(in: 1...100, input: Any.self)
-            guard let recipe = Interpreters.reflect(gen, with: 42) else {
+            guard let recipe = try Interpreters.reflect(gen, with: 42) else {
                 #expect(false, "Reflection failed for value 42")
                 return
             }
@@ -147,7 +147,7 @@ struct CoreGeneratorTests {
                 .map { $0.joined() }
             
             let generated = try #require(Interpreters.generate(gen))
-            let reflect = Interpreters.reflect(gen, with: generated)
+            let reflect = try Interpreters.reflect(gen, with: generated)
             #expect(reflect == nil)
         }
     }

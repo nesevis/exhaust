@@ -33,14 +33,12 @@ extension ChoiceTree {
         switch self {
         case let .choice(value, metadata):
             return value.fundamentalValues
-                // TODO: Optimise, though these are O(1) lookups
-                .filter { metadata.isValidForRange($0.convertible.bitPattern64) }
+                .filter { $0.fits(in: metadata.validRanges) }
                 .map { .choice($0, metadata) }
         case let .sequence(length, elements, meta):
             guard length > 0 else {
                 return []
             }
-//            let newMeta = ChoiceMetadata(validRanges: meta.validRanges, strategies: .sequences)
             return [
                 // No elements
                 .sequence(length: 0, elements: [], meta),
@@ -60,13 +58,12 @@ extension ChoiceTree {
         case let .choice(value, metadata):
             return value.boundaries
                 // TODO: Optimise, though these are O(1) lookups
-                .filter { metadata.isValidForRange($0.convertible.bitPattern64) }
+                .filter { $0.fits(in: metadata.validRanges) }
                 .map { .choice($0, metadata) }
         case let .sequence(length, elements, meta):
             guard length > 1 else {
                 return []
             }
-//            let newMeta = ChoiceMetadata(validRanges: meta.validRanges, strategies: .sequences)
             return [
                 .sequence(length: length - 1, elements: Array(elements.dropFirst()), meta).resetStrategies(),
                 .sequence(length: length - 1, elements: Array(elements.dropLast()), meta).resetStrategies()
@@ -81,20 +78,18 @@ extension ChoiceTree {
         case let .choice(value, metadata):
             return value.binary(for: metadata.validRanges)
                 .map { .choice($0, metadata) }
-        case let .sequence(length, elements, meta):
+        case let .sequence(length, elements, metadata):
             guard length > 1 else {
                 return []
             }
-            // Split the array in ~half
-//            let newMeta = ChoiceMetadata(validRanges: meta.validRanges, strategies: .sequences)
             let halvingPoint = length / 2
             return [(halvingPoint, true), (length - halvingPoint, false)]
-                .filter { pair in meta.isValidForRange(pair.0) }
+                .filter { ChoiceValue($0.0).fits(in: metadata.validRanges) }
                 .map { length, prefix in
                     let subArray = prefix
                         ? Array(elements.prefix(Int(length)))
                         : Array(elements.suffix(Int(length)))
-                    return .sequence(length: length, elements: subArray, meta).resetStrategies()
+                    return .sequence(length: length, elements: subArray, metadata).resetStrategies()
                 }
         default:
             fatalError("\(#function) should not be called directly for \(self)!")
@@ -106,7 +101,7 @@ extension ChoiceTree {
         case let .choice(value, metadata):
             return value.saturation(for: metadata.validRanges)
                 .map { .choice($0, metadata).resetStrategies() }
-        case let .sequence(length, elements, meta):
+        case let .sequence(length, elements, metadata):
             guard length > 1 else {
                 return []
             }
@@ -114,9 +109,9 @@ extension ChoiceTree {
             let chunks = elements.evenlyChunked(in: Int(length) / 10)
             
             return chunks
-                .filter { meta.isValidForRange(UInt64($0.count)) }
+                .filter { ChoiceValue($0.count).fits(in: metadata.validRanges) }
                 .map { chunk in
-                    .sequence(length: UInt64(chunk.count), elements: Array(chunk), meta).resetStrategies()
+                    .sequence(length: UInt64(chunk.count), elements: Array(chunk), metadata).resetStrategies()
                 }
         default:
             fatalError("\(#function) should not be called directly for \(self)!")
@@ -128,10 +123,8 @@ extension ChoiceTree {
         case let .choice(value, metadata):
             return value.ultraSaturation(for: metadata.validRanges)
                 .map { .choice($0, metadata) }
-//                .map { .choice($0, metadata).setStrategies([.ultraSaturation]) }
         case .sequence:
             return self.boundaries
-//                .map { $0.setStrategies([.ultraSaturation])}
         default:
             fatalError("\(#function) should not be called directly for \(self)!")
         }
@@ -145,8 +138,8 @@ extension ChoiceTree {
         case .just:
             return self
         case let .sequence(length, elements, meta):
-            let newMeta = ChoiceMetadata(validRanges: meta.validRanges, strategies: ShrinkingStrategy.sequences)
-            return .sequence(length: length, elements: elements.map { $0.setStrategies(strategies) }, newMeta)
+            let newMeta = ChoiceMetadata(validRanges: meta.validRanges, strategies: strategies)
+            return .sequence(length: length, elements: elements/*.map { $0.setStrategies(strategies) }*/, newMeta)
         case let .branch(label, children):
             return .branch(label: label, children: children.map { $0.setStrategies(strategies) })
         case let .group(array):
@@ -158,43 +151,59 @@ extension ChoiceTree {
     
     func resetStrategies() -> Self {
         switch self {
-        case let .choice(value, meta):
-            let strategies: [ShrinkingStrategy] = switch value {
-            case .unsigned:
-                UInt64.strategies
-            case .signed:
-                Int64.strategies
-            case .floating:
-                Double.strategies
-            case .character:
-                Character.strategies
-            }
-            return self.setStrategies(strategies)
+        case .choice:
+            return self.setStrategiesForRangeAndType()
         case .just:
             return self
         case let .sequence(length, elements, meta):
-            let newMeta = ChoiceMetadata(validRanges: meta.validRanges, strategies: ShrinkingStrategy.sequences)
-            return .sequence(length: length, elements: elements.map { $0.resetStrategies() }, newMeta)
+            return .sequence(length: length, elements: elements.map { $0.resetStrategies() }, meta)
+                .setStrategiesForRangeAndType()
         case let .branch(label, children):
             return .branch(label: label, children: children.map { $0.resetStrategies() })
         case let .group(array):
             return .group(array.map { $0.resetStrategies() })
         case let .important(element):
+            return .important(element.setStrategiesForRangeAndType())
+        }
+    }
+    
+    private func setStrategiesForRangeAndType() -> Self {
+        guard let range = self.effectiveRange else {
+            fatalError("\(#function) should not be called")
+            return self
+        }
+        switch self {
+        case .choice:
             var importantStrategies = [ShrinkingStrategy]()
-            if let range = element.effectiveRange {
-                switch range {
-                case 0..<1:
-                    importantStrategies.append(.ultraSaturation)
-                case 1:
-                    // This is exactly one
-                    break
-                case 1..<50:
-                    importantStrategies.append(contentsOf: [.saturation, .ultraSaturation])
-                default:
-                    importantStrategies.append(contentsOf: [.binary, .saturation, .ultraSaturation])
-                }
+            switch range {
+            case ..<0.1:
+                print("Reached an appropriate level of precision")
+                break
+            case 0.1..<1:
+                importantStrategies.append(.ultraSaturation)
+            case 1:
+                // This is exactly one
+                break
+            case 1..<50:
+                importantStrategies.append(contentsOf: [.saturation, .ultraSaturation])
+            default:
+                importantStrategies.append(contentsOf: [.binary, .saturation, .ultraSaturation])
             }
-            return .important(element.setStrategies(importantStrategies) )
+            return self.setStrategies(importantStrategies)
+        case .sequence:
+            var importantStrategies = [ShrinkingStrategy]()
+            switch range {
+            case ...1:
+                // This one or empty
+                break
+            case 1..<50:
+                importantStrategies.append(contentsOf: [.boundaries, .saturation])
+            default:
+                importantStrategies.append(contentsOf: [.binary, .saturation])
+            }
+            return self.setStrategies(importantStrategies)
+        default:
+            return self
         }
     }
     

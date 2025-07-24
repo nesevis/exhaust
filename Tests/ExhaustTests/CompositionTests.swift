@@ -40,7 +40,7 @@ struct CompositionTests {
     struct LensTests {
         
         @Test("Gen.lens with simple property extraction")
-        func testSimpleLens() {
+        func testSimpleLens() throws {
             let nameGen = Gen.lens(extract: \TestPerson.name, String.arbitrary)
             let ageGen = Gen.lens(extract: \TestPerson.age, Gen.choose(in: 0...100))
             let heightGen = Gen.lens(extract: \TestPerson.height, Gen.choose(in: 150.0...200.0))
@@ -59,7 +59,7 @@ struct CompositionTests {
             #expect(person.height >= 150.0 && person.height <= 200.0)
             
             // Test round-trip: generate -> reflect -> replay
-            if let recipe = Interpreters.reflect(personGen, with: person) {
+            if let recipe = try Interpreters.reflect(personGen, with: person) {
                 if let replayed = Interpreters.replay(personGen, using: recipe) {
                     #expect(person == replayed)
                 } else {
@@ -78,7 +78,7 @@ struct CompositionTests {
             )
             
             let generated = try #require(Interpreters.generate(gen))
-            let recipe = try #require(Interpreters.reflect(gen, with: generated))
+            let recipe = try #require(try Interpreters.reflect(gen, with: generated))
             let replayed = try #require(Interpreters.replay(gen, using: recipe))
             #expect(generated == replayed)
         }
@@ -95,7 +95,7 @@ struct CompositionTests {
             ).map { (color, weight) in Apple(color: color, weight: weight) }
             
             let generated = try #require(Interpreters.generate(gen))
-            let recipe = try #require(Interpreters.reflect(gen, with: generated))
+            let recipe = try #require(try Interpreters.reflect(gen, with: generated))
             let replayed = try #require(Interpreters.replay(gen, using: recipe))
             #expect(generated == replayed)
         }
@@ -109,7 +109,7 @@ struct CompositionTests {
             )
             
             let generated = try #require(Interpreters.generate(gen))
-            let recipe = try #require(Interpreters.reflect(gen, with: generated))
+            let recipe = try #require(try Interpreters.reflect(gen, with: generated))
             let replayed = try #require(Interpreters.replay(gen, using: recipe))
             #expect(generated == replayed)
         }
@@ -124,7 +124,7 @@ struct CompositionTests {
             )
             
             let generated = try #require(Interpreters.generate(gen))
-            let recipe = try #require(Interpreters.reflect(gen, with: generated))
+            let recipe = try #require(try Interpreters.reflect(gen, with: generated))
             let replayed = try #require(Interpreters.replay(gen, using: recipe))
             #expect(generated == replayed)
         }
@@ -140,7 +140,7 @@ struct CompositionTests {
             )
             
             let generated = try #require(Interpreters.generate(gen))
-            let recipe = try #require(Interpreters.reflect(gen, with: generated))
+            let recipe = try #require(try Interpreters.reflect(gen, with: generated))
             let replayed = try #require(Interpreters.replay(gen, using: recipe))
             #expect(generated == replayed)
         }
@@ -157,7 +157,7 @@ struct CompositionTests {
             )
             
             let generated = try #require(Interpreters.generate(gen))
-            let recipe = try #require(Interpreters.reflect(gen, with: generated))
+            let recipe = try #require(try Interpreters.reflect(gen, with: generated))
             let replayed = try #require(Interpreters.replay(gen, using: recipe))
             #expect(generated == replayed)
         }
@@ -175,7 +175,7 @@ struct CompositionTests {
             )
             
             let generated = try #require(Interpreters.generate(gen))
-            let recipe = try #require(Interpreters.reflect(gen, with: generated))
+            let recipe = try #require(try Interpreters.reflect(gen, with: generated))
             let replayed = try #require(Interpreters.replay(gen, using: recipe))
             
             #expect(generated.0 == replayed.0)
@@ -201,7 +201,7 @@ struct CompositionTests {
             )
             
             let generated = try #require(Interpreters.generate(gen))
-            let recipe = try #require(Interpreters.reflect(gen, with: generated))
+            let recipe = try #require(try Interpreters.reflect(gen, with: generated))
             let replayed = try #require(Interpreters.replay(gen, using: recipe))
             
             #expect(generated.0 == replayed.0)
@@ -229,7 +229,7 @@ struct CompositionTests {
             )
             
             let generated = try #require(Interpreters.generate(gen))
-            let recipe = try #require(Interpreters.reflect(gen, with: generated))
+            let recipe = try #require(try Interpreters.reflect(gen, with: generated))
             let replayed = try #require(Interpreters.replay(gen, using: recipe))
             
             #expect(generated.0 == replayed.0)
@@ -259,7 +259,7 @@ struct CompositionTests {
             )
             
             let generated = try #require(Interpreters.generate(gen))
-            let recipe = try #require(Interpreters.reflect(gen, with: generated))
+            let recipe = try #require(try Interpreters.reflect(gen, with: generated))
             let replayed = try #require(Interpreters.replay(gen, using: recipe))
             
             #expect(generated.0 == replayed.0)
@@ -275,7 +275,7 @@ struct CompositionTests {
         }
         
         @Test("Gen.lens with nested structures")
-        func testNestedLens() {
+        func testNestedLens() throws {
             let pointGen = Gen.lens(extract: \TestPoint.x, Gen.choose(in: 0.0...100.0))
                 .bind { x in
                     Gen.lens(extract: \TestPoint.y, Gen.choose(in: 0.0...100.0)).map { y in
@@ -293,7 +293,7 @@ struct CompositionTests {
             let rect = Interpreters.generate(rectGen)!
             
             // Test round-trip
-            if let recipe = Interpreters.reflect(rectGen, with: rect) {
+            if let recipe = try Interpreters.reflect(rectGen, with: rect) {
                 if let replayed = Interpreters.replay(rectGen, using: recipe) {
                     #expect(rect == replayed)
                 } else {
@@ -350,14 +350,14 @@ struct CompositionTests {
         }
         
         @Test("Very large arrays")
-        func testLargeArrays() {
+        func testLargeArrays() throws {
             let gen = UInt8.arbitrary.proliferate(with: 1000...1000)
             
             let largeArray = Interpreters.generate(gen)!
             #expect(largeArray.count == 1000)
             
             // Should still support round-trip
-            if let recipe = Interpreters.reflect(gen, with: largeArray) {
+            if let recipe = try Interpreters.reflect(gen, with: largeArray) {
                 if let replayed = Interpreters.replay(gen, using: recipe) {
                     #expect(largeArray == replayed)
                 } else {
@@ -369,7 +369,7 @@ struct CompositionTests {
         }
         
         @Test("Deeply nested structures")
-        func testDeeplyNestedStructures() {
+        func testDeeplyNestedStructures() throws {
             // Create a generator for arrays of arrays of arrays
             let gen = Int.arbitrary
                 .proliferate(with: 2...3)    // [Int]
@@ -388,7 +388,7 @@ struct CompositionTests {
             }
             
             // Test round-trip
-            if let recipe = Interpreters.reflect(gen, with: nested) {
+            if let recipe = try Interpreters.reflect(gen, with: nested) {
                 if let replayed = Interpreters.replay(gen, using: recipe) {
                     #expect(nested == replayed)
                 } else {
@@ -459,7 +459,7 @@ struct CompositionTests {
     struct ComplexCompositionTests {
         
         @Test("Complex company structure with nested generators")
-        func testComplexComposition() {
+        func testComplexComposition() throws {
             let personGen = Gen.lens(extract: \TestPerson.name, Gen.just("Bill Gates"))
                 .bind { name in
                     Gen.lens(extract: \TestPerson.age, Gen.choose(in: 18...65))
@@ -485,7 +485,7 @@ struct CompositionTests {
             let company = Interpreters.generate(companyGen)!
             
             // Test round-trip
-            if let recipe = Interpreters.reflect(companyGen, with: company) {
+            if let recipe = try Interpreters.reflect(companyGen, with: company) {
                 if let replayed = Interpreters.replay(companyGen, using: recipe) {
                     #expect(company == replayed)
                 } else {
@@ -497,7 +497,7 @@ struct CompositionTests {
         }
         
         @Test("Complex generator composition stability")
-        func testComplexGeneratorStability() {
+        func testComplexGeneratorStability() throws {
             // Build a very complex generator with multiple composition patterns
             let baseGen = Gen.choose(in: 1...100, input: Any.self)
             let arrayGen = baseGen.proliferate(with: 1...10)
@@ -510,7 +510,7 @@ struct CompositionTests {
             // Generate many values to test stability
             for iteration in 0..<100 {
                 let generated = Interpreters.generate(pickedGen)!
-                if let recipe = Interpreters.reflect(pickedGen, with: generated) {
+                if let recipe = try Interpreters.reflect(pickedGen, with: generated) {
                     if let replayed = Interpreters.replay(pickedGen, using: recipe) {
                         #expect(generated == replayed, "Failed at iteration \(iteration)")
                     } else {

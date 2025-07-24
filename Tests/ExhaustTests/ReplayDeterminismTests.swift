@@ -20,7 +20,7 @@ struct ReplayDeterminismTests {
         let initial = try #require(Interpreters.generate(gen))
         
         // Get recipe for that value
-        let recipe = try #require(Interpreters.reflect(gen, with: initial))
+        let recipe = try #require(try Interpreters.reflect(gen, with: initial))
         
         // Replay multiple times and verify identical results
         let replay1 = try #require(Interpreters.replay(gen, using: recipe))
@@ -37,13 +37,13 @@ struct ReplayDeterminismTests {
         let gen = Gen.choose(in: 1...1000, input: Any.self)
         
         let value = 742
-        let recipe = try #require(Interpreters.reflect(gen, with: value))
+        let recipe = try #require(try Interpreters.reflect(gen, with: value))
         
         // Replay original recipe
         let replay1 = try #require(Interpreters.replay(gen, using: recipe))
         
         // Create new recipe from replayed value and replay again
-        let newRecipe = try #require(Interpreters.reflect(gen, with: replay1))
+        let newRecipe = try #require(try Interpreters.reflect(gen, with: replay1))
         let replay2 = try #require(Interpreters.replay(gen, using: newRecipe))
         
         #expect(value == replay1)
@@ -68,7 +68,7 @@ struct ReplayDeterminismTests {
             }
         
         let person = Person(name: "Alice", age: 25, scores: [90, 85, 92])
-        let recipe = try #require(Interpreters.reflect(personGen, with: person))
+        let recipe = try #require(try Interpreters.reflect(personGen, with: person))
         
         // Multiple replays should be identical
         let replay1 = try #require(Interpreters.replay(personGen, using: recipe))
@@ -83,7 +83,7 @@ struct ReplayDeterminismTests {
         let gen = String.arbitrary.proliferate(with: 3...7)
         
         let array = ["hello", "world", "test", "array"]
-        let recipe = try #require(Interpreters.reflect(gen, with: array))
+        let recipe = try #require(try Interpreters.reflect(gen, with: array))
         
         // Replay should preserve exact order
         let replayed = try #require(Interpreters.replay(gen, using: recipe))

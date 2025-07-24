@@ -19,7 +19,7 @@ extension Interpreters {
     using generator: ReflectiveGenerator<Input, Output>,
     where property: (Output) -> Bool
     ) throws -> Output {
-        guard let recipe = Interpreters.reflect(generator, with: value) else {
+        guard let recipe = try Interpreters.reflect(generator, with: value) else {
             throw ShrinkError.couldNotReflect
         }
         guard property(value) == false else {
@@ -36,7 +36,7 @@ extension Interpreters {
     ) throws -> Output {
         
         var currentBestRecipe = recipe
-        var recipeComplexity = currentBestRecipe.complexity
+        var currentBestRecipeComplexity = currentBestRecipe.complexity
         var steps = 0
         var cacheHits = 0
         var counterExample = value
@@ -76,21 +76,23 @@ extension Interpreters {
                 
                 if isValidShrink {
                     // Successful shrink!
-                    shrinkWasImproved = candidateComplexity < recipeComplexity
+                    shrinkWasImproved = candidateComplexity < currentBestRecipeComplexity
                     var validCandidate = candidateRecipe
                     if isLockedIn, let previousInvalidRecipe {
                         validCandidate = ChoiceTree.diffAndLockChanges(in: candidateRecipe, from: previousInvalidRecipe)
                     }
-                    previousValid = (validCandidate, candidateValue)
                     // Break inner loop to repeat the shrink process
                     if shrinkWasImproved {
+                        previousValid = (validCandidate, candidateValue)
                         print("Improved shrink:\n\(validCandidate)")
                         currentBestRecipe = validCandidate.resetStrategies()
-                        recipeComplexity = candidateComplexity
+                        currentBestRecipeComplexity = candidateComplexity
                         counterExample = candidateValue
                         break
+                    } else {
+                        print("Shrink was not improved:\n\(validCandidate)")
                     }
-                } else if previousValid.recipe != recipe {
+                } else {
                     previousInvalidRecipe = candidateRecipe
                     // We now have a passing result, return the previous valid shrink?
                     // This when the property takes longer to get to. In cases where the fundamental shrink removes it we'd still like more detail about what's going wrong...
@@ -107,11 +109,13 @@ extension Interpreters {
                         continue
                     }
                     break
-                } else {
-                    previousInvalidRecipe = candidateRecipe
-                    // It's possible
-                    print("Invalid shrink, there has been no valid shrinks yet")
                 }
+//                else {
+//                    // Whaat
+//                    previousInvalidRecipe = candidateRecipe
+//                    // It's possible
+//                    print("Invalid shrink, there has been no valid shrinks yet")
+//                }
             }
             
             if shrinkWasImproved {

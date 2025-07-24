@@ -5,6 +5,8 @@
 //  Created by Chris Kolbu on 16/7/2025.
 //
 
+import Foundation
+
 extension Interpreters {
     // MARK: - Public-Facing Reflect Function (Unchanged, but now correct)
 
@@ -13,10 +15,10 @@ extension Interpreters {
         with outputValue: Output,
         /// Optional validation check
         where check: (Output) -> Bool = { _ in true }
-    ) -> ChoiceTree? {
+    ) throws -> ChoiceTree? {
         // The public API doesn't need to change. We start the process here.
         // We only care about the final output of the generator for the check.
-        let allPossibleOutcomes = reflectRecursive(gen, onFinalOutput: outputValue)
+        let allPossibleOutcomes = try reflectRecursive(gen, onFinalOutput: outputValue)
         
         let matchingPaths = allPossibleOutcomes.compactMap { (outputValue, path) -> [ChoiceTree]? in
             return check(outputValue) ? path : nil
@@ -42,7 +44,7 @@ extension Interpreters {
     private static func reflectRecursive<Input, Output>(
         _ gen: ReflectiveGenerator<Input, Output>,
         onFinalOutput finalOutput: Any
-    ) -> [(value: Output, path: [ChoiceTree])] { // Still returns typed Output and path
+    ) throws -> [(value: Output, path: [ChoiceTree])] { // Still returns typed Output and path
         switch gen {
         case let .pure(value):
             // The pure value is the result for this path. No check needed here.
@@ -50,17 +52,17 @@ extension Interpreters {
 
         case let .impure(operation, continuation):
             // 1. Interpret the operation against the final output value.
-            let intermediateResults = interpretOperationBackward(operation, onFinalOutput: finalOutput, outputType: Output.self)
+            let intermediateResults = try interpretOperationBackward(operation, onFinalOutput: finalOutput, outputType: Output.self)
             
             // 2. For each successful intermediate result...
-            let results = intermediateResults.flatMap { (intermediateValue: Any, partialPath: [ChoiceTree]) in
+            let results = try intermediateResults.flatMap { (intermediateValue: Any, partialPath: [ChoiceTree]) in
                 if case .lmap = operation, false {
                     // Do not execute the continuation
                     return [(value: finalOutput as! Output, path: partialPath)]
                 } else {
                     let nextGen = continuation(intermediateValue)
                     // The `finalOutput` is passed down UNCHANGED. This is the crucial part.
-                    let finalResults = reflectRecursive(nextGen, onFinalOutput: finalOutput)
+                    let finalResults = try reflectRecursive(nextGen, onFinalOutput: finalOutput)
                     return finalResults.map { (finalValue, restOfPath) in
                         (finalValue, partialPath + restOfPath)
                     }
@@ -78,13 +80,13 @@ extension Interpreters {
         _ op: ReflectiveOperation<Input>,
         onFinalOutput finalOutput: Any,
         outputType: Output.Type
-    ) -> [(value: Any, path: [ChoiceTree])] {
+    ) throws -> [(value: Any, path: [ChoiceTree])] {
         switch op {
         case let .lmap(transform, nextGen):
             guard let subValue = transform(finalOutput) else {
                 return []
             }
-            return reflectRecursive(nextGen, onFinalOutput: subValue)
+            return try reflectRecursive(nextGen, onFinalOutput: subValue)
                 .map { ($0.value, $0.path) }
             
         case let .prune(nextGen):
@@ -95,12 +97,12 @@ extension Interpreters {
                 return [] // Prune nil values from failed case path extractions
             }
             
-            return reflectRecursive(nextGen, onFinalOutput: finalOutput).map { ($0.value, $0.path) }
+            return try reflectRecursive(nextGen, onFinalOutput: finalOutput).map { ($0.value, $0.path) }
 
         case let .pick(choices):
             // PICK's JOB: Try all branches against the same final output value.
-            return choices.flatMap { (_, label, generator) -> [(value: Any, path: [ChoiceTree])] in
-                let subPaths = reflectRecursive(generator, onFinalOutput: finalOutput)
+            return try choices.flatMap { (_, label, generator) -> [(value: Any, path: [ChoiceTree])] in
+                let subPaths = try reflectRecursive(generator, onFinalOutput: finalOutput)
                 let labeledPaths = subPaths.map { (value, pathTree) in
                     (value, [ChoiceTree.branch(label: label, children: pathTree)])
                 }
@@ -122,7 +124,7 @@ extension Interpreters {
             }
             let bitPattern = convertibleValue.bitPattern64
             guard (min...max).contains(bitPattern) else {
-                return []
+                throw ReflectionError.inputWasOutOfGeneratorRange(convertibleValue, min...max)
             }
             
             // Success! The result for the continuation is the value itself.
@@ -140,7 +142,7 @@ extension Interpreters {
             // Validate that the character is within the expected range
             let firstScalar = character.unicodeScalars.first?.value ?? 0
             guard (min...max).contains(UInt64(firstScalar)) else {
-                return []
+                throw ReflectionError.inputWasOutOfGeneratorRange(character, min...max)
             }
             
             // Store the exact Character representation
@@ -164,13 +166,13 @@ extension Interpreters {
             var combinedResults: [Any] = []
             let validRanges = lengthGen.associatedRange.map { [$0] }
             
-            let lengthResult = self.reflectRecursive(lengthGen, onFinalOutput: finalOutput)
+            let lengthResult = try reflectRecursive(lengthGen, onFinalOutput: finalOutput)
             
             // 3. Iterate over the elements of the target array.
             for elementTarget in targetArray {
                 // Reflect on the element generator with the corresponding element as the target.
                 // We assume reflection on an element is non-ambiguous and produces one path.
-                guard let (value, path) = self.reflectRecursive(elementGen, onFinalOutput: elementTarget).first else {
+                guard let (value, path) = try reflectRecursive(elementGen, onFinalOutput: elementTarget).first else {
                     // If any element cannot be reflected, the whole sequence fails.
                     return []
                 }
@@ -194,5 +196,9 @@ extension Interpreters {
             )
             return [(value: combinedResults, path: [finalTree])]
         }
+    }
+    
+    enum ReflectionError: LocalizedError {
+        case inputWasOutOfGeneratorRange(any BitPatternConvertible, ClosedRange<UInt64>)
     }
 }
