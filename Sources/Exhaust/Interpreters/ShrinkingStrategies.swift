@@ -13,19 +13,42 @@ enum ShrinkingStrategy: CaseIterable, Hashable, Equatable {
     /// floor/ceil for doubles, etc
     case patterns
     /// halve and halve again
-    case binary
+    case binary(ShrinkingDirection)
     /// round to powers of two
     case decimal
     /// Exhaustive search around narrow range
-    case saturation // divide by 5
-    case ultraSaturation
+    case saturation(ShrinkingDirection)
+    case ultraSaturation(ShrinkingDirection)
     
-    /// Handy in-order sets
-    static let unsignedIntegers: [Self] = [.fundamentals, .boundaries, .binary]
-    static let signedIntegers: [Self] = unsignedIntegers
-    static let floatingPoints: [Self] = unsignedIntegers
-    static let characters: [Self] = unsignedIntegers
-    static let sequences: [Self] = [.fundamentals, .binary, .boundaries]
+    var direction: ShrinkingDirection? {
+        switch self {
+        case .fundamentals, .boundaries, .patterns, .decimal:
+            return nil
+        case .binary(let shrinkingDirection), .saturation(let shrinkingDirection), .ultraSaturation(let shrinkingDirection):
+            return shrinkingDirection
+        }
+    }
+    
+    static var allCases: [ShrinkingStrategy] {
+        [.fundamentals, .boundaries, .patterns, .decimal] +
+        ShrinkingDirection.allCases.flatMap { direction in
+            [.binary(direction), .saturation(direction), ultraSaturation(direction)]
+        }
+    }
+    
+    static var sequenceStrategies: [ShrinkingStrategy] {
+        [
+            .fundamentals,
+            .boundaries,
+            .binary(.downTowardsBoundary),
+            .saturation(.downTowardsBoundary)
+        ]
+    }
+}
+
+enum ShrinkingDirection: CaseIterable, Hashable, Equatable {
+    case downTowardsBoundary
+    case upTowardsBoundary
 }
 
 struct ShrinkingStrategies: OptionSet, Equatable {

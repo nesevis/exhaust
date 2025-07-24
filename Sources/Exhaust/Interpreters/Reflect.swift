@@ -130,7 +130,8 @@ extension Interpreters {
             // Success! The result for the continuation is the value itself.
             let metadata = ChoiceMetadata(
                 validRanges: op.associatedRange.map { [$0] } ?? type(of: convertibleValue).bitPatternRanges,
-                strategies: (type(of: convertibleValue) as? any Arbitrary.Type)?.strategies ?? []
+                // FIXME: We can clamp this here as well using the range
+                strategies: [.fundamentals, .boundaries, .binary(.downTowardsBoundary), .saturation(.downTowardsBoundary)]
             )
             return [(value: finalOutput, path: [.choice(.init(convertibleValue), metadata)])]
         
@@ -148,7 +149,8 @@ extension Interpreters {
             // Store the exact Character representation
             let metadata = ChoiceMetadata(
                 validRanges: [min...max], // Character uses the provided range directly
-                strategies: Character.strategies
+                // FIXME: We can clamp this here as well using the range
+                strategies: [.fundamentals, .boundaries, .binary(.downTowardsBoundary), .saturation(.downTowardsBoundary)]
             )
             return [(value: finalOutput, path: [.choice(.init(character), metadata)])]
         
@@ -187,7 +189,7 @@ extension Interpreters {
             
             let metadata = ChoiceMetadata(
                 validRanges: validRanges ?? UInt64.bitPatternRanges,
-                strategies: ShrinkingStrategy.sequences // For sequences, use the sequences strategies
+                strategies: ShrinkingStrategy.sequenceStrategies
             )
             let finalTree = ChoiceTree.sequence(
                 length: lengthResult.first?.value ?? 0,

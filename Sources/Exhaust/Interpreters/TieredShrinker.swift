@@ -83,9 +83,12 @@ extension Interpreters {
                     }
                     // Break inner loop to repeat the shrink process
                     if shrinkWasImproved {
+                        let direction: ShrinkingDirection = validCandidate.contains { $0.metadata.strategies.contains(where: { $0.direction == .downTowardsBoundary }) }
+                        ? .downTowardsBoundary
+                        : .upTowardsBoundary
                         previousValid = (validCandidate, candidateValue)
-                        print("Improved shrink:\n\(validCandidate)")
-                        currentBestRecipe = validCandidate.resetStrategies()
+                        print("Improved \(direction) shrink:\n\(validCandidate)")
+                        currentBestRecipe = validCandidate.resetStrategies(direction: direction)
                         currentBestRecipeComplexity = candidateComplexity
                         counterExample = candidateValue
                         break

@@ -213,9 +213,8 @@ extension ChoiceTree {
                 let rhsRange = rhsValue.convertible.bitPattern64
                 let convertibleRange = min(lhsRange, rhsRange)...max(lhsRange, rhsRange)
                 let meta = ChoiceMetadata(validRanges: [convertibleRange], strategies: [])
-                let new = ChoiceTree.choice(lhsValue, meta)
-                return .important(new)
-                    .resetStrategies() // This will apply strategies based on the effective range
+                return ChoiceTree.choice(lhsValue, meta)
+                    .resetStrategies(direction: lhsValue.shrinkingDirection(given: rhsValue)) // This will apply strategies based on the effective range
             case let (.sequence(lhsLength, lhsElements, lhsMeta), .sequence(rhsLength, rhsElements, _)):
                 // The sequence itself is important
                 if lhsLength != rhsLength {
@@ -225,7 +224,7 @@ extension ChoiceTree {
                     // We know that the range has to be between what what's allowable and what failed
                     let meta = ChoiceMetadata(validRanges: [newRange], strategies: [])
                     return .important(.sequence(length: lhsLength, elements: lhsElements, meta))
-                        .resetStrategies() // This will apply strategies based on the effective range
+                        .resetStrategies(direction: ChoiceValue(lhsLength).shrinkingDirection(given: ChoiceValue(rhsLength))) // This will apply strategies based on the effective range
                 }
                 // The sequence content is important
                 if lhsElements.elementsEqual(rhsElements) == false {

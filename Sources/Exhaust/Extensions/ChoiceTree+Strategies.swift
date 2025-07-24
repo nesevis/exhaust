@@ -43,9 +43,9 @@ extension ChoiceTree {
                 // No elements
                 .sequence(length: 0, elements: [], meta),
                 // The first element
-                .sequence(length: 1, elements: Array(elements.prefix(1)), meta).resetStrategies(),
+                .sequence(length: 1, elements: Array(elements.prefix(1)), meta).resetStrategies(direction: .downTowardsBoundary),
                 // The last element
-                .sequence(length: 1, elements: Array(elements.suffix(1)), meta).resetStrategies()
+                .sequence(length: 1, elements: Array(elements.suffix(1)), meta).resetStrategies(direction: .downTowardsBoundary)
             ]
         default:
             fatalError("\(#function) should not be called directly for \(self)!")
@@ -65,18 +65,18 @@ extension ChoiceTree {
                 return []
             }
             return [
-                .sequence(length: length - 1, elements: Array(elements.dropFirst()), meta).resetStrategies(),
-                .sequence(length: length - 1, elements: Array(elements.dropLast()), meta).resetStrategies()
+                .sequence(length: length - 1, elements: Array(elements.dropFirst()), meta).resetStrategies(direction: .downTowardsBoundary),
+                .sequence(length: length - 1, elements: Array(elements.dropLast()), meta).resetStrategies(direction: .downTowardsBoundary)
             ]
         default:
             fatalError("\(#function) should not be called directly for \(self)!")
         }
     }
     
-    var binary: [ChoiceTree] {
+    func binary(for direction: ShrinkingDirection) -> [ChoiceTree] {
         switch self {
         case let .choice(value, metadata):
-            return value.binary(for: metadata.validRanges)
+            return value.binary(for: metadata.validRanges, direction: direction)
                 .map { .choice($0, metadata) }
         case let .sequence(length, elements, metadata):
             guard length > 1 else {
@@ -89,18 +89,19 @@ extension ChoiceTree {
                     let subArray = prefix
                         ? Array(elements.prefix(Int(length)))
                         : Array(elements.suffix(Int(length)))
-                    return .sequence(length: length, elements: subArray, metadata).resetStrategies()
+                    return .sequence(length: length, elements: subArray, metadata).resetStrategies(direction: direction)
                 }
         default:
             fatalError("\(#function) should not be called directly for \(self)!")
         }
     }
     
-    var saturation: [ChoiceTree] {
+    func saturation(for direction: ShrinkingDirection) -> [ChoiceTree] {
         switch self {
         case let .choice(value, metadata):
-            return value.saturation(for: metadata.validRanges)
-                .map { .choice($0, metadata).resetStrategies() }
+            return value.saturation(for: metadata.validRanges, direction: direction)
+                // FIXME: Reset strategies here?
+                .map { .choice($0, metadata) }
         case let .sequence(length, elements, metadata):
             guard length > 1 else {
                 return []
@@ -109,19 +110,20 @@ extension ChoiceTree {
             let chunks = elements.evenlyChunked(in: Int(length) / 10)
             
             return chunks
-                .filter { ChoiceValue($0.count).fits(in: metadata.validRanges) }
+                .filter { ChoiceValue(UInt64($0.count)).fits(in: metadata.validRanges) }
                 .map { chunk in
-                    .sequence(length: UInt64(chunk.count), elements: Array(chunk), metadata).resetStrategies()
+                        .sequence(length: UInt64(chunk.count), elements: Array(chunk), metadata)
+                            .resetStrategies(direction: direction)
                 }
         default:
             fatalError("\(#function) should not be called directly for \(self)!")
         }
     }
     
-    var ultraSaturation: [ChoiceTree] {
+    func ultraSaturation(for direction: ShrinkingDirection) -> [ChoiceTree] {
         switch self {
         case let .choice(value, metadata):
-            return value.ultraSaturation(for: metadata.validRanges)
+            return value.ultraSaturation(for: metadata.validRanges, direction: direction)
                 .map { .choice($0, metadata) }
         case .sequence:
             return self.boundaries
@@ -149,25 +151,26 @@ extension ChoiceTree {
         }
     }
     
-    func resetStrategies() -> Self {
+    func resetStrategies(direction: ShrinkingDirection) -> Self {
+        // FIXME: Do we need to reset elements recursively here?
         switch self {
         case .choice:
-            return self.setStrategiesForRangeAndType()
+            return self.setStrategiesForRangeAndType(direction: direction)
         case .just:
             return self
         case let .sequence(length, elements, meta):
-            return .sequence(length: length, elements: elements.map { $0.resetStrategies() }, meta)
-                .setStrategiesForRangeAndType()
+            return .sequence(length: length, elements: elements, meta)
+                .setStrategiesForRangeAndType(direction: direction)
         case let .branch(label, children):
-            return .branch(label: label, children: children.map { $0.resetStrategies() })
+            return self
         case let .group(array):
-            return .group(array.map { $0.resetStrategies() })
+            return self
         case let .important(element):
-            return .important(element.setStrategiesForRangeAndType())
+            return .important(element.setStrategiesForRangeAndType(direction: direction))
         }
     }
     
-    private func setStrategiesForRangeAndType() -> Self {
+    private func setStrategiesForRangeAndType(direction: ShrinkingDirection) -> Self {
         guard let range = self.effectiveRange else {
             fatalError("\(#function) should not be called")
             return self
@@ -180,14 +183,14 @@ extension ChoiceTree {
                 print("Reached an appropriate level of precision")
                 break
             case 0.1..<1:
-                importantStrategies.append(.ultraSaturation)
+                importantStrategies.append(.ultraSaturation(direction))
             case 1:
                 // This is exactly one
                 break
             case 1..<50:
-                importantStrategies.append(contentsOf: [.saturation, .ultraSaturation])
+                importantStrategies.append(contentsOf: [.saturation(direction), .ultraSaturation(direction)])
             default:
-                importantStrategies.append(contentsOf: [.binary, .saturation, .ultraSaturation])
+                importantStrategies.append(contentsOf: [.binary(direction), .saturation(direction), .ultraSaturation(direction)])
             }
             return self.setStrategies(importantStrategies)
         case .sequence:
@@ -197,9 +200,9 @@ extension ChoiceTree {
                 // This one or empty
                 break
             case 1..<50:
-                importantStrategies.append(contentsOf: [.boundaries, .saturation])
+                importantStrategies.append(contentsOf: [.boundaries, .saturation(direction)])
             default:
-                importantStrategies.append(contentsOf: [.binary, .saturation])
+                importantStrategies.append(contentsOf: [.binary(direction), .saturation(direction)])
             }
             return self.setStrategies(importantStrategies)
         default:
@@ -227,7 +230,7 @@ extension ChoiceTree {
                 }
                 return Double(UInt32(bitPattern64: range.upperBound - range.lowerBound))
             }
-        case .sequence(_, let elements, let choiceMetadata):
+        case .sequence(_, _, let choiceMetadata):
             return Double(choiceMetadata.validRanges[0].count)
         default:
             return nil
