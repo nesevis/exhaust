@@ -133,7 +133,21 @@ extension ReflectiveGenerator where Operation: AnyReflectiveOperation {
     }
 }
 
-extension ReflectiveGenerator {
+extension ReflectiveGenerator where Operation: AnyReflectiveOperation {
+
+    func bimap<NewOutput>(
+        forward: @escaping (Value) -> NewOutput,
+        backward: @escaping (NewOutput) -> Value
+    ) -> ReflectiveGenerator<Operation.Input, NewOutput> {
+        let erasedBackward: (Any) -> Any = { newOutput in
+            return backward(newOutput as! NewOutput) as Any
+        }
+        let erasedGen = self
+            .map(forward)
+            .mapOperation { Gen.eraseInputType(from: $0 as! ReflectiveOperation<Operation.Input>) }
+        
+        return Gen.lmap(erasedBackward, erasedGen)
+    }
     
     func mapOperation<NewOperation>(_ transform: @escaping (Operation) -> NewOperation) -> FreerMonad<NewOperation, Value> {
         switch self {

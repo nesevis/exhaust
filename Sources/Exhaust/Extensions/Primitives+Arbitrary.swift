@@ -7,7 +7,8 @@
 
 extension Bool: Arbitrary {
     static var arbitrary: ReflectiveGenerator<Any, Bool> {
-        Gen.choose(in: 0...1).map { $0 == 1 ? true : false }
+        Gen.choose(in: UInt(0)...1)
+            .bimap(forward: { $0 == 1 }, backward: { $0 ? 1 : 0 })
     }
     static var strategies: [ShrinkingStrategy] { ShrinkingStrategy.unsignedIntegers }
 }
