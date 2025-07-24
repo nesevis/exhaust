@@ -135,7 +135,7 @@ extension ReflectiveGenerator where Operation: AnyReflectiveOperation {
 
 extension ReflectiveGenerator where Operation: AnyReflectiveOperation {
 
-    func bimap<NewOutput>(
+    func biMap<NewOutput>(
         forward: @escaping (Value) -> NewOutput,
         backward: @escaping (NewOutput) -> Value
     ) -> ReflectiveGenerator<Operation.Input, NewOutput> {
@@ -144,6 +144,48 @@ extension ReflectiveGenerator where Operation: AnyReflectiveOperation {
         }
         let erasedGen = self
             .map(forward)
+            .mapOperation { Gen.eraseInputType(from: $0 as! ReflectiveOperation<Operation.Input>) }
+        return Gen.lmap(erasedBackward, erasedGen)
+    }
+    
+    // extract path: some PartialPath<NewInput, Input>,
+    func biMap<NewOutput>(
+        forward: @escaping (Value) -> NewOutput,
+        backward: some PartialPath<NewOutput, Value>
+    ) -> ReflectiveGenerator<Operation.Input, NewOutput> {
+        let erasedBackward: (Any) -> Any = { newOutput in
+            backward.extract(from: newOutput)!
+        }
+        let erasedGen = self
+            .map(forward)
+            .mapOperation { Gen.eraseInputType(from: $0 as! ReflectiveOperation<Operation.Input>) }
+        
+        return Gen.lmap(erasedBackward, erasedGen)
+    }
+    
+    func biMap<NewOutput>(
+        forward: some PartialPath<Value, NewOutput>,
+        backward: some PartialPath<NewOutput, Value>
+    ) -> ReflectiveGenerator<Operation.Input, NewOutput?> {
+        let erasedBackward: (Any) -> Any = { newOutput in
+            backward.extract(from: newOutput)!
+        }
+        let erasedGen = self
+            .map(forward.extract(from:))
+            .mapOperation { Gen.eraseInputType(from: $0 as! ReflectiveOperation<Operation.Input>) }
+        
+        return Gen.lmap(erasedBackward, erasedGen)
+    }
+
+    func biMap<NewOutput>(
+        forward: some PartialPath<Value, NewOutput>,
+        backward: @escaping (NewOutput) -> Value
+    ) -> ReflectiveGenerator<Operation.Input, NewOutput?> {
+        let erasedBackward: (Any) -> Any = { newOutput in
+            backward(newOutput as! NewOutput)
+        }
+        let erasedGen = self
+            .map(forward.extract(from:))
             .mapOperation { Gen.eraseInputType(from: $0 as! ReflectiveOperation<Operation.Input>) }
         
         return Gen.lmap(erasedBackward, erasedGen)

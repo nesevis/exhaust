@@ -522,4 +522,39 @@ struct CompositionTests {
             }
         }
     }
+    
+    @Suite("Zip tests")
+    struct ZipTests {
+        
+        @Test("Test zip implicit lensing composes with bimap")
+        func testBizipIsReplayable2() throws {
+            struct Thing: Equatable {
+                let a: Int
+                let b: String
+                let c: Bool
+            }
+            
+            // Gen.zip will lens each generator into its position in the tuple
+            // We want to confirm that 
+            let gen = Gen.zip(Int.arbitrary, String.arbitrary, Bool.arbitrary)
+            .biMap(
+                forward: { Thing(a: $0.0, b: $0.1, c: $0.2) },
+                backward: { ($0.a, $0.b, $0.c) }
+            )
+            try validateGenerator(gen)
+        }
+        
+        @Test("Test bimap is replayable")
+        func testBimapIsReplayable() throws {
+            let gen = Int.arbitrary.biMap(
+                forward: { $0.bitPattern64 },
+                backward: { Int(bitPattern64: $0) }
+            )
+            
+            let instance = try #require(Interpreters.generate(gen))
+            let recipe = try #require(try Interpreters.reflect(gen, with: instance))
+            let replay = try #require(Interpreters.replay(gen, using: recipe))
+            #expect(instance == replay)
+        }
+    }
 }
