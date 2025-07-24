@@ -95,6 +95,20 @@ extension Interpreters {
             // PICK's JOB: Try all branches against the same final output value.
             return try choices.flatMap { (_, label, generator) -> [(value: Any, path: [ChoiceTree])] in
                 let subPaths = try reflectRecursive(generator, onFinalOutput: finalOutput)
+                // FIXME: I need to validate that the subpaths contains the final output
+                // otherwise we can't prune the branches that weren't chosen.
+                // Do we need an equatable constraint on Gen.pick?
+                guard
+                    let equatableOutput = finalOutput as? any Equatable,
+                    let equatableValue = subPaths.firstNonNil({ $0.value as? any Equatable })
+                else {
+                    throw ReflectionError.pickValueIsNotEquatable("\(finalOutput)")
+                }
+                
+                guard equatableValue.isEqual(equatableOutput) else {
+                    return []
+                }
+                
                 let labeledPaths = subPaths.map { (value, pathTree) in
                     (value, [ChoiceTree.branch(label: label, children: pathTree)])
                 }

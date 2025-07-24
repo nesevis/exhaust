@@ -17,7 +17,8 @@ enum Gen {
         comap(path.extract(from:), next)
     }
     
-    static func pick<Input, Output>(
+    // We have to enforce equatable here so we can prune the pick in the reflection process
+    static func pick<Input, Output: Equatable>(
         choices: [(weight: UInt64, generator: ReflectiveGenerator<Input, Output>)]
     ) -> ReflectiveGenerator<Input, Output> {
         // The nested generators must all have the same Output type.

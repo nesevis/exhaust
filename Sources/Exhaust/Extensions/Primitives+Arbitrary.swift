@@ -7,8 +7,10 @@
 
 extension Bool: Arbitrary {
     static var arbitrary: ReflectiveGenerator<Any, Bool> {
-        Gen.choose(in: UInt(0)...1)
-            .bimap(forward: { $0 == 1 }, backward: { $0 ? 1 : 0 })
+        Gen.pick(choices: [
+            (1, .pure(true)),
+            (1, .pure(false))
+        ])
     }
 }
 
@@ -107,7 +109,7 @@ extension String: Arbitrary {
     }
 }
 
-extension Optional: Arbitrary where Wrapped: Arbitrary {
+extension Optional: Arbitrary where Wrapped: Arbitrary, Wrapped: Equatable {
     static var arbitrary: ReflectiveGenerator<Any, Optional<Wrapped>> {
         Gen.pick(choices: [
             (1, Gen.just(.none)),
