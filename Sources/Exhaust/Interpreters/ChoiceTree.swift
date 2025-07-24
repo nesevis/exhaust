@@ -37,6 +37,23 @@ extension ChoiceTree {
         return false
     }
     
+    var structuralComplexity: UInt64 {
+        switch self {
+        case .choice:
+            return 1
+        case .just:
+            return 0
+        case .sequence(_, let elements, _):
+            return 2 + elements.map(\.structuralComplexity).reduce(0, +)
+        case .branch(_, let children):
+            return 3 + children.map(\.structuralComplexity).reduce(0, +)
+        case .group(let array):
+            return 1 + array.map(\.structuralComplexity).reduce(0, +)
+        case .important(let choiceTree):
+            return choiceTree.structuralComplexity
+        }
+    }
+    
     var complexity: UInt64 {
         switch self {
         case let .choice(value, _):

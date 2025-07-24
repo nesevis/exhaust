@@ -131,7 +131,13 @@ extension Interpreters {
             let metadata = ChoiceMetadata(
                 validRanges: op.associatedRange.map { [$0] } ?? type(of: convertibleValue).bitPatternRanges,
                 // FIXME: We can clamp this here as well using the range
-                strategies: [.fundamentals, .boundaries, .binary(.downTowardsBoundary), .saturation(.downTowardsBoundary)]
+                strategies: [
+                    FundamentalReducerStrategy(direction: .towardsLowerBound),
+                    BoundaryReducerStrategy(direction: .towardsLowerBound),
+                    SpreadReducerStrategy(direction: .towardsLowerBound),
+                    BinaryReducerStrategy(direction: .towardsLowerBound),
+                    SaturationReducerStrategy(direction: .towardsLowerBound)
+                ]
             )
             return [(value: finalOutput, path: [.choice(.init(convertibleValue), metadata)])]
         
@@ -150,7 +156,13 @@ extension Interpreters {
             let metadata = ChoiceMetadata(
                 validRanges: [min...max], // Character uses the provided range directly
                 // FIXME: We can clamp this here as well using the range
-                strategies: [.fundamentals, .boundaries, .binary(.downTowardsBoundary), .saturation(.downTowardsBoundary)]
+                strategies: [
+                    FundamentalReducerStrategy(direction: .towardsLowerBound),
+                    BoundaryReducerStrategy(direction: .towardsLowerBound),
+                    SpreadReducerStrategy(direction: .towardsLowerBound),
+                    BinaryReducerStrategy(direction: .towardsLowerBound),
+                    SaturationReducerStrategy(direction: .towardsLowerBound)
+                ]
             )
             return [(value: finalOutput, path: [.choice(.init(character), metadata)])]
         

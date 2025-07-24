@@ -19,13 +19,40 @@ extension Interpreters {
     using generator: ReflectiveGenerator<Input, Output>,
     where property: (Output) -> Bool
     ) throws -> Output {
+        // At this stage we know that `value`'s values represent a higher or a lower bound beyond the generator
+        // Can we 'cheat' and encode that?
         guard let recipe = try Interpreters.reflect(generator, with: value) else {
             throw ShrinkError.couldNotReflect
         }
         guard property(value) == false else {
             throw ShrinkError.counterExampleMustFail
         }
+        let narrowedRecipe = try self.attemptRecipeNarrowing(recipe, using: generator, where: property)
+
         return try self.shrinkImpl(value, using: generator, recipe: recipe, where: property)
+    }
+    
+    private static func attemptRecipeNarrowing<Input, Output>(
+        _ recipe: ChoiceTree,
+        using generator: ReflectiveGenerator<Input, Output>,
+        where property: (Output) -> Bool
+    ) throws -> ChoiceTree {
+        let candidates = (1...200).compactMap { _ in
+            Interpreters.generate(generator, with: () as! Input)
+        }.partitioned(by: property)
+        // Once we have these candidates, how do we correlate a recipe with a fully fledged object? Reflection?
+        // We have no guarantee that these 
+        /*
+         (lldb) po Mirror(reflecting: candidates.falseElements[0]).children.map(\.value)
+         ▿ 2 elements
+           - 0 : 147
+           - 1 : false
+         (lldb) po Mirror(reflecting: candidates.falseElements[0]).children.map(\.value).map { type(of: $0) }
+         ▿ 2 elements
+           - 0 : Swift.Int
+           - 1 : Swift.Bool
+         */
+        return recipe
     }
     
     private static func shrinkImpl<Input, Output>(
@@ -57,6 +84,7 @@ extension Interpreters {
                 steps += 1
                 guard seen[candidateRecipe] == nil else {
                     cacheHits += 1
+                    print("Cache hit for \(candidateRecipe)")
                     if cacheHits > 1000 {
                         print("Cache hit limit reached; breaking")
                         break
@@ -76,17 +104,20 @@ extension Interpreters {
                 
                 if isValidShrink {
                     // Successful shrink!
-                    shrinkWasImproved = candidateComplexity < currentBestRecipeComplexity
+                    // FIXME: If you end up in a local minimum of zero, the complexity check will never be successful
+                    shrinkWasImproved = currentBestRecipeComplexity == 0 || candidateComplexity < currentBestRecipeComplexity
                     var validCandidate = candidateRecipe
                     if isLockedIn, let previousInvalidRecipe {
                         validCandidate = ChoiceTree.diffAndLockChanges(in: candidateRecipe, from: previousInvalidRecipe)
                     }
                     // Break inner loop to repeat the shrink process
                     if shrinkWasImproved {
-                        let direction: ShrinkingDirection = validCandidate.contains { $0.metadata.strategies.contains(where: { $0.direction == .downTowardsBoundary }) }
-                        ? .downTowardsBoundary
-                        : .upTowardsBoundary
+                        let direction: ShrinkingDirection = validCandidate.contains { $0.metadata.strategies.contains(where: { $0.direction == .towardsLowerBound }) }
+                            ? .towardsLowerBound
+                            : .towardsHigherBound
                         previousValid = (validCandidate, candidateValue)
+                        // How do we continually adjust the boundary to make the pool of valid choices smaller?
+                        // This is possible for single values, but very hard for groups of possibly interrelated ones
                         print("Improved \(direction) shrink:\n\(validCandidate)")
                         currentBestRecipe = validCandidate.resetStrategies(direction: direction)
                         currentBestRecipeComplexity = candidateComplexity
@@ -94,6 +125,9 @@ extension Interpreters {
                         break
                     } else {
                         print("Shrink was not improved:\n\(validCandidate)")
+                        print("Candidate complexity: \(candidateComplexity)")
+                        print("Best complexity: \(currentBestRecipeComplexity)")
+                        
                     }
                 } else {
                     previousInvalidRecipe = candidateRecipe

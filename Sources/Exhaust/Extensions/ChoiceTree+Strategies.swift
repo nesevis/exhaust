@@ -43,9 +43,9 @@ extension ChoiceTree {
                 // No elements
                 .sequence(length: 0, elements: [], meta),
                 // The first element
-                .sequence(length: 1, elements: Array(elements.prefix(1)), meta).resetStrategies(direction: .downTowardsBoundary),
+                .sequence(length: 1, elements: Array(elements.prefix(1)), meta).resetStrategies(direction: .towardsLowerBound),
                 // The last element
-                .sequence(length: 1, elements: Array(elements.suffix(1)), meta).resetStrategies(direction: .downTowardsBoundary)
+                .sequence(length: 1, elements: Array(elements.suffix(1)), meta).resetStrategies(direction: .towardsLowerBound)
             ]
         default:
             fatalError("\(#function) should not be called directly for \(self)!")
@@ -65,8 +65,8 @@ extension ChoiceTree {
                 return []
             }
             return [
-                .sequence(length: length - 1, elements: Array(elements.dropFirst()), meta).resetStrategies(direction: .downTowardsBoundary),
-                .sequence(length: length - 1, elements: Array(elements.dropLast()), meta).resetStrategies(direction: .downTowardsBoundary)
+                .sequence(length: length - 1, elements: Array(elements.dropFirst()), meta).resetStrategies(direction: .towardsLowerBound),
+                .sequence(length: length - 1, elements: Array(elements.dropLast()), meta).resetStrategies(direction: .towardsLowerBound)
             ]
         default:
             fatalError("\(#function) should not be called directly for \(self)!")
@@ -101,7 +101,7 @@ extension ChoiceTree {
         case let .choice(value, metadata):
             return value.saturation(for: metadata.validRanges, direction: direction)
                 // FIXME: Reset strategies here?
-                .map { .choice($0, metadata) }
+                .map { .choice($0, metadata).resetStrategies(direction: direction) }
         case let .sequence(length, elements, metadata):
             guard length > 1 else {
                 return []
@@ -132,7 +132,7 @@ extension ChoiceTree {
         }
     }
     
-    func setStrategies(_ strategies: [ShrinkingStrategy]) -> Self {
+    func setStrategies(_ strategies: [any TemporaryDualPurposeStrategy]) -> Self {
         switch self {
         case let .choice(value, meta):
             let newMeta = ChoiceMetadata(validRanges: meta.validRanges, strategies: strategies)
@@ -148,6 +148,24 @@ extension ChoiceTree {
             return .group(array.map { $0.setStrategies(strategies) })
         case let .important(element):
             return .important(element.setStrategies(strategies))
+        }
+    }
+    
+    
+    func adjustRangeBasedOnValue() -> Self {
+        switch self {
+        case .choice(let choiceValue, let choiceMetadata):
+            fatalError()
+        case .just:
+            fatalError()
+        case .sequence(let length, let elements, let choiceMetadata):
+            fatalError()
+        case .branch(let label, let children):
+            fatalError()
+        case .group(let array):
+            fatalError()
+        case .important(let choiceTree):
+            fatalError()
         }
     }
     
@@ -172,37 +190,43 @@ extension ChoiceTree {
     
     private func setStrategiesForRangeAndType(direction: ShrinkingDirection) -> Self {
         guard let range = self.effectiveRange else {
-            fatalError("\(#function) should not be called")
             return self
         }
         switch self {
         case .choice:
-            var importantStrategies = [ShrinkingStrategy]()
+            var importantStrategies = [any TemporaryDualPurposeStrategy]()
             switch range {
             case ..<0.1:
                 print("Reached an appropriate level of precision")
                 break
             case 0.1..<1:
-                importantStrategies.append(.ultraSaturation(direction))
+                importantStrategies.append(UltraSaturationReducerStrategy(direction: direction))
             case 1:
                 // This is exactly one
                 break
             case 1..<50:
-                importantStrategies.append(contentsOf: [.saturation(direction), .ultraSaturation(direction)])
+                importantStrategies.append(SaturationReducerStrategy(direction: direction))
+                importantStrategies.append(UltraSaturationReducerStrategy(direction: direction))
             default:
-                importantStrategies.append(contentsOf: [.binary(direction), .saturation(direction), .ultraSaturation(direction)])
+                importantStrategies.append(SpreadReducerStrategy(direction: direction))
+                importantStrategies.append(BinaryReducerStrategy(direction: direction))
+                importantStrategies.append(SaturationReducerStrategy(direction: direction))
+                importantStrategies.append(UltraSaturationReducerStrategy(direction: direction))
             }
             return self.setStrategies(importantStrategies)
         case .sequence:
-            var importantStrategies = [ShrinkingStrategy]()
+            var importantStrategies = [any TemporaryDualPurposeStrategy]()
             switch range {
             case ...1:
                 // This one or empty
                 break
             case 1..<50:
-                importantStrategies.append(contentsOf: [.boundaries, .saturation(direction)])
+                importantStrategies.append(BoundaryReducerStrategy(direction: direction))
+                importantStrategies.append(SaturationReducerStrategy(direction: direction))
             default:
-                importantStrategies.append(contentsOf: [.binary(direction), .saturation(direction)])
+                importantStrategies.append(SpreadReducerStrategy(direction: direction))
+                importantStrategies.append(BinaryReducerStrategy(direction: direction))
+                importantStrategies.append(SaturationReducerStrategy(direction: direction))
             }
             return self.setStrategies(importantStrategies)
         default:
@@ -210,7 +234,7 @@ extension ChoiceTree {
         }
     }
     
-    private var effectiveRange: Double? {
+    var effectiveRange: Double? {
         switch self {
         case .choice(let choiceValue, let choiceMetadata):
             let range = choiceMetadata.validRanges[0]
@@ -223,6 +247,10 @@ extension ChoiceTree {
             case .floating:
                 let lower = Double(bitPattern64: range.lowerBound)
                 let upper = Double(bitPattern64: range.upperBound)
+                let range = upper - lower
+                if range.isFinite == false {
+                    return Double.greatestFiniteMagnitude
+                }
                 return upper - lower
             case .character(let character):
                 guard let range = choiceMetadata.validRanges.first(where: { $0.contains(character.bitPattern64) }) else {

@@ -52,14 +52,15 @@ struct ShrinkingTests {
         func testBasicDoubleShrink() throws {
             typealias Shrink = Double
             let gen = Shrink.arbitrary
-            let failing: Shrink = 999
+            let failing: Shrink = -.greatestFiniteMagnitude
             let target: Shrink = 6
             let property: (Shrink) -> Bool = { value in
-                print("Shrinking \(value) \(value < target)")
-                return value < target
+                print("Shrinking \(value) \(value > target)")
+                return value > target
             }
 
             let shrunken = try Interpreters.shrink(failing, using: gen, where: property)
+            print()
             #expect(shrunken <= target + 0.1)
         }
         
@@ -168,7 +169,7 @@ struct ShrinkingTests {
         @Test("Shrinker finds minimal failing Person")
         func testPersonShrinking() throws {
             struct Person: Equatable {
-                let age: UInt
+                let age: Int
                 let canDrink: Bool
             }
             
@@ -359,7 +360,7 @@ struct ShrinkingTests {
             #expect(property(counterExample) == false)
             
             let shrunken = try Interpreters.shrink(counterExample, using: gen, where: property)
-            let minimalCounterExample = Receipt(items: ["a", "b"], cost: 2)
+            let minimalCounterExample = Receipt(items: ["b"], cost: 1)
             #expect(minimalCounterExample == shrunken)
             /*
              Chuffed with that one. This is a proper minimal example

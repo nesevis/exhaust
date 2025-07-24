@@ -171,7 +171,7 @@ enum Interpreters {
                 if TycheReportContext.isReportingEnabled {
                     let metadata = GenerationMetadata(
                         operationType: "chooseBits",
-                        generatorType: "UInt64",
+                        generatorType: "\(Output.self)",
                         size: context.size,
                         entropy: randomBits,
                         duration: duration

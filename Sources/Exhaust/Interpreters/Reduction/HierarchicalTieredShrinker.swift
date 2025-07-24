@@ -5,7 +5,7 @@
 //  Created by Chris Kolbu on 21/7/2025.
 //
 
-final class HierarchicalTieredShrinker: IteratorProtocol, Equatable {
+final class HierarchicalTieredShrinker: IteratorProtocol {
     typealias Element = ChoiceTree
     typealias Shrinks = [ChoiceTree].SubSequence
     private typealias Shrink = (ChoiceTree?, State)
@@ -18,23 +18,24 @@ final class HierarchicalTieredShrinker: IteratorProtocol, Equatable {
     private var state = State.idle
     
     init(_ candidate: ChoiceTree) {
+        print("New shrinker iterator \(candidate.elementDescription) \(candidate.metadata.strategies)\n\(candidate.effectiveRange)")
 //        print("Creating new \( candidate.isImportant ? "important " : "")shrinker for\n\(candidate)\nMeta: \(candidate.metadata)")
         self.origin = candidate
         self.isImportant = candidate.isImportant
     }
     
-    private enum State: Equatable {
+    private enum State {
         case idle
         case exhausted
         
         /// Representing a ChoiceTree.choice
-        case choice(shrinks: Shrinks, metadata: ChoiceMetadata, strategy: [ShrinkingStrategy])
+        case choice(shrinks: Shrinks, metadata: ChoiceMetadata, strategy: [any TemporaryDualPurposeStrategy])
 
         /// Representing a ChoiceTree.sequence
-        case sequence(shrinks: Shrinks, original: Shrinks, metadata: ChoiceMetadata, strategy: [ShrinkingStrategy])
+        case sequence(shrinks: Shrinks, original: Shrinks, metadata: ChoiceMetadata, strategy: [any TemporaryDualPurposeStrategy])
         
         /// Representing the element of a ChoiceTree.sequence. `shrinks` is presented as a subsequence, but is never sliced beyond its original size
-        case element(shrinks: Shrinks, childIndex: Int, subIterator: HierarchicalTieredShrinker, sequenceMetadata: ChoiceMetadata, sequenceStrategy: [ShrinkingStrategy])
+        case element(shrinks: Shrinks, childIndex: Int, subIterator: HierarchicalTieredShrinker, sequenceMetadata: ChoiceMetadata, sequenceStrategy: [any TemporaryDualPurposeStrategy])
         
         /// Representing a group that is being shrunk
         case group(children: Shrinks, childIndex: Int, subIterators: [HierarchicalTieredShrinker], exhaustedChildren: Set<Int>)
@@ -80,36 +81,51 @@ final class HierarchicalTieredShrinker: IteratorProtocol, Equatable {
         }
     }
     
-    private func shrinks(for path: ChoiceTree, strategies: [ShrinkingStrategy]) -> Shrinks {
+    private func shrinks(for path: ChoiceTree, strategies: [any TemporaryDualPurposeStrategy]) -> Shrinks {
         var shrinks: Shrinks?
         var remaining = strategies
         while remaining.isEmpty == false, (shrinks?.isEmpty ?? true) {
             let current = remaining.removeFirst()
-            switch current {
-            case .fundamentals:
-                shrinks = path
-                    .with(strategies: remaining)
-                    .fundamentalValues[...]
-            case .boundaries:
-                shrinks = path
-                    .with(strategies: remaining)
-                    .boundaries[...]
-            case .patterns:
-                fatalError("\(current) is unsupported")
-            case .binary(let direction):
-                shrinks = path
-                    .with(strategies: remaining)
-                    .binary(for: direction)[...]
-            case .decimal:
-                fatalError("\(current) is unsupported")
-            case .saturation(let direction):
-                shrinks = path
-                    .with(strategies: remaining)
-                    .saturation(for: direction)[...]
-            case .ultraSaturation(let direction):
-                shrinks = path
-                    .with(strategies: remaining)
-                    .ultraSaturation(for: direction)[...]
+            switch path {
+            case .choice(let choiceValue, let choiceMetadata):
+                let rawRange = choiceMetadata.validRanges[0]
+                switch choiceValue {
+                case .unsigned(let uint):
+                    shrinks = current.values(for: uint, in: rawRange)
+                        .map { ChoiceTree.choice(ChoiceValue($0), choiceMetadata).with(strategies: remaining) }[...]
+                case .signed(let int, _):
+                    let castRange = Int64(bitPattern64: rawRange.lowerBound)...Int64(bitPattern64: rawRange.upperBound)
+                    shrinks = current.values(for: int, in: castRange)
+                        .map { ChoiceTree.choice(ChoiceValue($0), choiceMetadata).with(strategies: remaining) }[...]
+                case .floating(let double, _):
+                    let castRange = Double(bitPattern64: rawRange.lowerBound)...Double(bitPattern64: rawRange.upperBound)
+                    shrinks = current.values(for: double, in: castRange)
+                        .map { ChoiceTree.choice(ChoiceValue($0), choiceMetadata).with(strategies: remaining) }[...]
+                case .character(let character):
+                    let castRanges = choiceMetadata.validRanges.map { range in
+                        Character(bitPattern64: range.lowerBound)...Character(bitPattern64: range.upperBound)
+                    }
+                    shrinks = current.values(for: character, in: castRanges)
+                        .map { ChoiceTree.choice(.character($0), choiceMetadata).with(strategies: remaining) }[...]
+                }
+            case .sequence(_, let elements, let choiceMetadata):
+                let rawRange = choiceMetadata.validRanges[0]
+                let castRange = Int(bitPattern64: rawRange.lowerBound)...Int(bitPattern64: rawRange.upperBound)
+                let results = current.values(for: elements, in: castRange)
+                shrinks = results
+                    .filter { $0.isEmpty == false }
+                    .map { collection in
+                        .sequence(
+                            length: UInt64(results.count),
+                            elements: Array(collection as! Shrinks),
+                            choiceMetadata
+                        ).with(strategies: remaining)
+                }[...]
+            case .important(let choiceTree):
+                // FIXME: This feels suboptimal
+                return self.shrinks(for: choiceTree, strategies: [current])
+            default:
+                fatalError("\(#function) can't be called with \(path)")
             }
         }
         return shrinks ?? [][...]
@@ -285,13 +301,6 @@ final class HierarchicalTieredShrinker: IteratorProtocol, Equatable {
             }
         }
     }
-    
-    // MARK: - Equatable
-    
-    static func == (lhs: HierarchicalTieredShrinker, rhs: HierarchicalTieredShrinker) -> Bool {
-        lhs.origin == rhs.origin &&
-        lhs.state == rhs.state
-    }
 }
 
 extension ChoiceTree {
@@ -304,11 +313,11 @@ extension ChoiceTree {
         }
     }
     
-    var strategy: [ShrinkingStrategy] {
+    var strategy: [any TemporaryDualPurposeStrategy] {
         self.metadata.strategies
     }
     
-    func with(strategies: [ShrinkingStrategy]) -> ChoiceTree {
+    func with(strategies: [any TemporaryDualPurposeStrategy]) -> ChoiceTree {
         switch self {
         case let .choice(value, meta):
             let newMeta = ChoiceMetadata(validRanges: meta.validRanges, strategies: strategies)

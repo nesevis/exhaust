@@ -71,13 +71,13 @@ extension ChoiceValue {
         case let .unsigned(value):
             var halvings = [UInt64]()
             switch direction {
-            case .downTowardsBoundary:
+            case .towardsLowerBound:
                 var candidate = value / 2
                 while candidate > ranges[0].lowerBound {
                     halvings.append(candidate)
                     candidate /= 2
                 }
-            case .upTowardsBoundary:
+            case .towardsHigherBound:
                 var candidate = value * 2
                 while candidate < ranges[0].upperBound {
                     halvings.append(candidate)
@@ -89,13 +89,16 @@ extension ChoiceValue {
         case let .signed(value, _):
             var halvings = [Int64]()
             switch direction {
-            case .downTowardsBoundary:
+            case .towardsLowerBound:
+                guard value > 0 else {
+                    return []
+                }
                 var candidate = value / 2
                 while candidate > ranges[0].lowerBound {
                     halvings.append(candidate)
                     candidate /= 2
                 }
-            case .upTowardsBoundary:
+            case .towardsHigherBound:
                 var candidate = value * 2
                 while candidate < ranges[0].upperBound {
                     halvings.append(candidate)
@@ -107,16 +110,20 @@ extension ChoiceValue {
         case let .floating(value, _):
             var halvings = [Double]()
             switch direction {
-            case .downTowardsBoundary:
+            case .towardsLowerBound:
+                guard value > 0 else {
+                    return []
+                }
                 var candidate = value / 2
-                let bound = Double(ranges[0].lowerBound)
+                let bound = Double(bitPattern64: ranges[0].lowerBound)
                 while candidate > bound {
                     halvings.append(candidate)
                     candidate /= 2
                 }
-            case .upTowardsBoundary:
+            case .towardsHigherBound:
+                let value = value == 0 ? 1 :value
                 var candidate = value * 2
-                let bound = Double(ranges[0].upperBound)
+                let bound = Double(bitPattern64: ranges[0].upperBound)
                 while candidate < bound {
                     halvings.append(candidate)
                     candidate *= 2
@@ -144,14 +151,14 @@ extension ChoiceValue {
             var count = 0
             var values = [UInt64]()
             switch direction {
-            case .downTowardsBoundary:
+            case .towardsLowerBound:
                 var candidate = (value / 10) * 9
                 while count < max, candidate > ranges[0].lowerBound {
                     count += 1
                     values.append(candidate)
                     candidate = (candidate / 10) * 9
                 }
-            case .upTowardsBoundary:
+            case .towardsHigherBound:
                 var candidate = (value * 10) / 9
                 while count < max, candidate < ranges[0].lowerBound {
                     count += 1
@@ -162,18 +169,21 @@ extension ChoiceValue {
             return values
                 .map(ChoiceValue.init)
         case let .signed(value, _):
+            guard value != 0 else {
+                return []
+            }
             let max = 50
             var count = 0
             var values = [Int64]()
             switch direction {
-            case .downTowardsBoundary:
+            case .towardsLowerBound:
                 var candidate = (value / 10) * 9
                 while count < max, candidate > ranges[0].lowerBound {
                     count += 1
                     values.append(candidate)
                     candidate = (candidate / 10) * 9
                 }
-            case .upTowardsBoundary:
+            case .towardsHigherBound:
                 var candidate = (value * 10) / 9
                 while count < max, candidate < ranges[0].lowerBound {
                     count += 1
@@ -184,11 +194,14 @@ extension ChoiceValue {
             return values
                 .map(ChoiceValue.init)
         case let .floating(value, _):
+            guard value != 0 else {
+                return []
+            }
             let max = 50
             var count = 0
             var values = [Double]()
             switch direction {
-            case .downTowardsBoundary:
+            case .towardsLowerBound:
                 let bound = Double(bitPattern64: ranges[0].lowerBound)
                 var candidate = (value / 10) * 9
                 while count < max, candidate > bound {
@@ -196,7 +209,7 @@ extension ChoiceValue {
                     values.append(candidate)
                     candidate = (candidate / 10) * 9
                 }
-            case .upTowardsBoundary:
+            case .towardsHigherBound:
                 let bound = Double(bitPattern64: ranges[0].upperBound)
                 var candidate = (value * 10) / 9
                 while count < max, candidate < bound {
@@ -229,7 +242,7 @@ extension ChoiceValue {
             let limit = 50
             var count = 0
             switch direction {
-            case .downTowardsBoundary:
+            case .towardsLowerBound:
                 let bound = ranges[0].lowerBound
                 var candidate = value - 1
                 while count < limit, candidate > bound {
@@ -237,7 +250,7 @@ extension ChoiceValue {
                     candidate -= 1
                     count += 1
                 }
-            case .upTowardsBoundary:
+            case .towardsHigherBound:
                 let bound = ranges[0].upperBound
                 var candidate = value + 1
                 while count < limit, candidate < bound {
@@ -253,7 +266,7 @@ extension ChoiceValue {
             let limit = 50
             var count = 0
             switch direction {
-            case .downTowardsBoundary:
+            case .towardsLowerBound:
                 let bound = ranges[0].lowerBound
                 var candidate = value - 1
                 while count < limit, candidate > bound {
@@ -261,7 +274,7 @@ extension ChoiceValue {
                     candidate -= 1
                     count += 1
                 }
-            case .upTowardsBoundary:
+            case .towardsHigherBound:
                 let bound = ranges[0].upperBound
                 var candidate = value + 1
                 while count < limit, candidate < bound {
@@ -277,7 +290,7 @@ extension ChoiceValue {
             let limit = 50
             var count = 0
             switch direction {
-            case .downTowardsBoundary:
+            case .towardsLowerBound:
                 let bound = Double(bitPattern64: ranges[0].lowerBound)
                 var candidate = value - 0.1
                 while count < limit, candidate > bound {
@@ -285,7 +298,7 @@ extension ChoiceValue {
                     candidate -= 0.1
                     count += 1
                 }
-            case .upTowardsBoundary:
+            case .towardsHigherBound:
                 let bound = Double(bitPattern64: ranges[0].upperBound)
                 var candidate = value + 0.1
                 while count < limit, candidate < bound {

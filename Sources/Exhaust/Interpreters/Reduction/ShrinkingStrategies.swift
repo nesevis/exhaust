@@ -36,19 +36,19 @@ enum ShrinkingStrategy: CaseIterable, Hashable, Equatable {
         }
     }
     
-    static var sequenceStrategies: [ShrinkingStrategy] {
+    static var sequenceStrategies: [any ChoiceValueReducerStrategy & ChoiceSequenceReducerStrategy] {
         [
-            .fundamentals,
-            .boundaries,
-            .binary(.downTowardsBoundary),
-            .saturation(.downTowardsBoundary)
+            BoundaryReducerStrategy(direction: .towardsLowerBound),
+            BinaryReducerStrategy(direction: .towardsLowerBound),
+            SaturationReducerStrategy(direction: .towardsLowerBound)
         ]
     }
 }
 
 enum ShrinkingDirection: CaseIterable, Hashable, Equatable {
-    case downTowardsBoundary
-    case upTowardsBoundary
+    case towardsLowerBound
+    case towardsHigherBound
+//    case expandingFromValue // Going out on both sides
 }
 
 struct ShrinkingStrategies: OptionSet, Equatable {
