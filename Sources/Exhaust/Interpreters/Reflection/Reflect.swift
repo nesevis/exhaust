@@ -23,13 +23,10 @@ extension Interpreters {
         let matchingPaths = allPossibleOutcomes.compactMap { (outputValue, path) -> [ChoiceTree]? in
             return check(outputValue) ? path : nil
         }.flatMap { $0 }
-        
-        guard matchingPaths.isEmpty == false else {
-            return nil
-        }
+
         switch matchingPaths.count {
         case 0:
-            return nil
+            throw ReflectionError.couldNotMapInputToGenerator
         case 1:
             return matchingPaths[0]
         default:
@@ -56,16 +53,11 @@ extension Interpreters {
             
             // 2. For each successful intermediate result...
             let results = try intermediateResults.flatMap { (intermediateValue: Any, partialPath: [ChoiceTree]) in
-                if case .lmap = operation, false {
-                    // Do not execute the continuation
-                    return [(value: finalOutput as! Output, path: partialPath)]
-                } else {
-                    let nextGen = continuation(intermediateValue)
-                    // The `finalOutput` is passed down UNCHANGED. This is the crucial part.
-                    let finalResults = try reflectRecursive(nextGen, onFinalOutput: finalOutput)
-                    return finalResults.map { (finalValue, restOfPath) in
-                        (finalValue, partialPath + restOfPath)
-                    }
+                let nextGen = continuation(intermediateValue)
+                // The `finalOutput` is passed down UNCHANGED. This is the crucial part.
+                let finalResults = try reflectRecursive(nextGen, onFinalOutput: finalOutput)
+                return finalResults.map { (finalValue, restOfPath) in
+                    (finalValue, partialPath + restOfPath)
                 }
             }
             return results
@@ -84,7 +76,7 @@ extension Interpreters {
         switch op {
         case let .lmap(transform, nextGen):
             guard let subValue = transform(finalOutput) else {
-                return []
+                throw ReflectionError.lmapWasWrongType
             }
             return try reflectRecursive(nextGen, onFinalOutput: subValue)
                 .map { ($0.value, $0.path) }
@@ -120,7 +112,7 @@ extension Interpreters {
                 convertibleValue = UInt64(convertible.underestimatedCount)
             }
             guard let convertibleValue else {
-                return []
+                throw ReflectionError.chooseBitsCouldNotConvertValue("\(finalOutput)")
             }
             let bitPattern = convertibleValue.bitPattern64
             guard (min...max).contains(bitPattern) else {
@@ -173,7 +165,7 @@ extension Interpreters {
             guard
                 let targetArray = finalOutput as? any Sequence
             else {
-                return []
+                throw ReflectionError.inputWasWrongForSequence("\(finalOutput)")
             }
             
             var combinedPath: [ChoiceTree] = []
@@ -188,7 +180,7 @@ extension Interpreters {
                 // We assume reflection on an element is non-ambiguous and produces one path.
                 guard let (value, path) = try reflectRecursive(elementGen, onFinalOutput: elementTarget).first else {
                     // If any element cannot be reflected, the whole sequence fails.
-                    return []
+                    throw ReflectionError.couldNotReflectOnSequenceElement("\(elementTarget)")
                 }
                 combinedResults.append(value)
                 // Group each element's path choices instead of flattening them
@@ -213,6 +205,12 @@ extension Interpreters {
     }
     
     enum ReflectionError: LocalizedError {
+        case lmapWasWrongType
+        case couldNotMapInputToGenerator
+        case chooseBitsCouldNotConvertValue(String)
+        case inputWasWrongForSequence(String)
+        case couldNotReflectOnSequenceElement(String)
+        case pickValueIsNotEquatable(String)
         case inputWasOutOfGeneratorRange(any BitPatternConvertible, ClosedRange<UInt64>)
     }
 }

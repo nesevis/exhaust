@@ -105,7 +105,7 @@ extension Interpreters {
                 let nextGen = continuation(result)
                 return self.replayWithChoicesHelper(nextGen, choices: &choices)
 
-            case let .sequence(count, elementGenerator):
+            case let .sequence(_, elementGenerator):
                 // Consume the next choice which should be a sequence
                 guard !choices.isEmpty else { 
                     return nil 
