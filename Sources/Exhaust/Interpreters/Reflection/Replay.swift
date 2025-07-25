@@ -179,8 +179,13 @@ extension Interpreters {
         }
         
         // Handle group scripts by distributing choices to the generator
+        // Groups containing branches represent `picks` and are handled together
         if case let .group(choices) = script {
-            return try replayWithChoices(gen, choices: choices)
+            if choices.allSatisfy({ $0.isBranch || $0.isSelected }) == false {
+                return try replayWithChoices(gen, choices: choices)
+            }
+            // Handle all the pick branches together
+            return try replayWithChoices(gen, choices: [script])
         }
         
         switch gen {

@@ -7,6 +7,27 @@
 
 import Foundation
 
+extension Optional: BitPatternConvertible where Wrapped: BitPatternConvertible {
+    static var bitPatternRanges: [ClosedRange<UInt64>] {
+        Wrapped.bitPatternRanges
+    }
+    
+    init(bitPattern64: UInt64) {
+        self = .some(Wrapped(bitPattern64: bitPattern64))
+    }
+    
+    var bitPattern64: UInt64 {
+        switch self {
+        case .none:
+            0
+        case .some(let wrapped):
+            wrapped.bitPattern64
+        }
+    }
+    
+    
+}
+
 extension UInt8: BitPatternConvertible {
     init(bitPattern64: UInt64) {
         self = UInt8(bitPattern64)

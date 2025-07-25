@@ -47,6 +47,13 @@ extension ChoiceTree {
         return false
     }
     
+    var isBranch: Bool {
+        if case .branch = self {
+            return true
+        }
+        return false
+    }
+    
     var isJust: Bool {
         if case .just = self {
             return true

@@ -74,6 +74,7 @@ extension Interpreters {
         outputType: Output.Type
     ) throws -> [(value: Any, path: [ChoiceTree])] {
         switch op {
+        // If the `onFinalOutput` is nil here, it must be an optional. How do we handle that?
         case let .lmap(transform, nextGen):
             guard let subValue = transform(finalOutput) else {
                 throw ReflectionError.lmapWasWrongType
@@ -93,20 +94,23 @@ extension Interpreters {
 
         case let .pick(choices):
             // PICK's JOB: Try all branches against the same final output value.
+            var isPicked = false
             let results = try choices.flatMap { (_, label, generator) -> [(value: Any, label: UInt64,  isPicked: Bool, path: [ChoiceTree])] in
                 let subPaths = try reflectRecursive(generator, onFinalOutput: finalOutput)
-                // The reflection process creates a history of the choices made to create that value,
-                // so we prune the choices to find the one that was made. This requires `Gen.pick` to
-                // require Equatable-conforming values.
-                // FIXME: The open question is how the shrinker deals with this "lack" of choice?
+                
+                // Right. So this may be a nil
                 guard
-                    let equatableOutput = finalOutput as? any Equatable,
-                    let equatableValue = subPaths.firstNonNil({ $0.value as? any Equatable })
+                    let equatableOutput = .some(finalOutput as? any Equatable),
+                    let equatableValue = .some(subPaths.firstNonNil({ $0.value as? any Equatable }))
                 else {
                     throw ReflectionError.pickValueIsNotEquatable("\(finalOutput)")
                 }
                 
-                let isPicked = equatableValue.isEqual(equatableOutput)
+                // Only pick one even if there are multiple identical generators
+                // These results may be a deliberate nil
+                let nilFriendlyEquatable = equatableValue.map { lhs in equatableOutput.map { rhs in lhs.isEqual(rhs) } ?? false }
+                ?? (type(of: equatableOutput) == type(of: equatableValue))
+                isPicked = nilFriendlyEquatable
                 
                 let labeledPaths = subPaths.map { (value, pathTree) in
                     (value, label, isPicked, pathTree)
@@ -120,8 +124,14 @@ extension Interpreters {
             return [(finalOutput, [ChoiceTree.group(returnData.map(\.1))])]
             
         case let .chooseBits(min, max):
-            // In the reverse pass of a [[Char]] we'll be passed the array here and it will represent the length of the list. How can we know that?
+            var isNil = false
+            if let optionalValue = finalOutput as? Optional<Any>, optionalValue == nil {
+                // We can't properly reflect on this generator without a valid finalOutput
+                // Can we create an instance though?
+                isNil = true
+            }
             var convertibleValue: (any BitPatternConvertible)?
+            // In the reverse pass of a [[Char]] we'll be passed the array here and it will represent the length of the list. How can we know that?
             if let convertible = finalOutput as? any BitPatternConvertible {
                 convertibleValue = convertible
             }
@@ -133,7 +143,9 @@ extension Interpreters {
             guard let convertibleValue else {
                 throw ReflectionError.chooseBitsCouldNotConvertValue("\(finalOutput)")
             }
-            let bitPattern = convertibleValue.bitPattern64
+
+            // FIXME: Do we turn off validation for nil-generated values?
+            let bitPattern = isNil ? min : convertibleValue.bitPattern64
             guard (min...max).contains(bitPattern) else {
                 throw ReflectionError.inputWasOutOfGeneratorRange(convertibleValue, min...max)
             }
@@ -154,12 +166,22 @@ extension Interpreters {
         
         case let .chooseCharacter(min, max):
             // Handle Character-specific reflection
-            guard let character = finalOutput as? Character else {
+            var isNil = false
+            if let optionalValue = finalOutput as? Optional<Any>, optionalValue == nil {
+                // We can't properly reflect on this generator without a valid finalOutput
+                // Can we create an instance though?
+                isNil = true
+            }
+
+            guard let convertible = finalOutput as? any BitPatternConvertible else {
                 return []
             }
+            let character = convertible as? Character ?? Character(bitPattern64: convertible.bitPattern64)
+            
             // Validate that the character is within the expected range
             let firstScalar = character.unicodeScalars.first?.value ?? 0
-            guard (min...max).contains(UInt64(firstScalar)) else {
+            // Skipping validation for nil cases
+            guard isNil || (min...max).contains(UInt64(firstScalar)) else {
                 throw ReflectionError.inputWasOutOfGeneratorRange(character, min...max)
             }
             
@@ -175,7 +197,7 @@ extension Interpreters {
                     SaturationReducerStrategy(direction: .towardsLowerBound)
                 ]
             )
-            return [(value: finalOutput, path: [.choice(.init(character), metadata)])]
+            return [(value: character, path: [.choice(.init(character), metadata)])]
         
         case let .just(value):
             let string = "\(value)".prefix(50)
