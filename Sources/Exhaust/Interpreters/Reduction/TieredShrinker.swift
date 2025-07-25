@@ -36,32 +36,7 @@ extension Interpreters {
         guard property(value) == false else {
             throw ShrinkError.counterExampleMustFail
         }
-        let narrowedRecipe = try self.attemptRecipeNarrowing(recipe, using: generator, where: property)
-
         return try self.shrinkImpl(value, using: generator, recipe: recipe, where: property)
-    }
-    
-    private static func attemptRecipeNarrowing<Input, Output>(
-        _ recipe: ChoiceTree,
-        using generator: ReflectiveGenerator<Input, Output>,
-        where property: (Output) -> Bool
-    ) throws -> ChoiceTree {
-        let candidates = (1...200).compactMap { _ in
-            Interpreters.generate(generator, with: () as! Input)
-        }.partitioned(by: property)
-        // Once we have these candidates, how do we correlate a recipe with a fully fledged object? Reflection?
-        // We have no guarantee that these 
-        /*
-         (lldb) po Mirror(reflecting: candidates.falseElements[0]).children.map(\.value)
-         ▿ 2 elements
-           - 0 : 147
-           - 1 : false
-         (lldb) po Mirror(reflecting: candidates.falseElements[0]).children.map(\.value).map { type(of: $0) }
-         ▿ 2 elements
-           - 0 : Swift.Int
-           - 1 : Swift.Bool
-         */
-        return recipe
     }
     
     private static func shrinkImpl<Input, Output>(

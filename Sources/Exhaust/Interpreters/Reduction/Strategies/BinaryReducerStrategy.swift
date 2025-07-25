@@ -45,6 +45,7 @@ struct BinaryReducerStrategy: ChoiceValueReducerStrategy, ChoiceSequenceReducerS
                 count += 1
             }
         case .towardsHigherBound:
+            // FIXME: Fundamental error here is that multiplying -2 * 3 is -6, so we need to check whether the number is negative or not
             var candidate = value * 2
             while count < limit, candidate < range.upperBound {
                 values.append(candidate)

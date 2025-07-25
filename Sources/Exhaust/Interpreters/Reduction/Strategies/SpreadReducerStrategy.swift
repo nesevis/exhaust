@@ -28,6 +28,9 @@ struct SpreadReducerStrategy: ChoiceValueReducerStrategy, ChoiceSequenceReducerS
             return []
         }
         let chunks = lengthRange.equallySpacedExcludingBounds(count: collection.count / 10)
+        guard chunks.isEmpty == false else {
+            return []
+        }
         let result = collection.evenlyChunked(in: chunks.count)
             .map(Array.init)
         return result
