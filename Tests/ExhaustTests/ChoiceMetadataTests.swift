@@ -186,7 +186,7 @@ struct ChoiceMetadataTests {
         @Test("ChoiceTree.just complexity")
         func testJustComplexity() {
             // Test that .just cases have zero complexity
-            let justTree = ChoiceTree.just
+            let justTree = ChoiceTree.just("")
             #expect(justTree.complexity == 0)
         }
     }

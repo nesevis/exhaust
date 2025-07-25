@@ -13,7 +13,7 @@ enum ChoiceTree: Hashable, Equatable, Sendable {
     
     /// A deterministic or constant value that can't be shrunk
     /// This is encoded into the generator, and doesn't need to be part of the ``ChoiceTree``
-    case just
+    case just(String)
     
     /// A node that represents the generation of a sequence. It explicitly
     /// captures the length and the choice trees for each of its elements.
@@ -27,11 +27,28 @@ enum ChoiceTree: Hashable, Equatable, Sendable {
     
     /// Used only for test case reduction. Represents a value that is known to have affected the property being tested against
     indirect case important(ChoiceTree)
+    
+    /// Used only for replay. Represents the selected branch in a ``group`` of ``branch``es.
+    indirect case selected(ChoiceTree)
 }
 
 extension ChoiceTree {
     var isImportant: Bool {
         if case .important = self {
+            return true
+        }
+        return false
+    }
+    
+    var isSelected: Bool {
+        if case .selected = self {
+            return true
+        }
+        return false
+    }
+    
+    var isJust: Bool {
+        if case .just = self {
             return true
         }
         return false
@@ -49,7 +66,7 @@ extension ChoiceTree {
             return 3 + children.map(\.structuralComplexity).reduce(0, +)
         case .group(let array):
             return 1 + array.map(\.structuralComplexity).reduce(0, +)
-        case .important(let choiceTree):
+        case .important(let choiceTree), .selected(let choiceTree):
             return choiceTree.structuralComplexity
         }
     }
@@ -86,7 +103,7 @@ extension ChoiceTree {
                 complexity += elementComplexity
             }
             return complexity
-        case let .important(value):
+        case let .important(value), let .selected(value):
             return value.complexity
         }
     }
@@ -115,8 +132,11 @@ extension ChoiceTree {
             // For a group, recursively map over its children.
             return try .group(children.map { try $0.map(transform) })
         case let .important(child):
-            // For a locked node, recursively map over the locked child.
+            // For an important node, recursively map over the locked child.
             return try .important(child.map(transform))
+        case let .selected(child):
+            // For a selected node, recursively map over the locked child.
+            return try .selected(child.map(transform))
         }
     }
     
@@ -132,7 +152,7 @@ extension ChoiceTree {
         case let .sequence(_, elements, _), let .branch(_, elements), let .group(elements):
             // For a sequence, recursively map over its elements.
             return elements.contains(where: predicate)
-        case let .important(child):
+        case let .important(child), let .selected(child):
             // For a locked node, recursively map over the locked child.
             return predicate(child)
         }
@@ -271,10 +291,11 @@ extension ChoiceTree: CustomDebugStringConvertible {
         treeDescription(prefix: "", isLast: true)
     }
     
-    private func treeDescription(prefix: String, isLast: Bool, isLocked: Bool = false) -> String {
+    private func treeDescription(prefix: String, isLast: Bool, isLocked: Bool = false, isSelected: Bool = false) -> String {
         let connector = isLast ? "└── " : "├── "
         let childPrefix = prefix + (isLast ? "    " : "│   ")
         let locked = isLocked ? "✨" : ""
+        let selected = isSelected ? "✅" : ""
         
         switch self {
         case let .choice(value, _):
@@ -289,8 +310,8 @@ extension ChoiceTree: CustomDebugStringConvertible {
                 return prefix + connector + "\(locked)choice(float: \(float))\(locked)"
             }
             
-        case .just:
-            return prefix + connector + "just"
+        case .just(let type):
+            return prefix + connector + "just(\(type))"
             
         case let .sequence(length, elements, _):
             var result = prefix + connector + "\(locked)sequence(length: \(length))\(locked)"
@@ -314,7 +335,7 @@ extension ChoiceTree: CustomDebugStringConvertible {
             return result
             
         case let .branch(label, children):
-            var result = prefix + connector + "\(locked)branch(label: \(label))\(locked)"
+            var result = prefix + connector + "\(selected)\(locked)branch(label: \(label))\(locked)"
             for (index, child) in children.enumerated() {
                 let isLastChild = index == children.count - 1
                 result += "\n" + child.treeDescription(prefix: childPrefix, isLast: isLastChild)
@@ -330,6 +351,8 @@ extension ChoiceTree: CustomDebugStringConvertible {
             return result
         case let .important(value):
             return value.treeDescription(prefix: prefix, isLast: isLast, isLocked: true)
+        case let .selected(value):
+            return value.treeDescription(prefix: prefix, isLast: isLast, isSelected: true)
         }
     }
     
@@ -346,9 +369,9 @@ extension ChoiceTree: CustomDebugStringConvertible {
             case .character(let character):
                 return character.description
             }
-        case .just:
-            return "constant"
-        case .sequence(let length, let elements, _):
+        case .just(let type):
+            return "just(\(type))"
+        case .sequence(_, let elements, _):
             if case .choice(.character, _) = elements.first {
                 return "\"\(elements.map(\.elementDescription).joined())\""
             }
@@ -357,7 +380,7 @@ extension ChoiceTree: CustomDebugStringConvertible {
             return "\(label): \(children.map(\.elementDescription).joined(separator: " | "))"
         case .group(let array):
             return "{" + array.map(\.elementDescription).joined() + "}"
-        case .important(let choiceTree):
+        case .important(let choiceTree), .selected(let choiceTree):
             return choiceTree.elementDescription
         }
     }

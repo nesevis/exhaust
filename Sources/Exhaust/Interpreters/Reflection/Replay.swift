@@ -91,25 +91,33 @@ extension Interpreters {
                 guard !choices.isEmpty else { return nil }
                 let choice = choices.removeFirst()
                 
-                guard case let .group(branches) = choice else {
+                guard case var .group(branches) = choice else {
                     throw ReplayError.wrongInputChoice
                 }
                 
-                let nextGen = try branches.firstNonNil { branch -> ReflectiveGenerator<Input, Output>? in
-                    guard case let .branch(label, children) = branch else {
-                        throw ReplayError.wrongInputChoice
-                    }
-                    
-                    guard
-                        // Find the sub-generator that matches the label
-                        let chosenGen = pickChoices.first(where: { $0.label == label })?.generator,
-                        // Process the chosen sub-generator with its children
-                        let result = try replayWithChoices(chosenGen, choices: children)
-                    else {
-                        return nil
-                    }
-                    return continuation(result)
+                // There can only be one selected pick in a group of branches
+                // If one is selected, we don't have to replay the others
+                if branches.contains(where: \.isSelected) {
+                    branches = branches.filter(\.isSelected)
                 }
+                
+                let nextGen = try branches
+                    .firstNonNil { branch -> ReflectiveGenerator<Input, Output>? in
+                        switch branch {
+                        case let .branch(label, children), let .selected(.branch(label, children)):
+                            guard
+                                // Find the sub-generator that matches the label
+                                let chosenGen = pickChoices.first(where: { $0.label == label })?.generator,
+                                // Process the chosen sub-generator with its children
+                                let result = try replayWithChoices(chosenGen, choices: children)
+                            else {
+                                return nil
+                            }
+                            return continuation(result)
+                        default:
+                            throw ReplayError.wrongInputChoice
+                        }
+                    }
                 
                 guard let nextGen else {
                     throw ReplayError.noSuccessfulBranch

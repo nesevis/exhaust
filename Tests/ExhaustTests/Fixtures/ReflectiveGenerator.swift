@@ -13,6 +13,7 @@ func validateGenerator<Output: Equatable>(_ gen: ReflectiveGenerator<Any, Output
     let instance = try #require(Interpreters.generate(gen))
     let recipe = try #require(try Interpreters.reflect(gen, with: instance))
     let replay = try #require(try Interpreters.replay(gen, using: recipe))
+    #expect(instance == replay)
     print()
     return (recipe, instance)
 }

@@ -17,7 +17,7 @@ extension ClosedRange where Bound == UInt64 {
             let size = chunkSize + UInt64(extraOne) 
             let end = start + size - 1
             
-            result.append(start...min(end, upperBound))
+            result.append(start...Swift.min(end, upperBound))
             start = end + 1
             
             if start > upperBound { break }
@@ -45,10 +45,11 @@ extension ClosedRange where Bound == UInt64 {
     }
 }
 
+// For unsigned values
 extension ClosedRange where Bound: Comparable, Bound: FixedWidthInteger {
     func equallySpacedExcludingBounds(count: Bound) -> [Bound] {
         guard isEmpty == false else { return [] }
-        var count = count + 2 // Avoiding anchoring close to the extremes
+        let count = count + 2 // Avoiding anchoring close to the extremes
         
         let totalSize = upperBound - lowerBound
         guard totalSize > count, count > 0 else {
@@ -62,6 +63,43 @@ extension ClosedRange where Bound: Comparable, Bound: FixedWidthInteger {
         
         for i in 2...count - 1 {
             result.append(lowerBound + spacing * i)
+        }
+        
+        return result
+    }
+}
+
+// For signed values
+extension ClosedRange where Bound: Comparable, Bound: FixedWidthInteger & SignedInteger {
+    func equallySpacedExcludingBounds(count: Bound) -> [Bound] {
+        guard isEmpty == false else { return [] }
+        let count = count + 2 // Avoiding anchoring close to the extremes
+        
+        var result: [Bound] = []
+        if upperBound &- lowerBound == -1 {
+            // We've wrapped. This is a huge range, so split it in half
+            let totalSize = upperBound
+            let spacing = totalSize / (count * 2) + 1
+            for i in 1...Int(count / 2) {
+                let value = lowerBound + spacing * Bound(i)
+                result.append(value)
+                result.append(abs(value))
+            }
+        } else {
+            // The range is mappable
+            let totalSize = upperBound - lowerBound
+            guard totalSize > count, count > 0 else {
+                return []
+            }
+            
+            let spacing = totalSize / count + 1
+            
+            var result: [Bound] = []
+            result.reserveCapacity(Int(count))
+            
+            for i in 2...count - 1 {
+                result.append(lowerBound + spacing * i)
+            }
         }
         
         return result

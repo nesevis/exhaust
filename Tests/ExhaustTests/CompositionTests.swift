@@ -535,7 +535,6 @@ struct CompositionTests {
             }
             
             // Gen.zip will lens each generator into its position in the tuple
-            // We want to confirm that 
             let gen = Gen.zip(Int.arbitrary, String.arbitrary, Bool.arbitrary)
             .biMap(
                 forward: { Thing(a: $0.0, b: $0.1, c: $0.2) },

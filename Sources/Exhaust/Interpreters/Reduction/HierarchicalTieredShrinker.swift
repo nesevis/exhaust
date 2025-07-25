@@ -15,13 +15,13 @@ final class HierarchicalTieredShrinker: IteratorProtocol {
     private var isImportant: Bool
     
     /// The internal state of the iterator
-    private var state = State.idle
+    private var state: State
     
     init(_ candidate: ChoiceTree) {
-        print("New shrinker iterator \(candidate.elementDescription) \(candidate.metadata.strategies)\n\(candidate.effectiveRange)")
-//        print("Creating new \( candidate.isImportant ? "important " : "")shrinker for\n\(candidate)\nMeta: \(candidate.metadata)")
+        print("New shrinker iterator \(candidate.elementDescription)\n\(candidate.effectiveRange?.description ?? "No range")")
         self.origin = candidate
         self.isImportant = candidate.isImportant
+        self.state = .idle
     }
     
     private enum State {
@@ -41,7 +41,7 @@ final class HierarchicalTieredShrinker: IteratorProtocol {
         case group(children: Shrinks, childIndex: Int, subIterators: [HierarchicalTieredShrinker], exhaustedChildren: Set<Int>)
         
         /// Representing a branch in the ``ChoiceTree``
-        case branch(label: UInt64, children: Shrinks, subIterator: HierarchicalTieredShrinker)
+        case branch(label: UInt64, children: Shrinks, childIndex: Int, subIterators: [HierarchicalTieredShrinker], exhaustedChildren: Set<Int>)
     }
     
     /// This kicks off the initial round of shrinks. It will go by strategy
@@ -63,11 +63,12 @@ final class HierarchicalTieredShrinker: IteratorProtocol {
             }
             return (first, .sequence(shrinks: shrinks.dropFirst(), original: shrinks, metadata: meta, strategy: first.strategy))
         case let .branch(label, array):
-            guard let first = array.first else {
+            guard let firstBranch = array.first else {
                 return (nil, .exhausted)
             }
-            let subIterator = HierarchicalTieredShrinker(first)
-            return (first, .branch(label: label, children: array[...], subIterator: subIterator))
+            // This doesn't property wrap up the value again
+            let subIterators = array.map { HierarchicalTieredShrinker($0) }
+            return (first, .branch(label: label, children: array[...], childIndex: 0, subIterators: subIterators, exhaustedChildren: []))
         case let .group(array):
             //
             guard array.isEmpty == false else {
@@ -78,6 +79,8 @@ final class HierarchicalTieredShrinker: IteratorProtocol {
             return (first, .group(children: array[...], childIndex: 0, subIterators: subIterators, exhaustedChildren: []))
         case let .important(value):
             return handle(first: value)
+        case .selected:
+            fatalError("\(Self.self) should not handle `.selected`")
         }
     }
     
@@ -146,6 +149,10 @@ final class HierarchicalTieredShrinker: IteratorProtocol {
                 if let result {
                     if isImportant {
                         return .important(result)
+                    }
+                    if result.isJust {
+                        // What?
+//                        return nil
                     }
                     return result
                 }
@@ -283,20 +290,35 @@ final class HierarchicalTieredShrinker: IteratorProtocol {
                     state = .group(children: children, childIndex: index, subIterators: subIterators, exhaustedChildren: exhaustedChildren)
                     continue
                 }
-            case let .branch(label, children, subIterator):
-                if let subResult = subIterator.next() {
-                    // There's still a result, keep working on the child
-                    state = .branch(label: label, children: children, subIterator: subIterator)
-                    return ChoiceTree.branch(label: label, children: CollectionOfOne(subResult) + Array(children))
-                } else {
-                    // We've exhausted this child
-                    guard let child = children.first else {
+            case .branch(let label, var children, var index, let subIterators, var exhaustedChildren):
+                if let subResult = subIterators[index].next() {
+                    children[index] = subResult
+                    // There's still a result, update the child, and if it's not an important part, move to the next one (round-robin)
+                    index = children[index].isImportant ? index : (index + 1) % children.count
+                    // Skip exhausted children
+                    while exhaustedChildren.contains(index) && exhaustedChildren.count < children.count {
+                        index = (index + 1) % children.count
+                    }
+                    if exhaustedChildren.count >= children.count {
                         state = .exhausted
                         return nil
                     }
-                    let nextIterator = HierarchicalTieredShrinker(child)
-                    state = .branch(label: label, children: children.dropFirst(), subIterator: nextIterator)
-                    return ChoiceTree.branch(label: label, children: Array(children.dropFirst()))
+                    state = .branch(label: label, children: children, childIndex: index, subIterators: subIterators, exhaustedChildren: exhaustedChildren)
+                    return ChoiceTree.branch(label: label, children: Array(children))
+                } else {
+                    // This child is exhausted, mark it and move to next
+                    exhaustedChildren.insert(index)
+                    if exhaustedChildren.count >= children.count {
+                        state = .exhausted
+                        return nil
+                    }
+                    index = (index + 1) % children.count
+                    // Skip exhausted children
+                    while exhaustedChildren.contains(index) {
+                        index = (index + 1) % children.count
+                    }
+                    state = .branch(label: label, children: children, childIndex: index, subIterators: subIterators, exhaustedChildren: exhaustedChildren)
+                    continue
                 }
             }
         }

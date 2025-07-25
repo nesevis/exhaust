@@ -146,7 +146,7 @@ extension ChoiceTree {
             return .branch(label: label, children: children.map { $0.setStrategies(strategies) })
         case let .group(array):
             return .group(array.map { $0.setStrategies(strategies) })
-        case let .important(element):
+        case let .important(element), let .selected(element):
             return .important(element.setStrategies(strategies))
         }
     }
@@ -166,6 +166,8 @@ extension ChoiceTree {
             fatalError()
         case .important(let choiceTree):
             fatalError()
+        case .selected(let choiceTree):
+            fatalError()
         }
     }
     
@@ -183,7 +185,7 @@ extension ChoiceTree {
             return self
         case let .group(array):
             return self
-        case let .important(element):
+        case let .important(element), let .selected(element):
             return .important(element.setStrategiesForRangeAndType(direction: direction))
         }
     }

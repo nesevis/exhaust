@@ -93,7 +93,7 @@ extension Interpreters {
 
         case let .pick(choices):
             // PICK's JOB: Try all branches against the same final output value.
-            let results = try choices.flatMap { (_, label, generator) -> [(value: Any, label: UInt64, path: [ChoiceTree])] in
+            let results = try choices.flatMap { (_, label, generator) -> [(value: Any, label: UInt64,  isPicked: Bool, path: [ChoiceTree])] in
                 let subPaths = try reflectRecursive(generator, onFinalOutput: finalOutput)
                 // The reflection process creates a history of the choices made to create that value,
                 // so we prune the choices to find the one that was made. This requires `Gen.pick` to
@@ -106,16 +106,17 @@ extension Interpreters {
                     throw ReflectionError.pickValueIsNotEquatable("\(finalOutput)")
                 }
                 
-                guard equatableValue.isEqual(equatableOutput) else {
-                    return []
-                }
+                let isPicked = equatableValue.isEqual(equatableOutput)
                 
                 let labeledPaths = subPaths.map { (value, pathTree) in
-                    (value, label, pathTree)
+                    (value, label, isPicked, pathTree)
                 }
                 return labeledPaths
             }
-            let returnData = results.map { (value: $0.value, path: ChoiceTree.branch(label: $0.label, children: $0.path)) }
+            let returnData = results.map {
+                let branch = ChoiceTree.branch(label: $0.label, children: $0.path)
+                return (value: $0.value, path: $0.isPicked ? .selected(branch) : branch)
+            }
             return [(finalOutput, [ChoiceTree.group(returnData.map(\.1))])]
             
         case let .chooseBits(min, max):
@@ -177,7 +178,8 @@ extension Interpreters {
             return [(value: finalOutput, path: [.choice(.init(character), metadata)])]
         
         case let .just(value):
-            return [(value: value, path: [.just])]
+            let string = "\(value)".prefix(50)
+            return [(value: value, path: [.just(String(string))])]
         case let .sequence(lengthGen, elementGen):
             // 1. The target value for a sequence MUST be an array.
             guard

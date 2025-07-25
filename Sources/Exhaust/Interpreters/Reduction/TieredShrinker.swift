@@ -21,9 +21,18 @@ extension Interpreters {
     ) throws -> Output {
         // At this stage we know that `value`'s values represent a higher or a lower bound beyond the generator
         // Can we 'cheat' and encode that?
-        guard let recipe = try Interpreters.reflect(generator, with: value) else {
+        guard let reflectedRecipe = try Interpreters.reflect(generator, with: value) else {
             throw ShrinkError.couldNotReflect
         }
+        // If this recipe had reflected a `pick` with multiple `.branch` choices and one was selected
+        // we need to deselect it to open the value up to shrinking
+        let recipe = reflectedRecipe
+            .map { choice in
+                if case let .selected(selected) = choice {
+                    return selected
+                }
+                return choice
+            }
         guard property(value) == false else {
             throw ShrinkError.counterExampleMustFail
         }
