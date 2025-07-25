@@ -284,9 +284,9 @@ extension ChoiceTree: CustomDebugStringConvertible {
             case let .unsigned(uint):
                 return prefix + connector + "\(locked)choice(unsigned:\(uint))\(locked)"
             case let .signed(int, _):
-                return prefix + connector + "\(locked)choice(signed: \(int))\(locked))"
+                return prefix + connector + "\(locked)choice(signed: \(int))\(locked)"
             case let .floating(float, _):
-                return prefix + connector + "\(locked)choice(float: \(float)\(locked))"
+                return prefix + connector + "\(locked)choice(float: \(float))\(locked)"
             }
             
         case .just:
