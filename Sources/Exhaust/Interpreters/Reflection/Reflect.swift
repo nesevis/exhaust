@@ -93,11 +93,12 @@ extension Interpreters {
 
         case let .pick(choices):
             // PICK's JOB: Try all branches against the same final output value.
-            return try choices.flatMap { (_, label, generator) -> [(value: Any, path: [ChoiceTree])] in
+            let results = try choices.flatMap { (_, label, generator) -> [(value: Any, label: UInt64, path: [ChoiceTree])] in
                 let subPaths = try reflectRecursive(generator, onFinalOutput: finalOutput)
-                // FIXME: I need to validate that the subpaths contains the final output
-                // otherwise we can't prune the branches that weren't chosen.
-                // Do we need an equatable constraint on Gen.pick?
+                // The reflection process creates a history of the choices made to create that value,
+                // so we prune the choices to find the one that was made. This requires `Gen.pick` to
+                // require Equatable-conforming values.
+                // FIXME: The open question is how the shrinker deals with this "lack" of choice?
                 guard
                     let equatableOutput = finalOutput as? any Equatable,
                     let equatableValue = subPaths.firstNonNil({ $0.value as? any Equatable })
@@ -110,10 +111,13 @@ extension Interpreters {
                 }
                 
                 let labeledPaths = subPaths.map { (value, pathTree) in
-                    (value, [ChoiceTree.branch(label: label, children: pathTree)])
+                    (value, label, pathTree)
                 }
                 return labeledPaths
             }
+            let returnData = results.map { (value: $0.value, path: ChoiceTree.branch(label: $0.label, children: $0.path)) }
+            return [(finalOutput, [ChoiceTree.group(returnData.map(\.1))])]
+            
         case let .chooseBits(min, max):
             // In the reverse pass of a [[Char]] we'll be passed the array here and it will represent the length of the list. How can we know that?
             var convertibleValue: (any BitPatternConvertible)?
