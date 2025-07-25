@@ -8,8 +8,8 @@
 extension Bool: Arbitrary {
     static var arbitrary: ReflectiveGenerator<Any, Bool> {
         Gen.pick(choices: [
-            (1, .pure(true)),
-            (1, .pure(false))
+            (1, Gen.just(true)),
+            (1, Gen.just(false))
         ])
     }
 }
@@ -113,7 +113,7 @@ extension Optional: Arbitrary where Wrapped: Arbitrary, Wrapped: Equatable {
     static var arbitrary: ReflectiveGenerator<Any, Optional<Wrapped>> {
         Gen.pick(choices: [
             (1, Gen.just(.none)),
-            (5, Wrapped.arbitrary.map { .some($0) })
+            (5, Wrapped.arbitrary.bind { Gen.just($0) })
         ])
     }
 }
