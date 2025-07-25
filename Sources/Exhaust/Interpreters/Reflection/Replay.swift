@@ -5,6 +5,8 @@
 //  Created by Chris Kolbu on 16/7/2025.
 //
 
+import Foundation
+
 extension Interpreters {
     // ... `generate` and `reflect` and their helpers ...
 
@@ -20,10 +22,10 @@ extension Interpreters {
     public static func replay<Input, Output>(
         _ gen: ReflectiveGenerator<Input, Output>,
         using choiceTree: ChoiceTree
-    ) -> Output? {
+    ) throws -> Output? {
         // Start the recursive process. The helper returns the value and any *unconsumed*
         // parts of the tree. A successful top-level replay should consume the entire tree.
-        let result = replayRecursive(gen, with: choiceTree)
+        let result = try replayRecursive(gen, with: choiceTree)
         
         // We can add a check here to ensure no parts of the tree were left over,
         // but the recursive logic should handle this correctly.
@@ -35,15 +37,15 @@ extension Interpreters {
     private static func replayWithChoices<Input, Output>(
         _ gen: ReflectiveGenerator<Input, Output>,
         choices: [ChoiceTree]
-    ) -> Output? {
+    ) throws -> Output? {
         var remainingChoices = choices
-        return replayWithChoicesHelper(gen, choices: &remainingChoices)
+        return try replayWithChoicesHelper(gen, choices: &remainingChoices)
     }
     
     private static func replayWithChoicesHelper<Input, Output>(
         _ gen: ReflectiveGenerator<Input, Output>,
         choices: inout [ChoiceTree]
-    ) -> Output? {
+    ) throws -> Output? {
         
         if let firstChoice = choices.first, firstChoice.isImportant {
             // This is wrapped in .important for shrinking purposes; unwrap
@@ -71,7 +73,7 @@ extension Interpreters {
                 }
                 
                 let nextGen = continuation(bits)
-                return self.replayWithChoicesHelper(nextGen, choices: &choices)
+                return try self.replayWithChoicesHelper(nextGen, choices: &choices)
             
             case .chooseCharacter:
                 // Consume the next choice which should be a Character
@@ -82,28 +84,38 @@ extension Interpreters {
                 }
                 
                 let nextGen = continuation(character)
-                return self.replayWithChoicesHelper(nextGen, choices: &choices)
+                return try self.replayWithChoicesHelper(nextGen, choices: &choices)
 
             case let .pick(pickChoices):
                 // Consume the next choice which should be a branch
                 guard !choices.isEmpty else { return nil }
                 let choice = choices.removeFirst()
-                guard case let .branch(label, children) = choice else {
-                    return nil
+                
+                guard case let .group(branches) = choice else {
+                    throw ReplayError.wrongInputChoice
                 }
                 
-                // Find the sub-generator that matches the label
-                guard let chosenGen = pickChoices.first(where: { $0.label == label })?.generator else {
-                    return nil
+                let nextGen = try branches.firstNonNil { branch -> ReflectiveGenerator<Input, Output>? in
+                    guard case let .branch(label, children) = branch else {
+                        throw ReplayError.wrongInputChoice
+                    }
+                    
+                    guard
+                        // Find the sub-generator that matches the label
+                        let chosenGen = pickChoices.first(where: { $0.label == label })?.generator,
+                        // Process the chosen sub-generator with its children
+                        let result = try replayWithChoices(chosenGen, choices: children)
+                    else {
+                        return nil
+                    }
+                    return continuation(result)
                 }
                 
-                // Process the chosen sub-generator with its children
-                guard let result = replayWithChoices(chosenGen, choices: children) else {
-                    return nil
+                guard let nextGen else {
+                    throw ReplayError.noSuccessfulBranch
                 }
-                
-                let nextGen = continuation(result)
-                return self.replayWithChoicesHelper(nextGen, choices: &choices)
+
+                return try self.replayWithChoicesHelper(nextGen, choices: &choices)
 
             case let .sequence(_, elementGenerator):
                 // Consume the next choice which should be a sequence
@@ -118,22 +130,22 @@ extension Interpreters {
                 
                 var accumulatedValues: [Any] = []
                 for elementScript in elements {
-                    guard let elementValue = self.replayRecursive(elementGenerator, with: elementScript) else {
+                    guard let elementValue = try self.replayRecursive(elementGenerator, with: elementScript) else {
                         return nil
                     }
                     accumulatedValues.append(elementValue)
                 }
                 
                 let nextGen = continuation(accumulatedValues)
-                return self.replayWithChoicesHelper(nextGen, choices: &choices)
+                return try self.replayWithChoicesHelper(nextGen, choices: &choices)
 
             case let .lmap(_, subGenerator), let .prune(subGenerator):
                 // A left map or prune doesn't consume choices, just passes them to the sub-generator
-                guard let subResult = self.replayWithChoicesHelper(subGenerator, choices: &choices) else {
+                guard let subResult = try self.replayWithChoicesHelper(subGenerator, choices: &choices) else {
                     return nil
                 }
                 let nextGen = continuation(subResult)
-                return self.replayWithChoicesHelper(nextGen, choices: &choices)
+                return try self.replayWithChoicesHelper(nextGen, choices: &choices)
             case let .just(value):
                 // Consume the next choice which should be a just
                 guard !choices.isEmpty else { return nil }
@@ -143,7 +155,7 @@ extension Interpreters {
                 }
                 
                 let nextGen = continuation(value)
-                return self.replayWithChoicesHelper(nextGen, choices: &choices)
+                return try self.replayWithChoicesHelper(nextGen, choices: &choices)
             }
         }
     }
@@ -151,7 +163,7 @@ extension Interpreters {
     private static func replayRecursive<Input, Output>(
         _ gen: ReflectiveGenerator<Input, Output>,
         with script: ChoiceTree
-    ) -> Output? {
+    ) throws -> Output? {
         
         var script = script
         if case let .important(choice) = script {
@@ -160,7 +172,7 @@ extension Interpreters {
         
         // Handle group scripts by distributing choices to the generator
         if case let .group(choices) = script {
-            return replayWithChoices(gen, choices: choices)
+            return try replayWithChoices(gen, choices: choices)
         }
         
         switch gen {
@@ -179,7 +191,7 @@ extension Interpreters {
                 let nextGen = continuation(result)
                 // We replay the rest of the generator with the *same* script,
                 // as the operation itself doesn't consume the whole tree.
-                return self.replayRecursive(nextGen, with: script)
+                return try self.replayRecursive(nextGen, with: script)
             }
             
             // This is the core structural match. We switch on the operation.
@@ -190,20 +202,20 @@ extension Interpreters {
                 guard case let .choice(bits, _) = script else {
                     return nil
                 }
-                return runContinuation(bits)
+                return try runContinuation(bits)
             
             case .chooseCharacter:
                 // This operation expects a primitive `.characterChoice` node from the script.
                 guard case let .choice(.character(character), _) = script else {
                     return nil
                 }
-                return runContinuation(character)
+                return try runContinuation(character)
             case let .just(value):
                 // This operation expects a `.just` node from the script.
                 guard case .just = script else {
                     return nil
                 }
-                return runContinuation(value)
+                return try runContinuation(value)
 
             case let .pick(choices):
                 // This operation expects a `.branch` node from the script.
@@ -219,7 +231,7 @@ extension Interpreters {
                 // Recursively replay the chosen sub-generator with the children of this branch node.
                 // A group of children is replayed as a single unit.
                 let childScript = ChoiceTree.group(children)
-                guard let result = self.replayRecursive(chosenGen, with: childScript) else {
+                guard let result = try self.replayRecursive(chosenGen, with: childScript) else {
                     return nil
                 }
                 return result as? Output
@@ -234,42 +246,47 @@ extension Interpreters {
                     validRanges: [lengthGen.associatedRange!],
                     strategies: ShrinkingStrategy.sequenceStrategies
                 )
-                guard let _ = self.replayRecursive(lengthGen, with: .choice(.unsigned(length), lengthMetadata)) else {
+                guard  let _ = try self.replayRecursive(lengthGen, with: .choice(.unsigned(length), lengthMetadata)) else {
                     return nil
                 }
                 
                 var accumulatedValues: [Any] = []
                 for elementScript in elements {
                     // Replay each element with its corresponding sub-tree from the script.
-                    guard let elementValue = self.replayRecursive(elementGenerator, with: elementScript) else {
+                    guard let elementValue = try self.replayRecursive(elementGenerator, with: elementScript) else {
                         return nil // Fail if any element fails to replay.
                     }
                     accumulatedValues.append(elementValue)
                 }
                 
-                return runContinuation(accumulatedValues)
+                return try runContinuation(accumulatedValues)
                  
             // Forward-only ops don't consume choices. Their presence in a reflectable
             // generator is an error.
             case let .lmap(_, subGenerator):
                 // A lens/lmap is a wrapper. It doesn't consume a node from the script itself.
                 // The choices are consumed by its sub-generator. We pass the same script down.
-                guard let subResult = self.replayRecursive(subGenerator, with: script) else {
+                guard let subResult = try self.replayRecursive(subGenerator, with: script) else {
                     return nil
                 }
                 
                 // Call the continuation with the subResult to handle the transformation
                 let nextGen = continuation(subResult)
-                return self.replayRecursive(nextGen, with: script)
+                return try self.replayRecursive(nextGen, with: script)
                 
             case let .prune(subGenerator):
                 // A prune is a wrapper. It doesn't consume a node from the script itself.
                 // The choices are consumed by its sub-generator. We pass the same script down.
-                guard let result = self.replayRecursive(subGenerator, with: script) else {
+                guard let result = try self.replayRecursive(subGenerator, with: script) else {
                     return nil
                 }
                 return result as? Output
             }
         }
+    }
+    
+    enum ReplayError: LocalizedError {
+        case wrongInputChoice
+        case noSuccessfulBranch
     }
 }
