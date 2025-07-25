@@ -60,7 +60,7 @@ struct CompositionTests {
             
             // Test round-trip: generate -> reflect -> replay
             if let recipe = try Interpreters.reflect(personGen, with: person) {
-                if let replayed = Interpreters.replay(personGen, using: recipe) {
+                if let replayed = try Interpreters.replay(personGen, using: recipe) {
                     #expect(person == replayed)
                 } else {
                     #expect(false, "Replay failed for person")
@@ -79,7 +79,7 @@ struct CompositionTests {
             
             let generated = try #require(Interpreters.generate(gen))
             let recipe = try #require(try Interpreters.reflect(gen, with: generated))
-            let replayed = try #require(Interpreters.replay(gen, using: recipe))
+            let replayed = try #require(try Interpreters.replay(gen, using: recipe))
             #expect(generated == replayed)
         }
         
@@ -96,7 +96,7 @@ struct CompositionTests {
             
             let generated = try #require(Interpreters.generate(gen))
             let recipe = try #require(try Interpreters.reflect(gen, with: generated))
-            let replayed = try #require(Interpreters.replay(gen, using: recipe))
+            let replayed = try #require(try Interpreters.replay(gen, using: recipe))
             #expect(generated == replayed)
         }
         
@@ -110,7 +110,7 @@ struct CompositionTests {
             
             let generated = try #require(Interpreters.generate(gen))
             let recipe = try #require(try Interpreters.reflect(gen, with: generated))
-            let replayed = try #require(Interpreters.replay(gen, using: recipe))
+            let replayed = try #require(try Interpreters.replay(gen, using: recipe))
             #expect(generated == replayed)
         }
         
@@ -125,7 +125,7 @@ struct CompositionTests {
             
             let generated = try #require(Interpreters.generate(gen))
             let recipe = try #require(try Interpreters.reflect(gen, with: generated))
-            let replayed = try #require(Interpreters.replay(gen, using: recipe))
+            let replayed = try #require(try Interpreters.replay(gen, using: recipe))
             #expect(generated == replayed)
         }
         
@@ -141,7 +141,7 @@ struct CompositionTests {
             
             let generated = try #require(Interpreters.generate(gen))
             let recipe = try #require(try Interpreters.reflect(gen, with: generated))
-            let replayed = try #require(Interpreters.replay(gen, using: recipe))
+            let replayed = try #require(try Interpreters.replay(gen, using: recipe))
             #expect(generated == replayed)
         }
         
@@ -158,7 +158,7 @@ struct CompositionTests {
             
             let generated = try #require(Interpreters.generate(gen))
             let recipe = try #require(try Interpreters.reflect(gen, with: generated))
-            let replayed = try #require(Interpreters.replay(gen, using: recipe))
+            let replayed = try #require(try Interpreters.replay(gen, using: recipe))
             #expect(generated == replayed)
         }
         
@@ -176,7 +176,7 @@ struct CompositionTests {
             
             let generated = try #require(Interpreters.generate(gen))
             let recipe = try #require(try Interpreters.reflect(gen, with: generated))
-            let replayed = try #require(Interpreters.replay(gen, using: recipe))
+            let replayed = try #require(try Interpreters.replay(gen, using: recipe))
             
             #expect(generated.0 == replayed.0)
             #expect(generated.1 == replayed.1)
@@ -202,7 +202,7 @@ struct CompositionTests {
             
             let generated = try #require(Interpreters.generate(gen))
             let recipe = try #require(try Interpreters.reflect(gen, with: generated))
-            let replayed = try #require(Interpreters.replay(gen, using: recipe))
+            let replayed = try #require(try Interpreters.replay(gen, using: recipe))
             
             #expect(generated.0 == replayed.0)
             #expect(generated.1 == replayed.1)
@@ -230,7 +230,7 @@ struct CompositionTests {
             
             let generated = try #require(Interpreters.generate(gen))
             let recipe = try #require(try Interpreters.reflect(gen, with: generated))
-            let replayed = try #require(Interpreters.replay(gen, using: recipe))
+            let replayed = try #require(try Interpreters.replay(gen, using: recipe))
             
             #expect(generated.0 == replayed.0)
             #expect(generated.1 == replayed.1)
@@ -260,7 +260,7 @@ struct CompositionTests {
             
             let generated = try #require(Interpreters.generate(gen))
             let recipe = try #require(try Interpreters.reflect(gen, with: generated))
-            let replayed = try #require(Interpreters.replay(gen, using: recipe))
+            let replayed = try #require(try Interpreters.replay(gen, using: recipe))
             
             #expect(generated.0 == replayed.0)
             #expect(generated.1 == replayed.1)
@@ -294,7 +294,7 @@ struct CompositionTests {
             
             // Test round-trip
             if let recipe = try Interpreters.reflect(rectGen, with: rect) {
-                if let replayed = Interpreters.replay(rectGen, using: recipe) {
+                if let replayed = try Interpreters.replay(rectGen, using: recipe) {
                     #expect(rect == replayed)
                 } else {
                     #expect(false, "Replay failed for rectangle")
@@ -358,7 +358,7 @@ struct CompositionTests {
             
             // Should still support round-trip
             if let recipe = try Interpreters.reflect(gen, with: largeArray) {
-                if let replayed = Interpreters.replay(gen, using: recipe) {
+                if let replayed = try Interpreters.replay(gen, using: recipe) {
                     #expect(largeArray == replayed)
                 } else {
                     #expect(false, "Replay failed for large array")
@@ -389,7 +389,7 @@ struct CompositionTests {
             
             // Test round-trip
             if let recipe = try Interpreters.reflect(gen, with: nested) {
-                if let replayed = Interpreters.replay(gen, using: recipe) {
+                if let replayed = try Interpreters.replay(gen, using: recipe) {
                     #expect(nested == replayed)
                 } else {
                     #expect(false, "Replay failed for deeply nested structure")
@@ -486,7 +486,7 @@ struct CompositionTests {
             
             // Test round-trip
             if let recipe = try Interpreters.reflect(companyGen, with: company) {
-                if let replayed = Interpreters.replay(companyGen, using: recipe) {
+                if let replayed = try Interpreters.replay(companyGen, using: recipe) {
                     #expect(company == replayed)
                 } else {
                     #expect(false, "Replay failed for company")
@@ -511,7 +511,7 @@ struct CompositionTests {
             for iteration in 0..<100 {
                 let generated = Interpreters.generate(pickedGen)!
                 if let recipe = try Interpreters.reflect(pickedGen, with: generated) {
-                    if let replayed = Interpreters.replay(pickedGen, using: recipe) {
+                    if let replayed = try Interpreters.replay(pickedGen, using: recipe) {
                         #expect(generated == replayed, "Failed at iteration \(iteration)")
                     } else {
                         #expect(false, "Replay failed at iteration \(iteration)")
@@ -541,7 +541,8 @@ struct CompositionTests {
                 forward: { Thing(a: $0.0, b: $0.1, c: $0.2) },
                 backward: { ($0.a, $0.b, $0.c) }
             )
-            try validateGenerator(gen)
+            let (recipe, instance) = try validateGenerator(gen)
+            let shrink = try Interpreters.shrink(instance, using: gen, where: { $0.c == !instance.c })
         }
         
         @Test("Test bimap is replayable")
@@ -553,7 +554,7 @@ struct CompositionTests {
             
             let instance = try #require(Interpreters.generate(gen))
             let recipe = try #require(try Interpreters.reflect(gen, with: instance))
-            let replay = try #require(Interpreters.replay(gen, using: recipe))
+            let replay = try #require(try Interpreters.replay(gen, using: recipe))
             #expect(instance == replay)
         }
     }

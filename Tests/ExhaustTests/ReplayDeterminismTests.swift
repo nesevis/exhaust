@@ -23,9 +23,9 @@ struct ReplayDeterminismTests {
         let recipe = try #require(try Interpreters.reflect(gen, with: initial))
         
         // Replay multiple times and verify identical results
-        let replay1 = try #require(Interpreters.replay(gen, using: recipe))
-        let replay2 = try #require(Interpreters.replay(gen, using: recipe))
-        let replay3 = try #require(Interpreters.replay(gen, using: recipe))
+        let replay1 = try #require(try Interpreters.replay(gen, using: recipe))
+        let replay2 = try #require(try Interpreters.replay(gen, using: recipe))
+        let replay3 = try #require(try Interpreters.replay(gen, using: recipe))
         
         #expect(initial == replay1)
         #expect(replay1 == replay2)
@@ -40,11 +40,11 @@ struct ReplayDeterminismTests {
         let recipe = try #require(try Interpreters.reflect(gen, with: value))
         
         // Replay original recipe
-        let replay1 = try #require(Interpreters.replay(gen, using: recipe))
+        let replay1 = try #require(try Interpreters.replay(gen, using: recipe))
         
         // Create new recipe from replayed value and replay again
         let newRecipe = try #require(try Interpreters.reflect(gen, with: replay1))
-        let replay2 = try #require(Interpreters.replay(gen, using: newRecipe))
+        let replay2 = try #require(try Interpreters.replay(gen, using: newRecipe))
         
         #expect(value == replay1)
         #expect(replay1 == replay2)
@@ -71,8 +71,8 @@ struct ReplayDeterminismTests {
         let recipe = try #require(try Interpreters.reflect(personGen, with: person))
         
         // Multiple replays should be identical
-        let replay1 = try #require(Interpreters.replay(personGen, using: recipe))
-        let replay2 = try #require(Interpreters.replay(personGen, using: recipe))
+        let replay1 = try #require(try Interpreters.replay(personGen, using: recipe))
+        let replay2 = try #require(try Interpreters.replay(personGen, using: recipe))
         
         #expect(person == replay1)
         #expect(replay1 == replay2)
@@ -86,7 +86,7 @@ struct ReplayDeterminismTests {
         let recipe = try #require(try Interpreters.reflect(gen, with: array))
         
         // Replay should preserve exact order
-        let replayed = try #require(Interpreters.replay(gen, using: recipe))
+        let replayed = try #require(try Interpreters.replay(gen, using: recipe))
         
         #expect(array == replayed)
         #expect(array.count == replayed.count)

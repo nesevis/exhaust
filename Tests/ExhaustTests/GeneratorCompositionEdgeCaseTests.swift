@@ -101,7 +101,7 @@ struct GeneratorCompositionEdgeCaseTests {
         
         let generated = try #require(Interpreters.generate(gen))
         let recipe = try #require(try Interpreters.reflect(gen, with: generated))
-        let replayed = try #require(Interpreters.replay(gen, using: recipe))
+        let replayed = try #require(try Interpreters.replay(gen, using: recipe))
         
         #expect(generated == replayed)
     }

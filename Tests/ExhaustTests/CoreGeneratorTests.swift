@@ -53,7 +53,7 @@ struct CoreGeneratorTests {
                 #expect(false, "Reflection failed for Gen.exact test")
                 return
             }
-            guard let replayed = Interpreters.replay(gen, using: recipe) else {
+            guard let replayed = try Interpreters.replay(gen, using: recipe) else {
                 #expect(false, "Replay failed for Gen.exact test")
                 return
             }
@@ -110,7 +110,7 @@ struct CoreGeneratorTests {
                 for iteration in 0..<10 {
                     let generated = Interpreters.generate(gen)!
                     if let recipe = try Interpreters.reflect(gen, with: generated) {
-                        if let replayed = Interpreters.replay(gen, using: recipe) {
+                        if let replayed = try Interpreters.replay(gen, using: recipe) {
                             #expect(generated == replayed, "Generator \(index), iteration \(iteration): \(generated) != \(replayed)")
                         } else {
                             #expect(false, "Replay failed for generator \(index), iteration \(iteration)")
@@ -132,7 +132,7 @@ struct CoreGeneratorTests {
             
             // Multiple replays should produce the same result
             for _ in 0..<20 {
-                if let replayed = Interpreters.replay(gen, using: recipe) {
+                if let replayed = try Interpreters.replay(gen, using: recipe) {
                     #expect(replayed == 42)
                 } else {
                     #expect(false, "Replay failed for value 42")

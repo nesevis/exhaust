@@ -42,7 +42,7 @@ struct GenerationExamplesTests {
             let result = Interpreters.generate(zipped)!
             let choices = try Interpreters.reflect(zipped, with: result)
             if let choices {
-                let replayed = Interpreters.replay(zipped, using: choices)
+                let replayed = try Interpreters.replay(zipped, using: choices)
                 if let replayed = replayed {
                     #expect(replayed == result)
                 } else {
@@ -64,7 +64,7 @@ struct GenerationExamplesTests {
             for i in 0..<3 {
                 let generated = Interpreters.generate(stringGen)!
                 if let recipe = try Interpreters.reflect(stringGen, with: generated) {
-                    if let replayed = Interpreters.replay(stringGen, using: recipe) {
+                    if let replayed = try Interpreters.replay(stringGen, using: recipe) {
                         // Round-trip successful
                     } else {
                         #expect(false, "Replay failed")
@@ -79,7 +79,7 @@ struct GenerationExamplesTests {
             for i in 0..<3 {
                 let generated = Interpreters.generate(proliferateGen)!
                 if let recipe = try Interpreters.reflect(proliferateGen, with: generated) {
-                    if let replayed = Interpreters.replay(proliferateGen, using: recipe) {
+                    if let replayed = try Interpreters.replay(proliferateGen, using: recipe) {
                         // Round-trip successful
                     } else {
                         #expect(false, "Replay failed")

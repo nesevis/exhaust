@@ -75,7 +75,7 @@ struct AdvancedFeatureTests {
                 
                 // Test round-trip
                 if let recipe = try Interpreters.reflect(gen, with: tree) {
-                    if let replayed = Interpreters.replay(gen, using: recipe) {
+                    if let replayed = try Interpreters.replay(gen, using: recipe) {
                         #expect(tree == replayed)
                     } else {
                         #expect(false, "Replay failed for tree")
@@ -129,7 +129,7 @@ struct AdvancedFeatureTests {
                 let recipe = try Interpreters.reflect(outerGen, with: generated)
                 
                 if let recipe = recipe {
-                    let replayed = Interpreters.replay(outerGen, using: recipe)
+                    let replayed = try Interpreters.replay(outerGen, using: recipe)
                     
                     if let replayed = replayed {
                         #expect(generated == replayed)
@@ -197,7 +197,7 @@ struct AdvancedFeatureTests {
                 
                 // Test round-trip for each variant
                 if let recipe = try Interpreters.reflect(variantGen, with: variant) {
-                    if let replayed = Interpreters.replay(variantGen, using: recipe) {
+                    if let replayed = try Interpreters.replay(variantGen, using: recipe) {
                         #expect(variant == replayed)
                     } else {
                         #expect(false, "Replay failed for variant")
@@ -264,7 +264,7 @@ struct AdvancedFeatureTests {
                 
                 // Test round-trip
                 if let recipe = try Interpreters.reflect(graphGen, with: graph) {
-                    if let replayed = Interpreters.replay(graphGen, using: recipe) {
+                    if let replayed = try Interpreters.replay(graphGen, using: recipe) {
                         #expect(graph == replayed)
                     } else {
                         #expect(false, "Replay failed for graph")
@@ -310,7 +310,7 @@ struct AdvancedFeatureTests {
                 
                 // Test round-trip (conditional generators may not support reflection)
                 if let recipe = try Interpreters.reflect(conditionalGen, with: data) {
-                    if let replayed = Interpreters.replay(conditionalGen, using: recipe) {
+                    if let replayed = try Interpreters.replay(conditionalGen, using: recipe) {
                         #expect(data == replayed)
                     }
                 }
@@ -336,7 +336,7 @@ struct AdvancedFeatureTests {
                     
                     // Test round-trip even with extreme values
                     if let recipe = try Interpreters.reflect(gen, with: value) {
-                        if let replayed = Interpreters.replay(gen, using: recipe) {
+                        if let replayed = try Interpreters.replay(gen, using: recipe) {
                             #expect(value == replayed, "Extreme generator \(index) failed round-trip")
                         } else {
                             #expect(false, "Replay failed for extreme generator \(index)")
@@ -369,7 +369,7 @@ struct AdvancedFeatureTests {
             
             // Test round-trip (this tests memory efficiency of reflection/replay)
             if let recipe = try Interpreters.reflect(largeNestedGen, with: large) {
-                if let replayed = Interpreters.replay(largeNestedGen, using: recipe) {
+                if let replayed = try Interpreters.replay(largeNestedGen, using: recipe) {
                     #expect(large == replayed)
                 } else {
                     #expect(false, "Replay failed for large nested structure")

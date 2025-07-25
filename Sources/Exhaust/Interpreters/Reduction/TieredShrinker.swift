@@ -77,7 +77,7 @@ extension Interpreters {
             // At this point we should reset the available shrinkers for the recipe
             let iterator = HierarchicalTieredShrinker(currentBestRecipe)
             while let candidateRecipe = iterator.next() {
-                guard let candidateValue = Interpreters.replay(generator, using: candidateRecipe) else {
+                guard let candidateValue = try Interpreters.replay(generator, using: candidateRecipe) else {
                     // This means the recipe is malformed, as any shrinks should return a valid recipe
                     throw ShrinkError.couldNotReplayRecipe(original: recipe, failing: candidateRecipe)
                 }
