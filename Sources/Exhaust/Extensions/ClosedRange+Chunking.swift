@@ -76,7 +76,7 @@ extension ClosedRange where Bound: Comparable, Bound: FixedWidthInteger & Signed
         let count = count + 2 // Avoiding anchoring close to the extremes
         
         var result: [Bound] = []
-        if upperBound &- lowerBound == -1 {
+        if upperBound &- lowerBound < 0 {
             // We've wrapped. This is a huge range, so split it in half
             let totalSize = upperBound
             let spacing = totalSize / (count * 2) + 1

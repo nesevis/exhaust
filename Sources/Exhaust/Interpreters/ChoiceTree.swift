@@ -148,14 +148,14 @@ extension ChoiceTree {
     }
     
     func contains(_ predicate: (ChoiceTree) -> Bool) -> Bool {
-        guard predicate(self) == false else {
+        let selfResult = predicate(self)
+        guard selfResult == false else {
             return true
         }
 
         switch self {
         case .choice, .just:
-            // For leaf nodes, return the transformed node directly.
-            fatalError("Should already have returned")
+            return selfResult
         case let .sequence(_, elements, _), let .branch(_, elements), let .group(elements):
             // For a sequence, recursively map over its elements.
             return elements.contains(where: predicate)

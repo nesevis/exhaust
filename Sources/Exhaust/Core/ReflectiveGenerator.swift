@@ -135,7 +135,7 @@ extension ReflectiveGenerator where Operation: AnyReflectiveOperation {
 
 extension ReflectiveGenerator where Operation: AnyReflectiveOperation {
 
-    func biMap<NewOutput>(
+    func dimap<NewOutput>(
         forward: @escaping (Value) -> NewOutput,
         backward: @escaping (NewOutput) -> Value
     ) -> ReflectiveGenerator<Operation.Input, NewOutput> {
@@ -149,7 +149,7 @@ extension ReflectiveGenerator where Operation: AnyReflectiveOperation {
     }
     
     // extract path: some PartialPath<NewInput, Input>,
-    func biMap<NewOutput>(
+    func dimap<NewOutput>(
         forward: @escaping (Value) -> NewOutput,
         backward: some PartialPath<NewOutput, Value>
     ) -> ReflectiveGenerator<Operation.Input, NewOutput> {
@@ -163,7 +163,7 @@ extension ReflectiveGenerator where Operation: AnyReflectiveOperation {
         return Gen.lmap(erasedBackward, erasedGen)
     }
     
-    func biMap<NewOutput>(
+    func dimap<NewOutput>(
         forward: some PartialPath<Value, NewOutput>,
         backward: some PartialPath<NewOutput, Value>
     ) -> ReflectiveGenerator<Operation.Input, NewOutput?> {
@@ -177,7 +177,7 @@ extension ReflectiveGenerator where Operation: AnyReflectiveOperation {
         return Gen.lmap(erasedBackward, erasedGen)
     }
 
-    func biMap<NewOutput>(
+    func dimap<NewOutput>(
         forward: some PartialPath<Value, NewOutput>,
         backward: @escaping (NewOutput) -> Value
     ) -> ReflectiveGenerator<Operation.Input, NewOutput?> {

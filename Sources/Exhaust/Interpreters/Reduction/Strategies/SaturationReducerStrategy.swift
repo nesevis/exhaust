@@ -96,7 +96,7 @@ struct SaturationReducerStrategy: ChoiceValueReducerStrategy, ChoiceSequenceRedu
             return []
         }
         
-        let chunks = collection.evenlyChunked(in: count / 10)
+        let chunks = collection.evenlyChunked(in: max(count / 10, 1))
         
         return chunks
             .filter { lengthRange.contains($0.count) }
