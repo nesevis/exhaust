@@ -216,4 +216,50 @@ enum Gen {
             return .pure(array)
         }
     }
+    
+    /// Retrieves the current size parameter controlling generator complexity.
+    /// The size typically grows as tests progress, allowing generators to produce
+    /// more complex values over time.
+    public static func getSize<Input>() -> ReflectiveGenerator<Input, UInt64> {
+        liftF(.getSize)
+    }
+    
+    /// Creates a generator with a temporarily modified size parameter.
+    /// This is useful for controlling the complexity of nested generators.
+    /// 
+    /// - Parameters:
+    ///   - newSize: The size parameter to use for the nested generator
+    ///   - generator: The generator to run with the modified size
+    /// - Returns: A generator that runs with the specified size
+    public static func resize<Input, Output>(
+        _ newSize: UInt64,
+        _ generator: ReflectiveGenerator<Input, Output>
+    ) -> ReflectiveGenerator<Input, Output> {
+        let erasedGenerator = generator.map { $0 as Any }
+        let op = ReflectiveOperation<Input>.resize(newSize: newSize, next: erasedGenerator)
+        return liftF(op)
+    }
+    
+    /// Creates an array generator whose length is controlled by the current size parameter.
+    /// This is a convenience method that combines `getSize` with `arrayOf` to create
+    /// arrays that grow in complexity as tests progress.
+    ///
+    /// - Parameters:
+    ///   - elementGenerator: The generator for array elements
+    ///   - lengthRange: Optional range to constrain the array length. If nil, uses 0...size
+    /// - Returns: A generator that produces arrays with size-controlled length
+    public static func sized<Input, Output>(
+        _ elementGenerator: ReflectiveGenerator<Input, Output>,
+        lengthRange: ClosedRange<UInt64>? = nil
+    ) -> ReflectiveGenerator<Input, [Output]> {
+        getSize().bind { size in
+            let actualRange = lengthRange ?? (0...size)
+            let clampedMin = max(actualRange.lowerBound, 0)
+            let clampedMax = min(actualRange.upperBound, size)
+            let finalRange = clampedMin...clampedMax
+            
+            let lengthGen = choose(in: finalRange, input: Input.self)
+            return arrayOf(elementGenerator, lengthGen)
+        }
+    }
 }

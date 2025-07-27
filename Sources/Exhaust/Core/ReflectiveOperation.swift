@@ -48,7 +48,15 @@ enum ReflectiveOperation<Input> {
     /// A constant value baked into the generator
     case just(Input)
     
-    // We need getSize and resize
+    /// Retrieves the current size parameter controlling generator complexity.
+    /// Used to scale generation based on test progression (smaller early, larger later).
+    /// The continuation receives the current size as a UInt64 value.
+    case getSize
+    
+    /// Temporarily modifies the size parameter for a nested generator.
+    /// Used to control complexity of sub-generators (e.g., making smaller arrays).
+    /// The nested generator runs with the new size, then the original size is restored.
+    case resize(newSize: UInt64, next: ReflectiveGenerator<Input, Any>)
 }
 
 extension ReflectiveOperation: AnyReflectiveOperation {
