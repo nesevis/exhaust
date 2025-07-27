@@ -536,7 +536,7 @@ struct CompositionTests {
             
             // Gen.zip will lens each generator into its position in the tuple
             let gen = Gen.zip(Int.arbitrary, String.arbitrary, Bool.arbitrary)
-            .dimap(
+            .mapped(
                 forward: { Thing(a: $0.0, b: $0.1, c: $0.2) },
                 backward: { ($0.a, $0.b, $0.c) }
             )
@@ -546,7 +546,7 @@ struct CompositionTests {
         
         @Test("Test bimap is replayable")
         func testBimapIsReplayable() throws {
-            let gen = Int.arbitrary.dimap(
+            let gen = Int.arbitrary.mapped(
                 forward: { $0.bitPattern64 },
                 backward: { Int(bitPattern64: $0) }
             )

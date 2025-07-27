@@ -135,7 +135,7 @@ extension ReflectiveGenerator where Operation: AnyReflectiveOperation {
 
 extension ReflectiveGenerator where Operation: AnyReflectiveOperation {
 
-    func dimap<NewOutput>(
+    func mapped<NewOutput>(
         forward: @escaping (Value) -> NewOutput,
         backward: @escaping (NewOutput) -> Value
     ) -> ReflectiveGenerator<Operation.Input, NewOutput> {
@@ -149,21 +149,23 @@ extension ReflectiveGenerator where Operation: AnyReflectiveOperation {
     }
     
     // extract path: some PartialPath<NewInput, Input>,
-    func dimap<NewOutput>(
+    func mapped<NewOutput>(
         forward: @escaping (Value) -> NewOutput,
         backward: some PartialPath<NewOutput, Value>
     ) -> ReflectiveGenerator<Operation.Input, NewOutput> {
-        let erasedBackward: (Any) -> Any = { newOutput in
-            backward.extract(from: newOutput)!
-        }
-        let erasedGen = self
-            .map(forward)
-            .mapOperation { Gen.eraseInputType(from: $0 as! ReflectiveOperation<Operation.Input>) }
-        
-        return Gen.lmap(erasedBackward, erasedGen)
+        // Check that  this doesn't crash
+        mapped(forward: forward, backward: backward.extract(from:) as! (NewOutput) -> Value)
+//        let erasedBackward: (Any) -> Any = { newOutput in
+//            backward.extract(from: newOutput)!
+//        }
+//        let erasedGen = self
+//            .map(forward)
+//            .mapOperation { Gen.eraseInputType(from: $0 as! ReflectiveOperation<Operation.Input>) }
+//
+//        return Gen.lmap(erasedBackward, erasedGen)
     }
     
-    func dimap<NewOutput>(
+    func mapped<NewOutput>(
         forward: some PartialPath<Value, NewOutput>,
         backward: some PartialPath<NewOutput, Value>
     ) -> ReflectiveGenerator<Operation.Input, NewOutput?> {
@@ -175,12 +177,18 @@ extension ReflectiveGenerator where Operation: AnyReflectiveOperation {
             .mapOperation { Gen.eraseInputType(from: $0 as! ReflectiveOperation<Operation.Input>) }
         
         return Gen.lmap(erasedBackward, erasedGen)
+        // TODO: Figure this out
+//        mapped(forward: forward.extract(from:) as! (Value) -> NewOutput, backward: backward.extract(from:) as! (NewOutput) -> Value)
     }
 
+    // Should be renamed to `mapped`, with the backward pass named `inverse`
+    // `reversibleMap?`
     func dimap<NewOutput>(
         forward: some PartialPath<Value, NewOutput>,
         backward: @escaping (NewOutput) -> Value
     ) -> ReflectiveGenerator<Operation.Input, NewOutput?> {
+        // TODO: Figure this out
+//        mapped(forward: forward.extract(from:) as! (Value) -> NewOutput, backward: backward)
         let erasedBackward: (Any) -> Any = { newOutput in
             backward(newOutput as! NewOutput)
         }
