@@ -50,11 +50,11 @@ struct SaturationReducerStrategy: ChoiceValueReducerStrategy, ChoiceSequenceRedu
                 candidate = (candidate / 10) * 9
             }
         case .towardsHigherBound:
-            var candidate = (value * 10) / 9
+            var candidate = value < 0 ? (value / 10) * 9 : (value * 10) / 9
             while count < max, candidate < range.upperBound {
                 count += 1
                 values.append(candidate)
-                candidate = (candidate * 10) / 9
+                candidate = candidate < 0 ? (candidate / 10) * 9 : (candidate * 10) / 9
             }
         }
         return values
