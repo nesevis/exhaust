@@ -13,6 +13,7 @@ enum ChoiceTree: Hashable, Equatable, Sendable {
     
     /// A deterministic or constant value that can't be shrunk
     /// This is encoded into the generator, and doesn't need to be part of the ``ChoiceTree``
+    /// The string value is a description of the value for debug purposes
     case just(String)
     
     /// A node that represents the generation of a sequence. It explicitly
@@ -25,17 +26,17 @@ enum ChoiceTree: Hashable, Equatable, Sendable {
     /// Represents a nested group of choices that usually represent objects or tuples
     indirect case group([ChoiceTree])
     
-    /// Used only for test case reduction. Represents a value that is known to have affected the property being tested against
-    indirect case important(ChoiceTree)
-    
-    /// Used only for replay. Represents the selected branch in a ``group`` of ``branch``es.
-    indirect case selected(ChoiceTree)
-    
     /// Represents a size value retrieved from the generation context
     case getSize(UInt64)
     
     /// Represents a resized generation context with nested choices
     indirect case resize(newSize: UInt64, choices: [ChoiceTree])
+    
+    /// Used only for test case reduction. Represents a value that is known to have affected the property being tested against
+    indirect case important(ChoiceTree)
+    
+    /// Used only for replay. Represents the selected branch in a ``group`` of ``branch``es.
+    indirect case selected(ChoiceTree)
 }
 
 extension ChoiceTree {
