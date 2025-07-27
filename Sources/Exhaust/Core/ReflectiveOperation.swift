@@ -45,7 +45,10 @@ enum ReflectiveOperation<Input> {
     /// is applied iteratively to build the complete sequence.
     case sequence(length: ReflectiveGenerator<Input, UInt64>, gen: ReflectiveGenerator<Input, Any>)
     
+    /// A constant value baked into the generator
     case just(Input)
+    
+    // We need getSize and resize
 }
 
 extension ReflectiveOperation: AnyReflectiveOperation {

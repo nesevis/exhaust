@@ -213,4 +213,11 @@ struct GeneratorIterator<Element>: IteratorProtocol, Sequence {
             }
         }
     }
+    
+    // MARK: - Quickcheck logarithmic scaling of test cases
+    
+    private func size(_ maxSize : Int, _ successfulTests : Int) -> Int {
+        let n = Double(successfulTests)
+        return Int((log(n + 1)) * Double(maxSize) / log(100))
+    }
 }
