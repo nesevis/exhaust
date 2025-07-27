@@ -53,6 +53,7 @@ extension Interpreters {
             
             // 2. For each successful intermediate result...
             let results = try intermediateResults.flatMap { (intermediateValue: Any, partialPath: [ChoiceTree]) in
+                let op = operation
                 let nextGen = continuation(intermediateValue)
                 // The `finalOutput` is passed down UNCHANGED. This is the crucial part.
                 let finalResults = try reflectRecursive(nextGen, onFinalOutput: finalOutput)
@@ -108,9 +109,13 @@ extension Interpreters {
                 
                 // Only pick one even if there are multiple identical generators
                 // These results may be a deliberate nil
-                let nilFriendlyEquatable = equatableValue.map { lhs in equatableOutput.map { rhs in lhs.isEqual(rhs) } ?? false }
-                ?? (type(of: equatableOutput) == type(of: equatableValue))
-                isPicked = nilFriendlyEquatable
+                let isLikelyToMatch: Bool
+                if let associatedRange = generator.associatedRange, let convertible = equatableValue as? (any BitPatternConvertible) {
+                    isLikelyToMatch = associatedRange.contains(convertible.bitPattern64)
+                } else {
+                    isLikelyToMatch = equatableValue.map { lhs in equatableOutput.map { rhs in lhs.isEqual(rhs) } ?? false } ?? (type(of: equatableOutput) == type(of: equatableValue))
+                }
+                isPicked = isLikelyToMatch
                 
                 let labeledPaths = subPaths.map { (value, pathTree) in
                     (value, label, isPicked, pathTree)
@@ -146,10 +151,11 @@ extension Interpreters {
 
             // FIXME: Do we turn off validation for nil-generated values?
             let bitPattern = isNil ? min : convertibleValue.bitPattern64
-            guard (min...max).contains(bitPattern) else {
-                throw ReflectionError.inputWasOutOfGeneratorRange(convertibleValue, min...max)
-            }
-            
+//            guard (min...max).contains(bitPattern) else {
+//                // We could be in a pick
+//                throw ReflectionError.inputWasOutOfGeneratorRange(convertibleValue, min...max)
+//            }
+//            
             // Success! The result for the continuation is the value itself.
             let metadata = ChoiceMetadata(
                 validRanges: op.associatedRange.map { [$0] } ?? type(of: convertibleValue).bitPatternRanges,
@@ -181,9 +187,9 @@ extension Interpreters {
             // Validate that the character is within the expected range
             let firstScalar = character.unicodeScalars.first?.value ?? 0
             // Skipping validation for nil cases
-            guard isNil || (min...max).contains(UInt64(firstScalar)) else {
-                throw ReflectionError.inputWasOutOfGeneratorRange(character, min...max)
-            }
+//            guard isNil || (min...max).contains(UInt64(firstScalar)) else {
+//                throw ReflectionError.inputWasOutOfGeneratorRange(character, min...max)
+//            }
             
             // Store the exact Character representation
             let metadata = ChoiceMetadata(
@@ -204,11 +210,13 @@ extension Interpreters {
             return [(value: value, path: [.just(String(string))])]
             
         case .getSize:
-            // For getSize, the finalOutput should be a UInt64 size value
-            guard let size = finalOutput as? UInt64 else {
-                return []
+            // We can't derive the getSize parameter when reflecting as the bind continuation that applies it is opaque to us. Ultimately it shouldn't matter for replay
+            var derivedSize: UInt64 = 0
+            if let sequence = finalOutput as? any Sequence {
+                derivedSize = UInt64(sequence.underestimatedCount)
             }
-            return [(value: size, path: [.getSize(size)])]
+            // For replay
+            return [(value: derivedSize, path: [.getSize(0)])]
             
         case let .resize(newSize, nextGen):
             // For resize, reflect on the nested generator with the new size context

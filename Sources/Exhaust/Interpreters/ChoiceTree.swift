@@ -359,17 +359,26 @@ extension ChoiceTree: CustomDebugStringConvertible {
             
         case let .sequence(length, elements, _):
             var result = prefix + connector + "\(locked)sequence(length: \(length))\(locked)"
-            if case .choice(.character(_), _) = elements.first {
+            if
+                case let .group(array) = elements.first,
+                // Dropping the first one as it is a getSize
+                case let .group(branches) = array.dropFirst().first,
+                case let .branch(_, children) = branches.first(where: { $0.isSelected == false }),
+                case .choice(.character(_), _) = children.first
+            {
                 // A special case displaying all the characters in a string inline
-                let string = elements.map { choice in
-                    switch choice {
-                    case let .choice(.character(char), _), let .important(.choice(.character(char), _)):
+                let characters = elements.dropFirst().compactMap { element in
+                    if
+                        case let .group(array) = element,
+                        case let .group(branches) = array.dropFirst().first,
+                        case let .branch(_, children) = branches.first(where: { $0.isSelected == false }),
+                        case let .choice(.character(char), _) = children.first
+                    {
                         return char
-                    default:
-                        fatalError("\(#function) Expected a homogenous array of characters!")
                     }
+                    return nil
                 }
-                result += "\n\(childPrefix)└── choice([char]: \"\(String(string))\")"
+                result += "\n\(childPrefix)└── choice([char]: \"\(String(characters))\")"
             } else {
                 for (index, element) in elements.enumerated() {
                     let isLastElement = index == elements.count - 1
@@ -397,8 +406,8 @@ extension ChoiceTree: CustomDebugStringConvertible {
             return value.treeDescription(prefix: prefix, isLast: isLast, isLocked: true)
         case let .selected(value):
             return value.treeDescription(prefix: prefix, isLast: isLast, isSelected: true)
-        case let .getSize(size):
-            return prefix + connector + "getSize(\(size))"
+        case .getSize:
+            return prefix + connector + "getSize(?)"
         case let .resize(newSize, choices):
             var result = prefix + connector + "resize(newSize: \(newSize))"
             for (index, choice) in choices.enumerated() {

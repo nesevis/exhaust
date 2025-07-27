@@ -34,7 +34,9 @@ extension UInt32: Arbitrary {
 
 extension UInt64: Arbitrary {
     static var arbitrary: ReflectiveGenerator<Any, UInt64> {
-        Gen.choose(in: UInt64.min...UInt64.max)
+        Gen.getSize().bind { size in
+            Gen.choose(in: UInt64.min...size)
+        }
     }
 }
 
@@ -70,7 +72,9 @@ extension Int64: Arbitrary {
 
 extension Int: Arbitrary {
     static var arbitrary: ReflectiveGenerator<Any, Self> {
-        Gen.choose(in: Int.min...Int.max)
+        Gen.getSize().bind { size in
+            Gen.choose(in: -Int(size)...Int(size))
+        }
     }
 }
 
@@ -82,29 +86,49 @@ extension Float: Arbitrary {
 
 extension Double: Arbitrary {
     static var arbitrary: ReflectiveGenerator<Any, Double> {
-        Gen.choose(in: -Double.greatestFiniteMagnitude...Double.greatestFiniteMagnitude)
+        Gen.getSize().bind { size in
+            Gen.choose(in: -Double(size)...Double(size))
+        }
+//        Gen.choose(in: -Double.greatestFiniteMagnitude...Double.greatestFiniteMagnitude)
     }
 }
 
 extension Unicode.Scalar: Arbitrary {
     static var arbitrary: ReflectiveGenerator<Any, Unicode.Scalar> {
-        Gen.pick(choices: [
-            (10, Gen.choose(in: self.bitPatternRanges[0])),
-//            (1, Gen.choose(in: self.bitPatternRanges[1])),
-        ])
-        .map { Unicode.Scalar(UInt32($0))! }
+        Gen.getSize().bind { size in
+            Gen.pick(choices: [
+                (200, Gen.choose(in: 32...126)), // Standard ascii
+                (size, Gen.choose(in: self.bitPatternRanges[0])),
+                ((size + 2) / 2, Gen.choose(in: self.bitPatternRanges[1]))
+            ])
+        }
+        .mapped(
+            forward: { Unicode.Scalar(UInt32($0))! },
+            backward: { UInt64($0) }
+        )
     }
 }
 
 extension Character: Arbitrary {
     static var arbitrary: ReflectiveGenerator<Any, Character> {
-        Gen.chooseCharacter()
+        Gen.getSize().bind { size in
+            Gen.pick(choices: [
+                (200, Gen.chooseCharacter(in: self.bitPatternRanges[0])), // Standard ascii
+                (size, Gen.chooseCharacter(in: self.bitPatternRanges[1])), // Null bytes, tab characters
+                (size, Gen.chooseCharacter(in: self.bitPatternRanges[2])),
+                ((size + 2) / 2, Gen.chooseCharacter(in: self.bitPatternRanges[3]))
+            ])
+        }
+//        .mapped(
+//            forward: { $0 },
+//            backward: { $0.unicodeScalars.max(by: { $0.bitPattern64 < $1.bitPattern64 })! }
+//        )
     }
 }
 
 extension String: Arbitrary {
     static var arbitrary: ReflectiveGenerator<Any, String> {
-        Gen.arrayOf(Character.arbitrary, Gen.choose(in: 0...150))
+        Gen.arrayOf(Character.arbitrary)
             .map { String($0) }
     }
 }

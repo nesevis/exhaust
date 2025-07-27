@@ -10,6 +10,7 @@ import Foundation
 struct GeneratorIterator<Element>: IteratorProtocol, Sequence {
     let generator: ReflectiveGenerator<Any, Element>
     var prng: Xoshiro256
+    var size: UInt64 = 0
     
     init(_ generator: ReflectiveGenerator<Any, Element>, seed: UInt64? = nil) {
         self.generator = generator
@@ -17,7 +18,8 @@ struct GeneratorIterator<Element>: IteratorProtocol, Sequence {
     }
     
     mutating func next() -> Element? {
-        Self.generate(generator, using: &prng)
+        defer { size += 1 } 
+        return Self.generate(generator, initialSize: size, using: &prng)
     }
     
     // MARK: - Generator implementation
@@ -212,7 +214,7 @@ struct GeneratorIterator<Element>: IteratorProtocol, Sequence {
                 return runContinuation(value)
                 
             case .getSize:
-                return runContinuation(size)
+                return runContinuation(logarithmicallyScaledSize(100, size))
                 
             case let .resize(newSize, nextGen):
                 guard let result = self.generateRecursive(nextGen, with: inputValue, size: newSize, prng: &prng) else { return nil }
@@ -223,8 +225,8 @@ struct GeneratorIterator<Element>: IteratorProtocol, Sequence {
     
     // MARK: - Quickcheck logarithmic scaling of test cases
     
-    private func size(_ maxSize : Int, _ successfulTests : Int) -> Int {
+    private static func logarithmicallyScaledSize(_ maxSize : UInt64, _ successfulTests : UInt64) -> UInt64 {
         let n = Double(successfulTests)
-        return Int((log(n + 1)) * Double(maxSize) / log(100))
+        return UInt64((log(n + 1)) * Double(maxSize) / log(100))
     }
 }

@@ -267,7 +267,9 @@ extension Character: BitPatternConvertible {
     /// Defines the range for characters.
     public static var bitPatternRanges: [ClosedRange<UInt64>] {
         [
-            0x000000...0x00D7FF, // Basic Multilingual Plane before surrogates
+            32...126, // The most normal ascii characters
+            0...31, // Null bytes, tabs, etc
+            0x00007F...0x00D7FF, // Basic Multilingual Plane before surrogates
             0x00E000...0x10FFFF  // Everything after surrogates up to the max
         ]
     }

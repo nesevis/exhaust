@@ -203,11 +203,13 @@ enum Gen {
     /// - Returns: A generator that produces an array of elements.
     public static func arrayOf<Input, Output>(
         _ elementGenerator: ReflectiveGenerator<Input, Output>,
-        _ length: ReflectiveGenerator<Input, UInt64>
+        _ length: ReflectiveGenerator<Input, UInt64>? = nil
     ) -> ReflectiveGenerator<Input, [Output]> {
         // 2. Use `bind` to get the result of the length generator.
         let sequenceOp = ReflectiveOperation<Input>.sequence(
-            length: length,
+            length: length ?? Gen.getSize().bind {
+                Gen.choose(in: $0...$0)
+            },
             gen: elementGenerator.map { $0 as Any }
         )
         // 4. Lift the operation. The continuation will decode the `[Any]` result.
@@ -221,7 +223,12 @@ enum Gen {
     /// The size typically grows as tests progress, allowing generators to produce
     /// more complex values over time.
     public static func getSize<Input>() -> ReflectiveGenerator<Input, UInt64> {
-        liftF(.getSize)
+        return .impure(operation: .getSize) { result in
+            if let typedResult = result as? UInt64 {
+                return .pure(typedResult)
+            }
+            fatalError("Interpreter provided wrong type. Expected \(UInt64.self), got \(type(of: result))")
+        }
     }
     
     /// Creates a generator with a temporarily modified size parameter.

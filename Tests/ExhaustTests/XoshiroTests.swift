@@ -38,18 +38,53 @@ func testGeneratorIteratorThing() throws {
         String.arbitrary,
         String.arbitrary
     )
-        .map { Person(age: $0.0, height: $0.1, firstName: $0.2, lastName: $0.3) }
+        .mapped(
+            forward:{ Person(age: $0.0, height: $0.1, firstName: $0.2, lastName: $0.3) },
+            backward: { ($0.age, $0.height, $0.firstName, $0.lastName) }
+        )
     
     var iterator = GeneratorIterator(gen, seed: 250883)
     let generated = iterator.next()!
+    let recipe = try Interpreters.reflect(gen, with: iterator.next()!)
+
     let reference = Person(
         age: -125408598803298769,
         height: 4.9569959933472683e-26,
         firstName: "춊뛍ᇚ欁ᩂ쏜녜៚蔆Ⲷ뽅旌㌽稔껞쏔䚉Ą镪熬彽ꢳ줏낅᷼鸥둔䄤塁⨼ㅇᥓᕢ댭䩓韀Ꮜ뱧꿼财䰞曠驘⨿㷉騥ᜆ韔睸눖Ѭ寛೟资矠Ф梲熃寋癓䳦䬯㹶舡鿀⽺㩃쁾딟ᗻ␈䰋ཋ吲⋽絆嫓㡫嫗媏ཛᩫ딛۹鉊╻趨鵱䬩暶ߓ갲늏㥩ᔶ紫ꘒ榌항裮隖鬤Π횴৫힏ଭẃ墶↢ۑ㑇砫璍漮",
         lastName: "ꊾ䘐鰉犲垣꽬嫎⦡뻇ᦫ灂틦饅Ꮯ톮丙ᱎ磈੪뜓㐼ꟑ邵爂큧閳㪐쨬ꎾ㌇縼䊸麀퀸⺽キ瘷줶瀀ᗫꇏ绨쎞彚꤃䒳ᓾ鄗絑㷘ꯜ璱䬲᪉偸㫊仴᝵惟㴲먗䗠ᐹꜻ녝셄㠴忻ϥ虫ⵘ斢秬푥ꯞ⺖ḟ㞫⪅⓲졼勓楨롫땜⬧鿜ᡊ㧟‗炞᭖⫻碥ཱུᠣꧧ甋꫞ꉨ쮊㸁琼钥⨄ⷘ퀸쒝짜椎ꂹ"
     )
-    
+    let next = Array(iterator.prefix(10))
+    print()
     #expect(generated == reference)
+}
+
+@Test("Reflect on getSize")
+func testReflectOnGetsize() throws {
+    // Test String.arbitrary
+    let gen = String.arbitrary
+    var iterator = GeneratorIterator(gen, seed: 123)
+    let _ = iterator.next()
+    let generated = iterator.next()!
+    print("Generated string: '\(generated)'")
+    let generated2 = iterator.next()!
+    let recipe2 = try Interpreters.reflect(gen, with: generated2)
+    let replay = try Interpreters.replay(gen, using: recipe2!)
+    print("String reflection succeeded! \(recipe2!.debugDescription)")
+    print()
+}
+
+@Test("Reflect on resize")
+func testReflectOnResize() throws {
+    // Test String.arbitrary
+    let gen = Gen.resize(50, String.arbitrary)
+    var iterator = GeneratorIterator(gen, seed: 123)
+    let first = iterator.next()!
+    let second = iterator.next()!
+    #expect(first.count == second.count)
+    let recipe = try Interpreters.reflect(gen, with: first)
+    let replay = try Interpreters.replay(gen, using: recipe!)
+    #expect(replay == first)
+    print("String reflection succeeded!")
 }
 
 private let reference: [UInt64] = [

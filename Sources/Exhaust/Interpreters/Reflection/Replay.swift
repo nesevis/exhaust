@@ -258,10 +258,14 @@ extension Interpreters {
                 
             case .getSize:
                 // This operation expects a `.getSize` node from the script.
-                guard case let .getSize(size) = script else {
+                switch script {
+                case let .choice(.unsigned(value), _):
+                    return try runContinuation(value)
+                case let .getSize(value):
+                    return try runContinuation(value)
+                default:
                     return nil
                 }
-                return try runContinuation(size)
                 
             case let .resize(newSize, nextGen):
                 // This operation expects a `.resize` node from the script.
@@ -303,7 +307,7 @@ extension Interpreters {
                 }
                 
                 let lengthMetadata = ChoiceMetadata(
-                    validRanges: [lengthGen.associatedRange!],
+                    validRanges: [lengthGen.associatedRange ?? length...length],
                     strategies: ShrinkingStrategy.sequenceStrategies
                 )
                 guard  let _ = try self.replayRecursive(lengthGen, with: .choice(.unsigned(length), lengthMetadata)) else {
