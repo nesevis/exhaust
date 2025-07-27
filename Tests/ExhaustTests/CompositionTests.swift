@@ -54,7 +54,8 @@ struct CompositionTests {
             }
             
             // Test generation
-            let person = Interpreters.generate(personGen)!
+            var iterator = GeneratorIterator(personGen)
+            let person = iterator.next()!
             #expect(person.age >= 0 && person.age <= 100)
             #expect(person.height >= 150.0 && person.height <= 200.0)
             
@@ -77,7 +78,8 @@ struct CompositionTests {
                 Gen.just("foo")
             )
             
-            let generated = try #require(Interpreters.generate(gen))
+            var iterator = GeneratorIterator(gen)
+            let generated = iterator.next()!
             let recipe = try #require(try Interpreters.reflect(gen, with: generated))
             let replayed = try #require(try Interpreters.replay(gen, using: recipe))
             #expect(generated == replayed)
@@ -94,7 +96,8 @@ struct CompositionTests {
                 Gen.lens(extract: \Apple.weight, Int.arbitrary)
             ).map { (color, weight) in Apple(color: color, weight: weight) }
             
-            let generated = try #require(Interpreters.generate(gen))
+            var iterator = GeneratorIterator(gen)
+            let generated = iterator.next()!
             let recipe = try #require(try Interpreters.reflect(gen, with: generated))
             let replayed = try #require(try Interpreters.replay(gen, using: recipe))
             #expect(generated == replayed)
@@ -108,7 +111,8 @@ struct CompositionTests {
                 String.arbitrary
             )
             
-            let generated = try #require(Interpreters.generate(gen))
+            var iterator = GeneratorIterator(gen)
+            let generated = iterator.next()!
             let recipe = try #require(try Interpreters.reflect(gen, with: generated))
             let replayed = try #require(try Interpreters.replay(gen, using: recipe))
             #expect(generated == replayed)
@@ -123,7 +127,8 @@ struct CompositionTests {
                 Gen.choose(in: 1...100, input: Any.self)
             )
             
-            let generated = try #require(Interpreters.generate(gen))
+            var iterator = GeneratorIterator(gen)
+            let generated = iterator.next()!
             let recipe = try #require(try Interpreters.reflect(gen, with: generated))
             let replayed = try #require(try Interpreters.replay(gen, using: recipe))
             #expect(generated == replayed)
@@ -139,7 +144,8 @@ struct CompositionTests {
                 Gen.just(true)
             )
             
-            let generated = try #require(Interpreters.generate(gen))
+            var iterator = GeneratorIterator(gen)
+            let generated = iterator.next()!
             let recipe = try #require(try Interpreters.reflect(gen, with: generated))
             let replayed = try #require(try Interpreters.replay(gen, using: recipe))
             #expect(generated == replayed)
@@ -156,7 +162,8 @@ struct CompositionTests {
                 Gen.choose(in: 0.0...1.0, input: Any.self)
             )
             
-            let generated = try #require(Interpreters.generate(gen))
+            var iterator = GeneratorIterator(gen)
+            let generated = iterator.next()!
             let recipe = try #require(try Interpreters.reflect(gen, with: generated))
             let replayed = try #require(try Interpreters.replay(gen, using: recipe))
             #expect(generated == replayed)
@@ -174,7 +181,8 @@ struct CompositionTests {
                 Gen.just("bar")
             )
             
-            let generated = try #require(Interpreters.generate(gen))
+            var iterator = GeneratorIterator(gen)
+            let generated = iterator.next()!
             let recipe = try #require(try Interpreters.reflect(gen, with: generated))
             let replayed = try #require(try Interpreters.replay(gen, using: recipe))
             
@@ -200,7 +208,8 @@ struct CompositionTests {
                 Gen.choose(in: -50...50, input: Any.self)
             )
             
-            let generated = try #require(Interpreters.generate(gen))
+            var iterator = GeneratorIterator(gen)
+            let generated = iterator.next()!
             let recipe = try #require(try Interpreters.reflect(gen, with: generated))
             let replayed = try #require(try Interpreters.replay(gen, using: recipe))
             
@@ -228,7 +237,8 @@ struct CompositionTests {
                 Gen.just(false)
             )
             
-            let generated = try #require(Interpreters.generate(gen))
+            var iterator = GeneratorIterator(gen)
+            let generated = iterator.next()!
             let recipe = try #require(try Interpreters.reflect(gen, with: generated))
             let replayed = try #require(try Interpreters.replay(gen, using: recipe))
             
@@ -258,7 +268,8 @@ struct CompositionTests {
                 String.arbitrary
             )
             
-            let generated = try #require(Interpreters.generate(gen))
+            var iterator = GeneratorIterator(gen)
+            let generated = iterator.next()!
             let recipe = try #require(try Interpreters.reflect(gen, with: generated))
             let replayed = try #require(try Interpreters.replay(gen, using: recipe))
             
@@ -290,7 +301,8 @@ struct CompositionTests {
                     }
                 }
             
-            let rect = Interpreters.generate(rectGen)!
+            var iterator = GeneratorIterator(rectGen)
+            let rect = iterator.next()!
             
             // Test round-trip
             if let recipe = try Interpreters.reflect(rectGen, with: rect) {
@@ -315,7 +327,8 @@ struct CompositionTests {
             let arrayGen = Gen.arrayOf(elementGen, lengthGen)
             
             for _ in 0..<20 {
-                let array = Interpreters.generate(arrayGen)!
+                var iterator = GeneratorIterator(arrayGen)
+                let array = iterator.next()!
                 #expect(array.count == 5)
                 for element in array {
                     #expect(1...100 ~= element)
@@ -328,7 +341,8 @@ struct CompositionTests {
             let gen = Int.arbitrary.proliferate(with: 3...7)
             
             for _ in 0..<20 {
-                let array = Interpreters.generate(gen)!
+                var iterator = GeneratorIterator(gen)
+                let array = iterator.next()!
                 #expect(3...7 ~= array.count)
             }
         }
@@ -340,7 +354,8 @@ struct CompositionTests {
                 .proliferate(with: 2...3)  // Outer array of 2-3 inner arrays
             
             for _ in 0..<10 {
-                let nestedArray = Interpreters.generate(gen)!
+                var iterator = GeneratorIterator(gen)
+                let nestedArray = iterator.next()!
                 #expect(2...3 ~= nestedArray.count)
                 
                 for innerArray in nestedArray {
@@ -353,7 +368,8 @@ struct CompositionTests {
         func testLargeArrays() throws {
             let gen = UInt8.arbitrary.proliferate(with: 1000...1000)
             
-            let largeArray = Interpreters.generate(gen)!
+            var iterator = GeneratorIterator(gen)
+            let largeArray = iterator.next()!
             #expect(largeArray.count == 1000)
             
             // Should still support round-trip
@@ -376,7 +392,8 @@ struct CompositionTests {
                 .proliferate(with: 2...3)    // [[Int]]
                 .proliferate(with: 2...3)    // [[[Int]]]
             
-            let nested = Interpreters.generate(gen)!
+            var iterator = GeneratorIterator(gen)
+            let nested = iterator.next()!
             
             // Validate structure
             #expect(2...3 ~= nested.count)
@@ -417,7 +434,8 @@ struct CompositionTests {
             var sawNonNumeric = false
             
             for _ in 0..<100 {
-                let result = Interpreters.generate(choiceGen)!
+                var iterator = GeneratorIterator(choiceGen)
+                let result = iterator.next()!
                 
                 if Int(result) != nil {
                     sawNumeric = true
@@ -442,7 +460,8 @@ struct CompositionTests {
             var rareCount = 0
             
             for _ in 0..<1000 {
-                let result = Interpreters.generate(gen)!
+                var iterator = GeneratorIterator(gen)
+                let result = iterator.next()!
                 if result == "common" {
                     commonCount += 1
                 } else {
@@ -482,7 +501,8 @@ struct CompositionTests {
                         }
                 }
             
-            let company = Interpreters.generate(companyGen)!
+            var iterator = GeneratorIterator(companyGen)
+            let company = iterator.next()!
             
             // Test round-trip
             if let recipe = try Interpreters.reflect(companyGen, with: company) {
@@ -509,7 +529,8 @@ struct CompositionTests {
             
             // Generate many values to test stability
             for iteration in 0..<100 {
-                let generated = Interpreters.generate(pickedGen)!
+                var iterator = GeneratorIterator(pickedGen)
+                let generated = iterator.next()!
                 if let recipe = try Interpreters.reflect(pickedGen, with: generated) {
                     if let replayed = try Interpreters.replay(pickedGen, using: recipe) {
                         #expect(generated == replayed, "Failed at iteration \(iteration)")
@@ -551,7 +572,8 @@ struct CompositionTests {
                 backward: { Int(bitPattern64: $0) }
             )
             
-            let instance = try #require(Interpreters.generate(gen))
+            var iterator = GeneratorIterator(gen)
+            let instance = iterator.next()!
             let recipe = try #require(try Interpreters.reflect(gen, with: instance))
             let replay = try #require(try Interpreters.replay(gen, using: recipe))
             #expect(instance == replay)

@@ -7,7 +7,7 @@
 
 import Foundation
 
-extension Interpreters {
+enum Interpreters {
     /// Attempts to shrink the `value` according to the `property`
     /// - Parameters:
     ///   - value: The value

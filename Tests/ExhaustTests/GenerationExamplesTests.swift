@@ -16,8 +16,9 @@ struct GenerationExamplesTests {
         
         @Test
         func example2() async throws {
-            let gen = Gen.choose(in: 1...5, input: Void.self)
-            let results = Interpreters.generate(gen)
+            let gen = Gen.choose(in: 1...5, input: Any.self)
+            var iterator = GeneratorIterator(gen)
+            let results = iterator.next()
             guard let results = results else {
                 #expect(false, "Generation failed")
                 return
@@ -39,7 +40,8 @@ struct GenerationExamplesTests {
                     Person(age: age, height: height)
                 }
             }    
-            let result = Interpreters.generate(zipped)!
+            var iterator = GeneratorIterator(zipped)
+            let result = iterator.next()!
             let choices = try Interpreters.reflect(zipped, with: result)
             if let choices {
                 let replayed = try Interpreters.replay(zipped, using: choices)
@@ -62,7 +64,8 @@ struct GenerationExamplesTests {
             // 1. Test String.arbitrary alone
             let stringGen = String.arbitrary
             for i in 0..<3 {
-                let generated = Interpreters.generate(stringGen)!
+                var iterator = GeneratorIterator(stringGen)
+                let generated = iterator.next()!
                 if let recipe = try Interpreters.reflect(stringGen, with: generated) {
                     if let replayed = try Interpreters.replay(stringGen, using: recipe) {
                         // Round-trip successful
@@ -77,7 +80,8 @@ struct GenerationExamplesTests {
             // 2. Test proliferate alone (without map)
             let proliferateGen = String.arbitrary.proliferate(with: 1...3)
             for i in 0..<3 {
-                let generated = Interpreters.generate(proliferateGen)!
+                var iterator = GeneratorIterator(proliferateGen)
+                let generated = iterator.next()!
                 if let recipe = try Interpreters.reflect(proliferateGen, with: generated) {
                     if let replayed = try Interpreters.replay(proliferateGen, using: recipe) {
                         // Round-trip successful

@@ -10,10 +10,13 @@ import Testing
 
 @discardableResult
 func validateGenerator<Output: Equatable>(_ gen: ReflectiveGenerator<Any, Output>) throws -> (recipe: ChoiceTree, instance: Output) {
-    let instance = try #require(Interpreters.generate(gen))
-    let recipe = try #require(try Interpreters.reflect(gen, with: instance))
-    let replay = try #require(try Interpreters.replay(gen, using: recipe))
-    #expect(instance == replay)
-    print()
-    return (recipe, instance)
+    var iterator = GeneratorIterator(gen)
+    if let instance = iterator.next() {
+        let recipe = try #require(try Interpreters.reflect(gen, with: instance))
+        let replay = try #require(try Interpreters.replay(gen, using: recipe))
+        #expect(instance == replay)
+        return (recipe, instance)
+    } else {
+        fatalError("Boo")
+    }
 }

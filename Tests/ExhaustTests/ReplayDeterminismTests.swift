@@ -17,7 +17,8 @@ struct ReplayDeterminismTests {
         let gen = Gen.zip(String.arbitrary, UInt.arbitrary, Int.arbitrary)
         
         // Generate initial value
-        let initial = try #require(Interpreters.generate(gen))
+        var iterator = GeneratorIterator(gen)
+        let initial = iterator.next()!
         
         // Get recipe for that value
         let recipe = try #require(try Interpreters.reflect(gen, with: initial))

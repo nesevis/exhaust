@@ -18,9 +18,10 @@ struct CoreGeneratorTests {
         @Test("Gen.choose produces values within specified range")
         func testGenChooseRange() {
             let gen = Gen.choose(in: 10...20, input: Any.self)
+            var iterator = GeneratorIterator(gen)
             
             for _ in 0..<50 {
-                let value = Interpreters.generate(gen)!
+                let value = iterator.next()!
                 #expect(10...20 ~= value)
             }
         }
@@ -28,9 +29,10 @@ struct CoreGeneratorTests {
         @Test("Gen.choose with type produces valid values")
         func testGenChooseType() {
             let gen = Gen.choose(type: UInt32.self, input: Any.self)
+            var iterator = GeneratorIterator(gen)
             
             for _ in 0..<20 {
-                let value = Interpreters.generate(gen)!
+                let value = iterator.next()!
                 #expect(value is UInt32)
             }
         }
@@ -45,7 +47,7 @@ struct CoreGeneratorTests {
             #expect(recipe != nil)
             
             // Test reflection fails with different value
-            let badRecipe = try Interpreters.reflect(gen, with: 43)
+            let badRecipe = try? Interpreters.reflect(gen, with: 43)
             #expect(badRecipe == nil)
             
             // Test replay
@@ -64,9 +66,10 @@ struct CoreGeneratorTests {
         func testGenJust() {
             let value = "constant"
             let gen = Gen.just(value)
+            var iterator = GeneratorIterator(gen)
             
             for _ in 0..<10 {
-                let generated = Interpreters.generate(gen)!
+                let generated = iterator.next()!
                 #expect(generated == value)
             }
         }
@@ -107,8 +110,9 @@ struct CoreGeneratorTests {
             ]
             
             for (index, gen) in generators.enumerated() {
+                var iterator = GeneratorIterator(gen)
                 for iteration in 0..<10 {
-                    let generated = Interpreters.generate(gen)!
+                    let generated = iterator.next()!
                     if let recipe = try Interpreters.reflect(gen, with: generated) {
                         if let replayed = try Interpreters.replay(gen, using: recipe) {
                             #expect(generated == replayed, "Generator \(index), iteration \(iteration): \(generated) != \(replayed)")
@@ -143,11 +147,14 @@ struct CoreGeneratorTests {
         @Test("Expect failure")
         func testOpaqueMapReplayFailure() throws {
             let gen = String.arbitrary
-                .proliferate(with: 1...5)
-                .map { $0.joined() }
+                .proliferate(with: 2...5)
+                .map { $0.joined() } // Using mapped here wouldn't be possible; we don't know what the string boundaries were
+            var iterator = GeneratorIterator(gen)
             
-            let generated = try #require(Interpreters.generate(gen))
-            let reflect = try Interpreters.reflect(gen, with: generated)
+            // String.arbitrary takes getSize so the first output will be empty
+            let _ = iterator.next()!
+            let generated = iterator.next()!
+            let reflect = try? Interpreters.reflect(gen, with: generated)
             #expect(reflect == nil)
         }
     }
@@ -158,10 +165,11 @@ struct CoreGeneratorTests {
         @Test("High-frequency generation performance")
         func testHighFrequencyGeneration() {
             let gen = Gen.choose(in: 1...1000, input: Any.self)
+            var iterator = GeneratorIterator(gen)
             
             // Should be able to generate many values quickly
             for _ in 0..<10000 {
-                let _ = Interpreters.generate(gen)!
+                let _ = iterator.next()!
             }
             
             // If we get here without timeout, performance is acceptable

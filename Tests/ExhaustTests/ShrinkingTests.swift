@@ -256,7 +256,8 @@ struct ShrinkingTests {
                 Gen.choose(in: -50...50),
             ).map { $0 as Tuple }
             
-            let generated = try #require(Interpreters.generate(gen))
+            var iterator = GeneratorIterator(gen)
+            let generated = iterator.next()!
             let recipe = try #require(try Interpreters.reflect(gen, with: generated))
             let replayed = try #require(try Interpreters.replay(gen, using: recipe))
             #expect(generated == replayed)
@@ -360,6 +361,7 @@ struct ShrinkingTests {
             #expect(property(counterExample) == false)
             
             let shrunken = try Interpreters.shrink(counterExample, using: gen, where: property)
+            // Looks like shrinking runs aground with getSize
             let minimalCounterExample = Receipt(items: ["b"], cost: 1)
             #expect(minimalCounterExample == shrunken)
             /*

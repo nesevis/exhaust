@@ -14,7 +14,8 @@ struct PickSelectionTests {
     @Test("Boolean arbitrary produces selected branch")
     func booleanArbitraryProducesSelectedBranch() throws {
         for _ in 0..<100 {
-            let value = try #require(Interpreters.generate(Bool.arbitrary, with: ()) as Bool?)
+            var iterator = GeneratorIterator(Bool.arbitrary)
+            let value = iterator.next()!
             let recipe = try #require(try Interpreters.reflect(Bool.arbitrary, with: value))
             
             // The Boolean generator uses Gen.pick, so we should get a group with selected branches
@@ -44,10 +45,12 @@ struct PickSelectionTests {
         }
     }
     
+    // FIXME: This crashes now that the Character generator is more complex
     @Test("Optional Character arbitrary produces selected branch")
     func optionalCharacterGeneratorProducesSelectedBranch2() throws {
         let gen = Character?.arbitrary
-        let value = try #require(Interpreters.generate(gen))
+        var iterator = GeneratorIterator(gen)
+        let value = iterator.next()!
         let recipe = try #require(try Interpreters.reflect(gen, with: value))
         guard case let .group(branches) = recipe else {
             Issue.record("Expected .group for Character?.arbitrary recipe, got \(recipe)")
@@ -65,7 +68,8 @@ struct PickSelectionTests {
     @Test("Optional Int arbitrary produces selected branch")
     func optionalIntGeneratorProducesSelectedBranch() throws {
         for _ in 0..<10 {
-            guard let value = Interpreters.generate(Int?.arbitrary, with: ()) else {
+            var iterator = GeneratorIterator(Int?.arbitrary)
+            guard let value = iterator.next() else {
                 continue
             }
             guard let recipe = try Interpreters.reflect(Int?.arbitrary, with: value) else {
@@ -115,7 +119,8 @@ struct PickSelectionTests {
         ])
         
         for _ in 0..<100 {
-            let value = try #require(Interpreters.generate(customGen, with: ()))
+            var iterator = GeneratorIterator(customGen)
+            let value = iterator.next()!
             let recipe = try #require(try Interpreters.reflect(customGen, with: value))
             
             guard case let .group(branches) = recipe else {
@@ -147,7 +152,8 @@ struct PickSelectionTests {
     @Test("Replay with selected branches")
     func replayWithSelectedBranches() throws {
         // Test that we can replay a recipe with selected branches
-        let value = try #require(Interpreters.generate(Bool.arbitrary))
+        var iterator = GeneratorIterator(Bool.arbitrary)
+        let value = iterator.next()!
         let recipe = try #require(try Interpreters.reflect(Bool.arbitrary, with: value))
         
         let replayedValue = try #require(try Interpreters.replay(Bool.arbitrary, using: recipe) as Bool?)

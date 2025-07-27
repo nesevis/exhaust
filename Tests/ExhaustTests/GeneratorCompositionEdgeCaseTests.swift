@@ -21,7 +21,8 @@ struct GeneratorCompositionEdgeCaseTests {
         
         // Generate multiple values
         for _ in 0..<10 {
-            let (constant, string) = try #require(Interpreters.generate(composed))
+            var iterator = GeneratorIterator(composed)
+            let (constant, string) = iterator.next()!
             #expect(constant == 42) // Constant should always be the same
             // String can be anything
         }
@@ -39,7 +40,8 @@ struct GeneratorCompositionEdgeCaseTests {
         
         // Verify all components are generated correctly
         for _ in 0..<20 {
-            let (int, string, uint, double, ranged) = try #require(Interpreters.generate(gen))
+            var iterator = GeneratorIterator(gen)
+            let (int, string, uint, double, ranged) = iterator.next()!
             
             // Type checking ensures correctness, but verify range constraint
             #expect(ranged >= 1)
@@ -53,7 +55,8 @@ struct GeneratorCompositionEdgeCaseTests {
         let middleGen = Gen.zip(innerGen, Bool.arbitrary)
         let outerGen = Gen.zip(middleGen, UInt.arbitrary)
         
-        let nestedTuple = try #require(Interpreters.generate(outerGen))
+        var iterator = GeneratorIterator(outerGen)
+        let nestedTuple = iterator.next()!
         // TOOD: write #expects
         
         // All values should be generated successfully
@@ -68,7 +71,8 @@ struct GeneratorCompositionEdgeCaseTests {
         let composed = Gen.zip(emptyArrayGen, normalGen)
         
         for _ in 0..<10 {
-            let (emptyArray, _) = try #require(Interpreters.generate(composed))
+            var iterator = GeneratorIterator(composed)
+            let (emptyArray, _) = iterator.next()!
             #expect(emptyArray.isEmpty)
         }
     }
@@ -85,7 +89,8 @@ struct GeneratorCompositionEdgeCaseTests {
         let composed = Gen.zip(dependentGen, independentGen)
         
         for _ in 0..<20 {
-            let ((first, second), _) = try #require(Interpreters.generate(composed))
+            var iterator = GeneratorIterator(composed)
+            let ((first, second), _) = iterator.next()!
             #expect(second >= first)
             #expect(second <= first + 10)
         }
@@ -99,7 +104,8 @@ struct GeneratorCompositionEdgeCaseTests {
             Bool.arbitrary
         )
         
-        let generated = try #require(Interpreters.generate(gen))
+        var iterator = GeneratorIterator(gen)
+        let generated = iterator.next()!
         let recipe = try #require(try Interpreters.reflect(gen, with: generated))
         let replayed = try #require(try Interpreters.replay(gen, using: recipe))
         
@@ -114,7 +120,8 @@ struct GeneratorCompositionEdgeCaseTests {
         let composed = Gen.zip(arrayGen, scalarGen)
         
         for _ in 0..<20 {
-            let (array, string) = try #require(Interpreters.generate(composed))
+            var iterator = GeneratorIterator(composed)
+            let (array, string) = iterator.next()!
             #expect(array.count >= 0)
             #expect(array.count <= 5)
         }
@@ -130,7 +137,8 @@ struct GeneratorCompositionEdgeCaseTests {
         let composed = Gen.zip(nestedGen, String.arbitrary)
         
         for _ in 0..<10 {
-            let (nested, string) = try #require(Interpreters.generate(composed))
+            var iterator = GeneratorIterator(composed)
+            let (nested, string) = iterator.next()!
             
             // Verify structure depth
             #expect(nested.count >= 1)

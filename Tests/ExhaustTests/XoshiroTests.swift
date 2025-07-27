@@ -77,7 +77,7 @@ func testReflectOnGetsize() throws {
 func testReflectOnResize() throws {
     // Test String.arbitrary
     let gen = Gen.resize(50, String.arbitrary)
-    var iterator = GeneratorIterator(gen, seed: 123)
+    var iterator = GeneratorIterator(gen)
     let first = iterator.next()!
     let second = iterator.next()!
     #expect(first.count == second.count)

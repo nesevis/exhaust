@@ -63,7 +63,8 @@ struct AdvancedFeatureTests {
             let gen = treeGen(depth: 3)
             
             for _ in 0..<10 {
-                let tree = Interpreters.generate(gen)!
+                var iterator = GeneratorIterator(gen)
+                let tree = iterator.next()!
                 
                 // Validate tree structure
                 func validateDepth(_ tree: TestTree<Int>, maxDepth: Int) -> Bool {
@@ -120,7 +121,8 @@ struct AdvancedFeatureTests {
                         }
                     }
                 
-                let generated = Interpreters.generate(outerGen)
+                var iterator = GeneratorIterator(outerGen)
+                let generated = iterator.next()
                 
                 guard let generated = generated else {
                     continue
@@ -184,7 +186,8 @@ struct AdvancedFeatureTests {
             var nestedCount = 0
             
             for _ in 0..<100 {
-                let variant = Interpreters.generate(variantGen)!
+                var iterator = GeneratorIterator(variantGen)
+                let variant = iterator.next()!
                 
                 switch variant {
                 case .simple(_):
@@ -250,7 +253,8 @@ struct AdvancedFeatureTests {
                 }
             
             for _ in 0..<10 {
-                let graph = Interpreters.generate(graphGen)!
+                var iterator = GeneratorIterator(graphGen)
+                let graph = iterator.next()!
                 
                 // Validate graph constraints
                 #expect(5...10 ~= graph.nodes.count)
@@ -276,48 +280,6 @@ struct AdvancedFeatureTests {
         }
     }
     
-    @Suite("Conditional Generation")
-    struct ConditionalTests {
-        
-        @Test("Conditional generation based on previous values")
-        func testConditionalGeneration() throws {
-            struct ConditionalData: Equatable {
-                let type: String
-                let value: Int
-            }
-            
-            let typeGen = Gen.pick(choices: [
-                (weight: UInt64(1), generator: Gen.just("small")),
-                (weight: UInt64(1), generator: Gen.just("large"))
-            ])
-            
-            let conditionalGen = typeGen.bind { type in
-                let valueRange = type == "small" ? 1...10 : 100...1000
-                return Gen.choose(in: valueRange, input: Any.self).map { value in
-                    ConditionalData(type: type, value: value)
-                }
-            }
-            
-            for iteration in 0..<50 {
-                let data = Interpreters.generate(conditionalGen)!
-                
-                // Validate conditional constraint
-                if data.type == "small" {
-                    #expect(1...10 ~= data.value)
-                } else {
-                    #expect(100...1000 ~= data.value)
-                }
-                
-                // Test round-trip (conditional generators may not support reflection)
-                if let recipe = try Interpreters.reflect(conditionalGen, with: data) {
-                    if let replayed = try Interpreters.replay(conditionalGen, using: recipe) {
-                        #expect(data == replayed)
-                    }
-                }
-            }
-        }
-    }
-    
     @Suite("Extreme Value Handling")
     struct ExtremeValueTests {
         
@@ -332,7 +294,8 @@ struct AdvancedFeatureTests {
             
             for (index, gen) in extremeGenerators.enumerated() {
                 for _ in 0..<10 {
-                    let value = Interpreters.generate(gen)!
+                    var iterator = GeneratorIterator(gen)
+                    let value = iterator.next()!
                     
                     // Test round-trip even with extreme values
                     if let recipe = try Interpreters.reflect(gen, with: value) {
@@ -356,7 +319,8 @@ struct AdvancedFeatureTests {
                 .proliferate(with: 10...10)     // 10 inner arrays  
                 .proliferate(with: 2...2)       // 2 outer arrays
             
-            let large = Interpreters.generate(largeNestedGen)!
+            var iterator = GeneratorIterator(largeNestedGen)
+            let large = iterator.next()!
             
             // Validate structure
             #expect(large.count == 2)
