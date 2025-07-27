@@ -133,7 +133,8 @@ final class HierarchicalTieredShrinker: IteratorProtocol {
                     .map { collection in
                         .sequence(
                             length: UInt64(results.count),
-                            elements: Array(collection as! Shrinks),
+                            // FIXME: This is badly typed
+                            elements: collection as? [ChoiceTree] ?? [],
                             choiceMetadata
                         ).with(strategies: remaining)
                 }[...]

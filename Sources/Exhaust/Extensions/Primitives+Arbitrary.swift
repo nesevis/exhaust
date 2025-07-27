@@ -119,10 +119,6 @@ extension Character: Arbitrary {
                 ((size + 2) / 2, Gen.chooseCharacter(in: self.bitPatternRanges[3]))
             ])
         }
-//        .mapped(
-//            forward: { $0 },
-//            backward: { $0.unicodeScalars.max(by: { $0.bitPattern64 < $1.bitPattern64 })! }
-//        )
     }
 }
 

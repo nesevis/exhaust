@@ -268,12 +268,14 @@ extension ChoiceTree {
                 return upper - lower
             case .character(let character):
                 guard let range = choiceMetadata.validRanges.first(where: { $0.contains(character.bitPattern64) }) else {
-                    fatalError("\(#function) this should not happen")
+                    // FIXME: This used to throw but now fails because character is a pick
+                    return nil
                 }
                 return Double(UInt32(bitPattern64: range.upperBound - range.lowerBound))
             }
         case .sequence(_, _, let choiceMetadata):
-            return Double(choiceMetadata.validRanges[0].count)
+            let range = choiceMetadata.validRanges[0]
+            return Double(UInt64(bitPattern64: range.upperBound - range.lowerBound))
         default:
             return nil
         }

@@ -37,11 +37,14 @@ enum ChoiceValue: Comparable, Hashable, Equatable {
             }
             return UInt64(abs(value))
         case let .floating(value, _):
-            let absValue = abs(value) * 100
+            let absValue = abs(value)
             if absValue >= Double(UInt64.max) {
                 return UInt64.max
             }
             // Complexity does not handle values below 1
+            if absValue.isNaN || absValue.isInfinite {
+                return UInt64.max
+            }
             return UInt64(absValue)
         case let .character(character):
             return character.bitPattern64 + 100 // Encourages removing '\0' bits
