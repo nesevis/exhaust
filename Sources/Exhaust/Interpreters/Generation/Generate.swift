@@ -214,6 +214,15 @@ enum Interpreters {
                 return runContinuation(results)
             case let .just(value):
                 return runContinuation(value)
+                
+            case .getSize:
+                return runContinuation(context.size)
+                
+            case let .resize(newSize, nextGen):
+                var newContext = context
+                newContext.size = newSize
+                guard let result = self.generateRecursive(nextGen, with: inputValue, context: newContext) else { return nil }
+                return runContinuation(result)
             }
         }
     }

@@ -202,6 +202,22 @@ extension Interpreters {
         case let .just(value):
             let string = "\(value)".prefix(50)
             return [(value: value, path: [.just(String(string))])]
+            
+        case .getSize:
+            // For getSize, the finalOutput should be a UInt64 size value
+            guard let size = finalOutput as? UInt64 else {
+                return []
+            }
+            return [(value: size, path: [.getSize(size)])]
+            
+        case let .resize(newSize, nextGen):
+            // For resize, reflect on the nested generator with the new size context
+            let nestedResults = try reflectRecursive(nextGen, onFinalOutput: finalOutput)
+            
+            return nestedResults.map { result in
+                (value: result.value, path: [.resize(newSize: newSize, choices: result.path)])
+            }
+            
         case let .sequence(lengthGen, elementGen):
             // 1. The target value for a sequence MUST be an array.
             guard

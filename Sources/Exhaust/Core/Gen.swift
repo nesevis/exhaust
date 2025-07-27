@@ -69,6 +69,10 @@ enum Gen {
             )
         case let .just(value):
             return .just(value as Any)
+        case .getSize:
+            return .getSize
+        case let .resize(newSize, next):
+            return .resize(newSize: newSize, next: next.mapOperation(eraseInputType(from:)))
         }
     }
     

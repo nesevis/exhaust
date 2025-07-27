@@ -148,6 +148,10 @@ extension ChoiceTree {
             return .group(array.map { $0.setStrategies(strategies) })
         case let .important(element), let .selected(element):
             return .important(element.setStrategies(strategies))
+        case let .getSize(size):
+            return .getSize(size)
+        case let .resize(newSize, choices):
+            return .resize(newSize: newSize, choices: choices.map { $0.setStrategies(strategies) })
         }
     }
     
@@ -168,6 +172,10 @@ extension ChoiceTree {
             fatalError()
         case .selected(let choiceTree):
             fatalError()
+        case .getSize(_):
+            fatalError()
+        case .resize(newSize: _, choices: _):
+            fatalError()
         }
     }
     
@@ -187,6 +195,10 @@ extension ChoiceTree {
             return self
         case let .important(element), let .selected(element):
             return .important(element.setStrategiesForRangeAndType(direction: direction))
+        case let .getSize(size):
+            return .getSize(size)
+        case let .resize(newSize, choices):
+            return .resize(newSize: newSize, choices: choices.map { $0.resetStrategies(direction: direction) })
         }
     }
     

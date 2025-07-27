@@ -42,6 +42,9 @@ final class HierarchicalTieredShrinker: IteratorProtocol {
         
         /// Representing a branch in the ``ChoiceTree``
         case branch(label: UInt64, children: Shrinks, childIndex: Int, subIterators: [HierarchicalTieredShrinker], exhaustedChildren: Set<Int>)
+        
+        /// Representing a resize node with nested choices
+        case resize(newSize: UInt64, choices: Shrinks, childIndex: Int, subIterators: [HierarchicalTieredShrinker], exhaustedChildren: Set<Int>)
     }
     
     /// This kicks off the initial round of shrinks. It will go by strategy
@@ -81,6 +84,16 @@ final class HierarchicalTieredShrinker: IteratorProtocol {
             return handle(first: value)
         case .selected:
             fatalError("\(Self.self) should not handle `.selected`")
+        case let .getSize(size):
+            // getSize nodes can't be shrunk, they represent constant size values
+            return (nil, .exhausted)
+        case let .resize(newSize, choices):
+            // For resize nodes, shrink the nested choices
+            guard !choices.isEmpty else {
+                return (nil, .exhausted)
+            }
+            let subIterators = choices.map { HierarchicalTieredShrinker($0) }
+            return (first, .resize(newSize: newSize, choices: choices[...], childIndex: 0, subIterators: subIterators, exhaustedChildren: []))
         }
     }
     
@@ -318,6 +331,36 @@ final class HierarchicalTieredShrinker: IteratorProtocol {
                         index = (index + 1) % children.count
                     }
                     state = .branch(label: label, children: children, childIndex: index, subIterators: subIterators, exhaustedChildren: exhaustedChildren)
+                    continue
+                }
+            case .resize(let newSize, var choices, var index, let subIterators, var exhaustedChildren):
+                if let subResult = subIterators[index].next() {
+                    choices[index] = subResult
+                    // There's still a result, update the choice, and if it's not an important part, move to the next one (round-robin)
+                    index = choices[index].isImportant ? index : (index + 1) % choices.count
+                    // Skip exhausted children
+                    while exhaustedChildren.contains(index) && exhaustedChildren.count < choices.count {
+                        index = (index + 1) % choices.count
+                    }
+                    if exhaustedChildren.count >= choices.count {
+                        state = .exhausted
+                        return nil
+                    }
+                    state = .resize(newSize: newSize, choices: choices, childIndex: index, subIterators: subIterators, exhaustedChildren: exhaustedChildren)
+                    return ChoiceTree.resize(newSize: newSize, choices: Array(choices))
+                } else {
+                    // This choice is exhausted, mark it and move to next
+                    exhaustedChildren.insert(index)
+                    if exhaustedChildren.count >= choices.count {
+                        state = .exhausted
+                        return nil
+                    }
+                    index = (index + 1) % choices.count
+                    // Skip exhausted children
+                    while exhaustedChildren.contains(index) {
+                        index = (index + 1) % choices.count
+                    }
+                    state = .resize(newSize: newSize, choices: choices, childIndex: index, subIterators: subIterators, exhaustedChildren: exhaustedChildren)
                     continue
                 }
             }

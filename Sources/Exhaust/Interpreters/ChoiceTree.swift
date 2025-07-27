@@ -30,6 +30,12 @@ enum ChoiceTree: Hashable, Equatable, Sendable {
     
     /// Used only for replay. Represents the selected branch in a ``group`` of ``branch``es.
     indirect case selected(ChoiceTree)
+    
+    /// Represents a size value retrieved from the generation context
+    case getSize(UInt64)
+    
+    /// Represents a resized generation context with nested choices
+    indirect case resize(newSize: UInt64, choices: [ChoiceTree])
 }
 
 extension ChoiceTree {
@@ -75,6 +81,10 @@ extension ChoiceTree {
             return 1 + array.map(\.structuralComplexity).reduce(0, +)
         case .important(let choiceTree), .selected(let choiceTree):
             return choiceTree.structuralComplexity
+        case .getSize:
+            return 1
+        case .resize(_, let choices):
+            return 2 + choices.map(\.structuralComplexity).reduce(0, +)
         }
     }
     
@@ -112,6 +122,18 @@ extension ChoiceTree {
             return complexity
         case let .important(value), let .selected(value):
             return value.complexity
+        case let .getSize(size):
+            return size
+        case .resize(_, let choices):
+            var complexity = UInt64(0)
+            for choice in choices {
+                let choiceComplexity = choice.complexity
+                if complexity &+ choiceComplexity < complexity {
+                    return UInt64.max
+                }
+                complexity += choiceComplexity
+            }
+            return complexity
         }
     }
 }
@@ -126,7 +148,7 @@ extension ChoiceTree {
         let transformedNode = try transform(self)
 
         switch transformedNode {
-        case .choice, .just:
+        case .choice, .just, .getSize:
             // For leaf nodes, return the transformed node directly.
             return transformedNode
         case let .sequence(length, elements, metadata):
@@ -144,6 +166,9 @@ extension ChoiceTree {
         case let .selected(child):
             // For a selected node, recursively map over the locked child.
             return try .selected(child.map(transform))
+        case let .resize(newSize, choices):
+            // For a resize node, recursively map over its choices.
+            return try .resize(newSize: newSize, choices: choices.map { try $0.map(transform) })
         }
     }
     
@@ -154,7 +179,7 @@ extension ChoiceTree {
         }
 
         switch self {
-        case .choice, .just:
+        case .choice, .just, .getSize:
             return selfResult
         case let .sequence(_, elements, _), let .branch(_, elements), let .group(elements):
             // For a sequence, recursively map over its elements.
@@ -162,6 +187,8 @@ extension ChoiceTree {
         case let .important(child), let .selected(child):
             // For a locked node, recursively map over the locked child.
             return predicate(child)
+        case let .resize(_, choices):
+            return choices.contains { $0.contains(predicate) }
         }
     }
     
@@ -222,6 +249,16 @@ extension ChoiceTree {
                     return containerResult
                 }
                 return .important(lhsChild.merge(with: rhsChild, using: combine))
+                
+            // If both are resize, merge their choices recursively.
+            case let (.resize(lhsSize, lhsChoices), .resize(_, rhsChoices)):
+                if let containerResult = combine(self, other) {
+                    return containerResult
+                }
+                let mergedChoices = zip(lhsChoices, rhsChoices).map { (lhsChoice, rhsChoice) in
+                    lhsChoice.merge(with: rhsChoice, using: combine)
+                }
+                return .resize(newSize: lhsSize, choices: mergedChoices)
 
             // --- Base Case: Let the user's closure decide ---
             // This handles:
@@ -360,6 +397,15 @@ extension ChoiceTree: CustomDebugStringConvertible {
             return value.treeDescription(prefix: prefix, isLast: isLast, isLocked: true)
         case let .selected(value):
             return value.treeDescription(prefix: prefix, isLast: isLast, isSelected: true)
+        case let .getSize(size):
+            return prefix + connector + "getSize(\(size))"
+        case let .resize(newSize, choices):
+            var result = prefix + connector + "resize(newSize: \(newSize))"
+            for (index, choice) in choices.enumerated() {
+                let isLastChoice = index == choices.count - 1
+                result += "\n" + choice.treeDescription(prefix: childPrefix, isLast: isLastChoice)
+            }
+            return result
         }
     }
     
@@ -389,6 +435,10 @@ extension ChoiceTree: CustomDebugStringConvertible {
             return "{" + array.map(\.elementDescription).joined() + "}"
         case .important(let choiceTree), .selected(let choiceTree):
             return choiceTree.elementDescription
+        case let .getSize(size):
+            return "getSize(\(size))"
+        case let .resize(newSize, choices):
+            return "resize(\(newSize): [\(choices.map(\.elementDescription).joined(separator: ", "))])"
         }
     }
 }

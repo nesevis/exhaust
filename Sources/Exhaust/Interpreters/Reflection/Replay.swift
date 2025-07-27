@@ -164,6 +164,32 @@ extension Interpreters {
                 
                 let nextGen = continuation(value)
                 return try self.replayWithChoicesHelper(nextGen, choices: &choices)
+                
+            case .getSize:
+                // getSize doesn't consume choices, just returns the current size
+                guard !choices.isEmpty else { return nil }
+                let choice = choices.removeFirst()
+                guard case let .getSize(size) = choice else {
+                    return nil
+                }
+                
+                let nextGen = continuation(size)
+                return try self.replayWithChoicesHelper(nextGen, choices: &choices)
+                
+            case let .resize(newSize, subGenerator):
+                // resize consumes a resize choice and replays the sub-generator
+                guard !choices.isEmpty else { return nil }
+                let choice = choices.removeFirst()
+                guard case let .resize(_, subChoices) = choice else {
+                    return nil
+                }
+                
+                var subChoicesCopy = subChoices
+                guard let subResult = try self.replayWithChoicesHelper(subGenerator, choices: &subChoicesCopy) else {
+                    return nil
+                }
+                let nextGen = continuation(subResult)
+                return try self.replayWithChoicesHelper(nextGen, choices: &choices)
             }
         }
     }
@@ -229,6 +255,27 @@ extension Interpreters {
                     return nil
                 }
                 return try runContinuation(value)
+                
+            case .getSize:
+                // This operation expects a `.getSize` node from the script.
+                guard case let .getSize(size) = script else {
+                    return nil
+                }
+                return try runContinuation(size)
+                
+            case let .resize(newSize, nextGen):
+                // This operation expects a `.resize` node from the script.
+                guard case let .resize(_, subChoices) = script else {
+                    return nil
+                }
+                // For now, use the first choice tree from the array if available
+                guard let firstChoice = subChoices.first else {
+                    return nil
+                }
+                guard let subResult = try self.replayRecursive(nextGen, with: firstChoice) else {
+                    return nil
+                }
+                return try runContinuation(subResult)
 
             case let .pick(choices):
                 // This operation expects a `.branch` node from the script.
