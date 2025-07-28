@@ -293,6 +293,7 @@ extension ChoiceTree {
                 // We need to build a range from rhs...lhs
                 let lhsRange = lhsValue.convertible.bitPattern64
                 let rhsRange = rhsValue.convertible.bitPattern64
+                // This won't work for doubles...
                 let convertibleRange = min(lhsRange, rhsRange)...max(lhsRange, rhsRange)
                 let meta = ChoiceMetadata(validRanges: [convertibleRange], strategies: [])
                 return ChoiceTree.choice(lhsValue, meta)

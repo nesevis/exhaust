@@ -53,7 +53,6 @@ extension Interpreters {
             
             // 2. For each successful intermediate result...
             let results = try intermediateResults.flatMap { (intermediateValue: Any, partialPath: [ChoiceTree]) in
-                let op = operation
                 let nextGen = continuation(intermediateValue)
                 // The `finalOutput` is passed down UNCHANGED. This is the crucial part.
                 let finalResults = try reflectRecursive(nextGen, onFinalOutput: finalOutput)
@@ -163,7 +162,7 @@ extension Interpreters {
                 strategies: [
                     FundamentalReducerStrategy(direction: .towardsLowerBound),
                     BoundaryReducerStrategy(direction: .towardsLowerBound),
-                    SpreadReducerStrategy(direction: .towardsLowerBound),
+//                    SpreadReducerStrategy(direction: .towardsLowerBound),
                     BinaryReducerStrategy(direction: .towardsLowerBound),
                     SaturationReducerStrategy(direction: .towardsLowerBound)
                 ]
@@ -198,7 +197,7 @@ extension Interpreters {
                 strategies: [
                     FundamentalReducerStrategy(direction: .towardsLowerBound),
                     BoundaryReducerStrategy(direction: .towardsLowerBound),
-                    SpreadReducerStrategy(direction: .towardsLowerBound),
+//                    SpreadReducerStrategy(direction: .towardsLowerBound),
                     BinaryReducerStrategy(direction: .towardsLowerBound),
                     SaturationReducerStrategy(direction: .towardsLowerBound)
                 ]
@@ -211,7 +210,8 @@ extension Interpreters {
             
         case .getSize:
             // We can't derive the getSize parameter when reflecting as the bind continuation that applies it is opaque to us. Ultimately it shouldn't matter for replay
-            var derivedSize: UInt64 = 0
+            // But it does for reflection. Let's use 50 as a midpoint value
+            var derivedSize: UInt64 = 50
             if let sequence = finalOutput as? any Sequence {
                 derivedSize = UInt64(sequence.underestimatedCount)
             }

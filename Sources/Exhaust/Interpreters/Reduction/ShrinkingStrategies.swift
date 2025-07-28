@@ -36,7 +36,7 @@ enum ShrinkingStrategy: CaseIterable, Hashable, Equatable {
         }
     }
     
-    static var sequenceStrategies: [any ChoiceValueReducerStrategy & ChoiceSequenceReducerStrategy] {
+    static var sequenceStrategies: [any TemporaryDualPurposeStrategy] {
         [
             BoundaryReducerStrategy(direction: .towardsLowerBound),
             BinaryReducerStrategy(direction: .towardsLowerBound),

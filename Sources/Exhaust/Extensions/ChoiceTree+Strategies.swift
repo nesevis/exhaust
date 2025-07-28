@@ -222,7 +222,7 @@ extension ChoiceTree {
                 importantStrategies.append(SaturationReducerStrategy(direction: direction))
                 importantStrategies.append(UltraSaturationReducerStrategy(direction: direction))
             default:
-                importantStrategies.append(SpreadReducerStrategy(direction: direction))
+//                importantStrategies.append(SpreadReducerStrategy(direction: direction))
                 importantStrategies.append(BinaryReducerStrategy(direction: direction))
                 importantStrategies.append(SaturationReducerStrategy(direction: direction))
                 importantStrategies.append(UltraSaturationReducerStrategy(direction: direction))
@@ -238,7 +238,7 @@ extension ChoiceTree {
                 importantStrategies.append(BoundaryReducerStrategy(direction: direction))
                 importantStrategies.append(SaturationReducerStrategy(direction: direction))
             default:
-                importantStrategies.append(SpreadReducerStrategy(direction: direction))
+//                importantStrategies.append(SpreadReducerStrategy(direction: direction))
                 importantStrategies.append(BinaryReducerStrategy(direction: direction))
                 importantStrategies.append(SaturationReducerStrategy(direction: direction))
             }

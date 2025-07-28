@@ -10,6 +10,7 @@
 extension UInt64: Arbitrary {
     static var arbitrary: ReflectiveGenerator<Any, Self> {
         Gen.getSize().bind { size in
+            // This needs a bit more work to slow the scaling down a tad. Counteract logarithm?
             let expanded: UInt64 = size < 64 ? 1 << size : UInt64.max
             return Gen.choose(in: UInt64.min...expanded)
         }
@@ -56,8 +57,9 @@ extension Int32: Arbitrary {}
 extension Double: Arbitrary {
     static var arbitrary: ReflectiveGenerator<Any, Self> {
         Gen.getSize().bind { size in
-            // TODO: use pow() to scale range   
-            Gen.choose(in: -Double(size)...Double(size))
+            // TODO: use pow() to scale range
+            let boundary = size == UInt64.max ? Double.greatestFiniteMagnitude : Double(size)
+            return Gen.choose(in: -boundary...boundary)
         }
     }
 }
@@ -91,7 +93,7 @@ extension Character: Arbitrary {
                 (200, Gen.chooseCharacter(in: self.bitPatternRanges[0])), // Standard ascii
                 (size, Gen.chooseCharacter(in: self.bitPatternRanges[1])), // Control characters
                 (size, Gen.chooseCharacter(in: self.bitPatternRanges[2])), // First bit of unicode minus ascii
-                ((size + 2) / 2, Gen.chooseCharacter(in: self.bitPatternRanges[3])) // Second bit
+                (size / 2, Gen.chooseCharacter(in: self.bitPatternRanges[3])) // Second bit of unicode
             ])
         }
     }

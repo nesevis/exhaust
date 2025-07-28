@@ -7,8 +7,21 @@
 
 import Algorithms
 
-struct SaturationReducerStrategy: ChoiceValueReducerStrategy, ChoiceSequenceReducerStrategy {
+struct SaturationReducerStrategy: ChoiceValueReducerStrategy, ChoiceSequenceReducerStrategy, LazyChoiceValueReducerStrategy, LazyChoiceSequenceReducerStrategy {
     let direction: ShrinkingDirection
+    
+    // We need a max here or it will just keep giving values
+    func next(for value: UInt64) -> UInt64? {
+        guard value > 0 else {
+            return nil
+        }
+        return switch direction {
+        case .towardsLowerBound:
+            (value / 10) * 9
+        case .towardsHigherBound:
+            (value / 9) * 10
+        }
+    }
     
     func values(for value: UInt64, in range: ClosedRange<UInt64>) -> [UInt64] {
         let max = 50
@@ -31,6 +44,25 @@ struct SaturationReducerStrategy: ChoiceValueReducerStrategy, ChoiceSequenceRedu
             }
         }
         return values
+    }
+    
+    func next(for value: Int64) -> Int64? {
+        switch direction {
+        case .towardsLowerBound where value < 0:
+            (value * 10) / 9
+        case .towardsLowerBound where value == 0:
+            -1
+        case .towardsLowerBound where value > 0:
+            (value / 10) * 9
+        case .towardsHigherBound where value < 0:
+            (value / 10) * 9
+        case .towardsHigherBound where value == 0:
+            1
+        case .towardsHigherBound where value > 0:
+            (value * 10) / 9
+        default:
+            fatalError("Reducer error")
+        }
     }
     
     func values(for value: Int64, in range: ClosedRange<Int64>) -> [Int64] {
@@ -58,6 +90,25 @@ struct SaturationReducerStrategy: ChoiceValueReducerStrategy, ChoiceSequenceRedu
             }
         }
         return values
+    }
+    
+    func next(for value: Double) -> Double? {
+        switch direction {
+        case .towardsLowerBound where value < 0:
+            (value * 10) / 9
+        case .towardsLowerBound where value == 0:
+            -1
+        case .towardsLowerBound where value > 0:
+            (value / 10) * 9
+        case .towardsHigherBound where value < 0:
+            (value / 10) * 9
+        case .towardsHigherBound where value == 0:
+            1
+        case .towardsHigherBound where value > 0:
+            (value * 10) / 9
+        default:
+            fatalError("Reducer error")
+        }
     }
     
     func values(for value: Double, in range: ClosedRange<Double>) -> [Double] {
@@ -88,6 +139,12 @@ struct SaturationReducerStrategy: ChoiceValueReducerStrategy, ChoiceSequenceRedu
     }
     
     // MARK: - ChoiceSequenceReducerStrategy
+    
+    func next(for collection: [ChoiceTree].SubSequence) -> [[ChoiceTree].SubSequence] {
+        // FIXME: This should be improved
+//        collection.evenlyChunked(in: max(collection.count / 10, 1))
+        []
+    }
     
     func values(for collection: some Collection, in lengthRange: ClosedRange<Int>) -> [any Collection] {
         let count = collection.underestimatedCount

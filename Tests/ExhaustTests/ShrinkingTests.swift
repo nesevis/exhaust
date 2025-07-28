@@ -52,13 +52,15 @@ struct ShrinkingTests {
         func testBasicDoubleShrink() throws {
             typealias Shrink = Double
             let gen = Shrink.arbitrary
-            let failing: Shrink = -.greatestFiniteMagnitude
+            let failing: Shrink = .greatestFiniteMagnitude
             let target: Shrink = 6
             let property: (Shrink) -> Bool = { value in
                 print("Shrinking \(value) \(value > target)")
-                return value > target
+                return value < target
             }
 
+            // This now fails because the complexity score doesn't deal with fractions
+            let reflectedRecipe = try Interpreters.reflect(gen, with: target)
             let shrunken = try Interpreters.shrink(failing, using: gen, where: property)
             print()
             #expect(shrunken <= target + 0.1)
@@ -319,6 +321,7 @@ struct ShrinkingTests {
             let shrunken = try Interpreters.shrink(failingExample, using: gen, where: property)
             
             // Assert
+            print()
             #expect(expectedMinimumCounterExample == shrunken)
         }
     }

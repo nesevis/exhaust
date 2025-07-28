@@ -59,8 +59,9 @@ enum Interpreters {
         while true {
             var shrinkWasImproved = false
             // At this point we should reset the available shrinkers for the recipe
-            let iterator = HierarchicalTieredShrinker(currentBestRecipe)
+            let iterator = ShrinkingIterator(currentBestRecipe)
             while let candidateRecipe = iterator.next() {
+//                print("\(Self.self) Pulled value from iterator")
                 guard let candidateValue = try Interpreters.replay(generator, using: candidateRecipe) else {
                     // This means the recipe is malformed, as any shrinks should return a valid recipe
                     throw ShrinkError.couldNotReplayRecipe(original: recipe, failing: candidateRecipe)
@@ -68,7 +69,7 @@ enum Interpreters {
                 steps += 1
                 guard seen[candidateRecipe] == nil else {
                     cacheHits += 1
-                    print("Cache hit for \(candidateRecipe)")
+//                    print("Cache hit for \(candidateRecipe)")
                     if cacheHits > 1000 {
                         print("Cache hit limit reached; breaking")
                         break
@@ -89,7 +90,7 @@ enum Interpreters {
                 if isValidShrink {
                     // Successful shrink!
                     // FIXME: If you end up in a local minimum of zero, the complexity check will never be successful
-                    shrinkWasImproved = currentBestRecipeComplexity == 0 || candidateComplexity < currentBestRecipeComplexity
+                    shrinkWasImproved = candidateComplexity < currentBestRecipeComplexity
                     var validCandidate = candidateRecipe
                     if isLockedIn, let previousInvalidRecipe {
                         validCandidate = ChoiceTree.diffAndLockChanges(in: candidateRecipe, from: previousInvalidRecipe)

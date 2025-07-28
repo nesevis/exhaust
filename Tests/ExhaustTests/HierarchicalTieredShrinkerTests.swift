@@ -14,7 +14,7 @@ struct HierarchicalTieredShrinkerTests {
     func fundamentalShrinksWorks() throws {
         let value = ChoiceValue.unsigned(976)
         let choice = ChoiceTree.choice(value, .init(validRanges: UInt64.bitPatternRanges, strategies: [FundamentalReducerStrategy(direction: .towardsLowerBound)]))
-        let iterator = HierarchicalTieredShrinker(choice)
+        let iterator = ShrinkingIterator(choice)
         
         var array: [ChoiceTree?] = []
         while let current = iterator.next() {
@@ -40,7 +40,7 @@ struct HierarchicalTieredShrinkerTests {
             ChoiceTree.choice(.unsigned(3), choiceMeta)
         ]
         let choice = ChoiceTree.sequence(length: UInt64(values.count), elements: values, sequenceMeta)
-        let iterator = HierarchicalTieredShrinker(choice)
+        let iterator = ShrinkingIterator(choice)
         
         var array: [ChoiceTree] = []
         while let current = iterator.next() {
@@ -59,7 +59,7 @@ struct HierarchicalTieredShrinkerTests {
             ChoiceTree.choice(.unsigned(3), choiceMeta)
         ]
         let choice = ChoiceTree.sequence(length: UInt64(values.count), elements: values, sequenceMeta)
-        let iterator = HierarchicalTieredShrinker(choice)
+        let iterator = ShrinkingIterator(choice)
         
         var array: [ChoiceTree] = []
         while let current = iterator.next() {
@@ -78,7 +78,7 @@ struct HierarchicalTieredShrinkerTests {
             ChoiceTree.choice(.unsigned(3), choiceMeta)
         ]
         let choice = ChoiceTree.sequence(length: UInt64(values.count), elements: values, sequenceMeta)
-        let iterator = HierarchicalTieredShrinker(choice)
+        let iterator = ShrinkingIterator(choice)
         
         var array: [ChoiceTree] = []
         while let current = iterator.next() {
