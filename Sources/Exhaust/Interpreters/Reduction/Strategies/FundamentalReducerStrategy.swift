@@ -5,7 +5,7 @@
 //  Created by Chris Kolbu on 24/7/2025.
 //
 
-struct FundamentalReducerStrategy: ChoiceValueReducerStrategy, ChoiceSequenceReducerStrategy, LazyChoiceValueReducerStrategy, LazyChoiceSequenceReducerStrategy {
+struct FundamentalReducerStrategy: LazyChoiceValueReducerStrategy, LazyChoiceSequenceReducerStrategy {
     let direction: ShrinkingDirection
     
     static let uintValues: [UInt64] = [0, 1, 2]
@@ -19,10 +19,6 @@ struct FundamentalReducerStrategy: ChoiceValueReducerStrategy, ChoiceSequenceRed
         return nil
     }
     
-    func values(for value: UInt64, in range: ClosedRange<UInt64>) -> [UInt64] {
-        [0, 1, 2]
-    }
-    
     static let intValues: [Int64] = [0, -1, 1, 2, -2]
     func next(for value: Int64) -> Int64? {
         guard Self.intValues.contains(value) else {
@@ -32,10 +28,6 @@ struct FundamentalReducerStrategy: ChoiceValueReducerStrategy, ChoiceSequenceRed
             return Self.intValues[index + 1]
         }
         return nil
-    }
-    
-    func values(for value: Int64, in range: ClosedRange<Int64>) -> [Int64] {
-        [0, -1, 1, 2, -2]
     }
     
     static let doubleValues: [Double] = [0, -0.1, -0.01, -0.001, -Double.ulpOfOne, -0.0001, Double.ulpOfOne, 0.001, 0.01, 0.1]
@@ -49,10 +41,6 @@ struct FundamentalReducerStrategy: ChoiceValueReducerStrategy, ChoiceSequenceRed
         return nil
     }
     
-    func values(for value: Double, in range: ClosedRange<Double>) -> [Double] {
-        [0, -0.1, -0.01, -0.001, -Double.ulpOfOne, -0.0001, Double.ulpOfOne, 0.001, 0.01, 0.1]
-    }
-    
     static let charValues: [Character] = [" ", "a", "b", "c", "A", "B", "C", "0", "1", "2", "3", "\n", "\0"]
     func next(for value: Character) -> Character? {
         guard Self.charValues.contains(value) else {
@@ -64,23 +52,11 @@ struct FundamentalReducerStrategy: ChoiceValueReducerStrategy, ChoiceSequenceRed
         return nil
     }
     
-    func values(for value: Character, in ranges: [ClosedRange<Character>]) -> [Character] {
-        [" ", "a", "b", "c", "A", "B", "C", "0", "1", "2", "3", "\n", "\0"]
-    }
-    
-    // MARK: - ChoiceSequenceReducerStrategy
+    // MARK: - LazyChoiceSequenceReducerStrategy
     
     func next(for collection: [ChoiceTree].SubSequence) -> [[ChoiceTree].SubSequence] {
         [
             [][...],
-            collection.prefix(1),
-            collection.suffix(1)
-        ]
-    }
-    
-    func values(for collection: some Collection, in lengthRange: ClosedRange<Int>) -> [any Collection] {
-        [
-            [],
             collection.prefix(1),
             collection.suffix(1)
         ]

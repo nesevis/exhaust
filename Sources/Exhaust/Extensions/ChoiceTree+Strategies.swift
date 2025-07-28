@@ -236,7 +236,7 @@ extension ChoiceTree {
                 break
             case 1..<50:
                 importantStrategies.append(BoundaryReducerStrategy(direction: direction))
-                importantStrategies.append(SaturationReducerStrategy(direction: direction))
+//                importantStrategies.append(SaturationReducerStrategy(direction: direction))
             default:
 //                importantStrategies.append(SpreadReducerStrategy(direction: direction))
                 importantStrategies.append(BinaryReducerStrategy(direction: direction))

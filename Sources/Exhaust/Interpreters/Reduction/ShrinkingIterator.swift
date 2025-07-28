@@ -7,7 +7,7 @@
 
 final class ShrinkingIterator: IteratorProtocol {
     typealias Element = ChoiceTree
-    typealias LazyShrinks = any AnyStrategyIterator
+    typealias Strategy = any AnyStrategyIterator
     typealias EagerShrinks = [ChoiceTree]
     private typealias Shrink = (ChoiceTree?, State)
     
@@ -30,10 +30,10 @@ final class ShrinkingIterator: IteratorProtocol {
         case exhausted
         
         /// Representing a ChoiceTree.choice
-        case choice(shrinks: LazyShrinks, metadata: ChoiceMetadata, strategy: [any TemporaryDualPurposeStrategy])
+        case choice(shrinks: Strategy, metadata: ChoiceMetadata, strategy: [any TemporaryDualPurposeStrategy])
 
         /// Representing a ChoiceTree.sequence
-        case sequence(shrinks: LazyShrinks, original: LazyShrinks, metadata: ChoiceMetadata, strategy: [any TemporaryDualPurposeStrategy])
+        case sequence(shrinks: Strategy, original: Strategy, metadata: ChoiceMetadata, strategy: [any TemporaryDualPurposeStrategy])
         
         /// Representing the element of a ChoiceTree.sequence. `shrinks` is presented as a subsequence, but is never sliced beyond its original size
         case element(shrinks: EagerShrinks, childIndex: Int, subIterator: ShrinkingIterator, sequenceMetadata: ChoiceMetadata, sequenceStrategy: [any TemporaryDualPurposeStrategy])
@@ -53,14 +53,15 @@ final class ShrinkingIterator: IteratorProtocol {
         switch first {
         case let .choice(_, meta):
             // If the first strategy is a no go, this returns early
-            guard let shrinks = self.shrinks(for: first, strategies: meta.strategies), let first = shrinks.next() else {
+            // We should be rotating, but we can't easily do that here. It may have to be
+            guard let shrinks = self.strategyValues(for: first, strategies: meta.strategies), let first = shrinks.next() else {
                 return (nil, .exhausted)
             }
             return (first, .choice(shrinks: shrinks, metadata: meta, strategy: first.strategy))
         case .just:
             return (nil, .exhausted)
         case let .sequence(_, _, meta):
-            guard let shrinks = self.shrinks(for: first, strategies: meta.strategies), let first = shrinks.next() else {
+            guard let shrinks = self.strategyValues(for: first, strategies: meta.strategies), let first = shrinks.next() else {
                 return (nil, .exhausted)
             }
             // FIXME: Don't materialise the sequence here
@@ -95,68 +96,6 @@ final class ShrinkingIterator: IteratorProtocol {
             let subIterators = choices.map { ShrinkingIterator($0) }
             return (first, .resize(newSize: newSize, choices: choices, childIndex: 0, subIterators: subIterators, exhaustedChildren: []))
         }
-    }
-    
-    private func shrinks(for path: ChoiceTree, strategies: [any TemporaryDualPurposeStrategy]) -> LazyShrinks? {
-        var remaining = strategies
-        while remaining.isEmpty == false {
-            let current = remaining.removeFirst()
-            switch path {
-            case .choice(let choiceValue, let metadata):
-                let rawRange = metadata.validRanges[0]
-                switch choiceValue {
-                case .unsigned(let uint):
-                    return StrategyIterator(initial: uint, strategy: current, current.next(for:)) { next in
-                        rawRange.contains(next)
-                            ? ChoiceTree.choice(ChoiceValue(next), metadata).with(strategies: remaining)
-                            : nil
-                    }
-                case .signed(let int, _):
-                    let castRange = Int64(bitPattern64: rawRange.lowerBound)...Int64(bitPattern64: rawRange.upperBound)
-                    return StrategyIterator(initial: int, strategy: current, current.next(for:)) { next in
-                        castRange.contains(next)
-                            ? ChoiceTree.choice(ChoiceValue(next), metadata).with(strategies: remaining)
-                            : nil
-                    }
-                case .floating(let double, _):
-                    let castRange = Double(bitPattern64: rawRange.lowerBound)...Double(bitPattern64: rawRange.upperBound)
-                    return StrategyIterator(initial: double, strategy: current, current.next(for:)) { next in
-                        castRange.contains(next)
-                            ? ChoiceTree.choice(ChoiceValue(next), metadata).with(strategies: remaining)
-                            : nil
-                    }
-                case .character(let character):
-                    let castRanges = metadata.validRanges.map { range in
-                        Character(bitPattern64: range.lowerBound)...Character(bitPattern64: range.upperBound)
-                    }
-                    return StrategyIterator(initial: character, strategy: current, current.next(for:)) { next in
-                        castRanges.contains(where: { $0.contains(next) })
-                            ? ChoiceTree.choice(ChoiceValue(next), metadata).with(strategies: remaining)
-                            : nil
-                    }
-                }
-            case .sequence(_, let elements, let metadata):
-                let rawRange = metadata.validRanges[0]
-                let castRange = Int(bitPattern64: rawRange.lowerBound)...Int(bitPattern64: rawRange.upperBound)
-                
-                guard elements.isEmpty == false else {
-                    return nil
-                }
-                
-                return StrategySequenceIterator(initial: elements, current.next(for:)) { values in
-                    guard castRange.contains(values.count) else {
-                        return nil
-                    }
-                    return ChoiceTree.sequence(length: UInt64(values.count), elements: Array(values), metadata).with(strategies: remaining)
-                }
-            case .important(let choiceTree):
-                // FIXME: This feels suboptimal
-                return self.shrinks(for: choiceTree, strategies: [current])
-            default:
-                fatalError("\(#function) can't be called with \(path)")
-            }
-        }
-        return nil
     }
     
     // MARK: - IteratorProtocol
@@ -377,6 +316,70 @@ final class ShrinkingIterator: IteratorProtocol {
                 }
             }
         }
+    }
+    
+    // MARK: - Strategies
+    
+    private func strategyValues(for path: ChoiceTree, strategies: [any TemporaryDualPurposeStrategy]) -> Strategy? {
+        var remaining = strategies
+        while remaining.isEmpty == false {
+            let current = remaining.removeFirst()
+            switch path {
+            case .choice(let choiceValue, let metadata):
+                let rawRange = metadata.validRanges[0]
+                switch choiceValue {
+                case .unsigned(let uint):
+                    return StrategyIterator(initial: uint, strategy: current, current.next(for:)) { next in
+                        rawRange.contains(next)
+                            ? ChoiceTree.choice(ChoiceValue(next), metadata).with(strategies: remaining)
+                            : nil
+                    }
+                case .signed(let int, _):
+                    let castRange = Int64(bitPattern64: rawRange.lowerBound)...Int64(bitPattern64: rawRange.upperBound)
+                    return StrategyIterator(initial: int, strategy: current, current.next(for:)) { next in
+                        castRange.contains(next)
+                            ? ChoiceTree.choice(ChoiceValue(next), metadata).with(strategies: remaining)
+                            : nil
+                    }
+                case .floating(let double, _):
+                    let castRange = Double(bitPattern64: rawRange.lowerBound)...Double(bitPattern64: rawRange.upperBound)
+                    return StrategyIterator(initial: double, strategy: current, current.next(for:)) { next in
+                        castRange.contains(next)
+                            ? ChoiceTree.choice(ChoiceValue(next), metadata).with(strategies: remaining)
+                            : nil
+                    }
+                case .character(let character):
+                    let castRanges = metadata.validRanges.map { range in
+                        Character(bitPattern64: range.lowerBound)...Character(bitPattern64: range.upperBound)
+                    }
+                    return StrategyIterator(initial: character, strategy: current, current.next(for:)) { next in
+                        castRanges.contains(where: { $0.contains(next) })
+                            ? ChoiceTree.choice(ChoiceValue(next), metadata).with(strategies: remaining)
+                            : nil
+                    }
+                }
+            case .sequence(_, let elements, let metadata):
+                let rawRange = metadata.validRanges[0]
+                let castRange = Int(bitPattern64: rawRange.lowerBound)...Int(bitPattern64: rawRange.upperBound)
+                
+                guard elements.isEmpty == false else {
+                    return nil
+                }
+                
+                return StrategySequenceIterator(initial: elements, current.next(for:)) { values in
+                    guard castRange.contains(values.count) else {
+                        return nil
+                    }
+                    return ChoiceTree.sequence(length: UInt64(values.count), elements: Array(values), metadata).with(strategies: remaining)
+                }
+            case .important(let choiceTree):
+                // FIXME: This feels suboptimal
+                return self.strategyValues(for: choiceTree, strategies: [current])
+            default:
+                fatalError("\(#function) can't be called with \(path)")
+            }
+        }
+        return nil
     }
 }
 

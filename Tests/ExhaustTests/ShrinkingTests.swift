@@ -119,11 +119,13 @@ struct ShrinkingTests {
             // This map makes the shrinker feel like it's dealing with the unmultiplied values
             let gen = UInt.arbitrary.map { $0 &* 10 }
             let property: (UInt) -> Bool = { thing in
-                print("Shrinking: \(thing)")
+//                print("Shrinking: \(thing)")
                 return thing < 100
             }
             
             // Returning counterexample after 41 steps, 28 cache hits and 10 complexity. There were 14 unique attempts and 8 valid shrinks. Recipe:
+            // After refactor:
+            // Returning counterexample after 26 steps, 0 cache hits and 10 complexity. There were 27 unique attempts and 16 valid shrinks
             let shrunken = try Interpreters.shrink(1330, using: gen, where: property)
             #expect(shrunken == 100)
         }
@@ -138,6 +140,7 @@ struct ShrinkingTests {
             }
             // Returning counterexample after 5 steps, 1 cache hits and 1 complexity. There were 5 unique attempts and 3 valid shrinks. Recipe:
             // With changes now terminates with cache hit max and goes to zero. Reduce the cache hits here
+            // After refactor it uses Fundamental and goes to 0, fails, then goes to -Int.max and returns early. Funky
             let shrunken = try Interpreters.shrink(counterExample, using: gen, where: property)
             #expect(shrunken == 1)
         }
@@ -154,6 +157,7 @@ struct ShrinkingTests {
             }
 
             // Returning counterexample after 59 steps, 1 cache hits and 100 complexity. There were 59 unique attempts and 55 valid shrinks. Recipe:
+            // After refactoring this fails after 0 steps hmm..
             let shrunken = try Interpreters.shrink(counterExample, using: zipGen, where: property)
             #expect(shrunken == (2, 98))
         }
@@ -231,6 +235,7 @@ struct ShrinkingTests {
             #expect(property(failingPerson) == false)
             
             let shrunken = try Interpreters.shrink(failingPerson, using: personGen, where: property)
+            print()
             
             // Shrinks well, but pulls out the character.
             // Good for finding where to break

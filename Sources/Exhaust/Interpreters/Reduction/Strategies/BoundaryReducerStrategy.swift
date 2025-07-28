@@ -5,55 +5,54 @@
 //  Created by Chris Kolbu on 24/7/2025.
 //
 
-struct BoundaryReducerStrategy: ChoiceValueReducerStrategy, ChoiceSequenceReducerStrategy, LazyChoiceValueReducerStrategy, LazyChoiceSequenceReducerStrategy {
+struct BoundaryReducerStrategy: LazyChoiceValueReducerStrategy, LazyChoiceSequenceReducerStrategy {
     let direction: ShrinkingDirection
     
     func next(for value: UInt64) -> UInt64? {
-        value == .min ? .max : nil
-    }
-    func values(for value: UInt64, in range: ClosedRange<UInt64>) -> [UInt64] {
-        [.min, .max]
+        guard value == .min || value == .max else {
+            return .min
+        }
+        return value == .min ? .max : nil
     }
     
     func next(for value: Int64) -> Int64? {
-        value == .min ? .max : nil
+        guard value == .min || value == .max else {
+            return .min
+        }
+        return value == .min ? .max : nil
     }
     
-    func values(for value: Int64, in range: ClosedRange<Int64>) -> [Int64] {
-        [.min, .max]
-    }
-    
-    private static let threshold = Double.greatestFiniteMagnitude / 100000000
+    private static let doubleValues = [
+        Double.greatestFiniteMagnitude / 100000000,
+        Double.greatestFiniteMagnitude / 10000000,
+        Double.greatestFiniteMagnitude / 1000000,
+        Double.greatestFiniteMagnitude / 100000,
+        Double.greatestFiniteMagnitude / 10000,
+        Double.greatestFiniteMagnitude / 1000,
+        Double.greatestFiniteMagnitude / 100,
+        Double.greatestFiniteMagnitude,
+        -Double.greatestFiniteMagnitude,
+        -Double.greatestFiniteMagnitude / 100,
+        -Double.greatestFiniteMagnitude / 1000,
+        -Double.greatestFiniteMagnitude / 10000,
+        -Double.greatestFiniteMagnitude / 100000,
+        -Double.greatestFiniteMagnitude / 1000000,
+        -Double.greatestFiniteMagnitude / 10000000,
+        -Double.greatestFiniteMagnitude / 100000000,
+    ]
     func next(for value: Double) -> Double? {
-        // Think about this one
+        guard Self.doubleValues.contains(value) else {
+            return Self.doubleValues[0]
+        }
+        if let index = Self.doubleValues.firstIndex(of: value), index < Self.doubleValues.endIndex - 1 {
+            return Self.doubleValues[index + 1]
+        }
+        return nil
+    }
+    
+    func next(for value: Character) -> Character? {
+        // TOOD: Edge cases and control characters?
         nil
-    }
-    
-    func values(for value: Double, in range: ClosedRange<Double>) -> [Double] {
-        // TODO: Rethink this
-        return [
-            Double.greatestFiniteMagnitude / 100000000,
-            Double.greatestFiniteMagnitude / 10000000,
-            Double.greatestFiniteMagnitude / 1000000,
-            Double.greatestFiniteMagnitude / 100000,
-            Double.greatestFiniteMagnitude / 10000,
-            Double.greatestFiniteMagnitude / 1000,
-            Double.greatestFiniteMagnitude / 100,
-            Double.greatestFiniteMagnitude,
-            -Double.greatestFiniteMagnitude,
-            -Double.greatestFiniteMagnitude / 100,
-            -Double.greatestFiniteMagnitude / 1000,
-            -Double.greatestFiniteMagnitude / 10000,
-            -Double.greatestFiniteMagnitude / 100000,
-            -Double.greatestFiniteMagnitude / 1000000,
-            -Double.greatestFiniteMagnitude / 10000000,
-            -Double.greatestFiniteMagnitude / 100000000,
-        ]
-    }
-    
-    func values(for value: Character, in ranges: [ClosedRange<Character>]) -> [Character] {
-        // TODO: Edge cases go here
-        []
     }
     
     // MARK: - ChoiceSequenceReducerStrategy
@@ -63,14 +62,6 @@ struct BoundaryReducerStrategy: ChoiceValueReducerStrategy, ChoiceSequenceReduce
             collection.dropFirst().dropLast(),
             collection.dropLast(),
             collection.dropFirst()
-        ]
-    }
-    
-    func values(for collection: some Collection, in lengthRange: ClosedRange<Int>) -> [any Collection] {
-        [
-            collection.dropFirst().dropLast(),
-            collection.dropFirst(),
-            collection.dropLast()
         ]
     }
 }
