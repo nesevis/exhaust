@@ -141,7 +141,9 @@ extension ChoiceValue {
         // If increasing, the range should be lhs..<rhs, if decreasing rhs...lhs
         switch direction {
         case .towardsHigherBound:
-            return ClosedRange(min(self.bitPattern64, other.bitPattern64)..<max(self.bitPattern64, other.bitPattern64))
+            let minVal = min(self.bitPattern64, other.bitPattern64)
+            let maxVal = max(self.bitPattern64, other.bitPattern64)
+            return minVal == maxVal ? minVal...maxVal : ClosedRange(minVal..<maxVal)
         case .towardsLowerBound:
             return min(self.bitPattern64, other.bitPattern64)...max(self.bitPattern64, other.bitPattern64)
         }

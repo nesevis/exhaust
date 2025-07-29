@@ -210,14 +210,34 @@ extension Float: BitPatternConvertible {
         ]
     }
     
-    /// Creates a `Float` from a `UInt64` by first converting to `UInt32`.
+    /// Creates a `Float` from a `UInt64` with ordering-preserving encoding.
     public init(bitPattern64: UInt64) {
-        self = Float(bitPattern: UInt32(bitPattern64) ^ Self.signBitMask)
+        let bitPattern32 = UInt32(bitPattern64)
+        let rawBitPattern: UInt32
+        // Negative numbers were encoded with ~rawBitPattern, so their encoded values have sign bit clear
+        // Positive numbers were encoded with rawBitPattern ^ signBitMask, so their encoded values have sign bit set
+        if bitPattern32 & Self.signBitMask == 0 {
+            // This was a negative number: flip all bits back
+            rawBitPattern = ~bitPattern32
+        } else {
+            // This was a positive number: flip sign bit back
+            rawBitPattern = bitPattern32 ^ Self.signBitMask
+        }
+        self = Float(bitPattern: rawBitPattern)
     }
     
-    /// The underlying IEEE 754 bits of the `Float`, promoted to a `UInt64`.
+    /// The underlying IEEE 754 bits with ordering-preserving encoding, promoted to a `UInt64`.
+    /// Positive numbers have sign bit flipped, negative numbers have all bits flipped.
+    /// This ensures that the natural UInt64 ordering matches the Float ordering.
     public var bitPattern64: UInt64 {
-        return UInt64(self.bitPattern ^ UInt32(Self.signBitMask))
+        let rawBitPattern = self.bitPattern
+        if rawBitPattern & Self.signBitMask == 0 {
+            // Positive numbers: flip sign bit
+            return UInt64(rawBitPattern ^ Self.signBitMask)
+        } else {
+            // Negative numbers: flip all bits
+            return UInt64(~rawBitPattern)
+        }
     }
 }
 
@@ -231,16 +251,33 @@ extension Double: BitPatternConvertible {
         ]
     }
     
-    /// Creates a `Double` from a `UInt64` with sign bit normalization.
+    /// Creates a `Double` from a `UInt64` with ordering-preserving encoding.
     public init(bitPattern64: UInt64) {
-        // // self = Int(Int64(bitPattern: bitPattern ^ Self.signBitMask))
-        let normalizedBitPattern = bitPattern64 ^ Self.signBitMask
-        self = Double(bitPattern: normalizedBitPattern)
+        let rawBitPattern: UInt64
+        // Negative numbers were encoded with ~rawBitPattern, so their encoded values have sign bit clear
+        // Positive numbers were encoded with rawBitPattern ^ signBitMask, so their encoded values have sign bit set
+        if bitPattern64 & Self.signBitMask == 0 {
+            // This was a negative number: flip all bits back
+            rawBitPattern = ~bitPattern64
+        } else {
+            // This was a positive number: flip sign bit back
+            rawBitPattern = bitPattern64 ^ Self.signBitMask
+        }
+        self = Double(bitPattern: rawBitPattern)
     }
     
-    /// The underlying IEEE 754 bits of the `Double` with sign bit normalization.
+    /// The underlying IEEE 754 bits with ordering-preserving encoding.
+    /// Positive numbers have sign bit flipped, negative numbers have all bits flipped.
+    /// This ensures that the natural UInt64 ordering matches the Double ordering.
     public var bitPattern64: UInt64 {
-        self.bitPattern ^ Self.signBitMask
+        let rawBitPattern = self.bitPattern
+        if rawBitPattern & Self.signBitMask == 0 {
+            // Positive numbers: flip sign bit
+            return rawBitPattern ^ Self.signBitMask
+        } else {
+            // Negative numbers: flip all bits
+            return ~rawBitPattern
+        }
     }
 }
 

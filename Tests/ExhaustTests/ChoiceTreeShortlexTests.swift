@@ -226,7 +226,7 @@ struct ChoiceTreeShortlexTests {
         let p = ChoiceValue(Double(-900))
         let ab = f.refineRange(against: p, direction: .towardsHigherBound)
         let ba = p.refineRange(against: f, direction: .towardsLowerBound)
-        #expect(ab?.cast(type: Double.self) == (-900)...(-46))
+        #expect(ab?.cast(type: Double.self) == (-900)...(-45.00000000000001))
         #expect(ba?.cast(type: Double.self) == (-900)...(-45))
     }
 }
