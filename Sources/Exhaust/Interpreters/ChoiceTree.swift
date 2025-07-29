@@ -274,17 +274,17 @@ extension ChoiceTree {
         }
     
     /// Locks in values of `new` where there is a difference from `old`
-    static func diffAndLockChanges(in new: ChoiceTree, from valid: ChoiceTree) -> ChoiceTree {
+    static func diffAndLockChanges(in new: ChoiceTree, from valid: ChoiceTree, keepStrategies: Bool) -> ChoiceTree {
         new.merge(with: valid) {
             lhs,
             rhs in
             switch (lhs, rhs) {
             case let (.important(lhsValue), .important(rhsValue)):
                 // Stop here
-                return Self.diffAndLockChanges(in: lhsValue, from: rhsValue)
+                return Self.diffAndLockChanges(in: lhsValue, from: rhsValue, keepStrategies: keepStrategies)
             case (.important, _):
                 return lhs
-            case let (.choice(lhsValue, _), .choice(rhsValue, _)):
+            case let (.choice(lhsValue, _), .choice(rhsValue, rhsMeta)):
                 guard lhsValue != rhsValue else {
                     return lhs
                 }
@@ -296,9 +296,11 @@ extension ChoiceTree {
                 // This won't work for doubles...
                 let convertibleRange = min(lhsRange, rhsRange)...max(lhsRange, rhsRange)
                 let meta = ChoiceMetadata(validRanges: [convertibleRange], strategies: [])
-                return ChoiceTree.choice(lhsValue, meta)
-                    .resetStrategies(direction: lhsValue.shrinkingDirection(given: rhsValue)) // This will apply strategies based on the effective range
-            case let (.sequence(lhsLength, lhsElements, lhsMeta), .sequence(rhsLength, rhsElements, _)):
+                let newLhs = ChoiceTree.choice(lhsValue, meta)
+                return keepStrategies
+                    ? newLhs.resetStrategies(direction: lhsValue.shrinkingDirection(given: rhsValue)) // This will apply strategies based on the effective range
+                    : newLhs.with(strategies: rhsMeta.strategies)
+            case let (.sequence(lhsLength, lhsElements, lhsMeta), .sequence(rhsLength, rhsElements, rhsMeta)):
                 // The sequence itself is important
                 if lhsLength != rhsLength {
                     // TODO: Decorate with whether we need to go down or up
@@ -306,13 +308,15 @@ extension ChoiceTree {
                     let newRange = min(lhsLength, rhsLength)...max(lhsLength, rhsLength)
                     // We know that the range has to be between what what's allowable and what failed
                     let meta = ChoiceMetadata(validRanges: [newRange], strategies: [])
-                    return .important(.sequence(length: lhsLength, elements: lhsElements, meta))
-                        .resetStrategies(direction: ChoiceValue(lhsLength).shrinkingDirection(given: ChoiceValue(rhsLength))) // This will apply strategies based on the effective range
+                    let newLhs = ChoiceTree.important(.sequence(length: lhsLength, elements: lhsElements, meta))
+                    return keepStrategies
+                        ? newLhs.resetStrategies(direction: ChoiceValue(lhsLength).shrinkingDirection(given: ChoiceValue(rhsLength))) // This will apply strategies based on the effective range
+                        : newLhs.with(strategies: rhsMeta.strategies)
                 }
                 // The sequence content is important
                 if lhsElements.elementsEqual(rhsElements) == false {
                     let importantElements = zip(lhsElements, rhsElements).map { lhs, rhs in
-                        ChoiceTree.diffAndLockChanges(in: lhs, from: rhs)
+                        ChoiceTree.diffAndLockChanges(in: lhs, from: rhs, keepStrategies: keepStrategies)
                     }
                     return .sequence(length: lhsLength, elements: importantElements, lhsMeta)
                 }

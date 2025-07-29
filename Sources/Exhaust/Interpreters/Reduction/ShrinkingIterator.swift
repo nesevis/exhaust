@@ -225,6 +225,8 @@ final class ShrinkingIterator: IteratorProtocol {
                 self.state = .choice(shrinks: shrinks, metadata: meta, strategy: strategy)
                 return result
             case .group(var children, var index, let subIterators, var exhaustedChildren):
+                // If the strategy is trying to return a value that is outside the range of the choice,
+                // we return nil and exhaust the subiterator
                 if let subResult = subIterators[index].next() {
                     children[index] = subResult
                     // There's still a result, update the child, and if it's not an important part, move to the next one (round-robin)
@@ -329,48 +331,37 @@ final class ShrinkingIterator: IteratorProtocol {
                 let rawRange = metadata.validRanges[0]
                 switch choiceValue {
                 case .unsigned(let uint):
-                    return StrategyIterator(initial: uint, strategy: current, current.next(for:)) { next in
-                        rawRange.contains(next)
-                            ? ChoiceTree.choice(ChoiceValue(next), metadata).with(strategies: remaining)
-                            : nil
+                    return StrategyIterator(initial: uint, strategy: current, inRange: [rawRange], current.next(for:)) { next in
+                        ChoiceTree.choice(ChoiceValue(next), metadata).with(strategies: remaining)
                     }
                 case .signed(let int, _):
                     let castRange = Int64(bitPattern64: rawRange.lowerBound)...Int64(bitPattern64: rawRange.upperBound)
-                    return StrategyIterator(initial: int, strategy: current, current.next(for:)) { next in
-                        castRange.contains(next)
-                            ? ChoiceTree.choice(ChoiceValue(next), metadata).with(strategies: remaining)
-                            : nil
+                    return StrategyIterator(initial: int, strategy: current, inRange: [castRange], current.next(for:)) { next in
+                        ChoiceTree.choice(ChoiceValue(next), metadata).with(strategies: remaining)
                     }
                 case .floating(let double, _):
                     let castRange = Double(bitPattern64: rawRange.lowerBound)...Double(bitPattern64: rawRange.upperBound)
-                    return StrategyIterator(initial: double, strategy: current, current.next(for:)) { next in
-                        castRange.contains(next)
-                            ? ChoiceTree.choice(ChoiceValue(next), metadata).with(strategies: remaining)
-                            : nil
+                    return StrategyIterator(initial: double, strategy: current, inRange: [castRange], current.next(for:)) { next in
+                        ChoiceTree.choice(ChoiceValue(next), metadata).with(strategies: remaining)
                     }
                 case .character(let character):
                     let castRanges = metadata.validRanges.map { range in
                         Character(bitPattern64: range.lowerBound)...Character(bitPattern64: range.upperBound)
                     }
-                    return StrategyIterator(initial: character, strategy: current, current.next(for:)) { next in
-                        castRanges.contains(where: { $0.contains(next) })
-                            ? ChoiceTree.choice(ChoiceValue(next), metadata).with(strategies: remaining)
-                            : nil
+                    return StrategyIterator(initial: character, strategy: current, inRange: castRanges, current.next(for:)) { next in
+                        ChoiceTree.choice(ChoiceValue(next), metadata).with(strategies: remaining)
                     }
                 }
             case .sequence(_, let elements, let metadata):
                 let rawRange = metadata.validRanges[0]
-                let castRange = Int(bitPattern64: rawRange.lowerBound)...Int(bitPattern64: rawRange.upperBound)
+                let castRange = Int(rawRange.lowerBound)...(rawRange.upperBound == .max ? Int.max : Int(rawRange.upperBound))
                 
                 guard elements.isEmpty == false else {
                     return nil
                 }
                 
-                return StrategySequenceIterator(initial: elements, current.next(for:)) { values in
-                    guard castRange.contains(values.count) else {
-                        return nil
-                    }
-                    return ChoiceTree.sequence(length: UInt64(values.count), elements: Array(values), metadata).with(strategies: remaining)
+                return StrategySequenceIterator(initial: elements, strategy: current, inRange: castRange, current.next(for:)) { values in
+                    ChoiceTree.sequence(length: UInt64(values.count), elements: Array(values), metadata).with(strategies: remaining)
                 }
             case .important(let choiceTree):
                 // FIXME: This feels suboptimal

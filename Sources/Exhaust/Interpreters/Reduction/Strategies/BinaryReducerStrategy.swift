@@ -10,17 +10,18 @@ struct BinaryReducerStrategy: LazyChoiceValueReducerStrategy, LazyChoiceSequence
     let direction: ShrinkingDirection
     
     func next(for value: UInt64) -> UInt64? {
-        switch direction {
+        let next = switch direction {
         case .towardsLowerBound:
             value / 2
         case .towardsHigherBound:
             value &* 2
         }
+        return next == value ? nil : next
     }
     
     // TODO: This can be a lot more aggressive along the lines of the Double implementation
     func next(for value: Int64) -> Int64? {
-        switch direction {
+        let next: Int64 = switch direction {
         case .towardsLowerBound where value < 0:
             value * 2
         case .towardsLowerBound where value == 0:
@@ -36,6 +37,7 @@ struct BinaryReducerStrategy: LazyChoiceValueReducerStrategy, LazyChoiceSequence
         default:
             fatalError("Reducer error")
         }
+        return next == value ? nil : next
     }
 
     static let reductionStrategy: [(threshold: Double, factor: Double)] = [
@@ -56,27 +58,31 @@ struct BinaryReducerStrategy: LazyChoiceValueReducerStrategy, LazyChoiceSequence
             return nil
         }
         let strategicDivisor = Self.reductionStrategy.first(where: { value > $0.threshold })?.factor ?? 2
-        switch direction {
+        let next: Double = switch direction {
         case .towardsLowerBound where value < 0:
-            return value * strategicDivisor
+            value * strategicDivisor
         case .towardsLowerBound where value == 0:
-            return -1
+            -1
         case .towardsLowerBound where value > 0:
-            return value / strategicDivisor
+            value / strategicDivisor
         case .towardsHigherBound where value < 0:
-            return value / strategicDivisor
+            value / strategicDivisor
         case .towardsHigherBound where value == 0:
-            return 1
+            1
         case .towardsHigherBound where value > 0:
-            return value * strategicDivisor
+            value * strategicDivisor
         default:
             fatalError("Reducer error")
         }
+        return next == value ? nil : next
     }
     
     // MARK: - LazyChoiceSequenceReducerStrategy
     
     func next(for collection: [ChoiceTree].SubSequence) -> [[ChoiceTree].SubSequence] {
+        guard collection.count > 1 else {
+            return []
+        }
         let count = collection.count
         let halved = count / 2
         var subsequences = [[ChoiceTree].SubSequence]()

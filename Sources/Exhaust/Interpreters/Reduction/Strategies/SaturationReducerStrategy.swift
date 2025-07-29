@@ -15,16 +15,17 @@ struct SaturationReducerStrategy: LazyChoiceValueReducerStrategy, LazyChoiceSequ
         guard value > 0 else {
             return nil
         }
-        return switch direction {
+        let next: UInt64 = switch direction {
         case .towardsLowerBound:
             (value / 10) * 9
         case .towardsHigherBound:
             (value / 9) * 10
         }
+        return next == value ? nil : next
     }
     
     func next(for value: Int64) -> Int64? {
-        let newValue: Int64 = switch direction {
+        let next: Int64 = switch direction {
         case .towardsLowerBound where value < 0:
             (value * 10) / 9
         case .towardsLowerBound where value == 0:
@@ -40,11 +41,11 @@ struct SaturationReducerStrategy: LazyChoiceValueReducerStrategy, LazyChoiceSequ
         default:
             fatalError("Reducer error")
         }
-        return newValue == value ? nil : newValue
+        return next == value ? nil : next
     }
     
     func next(for value: Double) -> Double? {
-        switch direction {
+        let next: Double = switch direction {
         case .towardsLowerBound where value < 0:
             (value * 10) / 9
         case .towardsLowerBound where value == 0:
@@ -60,13 +61,16 @@ struct SaturationReducerStrategy: LazyChoiceValueReducerStrategy, LazyChoiceSequ
         default:
             fatalError("Reducer error")
         }
+        return next == value ? nil : next
     }
     
     // MARK: - LazyChoiceSequenceReducerStrategy
     
     func next(for collection: [ChoiceTree].SubSequence) -> [[ChoiceTree].SubSequence] {
         // FIXME: This should be improved
-//        collection.evenlyChunked(in: max(collection.count / 10, 1))
-        []
+        [
+            collection.dropFirst(),
+            collection.dropLast()
+        ]
     }
 }

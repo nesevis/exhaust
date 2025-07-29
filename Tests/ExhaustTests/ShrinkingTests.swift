@@ -159,7 +159,7 @@ struct ShrinkingTests {
             // Returning counterexample after 59 steps, 1 cache hits and 100 complexity. There were 59 unique attempts and 55 valid shrinks. Recipe:
             // After refactoring this fails after 0 steps hmm..
             let shrunken = try Interpreters.shrink(counterExample, using: zipGen, where: property)
-            #expect(shrunken == (2, 98))
+            #expect(shrunken == (1, 99))
         }
     }
     
@@ -206,7 +206,7 @@ struct ShrinkingTests {
                  └── choice(signed: 165))
              */
             // FIXME: This is great as a test bed for shrinking _up_
-            let expectedMinimalValue = Person(age: 17, canDrink: true)
+            let expectedMinimalValue = Person(age: 0, canDrink: true)
             let shrunk = try Interpreters.shrink(initialFailingValue, using: personGen, where: property)
             #expect(expectedMinimalValue == shrunk)
         }

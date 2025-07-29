@@ -39,6 +39,10 @@ enum Interpreters {
         return try self.shrinkImpl(value, using: generator, recipe: recipe, where: property)
     }
     
+//    private func normalize<Output>(_ value: Output, others: [Bool: [Output]], recipe: ChoiceTree) -> ChoiceTree {
+//        return recipe
+//    }
+    
     private static func shrinkImpl<Input, Output>(
         _ value: Output,
         using generator: ReflectiveGenerator<Input, Output>,
@@ -90,10 +94,10 @@ enum Interpreters {
                 if isValidShrink {
                     // Successful shrink!
                     // FIXME: If you end up in a local minimum of zero, the complexity check will never be successful
-                    shrinkWasImproved = candidateComplexity < currentBestRecipeComplexity
+                    shrinkWasImproved = candidateRecipe.shortlexPrecedes(currentBestRecipe)
                     var validCandidate = candidateRecipe
                     if isLockedIn, let previousInvalidRecipe {
-                        validCandidate = ChoiceTree.diffAndLockChanges(in: candidateRecipe, from: previousInvalidRecipe)
+                        validCandidate = ChoiceTree.diffAndLockChanges(in: candidateRecipe, from: previousInvalidRecipe, keepStrategies: false)
                     }
                     // Break inner loop to repeat the shrink process
                     if shrinkWasImproved {
@@ -121,7 +125,7 @@ enum Interpreters {
                     // This is a dead end I think.
                     
                     // The real trick here is that once this starts repeating we're in a local minimum so we should try to discard the next one.
-                    let locked = ChoiceTree.diffAndLockChanges(in: previousValid.recipe, from: candidateRecipe)
+                    let locked = ChoiceTree.diffAndLockChanges(in: previousValid.recipe, from: candidateRecipe, keepStrategies: false)
                     print("Property was satisfied. Locking in the previous shrink:\n\(locked)")
                     counterExample = previousValid.value
                     shrinkWasImproved = locked != currentBestRecipe
@@ -147,12 +151,12 @@ enum Interpreters {
 
             // If we are here, no improvement could be found
             print("Returning counterexample after \(steps) steps, \(cacheHits) cache hits and \(currentBestRecipe.complexity) complexity. There were \(seen.count) unique attempts and \(seen.values.count(where: { $0 })) valid shrinks. Recipe:\n \(currentBestRecipe)")
-            _ = currentBestRecipe.map { component in
-                if component.isImportant {
-                    print("Of particular interest is the value: \(component.elementDescription)")
-                }
-                return component
-            }
+//            _ = currentBestRecipe.map { component in
+//                if component.isImportant {
+//                    print("Of particular interest is the value: \(component.elementDescription)")
+//                }
+//                return component
+//            }
             break
         }
         
