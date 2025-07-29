@@ -179,4 +179,54 @@ struct ChoiceTreeShortlexTests {
         // Important nodes get prioritized despite the group having same structural complexity
         #expect(importantGroup.shortlexPrecedes(normalGroup))
     }
+    
+    @Test("Unsigned range refinements work")
+    func testUnsignedRangesWork() throws {
+        let f = ChoiceValue.unsigned(45)
+        let p = ChoiceValue.unsigned(900)
+        let ab = f.refineRange(against: p, direction: .towardsHigherBound)
+        let ba = p.refineRange(against: f, direction: .towardsLowerBound)
+        #expect(ab == 45...899)
+        #expect(ba == 45...900)
+    }
+    
+    @Test("Signed positive range refinements work")
+    func testSignedPositiveRangesWork() throws {
+        let f = ChoiceValue(Int64(45))
+        let p = ChoiceValue(Int64(900))
+        let ab = f.refineRange(against: p, direction: .towardsHigherBound)
+        let ba = p.refineRange(against: f, direction: .towardsLowerBound)
+        #expect(ab?.cast(type: Int64.self) == 45...899)
+        #expect(ba?.cast(type: Int64.self) == 45...900)
+    }
+    
+    @Test("Signed negative range refinements work")
+    func testSignedNegativeRangesWork() throws {
+        let f = ChoiceValue(Int64(-45))
+        let p = ChoiceValue(Int64(-900))
+        let ab = f.refineRange(against: p, direction: .towardsHigherBound)
+        let ba = p.refineRange(against: f, direction: .towardsLowerBound)
+        #expect(ab?.cast(type: Int64.self) == (-900)...(-46))
+        #expect(ba?.cast(type: Int64.self) == (-900)...(-45))
+    }
+    
+    @Test("Float positive range refinements work")
+    func testFloatPositiveRangesWork() throws {
+        let f = ChoiceValue(Double(45))
+        let p = ChoiceValue(Double(900))
+        let ab = f.refineRange(against: p, direction: .towardsHigherBound)
+        let ba = p.refineRange(against: f, direction: .towardsLowerBound)
+        #expect(ab?.cast(type: Double.self) == 45...899.9999999999999)
+        #expect(ba?.cast(type: Double.self) == 45...900)
+    }
+    
+    @Test("Float negative range refinements work")
+    func testFloatNegativeRangesWork() throws {
+        let f = ChoiceValue(Double(-45))
+        let p = ChoiceValue(Double(-900))
+        let ab = f.refineRange(against: p, direction: .towardsHigherBound)
+        let ba = p.refineRange(against: f, direction: .towardsLowerBound)
+        #expect(ab?.cast(type: Double.self) == (-900)...(-46))
+        #expect(ba?.cast(type: Double.self) == (-900)...(-45))
+    }
 }

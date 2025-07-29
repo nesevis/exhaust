@@ -273,15 +273,26 @@ extension ChoiceTree {
             }
         }
     
+    func mapWhereDifferent(to other: ChoiceTree, using transform: (ChoiceTree, ChoiceTree) -> ChoiceTree?) -> ChoiceTree {
+        self.merge(with: other) { lhs, rhs in
+            // Only
+            guard lhs.typeId == rhs.typeId else {
+                return lhs
+            }
+            if lhs != rhs {
+                return transform(lhs, rhs) ?? lhs
+            }
+            return lhs
+        }
+    }
+    
     /// Locks in values of `new` where there is a difference from `old`
-    static func diffAndLockChanges(in new: ChoiceTree, from valid: ChoiceTree, keepStrategies: Bool) -> ChoiceTree {
-        new.merge(with: valid) {
-            lhs,
-            rhs in
+    static func diffAndLockChanges(in new: ChoiceTree, from valid: ChoiceTree, keepStrategies: Bool, markImportant: Bool) -> ChoiceTree {
+        new.merge(with: valid) { lhs, rhs in
             switch (lhs, rhs) {
             case let (.important(lhsValue), .important(rhsValue)):
                 // Stop here
-                return Self.diffAndLockChanges(in: lhsValue, from: rhsValue, keepStrategies: keepStrategies)
+                return Self.diffAndLockChanges(in: lhsValue, from: rhsValue, keepStrategies: keepStrategies, markImportant: true)
             case (.important, _):
                 return lhs
             case let (.choice(lhsValue, _), .choice(rhsValue, rhsMeta)):
@@ -291,12 +302,22 @@ extension ChoiceTree {
                 // TODO: Decorate with whether we need to go down or up
                 // 45_000 vs 0, so 0 triggered that this is important
                 // We need to build a range from rhs...lhs
-                let lhsRange = lhsValue.convertible.bitPattern64
-                let rhsRange = rhsValue.convertible.bitPattern64
-                // This won't work for doubles...
-                let convertibleRange = min(lhsRange, rhsRange)...max(lhsRange, rhsRange)
-                let meta = ChoiceMetadata(validRanges: [convertibleRange], strategies: [])
-                let newLhs = ChoiceTree.choice(lhsValue, meta)
+                let newLhs: ChoiceTree
+                // This is being compared with a value that succeeded
+                if markImportant {
+                    let lhsRange = lhsValue.convertible.bitPattern64
+                    let rhsRange = rhsValue.convertible.bitPattern64
+                    // This won't work for doubles...
+                    let convertibleRange = min(lhsRange, rhsRange)...max(lhsRange, rhsRange)
+                    let meta = ChoiceMetadata(validRanges: [convertibleRange], strategies: [])
+                    newLhs = markImportant
+                        ? ChoiceTree.important(.choice(lhsValue, meta))
+                        : .choice(lhsValue, meta)
+                } else {
+                    // We're not updating the range when the shrink was successful?
+                    newLhs = lhs
+                }
+                
                 return keepStrategies
                     ? newLhs.resetStrategies(direction: lhsValue.shrinkingDirection(given: rhsValue)) // This will apply strategies based on the effective range
                     : newLhs.with(strategies: rhsMeta.strategies)
@@ -305,10 +326,15 @@ extension ChoiceTree {
                 if lhsLength != rhsLength {
                     // TODO: Decorate with whether we need to go down or up
                     // We can now create a valid subrange for the length of this sequence
-                    let newRange = min(lhsLength, rhsLength)...max(lhsLength, rhsLength)
-                    // We know that the range has to be between what what's allowable and what failed
-                    let meta = ChoiceMetadata(validRanges: [newRange], strategies: [])
-                    let newLhs = ChoiceTree.important(.sequence(length: lhsLength, elements: lhsElements, meta))
+                    let newLhs: ChoiceTree
+                    if markImportant {
+                        let newRange = min(lhsLength, rhsLength)...max(lhsLength, rhsLength)
+                        // We know that the range has to be between what what's allowable and what failed
+                        let meta = ChoiceMetadata(validRanges: [newRange], strategies: [])
+                        newLhs = ChoiceTree.important(.sequence(length: lhsLength, elements: lhsElements, meta))
+                    } else {
+                        newLhs = lhs
+                    }
                     return keepStrategies
                         ? newLhs.resetStrategies(direction: ChoiceValue(lhsLength).shrinkingDirection(given: ChoiceValue(rhsLength))) // This will apply strategies based on the effective range
                         : newLhs.with(strategies: rhsMeta.strategies)
@@ -316,7 +342,7 @@ extension ChoiceTree {
                 // The sequence content is important
                 if lhsElements.elementsEqual(rhsElements) == false {
                     let importantElements = zip(lhsElements, rhsElements).map { lhs, rhs in
-                        ChoiceTree.diffAndLockChanges(in: lhs, from: rhs, keepStrategies: keepStrategies)
+                        ChoiceTree.diffAndLockChanges(in: lhs, from: rhs, keepStrategies: keepStrategies, markImportant: markImportant)
                     }
                     return .sequence(length: lhsLength, elements: importantElements, lhsMeta)
                 }
@@ -348,23 +374,23 @@ extension ChoiceTree: CustomDebugStringConvertible {
         let selected = isSelected ? "✅" : ""
         
         switch self {
-        case let .choice(value, _):
+        case let .choice(value, meta):
             switch value {
             case let .character(char):
-                return prefix + connector + "\(locked)choice(char: \"\(char)\")\(locked)"
+                return prefix + connector + "\(locked)choice(char: \"\(char)\")\(locked) \(meta.validRanges[0].cast(type: UInt64.self))"
             case let .unsigned(uint):
-                return prefix + connector + "\(locked)choice(unsigned:\(uint))\(locked)"
+                return prefix + connector + "\(locked)choice(unsigned:\(uint))\(locked) \(meta.validRanges[0].cast(type: UInt64.self))"
             case let .signed(int, _):
-                return prefix + connector + "\(locked)choice(signed: \(int))\(locked)"
+                return prefix + connector + "\(locked)choice(signed: \(int))\(locked) \(meta.validRanges[0].cast(type: Int64.self))"
             case let .floating(float, _):
-                return prefix + connector + "\(locked)choice(float: \(float))\(locked)"
+                return prefix + connector + "\(locked)choice(float: \(float))\(locked) \(meta.validRanges[0].cast(type: Double.self))"
             }
             
         case .just(let type):
             return prefix + connector + "just(\(type))"
             
-        case let .sequence(length, elements, _):
-            var result = prefix + connector + "\(locked)sequence(length: \(length))\(locked)"
+        case let .sequence(length, elements, meta):
+            var result = prefix + connector + "\(locked)sequence(length: \(length))\(locked) \(meta.validRanges[0].cast(type: UInt64.self))"
             if
                 case let .group(array) = elements.first,
                 // Dropping the first one as it is a getSize

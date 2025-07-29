@@ -218,7 +218,7 @@ extension ChoiceTree {
             case 1:
                 // This is exactly one
                 break
-            case 1..<50:
+            case 1..<50_000:
                 importantStrategies.append(SaturationReducerStrategy(direction: direction))
                 importantStrategies.append(UltraSaturationReducerStrategy(direction: direction))
             default:

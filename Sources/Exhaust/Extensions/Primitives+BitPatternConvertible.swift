@@ -24,8 +24,6 @@ extension Optional: BitPatternConvertible where Wrapped: BitPatternConvertible {
             wrapped.bitPattern64
         }
     }
-    
-    
 }
 
 extension UInt8: BitPatternConvertible {

@@ -97,7 +97,7 @@ enum Interpreters {
                     shrinkWasImproved = candidateRecipe.shortlexPrecedes(currentBestRecipe)
                     var validCandidate = candidateRecipe
                     if isLockedIn, let previousInvalidRecipe {
-                        validCandidate = ChoiceTree.diffAndLockChanges(in: candidateRecipe, from: previousInvalidRecipe, keepStrategies: false)
+                        validCandidate = ChoiceTree.diffAndLockChanges(in: candidateRecipe, from: previousInvalidRecipe, keepStrategies: true, markImportant: false)
                     }
                     // Break inner loop to repeat the shrink process
                     if shrinkWasImproved {
@@ -125,7 +125,7 @@ enum Interpreters {
                     // This is a dead end I think.
                     
                     // The real trick here is that once this starts repeating we're in a local minimum so we should try to discard the next one.
-                    let locked = ChoiceTree.diffAndLockChanges(in: previousValid.recipe, from: candidateRecipe, keepStrategies: false)
+                    let locked = ChoiceTree.diffAndLockChanges(in: previousValid.recipe, from: candidateRecipe, keepStrategies: true, markImportant: true)
                     print("Property was satisfied. Locking in the previous shrink:\n\(locked)")
                     counterExample = previousValid.value
                     shrinkWasImproved = locked != currentBestRecipe

@@ -29,14 +29,14 @@ final class StrategySequenceIterator: IteratorProtocol, AnyStrategyIterator {
     func next() -> ChoiceTree? {
         if currentBatch?.first == nil, let next = nextValues(initial) {
             guard next.isEmpty == false else {
+                print("❌\(Self.self)/\(type(of: strategy)).\(strategy.direction) [Exhausted]")
                 return nil
             }
             currentBatch = next[...]
             initial = currentBatch?.first ?? initial
         }
-        // Now return the
         guard let next = currentBatch?.first else {
-            print("❌\(Self.self)/\(type(of: strategy)).\(strategy.direction)")
+            print("❌\(Self.self)/\(type(of: strategy)).\(strategy.direction) [Exhausted]")
             return nil
         }
         currentBatch = currentBatch?.dropFirst()

@@ -31,7 +31,7 @@ final class StrategyIterator<T: BitPatternConvertible & Comparable>: IteratorPro
     
     func next() -> ChoiceTree? {
         guard let this = nextValue(current) else {
-            print("❌\(Self.self)/\(type(of: strategy)).\(strategy.direction) [NIL] \(current)")
+            print("❌\(Self.self)/\(type(of: strategy)).\(strategy.direction) [Exhausted] \(current)")
             return nil
         }
         current = this

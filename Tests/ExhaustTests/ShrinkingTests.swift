@@ -269,7 +269,6 @@ struct ShrinkingTests {
             let replayed = try #require(try Interpreters.replay(gen, using: recipe))
             #expect(generated == replayed)
             let property: (Tuple) -> Bool = { tuple in
-                // TestIsFailing if this is true?
                 tuple.1 < 100_000
             }
             // The issue here is that it's shrinking "complexity" overall, but isn't reducing the value
@@ -280,19 +279,18 @@ struct ShrinkingTests {
             print(shrunk)
             #expect(shrunk.1 >= 100_000)
             /*
-             This one maxes out the steps. Next to no cache hits, 0.4 seconds
-             The sheer memory use here is staggering
-             Returning counterexample after 500 steps, 1 cache hits and 133662 complexity. There were 499 unique attempts and 496 valid shrinks. Recipe:
+             For some reason it finds the strings more interesting. Perhaps due to the new shortlex complexity measure?
+             
+             Returning counterexample after 59 steps, 17 cache hits and 112374 complexity. There were 43 unique attempts and 30 valid shrinks. Recipe:
               └── group
-                 ├── choice(signed: 0))
-                 ├── ✨choice(unsigned: 106066)✨
-                 ├── sequence(length: 6)
-                 │   └── choice([char]: "Shonky")
-                 ├── sequence(length: 7)
-                 │   └── choice([char]: "Shabaka")
-                 ├── choice(float: 0.35)
-                 └── choice(signed: -25))
-             Of particular interest is the value: 131005
+                 ├── choice(signed: 0)
+                 ├── choice(unsigned:105000)
+                 ├── ✨sequence(length: 4)✨
+                 │   └── choice([char]: "onk")
+                 ├── ✨sequence(length: 5)✨
+                 │   └── choice([char]: "abak")
+                 ├── choice(float: 0.09999999999999998)
+                 └── choice(signed: -25)
              */
         }
     }

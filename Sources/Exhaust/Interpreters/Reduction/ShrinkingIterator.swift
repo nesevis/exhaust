@@ -19,10 +19,11 @@ final class ShrinkingIterator: IteratorProtocol {
     private var state: State
     
     init(_ candidate: ChoiceTree) {
-//        print("New shrinker iterator \(candidate.elementDescription)\n\(candidate.effectiveRange?.description ?? "No range")")
+//        print("New shrinker iterator!" \(candidate.elementDescription)\n\(candidate.effectiveRange?.description ?? "No range")")
         self.origin = candidate
         self.isImportant = candidate.isImportant
         self.state = .idle
+        print("New shrinker iterator: important? \(isImportant)")
     }
     
     private enum State {
@@ -80,7 +81,7 @@ final class ShrinkingIterator: IteratorProtocol {
             }
             let subIterators = array.map { ShrinkingIterator($0) }
             // We should be returning a group here.
-            return (first, .group(children: array, childIndex: 0, subIterators: subIterators, exhaustedChildren: []))
+            return (first, .group(children: array, childIndex: array.firstIndex(where: \.isImportant) ?? 0, subIterators: subIterators, exhaustedChildren: []))
         case let .important(value):
             return handle(first: value)
         case .selected:
@@ -183,7 +184,7 @@ final class ShrinkingIterator: IteratorProtocol {
                     // We return a sequence here, so it's important that the metadata is that of the sequence
                     return .sequence(
                         length: UInt64(shrinks.count),
-                        elements: Array(shrinks),
+                        elements: shrinks,
                         sequenceMetadata
                     )
                 } else {
@@ -240,7 +241,7 @@ final class ShrinkingIterator: IteratorProtocol {
                         return nil
                     }
                     state = .group(children: children, childIndex: index, subIterators: subIterators, exhaustedChildren: exhaustedChildren)
-                    return ChoiceTree.group(Array(children))
+                    return ChoiceTree.group(children)
                 } else {
                     // This child is exhausted, mark it and move to next
                     exhaustedChildren.insert(index)
@@ -270,7 +271,7 @@ final class ShrinkingIterator: IteratorProtocol {
                         return nil
                     }
                     state = .branch(label: label, children: children, childIndex: index, subIterators: subIterators, exhaustedChildren: exhaustedChildren)
-                    return ChoiceTree.branch(label: label, children: Array(children))
+                    return ChoiceTree.branch(label: label, children: children)
                 } else {
                     // This child is exhausted, mark it and move to next
                     exhaustedChildren.insert(index)
@@ -300,7 +301,7 @@ final class ShrinkingIterator: IteratorProtocol {
                         return nil
                     }
                     state = .resize(newSize: newSize, choices: choices, childIndex: index, subIterators: subIterators, exhaustedChildren: exhaustedChildren)
-                    return ChoiceTree.resize(newSize: newSize, choices: Array(choices))
+                    return ChoiceTree.resize(newSize: newSize, choices: choices)
                 } else {
                     // This choice is exhausted, mark it and move to next
                     exhaustedChildren.insert(index)

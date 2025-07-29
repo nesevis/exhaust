@@ -10,37 +10,39 @@ struct BinaryReducerStrategy: LazyChoiceValueReducerStrategy, LazyChoiceSequence
     let direction: ShrinkingDirection
     
     func next(for value: UInt64) -> UInt64? {
+        let strategicDivisor = Self.uintReductionStrategy.first(where: { value > $0.threshold })?.factor ?? 2
         let next = switch direction {
         case .towardsLowerBound:
-            value / 2
+            value / strategicDivisor
         case .towardsHigherBound:
-            value &* 2
+            value &* strategicDivisor
         }
         return next == value ? nil : next
     }
     
-    // TODO: This can be a lot more aggressive along the lines of the Double implementation
     func next(for value: Int64) -> Int64? {
+        let absoluteValue = UInt64(abs(value))
+        let strategicDivisor = Self.intReductionStrategy.first(where: { absoluteValue > $0.threshold })?.factor ?? 2
         let next: Int64 = switch direction {
         case .towardsLowerBound where value < 0:
-            value * 2
+            value * Int64(strategicDivisor)
         case .towardsLowerBound where value == 0:
             -1
         case .towardsLowerBound where value > 0:
-            value - (value / 2)
+            value / Int64(strategicDivisor)
         case .towardsHigherBound where value < 0:
-            value / 2
+            value / Int64(strategicDivisor)
         case .towardsHigherBound where value == 0:
             1
         case .towardsHigherBound where value > 0:
-            value * 2
+            value * Int64(strategicDivisor)
         default:
             fatalError("Reducer error")
         }
         return next == value ? nil : next
     }
 
-    static let reductionStrategy: [(threshold: Double, factor: Double)] = [
+    static let doubleReductionStrategy: [(threshold: Double, factor: Double)] = [
         (1e250, 1e100),  // Extreme values: divide by 10^100
         (1e150, 1e50),   // Very large: divide by 10^50
         (1e75,  1e25),   // Large: divide by 10^25
@@ -53,11 +55,29 @@ struct BinaryReducerStrategy: LazyChoiceValueReducerStrategy, LazyChoiceSequence
         (10,    2),      // Single digits: divide by 2
     ]
     
+    static let uintReductionStrategy: [(threshold: UInt64, factor: UInt64)] = [
+        (UInt64.max / 2, 1_000_000_000_000),   // Extreme values: divide by 10^12
+        (1_000_000_000_000_001, 1_000_000_000), // Quadrillions: divide by 10^9
+        (1_000_000_000_001, 1_000),        // Trillions: divide by 1000
+        (1_000_000_001, 50),                // Billions: divide by 50
+        (1_000_001, 5),                      // Millions: divide by 5
+        (100_001, 2),                        // Hundred thousands: divide by 2
+    ]
+    
+    static let intReductionStrategy: [(threshold: UInt64, factor: UInt64)] = [
+        (UInt64(Int64.max) / 2, 1_000_000_000_000), // Extreme values: divide by 10^12
+        (1_000_000_000_000_001, 1_000_000_000),     // Quadrillions: divide by 10^9
+        (1_000_000_000_001, 1_000),             // Trillions: divide by 1000
+        (1_000_000_001, 50),                     // Billions: divide by 50
+        (1_000_001, 5),                           // Millions: divide by 5
+        (100_001, 2),                             // Hundred thousands: divide by 2
+    ]
+    
     func next(for value: Double) -> Double? {
         guard value.isFinite else {
             return nil
         }
-        let strategicDivisor = Self.reductionStrategy.first(where: { value > $0.threshold })?.factor ?? 2
+        let strategicDivisor = Self.doubleReductionStrategy.first(where: { value > $0.threshold })?.factor ?? 2
         let next: Double = switch direction {
         case .towardsLowerBound where value < 0:
             value * strategicDivisor

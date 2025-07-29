@@ -33,9 +33,9 @@ struct UltraSaturationReducerStrategy: LazyChoiceValueReducerStrategy, LazyChoic
     func next(for value: Double) -> Double? {
         let next: Double = switch direction {
         case .towardsLowerBound:
-            value.nextDown
+            value - 0.25
         case .towardsHigherBound:
-            value.nextUp
+            value + 0.25
         }
         return next == value ? nil : next
     }

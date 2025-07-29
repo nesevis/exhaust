@@ -14,5 +14,11 @@ protocol BitPatternConvertible: Equatable, Sendable {
 
     /// Provides the raw `UInt64` bit pattern for this specific instance.
     /// This is the core encoding step used by the `reflect` interpreter.
-    var bitPattern64: UInt64 { get }
+    var bitPattern64: UInt64 { get }    
+}
+
+extension BitPatternConvertible where Self: Comparable {
+    var castRange: ClosedRange<Self> {
+        Self.bitPatternRanges[0].cast()
+    }
 }
