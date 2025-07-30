@@ -6,25 +6,14 @@
 //
 
 extension Gen {
-    private static func lensIfNot<Input, NewInput>(
-        extract path: some PartialPath<NewInput, Input>,
-        _ next: ReflectiveGenerator<Any, Input>
-    ) -> ReflectiveGenerator<Any, Input> {
-        guard next.isLens == false else {
-            return next
-        }
-        return comap(path.extract(from:), next)
-    }
     // Zip wraps plain generators in a lens to help them extract from the tuple that is returned when reflecting. If the generator is already a lens, the assumption is that the user is then mapping over the tuple to transform it into something else again.
     static func zip<A, B>(
         _ a: ReflectiveGenerator<Any, A>,
         _ b: ReflectiveGenerator<Any, B>
     ) -> ReflectiveGenerator<Any, (A, B)> {
         typealias Tuple = (A, B)
-        return Gen.lensIfNot(extract: \Tuple.0, a).bind { a in
-            Gen.lensIfNot(extract: \Tuple.1, b).map { b in
-                (a, b)
-            }
+        return Gen.lens(extract: \Tuple.0, a).bind { a in
+            b.mapped(forward: { b in (a, b) }, backward: \.1)
         }
     }
     
@@ -34,11 +23,9 @@ extension Gen {
         _ c: ReflectiveGenerator<Any, C>
     ) -> ReflectiveGenerator<Any, (A, B, C)> {
         typealias Tuple = (A, B, C)
-        return Gen.lensIfNot(extract: \Tuple.0, a).bind { a in
-            Gen.lensIfNot(extract: \Tuple.1, b).bind { b in
-                Gen.lensIfNot(extract: \Tuple.2, c).map { c in
-                    (a, b, c)
-                }
+        return Gen.lens(extract: \Tuple.0, a).bind { a in
+            Gen.lens(extract: \Tuple.1, b).bind { b in
+                c.mapped(forward: { c in (a, b, c) }, backward: \.2)
             }
         }
     }
@@ -50,16 +37,13 @@ extension Gen {
         _ d: ReflectiveGenerator<Any, D>
     ) -> ReflectiveGenerator<Any, (A, B, C, D)> {
         typealias Tuple = (A, B, C, D)
-        return Gen.lensIfNot(extract: \Tuple.0, a)
-            .bind { a in
-                Gen.lensIfNot(extract: \Tuple.1, b).bind { b in
-                    Gen.lensIfNot(extract: \Tuple.2, c).bind { c in
-                        Gen.lensIfNot(extract: \Tuple.3, d).map { d in
-                            (a, b, c, d)
-                        }
-                    }
+        return Gen.lens(extract: \Tuple.0, a).bind { a in
+            Gen.lens(extract: \Tuple.1, b).bind { b in
+                Gen.lens(extract: \Tuple.2, c).bind { c in
+                    d.mapped(forward: { d in (a, b, c, d) }, backward: \.3)
                 }
             }
+        }
     }
     
     static func zip<A, B, C, D, E>(
@@ -70,18 +54,15 @@ extension Gen {
         _ e: ReflectiveGenerator<Any, E>
     ) -> ReflectiveGenerator<Any, (A, B, C, D, E)> {
         typealias Tuple = (A, B, C, D, E)
-        return Gen.lensIfNot(extract: \Tuple.0, a)
-            .bind { a in
-                Gen.lensIfNot(extract: \Tuple.1, b).bind { b in
-                    Gen.lensIfNot(extract: \Tuple.2, c).bind { c in
-                        Gen.lensIfNot(extract: \Tuple.3, d).bind { d in
-                            Gen.lensIfNot(extract: \Tuple.4, e).map { e in
-                                (a, b, c, d, e)
-                            }
-                        }
+        return Gen.lens(extract: \Tuple.0, a).bind { a in
+            Gen.lens(extract: \Tuple.1, b).bind { b in
+                Gen.lens(extract: \Tuple.2, c).bind { c in
+                    Gen.lens(extract: \Tuple.3, d).bind { d in
+                        e.mapped(forward: { e in (a, b, c, d, e) }, backward: \.4)
                     }
                 }
             }
+        }
     }
     
     static func zip<A, B, C, D, E, F>(
@@ -93,20 +74,17 @@ extension Gen {
         _ f: ReflectiveGenerator<Any, F>
     ) -> ReflectiveGenerator<Any, (A, B, C, D, E, F)> {
         typealias Tuple = (A, B, C, D, E, F)
-        return Gen.lensIfNot(extract: \Tuple.0, a)
-            .bind { a in
-                Gen.lensIfNot(extract: \Tuple.1, b).bind { b in
-                    Gen.lensIfNot(extract: \Tuple.2, c).bind { c in
-                        Gen.lensIfNot(extract: \Tuple.3, d).bind { d in
-                            Gen.lensIfNot(extract: \Tuple.4, e).bind { e in
-                                Gen.lensIfNot(extract: \Tuple.5, f).map { f in
-                                    (a, b, c, d, e, f)
-                                }
-                            }
+        return Gen.lens(extract: \Tuple.0, a).bind { a in
+            Gen.lens(extract: \Tuple.1, b).bind { b in
+                Gen.lens(extract: \Tuple.2, c).bind { c in
+                    Gen.lens(extract: \Tuple.3, d).bind { d in
+                        Gen.lens(extract: \Tuple.4, e).bind { e in
+                            f.mapped(forward: { f in (a, b, c, d, e, f) }, backward: \.5)
                         }
                     }
                 }
             }
+        }
     }
     
     static func zip<A, B, C, D, E, F, G>(
@@ -119,22 +97,19 @@ extension Gen {
         _ g: ReflectiveGenerator<Any, G>
     ) -> ReflectiveGenerator<Any, (A, B, C, D, E, F, G)> {
         typealias Tuple = (A, B, C, D, E, F, G)
-        return Gen.lensIfNot(extract: \Tuple.0, a)
-            .bind { a in
-                Gen.lensIfNot(extract: \Tuple.1, b).bind { b in
-                    Gen.lensIfNot(extract: \Tuple.2, c).bind { c in
-                        Gen.lensIfNot(extract: \Tuple.3, d).bind { d in
-                            Gen.lensIfNot(extract: \Tuple.4, e).bind { e in
-                                Gen.lensIfNot(extract: \Tuple.5, f).bind { f in
-                                    Gen.lensIfNot(extract: \Tuple.6, g).map { g in
-                                        (a, b, c, d, e, f, g)
-                                    }
-                                }
+        return Gen.lens(extract: \Tuple.0, a).bind { a in
+            Gen.lens(extract: \Tuple.1, b).bind { b in
+                Gen.lens(extract: \Tuple.2, c).bind { c in
+                    Gen.lens(extract: \Tuple.3, d).bind { d in
+                        Gen.lens(extract: \Tuple.4, e).bind { e in
+                            Gen.lens(extract: \Tuple.5, f).bind { f in
+                                g.mapped(forward: { g in (a, b, c, d, e, f, g) }, backward: \.6)
                             }
                         }
                     }
                 }
             }
+        }
     }
     
     static func zip<A, B, C, D, E, F, G, H>(
@@ -148,24 +123,21 @@ extension Gen {
         _ h: ReflectiveGenerator<Any, H>
     ) -> ReflectiveGenerator<Any, (A, B, C, D, E, F, G, H)> {
         typealias Tuple = (A, B, C, D, E, F, G, H)
-        return Gen.lensIfNot(extract: \Tuple.0, a)
-            .bind { a in
-                Gen.lensIfNot(extract: \Tuple.1, b).bind { b in
-                    Gen.lensIfNot(extract: \Tuple.2, c).bind { c in
-                        Gen.lensIfNot(extract: \Tuple.3, d).bind { d in
-                            Gen.lensIfNot(extract: \Tuple.4, e).bind { e in
-                                Gen.lensIfNot(extract: \Tuple.5, f).bind { f in
-                                    Gen.lensIfNot(extract: \Tuple.6, g).bind { g in
-                                        Gen.lensIfNot(extract: \Tuple.7, h).map { h in
-                                            (a, b, c, d, e, f, g, h)
-                                        }
-                                    }
+        return Gen.lens(extract: \Tuple.0, a).bind { a in
+            Gen.lens(extract: \Tuple.1, b).bind { b in
+                Gen.lens(extract: \Tuple.2, c).bind { c in
+                    Gen.lens(extract: \Tuple.3, d).bind { d in
+                        Gen.lens(extract: \Tuple.4, e).bind { e in
+                            Gen.lens(extract: \Tuple.5, f).bind { f in
+                                Gen.lens(extract: \Tuple.6, g).bind { g in
+                                    h.mapped(forward: { h in (a, b, c, d, e, f, g, h) }, backward: \.7)
                                 }
                             }
                         }
                     }
                 }
             }
+        }
     }
     
     static func zip<A, B, C, D, E, F, G, H, I>(
@@ -180,19 +152,15 @@ extension Gen {
         _ i: ReflectiveGenerator<Any, I>
     ) -> ReflectiveGenerator<Any, (A, B, C, D, E, F, G, H, I)> {
         typealias Tuple = (A, B, C, D, E, F, G, H, I)
-        return Gen.lensIfNot(extract: \Tuple.0, a)
-            .bind { a in
-                Gen.lensIfNot(extract: \Tuple.1, b).bind { b in
-                    Gen.lensIfNot(extract: \Tuple.2, c).bind { c in
-                        Gen.lensIfNot(extract: \Tuple.3, d).bind { d in
-                            Gen.lensIfNot(extract: \Tuple.4, e).bind { e in
-                                Gen.lensIfNot(extract: \Tuple.5, f).bind { f in
-                                    Gen.lensIfNot(extract: \Tuple.6, g).bind { g in
-                                        Gen.lensIfNot(extract: \Tuple.7, h).bind { h in
-                                            Gen.lensIfNot(extract: \Tuple.8, i).map { i in
-                                                (a, b, c, d, e, f, g, h, i)
-                                            }
-                                        }
+        return Gen.lens(extract: \Tuple.0, a).bind { a in
+            Gen.lens(extract: \Tuple.1, b).bind { b in
+                Gen.lens(extract: \Tuple.2, c).bind { c in
+                    Gen.lens(extract: \Tuple.3, d).bind { d in
+                        Gen.lens(extract: \Tuple.4, e).bind { e in
+                            Gen.lens(extract: \Tuple.5, f).bind { f in
+                                Gen.lens(extract: \Tuple.6, g).bind { g in
+                                    Gen.lens(extract: \Tuple.7, h).bind { h in
+                                        i.mapped(forward: { i in (a, b, c, d, e, f, g, h, i) }, backward: \.8)
                                     }
                                 }
                             }
@@ -200,6 +168,7 @@ extension Gen {
                     }
                 }
             }
+        }
     }
     
     static func zip<A, B, C, D, E, F, G, H, I, J>(
@@ -215,20 +184,16 @@ extension Gen {
         _ j: ReflectiveGenerator<Any, J>
     ) -> ReflectiveGenerator<Any, (A, B, C, D, E, F, G, H, I, J)> {
         typealias Tuple = (A, B, C, D, E, F, G, H, I, J)
-        return Gen.lensIfNot(extract: \Tuple.0, a)
-            .bind { a in
-                Gen.lensIfNot(extract: \Tuple.1, b).bind { b in
-                    Gen.lensIfNot(extract: \Tuple.2, c).bind { c in
-                        Gen.lensIfNot(extract: \Tuple.3, d).bind { d in
-                            Gen.lensIfNot(extract: \Tuple.4, e).bind { e in
-                                Gen.lensIfNot(extract: \Tuple.5, f).bind { f in
-                                    Gen.lensIfNot(extract: \Tuple.6, g).bind { g in
-                                        Gen.lensIfNot(extract: \Tuple.7, h).bind { h in
-                                            Gen.lensIfNot(extract: \Tuple.8, i).bind { i in
-                                                Gen.lensIfNot(extract: \Tuple.9, j).map { j in
-                                                    (a, b, c, d, e, f, g, h, i, j)
-                                                }
-                                            }
+        return Gen.lens(extract: \Tuple.0, a).bind { a in
+            Gen.lens(extract: \Tuple.1, b).bind { b in
+                Gen.lens(extract: \Tuple.2, c).bind { c in
+                    Gen.lens(extract: \Tuple.3, d).bind { d in
+                        Gen.lens(extract: \Tuple.4, e).bind { e in
+                            Gen.lens(extract: \Tuple.5, f).bind { f in
+                                Gen.lens(extract: \Tuple.6, g).bind { g in
+                                    Gen.lens(extract: \Tuple.7, h).bind { h in
+                                        Gen.lens(extract: \Tuple.8, i).bind { i in
+                                            j.mapped(forward: { j in (a, b, c, d, e, f, g, h, i, j) }, backward: \.9)
                                         }
                                     }
                                 }
@@ -237,5 +202,6 @@ extension Gen {
                     }
                 }
             }
+        }
     }
 }
