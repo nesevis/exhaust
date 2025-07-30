@@ -124,4 +124,14 @@ enum ChoiceValue: Comparable, Hashable, Equatable {
     static func == (lhs: Self, rhs: Self) -> Bool {
         lhs.hashValue == rhs.hashValue
     }
+    
+    static func < (lhs: Self, rhs: Self) -> Bool {
+        switch (lhs, rhs) {
+        case (.unsigned, .unsigned), (.signed, .signed), (.floating, .floating), (.character, .character):
+            // The bitpattern64 representation is sequential across all types
+            return lhs.bitPattern64 < rhs.bitPattern64
+        default:
+            fatalError("Can't compare two different choice values!")
+        }
+    }
 }
