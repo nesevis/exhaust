@@ -14,14 +14,15 @@ enum TestCaseReducer {
     /// - Returns: A minimal counterexample to aid in debugging
     public static func shrink<Input, Output>(
         _ value: Output,
+        recipe: ChoiceTree? = nil,
         using generator: ReflectiveGenerator<Input, Output>,
         where property: (Output) -> Bool
     ) throws -> Output {
-        guard let reflectedRecipe = try Interpreters.reflect(generator, with: value) else {
+        guard let reflectedRecipe = try recipe ?? (try Interpreters.reflect(generator, with: value)) else {
             throw Interpreters.ShrinkError.couldNotReflect
         }
         // If this recipe had reflected a `pick` with multiple `.branch` choices and one was selected
-        // we need to deselect it to open the value up to shrinking
+        // we need to deselect it to open the value up to shrinking. No we don't
         let recipe = reflectedRecipe
             .map { choice in
                 if case let .selected(selected) = choice {
@@ -35,9 +36,80 @@ enum TestCaseReducer {
         return try self.shrinkImpl(value, using: generator, recipe: recipe, where: property)
     }
     
-    //    private func normalize<Output>(_ value: Output, others: [Bool: [Output]], recipe: ChoiceTree) -> ChoiceTree {
-    //        return recipe
-    //    }
+    public static func normalize<Output>(
+        _ value: Output,
+        generator: ReflectiveGenerator<Any, Output>,
+        limit: Int = 30,
+        property: (Output) -> Bool,
+        recipe: ChoiceTree
+    ) throws -> ChoiceTree {
+        let recipe = recipe
+            .map { choice in
+                if case let .selected(selected) = choice {
+                    return selected
+                }
+                return choice
+            }
+        // Let's generate a few samples
+        let iterator = GeneratorIterator(generator, maxRuns: UInt64(limit))
+        let candidates = Array(iterator.prefix(limit))
+        let (failing, passing) = candidates.partitioned(by: property)
+        // Is it better to start with the failing?
+        var normalized = recipe
+        print("Normalized using \(limit) generations")
+        print("Before:\n\(recipe)")
+        for fail in failing {
+            // The ranges of both `normalized` and `fail` are both — possibly — somewhere outside of the valid range, but we are here to reduce, and if 0...1 fails, then that's a pretty minimal counterexample
+            guard let choices = try Interpreters.reflect(generator, with: fail) else {
+                print("–Failed to reflect on fail")
+                continue
+            }
+            normalized = normalized.refineEndOfRange(using: choices, direction: .towardsLowerBound)
+        }
+        print("After \(failing.count) fails:\n\(normalized)")
+        for pass in passing {
+            // The passing value forms the higher *or* lower boundary of F's range, so it will go
+            // min(p.lower, f.lower)..<. This works as intended
+            guard let choices = try Interpreters.reflect(generator, with: pass) else {
+                print("–Failed to reflect on pass")
+                continue
+            }
+            // We have no sense of direction here, but it's a minor quibble as it only affects whether the range is x..<y or x...y
+            normalized = normalized.refineEndOfRange(using: choices, direction: .towardsLowerBound)
+        }
+        print("After \(passing.count) passes:\n\(normalized)")
+        
+        // Final pass to set the hard coded values in `normalized` to the minimum it can be according to the range.
+        let minimized = normalized.map { choiceTree in
+            switch choiceTree {
+            // Only handle leaf values
+            case .choice(let choiceValue, let choiceMetadata):
+                switch choiceValue {
+                case .unsigned:
+                    return .choice(.unsigned(choiceMetadata.validRanges[0].lowerBound), choiceMetadata)
+                case .signed:
+                    let castRange = choiceMetadata.validRanges[0].cast(type: Int64.self)
+                    return .choice(ChoiceValue(castRange.lowerBound), choiceMetadata)
+                case .floating:
+                    let castRange = choiceMetadata.validRanges[0].cast(type: Double.self)
+                    return .choice(ChoiceValue(castRange.lowerBound), choiceMetadata)
+                case .character(let character):
+                    // TODO: Need to fix character minimisation first
+                    return choiceTree
+                }
+            case .sequence(_, let elements, let choiceMetadata):
+                let newLength = choiceMetadata.validRanges[0].lowerBound
+                return .sequence(length: newLength, elements: Array(elements.prefix(Int(newLength))), choiceMetadata)
+            default:
+                return choiceTree
+            }
+        }
+        
+        print("After minimisation:\n\(minimized)")
+        
+        return minimized
+    }
+    
     private static func shrinkImpl<Input, Output>(
         _ value: Output,
         using generator: ReflectiveGenerator<Input, Output>,
@@ -45,7 +117,6 @@ enum TestCaseReducer {
         where property: (Output) -> Bool
     ) throws -> Output {
         typealias ReferencePair = (recipe: ChoiceTree, value: Output)
-        fatalError()
         
         // Ok. We have a normalised value based on the other instances of `Output` in the test run (if available)
         // We know `value` fails the `property` test
@@ -53,73 +124,188 @@ enum TestCaseReducer {
         // First let's create a shrinking iterator from the recipe
         // Let's stash and keep these updated to we can refer back to them
         var previousFailing: ReferencePair = (recipe, value)
-        var previousPassing: ChoiceTree?
+        var steps = 0
+        var cacheHits = 0
+        var seen = [ChoiceTree: Bool]()
+        var combinatoryComplexities = [recipe.combinatoryComplexity]
         
         // This is the outer loop. It creates a new shrinking iterator
         outer: while true {
             // Let's create a new iterator based on the previous best shrink, starting with the initial recipe
-            // This is either the first go-round, or
+            // This is either the first go-round, or the previous iterator ran out
+            let direction = ShrinkingDirection.towardsLowerBound
+            if previousFailing.recipe != recipe {
+                previousFailing.recipe = previousFailing.recipe.resetStrategies(direction: direction)
+            }
+            // We've run out of shrinking strategies for at least one of the choice values
+            // How do we find a better proxy for more complex objects?
+            // Strings have _tons_ of choices.
+            if previousFailing.recipe.contains(\.rangeIsExhausted) {
+                break outer
+            }
             let iterator = ShrinkingIterator(previousFailing.recipe)
+            print("New iterator:\n \(previousFailing.recipe)")
             
             // Now let's iterate over the shrinks it provides. If it generates values outside of the allowed range of each recipe ingredient, it will cycle to the next strategy until it returns nil
             inner: while let candidate = iterator.next() {
-                // TODO: Caching goes here?
+                guard seen[candidate] == nil else {
+                    cacheHits += 1
+                    print("Cache hit")
+                    continue
+                }
                 
                 // Let's make sure we can replay this
                 guard let candidateValue = try Interpreters.replay(generator, using: candidate) else {
                     // If we can't, the recipe is invalid, so we should throw. Any shrunk candidate should be a valid simplification of the original
                     throw Interpreters.ShrinkError.couldNotReplayRecipe(original: recipe, failing: candidate)
                 }
+                steps += 1
+                
+                guard steps < 500, cacheHits < 100 else {
+                    break outer
+                }
                 
                 // Now let's see if the property still fails for this shrunk value
                 let isValidShrink = property(candidateValue) == false
+                // And let's add it to the cache
+                seen[candidate] = isValidShrink
                 
                 if isValidShrink {
+                    let complexity = candidate.combinatoryComplexity
+                    // This didn't work
+//                    if let previous = combinatoryComplexities.last, previous == complexity {
+//                        continue
+//                    }
                     // Ok, this is a valid reduction. In this case, the iterator is onto something, and we should let it keep rolling until it exhausts itself or produces an invalid shrink, or in other words, a passing value.
-                    
+
                     // Here, we should refine the allowable range of the values based on their new values.
+                    
+                    // Shortlex is fast and gives an indication of structural simplicity,
+                    // but the ultimate gauge of how "narrowed" a shrink has become is the aggregate range size.
+                    if candidate.shortlexLength <= previousFailing.recipe.shortlexLength {
+                        // Ok, this reduction is structurally simpler than the previous shrink
+                        // But that does not mean we should constrict anything but the top or bottom range depending on what direction we went in
+                        let refined = candidate
+                            .refineEndOfRange(using: previousFailing.recipe, direction: direction)
+
+                        previousFailing = (refined, candidateValue)
+                    } else {
+                        print("Shrink isn't shortlex better:\n\(candidate.shortlexLength) vs \(previousFailing.recipe.shortlexLength)")
+                        // How can we check that it isn't incrementally better?
+                    }
                     
                     // How do we recognise that we are:
                     // - In a local minimum, and should anneal or allow for exploration?
                     // - At the "best" reduction. Do we measure the allowable range for all values and quit once it's below a certain threshold?
+                    
                     // This is where this routine will exit by breaking the outer loop
                 } else {
                     // Ok, we have a passing value, which means whatever value just changed must be important. The ShrinkingIterator will only modify one value per call to `next`, so we know that the one that changed must be important.
                     // Now do we roll back to the previous value, or do we reverse the direction and go up?
                     // Here we will need to mark this property as `.important` so that the shrinker will focus on it for the next go around.
                     // We will also need to, depending on the strategy `direction`, narrow the range based on the passing value.
+                    // FIXME: Now that we have refined the range, how can we validate that the next results from the current iterator fall in that range?
                     let amalgated = previousFailing.recipe
-                        .mapWhereDifferent(to: candidate) { failing, passing in
-                            switch (failing, passing) {
-                            case let (.choice(failingChoice, _), .choice(passingChoice, passingMeta)):
-                                let failingBound = failingChoice.convertible.bitPattern64
-                                let passingBound = passingChoice.convertible.bitPattern64
-                                let newRange: ClosedRange<UInt64>
-                                switch passingMeta.strategies[0].direction {
-                                case .towardsHigherBound:
-                                    // Ok, so the passing value was increasing, which means its value -1 should represent the upper bound, and the failing value the lower bound
-                                    newRange = ClosedRange(failingBound..<passingBound)
-                                case .towardsLowerBound:
-                                    // Ok, the passing value was decreasing which means its value +1 should represent the lower bound
-                                    // Adding UInt64 values here can mess up the range when it's represented in the true type
-                                    newRange = passingBound+1...failingBound
-                                    break
-                                }
-                            case let (.sequence(failingLength, failingElements, _), .sequence(passingLength, passingElements, _)):
-                                fatalError()
-                            default:
-                                return nil
-                            }
-                            return failing
-                        }
+                        .refineEntireRange(using: candidate, direction: direction, markChangesAsImportant: true)
+                    previousFailing = (amalgated, candidateValue)
+                    print("Passed. Amalgated: \n\(previousFailing)")
+                    break inner
+                    // It somehow ends up being double wrapped in .important
+//                    if amalgated == previousFailing.recipe {
+//                        print("The amalgated result is the same; iterator must have given OOR value")
+//                    }
+                    // If we decide to switch directions, we'll need to reset strategies and their directions. By what metric do we decide to switch directions?
                 }
-                return value
+            }
+            print("Inner loop finished: \(steps) steps, \(cacheHits) cache hits")
+            guard steps < 500, cacheHits < 100 else {
+                break outer
             }
             // Ok, the iterator is exhausted, which means it has shrunk each value in the recipe as much as it can within the range restrictions of each value. We should add back relevant strategies and go again
         }
+        guard let finalOutput = try Interpreters.replay(generator, using: previousFailing.recipe) else {
+            fatalError("Invalid output!")
+        }
+        print("Outer loop finished")
+        print("Returning test case reduction after \(steps) steps and \(cacheHits) cache hits:")
+        print("Original:\n\(recipe)")
+        print("Reduced:\n\(previousFailing.recipe)")
         
         // Various data about number of shrinking steps, etc
-        return previousFailing.value
+        return finalOutput
+    }
+}
+
+extension ChoiceTree {
+    func refineEntireRange(using other: ChoiceTree, direction: ShrinkingDirection, markChangesAsImportant: Bool) -> ChoiceTree {
+        self.mapWhereDifferent(to: other) { failing, passing in
+            switch (failing, passing) {
+            case let (.choice(failingChoice, failingMeta), .choice(passingChoice, _)):
+                guard let range = failingChoice.refineRange(against: passingChoice, direction: direction) else {
+                    return failing
+                }
+                let meta = ChoiceMetadata(validRanges: [range], strategies: failingMeta.strategies)
+                return markChangesAsImportant
+                    ? .important(.choice(failingChoice, meta))
+                    : .choice(failingChoice, meta)
+            case let (.sequence(failingLength, failingElements, _), .sequence(passingLength, passingElements, passingMeta)):
+                guard let newRange = ChoiceValue(failingLength).refineRange(against: .init(passingLength), direction: direction) else {
+                    return failing
+                }
+                let meta = ChoiceMetadata(validRanges: [newRange], strategies: passingMeta.strategies)
+                return markChangesAsImportant
+                    ? .important(.sequence(length: failingLength, elements: failingElements, meta))
+                    : .sequence(length: failingLength, elements: failingElements, meta)
+            default:
+                return nil
+            }
+        }
+    }
+    
+    func refineEndOfRange(using other: ChoiceTree, direction: ShrinkingDirection) -> ChoiceTree {
+        self.mapWhereDifferent(to: other) { new, old in
+            switch (new, old) {
+            case let (.choice(newChoice, newMeta), .choice(oldChoice, _)):
+                guard let range = newChoice.refineOneEndOfRange(against: oldChoice, range: newMeta.validRanges[0], direction: direction) else {
+                    return new
+                }
+                let meta = ChoiceMetadata(validRanges: [range], strategies: newMeta.strategies)
+                return .choice(newChoice, meta)
+            case let (.sequence(newLength, newElements, newMeta), .sequence(oldLength, _, _)):
+                guard let newRange = ChoiceValue(newLength).refineOneEndOfRange(against: .init(oldLength), range: newMeta.validRanges[0], direction: direction) else {
+                    return new
+                }
+                let meta = ChoiceMetadata(validRanges: [newRange], strategies: newMeta.strategies)
+                return .sequence(length: newLength, elements: newElements, meta)
+            default:
+                return nil
+            }
+        }
+    }
+}
+
+extension ChoiceTree {
+    var rangeIsExhausted: Bool {
+        switch self {
+        case .choice(let choiceValue, let choiceMetadata):
+            choiceMetadata.strategies.isEmpty
+        case .sequence(let length, let elements, let choiceMetadata):
+            choiceMetadata.strategies.isEmpty
+        case .branch(let label, let children):
+            children.contains(where: \.rangeIsExhausted)
+        case .group(let array):
+            array.contains(where: \.rangeIsExhausted)
+        case .getSize(let uInt64):
+            false
+        case .resize(let newSize, let choices):
+            choices.contains(where: \.rangeIsExhausted)
+        case .important(let choiceTree):
+            choiceTree.rangeIsExhausted
+        case .selected(let choiceTree):
+            choiceTree.rangeIsExhausted
+        case .just:
+            false
+        }
     }
 }
 
@@ -137,15 +323,37 @@ extension ChoiceValue {
         }
     }
     
+    // Used when we know the two values represent the range
     func refineRange(against other: ChoiceValue, direction: ShrinkingDirection) -> ClosedRange<UInt64>? {
+        // If increasing, the range should be lhs..<rhs, if decreasing rhs...lhs
+        let minVal = min(self.bitPattern64, other.bitPattern64)
+        let maxVal = max(self.bitPattern64, other.bitPattern64)
+        switch direction {
+        case .towardsHigherBound:
+            // Range (..<) can't have the two values be equal to each other
+            return minVal == maxVal ? minVal...maxVal : ClosedRange(minVal..<maxVal)
+        case .towardsLowerBound:
+            return minVal...maxVal
+        }
+    }
+    
+    // Used when we know the other value represents a refinement of one end of the range
+    func refineOneEndOfRange(against other: ChoiceValue, range: ClosedRange<UInt64>, direction: ShrinkingDirection) -> ClosedRange<UInt64>? {
+        guard range.contains(other.bitPattern64) else {
+            return nil
+        }
         // If increasing, the range should be lhs..<rhs, if decreasing rhs...lhs
         switch direction {
         case .towardsHigherBound:
-            let minVal = min(self.bitPattern64, other.bitPattern64)
+            // We were moving up, so the higher of the two values is now the top end
             let maxVal = max(self.bitPattern64, other.bitPattern64)
-            return minVal == maxVal ? minVal...maxVal : ClosedRange(minVal..<maxVal)
+            // Range (..<) can't have the two values be equal to each other
+            return range.upperBound == maxVal
+                ? maxVal...range.upperBound
+                : ClosedRange(maxVal..<range.upperBound)
         case .towardsLowerBound:
-            return min(self.bitPattern64, other.bitPattern64)...max(self.bitPattern64, other.bitPattern64)
+            let minVal = min(self.bitPattern64, other.bitPattern64)
+            return range.lowerBound...minVal
         }
     }
 }
