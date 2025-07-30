@@ -219,6 +219,44 @@ enum Gen {
         }
     }
     
+    public static func arrayOf<Input, Output>(
+        _ elementGenerator: ReflectiveGenerator<Input, Output>,
+        within range: ClosedRange<UInt64>
+    ) -> ReflectiveGenerator<Input, [Output]> {
+        // 2. Use `bind` to get the result of the length generator.
+        let sequenceOp = ReflectiveOperation<Input>.sequence(
+            length: Gen.getSize().bind { size in
+                if range.contains(size) {
+                    return Gen.choose(in: size...size)
+                }
+                return Gen.choose(in: range)
+                
+            },
+            gen: elementGenerator.map { $0 as Any }
+        )
+        // 4. Lift the operation. The continuation will decode the `[Any]` result.
+        return .impure(operation: sequenceOp) { result in
+            let array = result as! [Output]
+            return .pure(array)
+        }
+    }
+    
+    public static func arrayOf<Input, Output>(
+        _ elementGenerator: ReflectiveGenerator<Input, Output>,
+        exactly: UInt64
+    ) -> ReflectiveGenerator<Input, [Output]> {
+        // 2. Use `bind` to get the result of the length generator.
+        let sequenceOp = ReflectiveOperation<Input>.sequence(
+            length: .pure(exactly), // How do we wrap this in a Gen.just?
+            gen: elementGenerator.map { $0 as Any }
+        )
+        // 4. Lift the operation. The continuation will decode the `[Any]` result.
+        return .impure(operation: sequenceOp) { result in
+            let array = result as! [Output]
+            return .pure(array)
+        }
+    }
+    
     /// Retrieves the current size parameter controlling generator complexity.
     /// The size typically grows as tests progress, allowing generators to produce
     /// more complex values over time.
