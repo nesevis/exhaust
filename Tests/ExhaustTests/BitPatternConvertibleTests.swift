@@ -78,7 +78,7 @@ struct BitPatternConvertibleTests {
     }
 
     @Test("Float BitPatternConvertible round-trip for special values")
-    func testFloatSpecialValuesRoundTrip() {
+    func testFloatSpecialValuesRoundTrip() throws {
         let testValues: [Float] = [
             Float.zero,
             -Float.zero,
@@ -96,6 +96,10 @@ struct BitPatternConvertibleTests {
             let bitPattern = value.bitPattern64
             let reconstructed = Float(bitPattern64: bitPattern)
             #expect(reconstructed == value, "Round-trip failed for Float(\(value)): got \(reconstructed)")
+        }
+        
+        try PropertyTest.test(Float.arbitrary) { val in
+            Float(bitPattern64: val.bitPattern64) == val
         }
     }
     
@@ -118,9 +122,20 @@ struct BitPatternConvertibleTests {
             }
         }
     }
+    
+    @Test("Property test Float bit pattern representation is sequential with size")
+    func propertyTestFloatBitPatternSequentiality() throws {
+        let gen = Gen.zip(
+            Gen.choose(in: -Float.greatestFiniteMagnitude...0),
+            Gen.choose(in: 1...Float.greatestFiniteMagnitude.nextDown)
+        )
+        try PropertyTest.test(gen) { low, high in
+            low.bitPattern64 < high.bitPattern64
+        }
+    }
 
     @Test("Double BitPatternConvertible round-trip for special values")
-    func testDoubleSpecialValuesRoundTrip() {
+    func testDoubleSpecialValuesRoundTrip() throws {
         let testValues: [Double] = [
             Double.zero,
             -Double.zero,
@@ -133,6 +148,10 @@ struct BitPatternConvertibleTests {
             Double.leastNormalMagnitude,
             -Double.leastNormalMagnitude
         ]
+        
+        try PropertyTest.test(Double.arbitrary) { val in
+            Double(bitPattern64: val.bitPattern64) == val
+        }
         
         for value in testValues {
             let bitPattern = value.bitPattern64
@@ -160,9 +179,20 @@ struct BitPatternConvertibleTests {
             }
         }
     }
+    
+    @Test("Property test Double bit pattern representation is sequential with size")
+    func propertyTestDoubleBitPatternSequentiality() throws {
+        let gen = Gen.zip(
+            Gen.choose(in: -Double.greatestFiniteMagnitude...0),
+            Gen.choose(in: 1...Double.greatestFiniteMagnitude.nextDown)
+        )
+        try PropertyTest.test(gen) { low, high in
+            low.bitPattern64 < high.bitPattern64
+        }
+    }
 
     @Test("UInt64 to Float mapping round-trip consistency")
-    func testUInt64ToFloatMappingRoundTrip() {
+    func testUInt64ToFloatMappingRoundTrip() throws {
         // Test that we can convert any UInt64 within Float range to Float and back
         let testValues: [UInt64] = [
             0,
@@ -173,6 +203,10 @@ struct BitPatternConvertibleTests {
             UInt64(UInt32.max) - 1,
             UInt64(UInt32.max)
         ]
+        
+        try PropertyTest.test(UInt64.arbitrary) { val in
+            UInt64(bitPattern64: val.bitPattern64) == val
+        }
         
         for bitPattern in testValues {
             let floatValue = Float(bitPattern64: bitPattern)
@@ -204,8 +238,12 @@ struct BitPatternConvertibleTests {
     // MARK: - Signed Integer Tests
 
     @Test("Int8 BitPatternConvertible round-trip")
-    func testInt8BitPatternRoundTrip() {
+    func testInt8BitPatternRoundTrip() throws {
         let testValues: [Int8] = [Int8.min, -1, 0, 1, Int8.max]
+        
+        try PropertyTest.test(Int8.arbitrary) { val in
+            Int8(bitPattern64: val.bitPattern64) == val
+        }
         
         for value in testValues {
             let bitPattern = value.bitPattern64
@@ -215,8 +253,12 @@ struct BitPatternConvertibleTests {
     }
 
     @Test("Int16 BitPatternConvertible round-trip")
-    func testInt16BitPatternRoundTrip() {
+    func testInt16BitPatternRoundTrip() throws {
         let testValues: [Int16] = [Int16.min, -1000, -1, 0, 1, 1000, Int16.max]
+        
+        try PropertyTest.test(Int16.arbitrary) { val in
+            Int16(bitPattern64: val.bitPattern64) == val
+        }
         
         for value in testValues {
             let bitPattern = value.bitPattern64
@@ -226,8 +268,12 @@ struct BitPatternConvertibleTests {
     }
 
     @Test("Int32 BitPatternConvertible round-trip")
-    func testInt32BitPatternRoundTrip() {
+    func testInt32BitPatternRoundTrip() throws {
         let testValues: [Int32] = [Int32.min, -100000, -1, 0, 1, 100000, Int32.max]
+        
+        try PropertyTest.test(Int32.arbitrary) { val in
+            Int32(bitPattern64: val.bitPattern64) == val
+        }
         
         for value in testValues {
             let bitPattern = value.bitPattern64
@@ -237,13 +283,28 @@ struct BitPatternConvertibleTests {
     }
 
     @Test("Int64 BitPatternConvertible round-trip")
-    func testInt64BitPatternRoundTrip() {
+    func testInt64BitPatternRoundTrip() throws {
         let testValues: [Int64] = [Int64.min, -1000000000, -1, 0, 1, 1000000000, Int64.max]
+        
+        try PropertyTest.test(Int64.arbitrary) { val in
+            Int64(bitPattern64: val.bitPattern64) == val
+        }
         
         for value in testValues {
             let bitPattern = value.bitPattern64
             let reconstructed = Int64(bitPattern64: bitPattern)
             #expect(reconstructed == value, "Round-trip failed for Int64(\(value)): got \(reconstructed)")
+        }
+    }
+    
+    @Test("Property test Int64 bit pattern representation is sequential with size")
+    func propertyTestSignedIntegerBitPatternSequentiality() throws {
+        let gen = Gen.zip(
+            Gen.choose(in: Int64.min...0),
+            Gen.choose(in: 1...Int64.max)
+        )
+        try PropertyTest.test(gen) { low, high in
+            low.bitPattern64 < high.bitPattern64
         }
     }
 

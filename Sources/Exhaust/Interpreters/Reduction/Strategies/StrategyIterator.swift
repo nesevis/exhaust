@@ -35,7 +35,7 @@ final class StrategyIterator<T: BitPatternConvertible & Comparable>: IteratorPro
             return nil
         }
         current = this
-        guard ranges.contains(where: { $0.contains(this)}) else {
+        guard ranges.contains(where: { $0.contains(this) }) else {
             outOfRangeHits += 1
             print("❌\(Self.self)/\(type(of: strategy)).\(strategy.direction) [OOR:\(outOfRangeHits)] \(current) -> \(this)")
             if outOfRangeHits >= 5 {

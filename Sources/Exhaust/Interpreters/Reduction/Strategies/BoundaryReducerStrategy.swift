@@ -8,18 +8,26 @@
 struct BoundaryReducerStrategy: LazyChoiceValueReducerStrategy, LazyChoiceSequenceReducerStrategy {
     let direction: ShrinkingDirection
     
+    private static let uintValues: [UInt64] = [.min, .max]
     func next(for value: UInt64) -> UInt64? {
-        guard value == .min || value == .max else {
-            return .min
+        guard Self.uintValues.contains(value) else {
+            return Self.uintValues[0]
         }
-        return value == .min ? .max : nil
+        if let index = Self.uintValues.firstIndex(of: value), index < Self.uintValues.endIndex - 1 {
+            return Self.uintValues[index + 1]
+        }
+        return nil
     }
     
+    private static let intValues: [Int64] = [.min, .max]
     func next(for value: Int64) -> Int64? {
-        guard value == .min || value == .max else {
-            return .min
+        guard Self.intValues.contains(value) else {
+            return Self.intValues[0]
         }
-        return value == .min ? .max : nil
+        if let index = Self.intValues.firstIndex(of: value), index < Self.intValues.endIndex - 1 {
+            return Self.intValues[index + 1]
+        }
+        return nil
     }
     
     private static let doubleValues = [

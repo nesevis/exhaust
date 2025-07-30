@@ -18,7 +18,7 @@ extension ChoiceTree {
         case .getSize, .just:
             return 0
         case .important(let child):
-            return child.shortlexLength - 1
+            return child.shortlexLength // > 0 ? child.shortlexLength - 1 : 0
         case .selected(let child):
             return child.shortlexLength
         case .resize(_, let choices):

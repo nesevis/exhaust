@@ -23,9 +23,20 @@ extension Interpreters {
         _ gen: ReflectiveGenerator<Input, Output>,
         using choiceTree: ChoiceTree
     ) throws -> Output? {
+        // First let's unwrap any `.important` markers
+        let unwrappedChoice = choiceTree.map { choice in
+            if case let .important(choiceTree) = choice {
+                // FIXME: Why is it wrapped in important twice?!
+                if case let .important(wrappedTwice) = choiceTree {
+                    return wrappedTwice
+                }
+                return choiceTree
+            }
+            return choice
+        }
         // Start the recursive process. The helper returns the value and any *unconsumed*
         // parts of the tree. A successful top-level replay should consume the entire tree.
-        let result = try replayRecursive(gen, with: choiceTree)
+        let result = try replayRecursive(gen, with: unwrappedChoice)
         
         // We can add a check here to ensure no parts of the tree were left over,
         // but the recursive logic should handle this correctly.
@@ -46,13 +57,6 @@ extension Interpreters {
         _ gen: ReflectiveGenerator<Input, Output>,
         choices: inout [ChoiceTree]
     ) throws -> Output? {
-        
-        if let firstChoice = choices.first, firstChoice.isImportant {
-            // This is wrapped in .important for shrinking purposes; unwrap
-            if case let .important(choice) = firstChoice {
-                choices[0] = choice
-            }
-        }
         switch gen {
         case let .pure(value):
             // Base case: return the value
@@ -80,7 +84,7 @@ extension Interpreters {
                 guard !choices.isEmpty else { return nil }
                 let choice = choices.removeFirst()
                 guard case let .choice(.character(character), _) = choice else {
-                    return nil
+                    throw ReplayError.wrongInputChoice
                 }
                 
                 let nextGen = continuation(character)
@@ -88,7 +92,9 @@ extension Interpreters {
 
             case let .pick(pickChoices):
                 // Consume the next choice which should be a branch
-                guard !choices.isEmpty else { return nil }
+                guard !choices.isEmpty else {
+                    return nil
+                }
                 let choice = choices.removeFirst()
                 
                 guard case var .group(branches) = choice else {
@@ -133,7 +139,7 @@ extension Interpreters {
                 let choice = choices.removeFirst()
                 
                 guard case let .sequence(_, elements, _) = choice else {
-                    return nil
+                    throw ReplayError.wrongInputChoice
                 }
                 
                 var accumulatedValues: [Any] = []
@@ -178,7 +184,9 @@ extension Interpreters {
                 
             case let .resize(newSize, subGenerator):
                 // resize consumes a resize choice and replays the sub-generator
-                guard !choices.isEmpty else { return nil }
+                guard !choices.isEmpty else {
+                    return nil
+                }
                 let choice = choices.removeFirst()
                 guard case let .resize(_, subChoices) = choice else {
                     return nil

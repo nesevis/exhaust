@@ -5,6 +5,7 @@
 //  Created by Chris Kolbu on 16/7/2025.
 //
 
+import Algorithms
 import Foundation
 
 enum ChoiceTree: Hashable, Equatable, Sendable {
@@ -274,15 +275,40 @@ extension ChoiceTree {
         }
     
     func mapWhereDifferent(to other: ChoiceTree, using transform: (ChoiceTree, ChoiceTree) -> ChoiceTree?) -> ChoiceTree {
-        self.merge(with: other) { lhs, rhs in
-            // Only
-            guard lhs.typeId == rhs.typeId else {
-                return lhs
+        self.merge(with: other) {
+            lhs,
+            rhs in
+            // Only disimilar types
+            switch (lhs, rhs) {
+                // Unwrap important markers
+            case let (.important(lhsValue), .important(rhsValue)) where lhsValue.typeId == rhsValue.typeId && lhsValue != rhsValue:
+                return transform(lhsValue, rhsValue).map { .important($0) }
+            case let (.important(lhsValue), _) where lhsValue.typeId == rhs.typeId && lhsValue != rhs:
+                return transform(lhsValue, rhs).map { .important($0) }
+            case let (_, .important(rhsValue)) where self.typeId == rhsValue.typeId && lhs != rhsValue:
+                return transform(lhs, rhsValue)
+                // Unwrap selected markers
+            case let (.selected(lhsValue), .selected(rhsValue)) where lhsValue.typeId == rhsValue.typeId && lhsValue != rhsValue:
+                return transform(lhsValue, rhsValue).map { .selected($0) }
+            case let (.selected(lhsValue), _) where lhsValue.typeId == rhs.typeId && lhsValue != rhs:
+                return transform(lhsValue, rhs).map { .selected($0) }
+            case let (_, .selected(rhsValue)) where self.typeId == rhsValue.typeId && lhs != rhsValue:
+                return transform(lhs, rhsValue)
+            case (.choice, .choice) where lhs.typeId == rhs.typeId && lhs != rhs:
+                return transform(lhs, rhs)
+            case let (.sequence(lLength, lElements, lMeta), .sequence(_, rElements, _)) where rhs != lhs:
+                let transformedElements = zip(lElements, rElements).map { lhs, rhs in
+                    lhs.mapWhereDifferent(to: rhs, using: transform)
+                }
+                let newLhs = ChoiceTree.sequence(
+                    length: lLength,
+                    elements: transformedElements.isEmpty ? lElements : transformedElements,
+                    lMeta
+                )
+                return transform(newLhs, rhs)
+            default:
+                return nil
             }
-            if lhs != rhs {
-                return transform(lhs, rhs) ?? lhs
-            }
-            return lhs
         }
     }
     
@@ -480,6 +506,33 @@ extension ChoiceTree: CustomDebugStringConvertible {
             return "getSize(\(size))"
         case let .resize(newSize, choices):
             return "resize(\(newSize): [\(choices.map(\.elementDescription).joined(separator: ", "))])"
+        }
+    }
+    
+    var combinatoryComplexity: Double {
+        switch self {
+        case .choice(let choiceValue, let choiceMetadata):
+            return choiceValue.combinatoryComplexity(for: choiceMetadata.validRanges[0])
+        case .just:
+            return 0
+        case .sequence(_, let elements, let choiceMetadata):
+            let range = choiceMetadata.validRanges[0].cast(type: Int64.self)
+            if range.lowerBound == .min || range.upperBound == .max {
+                return Double(Int64.max)
+            }
+            return Double(range.upperBound - range.lowerBound) + elements.reduce(0, { $0 + $1.combinatoryComplexity })
+        case .branch(_, let children):
+            return children.reduce(0, { $0 + $1.combinatoryComplexity })
+        case .group(let array):
+            return array.reduce(0, { $0 + $1.combinatoryComplexity })
+        case .getSize:
+            return 0
+        case .resize(_, let choices):
+            return choices.reduce(0, { $0 + $1.combinatoryComplexity })
+        case .important(let choiceTree):
+            return choiceTree.combinatoryComplexity
+        case .selected(let choiceTree):
+            return choiceTree.combinatoryComplexity
         }
     }
 }
