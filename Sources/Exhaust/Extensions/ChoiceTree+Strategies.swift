@@ -192,11 +192,13 @@ extension ChoiceTree {
         case let .branch(label, children):
             return self
         case let .group(array):
-            return self
-        case let .important(element), let .selected(element):
+            return .group(array.map { $0.resetStrategies(direction: direction) })
+        case let .important(element):
             return .important(element.setStrategiesForRangeAndType(direction: direction))
-        case let .getSize(size):
-            return .getSize(size)
+        case let .selected(element):
+            return .selected(element.setStrategiesForRangeAndType(direction: direction))
+        case .getSize:
+            return self
         case let .resize(newSize, choices):
             return .resize(newSize: newSize, choices: choices.map { $0.resetStrategies(direction: direction) })
         }
@@ -278,6 +280,23 @@ extension ChoiceTree {
             return Double(UInt64(bitPattern64: range.upperBound - range.lowerBound))
         default:
             return nil
+        }
+    }
+}
+
+extension ChoiceValue {
+    func combinatoryComplexity(for range: ClosedRange<UInt64>) -> Double {
+        switch self {
+        case .unsigned:
+            return Double(range.upperBound - range.lowerBound)
+        case .signed:
+            let range = range.cast(type: Int64.self)
+            return Double(abs(range.upperBound - range.lowerBound))
+        case .floating:
+            let range = range.cast(type: Double.self)
+            return abs(range.upperBound - range.lowerBound)
+        case .character:
+            return Double(range.upperBound - range.lowerBound)
         }
     }
 }

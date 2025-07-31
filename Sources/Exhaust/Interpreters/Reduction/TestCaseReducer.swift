@@ -60,6 +60,9 @@ enum TestCaseReducer {
         print("Before:\n\(recipe)")
         for fail in failing {
             // The ranges of both `normalized` and `fail` are both — possibly — somewhere outside of the valid range, but we are here to reduce, and if 0...1 fails, then that's a pretty minimal counterexample
+            // FIXME: We need to respect the original range here. If the number falls within it, don't do anything?
+            // E.g if we're searching for Int16.min like in one of the tests but constrict the range to what we've seen, we won't be able to shrink properly.
+            // So can we even normalize on failures? By virtue of being generated, the value **must** be in the range of the generator's range.
             guard let choices = try Interpreters.reflect(generator, with: fail) else {
                 print("–Failed to reflect on fail")
                 continue

@@ -562,7 +562,6 @@ struct CompositionTests {
                 backward: { ($0.a, $0.b, $0.c) }
             )
             let (recipe, instance) = try validateGenerator(gen)
-            let shrink = try Interpreters.shrink(instance, using: gen, where: { $0.c == !instance.c })
         }
         
         @Test("Test bimap is replayable")

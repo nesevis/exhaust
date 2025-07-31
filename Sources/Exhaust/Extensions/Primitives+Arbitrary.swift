@@ -40,6 +40,17 @@ extension Int64: Arbitrary {
     }
 }
 
+// FIXME: Do we need this. Is reflection still broken here?
+extension Int16: Arbitrary {
+    static var arbitrary: ReflectiveGenerator<Any, Self> {
+        Gen.getSize().bind { size in
+            let expanded: UInt64 = size < 15 ? 1 << size : UInt64(Int16.max)
+            let truncated = abs(Int16(truncatingIfNeeded: expanded))
+            return Gen.choose(in: -truncated...truncated)
+        }
+    }
+}
+
 extension SignedInteger {
     static var arbitrary: ReflectiveGenerator<Any, Self> {
         Int64.arbitrary
@@ -49,7 +60,6 @@ extension SignedInteger {
 
 extension Int: Arbitrary {}
 extension Int8: Arbitrary {}
-extension Int16: Arbitrary {}
 extension Int32: Arbitrary {}
 
 // MARK: - Floating points

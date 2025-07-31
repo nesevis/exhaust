@@ -14,6 +14,7 @@ final class ShrinkingIterator: IteratorProtocol {
     /// The original candidate
     private var origin: ChoiceTree
     private var isImportant: Bool
+    private var isSelected: Bool
     
     /// The internal state of the iterator
     private var state: State
@@ -22,8 +23,9 @@ final class ShrinkingIterator: IteratorProtocol {
 //        print("New shrinker iterator!" \(candidate.elementDescription)\n\(candidate.effectiveRange?.description ?? "No range")")
         self.origin = candidate
         self.isImportant = candidate.isImportant
+        self.isSelected = candidate.isSelected
         self.state = .idle
-        print("New shrinker iterator: important? \(isImportant)")
+        print("New shrinker iterator: [I:\(isImportant)|S:\(isSelected)] \(candidate)")
     }
     
     private enum State {
@@ -40,7 +42,7 @@ final class ShrinkingIterator: IteratorProtocol {
         case element(shrinks: EagerShrinks, childIndex: Int, subIterator: ShrinkingIterator, sequenceMetadata: ChoiceMetadata, sequenceStrategy: [any TemporaryDualPurposeStrategy])
         
         /// Representing a group that is being shrunk
-        case group(children: EagerShrinks, childIndex: Int, subIterators: [ShrinkingIterator], exhaustedChildren: Set<Int>)
+        case group(children: EagerShrinks, childIndex: Int, subIterators: [ShrinkingIterator?], exhaustedChildren: Set<Int>)
         
         /// Representing a branch in the ``ChoiceTree``
         case branch(label: UInt64, children: EagerShrinks, childIndex: Int, subIterators: [ShrinkingIterator], exhaustedChildren: Set<Int>)
@@ -71,21 +73,28 @@ final class ShrinkingIterator: IteratorProtocol {
             guard array.isEmpty == false else {
                 return (nil, .exhausted)
             }
-            // This doesn't property wrap up the value again
             let subIterators = array.map { ShrinkingIterator($0) }
             return (first, .branch(label: label, children: array, childIndex: 0, subIterators: subIterators, exhaustedChildren: []))
         case let .group(array):
-            //
+            // If a group contains branches, we should look for the selected one and only shrink that. This means there is no round robin.
             guard array.isEmpty == false else {
                 return (nil, .exhausted)
             }
-            let subIterators = array.map { ShrinkingIterator($0) }
+            let hasPickWithSelection = array.contains(where: \.isSelected)
+            let subIterators = array.map {
+                // If this is a sum type `pick` where only one branch is active, only create a generator for that value
+                if hasPickWithSelection {
+                    return $0.isSelected ? ShrinkingIterator($0) : nil
+                }
+                // If not, and this is a product type, return generators for all values
+                return ShrinkingIterator($0)
+            }
             // We should be returning a group here.
-            return (first, .group(children: array, childIndex: array.firstIndex(where: \.isImportant) ?? 0, subIterators: subIterators, exhaustedChildren: []))
+            return (first, .group(children: array, childIndex: array.firstIndex(where: { $0.isSelected || $0.isImportant }) ?? 0, subIterators: subIterators, exhaustedChildren: []))
         case let .important(value):
             return handle(first: value)
-        case .selected:
-            fatalError("\(Self.self) should not handle `.selected`")
+        case let .selected(value):
+            return handle(first: value)
         case .getSize:
             // getSize nodes can't be shrunk, they represent constant size values
             return (nil, .exhausted)
@@ -112,8 +121,11 @@ final class ShrinkingIterator: IteratorProtocol {
                     continue
                 }
                 if let result {
-                    if isImportant {
+                    if isImportant, result.isImportant == false {
                         return .important(result)
+                    }
+                    if isSelected, result.isSelected == false {
+                        return .selected(result)
                     }
                     if result.isJust {
                         // What?
@@ -129,8 +141,11 @@ final class ShrinkingIterator: IteratorProtocol {
 //                    print("Sequence continuing strategy for:\n \(result)")
                     // We still have shrinks left in this sequence strategy
                     self.state = .sequence(shrinks: shrinks, original: original, metadata: meta, strategy: strategy)
-                    if isImportant {
+                    if isImportant, result.isImportant == false {
                         return .important(result)
+                    }
+                    if isSelected, result.isSelected == false {
+                        return .selected(result)
                     }
                     return result
                 }
@@ -145,8 +160,11 @@ final class ShrinkingIterator: IteratorProtocol {
                     // We still have other sequence strategies to try
 //                    print("Sequence switching strategy for:\n \(result)")
                     self.state = state
-                    if isImportant {
+                    if isImportant, result.isImportant == false {
                         return .important(result)
+                    }
+                    if isSelected, result.isSelected == false {
+                        return .selected(result)
                     }
                     return result
                 }
@@ -213,8 +231,11 @@ final class ShrinkingIterator: IteratorProtocol {
                     if let result {
 //                        print("Choice switching strategy for:\n \(result)")
                         self.state = state
-                        if isImportant {
+                        if isImportant, result.isImportant == false {
                             return .important(result)
+                        }
+                        if isSelected, result.isSelected == false {
+                            return .selected(result)
                         }
                         return result
                     }
@@ -228,15 +249,25 @@ final class ShrinkingIterator: IteratorProtocol {
             case .group(var children, var index, let subIterators, var exhaustedChildren):
                 // If the strategy is trying to return a value that is outside the range of the choice,
                 // we return nil and exhaust the subiterator
-                if let subResult = subIterators[index].next() {
-                    children[index] = subResult
-                    // There's still a result, update the child, and if it's not an important part, move to the next one (round-robin)
-                    index = children[index].isImportant ? index : (index + 1) % children.count
+                // If this group represents a `pick` with an array of `branch`, the subIterators array has optional generators and only the selected branch will have one
+                if let subResult = subIterators[index]?.next() {
+                    let isSelected = children[index].isSelected
+                    children[index] = isSelected && subResult.isSelected == false
+                        ? .selected(subResult)
+                        : subResult
+                    // There's still a result, update the child, and if it's not an important part, or a selected branch (in which case this group represents a pick, move to the next one (round-robin)
+                    index = children[index].isSelected || children[index].isImportant
+                        ? index
+                        : (index + 1) % children.count
                     // Skip exhausted children
                     while exhaustedChildren.contains(index) && exhaustedChildren.count < children.count {
                         index = (index + 1) % children.count
                     }
                     if exhaustedChildren.count >= children.count {
+                        state = .exhausted
+                        return nil
+                    }
+                    if isSelected, subResult.rangeIsExhausted {
                         state = .exhausted
                         return nil
                     }
@@ -258,6 +289,7 @@ final class ShrinkingIterator: IteratorProtocol {
                     continue
                 }
             case .branch(let label, var children, var index, let subIterators, var exhaustedChildren):
+                // FIXME: There needs to be a way to "throw away" the branches here that are duds, without removing them from the recipe. A new `.ignored` case?
                 if let subResult = subIterators[index].next() {
                     children[index] = subResult
                     // There's still a result, update the child, and if it's not an important part, move to the next one (round-robin)
@@ -399,6 +431,8 @@ extension ChoiceTree {
             return .sequence(length: length, elements: elements, newMeta)
         case let .important(value):
             return .important(value.with(strategies: strategies))
+        case let .selected(value):
+            return .selected(value.with(strategies: strategies))
         default:
             fatalError("\(#function) should not be accessed directly by \(self)")
         }
