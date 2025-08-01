@@ -76,7 +76,7 @@ extension Interpreters {
                     return nil
                 }
                 
-                let nextGen = continuation(bits)
+                let nextGen = try continuation(bits)
                 return try self.replayWithChoicesHelper(nextGen, choices: &choices)
             
             case .chooseCharacter:
@@ -87,7 +87,7 @@ extension Interpreters {
                     throw ReplayError.wrongInputChoice
                 }
                 
-                let nextGen = continuation(character)
+                let nextGen = try continuation(character)
                 return try self.replayWithChoicesHelper(nextGen, choices: &choices)
 
             case let .pick(pickChoices):
@@ -119,7 +119,7 @@ extension Interpreters {
                             else {
                                 return nil
                             }
-                            return continuation(result)
+                            return try continuation(result)
                         default:
                             throw ReplayError.wrongInputChoice
                         }
@@ -150,7 +150,7 @@ extension Interpreters {
                     accumulatedValues.append(elementValue)
                 }
                 
-                let nextGen = continuation(accumulatedValues)
+                let nextGen = try continuation(accumulatedValues)
                 return try self.replayWithChoicesHelper(nextGen, choices: &choices)
 
             case let .lmap(_, subGenerator), let .prune(subGenerator):
@@ -158,7 +158,7 @@ extension Interpreters {
                 guard let subResult = try self.replayWithChoicesHelper(subGenerator, choices: &choices) else {
                     return nil
                 }
-                let nextGen = continuation(subResult)
+                let nextGen = try continuation(subResult)
                 return try self.replayWithChoicesHelper(nextGen, choices: &choices)
             case let .just(value):
                 // Consume the next choice which should be a just
@@ -168,7 +168,7 @@ extension Interpreters {
                     return nil
                 }
                 
-                let nextGen = continuation(value)
+                let nextGen = try continuation(value)
                 return try self.replayWithChoicesHelper(nextGen, choices: &choices)
                 
             case .getSize:
@@ -179,7 +179,7 @@ extension Interpreters {
                     return nil
                 }
                 
-                let nextGen = continuation(size)
+                let nextGen = try continuation(size)
                 return try self.replayWithChoicesHelper(nextGen, choices: &choices)
                 
             case let .resize(newSize, subGenerator):
@@ -196,7 +196,7 @@ extension Interpreters {
                 guard let subResult = try self.replayWithChoicesHelper(subGenerator, choices: &subChoicesCopy) else {
                     return nil
                 }
-                let nextGen = continuation(subResult)
+                let nextGen = try continuation(subResult)
                 return try self.replayWithChoicesHelper(nextGen, choices: &choices)
             }
         }
@@ -235,7 +235,7 @@ extension Interpreters {
                 // The crucial difference: we are NOT passing the script down.
                 // The continuation represents the rest of the generator, which
                 // will be handled by the next level of the .impure case.
-                let nextGen = continuation(result)
+                let nextGen = try continuation(result)
                 // We replay the rest of the generator with the *same* script,
                 // as the operation itself doesn't consume the whole tree.
                 return try self.replayRecursive(nextGen, with: script)
@@ -343,7 +343,7 @@ extension Interpreters {
                 }
                 
                 // Call the continuation with the subResult to handle the transformation
-                let nextGen = continuation(subResult)
+                let nextGen = try continuation(subResult)
                 return try self.replayRecursive(nextGen, with: script)
                 
             case let .prune(subGenerator):

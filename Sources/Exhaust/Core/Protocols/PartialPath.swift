@@ -5,6 +5,7 @@
 //  Created by Chris Kolbu on 16/7/2025.
 //
 
+import Foundation
 import CasePaths
 
 protocol PartialPath<Root, Value> {
@@ -18,7 +19,7 @@ protocol PartialPath<Root, Value> {
     ///
     /// - Parameter root: The root value to extract from.
     /// - Returns: The `Value` if extraction is successful, otherwise `nil`.
-    func extract(from root: Any) -> Value?
+    func extract(from root: Any) throws -> Value?
     
     /// Attempts to embed a `Value` back into a `Root` structure.
     ///
@@ -35,7 +36,7 @@ protocol PartialPath<Root, Value> {
 
 
 extension AnyCasePath: PartialPath {
-    func extract(from root: Any) -> Value? {
+    func extract(from root: Any) throws -> Value? {
         // Handle nil case
         if case Optional<Any>.none = root {
             return nil
@@ -64,11 +65,14 @@ extension AnyCasePath: PartialPath {
 }
 
 extension KeyPath: PartialPath {
-    func extract(from root: Any) -> Value? {
+    func extract(from root: Any) throws -> Value? {
         guard let root = root as? Root else {
-            print("PartialKeyPath.extract expected \(Root.self), but root type is \(type(of: root.self))")
-            return nil
+            throw PartialPathError.wrongRootType(expected: "\(Root.self)", actual: "\(root.self)")
         }
         return root[keyPath: self]
     }
+}
+
+enum PartialPathError: LocalizedError {
+    case wrongRootType(expected: String, actual: String)
 }

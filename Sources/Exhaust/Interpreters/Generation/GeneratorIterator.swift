@@ -24,7 +24,13 @@ struct GeneratorIterator<Element>: IteratorProtocol, Sequence {
             return nil
         }
         defer { size += 1 }
-        return Self.generate(generator, initialSize: size, maxRuns: maxRuns, using: &prng)
+        // Iterators can't have throwing `next` functions
+        do {
+            return try Self.generate(generator, initialSize: size, maxRuns: maxRuns, using: &prng)
+        } catch {
+            let error = error
+            fatalError(error.localizedDescription)
+        }
     }
     
     // MARK: - Generator implementation
@@ -34,9 +40,9 @@ struct GeneratorIterator<Element>: IteratorProtocol, Sequence {
         initialSize: UInt64 = 0,
         maxRuns: UInt64,
         using rng: inout Xoshiro256
-    ) -> Output? {
+    ) throws -> Output? {
         // Delegate to the main generate function, providing the placeholder input.
-        return self.generate(gen, with: (), initialSize: initialSize, maxRuns: maxRuns, using: &rng)
+        return try self.generate(gen, with: (), initialSize: initialSize, maxRuns: maxRuns, using: &rng)
     }
     
     static func generate<Output>(
@@ -44,9 +50,9 @@ struct GeneratorIterator<Element>: IteratorProtocol, Sequence {
         initialSize: UInt64 = 0,
         maxRuns: UInt64,
         using rng: inout Xoshiro256
-    ) -> Output? {
+    ) throws -> Output? {
         // Delegate to the main generate function, providing the placeholder input.
-        return self.generate(gen, with: (), initialSize: initialSize, maxRuns: maxRuns, using: &rng)
+        return try self.generate(gen, with: (), initialSize: initialSize, maxRuns: maxRuns, using: &rng)
     }
 
     fileprivate static func generate<Input, Output>(
@@ -56,10 +62,10 @@ struct GeneratorIterator<Element>: IteratorProtocol, Sequence {
         sizeOverride: UInt64? = nil,
         maxRuns: UInt64,
         using prng: inout Xoshiro256
-    ) -> Output? {
+    ) throws -> Output? {
         var sizeOverride: UInt64? = nil
         let startTime = Date()
-        let result = generateRecursive(gen, with: input, size: initialSize, maxRuns: maxRuns, sizeOverride: &sizeOverride, prng: &prng)
+        let result = try generateRecursive(gen, with: input, size: initialSize, maxRuns: maxRuns, sizeOverride: &sizeOverride, prng: &prng)
         let duration = Date().timeIntervalSince(startTime)
         
         // Report generation event if Tyche reporting is enabled
@@ -85,7 +91,7 @@ struct GeneratorIterator<Element>: IteratorProtocol, Sequence {
         maxRuns: UInt64,
         sizeOverride: inout UInt64?,
         prng: inout Xoshiro256
-    ) -> Output? {
+    ) throws -> Output? {
         // Size override only affects the first call, not all subsequent ones
         switch gen {
         case let .pure(value):
@@ -97,24 +103,24 @@ struct GeneratorIterator<Element>: IteratorProtocol, Sequence {
             let runContinuation = { (result: Any) -> Output? in
                 // Will this work properly now?
                 var sizeOverride = continuationSizeOverride
-                let nextGen = continuation(result)
+                let nextGen = try continuation(result)
                 var continuationRng = jumpedRng
-                return self.generateRecursive(nextGen, with: inputValue, size: size, maxRuns: maxRuns, sizeOverride: &sizeOverride, prng: &continuationRng)
+                return try self.generateRecursive(nextGen, with: inputValue, size: size, maxRuns: maxRuns, sizeOverride: &sizeOverride, prng: &continuationRng)
             }
             
             switch operation {
             case .lmap(_, let nextGen):
                 // The lmap transform is not used in the forward pass
                 // Run the nested generator and pass its result to the continuation
-                guard let result = self.generateRecursive(nextGen, with: inputValue, size: size, maxRuns: maxRuns, sizeOverride: &sizeOverride, prng: &prng) else { return nil }
-                return runContinuation(result)
+                guard let result = try self.generateRecursive(nextGen, with: inputValue, size: size, maxRuns: maxRuns, sizeOverride: &sizeOverride, prng: &prng) else { return nil }
+                return try runContinuation(result)
 
             case let .prune(nextGen):
                 guard let optional = .some(inputValue as Optional<Any>), let wrappedValue = optional else {
                     return nil // Pruned!
                 }
-                guard let result = self.generateRecursive(nextGen, with: wrappedValue, size: size, maxRuns: maxRuns, sizeOverride: &sizeOverride, prng: &prng) else { return nil }
-                return runContinuation(result)
+                guard let result = try self.generateRecursive(nextGen, with: wrappedValue, size: size, maxRuns: maxRuns, sizeOverride: &sizeOverride, prng: &prng) else { return nil }
+                return try runContinuation(result)
                 
             case let .pick(choices):
                 // --- Production-Ready Weighted Choice ---
@@ -126,7 +132,7 @@ struct GeneratorIterator<Element>: IteratorProtocol, Sequence {
                     // If all weights are 0, pick uniformly.
                     let randomIndex = Int.random(in: 0..<choices.count, using: &prng)
                     let chosenGenerator = choices[randomIndex].generator
-                    guard let result = self.generateRecursive(chosenGenerator, with: inputValue, size: size, maxRuns: maxRuns, sizeOverride: &sizeOverride, prng: &prng) else { return nil }
+                    guard let result = try self.generateRecursive(chosenGenerator, with: inputValue, size: size, maxRuns: maxRuns, sizeOverride: &sizeOverride, prng: &prng) else { return nil }
                     
                     // Report pick event
 //                    if TycheReportContext.isReportingEnabled {
@@ -141,14 +147,14 @@ struct GeneratorIterator<Element>: IteratorProtocol, Sequence {
 //                        TycheReportContext.safeRecordGeneration(randomIndex, metadata: metadata)
 //                    }
                     
-                    return runContinuation(result)
+                    return try runContinuation(result)
                 }
                 
                 var randomRoll = UInt64.random(in: 1...totalWeight, using: &prng)
                 
                 for (index, choice) in choices.enumerated() {
                     if randomRoll <= choice.weight {
-                        guard let result = self.generateRecursive(choice.generator, with: inputValue, size: size, maxRuns: maxRuns, sizeOverride: &sizeOverride, prng: &prng) else { return nil }
+                        guard let result = try self.generateRecursive(choice.generator, with: inputValue, size: size, maxRuns: maxRuns, sizeOverride: &sizeOverride, prng: &prng) else { return nil }
                         
                         // Report weighted pick event
 //                        if TycheReportContext.isReportingEnabled {
@@ -163,7 +169,7 @@ struct GeneratorIterator<Element>: IteratorProtocol, Sequence {
 //                            TycheReportContext.safeRecordGeneration(index, metadata: metadata)
 //                        }
                         
-                        return runContinuation(result)
+                        return try runContinuation(result)
                     }
                     randomRoll -= choice.weight
                 }
@@ -195,7 +201,7 @@ struct GeneratorIterator<Element>: IteratorProtocol, Sequence {
                 //    The `continuation` for a `FreeFunctions.choose<T>()` call was
                 //    constructed to specifically expect a `UInt64` and perform
                 //    the `T(bitPattern:)` decoding itself before continuing the chain.
-                return runContinuation(randomBits)
+                return try runContinuation(randomBits)
             
             case let .chooseCharacter(min, max):
                 // Generate a random Unicode scalar value and create a Character
@@ -203,11 +209,11 @@ struct GeneratorIterator<Element>: IteratorProtocol, Sequence {
                 let unicodeScalar = Unicode.Scalar(UInt32(randomScalar))!
                 let character = Character(unicodeScalar)
                 
-                return runContinuation(character)
+                return try runContinuation(character)
             case let .sequence(lengthGen, elementGen):
                 
                 // An iterative loop, not a recursive one. This will never overflow the stack.
-                guard let length = self.generateRecursive(lengthGen, with: () as! Input, size: size, maxRuns: maxRuns, sizeOverride: &sizeOverride, prng: &prng) else {
+                guard let length = try self.generateRecursive(lengthGen, with: () as! Input, size: size, maxRuns: maxRuns, sizeOverride: &sizeOverride, prng: &prng) else {
                     return nil
                 }
                 var results: [Any] = []
@@ -215,7 +221,7 @@ struct GeneratorIterator<Element>: IteratorProtocol, Sequence {
                 for _ in 0..<length {
                     // Run the element generator once for each item.
                     // It's a self-contained generator, so its input is `()`.
-                    guard let element = self.generateRecursive(elementGen, with: () as! Input, size: size, maxRuns: maxRuns, sizeOverride: &sizeOverride, prng: &prng) else {
+                    guard let element = try self.generateRecursive(elementGen, with: () as! Input, size: size, maxRuns: maxRuns, sizeOverride: &sizeOverride, prng: &prng) else {
                         // If any element fails to generate, the whole sequence fails.
                         return nil
                     }
@@ -223,19 +229,19 @@ struct GeneratorIterator<Element>: IteratorProtocol, Sequence {
                 }
                 
                 // Pass the completed array to the continuation.
-                return runContinuation(results)
+                return try runContinuation(results)
             case let .just(value):
-                return runContinuation(value)
+                return try runContinuation(value)
                 
             case .getSize:
                 let size = sizeOverride ?? logarithmicallyScaledSize(maxRuns, size)
                 sizeOverride = nil // getSize consumes the `sizeOverride`
-                return runContinuation(size)
+                return try runContinuation(size)
                 
             case let .resize(newSize, nextGen):
                 sizeOverride = newSize
-                guard let result = self.generateRecursive(nextGen, with: inputValue, size: size, maxRuns: maxRuns, sizeOverride: &sizeOverride, prng: &prng) else { return nil }
-                return runContinuation(result)
+                guard let result = try self.generateRecursive(nextGen, with: inputValue, size: size, maxRuns: maxRuns, sizeOverride: &sizeOverride, prng: &prng) else { return nil }
+                return try runContinuation(result)
             }
         }
     }

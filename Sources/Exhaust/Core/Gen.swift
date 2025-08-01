@@ -51,11 +51,11 @@ enum Gen {
             // This case is tricky because it's already partially erased.
             // A simple way to handle it is to create a new transform from Any.
             // Note: This reveals a slight awkwardness in the enum design, but it works.
-            let newTransform: (Any) -> Any = { anyInput in
+            let newTransform: (Any) throws -> Any = { anyInput in
                 guard let typedInput = anyInput as? Input else {
                     fatalError("Type mismatch during lmap erasure.")
                 }
-                return transform(typedInput) ?? ()
+                return try transform(typedInput) ?? ()
             }
             return .lmap(transform: newTransform, next: next)
         case let .chooseBits(min, max):
@@ -128,10 +128,10 @@ enum Gen {
         }
     }
     
-    static func lmap<NewInput, Input, Output>(_ transform: @escaping (NewInput) -> Input, _ generator: ReflectiveGenerator<Input, Output>) -> ReflectiveGenerator<NewInput, Output> {
+    static func lmap<NewInput, Input, Output>(_ transform: @escaping (NewInput) throws -> Input, _ generator: ReflectiveGenerator<Input, Output>) -> ReflectiveGenerator<NewInput, Output> {
         
-        let erasedTransform: (Any) -> Any = { newInput in
-            return transform(newInput as! NewInput) as Any
+        let erasedTransform: (Any) throws -> Any = { newInput in
+            return try transform(newInput as! NewInput) as Any
         }
         
         let erasedGen = generator
@@ -149,7 +149,7 @@ enum Gen {
     }
     
     static func comap<NewInput, Input, Output>(
-        _ transform: @escaping (NewInput) -> Input?,
+        _ transform: @escaping (NewInput) throws -> Input?,
         _ generator: ReflectiveGenerator<Input, Output>
     ) -> ReflectiveGenerator<NewInput, Output> {
         lmap(transform, prune(generator))

@@ -136,13 +136,13 @@ extension ReflectiveGenerator where Operation: AnyReflectiveOperation {
 extension ReflectiveGenerator where Operation: AnyReflectiveOperation {
 
     func mapped<NewOutput>(
-        forward: @escaping (Value) -> NewOutput,
-        backward: @escaping (NewOutput) -> Value
-    ) -> ReflectiveGenerator<Operation.Input, NewOutput> {
-        let erasedBackward: (Any) -> Any = { newOutput in
-            return backward(newOutput as! NewOutput) as Any
+        forward: @escaping (Value) throws -> NewOutput,
+        backward: @escaping (NewOutput) throws -> Value
+    ) rethrows -> ReflectiveGenerator<Operation.Input, NewOutput> {
+        let erasedBackward: (Any) throws -> Any = { newOutput in
+            return try backward(newOutput as! NewOutput) as Any
         }
-        let erasedGen = self
+        let erasedGen = try self
             .map(forward)
             .mapOperation { Gen.eraseInputType(from: $0 as! ReflectiveOperation<Operation.Input>) }
         return Gen.lmap(erasedBackward, erasedGen)
@@ -150,55 +150,34 @@ extension ReflectiveGenerator where Operation: AnyReflectiveOperation {
     
     // extract path: some PartialPath<NewInput, Input>,
     func mapped<NewOutput>(
-        forward: @escaping (Value) -> NewOutput,
+        forward: @escaping (Value) throws -> NewOutput,
         backward: some PartialPath<NewOutput, Value>
-    ) -> ReflectiveGenerator<Operation.Input, NewOutput> {
-        // Check that  this doesn't crash
-        mapped(forward: forward, backward: backward.extract(from:) as! (NewOutput) -> Value)
-//        let erasedBackward: (Any) -> Any = { newOutput in
-//            backward.extract(from: newOutput)!
-//        }
-//        let erasedGen = self
-//            .map(forward)
-//            .mapOperation { Gen.eraseInputType(from: $0 as! ReflectiveOperation<Operation.Input>) }
-//
-//        return Gen.lmap(erasedBackward, erasedGen)
+    ) rethrows -> ReflectiveGenerator<Operation.Input, NewOutput> {
+        let erasedBackward: (Any) throws -> Any = { newOutput in
+            try backward.extract(from: newOutput)!
+        }
+        let erasedGen = try self
+            .map(forward)
+            .mapOperation { Gen.eraseInputType(from: $0 as! ReflectiveOperation<Operation.Input>) }
+
+        return Gen.lmap(erasedBackward, erasedGen)
     }
     
     func mapped<NewOutput>(
         forward: some PartialPath<Value, NewOutput>,
         backward: some PartialPath<NewOutput, Value>
-    ) -> ReflectiveGenerator<Operation.Input, NewOutput?> {
-        let erasedBackward: (Any) -> Any = { newOutput in
-            backward.extract(from: newOutput)!
+    ) throws -> ReflectiveGenerator<Operation.Input, NewOutput?> {
+        let erasedBackward: (Any) throws -> Any = { newOutput in
+            try backward.extract(from: newOutput)!
         }
-        let erasedGen = self
-            .map(forward.extract(from:))
-            .mapOperation { Gen.eraseInputType(from: $0 as! ReflectiveOperation<Operation.Input>) }
-        
-        return Gen.lmap(erasedBackward, erasedGen)
-        // TODO: Figure this out
-//        mapped(forward: forward.extract(from:) as! (Value) -> NewOutput, backward: backward.extract(from:) as! (NewOutput) -> Value)
-    }
-
-    // Should be renamed to `mapped`, with the backward pass named `inverse`
-    // `reversibleMap?`
-    func dimap<NewOutput>(
-        forward: some PartialPath<Value, NewOutput>,
-        backward: @escaping (NewOutput) -> Value
-    ) -> ReflectiveGenerator<Operation.Input, NewOutput?> {
-        // TODO: Figure this out
-//        mapped(forward: forward.extract(from:) as! (Value) -> NewOutput, backward: backward)
-        let erasedBackward: (Any) -> Any = { newOutput in
-            backward(newOutput as! NewOutput)
-        }
-        let erasedGen = self
-            .map(forward.extract(from:))
+        let erasedGen = try self
+            .map { try forward.extract(from: $0) }
             .mapOperation { Gen.eraseInputType(from: $0 as! ReflectiveOperation<Operation.Input>) }
         
         return Gen.lmap(erasedBackward, erasedGen)
     }
     
+    // This is internal
     func mapOperation<NewOperation>(_ transform: @escaping (Operation) -> NewOperation) -> FreerMonad<NewOperation, Value> {
         switch self {
         case let .pure(value):
@@ -214,7 +193,7 @@ extension ReflectiveGenerator where Operation: AnyReflectiveOperation {
             //    with the NewOperation type. We do this by recursively calling
             //    `mapOperation` on the result of the original continuation.
             let newContinuation = { (val: Any) -> FreerMonad<NewOperation, Value> in
-                continuation(val).mapOperation(transform)
+                try continuation(val).mapOperation(transform)
             }
             
             // 3. Return a new impure case with the transformed operation and continuation.

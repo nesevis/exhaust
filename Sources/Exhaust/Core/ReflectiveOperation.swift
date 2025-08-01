@@ -12,7 +12,7 @@ enum ReflectiveOperation<Input> {
     /// In the forward pass (generate), the transform is ignored.
     /// In the backward pass (reflect), the transform extracts the relevant part from the target value.
     /// Type erasure is required because Swift enums can't change type parameters across cases.
-    case lmap(transform: (Any) -> Any?, next: ReflectiveGenerator<Any, Any>)
+    case lmap(transform: (Any) throws -> Any?, next: ReflectiveGenerator<Any, Any>)
     
     /// Represents a weighted choice between multiple generators.
     /// Used by `Gen.pick` to select one of several possible generation strategies.

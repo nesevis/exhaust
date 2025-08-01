@@ -45,6 +45,14 @@ struct CompositionTests {
             let ageGen = Gen.lens(extract: \TestPerson.age, Gen.choose(in: 0...100))
             let heightGen = Gen.lens(extract: \TestPerson.height, Gen.choose(in: 150.0...200.0))
             
+            // This doesn't work
+            let personGen2 = Gen.zip(nameGen, ageGen, heightGen)
+                .map { TestPerson(name: $0.0, age: $0.1, height: $0.2) }
+//                .mapped(
+//                    forward: { TestPerson(name: $0.0, age: $0.1, height: $0.2) },
+//                    backward: { ($0.name, $0.age, $0.height) }
+//                )
+            
             let personGen = nameGen.bind { name in
                 ageGen.bind { age in
                     heightGen.map { height in
@@ -54,14 +62,14 @@ struct CompositionTests {
             }
             
             // Test generation
-            var iterator = GeneratorIterator(personGen)
+            var iterator = GeneratorIterator(personGen2)
             let person = iterator.next()!
             #expect(person.age >= 0 && person.age <= 100)
             #expect(person.height >= 150.0 && person.height <= 200.0)
             
             // Test round-trip: generate -> reflect -> replay
-            if let recipe = try Interpreters.reflect(personGen, with: person) {
-                if let replayed = try Interpreters.replay(personGen, using: recipe) {
+            if let recipe = try Interpreters.reflect(personGen2, with: person) {
+                if let replayed = try Interpreters.replay(personGen2, using: recipe) {
                     #expect(person == replayed)
                 } else {
                     #expect(false, "Replay failed for person")

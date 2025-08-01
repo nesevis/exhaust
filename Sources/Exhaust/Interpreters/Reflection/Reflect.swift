@@ -53,7 +53,7 @@ extension Interpreters {
             
             // 2. For each successful intermediate result...
             let results = try intermediateResults.flatMap { (intermediateValue: Any, partialPath: [ChoiceTree]) in
-                let nextGen = continuation(intermediateValue)
+                let nextGen = try continuation(intermediateValue)
                 // The `finalOutput` is passed down UNCHANGED. This is the crucial part.
                 let finalResults = try reflectRecursive(nextGen, onFinalOutput: finalOutput)
                 return finalResults.map { (finalValue, restOfPath) in
@@ -76,7 +76,7 @@ extension Interpreters {
         switch op {
         // If the `onFinalOutput` is nil here, it must be an optional. How do we handle that?
         case let .lmap(transform, nextGen):
-            guard let subValue = transform(finalOutput) else {
+            guard let subValue = try transform(finalOutput) else {
                 throw ReflectionError.lmapWasWrongType
             }
             return try reflectRecursive(nextGen, onFinalOutput: subValue)
