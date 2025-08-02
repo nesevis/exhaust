@@ -13,8 +13,9 @@ struct GeneratorIterator<Element>: IteratorProtocol, Sequence {
     var size: UInt64 = 0
     var maxRuns: UInt64
     
-    init(_ generator: ReflectiveGenerator<Any, Element>, seed: UInt64? = nil, maxRuns: UInt64? = nil) {
+    init<Input>(_ generator: ReflectiveGenerator<Input, Element>, seed: UInt64? = nil, maxRuns: UInt64? = nil) {
         self.generator = generator
+            .mapOperation(Gen.eraseInputType(from:))
         self.prng = seed.map { Xoshiro256(seed: $0) } ?? Xoshiro256()
         self.maxRuns = maxRuns ?? 100
     }
