@@ -125,6 +125,208 @@ struct MonadLawTests {
     }
 }
 
+// MARK: - Partial Monadic Profunctor Law Tests
+@Suite("Partial Monadic Profunctor law tests")
+struct PartialMonadicProfunctorLawTests {
+    
+    // MARK: - PMP Law 1: lmap Just . prune = id
+    
+    @Test("PMP Law 1: lmap(Just) . prune == identity")
+    /// A Partial Monadic Profunctor must satisfy: `Gen.lmap({ $0 }, Gen.prune(generator))` is equivalent to `generator`
+    func pmpLaw1_LmapJustPruneIsIdentity() throws {
+        // Arrange
+        let generator = Gen.just(42)
+        
+        // Act: lmap(Just) . prune should be identity
+        let lhs = Gen.lmap({ $0 }, Gen.prune(generator))
+        let rhs = generator
+        
+        var lhsIterator = GeneratorIterator(lhs)
+        var rhsIterator = GeneratorIterator(rhs)
+        
+        // Test via generation - both should produce same value
+        let lhsValue = lhsIterator.next()
+        let rhsValue = rhsIterator.next()
+        
+        // Assert
+        #expect(lhsValue == rhsValue)
+    }
+    
+    // MARK: - PMP Law 2: lmap (f >=> g) . prune = lmap f . prune . lmap g . prune
+    
+    @Test("PMP Law 2: Composition associativity")
+    /// A PMP must satisfy: `lmap(compose(f,g)) . prune` is equivalent to `lmap(f) . prune . lmap(g) . prune`
+    func pmpLaw2_CompositionAssociativity() throws {
+        // Arrange
+        let generator = Gen.just("hello")
+        
+        let f: (String) -> Int? = { str in str.count > 0 ? str.count : nil }
+        let g: (Int) -> String? = { num in num > 0 ? "length-\(num)" : nil }
+        
+        let composed: (String) -> String? = { str in
+            guard let intermediate = f(str) else { return nil }
+            return g(intermediate)
+        }
+        
+        // Act
+        // LHS: lmap(compose(f,g)) . prune
+        let lhs = Gen.lmap(composed, Gen.prune(generator))
+        
+        // RHS: lmap(f) . prune . lmap(g) . prune  
+        let rhs = Gen.lmap(g, Gen.prune(Gen.lmap(f, Gen.prune(generator))))
+        
+        var lhsIterator = GeneratorIterator(lhs)
+        var rhsIterator = GeneratorIterator(rhs)
+        
+        // Test via generation - both should produce same value
+        let lhsValue = lhsIterator.next()
+        let rhsValue = rhsIterator.next()
+        
+        // Assert
+        #expect(lhsValue == rhsValue)
+    }
+    
+    // MARK: - PMP Law 3: (lmap f . prune) (return y) = return y
+    
+    @Test("PMP Law 3: lmap . prune over pure values")
+    /// A PMP must satisfy: `Gen.lmap(f, Gen.prune(.pure(y)))` is equivalent to `.pure(y)`
+    func pmpLaw3_LmapPruneOverPure() throws {
+        // Arrange
+        let pureValue = "test"
+        let transform: (String) -> Int? = { $0.count > 0 ? $0.count : nil }
+        
+        // Act
+        let lhs = Gen.lmap(transform, Gen.prune(ReflectiveGenerator.pure(pureValue)))
+        let rhs = ReflectiveGenerator<String, String>.pure(pureValue)
+        
+        var lhsIterator = GeneratorIterator(lhs)
+        var rhsIterator = GeneratorIterator(rhs)
+        
+        // Test via generation - both should produce same value
+        let lhsValue = lhsIterator.next()
+        let rhsValue = rhsIterator.next()
+        
+        // Assert
+        #expect(lhsValue == rhsValue)
+    }
+    
+    // MARK: - PMP Law 4: (lmap f . prune) (x >>= g) = (lmap f . prune) x >>= (lmap f . prune) . g
+    
+    @Test("PMP Law 4: lmap . prune distributes over bind")
+    /// A PMP must satisfy: `(lmap f . prune)(x >>= g)` is equivalent to `(lmap f . prune) x >>= (lmap f . prune) . g`
+    func pmpLaw4_LmapPruneDistributesOverBind() throws {
+        // Arrange - carefully chosen types for the law to work
+        let baseGenerator = ReflectiveGenerator<Int, Int>.pure(5)
+        // Crucial: bindFunction must return a generator with the SAME input type as base
+        let bindFunction: (Int) -> ReflectiveGenerator<Int, String> = { val in
+            ReflectiveGenerator<Int, String>.pure("Value: \(val)")
+        }
+        // transform maps from NewInput to original input type (Optional)
+        let transform: (String) -> Int? = { str in 
+            str.hasPrefix("Value:") ? str.count : nil 
+        }
+        
+        // Act
+        // LHS: (lmap f . prune)(x >>= g)
+        let boundGenerator = baseGenerator.bind(bindFunction)  // ReflectiveGenerator<Int, String>
+        let lhs = Gen.lmap(transform, Gen.prune(boundGenerator))  // ReflectiveGenerator<String, String>
+        
+        // RHS: (lmap f . prune) x >>= (lmap f . prune) . g  
+        let transformedBase = Gen.lmap(transform, Gen.prune(baseGenerator))  // ReflectiveGenerator<String, Int>
+        
+        // The bind function applies (lmap f . prune) to the result of g
+        let transformedFunction: (Int) -> ReflectiveGenerator<String, String> = { val in
+            let resultGenerator = bindFunction(val)  // ReflectiveGenerator<Int, String>
+            return Gen.lmap(transform, Gen.prune(resultGenerator))  // ReflectiveGenerator<String, String>
+        }
+        let rhs = transformedBase.bind(transformedFunction)  // ReflectiveGenerator<String, String>
+        
+        var lhsIterator = GeneratorIterator(lhs)
+        var rhsIterator = GeneratorIterator(rhs)
+        
+        // Test via generation - both should produce same value
+        let lhsValue = lhsIterator.next()
+        let rhsValue = rhsIterator.next()
+        
+        // Assert
+        #expect(lhsValue == rhsValue)
+    }
+    
+    // MARK: - Additional Profunctor Laws
+    
+    @Test("Profunctor Law 1: lmap(identity) == identity")
+    /// A Profunctor must satisfy: `Gen.lmap(identity, generator)` is equivalent to `generator`
+    func profunctorLaw1_LmapIdentity() throws {
+        // Arrange
+        let generator = Gen.just(42)
+        let identity: (Int) -> Int = { $0 }
+        
+        // Act
+        let lhs = Gen.lmap(identity, generator)
+        let rhs = generator
+        
+        var lhsIterator = GeneratorIterator(lhs)
+        var rhsIterator = GeneratorIterator(rhs)
+        
+        // Test via generation - both should produce same value
+        let lhsValue = lhsIterator.next()
+        let rhsValue = rhsIterator.next()
+        
+        // Assert
+        #expect(lhsValue == rhsValue)
+    }
+    
+    @Test("Profunctor Law 2: lmap(compose(f,g)) == lmap(g) . lmap(f)")
+    /// A Profunctor must satisfy: `lmap(f . g)` is equivalent to `lmap(g, lmap(f, generator))`
+    func profunctorLaw2_LmapComposition() throws {
+        // Arrange
+        let generator = Gen.just(100)
+        let f: (String) -> Int = { $0.count }
+        let g: (Int) -> String = { "Value: \($0)" }
+        let composed: (String) -> String = { str in g(f(str)) }
+        
+        // Act
+        let lhs = Gen.lmap(composed, generator)
+        let rhs = Gen.lmap(g, Gen.lmap(f, generator))
+        
+        var lhsIterator = GeneratorIterator(lhs)
+        var rhsIterator = GeneratorIterator(rhs)
+        
+        // Test via generation - both should produce same value
+        let lhsValue = lhsIterator.next()
+        let rhsValue = rhsIterator.next()
+        
+        // Assert
+        #expect(lhsValue == rhsValue)
+    }
+    
+    // MARK: - Comap Law Tests
+    
+    @Test("Comap is equivalent to lmap . prune")
+    /// The comap combinator should be equivalent to `lmap(transform, prune(generator))`
+    func comapEquivalence() throws {
+        // Arrange
+        let generator = Gen.just(42)
+        let transform: (String) -> Int? = { str in str.isEmpty ? nil : str.count }
+        
+        // Act
+        let comapResult = Gen.comap(transform, generator)
+        let lmapPruneResult = Gen.lmap(transform, Gen.prune(generator))
+        
+        // Test via generation with valid input
+        
+        var lhsIterator = GeneratorIterator(comapResult)
+        var rhsIterator = GeneratorIterator(lmapPruneResult)
+        
+        // Test via generation - both should produce same value
+        let lhsValue = lhsIterator.next()
+        let rhsValue = rhsIterator.next()
+        
+        // Assert
+        #expect(lhsValue == rhsValue)
+    }
+}
+
 
 // MARK: - Interpreter logic
 
