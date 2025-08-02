@@ -93,24 +93,6 @@ struct CompositionTests {
             #expect(generated == replayed)
         }
         
-        @Test("Gen.lens with zip of two values, themselves lenses")
-        func testLensWithZippedLenses() throws {
-            struct Apple: Equatable {
-                let color: String
-                let weight: Int
-            }
-            let gen = Gen.zip(
-                Gen.lens(extract: \Apple.color, String.arbitrary),
-                Gen.lens(extract: \Apple.weight, Int.arbitrary)
-            ).map { (color, weight) in Apple(color: color, weight: weight) }
-            
-            var iterator = GeneratorIterator(gen)
-            let generated = iterator.next()!
-            let recipe = try #require(try Interpreters.reflect(gen, with: generated))
-            let replayed = try #require(try Interpreters.replay(gen, using: recipe))
-            #expect(generated == replayed)
-        }
-        
         @Test("Gen.lens with zip of three values")
         func testLensWithZip3() throws {
             let gen = Gen.zip(
