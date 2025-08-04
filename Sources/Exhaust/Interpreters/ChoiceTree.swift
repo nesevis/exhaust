@@ -467,7 +467,7 @@ extension ChoiceTree: CustomDebugStringConvertible {
         case .getSize:
             return prefix + connector + "getSize(?)"
         case let .resize(newSize, choices):
-            var result = prefix + connector + "resize(newSize: \(newSize))"
+            var result = prefix + connector + "resize(?)"
             for (index, choice) in choices.enumerated() {
                 let isLastChoice = index == choices.count - 1
                 result += "\n" + choice.treeDescription(prefix: childPrefix, isLast: isLastChoice)

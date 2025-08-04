@@ -76,50 +76,57 @@ extension Interpreters {
         switch op {
         // If the `onFinalOutput` is nil here, it must be an optional. How do we handle that?
         case let .lmap(transform, nextGen):
-            guard let subValue = try transform(finalOutput) else {
-                throw ReflectionError.lmapWasWrongType
+            do {
+                guard let subValue = try transform(finalOutput) else {
+                    throw ReflectionError.lmapWasWrongType
+                }
+                return try reflectRecursive(nextGen, onFinalOutput: subValue)
+                    .map { ($0.value, $0.path) }
+            } catch ReflectionError.reflectedNil {
+                // This branch cannot handle the nil value, skip it gracefully
+                return []
             }
-            return try reflectRecursive(nextGen, onFinalOutput: subValue)
-                .map { ($0.value, $0.path) }
             
         case let .prune(nextGen):
             // PRUNE's JOB: Check if the final output is nil and should be pruned.
             // When case path extraction fails on wrong enum cases, it produces nil wrapped in Optional<Any>
             // This needs to be filtered out to prevent invalid branches in reflection recipes
-            if let optionalValue = finalOutput as? Optional<Any>, optionalValue == nil {
-                return [] // Prune nil values from failed case path extractions
+//            if let optionalValue = finalOutput as? Optional<Any>, optionalValue == nil {
+//                return [] // Prune nil values from failed case path extractions
+//            }
+            do {
+                return try reflectRecursive(nextGen, onFinalOutput: finalOutput).map { ($0.value, $0.path) }
+            } catch ReflectionError.reflectedNil {
+                return []
             }
-            
-            return try reflectRecursive(nextGen, onFinalOutput: finalOutput).map { ($0.value, $0.path) }
 
         case let .pick(choices):
             // PICK's JOB: Try all branches against the same final output value.
-            var isPicked = false
             let results = try choices.flatMap { (_, label, generator) -> [(value: Any, label: UInt64,  isPicked: Bool, path: [ChoiceTree])] in
-                let subPaths = try reflectRecursive(generator, onFinalOutput: finalOutput)
-                
-                // Right. So this may be a nil
-                guard
-                    let equatableOutput = .some(finalOutput as? any Equatable),
-                    let equatableValue = .some(subPaths.firstNonNil({ $0.value as? any Equatable }))
-                else {
-                    throw ReflectionError.pickValueIsNotEquatable("\(finalOutput)")
+                do {
+                    let subPaths = try reflectRecursive(generator, onFinalOutput: finalOutput)
+                    let value = subPaths.firstNonNil(\.value)
+                    
+                    var isPicked = false
+                    if
+                        let equatableOutput = finalOutput as? any Equatable,
+                        let equatableValue = value as? any Equatable
+                    {
+                        // Try to compare using Equatable
+                        isPicked = equatableOutput.isEqual(equatableValue)
+                    } else if let convertible = value as? any BitPatternConvertible {
+                        isPicked = generator.associatedRange?.contains(convertible.bitPattern64) ?? false
+                    }
+                    
+                    let labeledPaths = subPaths.map { (value, pathTree) in
+                        (value, label, isPicked, pathTree)
+                    }
+                    return labeledPaths
+                    
+                } catch ReflectionError.reflectedNil {
+                    // Return the choice anyway?
+                    return [(value: finalOutput, label: label, isPicked: false, path: [])]
                 }
-                
-                // Only pick one even if there are multiple identical generators
-                // These results may be a deliberate nil
-                let isLikelyToMatch: Bool
-                if let associatedRange = generator.associatedRange, let convertible = equatableValue as? (any BitPatternConvertible) {
-                    isLikelyToMatch = associatedRange.contains(convertible.bitPattern64)
-                } else {
-                    isLikelyToMatch = equatableValue.map { lhs in equatableOutput.map { rhs in lhs.isEqual(rhs) } ?? false } ?? (type(of: equatableOutput) == type(of: equatableValue))
-                }
-                isPicked = isLikelyToMatch
-                
-                let labeledPaths = subPaths.map { (value, pathTree) in
-                    (value, label, isPicked, pathTree)
-                }
-                return labeledPaths
             }
             let returnData = results.map {
                 let branch = ChoiceTree.branch(label: $0.label, children: $0.path)
@@ -171,11 +178,10 @@ extension Interpreters {
         
         case let .chooseCharacter(min, max):
             // Handle Character-specific reflection
-            var isNil = false
             if let optionalValue = finalOutput as? Optional<Any>, optionalValue == nil {
                 // We can't properly reflect on this generator without a valid finalOutput
                 // Can we create an instance though?
-                isNil = true
+                throw ReflectionError.reflectedNil(type: "Character")
             }
 
             guard let convertible = finalOutput as? any BitPatternConvertible else {
@@ -211,6 +217,7 @@ extension Interpreters {
         case .getSize:
             // We can't derive the getSize parameter when reflecting as the bind continuation that applies it is opaque to us. Ultimately it shouldn't matter for replay
             // But it does for reflection. Let's use 50 as a midpoint value
+            // FIXME: Replays are deterministic, the getSize value shouldn't matter?
             var derivedSize: UInt64 = 50
             if let sequence = finalOutput as? any Sequence {
                 derivedSize = UInt64(sequence.underestimatedCount)
@@ -238,7 +245,7 @@ extension Interpreters {
             var combinedResults: [Any] = []
             let validRanges = lengthGen.associatedRange.map { [$0] }
             
-            let lengthResult = try reflectRecursive(lengthGen, onFinalOutput: finalOutput)
+//            let lengthResult = try reflectRecursive(lengthGen, onFinalOutput: finalOutput)
             
             // 3. Iterate over the elements of the target array.
             for elementTarget in targetArray {
@@ -262,7 +269,9 @@ extension Interpreters {
                 strategies: ShrinkingStrategy.sequenceStrategies
             )
             let finalTree = ChoiceTree.sequence(
-                length: lengthResult.first?.value ?? 0,
+                // When replaying, the length should match the array count. Any number of transformations could lead to a change here??
+                length: UInt64(targetArray.underestimatedCount),
+//                length: lengthResult.first?.value ?? 0,
                 elements: combinedPath,
                 metadata
             )
@@ -271,6 +280,7 @@ extension Interpreters {
     }
     
     enum ReflectionError: LocalizedError {
+        case reflectedNil(type: String)
         case lmapWasWrongType
         case couldNotMapInputToGenerator
         case chooseBitsCouldNotConvertValue(String)

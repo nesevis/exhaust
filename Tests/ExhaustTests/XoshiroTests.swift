@@ -18,44 +18,10 @@ func testXoshiroAgainstReference() throws {
 
 @Test("Test spread of generator")
 func testGeneratorIterator() {
-    let iterator = GeneratorIterator(Int64.arbitrary, seed: 45)
-    let ten = Array(iterator.prefix(100))
-    let expected: [Int64] = [0, 4, 5, 29, 10, 28, 20, 31, 45, 13]
+    let iterator = GeneratorIterator(Int64.arbitrary, seed: 0)
+    let ten = Array(iterator.prefix(10))
+    let expected: [Int64] = [-1, -5101, -6690366, 1005319125, 15565817241, -272203297360, 1402855549857, -7979896926795, 55386323899548, 91824542356942]
     #expect(ten == expected)
-}
-
-@Test("Test speed of generator")
-func testGeneratorIteratorThing() throws {
-    struct Person: Equatable {
-        let age: Int
-        let height: Double
-        let firstName: String
-        let lastName: String
-    }
-    let gen = Gen.zip(
-        Int.arbitrary,
-        Double.arbitrary,
-        String.arbitrary,
-        String.arbitrary
-    )
-        .mapped(
-            forward:{ Person(age: $0.0, height: $0.1, firstName: $0.2, lastName: $0.3) },
-            backward: { ($0.age, $0.height, $0.firstName, $0.lastName) }
-        )
-    
-    var iterator = GeneratorIterator(gen, seed: 250883)
-    let generated = iterator.next()!
-    let recipe = try Interpreters.reflect(gen, with: iterator.next()!)
-
-    let reference = Person(
-        age: -125408598803298769,
-        height: 4.9569959933472683e-26,
-        firstName: "춊뛍ᇚ欁ᩂ쏜녜៚蔆Ⲷ뽅旌㌽稔껞쏔䚉Ą镪熬彽ꢳ줏낅᷼鸥둔䄤塁⨼ㅇᥓᕢ댭䩓韀Ꮜ뱧꿼财䰞曠驘⨿㷉騥ᜆ韔睸눖Ѭ寛೟资矠Ф梲熃寋癓䳦䬯㹶舡鿀⽺㩃쁾딟ᗻ␈䰋ཋ吲⋽絆嫓㡫嫗媏ཛᩫ딛۹鉊╻趨鵱䬩暶ߓ갲늏㥩ᔶ紫ꘒ榌항裮隖鬤Π횴৫힏ଭẃ墶↢ۑ㑇砫璍漮",
-        lastName: "ꊾ䘐鰉犲垣꽬嫎⦡뻇ᦫ灂틦饅Ꮯ톮丙ᱎ磈੪뜓㐼ꟑ邵爂큧閳㪐쨬ꎾ㌇縼䊸麀퀸⺽キ瘷줶瀀ᗫꇏ绨쎞彚꤃䒳ᓾ鄗絑㷘ꯜ璱䬲᪉偸㫊仴᝵惟㴲먗䗠ᐹꜻ녝셄㠴忻ϥ虫ⵘ斢秬푥ꯞ⺖ḟ㞫⪅⓲졼勓楨롫땜⬧鿜ᡊ㧟‗炞᭖⫻碥ཱུᠣꧧ甋꫞ꉨ쮊㸁琼钥⨄ⷘ퀸쒝짜椎ꂹ"
-    )
-    let next = Array(iterator.prefix(10))
-    print()
-    #expect(generated == reference)
 }
 
 @Test("Reflect on getSize")

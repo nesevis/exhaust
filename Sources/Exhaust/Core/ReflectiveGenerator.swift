@@ -140,7 +140,17 @@ extension ReflectiveGenerator where Operation: AnyReflectiveOperation {
         backward: @escaping (NewOutput) throws -> Value
     ) rethrows -> ReflectiveGenerator<Operation.Input, NewOutput> {
         let erasedBackward: (Any) throws -> Any = { newOutput in
-            return try backward(newOutput as! NewOutput) as Any
+            if let actual = newOutput as? NewOutput {
+                return try backward(actual)
+            }
+            
+            // Handle nil values by throwing the specific reflection error
+            // This allows the reflection system to skip this branch gracefully
+            if let optional = newOutput as? Optional<NewOutput>, optional == nil {
+                throw Interpreters.ReflectionError.reflectedNil(type: String(describing: NewOutput.self))
+            }
+            
+            throw GeneratorError.mappedBackwardError(expected: String(describing: NewOutput.self), actual: String(describing: type(of: newOutput)))
         }
         let erasedGen = try self
             .map(forward)
@@ -176,6 +186,7 @@ extension ReflectiveGenerator where Operation: AnyReflectiveOperation {
         
         return Gen.lmap(erasedBackward, erasedGen)
     }
+    
     
     // This is internal
     func mapOperation<NewOperation>(_ transform: @escaping (Operation) -> NewOperation) -> FreerMonad<NewOperation, Value> {

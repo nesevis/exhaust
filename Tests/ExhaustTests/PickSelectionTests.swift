@@ -56,6 +56,7 @@ struct PickSelectionTests {
             Issue.record("Expected .group for Character?.arbitrary recipe, got \(recipe)")
             return
         }
+        print()
         #expect(branches.count == 2)
         #expect(try branches.contains(where: \.isSelected))
     }
@@ -68,11 +69,12 @@ struct PickSelectionTests {
     @Test("Optional Int arbitrary produces selected branch")
     func optionalIntGeneratorProducesSelectedBranch() throws {
         for _ in 0..<10 {
-            var iterator = GeneratorIterator(Int?.arbitrary)
+            let gen = Int?.arbitrary
+            var iterator = GeneratorIterator(gen)
             guard let value = iterator.next() else {
                 continue
             }
-            guard let recipe = try Interpreters.reflect(Int?.arbitrary, with: value) else {
+            guard let recipe = try Interpreters.reflect(gen, with: value) else {
                 continue
             }
             

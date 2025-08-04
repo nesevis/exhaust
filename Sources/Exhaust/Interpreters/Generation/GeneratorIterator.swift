@@ -9,9 +9,10 @@ import Foundation
 
 struct GeneratorIterator<Element>: IteratorProtocol, Sequence {
     let generator: ReflectiveGenerator<Any, Element>
-    var prng: Xoshiro256
-    var size: UInt64 = 0
-    var maxRuns: UInt64
+    private(set) var prng: Xoshiro256
+    private var size: UInt64 = 0
+    private var isFixed = false
+    private(set) var maxRuns: UInt64
     
     init<Input>(_ generator: ReflectiveGenerator<Input, Element>, seed: UInt64? = nil, maxRuns: UInt64? = nil) {
         self.generator = generator
@@ -24,7 +25,7 @@ struct GeneratorIterator<Element>: IteratorProtocol, Sequence {
         guard size < maxRuns else {
             return nil
         }
-        defer { size += 1 }
+        defer { size += isFixed ? 0 : 1 }
         // Iterators can't have throwing `next` functions
         do {
             return try Self.generate(generator, initialSize: size, maxRuns: maxRuns, using: &prng)
@@ -32,6 +33,15 @@ struct GeneratorIterator<Element>: IteratorProtocol, Sequence {
             let error = error
             fatalError(error.localizedDescription)
         }
+    }
+
+    /// Used to generate results around a similar level of complexity.
+    /// Intended to be used to increase pool of results to compare against
+    func fixedAtSize() -> GeneratorIterator<Element> {
+        var fixed = GeneratorIterator(generator, seed: prng.seed, maxRuns: maxRuns)
+        fixed.isFixed = true
+        fixed.size = size
+        return fixed
     }
     
     // MARK: - Generator implementation

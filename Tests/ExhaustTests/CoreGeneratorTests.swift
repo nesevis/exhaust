@@ -165,7 +165,7 @@ struct CoreGeneratorTests {
         @Test("High-frequency generation performance")
         func testHighFrequencyGeneration() {
             let gen = Gen.choose(in: 1...1000, input: Any.self)
-            var iterator = GeneratorIterator(gen)
+            var iterator = GeneratorIterator(gen, maxRuns: 10000)
             
             // Should be able to generate many values quickly
             for _ in 0..<10000 {

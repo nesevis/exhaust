@@ -16,10 +16,20 @@ enum ChoiceValue: Comparable, Hashable, Equatable {
     // 0 returns Int even when we want UInt
     init(_ value: any BitPatternConvertible) {
         switch value {
-        case is Double, is Float:
+        case is Double:
             self = .floating(Double(bitPattern64: value.bitPattern64), value.bitPattern64)
-        case is Int64, is Int32, is Int16, is Int8, is Int:
+        case is Float:
+            self = .floating(Double(Float(bitPattern64: value.bitPattern64)), value.bitPattern64)
+        case is Int:
+            self = .signed(Int64(Int(bitPattern64: value.bitPattern64)), value.bitPattern64)
+        case is Int64:
             self = .signed(Int64(bitPattern64: value.bitPattern64), value.bitPattern64)
+        case is Int32:
+            self = .signed(Int64(Int32(bitPattern64: value.bitPattern64)), value.bitPattern64)
+        case is Int16:
+            self = .signed(Int64(Int16(bitPattern64: value.bitPattern64)), value.bitPattern64)
+        case is Int8:
+            self = .signed(Int64(Int8(bitPattern64: value.bitPattern64)), value.bitPattern64)
         case is Character:
             self = .character(value as! Character)
         default:

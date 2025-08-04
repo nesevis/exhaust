@@ -6,7 +6,8 @@ enum Gen {
             if let typedResult = result as? Output {
                 return .pure(typedResult)
             }
-            fatalError("Interpreter provided wrong type. Expected \(Output.self), got \(type(of: result))")
+            throw Interpreters.ReflectionError.reflectedNil(type: String(describing: Output.self))
+//            throw GeneratorError.liftFTypeMismatch(expected: String(describing: Output.self), actual: String(describing: type(of: result)))
         }
     }
     
@@ -18,7 +19,7 @@ enum Gen {
     }
     
     // We have to enforce equatable here so we can prune the pick in the reflection process
-    static func pick<Input, Output: Equatable>(
+    static func pick<Input, Output>(
         choices: [(weight: UInt64, generator: ReflectiveGenerator<Input, Output>)]
     ) -> ReflectiveGenerator<Input, Output> {
         // The nested generators must all have the same Output type.
@@ -36,6 +37,11 @@ enum Gen {
         let op = ReflectiveOperation<Optional<Input>>.prune(next: erasedGenerator)
         
         return liftF(op)
+    }
+    
+    /// Covariant version of prune that lifts a generator producing T into one that can handle T? during reflection
+    static func coprune<Input, Output>(_ generator: ReflectiveGenerator<Input, Output>) -> ReflectiveGenerator<Input, Optional<Output>> {
+        generator.map { Optional($0) }
     }
     
     // The transformation function that changes the Operation's Input type to Any.
@@ -255,6 +261,26 @@ enum Gen {
             let array = result as! [Output]
             return .pure(array)
         }
+    }
+    
+    public static func dictionaryOf<KeyOutput: Hashable, ValueOutput>(
+        _ keyGenerator: ReflectiveGenerator<Any, KeyOutput>,
+        _ valueGenerator: ReflectiveGenerator<Any, ValueOutput>
+    ) -> ReflectiveGenerator<Any, [KeyOutput: ValueOutput]> {
+        Gen.zip(
+            // These arrays use `getSize()` under the hood and will be the same length
+            Gen.arrayOf(keyGenerator),
+            Gen.arrayOf(valueGenerator)
+        )
+        .mapped(
+            forward: {
+                Dictionary(
+                    Swift.zip($0.0, $0.1).map { ($0.0, $0.1) },
+                    uniquingKeysWith: { key, _ in key }
+                )
+            },
+            backward: { (Array($0.keys), Array($0.values)) }
+        )
     }
     
     /// Retrieves the current size parameter controlling generator complexity.

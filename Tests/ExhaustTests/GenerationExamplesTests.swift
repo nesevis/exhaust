@@ -19,12 +19,19 @@ struct GenerationExamplesTests {
             let gen = Gen.choose(in: 1...5, input: Any.self)
             var iterator = GeneratorIterator(gen)
             let results = iterator.next()
-            guard let results = results else {
-                #expect(false, "Generation failed")
-                return
-            }
-            let choices = try Interpreters.reflect(gen, with: results, where: { _ in true })
-            #expect(true)
+            let nonNilResults = try #require(results)
+            let choices = try Interpreters.reflect(gen, with: nonNilResults, where: { _ in true })
+            #expect(choices != nil)
+        }
+        
+        @Test("Test Gen.dictionaryof")
+        func testGenDictionaryOf() throws {
+            let gen = Gen.dictionaryOf(String.arbitrary, Int.arbitrary)
+            let iterator = GeneratorIterator(gen)
+            let result = try #require(Array(iterator.prefix(2)).last) // Skip the first length=0 response
+            let reflection = try #require(try Interpreters.reflect(gen, with: result))
+            let replay = try #require(try Interpreters.replay(gen, using: reflection))
+            #expect(result == replay)
         }
         
         @Test

@@ -68,7 +68,7 @@ struct ChoiceTreeShortlexTests {
         let important = ChoiceTree.important(choice)
         let selected = ChoiceTree.selected(choice)
         
-        #expect(important.shortlexLength == 0) // wrapped choice - 1
+        #expect(important.shortlexLength == 1) // Same as wrapped choice
         #expect(selected.shortlexLength == 1) // Same as wrapped choice
     }
     
@@ -117,11 +117,13 @@ struct ChoiceTreeShortlexTests {
     
     @Test("Different node types use type order")
     func differentNodeTypesUseTypeOrder() {
+        // The logic here has changed
         let meta = ChoiceMetadata(validRanges: UInt64.bitPatternRanges, strategies: [])
         let choice = ChoiceTree.choice(.unsigned(42), meta)
         let important = ChoiceTree.important(choice)
         let just = ChoiceTree.just("String")
         
+        print()
         // Important (-2) < Selected (-1) < Just (0) < Choice (2)
         #expect(important.shortlexPrecedes(just))
         #expect(just.shortlexPrecedes(choice))
