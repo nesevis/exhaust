@@ -41,6 +41,14 @@ enum ChoiceTree: Hashable, Equatable, Sendable {
 }
 
 extension ChoiceTree {
+    var isSizing: Bool {
+        switch self {
+        case .getSize, .resize:
+            return true
+        default:
+            return false
+        }
+    }
     var isImportant: Bool {
         if case .important = self {
             return true
@@ -534,5 +542,71 @@ extension ChoiceTree: CustomDebugStringConvertible {
         case .selected(let choiceTree):
             return choiceTree.combinatoryComplexity
         }
+    }
+    
+    func flattenForClassification(prefix: String = "", depth: Int = 0) -> [(label: String, type: String, value: String)] {
+        switch self {
+        case .choice(let choiceValue, let choiceMetadata):
+            let label = "choice\(prefix.isEmpty ? "" : "_b\(prefix)")_d\(depth)"
+            let type = "continuous"
+            switch choiceValue {
+            case .unsigned(let uInt64):
+                return [(label, type, uInt64.description)]
+            case .signed(let int64, _):
+                return [(label, type, int64.description)]
+            case .floating(let double, _):
+                return [(label, type, double.description)]
+            case .character(let character):
+                fatalError("This should have been caught by .sequence")
+            }
+        case .just(let string):
+            return [("just\(prefix.isEmpty ? "" : "_b\(prefix)")_d\(depth)", "discrete", string)] // No point shrinking on this
+        case .sequence(let length, let elements, let choiceMetadata):
+            // We're throwing away sequence data here.
+            return [("sequence_d\(depth)", "continuous", length.description)]
+//                + elements.flatMap { $0.flattenForClassification(prefix: "s\(depth)", depth: depth + 1) }
+        case .branch(let label, let children):
+            // If the branches all return .just shoul
+            return children.flatMap { child in
+                // Only return selected branches
+                // FIXME: What if a generator has two valid selected branches?
+//                guard case .selected = child else {
+//                    return [(label: String, type: String, value: String)]()
+//                }
+                return child.flattenForClassification(prefix: label.description, depth: depth + 1)
+            }
+        case .group(let array):
+            if self.isPickOfJusts {
+                // We can return a discrete type representing all the possible values here?
+                let results = array.map { ($0.isSelected, $0.flattenForClassification(depth: depth + 1)) }
+                let values = results.flatMap(\.1).map(\.value)
+                let currentValue = results.filter(\.0).flatMap(\.1).firstNonNil(\.value)
+                // Set value to the one that is selected?
+                return [("pick\(prefix.isEmpty ? "" : "_b\(prefix)")_d\(depth)", values.joined(separator: ","), currentValue ?? "?")]
+            } else {
+                return array.flatMap { $0.flattenForClassification(depth: depth + 1) }
+            }
+        case .getSize(let uInt64):
+            return []
+        case .resize(_, let choices):
+            return choices.flatMap { $0.flattenForClassification(depth: depth + 1) }
+        case .important(let choiceTree), .selected(let choiceTree):
+            return choiceTree.flattenForClassification(depth: depth) // Keep depth the same
+        }
+    }
+    
+    var isPickOfJusts: Bool {
+        guard case let .group(array) = self else {
+            return false
+        }
+        // Now, does this array represent a series of branches containing justs?
+        guard
+            array.contains(where: { $0.isBranch }),
+            // This may fail if the branches are all resized
+            array.allSatisfy({ $0.isBranch || $0.isSelected || $0.isSizing })
+        else {
+            return false
+        }
+        return true
     }
 }

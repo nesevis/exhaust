@@ -318,7 +318,7 @@ struct CompositionTests {
     @Suite("Zip tests")
     struct ZipTests {
         
-        @Test("Test zip implicit lensing composes with bimap")
+        @Test("Test zip implicit lensing composes with mapped")
         func testBizipIsReplayable2() throws {
             struct Thing: Equatable {
                 let a: Int
@@ -333,6 +333,7 @@ struct CompositionTests {
                 backward: { ($0.a, $0.b, $0.c) }
             )
             let (recipe, instance) = try validateGenerator(gen)
+            print()
         }
         
         @Test("Test bimap is replayable")

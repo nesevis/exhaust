@@ -214,7 +214,7 @@ enum Gen {
         // 2. Use `bind` to get the result of the length generator.
         let sequenceOp = ReflectiveOperation<Input>.sequence(
             length: length ?? Gen.getSize().bind {
-                Gen.choose(in: $0...$0)
+                Gen.choose(in: ($0 / 10)...$0)
             },
             gen: elementGenerator.map { $0 as Any }
         )

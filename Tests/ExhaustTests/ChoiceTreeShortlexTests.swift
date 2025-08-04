@@ -5,8 +5,157 @@
 //  Created by Chris Kolbu on 28/7/2025.
 //
 
-import Testing
 @testable import Exhaust
+import Foundation
+import See5
+import Testing
+
+@Suite("ChoiceTree flattening/classification tests")
+struct choiceTreeClassificationTests {
+    @Test("See5 full output parser")
+    func testOutputParser() throws {
+        let input = """
+C5.0 [Release 2.07 GPL Edition]      Mon Aug  4 22:08:35 2025
+-------------------------------
+    Options:
+    Application `/var/folders/9j/9mmq088d5sqbhbhv4rdbg7tc0000gn/T/c50_E139547D-8477-4527-BCA6-545362394E04/data'
+    Rule-based classifiers
+    Pruning confidence level 25%
+Read 51 cases (3 attributes) from /var/folders/9j/9mmq088d5sqbhbhv4rdbg7tc0000gn/T/c50_E139547D-8477-4527-BCA6-545362394E04/data.data
+Rules:
+Rule 1: (16, lift 3.0)
+    pick_d1 = false
+    sequence_d1 <= 49
+    ->  class pass  [0.944]
+Rule 2: (23, lift 1.4)
+    pick_d1 = true
+    ->  class fail  [0.960]
+Rule 3: (17, lift 1.4)
+    sequence_d1 > 49
+    ->  class fail  [0.947]
+Default class: fail
+Evaluation on training data (51 cases):
+            Rules     
+      ----------------
+        No      Errors
+         3    0( 0.0%)   <<
+       (a)   (b)    <-classified as
+      ----  ----
+        16          (a): class pass
+              35    (b): class fail
+    Attribute usage:
+         76%  pick_d1
+         65%  sequence_d1
+Time: 0.0 secs
+"""
+        var inputMutable = input[...]
+        let rules = See5Parser.parse(source: &inputMutable)
+        print()
+    }
+    @Test("See5 output rule parser")
+    func testRuleParser() throws {
+        let input = """
+Rule 1: (16, lift 3.0)
+    pick_d1 = false
+    sequence_d1 <= 49
+    ->  class pass  [0.944]
+"""
+        var inputMutable = input[...]
+        let rule = See5Parser.Rule.parse(source: &inputMutable)
+        #expect(inputMutable.isEmpty)
+        #expect(rule != nil)
+        print()
+        
+    }
+    
+    @Test("Test merging classifications")
+    func testMergingClassifications() async throws {
+        typealias SchemaTuple = (label: String, type: String, value: String)
+        let gen = Gen.zip(Bool.arbitrary, Int.arbitrary, String.arbitrary)
+        var iterator = GeneratorIterator(gen, maxRuns: 100)
+        let property: ((Bool, Int, String)) -> Bool = { triple in
+            triple.2.contains("@")
+        }
+        let originalStart = Date()
+        var startTime = Date()
+        var results = [[SchemaTuple]]()
+        while let instance = iterator.next() {
+            let tree = try #require(try Interpreters.reflect(gen, with: instance))
+            var result = tree.flattenForClassification()
+            let valid = property(instance)
+            result.append(("valid", "true,false", valid.description))
+            results.append(result)
+            if valid == false {
+                print("Fixing iterator at size. \(instance.2.count)")
+                break
+            }
+        }
+        let duration = Date().timeIntervalSince(startTime)
+        print("Found a failure after \(duration * 1000)ms and \(results.count) runs")
+        startTime = Date()
+        
+        iterator = GeneratorIterator(gen, maxRuns: 100)
+        let aroundFailurePoint = iterator.prefix(50)
+        
+        for instance in aroundFailurePoint {
+            let tree = try #require(try Interpreters.reflect(gen, with: instance))
+            var result = tree.flattenForClassification()
+            let valid = property(instance)
+            result.append(("valid", "true,false", valid.description))
+            results.append(result)
+        }
+        
+        let duration2 = Date().timeIntervalSince(startTime)
+        print("Finished padding out adjacent results after \(duration2 * 1000)ms and \(results.count) total")
+        startTime = Date()
+        
+        let schema = results[0].dropLast()
+        let dataSchema = DataSchema(
+            attributes: schema.map {
+                AttributeDefinition(
+                    name: $0.label,
+                    type: $0.type.contains(",")
+                        ? .discrete(values: $0.type.split(separator: ",").map { String($0 )})
+                        : .continuous
+                )
+            },
+            classes: ["pass", "fail"]
+        )
+        
+        let cases = results.map { result in
+            LabeledDataCase(values: result.dropLast().map { $0.type == "continuous" ? .continuous($0.value) : .discrete($0.value) }, targetClass: result.last?.value == "true" ? "pass" : "fail")
+        }
+        let trainingData = TrainingData(cases: cases)
+        
+        let classifier = try await C50Classifier(schema: dataSchema)
+        
+        let duration3 = Date().timeIntervalSince(startTime)
+        print("Marshaled See5 data after \(duration3 * 1000)ms")
+        startTime = Date()
+        
+        try await classifier.train(data: trainingData, options: .init(algorithm: .rules))
+        
+        let duration4 = Date().timeIntervalSince(startTime)
+        print("Finished training on data after \(duration4 * 1000)ms")
+        
+        print("Completely finished in \(Date().timeIntervalSince(originalStart) * 1000)ms")
+        
+        guard
+            let modelData = await classifier.trainedModel?.modelData,
+            let output = String(data: modelData, encoding: .utf8)
+        else {
+            fatalError()
+        }
+        print(output)
+        var mutable = output[...]
+        let rules = See5Parser.parse(source: &mutable)
+        print(rules)
+        // Now we need to modify the ChoiceTree to map the rules.
+        
+        print("Got rules!")
+        
+    }
+}
 
 @Suite("ChoiceTree shortlex ordering")
 struct ChoiceTreeShortlexTests {
