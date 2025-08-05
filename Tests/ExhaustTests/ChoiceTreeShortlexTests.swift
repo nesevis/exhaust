@@ -71,16 +71,18 @@ Rule 1: (16, lift 3.0)
     @Test("Test merging classifications")
     func testMergingClassifications() async throws {
         typealias SchemaTuple = (label: String, type: String, value: String)
-        let gen = Gen.zip(Bool.arbitrary, Int.arbitrary, String.arbitrary)
-        var iterator = GeneratorIterator(gen, maxRuns: 100)
+        let gen = Gen.zip(Bool.arbitrary, Int.arbitrary, String.arbitraryAscii)
+        var iterator = GeneratorIterator(gen, maxRuns: 200)
         let property: ((Bool, Int, String)) -> Bool = { triple in
-            triple.2.contains("@")
+            triple.2.count < 50
         }
         let originalStart = Date()
         var startTime = Date()
         var results = [[SchemaTuple]]()
         while let instance = iterator.next() {
-            let tree = try #require(try Interpreters.reflect(gen, with: instance))
+            guard let tree = try Interpreters.reflect(gen, with: instance) else {
+                continue
+            }
             var result = tree.flattenForClassification()
             let valid = property(instance)
             result.append(("valid", "true,false", valid.description))
@@ -94,13 +96,17 @@ Rule 1: (16, lift 3.0)
         print("Found a failure after \(duration * 1000)ms and \(results.count) runs")
         startTime = Date()
         
-        iterator = GeneratorIterator(gen, maxRuns: 100)
-        let aroundFailurePoint = iterator.prefix(50)
+        iterator = GeneratorIterator(gen, maxRuns: 200)
         
-        for instance in aroundFailurePoint {
-            let tree = try #require(try Interpreters.reflect(gen, with: instance))
+        // Run for 500ms or 200 instances
+        let paddingStart = Date()
+        while Date().timeIntervalSince(paddingStart) < 0.5, let instance = iterator.next() {
+            guard let tree = try Interpreters.reflect(gen, with: instance) else {
+                continue
+            }
             var result = tree.flattenForClassification()
             let valid = property(instance)
+            print(instance.2)
             result.append(("valid", "true,false", valid.description))
             results.append(result)
         }

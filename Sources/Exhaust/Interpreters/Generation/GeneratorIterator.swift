@@ -217,7 +217,7 @@ struct GeneratorIterator<Element>: IteratorProtocol, Sequence {
             case let .chooseCharacter(min, max):
                 // Generate a random Unicode scalar value and create a Character
                 let randomScalar = UInt64.random(in: min...max, using: &prng)
-                let unicodeScalar = Unicode.Scalar(UInt32(randomScalar))!
+                let unicodeScalar = Unicode.Scalar(UInt32(randomScalar)) ?? Unicode.Scalar(63)! // "?"
                 let character = Character(unicodeScalar)
                 
                 return try runContinuation(character)

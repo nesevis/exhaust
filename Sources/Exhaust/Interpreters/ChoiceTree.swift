@@ -314,6 +314,12 @@ extension ChoiceTree {
                     lMeta
                 )
                 return transform(newLhs, rhs)
+            case let (.group(lhs), .group(rhs)):
+                let transformedGroup = zip(lhs, rhs).map { lhs, rhs in
+                    lhs.mapWhereDifferent(to: rhs, using: transform)
+                }
+                let newLhs = ChoiceTree.group(transformedGroup)
+                return newLhs
             default:
                 return nil
             }
@@ -413,7 +419,7 @@ extension ChoiceTree: CustomDebugStringConvertible {
             case let .character(char):
                 return prefix + connector + "\(locked)choice(char: \"\(char)\")\(locked) \(meta.validRanges[0].cast(type: UInt64.self))"
             case let .unsigned(uint):
-                return prefix + connector + "\(locked)choice(unsigned:\(uint))\(locked) \(meta.validRanges[0].cast(type: UInt64.self))"
+                return prefix + connector + "\(locked)choice(unsigned:\(uint))\(locked) \(meta.validRanges[0])"
             case let .signed(int, _):
                 return prefix + connector + "\(locked)choice(signed: \(int))\(locked) \(meta.validRanges[0].cast(type: Int64.self))"
             case let .floating(float, _):
@@ -544,6 +550,59 @@ extension ChoiceTree: CustomDebugStringConvertible {
         }
     }
     
+    // Defined as distance from zero for ranges that contain zero, or distance from the midpoint of the range?
+    var valueComplexity: Double {
+        switch self {
+        case .choice(let choiceValue, let meta):
+            switch choiceValue {
+            case .unsigned(let uInt64):
+                let range = meta.validRanges[0]
+                if range.contains(0) {
+                    return Double(uInt64)
+                } else {
+                    return Double(range.midPoint)
+                }
+            case .signed(let int64, _):
+                let range = meta.validRanges[0]
+                let zero = Int64(0).bitPattern64
+                if range.contains(zero) {
+                    return Double(abs(int64))
+                }
+                return Double(Int64(bitPattern64: range.midPoint))
+            case .floating(let double, _):
+                let range = meta.validRanges[0]
+                let zero = Double(0).bitPattern64
+                if range.contains(zero) {
+                    return abs(double)
+                }
+                return Double(bitPattern64: range.midPoint)
+            case .character(let character):
+                let range = meta.validRanges[0]
+                if range.contains(0) {
+                    return Double(character.bitPattern64)
+                } else {
+                    return Double(range.midPoint)
+                }
+            }
+        case .just:
+            return 0
+        case .sequence(let length, let elements, _):
+            return elements.reduce(into: Double(0)) { $0 += $1.valueComplexity }
+        case .branch(let label, let children):
+            return children.reduce(into: Double(0)) { $0 += $1.valueComplexity }
+        case .group(let array):
+            return array.reduce(into: Double(0)) { $0 += $1.valueComplexity }
+        case .getSize:
+            return 0
+        case .resize(_, let choices):
+            return choices.reduce(into: Double(0)) { $0 += $1.valueComplexity }
+        case .important(let choiceTree):
+            return choiceTree.valueComplexity
+        case .selected(let choiceTree):
+            return choiceTree.valueComplexity
+        }
+    }
+    
     func flattenForClassification(prefix: String = "", depth: Int = 0) -> [(label: String, type: String, value: String)] {
         switch self {
         case .choice(let choiceValue, let choiceMetadata):
@@ -562,9 +621,80 @@ extension ChoiceTree: CustomDebugStringConvertible {
         case .just(let string):
             return [("just\(prefix.isEmpty ? "" : "_b\(prefix)")_d\(depth)", "discrete", string)] // No point shrinking on this
         case .sequence(let length, let elements, let choiceMetadata):
-            // We're throwing away sequence data here.
-            return [("sequence_d\(depth)", "continuous", length.description)]
-//                + elements.flatMap { $0.flattenForClassification(prefix: "s\(depth)", depth: depth + 1) }
+            var features: [(label: String, type: String, value: String)] = []
+            let seqPrefix = "sequence\(prefix.isEmpty ? "" : "_b\(prefix)")_d\(depth)"
+            
+            // Basic length feature
+            features.append((seqPrefix + "_length", "continuous", length.description))
+            
+            // Analyze element types and values
+            if !elements.isEmpty {
+                let elementTypes = elements.map { element -> String in
+                    switch element {
+                    case .choice(let value, _):
+                        switch value {
+                        case .unsigned, .signed: return "int"
+                        case .floating: return "float" 
+                        case .character: return "char"
+                        }
+                    case .just: return "const"
+                    default: return "complex"
+                    }
+                }
+                
+                // Element type distribution
+//                let uniqueTypes = Set(elementTypes)
+//                features.append((seqPrefix + "_types", "discrete", uniqueTypes.sorted().joined(separator: ",")))
+//                features.append((seqPrefix + "_type_count", "continuous", uniqueTypes.count.description))
+                
+//                // First and last element features (if simple values)
+//                if let firstElement = elements.first,
+//                   case .choice(let firstValue, _) = firstElement {
+//                    features.append((seqPrefix + "_first", "continuous", String(describing: firstValue.convertible)))
+//                }
+//                
+//                if let lastElement = elements.last,
+//                   case .choice(let lastValue, _) = lastElement {
+//                    features.append((seqPrefix + "_last", "continuous", String(describing: lastValue.convertible)))
+//                }
+                
+                // Extract numeric values for statistical analysis
+                let numericValues = elements.compactMap { element -> Double? in
+                    guard case .choice(let value, _) = element else { return nil }
+                    switch value {
+                    case .unsigned(let uint): return Double(uint)
+                    case .signed(let int, _): return Double(int)
+                    case .floating(let double, _): return double
+                    case .character: return nil
+                    }
+                }
+                
+                if !numericValues.isEmpty {
+                    let sum = numericValues.reduce(0, +)
+                    let mean = sum / Double(numericValues.count)
+                    let minVal = numericValues.min() ?? 0
+                    let maxVal = numericValues.max() ?? 0
+                    
+                    features.append((seqPrefix + "_mean", "continuous", String(format: "%.3f", mean)))
+                    features.append((seqPrefix + "_min", "continuous", minVal.description))
+                    features.append((seqPrefix + "_max", "continuous", maxVal.description))
+                    features.append((seqPrefix + "_range", "continuous", (maxVal - minVal).description))
+                    
+                    // Check for patterns
+//                    let isAscending = numericValues.enumerated().dropFirst().allSatisfy { $1 >= numericValues[$0.offset - 1] }
+//                    let isDescending = numericValues.enumerated().dropFirst().allSatisfy { $1 <= numericValues[$0.offset - 1] }
+//                    
+//                    if isAscending && !isDescending {
+//                        features.append((seqPrefix + "_pattern", "discrete", "ascending"))
+//                    } else if isDescending && !isAscending {
+//                        features.append((seqPrefix + "_pattern", "discrete", "descending"))
+//                    } else {
+//                        features.append((seqPrefix + "_pattern", "discrete", "mixed"))
+//                    }
+                }
+            }
+            
+            return features
         case .branch(let label, let children):
             // If the branches all return .just shoul
             return children.flatMap { child in
@@ -608,5 +738,44 @@ extension ChoiceTree: CustomDebugStringConvertible {
             return false
         }
         return true
+    }
+}
+
+//extension ChoiceTree: Comparable {
+//    static func < (lhs: ChoiceTree, rhs: ChoiceTree) -> Bool {
+//        switch lhs {
+////        case .choice(let choiceValue, let choiceMetadata):
+////            <#code#>
+////        case .just(let string):
+////            <#code#>
+////        case .sequence(let length, let elements, let choiceMetadata):
+////            <#code#>
+////        case .branch(let label, let children):
+////            <#code#>
+////        case .group(let array):
+////            <#code#>
+////        case .getSize(let uInt64):
+////            <#code#>
+////        case .resize(let newSize, let choices):
+////            <#code#>
+////        case .important(let choiceTree):
+////            <#code#>
+////        case .selected(let choiceTree):
+////            <#code#>
+////        }
+//        switch (lhs, rhs) {
+//        case let (.choice(lhsV, _), .choice(rhsV, _)):
+//            return lhsV < rhsV
+//        
+//        }
+//    }
+//    
+//    
+//}
+
+extension ClosedRange where Bound == UInt64 {
+    var midPoint: UInt64 {
+        let span = upperBound - lowerBound
+        return lowerBound + (span / 2)
     }
 }

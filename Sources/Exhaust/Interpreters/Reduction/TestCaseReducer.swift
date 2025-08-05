@@ -63,54 +63,57 @@ enum TestCaseReducer {
             // FIXME: We need to respect the original range here. If the number falls within it, don't do anything?
             // E.g if we're searching for Int16.min like in one of the tests but constrict the range to what we've seen, we won't be able to shrink properly.
             // So can we even normalize on failures? By virtue of being generated, the value **must** be in the range of the generator's range.
+            // Switch to the least absolutely complex value that is still within the range? The lowest one?
+            
             guard let choices = try Interpreters.reflect(generator, with: fail) else {
                 print("–Failed to reflect on fail")
                 continue
             }
-            normalized = normalized.refineEndOfRange(using: choices, direction: .towardsLowerBound)
+            normalized = choices.valueComplexity < normalized.valueComplexity ? choices : normalized
+//            normalized.refineEndOfRange(using: choices, direction: .towardsLowerBound)
         }
         print("After \(failing.count) fails:\n\(normalized)")
         for pass in passing {
-            // The passing value forms the higher *or* lower boundary of F's range, so it will go
-            // min(p.lower, f.lower)..<. This works as intended
             guard let choices = try Interpreters.reflect(generator, with: pass) else {
                 print("–Failed to reflect on pass")
                 continue
             }
-            // We have no sense of direction here, but it's a minor quibble as it only affects whether the range is x..<y or x...y
+            // What happens is that if the boundary into passes exists on the lower end,
+            // it is a predicate like x < y. Conversely, x > y would trim the top end of the range
+            // This is an important signal. Trimming both ends means it's x < y && x > y
             normalized = normalized.refineEndOfRange(using: choices, direction: .towardsLowerBound)
         }
         print("After \(passing.count) passes:\n\(normalized)")
         
         // Final pass to set the hard coded values in `normalized` to the minimum it can be according to the range.
-        let minimized = normalized.map { choiceTree in
-            switch choiceTree {
-            // Only handle leaf values
-            case .choice(let choiceValue, let choiceMetadata):
-                switch choiceValue {
-                case .unsigned:
-                    return .choice(.unsigned(choiceMetadata.validRanges[0].lowerBound), choiceMetadata)
-                case .signed:
-                    let castRange = choiceMetadata.validRanges[0].cast(type: Int64.self)
-                    return .choice(ChoiceValue(castRange.lowerBound), choiceMetadata)
-                case .floating:
-                    let castRange = choiceMetadata.validRanges[0].cast(type: Double.self)
-                    return .choice(ChoiceValue(castRange.lowerBound), choiceMetadata)
-                case .character(let character):
-                    // TODO: Need to fix character minimisation first
-                    return choiceTree
-                }
-            case .sequence(_, let elements, let choiceMetadata):
-                let newLength = choiceMetadata.validRanges[0].lowerBound
-                return .sequence(length: newLength, elements: Array(elements.prefix(Int(newLength))), choiceMetadata)
-            default:
-                return choiceTree
-            }
-        }
+//        let minimized = normalized.map { choiceTree in
+//            switch choiceTree {
+//            // Only handle leaf values
+//            case .choice(let choiceValue, let choiceMetadata):
+//                switch choiceValue {
+//                case .unsigned:
+//                    return .choice(.unsigned(choiceMetadata.validRanges[0].lowerBound), choiceMetadata)
+//                case .signed:
+//                    let castRange = choiceMetadata.validRanges[0].cast(type: Int64.self)
+//                    return .choice(ChoiceValue(castRange.lowerBound), choiceMetadata)
+//                case .floating:
+//                    let castRange = choiceMetadata.validRanges[0].cast(type: Double.self)
+//                    return .choice(ChoiceValue(castRange.lowerBound), choiceMetadata)
+//                case .character(let character):
+//                    // TODO: Need to fix character minimisation first
+//                    return choiceTree
+//                }
+//            case .sequence(_, let elements, let choiceMetadata):
+//                let newLength = choiceMetadata.validRanges[0].lowerBound
+//                return .sequence(length: newLength, elements: Array(elements.prefix(Int(newLength))), choiceMetadata)
+//            default:
+//                return choiceTree
+//            }
+//        }
         
-        print("After minimisation:\n\(minimized)")
+        print("After minimisation:\n\(normalized)")
         
-        return minimized
+        return normalized
     }
     
     private static func shrinkImpl<Input, Output>(
@@ -269,13 +272,13 @@ extension ChoiceTree {
         self.mapWhereDifferent(to: other) { new, old in
             switch (new, old) {
             case let (.choice(newChoice, newMeta), .choice(oldChoice, _)):
-                guard let range = newChoice.refineOneEndOfRange(against: oldChoice, range: newMeta.validRanges[0], direction: direction) else {
+                guard let range = newChoice.refineOneEndOfRange(against: oldChoice, range: newMeta.validRanges[0]) else {
                     return new
                 }
                 let meta = ChoiceMetadata(validRanges: [range], strategies: newMeta.strategies)
                 return .choice(newChoice, meta)
             case let (.sequence(newLength, newElements, newMeta), .sequence(oldLength, _, _)):
-                guard let newRange = ChoiceValue(newLength).refineOneEndOfRange(against: .init(oldLength), range: newMeta.validRanges[0], direction: direction) else {
+                guard let newRange = ChoiceValue(newLength).refineOneEndOfRange(against: .init(oldLength), range: newMeta.validRanges[0]) else {
                     return new
                 }
                 let meta = ChoiceMetadata(validRanges: [newRange], strategies: newMeta.strategies)
@@ -326,7 +329,7 @@ extension ChoiceValue {
         }
     }
     
-    // Used when we know the two values represent the range
+    // Used when comparing failures. The problem is that we don't know where the boundaries lay outside of which the property is true. So should this be run after the successful `refineEndOfRange` tests to help hone in on the least absolutely complex value within the range?
     func refineRange(against other: ChoiceValue, direction: ShrinkingDirection) -> ClosedRange<UInt64>? {
         // If increasing, the range should be lhs..<rhs, if decreasing rhs...lhs
         let minVal = min(self.bitPattern64, other.bitPattern64)
@@ -341,22 +344,41 @@ extension ChoiceValue {
     }
     
     // Used when we know the other value represents a refinement of one end of the range
-    func refineOneEndOfRange(against other: ChoiceValue, range: ClosedRange<UInt64>, direction: ShrinkingDirection) -> ClosedRange<UInt64>? {
+    // E.g we are comparing `self`, a failure, against `other`, a successful value
+    func refineOneEndOfRange(against other: ChoiceValue, range: ClosedRange<UInt64>) -> ClosedRange<UInt64>? {
         guard range.contains(other.bitPattern64) else {
             return nil
         }
-        // If increasing, the range should be lhs..<rhs, if decreasing rhs...lhs
-        switch direction {
-        case .towardsHigherBound:
-            // We were moving up, so the higher of the two values is now the top end
-            let maxVal = max(self.bitPattern64, other.bitPattern64)
-            // Range (..<) can't have the two values be equal to each other
-            return range.upperBound == maxVal
-                ? maxVal...range.upperBound
-                : ClosedRange(maxVal..<range.upperBound)
-        case .towardsLowerBound:
-            let minVal = min(self.bitPattern64, other.bitPattern64)
-            return range.lowerBound...minVal
+        if self < other {
+            // This represents a refinement of the top range to the value of other - 1
+            switch (self, other) {
+            case let (.unsigned(lhs), .unsigned(rhs)):
+                return range.lowerBound...min(range.upperBound, rhs)
+            case let (.signed(_, lhs), .signed(_, rhs)):
+                return range.lowerBound...min(range.upperBound, rhs)
+            case let (.floating(lhsV, lhs), .floating(rhsV, rhs)):
+                return range.lowerBound...min(range.upperBound, rhs)
+            case let (.character(lhs), .character(rhs)):
+                return range.lowerBound.bitPattern64...min(range.upperBound, rhs.bitPattern64)
+            default:
+                fatalError("Can't compare different values")
+            }
+        } else {
+            // self (fail) is larger or equal to other (pass)
+            // This represents a refinement of the bottom of the range to the value of the other + 1
+            // Does it matter if the range is wholly negative?
+            switch (self, other) {
+            case let (.unsigned(lhs), .unsigned(rhs)):
+                return max(range.lowerBound, rhs + 1)...range.upperBound
+            case let (.signed(lhs, _), .signed(_, rhs)):
+                return max(range.lowerBound, rhs + 1)...range.upperBound
+            case let (.floating(lhs, _), .floating(_, rhs)):
+                return max(range.lowerBound, rhs + 1)...range.upperBound
+            case let (.character(lhs), .character(rhs)):
+                return max(range.lowerBound, rhs.bitPattern64 + 1)...range.upperBound
+            default:
+                fatalError("Can't compare different values")
+            }
         }
     }
 }

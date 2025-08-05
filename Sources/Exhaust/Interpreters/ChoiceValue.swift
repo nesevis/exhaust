@@ -63,27 +63,8 @@ enum ChoiceValue: Comparable, Hashable, Equatable {
     
     func fits(in ranges: [ClosedRange<UInt64>]) -> Bool {
         for range in ranges {
-            switch self {
-            case .unsigned(let uInt64):
-                if range.contains(uInt64) {
-                    return true
-                }
-            case .signed(let int64, _):
-                let lower = Int64(bitPattern64: range.lowerBound)
-                let upper = Int64(bitPattern64: range.upperBound)
-                if int64 >= lower && int64 <= upper {
-                    return true
-                }
-            case .floating(let double, _):
-                let lower = Double(bitPattern64: range.lowerBound)
-                let upper = Double(bitPattern64: range.upperBound)
-                if double >= lower && double <= upper {
-                    return true
-                }
-            case .character(let character):
-                if range.contains(character.bitPattern64) {
-                    return true
-                }
+            if range.contains(bitPattern64) {
+                return true
             }
         }
         return false

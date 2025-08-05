@@ -24,34 +24,36 @@ extension UnsignedInteger {
     }
 }
 
-extension UInt: Arbitrary {}
-extension UInt8: Arbitrary {}
-extension UInt16: Arbitrary {}
-extension UInt32: Arbitrary {}
-
 // MARK: - Signed integers
 
-extension Int64: Arbitrary {
+extension UInt: Arbitrary {}
+extension UInt8: Arbitrary {
     static var arbitrary: ReflectiveGenerator<Any, Self> {
         Gen.getSize().bind { size in
-            let expanded: UInt64 = size < 63 ? 1 << size : UInt64(Int64.max)
-            return Gen.choose(in: -Int64(expanded)...Int64(expanded))
+            let expanded: UInt64 = size < 7 ? 1 << size : UInt64(UInt8.max)
+            return Gen.choose(in: 0...UInt8(expanded))
+        }
+    }
+}
+extension UInt16: Arbitrary {
+    static var arbitrary: ReflectiveGenerator<Any, Self> {
+        Gen.getSize().bind { size in
+            let expanded: UInt64 = size < 15 ? 1 << size : UInt64(UInt16.max)
+            return Gen.choose(in: 0...UInt16(expanded))
+        }
+    }
+}
+extension UInt32: Arbitrary {
+    static var arbitrary: ReflectiveGenerator<Any, Self> {
+        Gen.getSize().bind { size in
+            let expanded: UInt64 = size < 31 ? 1 << size : UInt64(UInt32.max)
+            return Gen.choose(in: 0...UInt32(expanded))
         }
     }
 }
 
-// FIXME: Do we need this. Is reflection still broken here?
-//extension Int16: Arbitrary {
-//    static var arbitrary: ReflectiveGenerator<Any, Self> {
-//        Gen.getSize().bind { size in
-//            let expanded: UInt64 = size < 15 ? 1 << size : UInt64(Int16.max)
-//            let truncated = abs(Int16(truncatingIfNeeded: expanded))
-//            return Gen.choose(in: -truncated...truncated)
-//        }
-//    }
-//}
-
 extension SignedInteger {
+    // TODO: Implement individually. The ranges are all messed up
     static var arbitrary: ReflectiveGenerator<Any, Self> {
         Int64.arbitrary
             .mapped(forward: { Self(truncatingIfNeeded: $0) }, backward: { Int64($0) })
@@ -59,9 +61,30 @@ extension SignedInteger {
 }
 
 extension Int: Arbitrary {}
-extension Int8: Arbitrary {}
-extension Int16: Arbitrary {}
-extension Int32: Arbitrary {}
+extension Int8: Arbitrary {
+    static var arbitrary: ReflectiveGenerator<Any, Self> {
+        Gen.getSize().bind { size in
+            let expanded: UInt64 = size < 7 ? 1 << size : UInt64(Int8.max)
+            return Gen.choose(in: -Int8(expanded)...Int8(expanded))
+        }
+    }
+}
+extension Int16: Arbitrary {
+    static var arbitrary: ReflectiveGenerator<Any, Self> {
+        Gen.getSize().bind { size in
+            let expanded: UInt64 = size < 15 ? 1 << size : UInt64(Int16.max)
+            return Gen.choose(in: -Int16(expanded)...Int16(expanded))
+        }
+    }
+}
+extension Int32: Arbitrary {
+    static var arbitrary: ReflectiveGenerator<Any, Self> {
+        Gen.getSize().bind { size in
+            let expanded: UInt64 = size < 31 ? 1 << size : UInt64(Int32.max)
+            return Gen.choose(in: -Int32(expanded)...Int32(expanded))
+        }
+    }
+}
 
 // MARK: - Floating points
 
@@ -99,6 +122,7 @@ extension Bool: Arbitrary {
 
 extension Character: Arbitrary {
     static var arbitrary: ReflectiveGenerator<Any, Character> {
+        // This is nearly ten times slower than `arbitraryAscii`.
         Gen.getSize().bind { size in
             Gen.pick(choices: [
                 (200, Gen.chooseCharacter(in: self.bitPatternRanges[0])), // Standard ascii
@@ -108,12 +132,23 @@ extension Character: Arbitrary {
             ])
         }
     }
+    
+    // We need to use `chooseCharacter`, as the Character constructor isn't bijective with UInt32
+    // FIXME: Does SwiftCheck handle this in any way?
+    static var arbitraryAscii: ReflectiveGenerator<Any, Character> {
+        Gen.chooseCharacter(in: self.bitPatternRanges[0])
+    }
 }
 
 extension String: Arbitrary {
     static var arbitrary: ReflectiveGenerator<Any, String> {
         Gen.arrayOf(Character.arbitrary)
             .map { String($0) }
+    }
+    
+    static var arbitraryAscii: ReflectiveGenerator<Any, String> {
+        Gen.arrayOf(Character.arbitraryAscii)
+            .mapped(forward: { String($0) }, backward: { Array($0) })
     }
 }
 
