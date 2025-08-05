@@ -261,6 +261,6 @@ struct GeneratorIterator<Element>: IteratorProtocol, Sequence {
     
     private static func logarithmicallyScaledSize(_ maxSize : UInt64, _ successfulTests : UInt64) -> UInt64 {
         let n = Double(successfulTests)
-        return UInt64((log(n + 1)) * Double(maxSize) / log(100))
+        return UInt64((log(n + 1)) * Double(maxSize) / log(100) / 2)
     }
 }
