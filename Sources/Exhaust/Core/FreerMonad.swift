@@ -11,6 +11,7 @@ enum FreerMonad<Operation, Value>: AnyFreerMonad {
 
 // MARK: - Functor and Monad
 extension FreerMonad {
+    @inlinable
     func bind<NewValue>(_ transform: @escaping (Value) throws -> FreerMonad<Operation, NewValue>) rethrows -> FreerMonad<Operation, NewValue> {
         switch self {
         case let .pure(value):
@@ -20,6 +21,7 @@ extension FreerMonad {
         }
     }
     
+    @inlinable
     func map<NewValue>(_ transform: @escaping (Value) throws -> NewValue) rethrows -> FreerMonad<Operation, NewValue> {
         try self.bind { try .pure(transform($0)) }
     }

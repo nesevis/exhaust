@@ -86,6 +86,15 @@ extension Int32: Arbitrary {
     }
 }
 
+extension Int64: Arbitrary {
+    static var arbitrary: ReflectiveGenerator<Any, Self> {
+        Gen.getSize().bind { size in
+            let expanded: UInt64 = size < 63 ? 1 << size : UInt64(Int64.max)
+            return Gen.choose(in: -Int64(expanded)...Int64(expanded))
+        }
+    }
+}
+
 // MARK: - Floating points
 
 extension Double: Arbitrary {

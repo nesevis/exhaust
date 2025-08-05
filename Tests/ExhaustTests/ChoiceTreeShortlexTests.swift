@@ -106,7 +106,7 @@ Rule 1: (16, lift 3.0)
             }
             var result = tree.flattenForClassification()
             let valid = property(instance)
-            print(instance.2)
+//            print(instance.2)
             result.append(("valid", "true,false", valid.description))
             results.append(result)
         }

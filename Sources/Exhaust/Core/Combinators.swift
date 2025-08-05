@@ -1,4 +1,5 @@
 enum Gen {
+    @inlinable
     static func liftF<Input, Output>(
         _ op: ReflectiveOperation<Input>
     ) -> ReflectiveGenerator<Input, Output> {
@@ -11,6 +12,7 @@ enum Gen {
         }
     }
     
+    @inlinable
     static func lens<Input, NewInput>(
         extract path: some PartialPath<NewInput, Input>,
         _ next: ReflectiveGenerator<Any, Input>
@@ -19,6 +21,7 @@ enum Gen {
     }
     
     // We have to enforce equatable here so we can prune the pick in the reflection process
+    @inlinable
     static func pick<Input, Output>(
         choices: [(weight: UInt64, generator: ReflectiveGenerator<Input, Output>)]
     ) -> ReflectiveGenerator<Input, Output> {
@@ -29,6 +32,7 @@ enum Gen {
         return liftF(.pick(choices: erasedChoices))
     }
     
+    @inlinable
     static func prune<Input, Output>(_ generator: ReflectiveGenerator<Input, Output>) -> ReflectiveGenerator<Optional<Input>, Output> {
         // The implementation is very similar to lmap: it uses mapOperation to erase
         // the input type and wraps the generator in the .prune operation.
@@ -40,12 +44,14 @@ enum Gen {
     }
     
     /// Covariant version of prune that lifts a generator producing T into one that can handle T? during reflection
+    @inlinable
     static func coprune<Input, Output>(_ generator: ReflectiveGenerator<Input, Output>) -> ReflectiveGenerator<Input, Optional<Output>> {
         generator.map { Optional($0) }
     }
     
     // The transformation function that changes the Operation's Input type to Any.
     // This function needs to be defined recursively for the `.pick` case.
+    @inlinable
     static func eraseInputType<Input>(from op: ReflectiveOperation<Input>) -> ReflectiveOperation<Any> {
         switch op {
         case let .pick(choices):
@@ -82,6 +88,7 @@ enum Gen {
         }
     }
     
+    @inlinable
     static func chooseCharacter<Input>(in range: ClosedRange<UInt64>? = nil, input: Input.Type = Input.self) -> ReflectiveGenerator<Input, Character> {
         // Default to the lower range
         let actualRange = range ?? Character.bitPatternRanges[0]
@@ -96,6 +103,7 @@ enum Gen {
         }
     }
     
+    @inlinable
     static func choose<Input, Output: BitPatternConvertible>(in range: ClosedRange<Output>? = nil, type: Output.Type = Output.self, input: Input.Type = Input.self) -> ReflectiveGenerator<Input, Output> {
         
         // 1. Determine the range of raw UInt64 bits to generate.
@@ -134,6 +142,7 @@ enum Gen {
         }
     }
     
+    @inlinable
     static func lmap<NewInput, Input, Output>(_ transform: @escaping (NewInput) throws -> Input, _ generator: ReflectiveGenerator<Input, Output>) -> ReflectiveGenerator<NewInput, Output> {
         
         let erasedTransform: (Any) throws -> Any = { newInput in
@@ -154,6 +163,7 @@ enum Gen {
         }
     }
     
+    @inlinable
     static func comap<NewInput, Input, Output>(
         _ transform: @escaping (NewInput) throws -> Input?,
         _ generator: ReflectiveGenerator<Input, Output>
@@ -162,6 +172,7 @@ enum Gen {
     }
     
     // A base generator that produces a single, constant value.
+    @inlinable
     static func just<Output>(_ value: Output) -> ReflectiveGenerator<Any, Output> {
         liftF(ReflectiveOperation<Output>.just(value))
             .mapOperation(eraseInputType(from:))
@@ -182,6 +193,7 @@ enum Gen {
     ///
     /// - Parameter value: The constant value to generate and validate against
     /// - Returns: A generator that produces the constant and validates during reflection
+    @inlinable
     static func exact<Value: Equatable>(_ value: Value) -> ReflectiveGenerator<Value, Value> {
         // Use lmap with a transform that validates the target value during reflection.
         // The transform returns nil for mismatches, causing reflection to fail.
@@ -207,6 +219,7 @@ enum Gen {
     ///   - elementGenerator: A self-contained (`<Void, Element>`) generator for the elements of the array.
     ///   - lengthRange: The desired range for the array's length. Defaults to `0...size`.
     /// - Returns: A generator that produces an array of elements.
+    @inlinable
     public static func arrayOf<Input, Output>(
         _ elementGenerator: ReflectiveGenerator<Input, Output>,
         _ length: ReflectiveGenerator<Input, UInt64>? = nil
@@ -225,6 +238,7 @@ enum Gen {
         }
     }
     
+    @inlinable
     public static func arrayOf<Input, Output>(
         _ elementGenerator: ReflectiveGenerator<Input, Output>,
         within range: ClosedRange<UInt64>
@@ -247,6 +261,7 @@ enum Gen {
         }
     }
     
+    @inlinable
     public static func arrayOf<Input, Output>(
         _ elementGenerator: ReflectiveGenerator<Input, Output>,
         exactly: UInt64
@@ -263,6 +278,7 @@ enum Gen {
         }
     }
     
+    @inlinable
     public static func dictionaryOf<KeyOutput: Hashable, ValueOutput>(
         _ keyGenerator: ReflectiveGenerator<Any, KeyOutput>,
         _ valueGenerator: ReflectiveGenerator<Any, ValueOutput>
@@ -286,6 +302,7 @@ enum Gen {
     /// Retrieves the current size parameter controlling generator complexity.
     /// The size typically grows as tests progress, allowing generators to produce
     /// more complex values over time.
+    @inlinable
     public static func getSize<Input>() -> ReflectiveGenerator<Input, UInt64> {
         return .impure(operation: .getSize) { result in
             if let typedResult = result as? UInt64 {
@@ -302,6 +319,7 @@ enum Gen {
     ///   - newSize: The size parameter to use for the nested generator
     ///   - generator: The generator to run with the modified size
     /// - Returns: A generator that runs with the specified size
+    @inlinable
     public static func resize<Input, Output>(
         _ newSize: UInt64,
         _ generator: ReflectiveGenerator<Input, Output>
@@ -319,6 +337,7 @@ enum Gen {
     ///   - elementGenerator: The generator for array elements
     ///   - lengthRange: Optional range to constrain the array length. If nil, uses 0...size
     /// - Returns: A generator that produces arrays with size-controlled length
+    @inlinable
     public static func sized<Input, Output>(
         _ elementGenerator: ReflectiveGenerator<Input, Output>,
         lengthRange: ClosedRange<UInt64>? = nil

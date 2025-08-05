@@ -285,6 +285,7 @@ extension ChoiceTree {
 }
 
 extension ChoiceValue {
+    #warning("The range casting here is fraught")
     func combinatoryComplexity(for range: ClosedRange<UInt64>) -> Double {
         switch self {
         case .unsigned:
