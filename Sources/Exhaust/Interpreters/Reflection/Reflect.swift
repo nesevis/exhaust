@@ -243,9 +243,15 @@ extension Interpreters {
             
             var combinedPath: [ChoiceTree] = []
             var combinedResults: [Any] = []
-            let validRanges = lengthGen.associatedRange.map { [$0] }
             
-//            let lengthResult = try reflectRecursive(lengthGen, onFinalOutput: finalOutput)
+            // FIXME: Make less allocaty
+            var validRanges = [ClosedRange<UInt64>]()
+            if let lengthRange = lengthGen.associatedRange {
+                validRanges = [lengthRange]
+            } else {
+                let lengthReflection = try reflectRecursive(lengthGen, onFinalOutput: finalOutput)
+                validRanges = [lengthReflection.firstNonNil({ $0.path.firstNonNil { $0.metadata.validRanges.first }}) ?? UInt64.bitPatternRanges[0]]
+            }
             
             // 3. Iterate over the elements of the target array.
             for elementTarget in targetArray {
@@ -265,7 +271,7 @@ extension Interpreters {
             }
             
             let metadata = ChoiceMetadata(
-                validRanges: validRanges ?? UInt64.bitPatternRanges,
+                validRanges: validRanges,
                 strategies: ShrinkingStrategy.sequenceStrategies
             )
             let finalTree = ChoiceTree.sequence(

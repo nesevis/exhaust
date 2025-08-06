@@ -8,6 +8,7 @@
 import Foundation
 
 enum GeneratorError: LocalizedError {
+    case couldNotGenerateConcomitantChoiceTree
     case mappedBackwardError(expected: String, actual: String)
     case liftFTypeMismatch(expected: String, actual: String)
 }

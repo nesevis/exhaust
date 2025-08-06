@@ -176,4 +176,21 @@ struct CoreGeneratorTests {
             #expect(true)
         }
     }
+    
+    
+    @Suite("ChoiceTreeGeneratorTests")
+    struct choiceTreeGeneratorTests {
+        @Test("Kick tyres")
+        func kickTheTyres() throws {
+            let gen = Gen.arrayOf(String.arbitraryAscii)
+            var iterator = GeneratorIterator(gen, seed: 4)
+            var output = iterator.next()!
+            var thing = ValueAndChoiceTreeIterator(gen, seed: 4)
+            let test = thing.next()!
+            let (output2, choiceTree) = try #require(test)
+            let replay = try? Interpreters.replay(gen, using: choiceTree)
+            let reflection = try Interpreters.reflect(gen, with: output)
+            print()
+        }
+    }
 }

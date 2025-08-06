@@ -430,7 +430,7 @@ extension ChoiceTree: CustomDebugStringConvertible {
             return prefix + connector + "just(\(type))"
             
         case let .sequence(length, elements, meta):
-            var result = prefix + connector + "\(locked)sequence(length: \(length))\(locked) \(meta.validRanges[0].cast(type: UInt64.self))"
+            var result = prefix + connector + "\(locked)sequence(length: \(length))\(locked) \(meta.validRanges[0])"
             if
                 case let .group(array) = elements.first,
                 // Dropping the first one as it is a getSize
