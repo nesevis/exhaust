@@ -14,7 +14,7 @@ public struct ValueAndChoiceTreeIterator<FinalOutput>: IteratorProtocol, Sequenc
     private struct Context {
         let maxRuns: UInt64
         let materializePicks: Bool
-        let isFixed: Bool
+        var isFixed: Bool
         var size: UInt64
         var sizeOverride: UInt64? = nil
     }
@@ -46,12 +46,16 @@ public struct ValueAndChoiceTreeIterator<FinalOutput>: IteratorProtocol, Sequenc
 
     /// Used to generate results around a similar level of complexity.
     /// Intended to be used to increase pool of results to compare against
-//    func fixedAtSize() -> GeneratorIterator<Element> {
-//        var fixed = GeneratorIterator(generator, seed: prng.seed, maxRuns: maxRuns)
-//        fixed.isFixed = true
-//        fixed.size = size
-//        return fixed
-//    }
+    func fixedAtSize() -> ValueAndChoiceTreeIterator<FinalOutput> {
+        var fixed = ValueAndChoiceTreeIterator(
+            generator,
+            materializePicks: context.materializePicks,
+            seed: prng.seed,
+            maxRuns: context.maxRuns
+        )
+        fixed.context.isFixed = true
+        return fixed
+    }
     
     // MARK: - Generator implementation
     
@@ -78,17 +82,8 @@ public struct ValueAndChoiceTreeIterator<FinalOutput>: IteratorProtocol, Sequenc
             sizeOverride: &sizeOverride,
             prng: &prng
         )
-        guard let (value, choiceTrees) = result else {
-            throw GeneratorError.couldNotGenerateConcomitantChoiceTree
-        }
-        switch choiceTrees.count {
-        case 0:
-            throw GeneratorError.couldNotGenerateConcomitantChoiceTree
-        case 1:
-            return (value, choiceTrees[0])
-        default:
-            return (value, .group(choiceTrees))
-        }
+        // TODO: Do we need to handle an error here?
+        return result
     }
 
      // MARK: - Recursive Engine
@@ -98,39 +93,42 @@ public struct ValueAndChoiceTreeIterator<FinalOutput>: IteratorProtocol, Sequenc
         with inputValue: Input,
         context: Context,
         sizeOverride: inout UInt64?,
-        ignoreChoiceTree: Bool = false,
         prng: inout Xoshiro256
-    ) throws -> (Output, [ChoiceTree])? {
+    ) throws -> (Output, ChoiceTree)? {
         // Size override only affects the first call, not all subsequent ones
         switch gen {
         case let .pure(value):
             // The ChoiceTree value will be discarded from the caller if it's coming
             // from .chooseBits or .chooseCharacter
-            return (value, ignoreChoiceTree ? [] : [ChoiceTree.just(String(String(describing: value).prefix(50)))])
+            return (value, ChoiceTree.just(String(String(describing: value).prefix(50))))
             
         case let .impure(operation, continuation):
             let jumpedRng = Xoshiro256(seed: prng.next())
             let continuationSizeOverride = sizeOverride
-            // RunContinuation
-            let runContinuation = { (result: Any, calleeChoiceTree: [ChoiceTree]) -> (Output, [ChoiceTree])? in
+            
+            let runContinuation = { (result: Any, calleeChoiceTree: ChoiceTree) -> (Output, ChoiceTree)? in
                 // Will this work properly now?
                 var sizeOverride = continuationSizeOverride
                 let nextGen = try continuation(result)
                 var continuationRng = jumpedRng
-                if let (result, innerChoiceTree) = try self.generateRecursive(
+                
+                if calleeChoiceTree.isChoice, case let .pure(value) = nextGen {
+                    // Early return for a pure case originating with a choice
+                    return (value, calleeChoiceTree)
+                }
+                if let (continuationResult, innerChoiceTree) = try self.generateRecursive(
                     nextGen,
                     with: inputValue,
                     context: context,
                     sizeOverride: &sizeOverride,
-                    ignoreChoiceTree: calleeChoiceTree.contains(where: \.isChoice),
                     prng: &continuationRng
                 ) {
                     if nextGen.isPure {
-                        return (result, calleeChoiceTree)
+                        return (continuationResult, calleeChoiceTree)
                     } else {
                         // A large part of the trace is adding these arrays together
                         // Use chain?
-                        return (result, calleeChoiceTree + innerChoiceTree)
+                        return (continuationResult, .group([calleeChoiceTree, innerChoiceTree]))
                     }
                 }
                 return nil
@@ -198,7 +196,7 @@ public struct ValueAndChoiceTreeIterator<FinalOutput>: IteratorProtocol, Sequenc
                             prng: &prng
                         ), let final = try runContinuation(result.0, result.1) {
                             value = final.0
-                            branch = ChoiceTree.branch(label: choice.label, children: final.1)
+                            branch = ChoiceTree.branch(label: choice.label, children: [final.1])
                         }
                     }
                     
@@ -206,6 +204,10 @@ public struct ValueAndChoiceTreeIterator<FinalOutput>: IteratorProtocol, Sequenc
                         // Wrap in selected
                         finalValue = value
                         branches.append(.selected(branch))
+                        if context.materializePicks == false {
+                            // Do not iterate more
+                            break
+                        }
                     } else if let branch {
                         branches.append(branch)
                     }
@@ -216,9 +218,8 @@ public struct ValueAndChoiceTreeIterator<FinalOutput>: IteratorProtocol, Sequenc
                 else {
                     throw GeneratorError.couldNotGenerateConcomitantChoiceTree
                 }
-                let branchChoices = [ChoiceTree.group(branches)]
                 
-                return (value, branchChoices)
+                return (value, .group(branches))
 
             case let .chooseBits(min, max):
                 // 1. Generate the raw, random bits. The interpreter's only job
@@ -229,8 +230,8 @@ public struct ValueAndChoiceTreeIterator<FinalOutput>: IteratorProtocol, Sequenc
                 
                 // Run the continuation here, which is getting a .pure value, which we ignore
                 // for ChoiceTree purposes
-                if let (result, _) = try runContinuation(randomBits, [choiceTree]) {
-                    return (result, [choiceTree])
+                if let (result, _) = try runContinuation(randomBits, choiceTree) {
+                    return (result, choiceTree)
                 }
                 return nil
             
@@ -243,8 +244,8 @@ public struct ValueAndChoiceTreeIterator<FinalOutput>: IteratorProtocol, Sequenc
                 
                 // Run the continuation here, which is getting a .pure value, which we ignore
                 // for ChoiceTree purposes
-                if let (result, _) = try runContinuation(character, [choiceTree]) {
-                    return (result, [choiceTree])
+                if let (result, _) = try runContinuation(character, choiceTree) {
+                    return (result, choiceTree)
                 }
                 return nil
             case let .sequence(lengthGen, elementGen):
@@ -269,7 +270,7 @@ public struct ValueAndChoiceTreeIterator<FinalOutput>: IteratorProtocol, Sequenc
                 for _ in 0..<length {
                     // Run the element generator once for each item.
                     // It's a self-contained generator, so its input is `()`.
-                    guard let element = try self.generateRecursive(
+                    guard let elementResult = try self.generateRecursive(
                         elementGen,
                         with: () as! Input,
                         context: context,
@@ -279,41 +280,38 @@ public struct ValueAndChoiceTreeIterator<FinalOutput>: IteratorProtocol, Sequenc
                         // If any element fails to generate, the whole sequence fails.
                         return nil
                     }
-                    results.append(element.0)
+                    results.append(elementResult.0)
+                    elements.append(elementResult.1)
                     
                     // Inline the flatMap logic to avoid intermediate arrays
-                    let choiceTrees = element.1
-                    if choiceTrees.count > 1 {
-                        elements.append(.group(choiceTrees))
-                    } else {
-                        elements.append(contentsOf: choiceTrees)
-                    }
+//                    let choiceTrees = elementResult.1
+//                    if choiceTrees.count > 1 {
+//                        elements.append(.group(choiceTrees))
+//                    } else {
+//                        elements.append(contentsOf: choiceTrees)
+//                    }
                 }
                 
                 let choiceTree = ChoiceTree.sequence(
                     length: length,
                     elements: elements,
-                    lengthTrees.first(where: { $0.metadata.validRanges.isEmpty == false })!.metadata
+                    lengthTrees.metadata // FIXME: This will now be a group
                 )
                 
                 // Ignore the result ChoiceTree here; it will be a `just` value
-                let innerResult = [choiceTree]
-                if let (result, _) = try runContinuation(results, innerResult) {
-                    return (result, innerResult)
+                if let (result, _) = try runContinuation(results, choiceTree) {
+                    return (result, choiceTree)
                 }
                 return nil
             case let .just(value):
                 // FIXME: Not sure about this one
                 // Ignore
-                return try runContinuation(
-                    value,
-                    [.just("<value>")]
-                )
+                return try runContinuation(value, .just("<value>"))
                 
             case .getSize:
                 let size = sizeOverride ?? logarithmicallyScaledSize(context.maxRuns, context.size)
                 sizeOverride = nil // getSize consumes the `sizeOverride`
-                return try runContinuation(size, [.getSize(size)])
+                return try runContinuation(size, .getSize(size))
                 
             case let .resize(newSize, nextGen):
                 sizeOverride = newSize
@@ -324,7 +322,7 @@ public struct ValueAndChoiceTreeIterator<FinalOutput>: IteratorProtocol, Sequenc
                     sizeOverride: &sizeOverride,
                     prng: &prng
                 ) else { return nil }
-                return try runContinuation(result, [.resize(newSize: newSize, choices: result.1)])
+                return try runContinuation(result, .resize(newSize: newSize, choices: [result.1]))
             }
         }
     }

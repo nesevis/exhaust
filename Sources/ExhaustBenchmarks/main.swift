@@ -36,6 +36,8 @@ benchmark("String generation with choiceTree") {
     }
 }
 
+// There's no functional difference here between calling next() repeatedly and creating an array from the prefix
+
 benchmark("String generation with choiceTree materialised") {
     let generator = String.arbitrary
     var iterator = ValueAndChoiceTreeIterator(generator, materializePicks: true, seed: 1, maxRuns: 100)
@@ -71,8 +73,12 @@ benchmark("Zipped person with reflection") {
 
 
 benchmark("Zipped person with ChoiceTree") {
-    let generator = Gen.zip(String.arbitraryAscii, UInt8.arbitrary, Double.arbitrary)
-        .mapped(forward: { Person(name: $0.0, age: $0.1, height: $0.2) }, backward: { ($0.name, $0.age, $0.height) })
+    let generator = Gen.zip(
+        String.arbitraryAscii,
+        UInt8.arbitrary,
+        Double.arbitrary
+    )
+    .mapped(forward: { Person(name: $0.0, age: $0.1, height: $0.2) }, backward: { ($0.name, $0.age, $0.height) })
     var iterator = ValueAndChoiceTreeIterator(generator, materializePicks: true, seed: 1, maxRuns: 100)
     while let (value, tree) = iterator.next() {
         let value = value

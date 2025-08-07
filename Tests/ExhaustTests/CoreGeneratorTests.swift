@@ -192,7 +192,7 @@ struct CoreGeneratorTests {
             _ = thing.next()
             let test = thing.next()!
             let (output2, choiceTree) = try #require(test)
-            let bla = choiceTree.debugDescription
+//            let bla = choiceTree.debugDescription
             let replay = try? Interpreters.replay(gen, using: choiceTree)
             let reflection = try Interpreters.reflect(gen, with: output)
             #expect(output == output2)
