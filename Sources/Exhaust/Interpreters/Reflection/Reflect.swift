@@ -212,7 +212,7 @@ public extension Interpreters {
         
         case let .just(value):
             // Avoid expensive string interpolation and prefix operations
-            return [(value: value, path: [.just("<value>")])]
+            return [(value: value, path: [.just("\(value)")])]
             
         case .getSize:
             // We can't derive the getSize parameter when reflecting as the bind continuation that applies it is opaque to us. Ultimately it shouldn't matter for replay

@@ -57,7 +57,7 @@ public enum Gen {
             if let character = result as? Character {
                 return .pure(character)
             } else {
-                fatalError("Interpreter failed to provide a Character for a chooseCharacter operation.")
+                throw GeneratorError.typeMismatch(expected: "Character", actual: String(describing: type(of: result)))
             }
         }
     }
@@ -96,7 +96,7 @@ public enum Gen {
             if let convertibleValue {
                 return .pure(Output(bitPattern64: convertibleValue.bitPattern64))
             } else {
-                fatalError("Interpreter failed to provide a UInt64 for a chooseBits operation.")
+                throw GeneratorError.typeMismatch(expected: "any BitPatternConvertible", actual: String(describing: Swift.type(of: result)))
             }
         }
     }
@@ -117,7 +117,10 @@ public enum Gen {
                 return .pure(typed)
                 
             }
-            fatalError("Interpreter error in handling of Op.lmap case: unexpected result type \(type(of: result))")
+            throw GeneratorError.typeMismatch(
+                expected: String(describing: Output.self),
+                actual: String(describing: type(of: result))
+            )
         }
     }
     
@@ -190,7 +193,12 @@ public enum Gen {
         )
         // 4. Lift the operation. The continuation will decode the `[Any]` result.
         return .impure(operation: sequenceOp) { result in
-            let array = result as! [Output]
+            guard let array = result as? [Output] else {
+                throw GeneratorError.typeMismatch(
+                    expected: String(describing: type(of: [Output].self)),
+                    actual: String(describing: type(of: result))
+                )
+            }
             return .pure(array)
         }
     }
@@ -265,7 +273,10 @@ public enum Gen {
             if let typedResult = result as? UInt64 {
                 return .pure(typedResult)
             }
-            fatalError("Interpreter provided wrong type. Expected \(UInt64.self), got \(type(of: result))")
+            throw GeneratorError.typeMismatch(
+                expected: "\(UInt64.self)",
+                actual: String(describing: type(of: result))
+            )
         }
     }
     
