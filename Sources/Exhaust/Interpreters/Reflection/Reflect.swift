@@ -10,8 +10,8 @@ import Foundation
 public extension Interpreters {
     // MARK: - Public-Facing Reflect Function (Unchanged, but now correct)
 
-    public static func reflect<Input, Output>(
-        _ gen: ReflectiveGenerator<Input, Output>,
+    public static func reflect<Output>(
+        _ gen: ReflectiveGenerator<Output>,
         with outputValue: Output,
         /// Optional validation check
         where check: (Output) -> Bool = { _ in true }
@@ -38,8 +38,8 @@ public extension Interpreters {
 
     /// The main recursive engine for reflection.
     /// It now takes the *final output value* as a constant target throughout the recursion.
-    private static func reflectRecursive<Input, Output>(
-        _ gen: ReflectiveGenerator<Input, Output>,
+    private static func reflectRecursive<Output>(
+        _ gen: ReflectiveGenerator<Output>,
         onFinalOutput finalOutput: Any
     ) throws -> [(value: Output, path: [ChoiceTree])] { // Still returns typed Output and path
         switch gen {
@@ -68,8 +68,8 @@ public extension Interpreters {
 
     /// This helper interprets a single operation. It receives the overall final output
     /// and determines what to do based on its own semantics.
-    private static func interpretOperationBackward<Input, Output>(
-        _ op: ReflectiveOperation<Input>,
+    private static func interpretOperationBackward<Output>(
+        _ op: ReflectiveOperation,
         onFinalOutput finalOutput: Any,
         outputType: Output.Type
     ) throws -> [(value: Any, path: [ChoiceTree])] {
@@ -212,7 +212,7 @@ public extension Interpreters {
         
         case let .just(value):
             // Avoid expensive string interpolation and prefix operations
-            return [(value: value, path: [.just("<value>")])]
+            return [(value: value, path: [.just("\(value)")])]
             
         case .getSize:
             // We can't derive the getSize parameter when reflecting as the bind continuation that applies it is opaque to us. Ultimately it shouldn't matter for replay

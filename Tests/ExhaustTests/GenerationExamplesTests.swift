@@ -16,7 +16,7 @@ struct GenerationExamplesTests {
         
         @Test
         func example2() async throws {
-            let gen = Gen.choose(in: 1...5, input: Any.self)
+            let gen = Gen.choose(in: 1...5)
             var iterator = GeneratorIterator(gen)
             let results = iterator.next()
             let nonNilResults = try #require(results)

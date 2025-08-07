@@ -12,10 +12,10 @@ enum TestCaseReducer {
     ///   - generator: The generator used to generate the value
     ///   - property: A function that should return `true`, representing a an invariant relationship of the `value`
     /// - Returns: A minimal counterexample to aid in debugging
-    public static func shrink<Input, Output>(
+    public static func shrink<Output>(
         _ value: Output,
         recipe: ChoiceTree? = nil,
-        using generator: ReflectiveGenerator<Input, Output>,
+        using generator: ReflectiveGenerator<Output>,
         where property: (Output) -> Bool
     ) throws -> Output {
         guard let reflectedRecipe = try recipe ?? (try Interpreters.reflect(generator, with: value)) else {
@@ -38,7 +38,7 @@ enum TestCaseReducer {
     
     public static func normalize<Output>(
         _ value: Output,
-        generator: ReflectiveGenerator<Any, Output>,
+        generator: ReflectiveGenerator<Output>,
         limit: Int = 30,
         property: (Output) -> Bool,
         recipe: ChoiceTree
@@ -116,9 +116,9 @@ enum TestCaseReducer {
         return normalized
     }
     
-    private static func shrinkImpl<Input, Output>(
+    private static func shrinkImpl<Output>(
         _ value: Output,
-        using generator: ReflectiveGenerator<Input, Output>,
+        using generator: ReflectiveGenerator<Output>,
         recipe: ChoiceTree,
         where property: (Output) -> Bool
     ) throws -> Output {

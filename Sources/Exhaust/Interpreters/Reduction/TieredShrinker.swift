@@ -14,9 +14,9 @@ public enum Interpreters {
     ///   - generator: The generator used to generate the value
     ///   - property: A function that should return `true`, representing a an invariant relationship of the `value`
     /// - Returns: A minimal counterexample to aid in debugging
-    public static func shrink<Input, Output>(
+    public static func shrink<Output>(
     _ value: Output,
-    using generator: ReflectiveGenerator<Input, Output>,
+    using generator: ReflectiveGenerator<Output>,
     where property: (Output) -> Bool
     ) throws -> Output {
         // At this stage we know that `value`'s values represent a higher or a lower bound beyond the generator
@@ -43,9 +43,9 @@ public enum Interpreters {
 //        return recipe
 //    }
     
-    private static func shrinkImpl<Input, Output>(
+    private static func shrinkImpl<Output>(
         _ value: Output,
-        using generator: ReflectiveGenerator<Input, Output>,
+        using generator: ReflectiveGenerator<Output>,
         recipe: ChoiceTree,
         where property: (Output) -> Bool
     ) throws -> Output {

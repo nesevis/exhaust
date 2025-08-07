@@ -93,7 +93,7 @@ struct CompositionTests {
         
         @Test("Gen.arrayOf creates arrays of specified size")
         func testGenArrayOf() {
-            let elementGen = Gen.choose(in: 1...100, input: Any.self)
+            let elementGen = Gen.choose(in: 1...100)
             let lengthGen = Gen.just(UInt64(5))
             let arrayGen = Gen.arrayOf(elementGen, lengthGen)
             
@@ -193,7 +193,7 @@ struct CompositionTests {
         
         @Test("Gen.pick chooses between alternatives")
         func testGenPick() {
-            let intGen = Gen.choose(in: 1...10, input: Any.self)
+            let intGen = Gen.choose(in: 1...10)
             let stringGen = String.arbitrary
             
             let choiceGen = Gen.pick(choices: [
@@ -290,7 +290,7 @@ struct CompositionTests {
         @Test("Complex generator composition stability")
         func testComplexGeneratorStability() throws {
             // Build a very complex generator with multiple composition patterns
-            let baseGen = Gen.choose(in: 1...100, input: Any.self)
+            let baseGen = Gen.choose(in: 1...100)
             let arrayGen = baseGen.proliferate(with: 1...10)
             let nestedGen = arrayGen.proliferate(with: 1...5)
             let pickedGen = Gen.pick(choices: [

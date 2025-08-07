@@ -35,7 +35,7 @@ struct ReplayDeterminismTests {
     
     @Test("Recipe serialization preserves determinism")
     func testRecipeSerializationDeterminism() throws {
-        let gen = Gen.choose(in: 1...1000, input: Any.self)
+        let gen = Gen.choose(in: 1...1000)
         
         let value = 742
         let recipe = try #require(try Interpreters.reflect(gen, with: value))

@@ -35,7 +35,7 @@ struct GeneratorCompositionEdgeCaseTests {
             String.arbitrary,
             UInt.arbitrary,
             Double.arbitrary,
-            Gen.choose(in: 1...100, input: Any.self)
+            Gen.choose(in: 1...100)
         )
         
         // Verify all components are generated correctly
@@ -80,7 +80,7 @@ struct GeneratorCompositionEdgeCaseTests {
     @Test("Composition with bound generators")
     func testBoundGeneratorComposition() throws {
         let dependentGen = Int.arbitrary.bind { first in
-            Gen.choose(in: first...(first + 10), input: Any.self).map { second in
+            Gen.choose(in: first...(first + 10)).map { second in
                 (first, second)
             }
         }
@@ -99,7 +99,7 @@ struct GeneratorCompositionEdgeCaseTests {
     @Test("Composition preserves replay behavior")
     func testCompositionReplayBehavior() throws {
         let gen = Gen.zip(
-            Gen.choose(in: 1...100, input: Any.self),
+            Gen.choose(in: 1...100),
             String.arbitrary,
             Bool.arbitrary
         )

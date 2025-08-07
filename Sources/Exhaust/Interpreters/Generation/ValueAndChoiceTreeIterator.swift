@@ -20,13 +20,12 @@ public struct ValueAndChoiceTreeIterator<FinalOutput>: IteratorProtocol, Sequenc
     }
 
     public typealias Element = (value: FinalOutput, tree: ChoiceTree)
-    let generator: ReflectiveGenerator<Any, FinalOutput>
+    let generator: ReflectiveGenerator<FinalOutput>
     private(set) var prng: Xoshiro256
     private var context: Context
     
-    public init<Input>(_ generator: ReflectiveGenerator<Input, FinalOutput>, materializePicks: Bool = false, seed: UInt64? = nil, maxRuns: UInt64? = nil) {
+    public init(_ generator: ReflectiveGenerator<FinalOutput>, materializePicks: Bool = false, seed: UInt64? = nil, maxRuns: UInt64? = nil) {
         self.generator = generator
-            .mapOperation(Gen.eraseInputType(from:))
         self.prng = seed.map { Xoshiro256(seed: $0) } ?? Xoshiro256()
         self.context = .init(maxRuns: maxRuns ?? 100, materializePicks: materializePicks, isFixed: false, size: 0)
     }
@@ -57,16 +56,7 @@ public struct ValueAndChoiceTreeIterator<FinalOutput>: IteratorProtocol, Sequenc
     // MARK: - Generator implementation
     
     private static func generate<Output>(
-        _ gen: ReflectiveGenerator<Any, Output>,
-        context: Context,
-        using rng: inout Xoshiro256
-    ) throws -> (Output, ChoiceTree)? {
-        // Delegate to the main generate function, providing the placeholder input.
-        return try self.generate(gen, with: (), context: context, using: &rng)
-    }
-    
-    private static func generate<Output>(
-        _ gen: ReflectiveGenerator<Void, Output>, // Constrained to Input == Void
+        _ gen: ReflectiveGenerator<Output>,
         context: Context,
         using rng: inout Xoshiro256
     ) throws -> (Output, ChoiceTree)? {
@@ -75,7 +65,7 @@ public struct ValueAndChoiceTreeIterator<FinalOutput>: IteratorProtocol, Sequenc
     }
 
     private static func generate<Input, Output>(
-        _ gen: ReflectiveGenerator<Input, Output>,
+        _ gen: ReflectiveGenerator<Output>,
         with input: Input,
         context: Context,
         using prng: inout Xoshiro256
@@ -104,7 +94,7 @@ public struct ValueAndChoiceTreeIterator<FinalOutput>: IteratorProtocol, Sequenc
      // MARK: - Recursive Engine
     
     private static func generateRecursive<Input, Output>(
-        _ gen: ReflectiveGenerator<Input, Output>,
+        _ gen: ReflectiveGenerator<Output>,
         with inputValue: Input,
         context: Context,
         sizeOverride: inout UInt64?,
@@ -180,7 +170,7 @@ public struct ValueAndChoiceTreeIterator<FinalOutput>: IteratorProtocol, Sequenc
                 let totalWeight = choices.reduce(0) { $0 + $1.weight }
                 // This determines which of the branches will be selected
                 var randomRoll = UInt64.random(in: 1...totalWeight, using: &prng)
-                var selectedChoice: (weight: UInt64, label: UInt64, generator: ReflectiveGenerator<Input, Any>)?
+                var selectedChoice: (weight: UInt64, label: UInt64, generator: ReflectiveGenerator<Any>)?
                 for choice in choices {
                     if randomRoll <= choice.weight {
                         selectedChoice = choice
@@ -189,12 +179,14 @@ public struct ValueAndChoiceTreeIterator<FinalOutput>: IteratorProtocol, Sequenc
                     randomRoll -= choice.weight
                 }
                 
-                var branches = [(Output, ChoiceTree)]()
+                var branches = [ChoiceTree]()
+                branches.reserveCapacity(choices.count)
+                var finalValue: Output?
                 
                 for choice in choices {
                     let isSelected = choice.label == selectedChoice?.label
-                    
                     var value: Output?
+                    
                     var branch: ChoiceTree?
                     
                     if isSelected || context.materializePicks {
@@ -210,22 +202,21 @@ public struct ValueAndChoiceTreeIterator<FinalOutput>: IteratorProtocol, Sequenc
                         }
                     }
                     
-                    if let value, let branch {
-                        if isSelected {
-                            // Wrap in selected
-                            branches.append((value, .selected(branch)))
-                        } else {
-                            branches.append((value, branch))
-                        }
+                    if isSelected, let branch {
+                        // Wrap in selected
+                        finalValue = value
+                        branches.append(.selected(branch))
+                    } else if let branch {
+                        branches.append(branch)
                     }
                 }
                 
                 guard
-                    let value = branches.first(where: { $0.1.isSelected })?.0
+                    let value = finalValue
                 else {
                     throw GeneratorError.couldNotGenerateConcomitantChoiceTree
                 }
-                let branchChoices = [ChoiceTree.group(branches.map(\.1))]
+                let branchChoices = [ChoiceTree.group(branches)]
                 
                 return (value, branchChoices)
 
@@ -234,7 +225,7 @@ public struct ValueAndChoiceTreeIterator<FinalOutput>: IteratorProtocol, Sequenc
                 //    is to produce entropy within the specified bounds. It has
                 //    no knowledge of the final `Output` type (e.g., Int, Float).
                 let randomBits = UInt64.random(in: min...max, using: &prng)
-                let choiceTree = ChoiceTree.choice(ChoiceValue(randomBits), .init(validRanges: [min...max], strategies: []))
+                let choiceTree = ChoiceTree.choice(ChoiceValue(randomBits), .init(validRanges: [min...max]))
                 
                 // Run the continuation here, which is getting a .pure value, which we ignore
                 // for ChoiceTree purposes
@@ -248,7 +239,7 @@ public struct ValueAndChoiceTreeIterator<FinalOutput>: IteratorProtocol, Sequenc
                 let randomScalar = UInt64.random(in: min...max, using: &prng)
                 let unicodeScalar = Unicode.Scalar(UInt32(randomScalar)) ?? Unicode.Scalar(63)! // "?"
                 let character = Character(unicodeScalar)
-                let choiceTree = ChoiceTree.choice(ChoiceValue.character(character), .init(validRanges: [min...max], strategies: []))
+                let choiceTree = ChoiceTree.choice(ChoiceValue.character(character), .init(validRanges: [min...max]))
                 
                 // Run the continuation here, which is getting a .pure value, which we ignore
                 // for ChoiceTree purposes
