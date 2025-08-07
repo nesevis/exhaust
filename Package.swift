@@ -21,6 +21,7 @@ let package = Package(
     dependencies: [
         .package(url: "https://github.com/pointfreeco/swift-case-paths", from: "1.5.0"),
         .package(url: "https://github.com/apple/swift-algorithms", from: "1.2.0"),
+        .package(url: "https://github.com/google/swift-benchmark", from: "0.1.2"),
         .package(path: "../See5") // Local C50 package
     ],
     targets: [
@@ -37,6 +38,13 @@ let package = Package(
         .testTarget(
             name: "ExhaustTests",
             dependencies: ["Exhaust"]
+        ),
+        .executableTarget(
+            name: "ExhaustBenchmarks",
+            dependencies: [
+                "Exhaust",
+                .product(name: "Benchmark", package: "swift-benchmark")
+            ]
         ),
     ]
 )
