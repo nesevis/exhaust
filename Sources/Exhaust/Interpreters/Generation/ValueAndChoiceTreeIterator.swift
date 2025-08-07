@@ -108,6 +108,7 @@ public struct ValueAndChoiceTreeIterator<FinalOutput>: IteratorProtocol, Sequenc
         with inputValue: Input,
         context: Context,
         sizeOverride: inout UInt64?,
+        ignoreChoiceTree: Bool = false,
         prng: inout Xoshiro256
     ) throws -> (Output, [ChoiceTree])? {
         // Size override only affects the first call, not all subsequent ones
@@ -115,7 +116,7 @@ public struct ValueAndChoiceTreeIterator<FinalOutput>: IteratorProtocol, Sequenc
         case let .pure(value):
             // The ChoiceTree value will be discarded from the caller if it's coming
             // from .chooseBits or .chooseCharacter
-            return (value, [ChoiceTree.just(String(String(describing: value).prefix(50)))])
+            return (value, ignoreChoiceTree ? [] : [ChoiceTree.just(String(String(describing: value).prefix(50)))])
             
         case let .impure(operation, continuation):
             let jumpedRng = Xoshiro256(seed: prng.next())
@@ -131,6 +132,7 @@ public struct ValueAndChoiceTreeIterator<FinalOutput>: IteratorProtocol, Sequenc
                     with: inputValue,
                     context: context,
                     sizeOverride: &sizeOverride,
+                    ignoreChoiceTree: calleeChoiceTree.contains(where: \.isChoice),
                     prng: &continuationRng
                 ) {
                     return (result, nextGen.isPure ? calleeChoiceTree : calleeChoiceTree + innerChoiceTree)
