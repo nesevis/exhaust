@@ -35,7 +35,7 @@ public enum Gen {
     static func prune<Output>(_ generator: ReflectiveGenerator<Output>) -> ReflectiveGenerator<Output> {
         // The implementation is very similar to lmap: it uses mapOperation to erase
         // the input type and wraps the generator in the .prune operation.
-        let erasedGenerator = generator.mapOperation(eraseInputType).map { $0 as Any }
+        let erasedGenerator = generator.map { $0 as Any }
         
         let op = ReflectiveOperation.prune(next: erasedGenerator)
         
@@ -46,46 +46,6 @@ public enum Gen {
     @inlinable
     static func coprune<Output>(_ generator: ReflectiveGenerator<Output>) -> ReflectiveGenerator<Optional<Output>> {
         generator.map { Optional($0) }
-    }
-    
-    // The transformation function that changes the Operation's Input type to Any.
-    // This function needs to be defined recursively for the `.pick` case.
-    @inlinable
-    static func eraseInputType(from op: ReflectiveOperation) -> ReflectiveOperation {
-        return op
-//        switch op {
-//        case let .pick(choices):
-//            let result = choices.map { ($0.weight, $0.label, $0.generator.mapOperation(eraseInputType(from:))) }
-//            return .pick(choices: result)
-//        case let .prune(next):
-//            return .prune(next: next)
-//        case let .lmap(transform, next):
-//            // This case is tricky because it's already partially erased.
-//            // A simple way to handle it is to create a new transform from Any.
-//            // Note: This reveals a slight awkwardness in the enum design, but it works.
-//            let newTransform: (Any) throws -> Any = { anyInput in
-//                guard let typedInput = anyInput as? Input else {
-//                    fatalError("Type mismatch during lmap erasure.")
-//                }
-//                return try transform(typedInput) ?? ()
-//            }
-//            return .lmap(transform: newTransform, next: next)
-//        case let .chooseBits(min, max):
-//            return .chooseBits(min: min, max: max)
-//        case let .chooseCharacter(min, max):
-//            return .chooseCharacter(min: min, max: max)
-//        case let .sequence(length, gen):
-//            return .sequence(
-//                length: length.mapOperation(eraseInputType(from:)),
-//                gen: gen.mapOperation(eraseInputType(from:))
-//            )
-//        case let .just(value):
-//            return .just(value as Any)
-//        case .getSize:
-//            return .getSize
-//        case let .resize(newSize, next):
-//            return .resize(newSize: newSize, next: next.mapOperation(eraseInputType(from:)))
-//        }
     }
     
     @inlinable
@@ -150,7 +110,6 @@ public enum Gen {
         }
         
         let erasedGen = generator
-            .mapOperation { eraseInputType(from: $0) }
             .map { $0 as Any }
 
         return .impure(operation: ReflectiveOperation.lmap(transform: erasedTransform, next: erasedGen)) { result in
@@ -175,7 +134,6 @@ public enum Gen {
     @inlinable
     static func just<Output>(_ value: Output) -> ReflectiveGenerator<Output> {
         liftF(ReflectiveOperation.just(value))
-            .mapOperation(eraseInputType(from:))
     }
 
 
@@ -197,7 +155,7 @@ public enum Gen {
     static func exact<Value: Equatable>(_ value: Value) -> ReflectiveGenerator<Value> {
         // Use lmap with a transform that validates the target value during reflection.
         // The transform returns nil for mismatches, causing reflection to fail.
-        let baseGenerator = just(value).mapOperation(eraseInputType).map { $0 as Any }
+        let baseGenerator = just(value).map { $0 as Any }
         
         let transform: (Any) -> Any? = { inputValue in
             guard let typedInput = inputValue as? Value, typedInput == value else {

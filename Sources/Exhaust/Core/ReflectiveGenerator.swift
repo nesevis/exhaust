@@ -131,7 +131,7 @@ extension ReflectiveGenerator where Operation: AnyReflectiveOperation {
     }
 }
 
-public extension ReflectiveGenerator where Operation: AnyReflectiveOperation {
+public extension ReflectiveGenerator where Operation == ReflectiveOperation {
 
     func mapped<NewOutput>(
         forward: @escaping (Value) throws -> NewOutput,
@@ -152,7 +152,6 @@ public extension ReflectiveGenerator where Operation: AnyReflectiveOperation {
         }
         let erasedGen = try self
             .map(forward)
-            .mapOperation { Gen.eraseInputType(from: $0 as! ReflectiveOperation) }
         return Gen.lmap(erasedBackward, erasedGen)
     }
     
@@ -166,7 +165,6 @@ public extension ReflectiveGenerator where Operation: AnyReflectiveOperation {
         }
         let erasedGen = try self
             .map(forward)
-            .mapOperation { Gen.eraseInputType(from: $0 as! ReflectiveOperation) }
 
         return Gen.lmap(erasedBackward, erasedGen)
     }
@@ -180,7 +178,6 @@ public extension ReflectiveGenerator where Operation: AnyReflectiveOperation {
         }
         let erasedGen = try self
             .map { try forward.extract(from: $0) }
-            .mapOperation { Gen.eraseInputType(from: $0 as! ReflectiveOperation) }
         
         return Gen.lmap(erasedBackward, erasedGen)
     }

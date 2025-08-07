@@ -41,7 +41,7 @@ struct AdvancedFeatureTests {
         
         @Test("Recursive tree generation with depth control")
         func testRecursiveTreeGeneration() throws {
-            func treeGen(depth: Int) -> ReflectiveGenerator<Any, TestTree<Int>> {
+            func treeGen(depth: Int) -> ReflectiveGenerator<TestTree<Int>> {
                 if depth <= 0 {
                     // Leaf node
                     return Gen.lens(extract: \TestTree<Int>.value, Gen.choose(in: 1...100))
@@ -209,11 +209,11 @@ struct AdvancedFeatureTests {
         
         @Test("Generator robustness with extreme values")
         func testExtremeValueHandling() throws {
-            let extremeGenerators: [ReflectiveGenerator<Any, Int>] = [
-                Gen.choose(in: Int.min...Int.min, input: Any.self),  // Minimum value
-                Gen.choose(in: Int.max...Int.max, input: Any.self),  // Maximum value
-                Gen.choose(in: -1...1, input: Any.self),             // Small range around zero
-                Gen.choose(in: 0...0, input: Any.self)               // Single value
+            let extremeGenerators: [ReflectiveGenerator<Int>] = [
+                Gen.choose(in: Int.min...Int.min),  // Minimum value
+                Gen.choose(in: Int.max...Int.max),  // Maximum value
+                Gen.choose(in: -1...1),             // Small range around zero
+                Gen.choose(in: 0...0)               // Single value
             ]
             
             for (index, gen) in extremeGenerators.enumerated() {

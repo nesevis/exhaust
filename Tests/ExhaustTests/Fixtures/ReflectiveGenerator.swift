@@ -9,7 +9,7 @@
 import Testing
 
 @discardableResult
-func validateGenerator<Output: Equatable>(_ gen: ReflectiveGenerator<Any, Output>) throws -> (recipe: ChoiceTree, instance: Output) {
+func validateGenerator<Output: Equatable>(_ gen: ReflectiveGenerator<Output>) throws -> (recipe: ChoiceTree, instance: Output) {
     var iterator = GeneratorIterator(gen)
     if let instance = iterator.next() {
         let recipe = try #require(try Interpreters.reflect(gen, with: instance))

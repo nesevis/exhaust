@@ -14,7 +14,7 @@ struct ConstraintViolationTests {
     
     @Test("Range-constrained generators never exceed bounds")
     func testRangeBoundsNeverViolated() throws {
-        let gen = Gen.choose(in: 10...50, input: Any.self)
+        let gen = Gen.choose(in: 10...50)
         var iterator = GeneratorIterator(gen)
         
         // Generate many values to test constraint
@@ -66,8 +66,8 @@ struct ConstraintViolationTests {
     @Test("Bound generators respect all constraints")
     func testBoundGeneratorConstraints() throws {
         // Generator that produces pairs where second > first
-        let orderedPairGen = Gen.choose(in: 1...100, input: Any.self).bind { first in
-            Gen.choose(in: (first + 1)...200, input: Any.self).map { second in
+        let orderedPairGen = Gen.choose(in: 1...100).bind { first in
+            Gen.choose(in: (first + 1)...200).map { second in
                 (first, second)
             }
         }
@@ -86,7 +86,7 @@ struct ConstraintViolationTests {
     func testStringLengthConstraints() throws {
         // This test assumes you have a way to constrain string length
         // Adapt based on your actual string generation API
-        let shortStringGen = Gen.chooseCharacter(in: 0...30, input: Any.self).map(String.init)
+        let shortStringGen = Gen.chooseCharacter(in: 0...30).map(String.init)
         
         var iterator = GeneratorIterator(shortStringGen)
         for _ in 0..<30 {
@@ -110,8 +110,8 @@ struct ConstraintViolationTests {
     
     @Test("Zipped generators maintain individual constraints")
     func testZippedGeneratorConstraints() throws {
-        let positiveGen = Gen.choose(in: 1...100, input: Any.self)
-        let evenGen = Gen.choose(in: 0...50, input: Any.self).map { $0 * 2 }
+        let positiveGen = Gen.choose(in: 1...100)
+        let evenGen = Gen.choose(in: 0...50).map { $0 * 2 }
         let shortArrayGen = String.arbitrary.proliferate(with: 1...3)
         
         let combinedGen = Gen.zip(positiveGen, evenGen, shortArrayGen)

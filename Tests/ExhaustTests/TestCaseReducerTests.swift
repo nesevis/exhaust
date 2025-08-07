@@ -107,7 +107,7 @@ struct TestCaseReducerTests {
     
     @Test("Sum of two numbers must be less than 100")
     func testWithSumOfTwoNumbers() throws {
-        let gen = Gen.choose(in: UInt(1)...1_000_000, input: Any.self)
+        let gen = Gen.choose(in: UInt(1)...1_000_000)
         let zipGen = Gen.zip(gen, gen)
         let counterExample: (UInt, UInt) = (150, 250)
         let property: ((UInt, UInt)) -> Bool = { thing in

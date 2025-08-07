@@ -17,7 +17,7 @@ struct CoreGeneratorTests {
         
         @Test("Gen.choose produces values within specified range")
         func testGenChooseRange() {
-            let gen = Gen.choose(in: 10...20, input: Any.self)
+            let gen = Gen.choose(in: 10...20)
             var iterator = GeneratorIterator(gen)
             
             for _ in 0..<50 {
@@ -28,7 +28,7 @@ struct CoreGeneratorTests {
         
         @Test("Gen.choose with type produces valid values")
         func testGenChooseType() {
-            let gen = Gen.choose(type: UInt32.self, input: Any.self)
+            let gen = Gen.choose(type: UInt32.self)
             var iterator = GeneratorIterator(gen)
             
             for _ in 0..<20 {
@@ -104,7 +104,7 @@ struct CoreGeneratorTests {
         
         @Test("Generate-Reflect-Replay cycle consistency")
         func testGenerateReflectReplayConsistency() throws {
-            let generators: [ReflectiveGenerator<Any, String>] = [
+            let generators: [ReflectiveGenerator<String>] = [
                 String.arbitrary,
                 Gen.just("constant")
             ]
@@ -128,7 +128,7 @@ struct CoreGeneratorTests {
         
         @Test("Multiple generation consistency")
         func testMultipleGenerationConsistency() throws {
-            let gen = Gen.choose(in: 1...100, input: Any.self)
+            let gen = Gen.choose(in: 1...100)
             guard let recipe = try Interpreters.reflect(gen, with: 42) else {
                 #expect(false, "Reflection failed for value 42")
                 return
@@ -164,7 +164,7 @@ struct CoreGeneratorTests {
         
         @Test("High-frequency generation performance")
         func testHighFrequencyGeneration() {
-            let gen = Gen.choose(in: 1...1000, input: Any.self)
+            let gen = Gen.choose(in: 1...1000)
             var iterator = GeneratorIterator(gen, maxRuns: 10000)
             
             // Should be able to generate many values quickly

@@ -135,10 +135,11 @@ struct PartialMonadicProfunctorLawTests {
     /// A Partial Monadic Profunctor must satisfy: `Gen.lmap({ $0 }, Gen.prune(generator))` is equivalent to `generator`
     func pmpLaw1_LmapJustPruneIsIdentity() throws {
         // Arrange
-        let generator = Gen.just(42)
+        let generator = Gen.just(Int(42))
         
         // Act: lmap(Just) . prune should be identity
-        let lhs = Gen.lmap({ $0 }, Gen.prune(generator))
+        // Type discovery here is bad now with input parameterisation removed
+        let lhs = Gen.lmap({ $0 as Int }, Gen.prune(generator))
         let rhs = generator
         
         var lhsIterator = GeneratorIterator(lhs)
@@ -197,7 +198,7 @@ struct PartialMonadicProfunctorLawTests {
         
         // Act
         let lhs = Gen.lmap(transform, Gen.prune(ReflectiveGenerator.pure(pureValue)))
-        let rhs = ReflectiveGenerator<String, String>.pure(pureValue)
+        let rhs = ReflectiveGenerator<String>.pure(pureValue)
         
         var lhsIterator = GeneratorIterator(lhs)
         var rhsIterator = GeneratorIterator(rhs)
@@ -216,10 +217,10 @@ struct PartialMonadicProfunctorLawTests {
     /// A PMP must satisfy: `(lmap f . prune)(x >>= g)` is equivalent to `(lmap f . prune) x >>= (lmap f . prune) . g`
     func pmpLaw4_LmapPruneDistributesOverBind() throws {
         // Arrange - carefully chosen types for the law to work
-        let baseGenerator = ReflectiveGenerator<Int, Int>.pure(5)
+        let baseGenerator = ReflectiveGenerator<Int>.pure(5)
         // Crucial: bindFunction must return a generator with the SAME input type as base
-        let bindFunction: (Int) -> ReflectiveGenerator<Int, String> = { val in
-            ReflectiveGenerator<Int, String>.pure("Value: \(val)")
+        let bindFunction: (Int) -> ReflectiveGenerator<String> = { val in
+            ReflectiveGenerator<String>.pure("Value: \(val)")
         }
         // transform maps from NewInput to original input type (Optional)
         let transform: (String) -> Int? = { str in 
@@ -235,7 +236,7 @@ struct PartialMonadicProfunctorLawTests {
         let transformedBase = Gen.lmap(transform, Gen.prune(baseGenerator))  // ReflectiveGenerator<String, Int>
         
         // The bind function applies (lmap f . prune) to the result of g
-        let transformedFunction: (Int) -> ReflectiveGenerator<String, String> = { val in
+        let transformedFunction: (Int) -> ReflectiveGenerator<String> = { val in
             let resultGenerator = bindFunction(val)  // ReflectiveGenerator<Int, String>
             return Gen.lmap(transform, Gen.prune(resultGenerator))  // ReflectiveGenerator<String, String>
         }
