@@ -8,7 +8,7 @@
 import Foundation
 
 // TODO: Rename
-struct ValueAndChoiceTreeIterator<FinalOutput>: IteratorProtocol, Sequence {
+public struct ValueAndChoiceTreeIterator<FinalOutput>: IteratorProtocol, Sequence {
     // TODO: This will have to be inout?
     private struct Context {
         let maxRuns: UInt64
@@ -18,19 +18,19 @@ struct ValueAndChoiceTreeIterator<FinalOutput>: IteratorProtocol, Sequence {
         var sizeOverride: UInt64? = nil
     }
 
-    typealias Element = (value: FinalOutput, tree: ChoiceTree)?
+    public typealias Element = (value: FinalOutput, tree: ChoiceTree)
     let generator: ReflectiveGenerator<Any, FinalOutput>
     private(set) var prng: Xoshiro256
     private var context: Context
     
-    init<Input>(_ generator: ReflectiveGenerator<Input, FinalOutput>, materializePicks: Bool = false, seed: UInt64? = nil, maxRuns: UInt64? = nil) {
+    public init<Input>(_ generator: ReflectiveGenerator<Input, FinalOutput>, materializePicks: Bool = false, seed: UInt64? = nil, maxRuns: UInt64? = nil) {
         self.generator = generator
             .mapOperation(Gen.eraseInputType(from:))
         self.prng = seed.map { Xoshiro256(seed: $0) } ?? Xoshiro256()
         self.context = .init(maxRuns: maxRuns ?? 100, materializePicks: materializePicks, isFixed: false, size: 0)
     }
     
-    mutating func next() -> Element? {
+    public mutating func next() -> Element? {
         guard context.size < context.maxRuns else {
             return nil
         }
