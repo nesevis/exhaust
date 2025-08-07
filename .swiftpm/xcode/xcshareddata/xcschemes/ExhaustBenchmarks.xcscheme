@@ -52,7 +52,11 @@
       </BuildableProductRunnable>
       <CommandLineArguments>
          <CommandLineArgument
-            argument = "--iterations=200"
+            argument = "--iterations=1"
+            isEnabled = "YES">
+         </CommandLineArgument>
+         <CommandLineArgument
+            argument = "--allow-debug-build"
             isEnabled = "YES">
          </CommandLineArgument>
       </CommandLineArguments>

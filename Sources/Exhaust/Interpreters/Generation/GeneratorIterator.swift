@@ -126,26 +126,12 @@ public struct GeneratorIterator<Element>: IteratorProtocol, Sequence {
                 // --- Production-Ready Weighted Choice ---
                 guard !choices.isEmpty else { return nil }
                 
-                let startTime = Date()
                 let totalWeight = choices.reduce(0) { $0 + $1.weight }
                 guard totalWeight > 0 else {
                     // If all weights are 0, pick uniformly.
                     let randomIndex = Int.random(in: 0..<choices.count, using: &prng)
                     let chosenGenerator = choices[randomIndex].generator
                     guard let result = try self.generateRecursive(chosenGenerator, with: inputValue, size: size, maxRuns: maxRuns, sizeOverride: &sizeOverride, prng: &prng) else { return nil }
-                    
-                    // Report pick event
-//                    if TycheReportContext.isReportingEnabled {
-//                        let duration = Date().timeIntervalSince(startTime)
-//                        let metadata = GenerationMetadata(
-//                            operationType: "pick-uniform",
-//                            generatorType: "Choice[\(choices.count)]",
-//                            size: &prng.size,
-//                            entropy: UInt64(randomIndex),
-//                            duration: duration
-//                        )
-//                        TycheReportContext.safeRecordGeneration(randomIndex, metadata: metadata)
-//                    }
                     
                     return try runContinuation(result)
                 }
@@ -155,19 +141,6 @@ public struct GeneratorIterator<Element>: IteratorProtocol, Sequence {
                 for (index, choice) in choices.enumerated() {
                     if randomRoll <= choice.weight {
                         guard let result = try self.generateRecursive(choice.generator, with: inputValue, size: size, maxRuns: maxRuns, sizeOverride: &sizeOverride, prng: &prng) else { return nil }
-                        
-                        // Report weighted pick event
-//                        if TycheReportContext.isReportingEnabled {
-//                            let duration = Date().timeIntervalSince(startTime)
-//                            let metadata = GenerationMetadata(
-//                                operationType: "pick-weighted",
-//                                generatorType: "Choice[\(choices.count)]",
-//                                size: prng.size,
-//                                entropy: UInt64(index),
-//                                duration: duration
-//                            )
-//                            TycheReportContext.safeRecordGeneration(index, metadata: metadata)
-//                        }
                         
                         return try runContinuation(result)
                     }
@@ -181,21 +154,7 @@ public struct GeneratorIterator<Element>: IteratorProtocol, Sequence {
                 // 1. Generate the raw, random bits. The interpreter's only job
                 //    is to produce entropy within the specified bounds. It has
                 //    no knowledge of the final `Output` type (e.g., Int, Float).
-                let startTime = Date()
                 let randomBits = UInt64.random(in: min...max, using: &prng)
-                let duration = Date().timeIntervalSince(startTime)
-                
-                // Report fine-grained generation event if Tyche reporting is enabled
-//                if TycheReportContext.isReportingEnabled {
-//                    let metadata = GenerationMetadata(
-//                        operationType: "chooseBits",
-//                        generatorType: "\(Output.self)",
-//                        size: prng.size,
-//                        entropy: randomBits,
-//                        duration: duration
-//                    )
-//                    TycheReportContext.safeRecordGeneration(randomBits, metadata: metadata)
-//                }
                 
                 // 2. Pass the raw UInt64 bits to the continuation.
                 //    The `continuation` for a `FreeFunctions.choose<T>()` call was

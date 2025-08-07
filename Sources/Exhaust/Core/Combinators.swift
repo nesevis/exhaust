@@ -7,7 +7,6 @@ public enum Gen {
                 return .pure(typedResult)
             }
             throw Interpreters.ReflectionError.reflectedNil(type: String(describing: Output.self))
-//            throw GeneratorError.liftFTypeMismatch(expected: String(describing: Output.self), actual: String(describing: type(of: result)))
         }
     }
     
