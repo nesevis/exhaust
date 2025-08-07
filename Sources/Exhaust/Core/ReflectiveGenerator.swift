@@ -106,9 +106,7 @@
 /// according to the original generator's constraints.
 ///
 /// - SeeAlso: `ReflectiveOperation`, `Gen`, `Interpreters`, `ChoiceTree`
-public typealias ReflectiveGenerator<Input, Output> = FreerMonad<ReflectiveOperation, Output>
-
-typealias AlignedReflectiveGenerator<Value> = ReflectiveGenerator<Value, Value>
+public typealias ReflectiveGenerator<Output> = FreerMonad<ReflectiveOperation, Output>
 
 extension ReflectiveGenerator where Operation: AnyReflectiveOperation {
     var isLens: Bool {
@@ -138,7 +136,7 @@ public extension ReflectiveGenerator where Operation: AnyReflectiveOperation {
     func mapped<NewOutput>(
         forward: @escaping (Value) throws -> NewOutput,
         backward: @escaping (NewOutput) throws -> Value
-    ) rethrows -> ReflectiveGenerator<Any, NewOutput> {
+    ) rethrows -> ReflectiveGenerator<NewOutput> {
         let erasedBackward: (Any) throws -> Any = { newOutput in
             if let actual = newOutput as? NewOutput {
                 return try backward(actual)
@@ -162,7 +160,7 @@ public extension ReflectiveGenerator where Operation: AnyReflectiveOperation {
     func mapped<NewOutput>(
         forward: @escaping (Value) throws -> NewOutput,
         backward: some PartialPath<NewOutput, Value>
-    ) rethrows -> ReflectiveGenerator<Any, NewOutput> {
+    ) rethrows -> ReflectiveGenerator<NewOutput> {
         let erasedBackward: (Any) throws -> Any = { newOutput in
             try backward.extract(from: newOutput)!
         }
@@ -176,7 +174,7 @@ public extension ReflectiveGenerator where Operation: AnyReflectiveOperation {
     func mapped<NewOutput>(
         forward: some PartialPath<Value, NewOutput>,
         backward: some PartialPath<NewOutput, Value>
-    ) throws -> ReflectiveGenerator<Any, NewOutput?> {
+    ) throws -> ReflectiveGenerator<NewOutput?> {
         let erasedBackward: (Any) throws -> Any = { newOutput in
             try backward.extract(from: newOutput)!
         }

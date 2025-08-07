@@ -11,7 +11,7 @@ public extension Interpreters {
     // MARK: - Public-Facing Reflect Function (Unchanged, but now correct)
 
     public static func reflect<Output>(
-        _ gen: ReflectiveGenerator<Any, Output>,
+        _ gen: ReflectiveGenerator<Output>,
         with outputValue: Output,
         /// Optional validation check
         where check: (Output) -> Bool = { _ in true }
@@ -39,7 +39,7 @@ public extension Interpreters {
     /// The main recursive engine for reflection.
     /// It now takes the *final output value* as a constant target throughout the recursion.
     private static func reflectRecursive<Output>(
-        _ gen: ReflectiveGenerator<Any, Output>,
+        _ gen: ReflectiveGenerator<Output>,
         onFinalOutput finalOutput: Any
     ) throws -> [(value: Output, path: [ChoiceTree])] { // Still returns typed Output and path
         switch gen {

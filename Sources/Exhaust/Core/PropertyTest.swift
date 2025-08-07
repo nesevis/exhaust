@@ -7,7 +7,7 @@
 
 enum PropertyTest {
     static func test<Output>(
-        _ gen: ReflectiveGenerator<Any, Output>,
+        _ gen: ReflectiveGenerator<Output>,
         maxIterations: UInt64 = 100,
         seed: UInt64? = nil,
         property: @escaping (Output) -> Bool

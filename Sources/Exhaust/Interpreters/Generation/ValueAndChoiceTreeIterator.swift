@@ -20,11 +20,11 @@ public struct ValueAndChoiceTreeIterator<FinalOutput>: IteratorProtocol, Sequenc
     }
 
     public typealias Element = (value: FinalOutput, tree: ChoiceTree)
-    let generator: ReflectiveGenerator<Any, FinalOutput>
+    let generator: ReflectiveGenerator<FinalOutput>
     private(set) var prng: Xoshiro256
     private var context: Context
     
-    public init(_ generator: ReflectiveGenerator<Any, FinalOutput>, materializePicks: Bool = false, seed: UInt64? = nil, maxRuns: UInt64? = nil) {
+    public init(_ generator: ReflectiveGenerator<FinalOutput>, materializePicks: Bool = false, seed: UInt64? = nil, maxRuns: UInt64? = nil) {
         self.generator = generator
             .mapOperation(Gen.eraseInputType(from:))
         self.prng = seed.map { Xoshiro256(seed: $0) } ?? Xoshiro256()
@@ -57,7 +57,7 @@ public struct ValueAndChoiceTreeIterator<FinalOutput>: IteratorProtocol, Sequenc
     // MARK: - Generator implementation
     
     private static func generate<Output>(
-        _ gen: ReflectiveGenerator<Any, Output>,
+        _ gen: ReflectiveGenerator<Output>,
         context: Context,
         using rng: inout Xoshiro256
     ) throws -> (Output, ChoiceTree)? {
@@ -66,7 +66,7 @@ public struct ValueAndChoiceTreeIterator<FinalOutput>: IteratorProtocol, Sequenc
     }
 
     private static func generate<Input, Output>(
-        _ gen: ReflectiveGenerator<Input, Output>,
+        _ gen: ReflectiveGenerator<Output>,
         with input: Input,
         context: Context,
         using prng: inout Xoshiro256
@@ -95,7 +95,7 @@ public struct ValueAndChoiceTreeIterator<FinalOutput>: IteratorProtocol, Sequenc
      // MARK: - Recursive Engine
     
     private static func generateRecursive<Input, Output>(
-        _ gen: ReflectiveGenerator<Input, Output>,
+        _ gen: ReflectiveGenerator<Output>,
         with inputValue: Input,
         context: Context,
         sizeOverride: inout UInt64?,
@@ -171,7 +171,7 @@ public struct ValueAndChoiceTreeIterator<FinalOutput>: IteratorProtocol, Sequenc
                 let totalWeight = choices.reduce(0) { $0 + $1.weight }
                 // This determines which of the branches will be selected
                 var randomRoll = UInt64.random(in: 1...totalWeight, using: &prng)
-                var selectedChoice: (weight: UInt64, label: UInt64, generator: ReflectiveGenerator<Input, Any>)?
+                var selectedChoice: (weight: UInt64, label: UInt64, generator: ReflectiveGenerator<Any>)?
                 for choice in choices {
                     if randomRoll <= choice.weight {
                         selectedChoice = choice

@@ -8,13 +8,13 @@
 import Foundation
 
 public struct GeneratorIterator<Element>: IteratorProtocol, Sequence {
-    let generator: ReflectiveGenerator<Any, Element>
+    let generator: ReflectiveGenerator<Element>
     private(set) var prng: Xoshiro256
     private var size: UInt64 = 0
     private var isFixed = false
     private(set) var maxRuns: UInt64
     
-    public init(_ generator: ReflectiveGenerator<Any, Element>, seed: UInt64? = nil, maxRuns: UInt64? = nil) {
+    public init(_ generator: ReflectiveGenerator<Element>, seed: UInt64? = nil, maxRuns: UInt64? = nil) {
         self.generator = generator
             .mapOperation(Gen.eraseInputType(from:))
         self.prng = seed.map { Xoshiro256(seed: $0) } ?? Xoshiro256()
@@ -47,7 +47,7 @@ public struct GeneratorIterator<Element>: IteratorProtocol, Sequence {
     // MARK: - Generator implementation
     
     static func generate<Output>(
-        _ gen: ReflectiveGenerator<Any, Output>,
+        _ gen: ReflectiveGenerator<Output>,
         initialSize: UInt64 = 0,
         maxRuns: UInt64,
         using rng: inout Xoshiro256
@@ -57,7 +57,7 @@ public struct GeneratorIterator<Element>: IteratorProtocol, Sequence {
     }
 
     fileprivate static func generate<Input, Output>(
-        _ gen: ReflectiveGenerator<Input, Output>,
+        _ gen: ReflectiveGenerator<Output>,
         with input: Input,
         initialSize: UInt64 = 0,
         sizeOverride: UInt64? = nil,
@@ -86,7 +86,7 @@ public struct GeneratorIterator<Element>: IteratorProtocol, Sequence {
      // MARK: - Recursive Engine
     
     private static func generateRecursive<Input, Output>(
-        _ gen: ReflectiveGenerator<Input, Output>,
+        _ gen: ReflectiveGenerator<Output>,
         with inputValue: Input,
         size: UInt64,
         maxRuns: UInt64,

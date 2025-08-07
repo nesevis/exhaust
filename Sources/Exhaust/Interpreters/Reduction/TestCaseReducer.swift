@@ -15,7 +15,7 @@ enum TestCaseReducer {
     public static func shrink<Output>(
         _ value: Output,
         recipe: ChoiceTree? = nil,
-        using generator: ReflectiveGenerator<Any, Output>,
+        using generator: ReflectiveGenerator<Output>,
         where property: (Output) -> Bool
     ) throws -> Output {
         guard let reflectedRecipe = try recipe ?? (try Interpreters.reflect(generator, with: value)) else {
@@ -38,7 +38,7 @@ enum TestCaseReducer {
     
     public static func normalize<Output>(
         _ value: Output,
-        generator: ReflectiveGenerator<Any, Output>,
+        generator: ReflectiveGenerator<Output>,
         limit: Int = 30,
         property: (Output) -> Bool,
         recipe: ChoiceTree
@@ -118,7 +118,7 @@ enum TestCaseReducer {
     
     private static func shrinkImpl<Output>(
         _ value: Output,
-        using generator: ReflectiveGenerator<Any, Output>,
+        using generator: ReflectiveGenerator<Output>,
         recipe: ChoiceTree,
         where property: (Output) -> Bool
     ) throws -> Output {

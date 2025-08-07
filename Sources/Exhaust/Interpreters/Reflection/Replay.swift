@@ -20,7 +20,7 @@ extension Interpreters {
     /// - Returns: The deterministically generated value, or `nil` if the tree does not
     ///   match the generator's structure.
     public static func replay<Output>(
-        _ gen: ReflectiveGenerator<Any, Output>,
+        _ gen: ReflectiveGenerator<Output>,
         using choiceTree: ChoiceTree
     ) throws -> Output? {
         // First let's unwrap any `.important` markers
@@ -46,7 +46,7 @@ extension Interpreters {
     // MARK: - Private Recursive Replay Engine
     
     private static func replayWithChoices<Output>(
-        _ gen: ReflectiveGenerator<Any, Output>,
+        _ gen: ReflectiveGenerator<Output>,
         choices: [ChoiceTree]
     ) throws -> Output? {
         var remainingChoices = choices
@@ -54,7 +54,7 @@ extension Interpreters {
     }
     
     private static func replayWithChoicesHelper<Output>(
-        _ gen: ReflectiveGenerator<Any, Output>,
+        _ gen: ReflectiveGenerator<Output>,
         choices: inout [ChoiceTree]
     ) throws -> Output? {
         switch gen {
@@ -108,7 +108,7 @@ extension Interpreters {
                 }
                 
                 let nextGen = try branches
-                    .firstNonNil { branch -> ReflectiveGenerator<Any, Output>? in
+                    .firstNonNil { branch -> ReflectiveGenerator<Output>? in
                         switch branch {
                         case let .branch(label, children), let .selected(.branch(label, children)):
                             guard
@@ -203,7 +203,7 @@ extension Interpreters {
     }
     
     private static func replayRecursive<Output>(
-        _ gen: ReflectiveGenerator<Any, Output>,
+        _ gen: ReflectiveGenerator<Output>,
         with script: ChoiceTree
     ) throws -> Output? {
         

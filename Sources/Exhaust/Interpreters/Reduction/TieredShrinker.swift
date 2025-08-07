@@ -16,7 +16,7 @@ public enum Interpreters {
     /// - Returns: A minimal counterexample to aid in debugging
     public static func shrink<Output>(
     _ value: Output,
-    using generator: ReflectiveGenerator<Any, Output>,
+    using generator: ReflectiveGenerator<Output>,
     where property: (Output) -> Bool
     ) throws -> Output {
         // At this stage we know that `value`'s values represent a higher or a lower bound beyond the generator
@@ -45,7 +45,7 @@ public enum Interpreters {
     
     private static func shrinkImpl<Output>(
         _ value: Output,
-        using generator: ReflectiveGenerator<Any, Output>,
+        using generator: ReflectiveGenerator<Output>,
         recipe: ChoiceTree,
         where property: (Output) -> Bool
     ) throws -> Output {
