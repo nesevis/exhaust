@@ -1,6 +1,5 @@
-enum Gen {
-    @inlinable
-    static func liftF<Input, Output>(
+public enum Gen {
+    public static func liftF<Input, Output>(
         _ op: ReflectiveOperation<Input>
     ) -> ReflectiveGenerator<Input, Output> {
         return .impure(operation: op) { result in
@@ -104,7 +103,7 @@ enum Gen {
     }
     
     @inlinable
-    static func choose<Input, Output: BitPatternConvertible>(in range: ClosedRange<Output>? = nil, type: Output.Type = Output.self, input: Input.Type = Input.self) -> ReflectiveGenerator<Input, Output> {
+    public static func choose<Input, Output: BitPatternConvertible>(in range: ClosedRange<Output>? = nil, type: Output.Type = Output.self, input: Input.Type = Input.self) -> ReflectiveGenerator<Input, Output> {
         
         // 1. Determine the range of raw UInt64 bits to generate.
         //    This logic delegates the responsibility of defining the range to the type `T` itself.

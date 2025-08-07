@@ -7,7 +7,7 @@
 
 extension Gen {
     // Zip wraps plain generators in a lens to help them extract from the tuple that is returned when reflecting. If the generator is already a lens, the assumption is that the user is then mapping over the tuple to transform it into something else again.
-    static func zip<A, B>(
+    public static func zip<A, B>(
         _ a: ReflectiveGenerator<Any, A>,
         _ b: ReflectiveGenerator<Any, B>
     ) -> ReflectiveGenerator<Any, (A, B)> {
@@ -17,7 +17,7 @@ extension Gen {
         }
     }
     
-    static func zip<A, B, C>(
+    public static func zip<A, B, C>(
         _ a: ReflectiveGenerator<Any, A>,
         _ b: ReflectiveGenerator<Any, B>,
         _ c: ReflectiveGenerator<Any, C>
@@ -30,7 +30,7 @@ extension Gen {
         }
     }
     
-    static func zip<A, B, C, D>(
+    public static func zip<A, B, C, D>(
         _ a: ReflectiveGenerator<Any, A>,
         _ b: ReflectiveGenerator<Any, B>,
         _ c: ReflectiveGenerator<Any, C>,
@@ -46,7 +46,7 @@ extension Gen {
         }
     }
     
-    static func zip<A, B, C, D, E>(
+    public static func zip<A, B, C, D, E>(
         _ a: ReflectiveGenerator<Any, A>,
         _ b: ReflectiveGenerator<Any, B>,
         _ c: ReflectiveGenerator<Any, C>,
@@ -65,7 +65,7 @@ extension Gen {
         }
     }
     
-    static func zip<A, B, C, D, E, F>(
+    public static func zip<A, B, C, D, E, F>(
         _ a: ReflectiveGenerator<Any, A>,
         _ b: ReflectiveGenerator<Any, B>,
         _ c: ReflectiveGenerator<Any, C>,
@@ -87,7 +87,7 @@ extension Gen {
         }
     }
     
-    static func zip<A, B, C, D, E, F, G>(
+    public static func zip<A, B, C, D, E, F, G>(
         _ a: ReflectiveGenerator<Any, A>,
         _ b: ReflectiveGenerator<Any, B>,
         _ c: ReflectiveGenerator<Any, C>,
@@ -112,7 +112,7 @@ extension Gen {
         }
     }
     
-    static func zip<A, B, C, D, E, F, G, H>(
+    public static func zip<A, B, C, D, E, F, G, H>(
         _ a: ReflectiveGenerator<Any, A>,
         _ b: ReflectiveGenerator<Any, B>,
         _ c: ReflectiveGenerator<Any, C>,
@@ -140,7 +140,7 @@ extension Gen {
         }
     }
     
-    static func zip<A, B, C, D, E, F, G, H, I>(
+    public static func zip<A, B, C, D, E, F, G, H, I>(
         _ a: ReflectiveGenerator<Any, A>,
         _ b: ReflectiveGenerator<Any, B>,
         _ c: ReflectiveGenerator<Any, C>,
@@ -171,7 +171,7 @@ extension Gen {
         }
     }
     
-    static func zip<A, B, C, D, E, F, G, H, I, J>(
+    public static func zip<A, B, C, D, E, F, G, H, I, J>(
         _ a: ReflectiveGenerator<Any, A>,
         _ b: ReflectiveGenerator<Any, B>,
         _ c: ReflectiveGenerator<Any, C>,

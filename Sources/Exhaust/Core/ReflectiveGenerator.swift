@@ -106,7 +106,7 @@
 /// according to the original generator's constraints.
 ///
 /// - SeeAlso: `ReflectiveOperation`, `Gen`, `Interpreters`, `ChoiceTree`
-typealias ReflectiveGenerator<Input, Output> = FreerMonad<ReflectiveOperation<Input>, Output>
+public typealias ReflectiveGenerator<Input, Output> = FreerMonad<ReflectiveOperation<Input>, Output>
 
 typealias AlignedReflectiveGenerator<Value> = ReflectiveGenerator<Value, Value>
 
@@ -133,7 +133,7 @@ extension ReflectiveGenerator where Operation: AnyReflectiveOperation {
     }
 }
 
-extension ReflectiveGenerator where Operation: AnyReflectiveOperation {
+public extension ReflectiveGenerator where Operation: AnyReflectiveOperation {
 
     func mapped<NewOutput>(
         forward: @escaping (Value) throws -> NewOutput,
@@ -189,7 +189,7 @@ extension ReflectiveGenerator where Operation: AnyReflectiveOperation {
     
     
     // This is internal
-    func mapOperation<NewOperation>(_ transform: @escaping (Operation) -> NewOperation) -> FreerMonad<NewOperation, Value> {
+    public func mapOperation<NewOperation>(_ transform: @escaping (Operation) -> NewOperation) -> FreerMonad<NewOperation, Value> {
         switch self {
         case let .pure(value):
             // If we're at a pure value, there's no operation to transform. Return as is.

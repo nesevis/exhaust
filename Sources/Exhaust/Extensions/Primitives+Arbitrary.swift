@@ -8,7 +8,7 @@
 // MARK: - Unsigned Integers
 
 extension UInt64: Arbitrary {
-    static var arbitrary: ReflectiveGenerator<Any, Self> {
+    public static var arbitrary: ReflectiveGenerator<Any, Self> {
         Gen.getSize().bind { size in
             // This needs a bit more work to slow the scaling down a tad. Counteract logarithm?
             let expanded: UInt64 = size < 64 ? 1 << size : UInt64.max
@@ -18,7 +18,7 @@ extension UInt64: Arbitrary {
 }
 
 extension UnsignedInteger {
-    static var arbitrary: ReflectiveGenerator<Any, Self> {
+    public static var arbitrary: ReflectiveGenerator<Any, Self> {
         UInt64.arbitrary
             .mapped(forward: { Self(truncatingIfNeeded: $0) }, backward: { UInt64($0) })
     }
@@ -28,7 +28,7 @@ extension UnsignedInteger {
 
 extension UInt: Arbitrary {}
 extension UInt8: Arbitrary {
-    static var arbitrary: ReflectiveGenerator<Any, Self> {
+    public static var arbitrary: ReflectiveGenerator<Any, Self> {
         Gen.getSize().bind { size in
             let expanded: UInt64 = size < 7 ? 1 << size : UInt64(UInt8.max)
             return Gen.choose(in: 0...UInt8(expanded))
@@ -36,7 +36,7 @@ extension UInt8: Arbitrary {
     }
 }
 extension UInt16: Arbitrary {
-    static var arbitrary: ReflectiveGenerator<Any, Self> {
+    public static var arbitrary: ReflectiveGenerator<Any, Self> {
         Gen.getSize().bind { size in
             let expanded: UInt64 = size < 15 ? 1 << size : UInt64(UInt16.max)
             return Gen.choose(in: 0...UInt16(expanded))
@@ -44,7 +44,7 @@ extension UInt16: Arbitrary {
     }
 }
 extension UInt32: Arbitrary {
-    static var arbitrary: ReflectiveGenerator<Any, Self> {
+    public static var arbitrary: ReflectiveGenerator<Any, Self> {
         Gen.getSize().bind { size in
             let expanded: UInt64 = size < 31 ? 1 << size : UInt64(UInt32.max)
             return Gen.choose(in: 0...UInt32(expanded))
@@ -54,7 +54,7 @@ extension UInt32: Arbitrary {
 
 extension SignedInteger {
     // TODO: Implement individually. The ranges are all messed up
-    static var arbitrary: ReflectiveGenerator<Any, Self> {
+    public static var arbitrary: ReflectiveGenerator<Any, Self> {
         Int64.arbitrary
             .mapped(forward: { Self(truncatingIfNeeded: $0) }, backward: { Int64($0) })
     }
@@ -62,7 +62,7 @@ extension SignedInteger {
 
 extension Int: Arbitrary {}
 extension Int8: Arbitrary {
-    static var arbitrary: ReflectiveGenerator<Any, Self> {
+    public static var arbitrary: ReflectiveGenerator<Any, Self> {
         Gen.getSize().bind { size in
             let expanded: UInt64 = size < 7 ? 1 << size : UInt64(Int8.max)
             return Gen.choose(in: -Int8(expanded)...Int8(expanded))
@@ -70,7 +70,7 @@ extension Int8: Arbitrary {
     }
 }
 extension Int16: Arbitrary {
-    static var arbitrary: ReflectiveGenerator<Any, Self> {
+    public static var arbitrary: ReflectiveGenerator<Any, Self> {
         Gen.getSize().bind { size in
             let expanded: UInt64 = size < 15 ? 1 << size : UInt64(Int16.max)
             return Gen.choose(in: -Int16(expanded)...Int16(expanded))
@@ -78,7 +78,7 @@ extension Int16: Arbitrary {
     }
 }
 extension Int32: Arbitrary {
-    static var arbitrary: ReflectiveGenerator<Any, Self> {
+    public static var arbitrary: ReflectiveGenerator<Any, Self> {
         Gen.getSize().bind { size in
             let expanded: UInt64 = size < 31 ? 1 << size : UInt64(Int32.max)
             return Gen.choose(in: -Int32(expanded)...Int32(expanded))
@@ -87,7 +87,7 @@ extension Int32: Arbitrary {
 }
 
 extension Int64: Arbitrary {
-    static var arbitrary: ReflectiveGenerator<Any, Self> {
+    public static var arbitrary: ReflectiveGenerator<Any, Self> {
         Gen.getSize().bind { size in
             let expanded: UInt64 = size < 63 ? 1 << size : UInt64(Int64.max)
             return Gen.choose(in: -Int64(expanded)...Int64(expanded))
@@ -98,7 +98,7 @@ extension Int64: Arbitrary {
 // MARK: - Floating points
 
 extension Double: Arbitrary {
-    static var arbitrary: ReflectiveGenerator<Any, Self> {
+    public static var arbitrary: ReflectiveGenerator<Any, Self> {
         Gen.getSize().bind { size in
             // TODO: use pow() to scale range
             let boundary = size == UInt64.max ? Double.greatestFiniteMagnitude : Double(size)
@@ -108,7 +108,7 @@ extension Double: Arbitrary {
 }
 
 extension BinaryFloatingPoint {
-    static var arbitrary: ReflectiveGenerator<Any, Self> {
+    public static var arbitrary: ReflectiveGenerator<Any, Self> {
         Double.arbitrary
             .mapped(forward: { Self($0) }, backward: { Double($0) })
     }
@@ -119,7 +119,7 @@ extension Float: Arbitrary {}
 // MARK: - Boolean
 
 extension Bool: Arbitrary {
-    static var arbitrary: ReflectiveGenerator<Any, Bool> {
+    public static var arbitrary: ReflectiveGenerator<Any, Bool> {
         Gen.pick(choices: [
             (1, Gen.just(true)),
             (1, Gen.just(false))
@@ -130,7 +130,7 @@ extension Bool: Arbitrary {
 // MARK: - Strings and Characters
 
 extension Character: Arbitrary {
-    static var arbitrary: ReflectiveGenerator<Any, Character> {
+    public static var arbitrary: ReflectiveGenerator<Any, Character> {
         // This is nearly ten times slower than `arbitraryAscii`.
         Gen.getSize().bind { size in
             Gen.pick(choices: [
@@ -150,12 +150,12 @@ extension Character: Arbitrary {
 }
 
 extension String: Arbitrary {
-    static var arbitrary: ReflectiveGenerator<Any, String> {
+    public static var arbitrary: ReflectiveGenerator<Any, String> {
         Gen.arrayOf(Character.arbitrary)
             .map { String($0) }
     }
     
-    static var arbitraryAscii: ReflectiveGenerator<Any, String> {
+    public static var arbitraryAscii: ReflectiveGenerator<Any, String> {
         Gen.arrayOf(Character.arbitraryAscii)
             .mapped(forward: { String($0) }, backward: { Array($0) })
     }
@@ -164,7 +164,7 @@ extension String: Arbitrary {
 // MARK: - Optional
 
 extension Optional: Arbitrary where Wrapped: Arbitrary, Wrapped: Equatable {
-    static var arbitrary: ReflectiveGenerator<Any, Optional<Wrapped>> {
+    public static var arbitrary: ReflectiveGenerator<Any, Optional<Wrapped>> {
         Gen.pick(choices: [
             (1, Gen.just(.none)),
             (5, Wrapped.arbitrary.map { .some($0) })

@@ -2,7 +2,7 @@
 ///
 /// This protocol is the foundation for the unified `choose` generator, allowing it
 /// to work generically over any conforming type (e.g., `Int`, `Float`, `Character`).
-protocol BitPatternConvertible: Equatable, Sendable {
+public protocol BitPatternConvertible: Equatable, Sendable {
     /// The valid range of this type, expressed as an inclusive `ClosedRange`
     /// of `UInt64` bit patterns. This is used by `choose()` as the default range
     /// if a more specific one is not provided.

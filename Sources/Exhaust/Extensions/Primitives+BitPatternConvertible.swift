@@ -8,15 +8,15 @@
 import Foundation
 
 extension Optional: BitPatternConvertible where Wrapped: BitPatternConvertible {
-    static var bitPatternRanges: [ClosedRange<UInt64>] {
+    public static var bitPatternRanges: [ClosedRange<UInt64>] {
         Wrapped.bitPatternRanges
     }
     
-    init(bitPattern64: UInt64) {
+    public init(bitPattern64: UInt64) {
         self = .some(Wrapped(bitPattern64: bitPattern64))
     }
     
-    var bitPattern64: UInt64 {
+    public var bitPattern64: UInt64 {
         switch self {
         case .none:
             0
@@ -27,82 +27,82 @@ extension Optional: BitPatternConvertible where Wrapped: BitPatternConvertible {
 }
 
 extension UInt8: BitPatternConvertible {
-    init(bitPattern64: UInt64) {
+    public init(bitPattern64: UInt64) {
         self = UInt8(bitPattern64)
     }
     
-    static var bitPatternRanges: [ClosedRange<UInt64>] {
+    public static var bitPatternRanges: [ClosedRange<UInt64>] {
         [
             UInt64(UInt8.min)...UInt64(UInt8.max)
         ]
     }
     
-    var bitPattern64: UInt64 {
+    public var bitPattern64: UInt64 {
         UInt64(self)
     }
 }
 
 extension UInt16: BitPatternConvertible {
-    init(bitPattern64: UInt64) {
+    public init(bitPattern64: UInt64) {
         self = UInt16(bitPattern64)
     }
     
-    static var bitPatternRanges: [ClosedRange<UInt64>] {
+    public static var bitPatternRanges: [ClosedRange<UInt64>] {
         [
             UInt64(UInt16.min)...UInt64(UInt16.max)
         ]
     }
     
-    var bitPattern64: UInt64 {
+    public var bitPattern64: UInt64 {
         UInt64(self)
     }
 }
 
 extension UInt32: BitPatternConvertible {
-    init(bitPattern64: UInt64) {
+    public init(bitPattern64: UInt64) {
         self = UInt32(bitPattern64)
     }
     
-    static var bitPatternRanges: [ClosedRange<UInt64>] {
+    public static var bitPatternRanges: [ClosedRange<UInt64>] {
         [
             UInt64(UInt32.min)...UInt64(UInt32.max)
         ]
     }
     
-    var bitPattern64: UInt64 {
+    public var bitPattern64: UInt64 {
         UInt64(self)
     }
 }
 
 /// Implemented for bidirectionality
 extension UInt64: BitPatternConvertible {
-    static var bitPatternRanges: [ClosedRange<UInt64>] {
+    public static var bitPatternRanges: [ClosedRange<UInt64>] {
         [
             UInt64.min...UInt64.max
         ]
     }
     
-    init(bitPattern64: UInt64) {
+    public init(bitPattern64: UInt64) {
         self = bitPattern64
     }
     
-    var bitPattern64: UInt64 {
+    public var bitPattern64: UInt64 {
         self
     }
 }
 
 extension UInt: BitPatternConvertible {
-    static var bitPatternRanges: [ClosedRange<UInt64>] {
+    public static var bitPatternRanges: [ClosedRange<UInt64>] {
         [
             UInt64(UInt.min)...UInt64(UInt.max)
         ]
     }
     
-    init(bitPattern64: UInt64) {
+    public init(bitPattern64: UInt64) {
         self = UInt(bitPattern64)
     }
     
-    var bitPattern64: UInt64 {
+    public var bitPattern64: UInt64 {
         UInt64(self)
     }
 }
@@ -289,11 +289,11 @@ extension Unicode.Scalar: BitPatternConvertible {
         ]
     }
     
-    init(bitPattern64: UInt64) {
+    public init(bitPattern64: UInt64) {
         self = Unicode.Scalar(UInt32(bitPattern64))!
     }
     
-    var bitPattern64: UInt64 {
+    public var bitPattern64: UInt64 {
         UInt64(self.value)
     }
 }

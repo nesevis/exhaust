@@ -8,7 +8,7 @@
 import Foundation
 import CasePaths
 
-protocol PartialPath<Root, Value> {
+public protocol PartialPath<Root, Value> {
     associatedtype Root
     associatedtype Value
     
@@ -36,7 +36,7 @@ protocol PartialPath<Root, Value> {
 
 
 extension AnyCasePath: PartialPath {
-    func extract(from root: Any) throws -> Value? {
+    public func extract(from root: Any) throws -> Value? {
         // Handle nil case
         if case Optional<Any>.none = root {
             return nil
@@ -65,7 +65,7 @@ extension AnyCasePath: PartialPath {
 }
 
 extension KeyPath: PartialPath {
-    func extract(from root: Any) throws -> Value? {
+    public func extract(from root: Any) throws -> Value? {
         guard let root = root as? Root else {
             throw PartialPathError.wrongRootType(expected: "\(Root.self)", actual: "\(root.self)")
         }

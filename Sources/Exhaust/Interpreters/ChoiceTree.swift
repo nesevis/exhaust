@@ -8,7 +8,7 @@
 import Algorithms
 import Foundation
 
-enum ChoiceTree: Hashable, Equatable, Sendable {
+public enum ChoiceTree: Hashable, Equatable, Sendable {
     /// A primitive choice, typically a number or a high-level semantic label.
     case choice(ChoiceValue, ChoiceMetadata)
     
@@ -51,6 +51,13 @@ extension ChoiceTree {
     }
     var isImportant: Bool {
         if case .important = self {
+            return true
+        }
+        return false
+    }
+    
+    var isChoice: Bool {
+        if case .choice = self {
             return true
         }
         return false
@@ -403,7 +410,7 @@ extension ChoiceTree: CustomDebugStringConvertible {
         NSString(string: debugDescription)
     }
     
-    var debugDescription: String {
+    public var debugDescription: String {
         treeDescription(prefix: "", isLast: true)
     }
     

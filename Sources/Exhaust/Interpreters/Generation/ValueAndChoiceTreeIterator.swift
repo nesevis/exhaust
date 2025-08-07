@@ -5,6 +5,7 @@
 //  Created by Chris Kolbu on 27/7/2025.
 //
 
+import Algorithms
 import Foundation
 
 // TODO: Rename
@@ -80,7 +81,6 @@ public struct ValueAndChoiceTreeIterator<FinalOutput>: IteratorProtocol, Sequenc
         using prng: inout Xoshiro256
     ) throws -> (Output, ChoiceTree)? {
         var sizeOverride: UInt64? = nil
-        let startTime = Date()
         let result = try generateRecursive(
             gen,
             with: input,
@@ -135,7 +135,13 @@ public struct ValueAndChoiceTreeIterator<FinalOutput>: IteratorProtocol, Sequenc
                     ignoreChoiceTree: calleeChoiceTree.contains(where: \.isChoice),
                     prng: &continuationRng
                 ) {
-                    return (result, nextGen.isPure ? calleeChoiceTree : calleeChoiceTree + innerChoiceTree)
+                    if nextGen.isPure {
+                        return (result, calleeChoiceTree)
+                    } else {
+                        // A large part of the trace is adding these arrays together
+                        // Use chain?
+                        return (result, calleeChoiceTree + innerChoiceTree)
+                    }
                 }
                 return nil
             }
@@ -264,8 +270,11 @@ public struct ValueAndChoiceTreeIterator<FinalOutput>: IteratorProtocol, Sequenc
                     return nil
                 }
                 
-                var results: [(Any, [ChoiceTree])?] = []
+                var results: [Any] = []
+                var elements: [ChoiceTree] = []
                 results.reserveCapacity(Int(length))
+                elements.reserveCapacity(Int(length) * 2) // Estimate for flattened elements
+                
                 for _ in 0..<length {
                     // Run the element generator once for each item.
                     // It's a self-contained generator, so its input is `()`.
@@ -279,13 +288,16 @@ public struct ValueAndChoiceTreeIterator<FinalOutput>: IteratorProtocol, Sequenc
                         // If any element fails to generate, the whole sequence fails.
                         return nil
                     }
-                    results.append(element)
-                }
-                let elements = results
-                    .compactMap { $0?.1 }
-                    .flatMap {
-                        $0.count > 1 ? [.group($0)] : $0
+                    results.append(element.0)
+                    
+                    // Inline the flatMap logic to avoid intermediate arrays
+                    let choiceTrees = element.1
+                    if choiceTrees.count > 1 {
+                        elements.append(.group(choiceTrees))
+                    } else {
+                        elements.append(contentsOf: choiceTrees)
                     }
+                }
                 
                 let choiceTree = ChoiceTree.sequence(
                     length: length,
@@ -295,15 +307,16 @@ public struct ValueAndChoiceTreeIterator<FinalOutput>: IteratorProtocol, Sequenc
                 
                 // Ignore the result ChoiceTree here; it will be a `just` value
                 let innerResult = [choiceTree]
-                if let (result, _) = try runContinuation(results.compactMap { $0?.0 }, innerResult) {
+                if let (result, _) = try runContinuation(results, innerResult) {
                     return (result, innerResult)
                 }
                 return nil
             case let .just(value):
                 // FIXME: Not sure about this one
+                // Ignore
                 return try runContinuation(
                     value,
-                    [.just(String(String(describing: value).prefix(50)))]
+                    [.just("<value>")]
                 )
                 
             case .getSize:

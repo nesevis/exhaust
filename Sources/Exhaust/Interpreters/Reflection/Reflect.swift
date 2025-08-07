@@ -7,7 +7,7 @@
 
 import Foundation
 
-extension Interpreters {
+public extension Interpreters {
     // MARK: - Public-Facing Reflect Function (Unchanged, but now correct)
 
     public static func reflect<Input, Output>(
@@ -211,8 +211,8 @@ extension Interpreters {
             return [(value: character, path: [.choice(.init(character), metadata)])]
         
         case let .just(value):
-            let string = "\(value)".prefix(50)
-            return [(value: value, path: [.just(String(string))])]
+            // Avoid expensive string interpolation and prefix operations
+            return [(value: value, path: [.just("<value>")])]
             
         case .getSize:
             // We can't derive the getSize parameter when reflecting as the bind continuation that applies it is opaque to us. Ultimately it shouldn't matter for replay

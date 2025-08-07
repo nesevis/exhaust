@@ -5,7 +5,7 @@
 //  Created by Chris Kolbu on 20/7/2025.
 //
 
-enum ChoiceValue: Comparable, Hashable, Equatable {
+public enum ChoiceValue: Comparable, Hashable, Equatable, Sendable {
     case unsigned(UInt64)
     /// The UInt64 represents its hashable behaviour
     case signed(Int64, UInt64)
@@ -70,7 +70,7 @@ enum ChoiceValue: Comparable, Hashable, Equatable {
         return false
     }
 
-    var convertible: any BitPatternConvertible {
+    public var convertible: any BitPatternConvertible {
         switch self {
         case .unsigned(let uInt64):
             return uInt64
@@ -99,7 +99,7 @@ enum ChoiceValue: Comparable, Hashable, Equatable {
         }
     }
     
-    func hash(into hasher: inout Hasher) {
+    public func hash(into hasher: inout Hasher) {
         switch self {
         case .unsigned(let uInt64):
             hasher.combine(uInt64)
@@ -112,11 +112,11 @@ enum ChoiceValue: Comparable, Hashable, Equatable {
         }
     }
     
-    static func == (lhs: Self, rhs: Self) -> Bool {
+    public static func == (lhs: Self, rhs: Self) -> Bool {
         lhs.hashValue == rhs.hashValue
     }
     
-    static func < (lhs: Self, rhs: Self) -> Bool {
+    public static func < (lhs: Self, rhs: Self) -> Bool {
         switch (lhs, rhs) {
         case (.unsigned, .unsigned), (.signed, .signed), (.floating, .floating), (.character, .character):
             // The bitpattern64 representation is sequential across all types

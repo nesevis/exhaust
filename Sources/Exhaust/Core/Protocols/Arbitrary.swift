@@ -1,6 +1,6 @@
 import Foundation
 
-protocol Arbitrary {
+public protocol Arbitrary {
     
     /// The default, canonical `ReflectiveGenerator` for this type.
     ///

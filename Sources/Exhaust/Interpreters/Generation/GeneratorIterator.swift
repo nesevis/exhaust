@@ -7,21 +7,21 @@
 
 import Foundation
 
-struct GeneratorIterator<Element>: IteratorProtocol, Sequence {
+public struct GeneratorIterator<Element>: IteratorProtocol, Sequence {
     let generator: ReflectiveGenerator<Any, Element>
     private(set) var prng: Xoshiro256
     private var size: UInt64 = 0
     private var isFixed = false
     private(set) var maxRuns: UInt64
     
-    init<Input>(_ generator: ReflectiveGenerator<Input, Element>, seed: UInt64? = nil, maxRuns: UInt64? = nil) {
+    public init<Input>(_ generator: ReflectiveGenerator<Input, Element>, seed: UInt64? = nil, maxRuns: UInt64? = nil) {
         self.generator = generator
             .mapOperation(Gen.eraseInputType(from:))
         self.prng = seed.map { Xoshiro256(seed: $0) } ?? Xoshiro256()
         self.maxRuns = maxRuns ?? 100
     }
     
-    mutating func next() -> Element? {
+    public mutating func next() -> Element? {
         guard size < maxRuns else {
             return nil
         }
