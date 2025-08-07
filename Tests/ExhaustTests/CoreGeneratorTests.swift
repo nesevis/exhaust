@@ -182,14 +182,22 @@ struct CoreGeneratorTests {
     struct choiceTreeGeneratorTests {
         @Test("Kick tyres")
         func kickTheTyres() throws {
-            let gen = Gen.arrayOf(String.arbitraryAscii)
+            let gen = String.arbitrary
             var iterator = GeneratorIterator(gen, seed: 4)
+            _ = iterator.next()
+            _ = iterator.next()
             var output = iterator.next()!
-            var thing = ValueAndChoiceTreeIterator(gen, seed: 4)
+            var thing = ValueAndChoiceTreeIterator(gen, materializePicks: true, seed: 4)
+            _ = thing.next()
+            _ = thing.next()
             let test = thing.next()!
             let (output2, choiceTree) = try #require(test)
+            let bla = choiceTree.debugDescription
             let replay = try? Interpreters.replay(gen, using: choiceTree)
             let reflection = try Interpreters.reflect(gen, with: output)
+            #expect(output == output2)
+            // This will fail because the ranges are slightly different, so we need a structural equality check
+            #expect(choiceTree == reflection)
             print()
         }
     }

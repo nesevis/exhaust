@@ -443,6 +443,8 @@ extension ChoiceTree: CustomDebugStringConvertible {
                     if
                         case let .group(array) = element,
                         case let .group(branches) = array.dropFirst().first,
+                        // Why are we getting a nonselected branch?
+                        // FIXME: The assumption that the character value of all branches is identical no longer holds with the Value|ChoiceTree generator, and this special case is broken because reflected generators come back as all being selected now :|
                         case let .branch(_, children) = branches.first(where: { $0.isSelected == false }),
                         case let .choice(.character(char), _) = children.first
                     {
