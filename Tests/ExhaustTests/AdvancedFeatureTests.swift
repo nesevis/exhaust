@@ -63,7 +63,7 @@ struct AdvancedFeatureTests {
             let gen = treeGen(depth: 3)
             
             for _ in 0..<10 {
-                var iterator = GeneratorIterator(gen)
+                var iterator = ValueGenerator(gen)
                 let tree = iterator.next()!
                 
                 // Validate tree structure
@@ -121,7 +121,7 @@ struct AdvancedFeatureTests {
                         }
                     }
                 
-                var iterator = GeneratorIterator(outerGen)
+                var iterator = ValueGenerator(outerGen)
                 let generated = iterator.next()
                 
                 guard let generated = generated else {
@@ -177,7 +177,7 @@ struct AdvancedFeatureTests {
                 }
             
             for _ in 0..<10 {
-                var iterator = GeneratorIterator(graphGen)
+                var iterator = ValueGenerator(graphGen)
                 let graph = iterator.next()!
                 
                 // Validate graph constraints
@@ -218,7 +218,7 @@ struct AdvancedFeatureTests {
             
             for (index, gen) in extremeGenerators.enumerated() {
                 for _ in 0..<10 {
-                    var iterator = GeneratorIterator(gen)
+                    var iterator = ValueGenerator(gen)
                     let value = iterator.next()!
                     
                     // Test round-trip even with extreme values
@@ -243,7 +243,7 @@ struct AdvancedFeatureTests {
                 .proliferate(with: 10...10)     // 10 inner arrays  
                 .proliferate(with: 2...2)       // 2 outer arrays
             
-            var iterator = GeneratorIterator(largeNestedGen)
+            var iterator = ValueGenerator(largeNestedGen)
             let large = iterator.next()!
             
             // Validate structure

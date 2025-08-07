@@ -13,7 +13,7 @@ enum PropertyTest {
         property: @escaping (Output) -> Bool
     ) throws {
         var iterations = 0
-        var generator = GeneratorIterator(gen, seed: seed, maxRuns: maxIterations)
+        var generator = ValueGenerator(gen, seed: seed, maxRuns: maxIterations)
         var passFails = Dictionary([(true, [ChoiceTree?]()), (false, [ChoiceTree?]())], uniquingKeysWith: { $1 })
         
         while let next = generator.next() {

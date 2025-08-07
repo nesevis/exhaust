@@ -17,7 +17,7 @@ struct GenerationExamplesTests {
         @Test
         func example2() async throws {
             let gen = Gen.choose(in: 1...5)
-            var iterator = GeneratorIterator(gen)
+            var iterator = ValueGenerator(gen)
             let results = iterator.next()
             let nonNilResults = try #require(results)
             let choices = try Interpreters.reflect(gen, with: nonNilResults, where: { _ in true })
@@ -27,7 +27,7 @@ struct GenerationExamplesTests {
         @Test("Test Gen.dictionaryof")
         func testGenDictionaryOf() throws {
             let gen = Gen.dictionaryOf(String.arbitrary, Int.arbitrary)
-            let iterator = GeneratorIterator(gen)
+            let iterator = ValueGenerator(gen)
             let result = try #require(Array(iterator.prefix(2)).last) // Skip the first length=0 response
             let reflection = try #require(try Interpreters.reflect(gen, with: result))
             let replay = try #require(try Interpreters.replay(gen, using: reflection))
@@ -47,7 +47,7 @@ struct GenerationExamplesTests {
                     Person(age: age, height: height)
                 }
             }    
-            var iterator = GeneratorIterator(zipped)
+            var iterator = ValueGenerator(zipped)
             let result = iterator.next()!
             let choices = try Interpreters.reflect(zipped, with: result)
             if let choices {
@@ -71,7 +71,7 @@ struct GenerationExamplesTests {
             // 1. Test String.arbitrary alone
             let stringGen = String.arbitrary
             for i in 0..<3 {
-                var iterator = GeneratorIterator(stringGen)
+                var iterator = ValueGenerator(stringGen)
                 let generated = iterator.next()!
                 if let recipe = try Interpreters.reflect(stringGen, with: generated) {
                     if let replayed = try Interpreters.replay(stringGen, using: recipe) {
@@ -87,7 +87,7 @@ struct GenerationExamplesTests {
             // 2. Test proliferate alone (without map)
             let proliferateGen = String.arbitrary.proliferate(with: 1...3)
             for i in 0..<3 {
-                var iterator = GeneratorIterator(proliferateGen)
+                var iterator = ValueGenerator(proliferateGen)
                 let generated = iterator.next()!
                 if let recipe = try Interpreters.reflect(proliferateGen, with: generated) {
                     if let replayed = try Interpreters.replay(proliferateGen, using: recipe) {

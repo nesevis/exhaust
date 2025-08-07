@@ -18,7 +18,7 @@ func testXoshiroAgainstReference() throws {
 
 @Test("Test spread of generator")
 func testGeneratorIterator() {
-    let iterator = GeneratorIterator(Int64.arbitrary, seed: 0)
+    let iterator = ValueGenerator(Int64.arbitrary, seed: 0)
     let ten = Array(iterator.prefix(10))
     let expected: [Int64] = [-1, -20, -1634, 30680, 118758, -519187, 668934, -951278, 3301282, 2736585]
     #expect(ten == expected)
@@ -28,7 +28,7 @@ func testGeneratorIterator() {
 func testReflectOnGetsize() throws {
     // Test String.arbitrary
     let gen = String.arbitrary
-    var iterator = GeneratorIterator(gen, seed: 123)
+    var iterator = ValueGenerator(gen, seed: 123)
     let _ = iterator.next()
     let generated = iterator.next()!
     print("Generated string: '\(generated)'")

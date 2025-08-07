@@ -9,7 +9,7 @@ import Algorithms
 import Foundation
 
 // TODO: Rename
-public struct ValueAndChoiceTreeIterator<FinalOutput>: IteratorProtocol, Sequence {
+public struct ValueAndChoiceTreeGenerator<FinalOutput>: IteratorProtocol, Sequence {
     // TODO: This will have to be inout?
     private struct Context {
         let maxRuns: UInt64
@@ -46,8 +46,8 @@ public struct ValueAndChoiceTreeIterator<FinalOutput>: IteratorProtocol, Sequenc
 
     /// Used to generate results around a similar level of complexity.
     /// Intended to be used to increase pool of results to compare against
-    func fixedAtSize() -> ValueAndChoiceTreeIterator<FinalOutput> {
-        var fixed = ValueAndChoiceTreeIterator(
+    func fixedAtSize() -> ValueAndChoiceTreeGenerator<FinalOutput> {
+        var fixed = ValueAndChoiceTreeGenerator(
             generator,
             materializePicks: context.materializePicks,
             seed: prng.seed,

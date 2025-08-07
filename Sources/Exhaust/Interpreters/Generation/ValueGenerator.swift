@@ -7,7 +7,7 @@
 
 import Foundation
 
-public struct GeneratorIterator<Element>: IteratorProtocol, Sequence {
+public struct ValueGenerator<Element>: IteratorProtocol, Sequence {
     let generator: ReflectiveGenerator<Element>
     private(set) var prng: Xoshiro256
     private var size: UInt64 = 0
@@ -36,8 +36,8 @@ public struct GeneratorIterator<Element>: IteratorProtocol, Sequence {
 
     /// Used to generate results around a similar level of complexity.
     /// Intended to be used to increase pool of results to compare against
-    func fixedAtSize() -> GeneratorIterator<Element> {
-        var fixed = GeneratorIterator(generator, seed: prng.seed, maxRuns: maxRuns)
+    func fixedAtSize() -> ValueGenerator<Element> {
+        var fixed = ValueGenerator(generator, seed: prng.seed, maxRuns: maxRuns)
         fixed.isFixed = true
         fixed.size = size
         return fixed
@@ -104,6 +104,7 @@ public struct GeneratorIterator<Element>: IteratorProtocol, Sequence {
                 // Will this work properly now?
                 var sizeOverride = continuationSizeOverride
                 let nextGen = try continuation(result)
+                // PERF: Potential early return here if this op is a terminal one (just, chooseBits, chooseCharacter) and the nextGen is pure
                 var continuationRng = jumpedRng
                 return try self.generateRecursive(nextGen, with: inputValue, size: size, maxRuns: maxRuns, sizeOverride: &sizeOverride, prng: &continuationRng)
             }
@@ -138,7 +139,7 @@ public struct GeneratorIterator<Element>: IteratorProtocol, Sequence {
                 
                 var randomRoll = UInt64.random(in: 1...totalWeight, using: &prng)
                 
-                for (index, choice) in choices.enumerated() {
+                for choice in choices {
                     if randomRoll <= choice.weight {
                         guard let result = try self.generateRecursive(choice.generator, with: inputValue, size: size, maxRuns: maxRuns, sizeOverride: &sizeOverride, prng: &prng) else { return nil }
                         
