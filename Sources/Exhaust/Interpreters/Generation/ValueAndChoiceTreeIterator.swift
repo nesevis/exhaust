@@ -24,7 +24,7 @@ public struct ValueAndChoiceTreeIterator<FinalOutput>: IteratorProtocol, Sequenc
     private(set) var prng: Xoshiro256
     private var context: Context
     
-    public init<Input>(_ generator: ReflectiveGenerator<Input, FinalOutput>, materializePicks: Bool = false, seed: UInt64? = nil, maxRuns: UInt64? = nil) {
+    public init(_ generator: ReflectiveGenerator<Any, FinalOutput>, materializePicks: Bool = false, seed: UInt64? = nil, maxRuns: UInt64? = nil) {
         self.generator = generator
             .mapOperation(Gen.eraseInputType(from:))
         self.prng = seed.map { Xoshiro256(seed: $0) } ?? Xoshiro256()
@@ -58,15 +58,6 @@ public struct ValueAndChoiceTreeIterator<FinalOutput>: IteratorProtocol, Sequenc
     
     private static func generate<Output>(
         _ gen: ReflectiveGenerator<Any, Output>,
-        context: Context,
-        using rng: inout Xoshiro256
-    ) throws -> (Output, ChoiceTree)? {
-        // Delegate to the main generate function, providing the placeholder input.
-        return try self.generate(gen, with: (), context: context, using: &rng)
-    }
-    
-    private static func generate<Output>(
-        _ gen: ReflectiveGenerator<Void, Output>, // Constrained to Input == Void
         context: Context,
         using rng: inout Xoshiro256
     ) throws -> (Output, ChoiceTree)? {

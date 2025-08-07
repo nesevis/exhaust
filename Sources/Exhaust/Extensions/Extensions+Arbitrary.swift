@@ -7,8 +7,8 @@
 //
 // Approach 1: Generic over any Input type
 extension FreerMonad where Operation: AnyReflectiveOperation {
-    func proliferate<Input>(with range: ClosedRange<UInt64>) -> ReflectiveGenerator<Input, [Value]> 
-    where Operation == ReflectiveOperation<Input> {
-        Gen.arrayOf(self, Gen.choose(in: range, input: Input.self))
+    func proliferate(with range: ClosedRange<UInt64>) -> ReflectiveGenerator<Any, [Value]>
+    where Operation == ReflectiveOperation {
+        Gen.arrayOf(self, Gen.choose(in: range))
     }
 }

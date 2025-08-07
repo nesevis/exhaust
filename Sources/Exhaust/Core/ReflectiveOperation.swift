@@ -1,12 +1,12 @@
 public protocol AnyReflectiveOperation {
-    associatedtype Input
+//    associatedtype Input
     var associatedRange: ClosedRange<UInt64>? { get }
 }
 
 /// The primitive operations that can be performed by the reflective generator system.
 /// These operations are only generic over their input types - the output type is managed
 /// by the continuation in the containing `ReflectiveGen` to enable the Freer Monad pattern.
-public enum ReflectiveOperation<Input> {
+public enum ReflectiveOperation {
     /// Transforms the input type of a generator using a lens-like function.
     /// Used by `Gen.lmap` and `Gen.comap` to focus on a specific part of the input.
     /// In the forward pass (generate), the transform is ignored.
@@ -19,7 +19,7 @@ public enum ReflectiveOperation<Input> {
     /// Each choice has a weight (for random selection), a label (for replay), and a generator.
     /// In the forward pass, one choice is selected randomly based on weights.
     /// In the backward pass, all choices are tried against the target value.
-    case pick(choices: [(weight: UInt64, label: UInt64, generator: ReflectiveGenerator<Input, Any>)])
+    case pick(choices: [(weight: UInt64, label: UInt64, generator: ReflectiveGenerator<Any, Any>)])
     
     /// Handles conditional generation based on optional input values.
     /// Used by `Gen.prune` and `Gen.comap` to filter out invalid inputs.
@@ -43,10 +43,10 @@ public enum ReflectiveOperation<Input> {
     /// Used by `Gen.arrayOf` to create arrays of random length and content.
     /// The length is fixed at operation creation time, and the element generator
     /// is applied iteratively to build the complete sequence.
-    case sequence(length: ReflectiveGenerator<Input, UInt64>, gen: ReflectiveGenerator<Input, Any>)
+    case sequence(length: ReflectiveGenerator<Any, UInt64>, gen: ReflectiveGenerator<Any, Any>)
     
     /// A constant value baked into the generator
-    case just(Input)
+    case just(Any)
     
     /// Retrieves the current size parameter controlling generator complexity.
     /// Used to scale generation based on test progression (smaller early, larger later).
@@ -56,7 +56,7 @@ public enum ReflectiveOperation<Input> {
     /// Temporarily modifies the size parameter for a nested generator.
     /// Used to control complexity of sub-generators (e.g., making smaller arrays).
     /// The nested generator runs with the new size, then the original size is restored.
-    case resize(newSize: UInt64, next: ReflectiveGenerator<Input, Any>)
+    case resize(newSize: UInt64, next: ReflectiveGenerator<Any, Any>)
 }
 
 extension ReflectiveOperation: AnyReflectiveOperation {

@@ -14,7 +14,7 @@ public struct GeneratorIterator<Element>: IteratorProtocol, Sequence {
     private var isFixed = false
     private(set) var maxRuns: UInt64
     
-    public init<Input>(_ generator: ReflectiveGenerator<Input, Element>, seed: UInt64? = nil, maxRuns: UInt64? = nil) {
+    public init(_ generator: ReflectiveGenerator<Any, Element>, seed: UInt64? = nil, maxRuns: UInt64? = nil) {
         self.generator = generator
             .mapOperation(Gen.eraseInputType(from:))
         self.prng = seed.map { Xoshiro256(seed: $0) } ?? Xoshiro256()
@@ -48,16 +48,6 @@ public struct GeneratorIterator<Element>: IteratorProtocol, Sequence {
     
     static func generate<Output>(
         _ gen: ReflectiveGenerator<Any, Output>,
-        initialSize: UInt64 = 0,
-        maxRuns: UInt64,
-        using rng: inout Xoshiro256
-    ) throws -> Output? {
-        // Delegate to the main generate function, providing the placeholder input.
-        return try self.generate(gen, with: (), initialSize: initialSize, maxRuns: maxRuns, using: &rng)
-    }
-    
-    static func generate<Output>(
-        _ gen: ReflectiveGenerator<Void, Output>, // Constrained to Input == Void
         initialSize: UInt64 = 0,
         maxRuns: UInt64,
         using rng: inout Xoshiro256
