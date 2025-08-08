@@ -367,12 +367,12 @@ final class ShrinkingIterator: IteratorProtocol {
                     return StrategyIterator(initial: uint, strategy: current, inRange: [rawRange], current.next(for:)) { next in
                         ChoiceTree.choice(ChoiceValue(next), metadata).with(strategies: remaining)
                     }
-                case .signed(let int, _):
+                case .signed(let int, _, _):
                     let castRange = Int64(bitPattern64: rawRange.lowerBound)...Int64(bitPattern64: rawRange.upperBound)
                     return StrategyIterator(initial: int, strategy: current, inRange: [castRange], current.next(for:)) { next in
                         ChoiceTree.choice(ChoiceValue(next), metadata).with(strategies: remaining)
                     }
-                case .floating(let double, _):
+                case .floating(let double, _, _):
                     let castRange = Double(bitPattern64: rawRange.lowerBound)...Double(bitPattern64: rawRange.upperBound)
                     return StrategyIterator(initial: double, strategy: current, inRange: [castRange], current.next(for:)) { next in
                         ChoiceTree.choice(ChoiceValue(next), metadata).with(strategies: remaining)

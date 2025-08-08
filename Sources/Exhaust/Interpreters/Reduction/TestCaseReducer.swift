@@ -320,9 +320,9 @@ extension ChoiceValue {
         switch self {
         case let .unsigned(uint):
             uint
-        case let .signed(_, uint):
+        case let .signed(_, uint, _):
             uint
-        case let .floating(_, uint):
+        case let .floating(_, uint, _):
             uint
         case let .character(char):
             char.bitPattern64
@@ -354,9 +354,9 @@ extension ChoiceValue {
             switch (self, other) {
             case let (.unsigned(lhs), .unsigned(rhs)):
                 return range.lowerBound...min(range.upperBound, rhs)
-            case let (.signed(_, lhs), .signed(_, rhs)):
+            case let (.signed(_, lhs, _), .signed(_, rhs, _)):
                 return range.lowerBound...min(range.upperBound, rhs)
-            case let (.floating(lhsV, lhs), .floating(rhsV, rhs)):
+            case let (.floating(lhsV, lhs, _), .floating(rhsV, rhs, _)):
                 return range.lowerBound...min(range.upperBound, rhs)
             case let (.character(lhs), .character(rhs)):
                 return range.lowerBound.bitPattern64...min(range.upperBound, rhs.bitPattern64)
@@ -370,9 +370,9 @@ extension ChoiceValue {
             switch (self, other) {
             case let (.unsigned(lhs), .unsigned(rhs)):
                 return max(range.lowerBound, rhs + 1)...range.upperBound
-            case let (.signed(lhs, _), .signed(_, rhs)):
+            case let (.signed(lhs, _, _), .signed(_, rhs, _)):
                 return max(range.lowerBound, rhs + 1)...range.upperBound
-            case let (.floating(lhs, _), .floating(_, rhs)):
+            case let (.floating(lhs, _, _), .floating(_, rhs, _)):
                 return max(range.lowerBound, rhs + 1)...range.upperBound
             case let (.character(lhs), .character(rhs)):
                 return max(range.lowerBound, rhs.bitPattern64 + 1)...range.upperBound

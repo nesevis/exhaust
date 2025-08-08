@@ -8,8 +8,8 @@
 public enum ChoiceValue: Comparable, Hashable, Equatable, Sendable {
     case unsigned(UInt64)
     /// The UInt64 represents its hashable behaviour
-    case signed(Int64, UInt64)
-    case floating(Double, UInt64)
+    case signed(Int64, UInt64, any BitPatternConvertible.Type)
+    case floating(Double, UInt64, any BitPatternConvertible.Type)
     case character(Character)
 
     // Make shrinkable?
@@ -17,19 +17,19 @@ public enum ChoiceValue: Comparable, Hashable, Equatable, Sendable {
     init(_ value: any BitPatternConvertible) {
         switch value {
         case is Double:
-            self = .floating(Double(bitPattern64: value.bitPattern64), value.bitPattern64)
+            self = .floating(Double(bitPattern64: value.bitPattern64), value.bitPattern64, Double.self)
         case is Float:
-            self = .floating(Double(Float(bitPattern64: value.bitPattern64)), value.bitPattern64)
+            self = .floating(Double(Float(bitPattern64: value.bitPattern64)), value.bitPattern64, Float.self)
         case is Int:
-            self = .signed(Int64(Int(bitPattern64: value.bitPattern64)), value.bitPattern64)
+            self = .signed(Int64(Int(bitPattern64: value.bitPattern64)), value.bitPattern64, Int.self)
         case is Int64:
-            self = .signed(Int64(bitPattern64: value.bitPattern64), value.bitPattern64)
+            self = .signed(Int64(bitPattern64: value.bitPattern64), value.bitPattern64, Int64.self)
         case is Int32:
-            self = .signed(Int64(Int32(bitPattern64: value.bitPattern64)), value.bitPattern64)
+            self = .signed(Int64(Int32(bitPattern64: value.bitPattern64)), value.bitPattern64, Int32.self)
         case is Int16:
-            self = .signed(Int64(Int16(bitPattern64: value.bitPattern64)), value.bitPattern64)
+            self = .signed (Int64(Int16(bitPattern64: value.bitPattern64)), value.bitPattern64, Int16.self)
         case is Int8:
-            self = .signed(Int64(Int8(bitPattern64: value.bitPattern64)), value.bitPattern64)
+            self = .signed(Int64(Int8(bitPattern64: value.bitPattern64)), value.bitPattern64, Int8.self)
         case is Character:
             self = .character(value as! Character)
         default:
@@ -41,12 +41,12 @@ public enum ChoiceValue: Comparable, Hashable, Equatable, Sendable {
         switch self {
         case let .unsigned(value):
             return value
-        case let .signed(value, bitPattern):
+        case let .signed(value, bitPattern, _):
             if bitPattern == 0 {
                 return bitPattern
             }
             return UInt64(abs(value))
-        case let .floating(value, _):
+        case let .floating(value, _, _):
             let absValue = abs(value)
             if absValue >= Double(UInt64.max) {
                 return UInt64.max
@@ -69,14 +69,51 @@ public enum ChoiceValue: Comparable, Hashable, Equatable, Sendable {
         }
         return false
     }
+    
+    func displayRange(_ range: ClosedRange<UInt64>) -> String {
+        switch self {
+        case .unsigned:
+            return range.description
+        case .signed(_, _, let underlyingType):
+            let lower = underlyingType.init(bitPattern64: range.lowerBound)
+            let upper = underlyingType.init(bitPattern64: range.upperBound)
+            return "\(lower)...\(upper)"
+        case .floating(_, _, let underlyingType):
+            let lower = underlyingType.init(bitPattern64: range.lowerBound)
+            let upper = underlyingType.init(bitPattern64: range.upperBound)
+            return "\(lower)...\(upper)"
+        case .character:
+            return (Character(bitPattern64: range.lowerBound)...Character(bitPattern64: range.upperBound)).description
+        }
+    }
+    
+    var doubleValue: Double {
+        switch self {
+        case .unsigned(let uInt64):
+            // Clamp?
+            return Double(uInt64)
+        case .signed(_, let uint64, let underlyingType):
+            guard let value = underlyingType.init(bitPattern64: uint64) as? (any FixedWidthInteger) else {
+                fatalError()
+            }
+            return Double(value)
+        case .floating(_, let uint64, let underlyingType):
+            guard let value = underlyingType.init(bitPattern64: uint64) as? (any BinaryFloatingPoint) else {
+                fatalError()
+            }
+            return Double(value)
+        case .character(let character):
+            return Double(character.bitPattern64)
+        }
+    }
 
     public var convertible: any BitPatternConvertible {
         switch self {
         case .unsigned(let uInt64):
             return uInt64
-        case .signed(let int64, _):
+        case .signed(let int64, _, _):
             return int64
-        case .floating(let double, _):
+        case .floating(let double, _, _):
             return double
         case .character(let character):
             return character
@@ -88,9 +125,9 @@ public enum ChoiceValue: Comparable, Hashable, Equatable, Sendable {
         switch (self, other) {
         case let (.unsigned(lhs), .unsigned(rhs)):
             return lhs <= rhs ? .towardsHigherBound : .towardsLowerBound
-        case let (.signed(lhs, _), .signed(rhs, _)):
+        case let (.signed(lhs, _, _), .signed(rhs, _, _)):
             return lhs <= rhs ? .towardsHigherBound : .towardsLowerBound
-        case let (.floating(lhs, _), .floating(rhs, _)):
+        case let (.floating(lhs, _, _), .floating(rhs, _, _)):
             return lhs <= rhs ? .towardsHigherBound : .towardsLowerBound
         case let (.character(lhs), .character(rhs)):
             return lhs <= rhs ? .towardsHigherBound : .towardsLowerBound
@@ -103,9 +140,9 @@ public enum ChoiceValue: Comparable, Hashable, Equatable, Sendable {
         switch self {
         case .unsigned(let uInt64):
             hasher.combine(uInt64)
-        case .signed(_, let uInt64):
+        case .signed(_, let uInt64, _):
             hasher.combine(uInt64)
-        case .floating(_, let uInt64):
+        case .floating(_, let uInt64, _):
             hasher.combine(uInt64)
         case .character(let character):
             hasher.combine(character)

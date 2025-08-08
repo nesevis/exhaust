@@ -422,15 +422,16 @@ extension ChoiceTree: CustomDebugStringConvertible {
         
         switch self {
         case let .choice(value, meta):
+            let displayRange = value.displayRange(meta.validRanges[0])
             switch value {
             case let .character(char):
-                return prefix + connector + "\(locked)choice(char: \"\(char)\")\(locked) \(meta.validRanges[0].cast(type: UInt64.self))"
+                return prefix + connector + "\(locked)choice(char: \"\(char)\")\(locked) \(displayRange)"
             case let .unsigned(uint):
-                return prefix + connector + "\(locked)choice(unsigned:\(uint))\(locked) \(meta.validRanges[0])"
-            case let .signed(int, _):
-                return prefix + connector + "\(locked)choice(signed: \(int))\(locked) \(meta.validRanges[0].cast(type: Int64.self))"
-            case let .floating(float, _):
-                return prefix + connector + "\(locked)choice(float: \(float))\(locked) \(meta.validRanges[0].cast(type: Double.self))"
+                return prefix + connector + "\(locked)choice(unsigned:\(uint))\(locked) \(displayRange)"
+            case let .signed(int, _, _):
+                return prefix + connector + "\(locked)choice(signed: \(int))\(locked) \(displayRange))"
+            case let .floating(float, _, _):
+                return prefix + connector + "\(locked)choice(float: \(float))\(locked) \(displayRange)"
             }
             
         case .just(let type):
@@ -505,9 +506,9 @@ extension ChoiceTree: CustomDebugStringConvertible {
             switch choiceValue {
             case .unsigned(let uInt64):
                 return uInt64.description
-            case .signed(let int, _):
+            case .signed(let int, _, _):
                 return int.description
-            case .floating(let float, _):
+            case .floating(let float, _, _):
                 return float.description
             case .character(let character):
                 return character.description
@@ -571,14 +572,14 @@ extension ChoiceTree: CustomDebugStringConvertible {
                 } else {
                     return Double(range.midPoint)
                 }
-            case .signed(let int64, _):
+            case .signed(let int64, _, _):
                 let range = meta.validRanges[0]
                 let zero = Int64(0).bitPattern64
                 if range.contains(zero) {
                     return Double(abs(int64))
                 }
                 return Double(Int64(bitPattern64: range.midPoint))
-            case .floating(let double, _):
+            case .floating(let double, _, _):
                 let range = meta.validRanges[0]
                 let zero = Double(0).bitPattern64
                 if range.contains(zero) {
@@ -620,9 +621,9 @@ extension ChoiceTree: CustomDebugStringConvertible {
             switch choiceValue {
             case .unsigned(let uInt64):
                 return [(label, type, uInt64.description)]
-            case .signed(let int64, _):
+            case .signed(let int64, _, _):
                 return [(label, type, int64.description)]
-            case .floating(let double, _):
+            case .floating(let double, _, _):
                 return [(label, type, double.description)]
             case .character(let character):
                 fatalError("This should have been caught by .sequence")
@@ -670,12 +671,7 @@ extension ChoiceTree: CustomDebugStringConvertible {
                 // Extract numeric values for statistical analysis
                 let numericValues = elements.compactMap { element -> Double? in
                     guard case .choice(let value, _) = element else { return nil }
-                    switch value {
-                    case .unsigned(let uint): return Double(uint)
-                    case .signed(let int, _): return Double(int)
-                    case .floating(let double, _): return double
-                    case .character: return nil
-                    }
+                    return value.doubleValue
                 }
                 
                 if !numericValues.isEmpty {

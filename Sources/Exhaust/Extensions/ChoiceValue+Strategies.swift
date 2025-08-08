@@ -86,7 +86,7 @@ extension ChoiceValue {
             }
             return halvings
                 .map(ChoiceValue.init)
-        case let .signed(value, _):
+        case let .signed(value, _, _):
             var halvings = [Int64]()
             switch direction {
             case .towardsLowerBound:
@@ -107,7 +107,7 @@ extension ChoiceValue {
             }
             return halvings
                 .map(ChoiceValue.init)
-        case let .floating(value, _):
+        case let .floating(value, _, _):
             var halvings = [Double]()
             switch direction {
             case .towardsLowerBound:
@@ -168,7 +168,7 @@ extension ChoiceValue {
             }
             return values
                 .map(ChoiceValue.init)
-        case let .signed(value, _):
+        case let .signed(value, _, _):
             guard value != 0 else {
                 return []
             }
@@ -193,7 +193,7 @@ extension ChoiceValue {
             }
             return values
                 .map(ChoiceValue.init)
-        case let .floating(value, _):
+        case let .floating(value, _, _):
             guard value != 0 else {
                 return []
             }
@@ -261,7 +261,7 @@ extension ChoiceValue {
             }
             return values
                 .map(ChoiceValue.init)
-        case let .signed(value, _):
+        case let .signed(value, _, _):
             var values = [Int64]()
             let limit = 50
             var count = 0
@@ -285,7 +285,7 @@ extension ChoiceValue {
             }
             return values
                 .map(ChoiceValue.init)
-        case let .floating(value, _):
+        case let .floating(value, _, _):
             var values = [Double]()
             let limit = 50
             var count = 0
