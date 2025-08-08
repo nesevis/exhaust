@@ -29,7 +29,10 @@ extension ChoiceTree {
             "reduction_potential": fingerprint.reductionPotential,
             "complexity_q1": fingerprint.complexityDistribution[0],
             "complexity_median": fingerprint.complexityDistribution[2],
-            "complexity_q3": fingerprint.complexityDistribution[3]
+            "complexity_q3": fingerprint.complexityDistribution[3],
+            "structural_entropy": fingerprint.structuralEntropy,
+            "value_entropy": fingerprint.valueEntropy,
+            "branching_entropy": fingerprint.branchingEntropy
         ]
     }
     
@@ -93,7 +96,10 @@ extension ChoiceTree {
             "structural_complexity": Double(structuralComplexity),
             "total_complexity": Double(complexity),
             "convergence_indicator": fingerprint.reductionPotential,
-            "range_utilization": boundaryInfo["avg_range_utilization"] as? Double ?? 0.0
+            "range_utilization": boundaryInfo["avg_range_utilization"] as? Double ?? 0.0,
+            "structural_entropy": fingerprint.structuralEntropy,
+            "value_entropy": fingerprint.valueEntropy,
+            "entropy_convergence_factor": (fingerprint.structuralEntropy + fingerprint.valueEntropy) / 2.0
         ]
     }
     
@@ -189,6 +195,11 @@ extension ChoiceTree {
             fingerprint.complexityDistribution[2], // median
             fingerprint.complexityDistribution[3], // q3
             
+            // Shannon entropy measures
+            fingerprint.structuralEntropy,
+            fingerprint.valueEntropy,
+            fingerprint.branchingEntropy,
+            
             // Boundary features
             boundaryFeatures["avg_range_size"] as? Double ?? 0.0,
             boundaryFeatures["max_range_size"] as? Double ?? 0.0,
@@ -211,6 +222,7 @@ extension ChoiceTree {
             "max_depth", "choice_count", "sequence_count", "branch_count", "group_count",
             "important_node_ratio", "avg_branching_factor", "reduction_potential",
             "complexity_min", "complexity_q1", "complexity_median", "complexity_q3",
+            "structural_entropy", "value_entropy", "branching_entropy",
             "avg_range_size", "max_range_size", "avg_range_utilization",
             "avg_utilization", "range_size_variance",
             "structural_complexity", "total_complexity", "combinatory_complexity"

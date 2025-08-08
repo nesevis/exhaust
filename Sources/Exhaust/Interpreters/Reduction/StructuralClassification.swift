@@ -17,6 +17,11 @@ public struct StructuralFingerprint: Hashable, Sendable {
     public let avgBranchingFactor: Double
     public let reductionPotential: Double
     
+    // Shannon entropy measures
+    public let structuralEntropy: Double
+    public let valueEntropy: Double
+    public let branchingEntropy: Double
+    
     public init(from tree: ChoiceTree) {
         var analysis = StructuralAnalysis()
         analysis.analyze(tree, depth: 0)
@@ -28,6 +33,11 @@ public struct StructuralFingerprint: Hashable, Sendable {
         self.importantNodeRatio = analysis.totalNodes > 0 ? Double(analysis.importantNodes) / Double(analysis.totalNodes) : 0.0
         self.avgBranchingFactor = analysis.branchingFactors.isEmpty ? 0.0 : analysis.branchingFactors.reduce(0, +) / Double(analysis.branchingFactors.count)
         self.reductionPotential = Self.estimateReductionPotential(analysis: analysis)
+        
+        // Calculate Shannon entropy measures
+        self.structuralEntropy = Self.calculateStructuralEntropy(from: analysis.nodeTypeCounts)
+        self.valueEntropy = Self.calculateValueEntropy(from: analysis.choiceValues)
+        self.branchingEntropy = Self.calculateBranchingEntropy(from: analysis.branchingFactors)
     }
     
     private static func determineDominantPattern(from counts: [String: Int]) -> String {
@@ -65,6 +75,72 @@ public struct StructuralFingerprint: Hashable, Sendable {
         
         return min(1.0, max(0.0, sequenceReduction + importantNodeBoost + complexityFactor + depthPenalty))
     }
+    
+    /// Calculate Shannon entropy of node type distribution
+    private static func calculateStructuralEntropy(from nodeTypeCounts: [String: Int]) -> Double {
+        let totalNodes = nodeTypeCounts.values.reduce(0, +)
+        guard totalNodes > 0 else { return 0.0 }
+        
+        let probabilities = nodeTypeCounts.values.map { Double($0) / Double(totalNodes) }
+        return shannonEntropy(probabilities: probabilities)
+    }
+    
+    /// Calculate Shannon entropy of choice value distributions
+    private static func calculateValueEntropy(from choiceValues: [ChoiceValue]) -> Double {
+        guard !choiceValues.isEmpty else { return 0.0 }
+        
+        // Group values into bins for entropy calculation
+        let valueBins = binChoiceValues(choiceValues)
+        let totalValues = choiceValues.count
+        
+        let probabilities = valueBins.map { Double($0) / Double(totalValues) }
+        return shannonEntropy(probabilities: probabilities)
+    }
+    
+    /// Calculate Shannon entropy of branching factor distribution
+    private static func calculateBranchingEntropy(from branchingFactors: [Double]) -> Double {
+        guard !branchingFactors.isEmpty else { return 0.0 }
+        
+        // Convert to integer bins for entropy calculation
+        let intBranchingFactors = branchingFactors.map { Int($0) }
+        let branchingCounts = Dictionary(grouping: intBranchingFactors, by: { $0 })
+            .mapValues { $0.count }
+        
+        let totalFactors = branchingFactors.count
+        let probabilities = branchingCounts.values.map { Double($0) / Double(totalFactors) }
+        return shannonEntropy(probabilities: probabilities)
+    }
+    
+    /// Calculate Shannon entropy from probability distribution
+    private static func shannonEntropy(probabilities: [Double]) -> Double {
+        return probabilities
+            .filter { $0 > 0.0 } // Filter out zero probabilities
+            .reduce(0.0) { entropy, p in
+                entropy - p * log2(p)
+            }
+    }
+    
+    /// Bin choice values for entropy calculation
+    private static func binChoiceValues(_ values: [ChoiceValue]) -> [Int] {
+        // Create logarithmic bins based on complexity values
+        let complexities = values.map { $0.complexity }
+        guard let maxComplexity = complexities.max(), maxComplexity > 0 else {
+            return [values.count] // All values in one bin if no complexity
+        }
+        
+        let numBins = min(10, max(2, Int(sqrt(Double(values.count))))) // Adaptive bin count
+        let logMaxComplexity = log10(Double(maxComplexity) + 1)
+        
+        var bins = Array(repeating: 0, count: numBins)
+        
+        for complexity in complexities {
+            let logComplexity = log10(Double(complexity) + 1)
+            let binIndex = min(numBins - 1, Int((logComplexity / logMaxComplexity) * Double(numBins)))
+            bins[binIndex] += 1
+        }
+        
+        return bins.filter { $0 > 0 } // Return only non-empty bins
+    }
 }
 
 /// Internal helper for analyzing ChoiceTree structure
@@ -76,6 +152,7 @@ private struct StructuralAnalysis {
     var complexities: [UInt64] = []
     var branchingFactors: [Double] = []
     var avgComplexity: Double = 0.0
+    var choiceValues: [ChoiceValue] = []
     
     mutating func analyze(_ tree: ChoiceTree, depth: Int) {
         maxDepth = max(maxDepth, depth)
@@ -83,8 +160,9 @@ private struct StructuralAnalysis {
         complexities.append(tree.complexity)
         
         switch tree {
-        case .choice:
+        case let .choice(value, _):
             nodeTypeCounts["choice", default: 0] += 1
+            choiceValues.append(value)
             
         case .just:
             nodeTypeCounts["just", default: 0] += 1
