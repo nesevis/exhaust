@@ -7,7 +7,9 @@
 
 import Algorithms
 import Foundation
+import CasePaths
 
+@CasePathable
 public enum ChoiceTree: Hashable, Equatable, Sendable {
     /// A primitive choice, typically a number or a high-level semantic label.
     case choice(ChoiceValue, ChoiceMetadata)

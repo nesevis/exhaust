@@ -1,157 +1,120 @@
 //
-//  SerializableCasePath.swift
+//  ChoiceTreeCasePaths.swift
 //  Exhaust
 //
 //  Created by Chris Kolbu on 8/8/2025.
 //
 
 import Foundation
+import CasePaths
 
-/// A serializable case path that maintains bidirectional mapping between ChoiceTree structures and classifier rules
-public struct SerializableCasePath<Root, Value>: Sendable {
+/// A wrapper around CasePath that includes serialization information for classifier integration
+public struct SerializableChoiceTreePath<Value>: Sendable {
     public let serializedPath: String
-    private let extractor: @Sendable (Root) -> Value?
-    private let applicator: @Sendable (Root, Value) -> Root?
+    public let extract: @Sendable (ChoiceTree) -> Value?
+    public let apply: @Sendable (Value, ChoiceTree) -> ChoiceTree?
     
     public init(
         serializedPath: String,
-        extractor: @escaping @Sendable (Root) -> Value?,
-        applicator: @escaping @Sendable (Root, Value) -> Root?
+        extract: @escaping @Sendable (ChoiceTree) -> Value?,
+        apply: @escaping @Sendable (Value, ChoiceTree) -> ChoiceTree?
     ) {
         self.serializedPath = serializedPath
-        self.extractor = extractor
-        self.applicator = applicator
+        self.extract = extract
+        self.apply = apply
     }
     
-    /// Extract a value from the root using this path
-    public func extract(from root: Root) -> Value? {
-        return extractor(root)
+    /// Extract a value from the tree using this path
+    public func extract(from tree: ChoiceTree) -> Value? {
+        return extract(tree)
     }
     
-    /// Apply a value to the root using this path, returning modified root
-    public func apply(value: Value, to root: Root) -> Root? {
-        return applicator(root, value)
+    /// Apply a value to the tree using this path, returning modified tree
+    public func apply(value: Value, to tree: ChoiceTree) -> ChoiceTree? {
+        return apply(value, tree)
     }
 }
 
-/// Canonical paths for ChoiceTree navigation and modification
+/// Canonical paths for ChoiceTree navigation and modification using Swift Case Paths
 public enum ChoiceTreeCasePaths {
-    /// Path to choice value in a choice node
-    public static let choiceValue = SerializableCasePath<ChoiceTree, ChoiceValue>(
+    /// Path to choice value in a choice node (first tuple element)
+    public static let choiceValue = SerializableChoiceTreePath<ChoiceValue>(
         serializedPath: "choice.value",
-        extractor: { tree in
-            if case let .choice(value, _) = tree {
-                return value
-            }
-            return nil
+        extract: { tree in
+            tree[case: \ChoiceTree.Cases.choice]?.0
         },
-        applicator: { tree, newValue in
-            if case let .choice(_, metadata) = tree {
-                return .choice(newValue, metadata)
-            }
-            return nil
+        apply: { newValue, tree in
+            guard let (_, metadata) = tree[case: \ChoiceTree.Cases.choice] else { return nil }
+            return .choice(newValue, metadata)
         }
     )
     
-    /// Path to sequence length
-    public static let sequenceLength = SerializableCasePath<ChoiceTree, UInt64>(
-        serializedPath: "sequence.length",
-        extractor: { tree in
-            if case let .sequence(length, _, _) = tree {
-                return length
-            }
-            return nil
+    /// Path to sequence length (named parameter)
+    public static let sequenceLength = SerializableChoiceTreePath<UInt64>(
+        serializedPath: "sequence.length", 
+        extract: { tree in
+            tree[case: \ChoiceTree.Cases.sequence]?.0
         },
-        applicator: { tree, newLength in
-            if case let .sequence(_, elements, metadata) = tree {
-                return .sequence(length: newLength, elements: elements, metadata)
-            }
-            return nil
+        apply: { newLength, tree in
+            guard let (_, elements, metadata) = tree[case: \ChoiceTree.Cases.sequence] else { return nil }
+            return .sequence(length: newLength, elements: elements, metadata)
         }
     )
     
-    /// Path to sequence elements
-    public static let sequenceElements = SerializableCasePath<ChoiceTree, [ChoiceTree]>(
+    /// Path to sequence elements (named parameter)
+    public static let sequenceElements = SerializableChoiceTreePath<[ChoiceTree]>(
         serializedPath: "sequence.elements",
-        extractor: { tree in
-            if case let .sequence(_, elements, _) = tree {
-                return elements
-            }
-            return nil
+        extract: { tree in
+            tree[case: \ChoiceTree.Cases.sequence]?.1
         },
-        applicator: { tree, newElements in
-            if case let .sequence(length, _, metadata) = tree {
-                return .sequence(length: length, elements: newElements, metadata)
-            }
-            return nil
+        apply: { newElements, tree in
+            guard let (length, _, metadata) = tree[case: \ChoiceTree.Cases.sequence] else { return nil }
+            return .sequence(length: length, elements: newElements, metadata)
         }
     )
     
-    /// Path to branch children
-    public static let branchChildren = SerializableCasePath<ChoiceTree, [ChoiceTree]>(
+    /// Path to branch children (named parameter)
+    public static let branchChildren = SerializableChoiceTreePath<[ChoiceTree]>(
         serializedPath: "branch.children",
-        extractor: { tree in
-            if case let .branch(_, children) = tree {
-                return children
-            }
-            return nil
+        extract: { tree in
+            tree[case: \ChoiceTree.Cases.branch]?.1
         },
-        applicator: { tree, newChildren in
-            if case let .branch(label, _) = tree {
-                return .branch(label: label, children: newChildren)
-            }
-            return nil
+        apply: { newChildren, tree in
+            guard let (label, _) = tree[case: \ChoiceTree.Cases.branch] else { return nil }
+            return .branch(label: label, children: newChildren)
         }
     )
     
-    /// Path to group children
-    public static let groupChildren = SerializableCasePath<ChoiceTree, [ChoiceTree]>(
+    /// Path to group children (the array itself)
+    public static let groupChildren = SerializableChoiceTreePath<[ChoiceTree]>(
         serializedPath: "group.children",
-        extractor: { tree in
-            if case let .group(children) = tree {
-                return children
-            }
-            return nil
+        extract: { tree in
+            tree[case: \ChoiceTree.Cases.group]
         },
-        applicator: { tree, newChildren in
-            if case .group = tree {
-                return .group(newChildren)
-            }
-            return nil
+        apply: { newChildren, _ in
+            .group(newChildren)
         }
     )
     
     /// Path to important inner value
-    public static let importantInner = SerializableCasePath<ChoiceTree, ChoiceTree>(
+    public static let importantInner = SerializableChoiceTreePath<ChoiceTree>(
         serializedPath: "important.inner",
-        extractor: { tree in
-            if case let .important(inner) = tree {
-                return inner
-            }
-            return nil
+        extract: { tree in
+            tree[case: \ChoiceTree.Cases.important]
         },
-        applicator: { tree, newInner in
-            if case .important = tree {
-                return .important(newInner)
-            }
-            return nil
+        apply: { newInner, _ in
+            .important(newInner)
         }
     )
     
     /// Path to selected inner value  
-    public static let selectedInner = SerializableCasePath<ChoiceTree, ChoiceTree>(
+    public static let selectedInner = SerializableChoiceTreePath<ChoiceTree>(
         serializedPath: "selected.inner",
-        extractor: { tree in
-            if case let .selected(inner) = tree {
-                return inner
-            }
-            return nil
+        extract: { tree in
+            tree[case: \ChoiceTree.Cases.selected]
         },
-        applicator: { tree, newInner in
-            if case .selected = tree {
-                return .selected(newInner)
-            }
-            return nil
+        apply: { newInner, _ in
+            .selected(newInner)
         }
     )
 }
@@ -171,8 +134,8 @@ public struct CasePathRegistry {
     
     /// Retrieve a case path by its serialized representation
     @MainActor
-    public static func casePath<T>(for serializedPath: String) -> SerializableCasePath<ChoiceTree, T>? {
-        return pathMap[serializedPath] as? SerializableCasePath<ChoiceTree, T>
+    public static func casePath<T>(for serializedPath: String) -> SerializableChoiceTreePath<T>? {
+        return pathMap[serializedPath] as? SerializableChoiceTreePath<T>
     }
     
     /// Get all available serialized paths
