@@ -219,6 +219,7 @@ struct SerializableCasePathTests {
         // Test modifying deeply nested elements
         let newInnerChoice = ChoiceTree.choice(ChoiceValue.unsigned(999), ChoiceMetadata(validRanges: [0...1000], strategies: []))
         let modifiedInnerElements = [newInnerChoice, innerElements[1]]
+
         
         guard let modifiedInnerSequence = sequenceElementsPath.apply(value: modifiedInnerElements, to: outerElements[0]) else {
             #expect(Bool(false), "Failed to modify inner sequence")
