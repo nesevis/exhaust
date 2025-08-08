@@ -278,7 +278,6 @@ struct ChoiceTreeShortlexTests {
         let important = ChoiceTree.important(choice)
         let just = ChoiceTree.just("String")
         
-        print()
         // Important (-2) < Selected (-1) < Just (0) < Choice (2)
         #expect(important.shortlexPrecedes(just))
         #expect(just.shortlexPrecedes(choice))
