@@ -1,4 +1,5 @@
 public enum Gen {
+    @inlinable
     public static func liftF<Output>(
         _ op: ReflectiveOperation
     ) -> ReflectiveGenerator<Output> {
@@ -18,7 +19,6 @@ public enum Gen {
         comap(path.extract(from:), next)
     }
     
-    // We have to enforce equatable here so we can prune the pick in the reflection process
     @inlinable
     static func pick<Output>(
         choices: [(weight: UInt64, generator: ReflectiveGenerator<Output>)]
@@ -26,15 +26,24 @@ public enum Gen {
         // The nested generators must all have the same Output type.
         // We erase it to `Any` for the operation, but the `liftF` call
         // ensures the final monad has bthe correct `Output` type.
-        let erasedChoices = Swift.zip(choices, UInt64(1)...).map { ($0.0.weight, $0.1, $0.0.generator.map { $0 as Any }) }
-        return liftF(.pick(choices: erasedChoices))
+        var array = [(weight: UInt64, label: UInt64, generator: ReflectiveGenerator<Any>)]()
+        array.reserveCapacity(choices.count)
+        for index in choices.indices {
+            let choice = choices[index]
+            array.append((
+                weight: choice.weight,
+                label: UInt64(index + 1),
+                generator: choice.generator.erase()
+            ))
+        }
+        return liftF(.pick(choices: array))
     }
     
     @inlinable
     static func prune<Output>(_ generator: ReflectiveGenerator<Output>) -> ReflectiveGenerator<Output> {
         // The implementation is very similar to lmap: it uses mapOperation to erase
         // the input type and wraps the generator in the .prune operation.
-        let erasedGenerator = generator.map { $0 as Any }
+        let erasedGenerator = generator.erase()
         
         let op = ReflectiveOperation.prune(next: erasedGenerator)
         
@@ -64,7 +73,6 @@ public enum Gen {
     
     @inlinable
     public static func choose<Output: BitPatternConvertible>(in range: ClosedRange<Output>? = nil, type: Output.Type = Output.self) -> ReflectiveGenerator<Output> {
-        
         // 1. Determine the range of raw UInt64 bits to generate.
         //    This logic delegates the responsibility of defining the range to the type `T` itself.
         //    For example, for `Int`, this will now be the full `UInt64` range to support negatives.
@@ -103,13 +111,11 @@ public enum Gen {
     
     @inlinable
     static func lmap<NewInput, Input, Output>(_ transform: @escaping (NewInput) throws -> Input, _ generator: ReflectiveGenerator<Output>) -> ReflectiveGenerator<Output> {
-        
         let erasedTransform: (Any) throws -> Any = { newInput in
             return try transform(newInput as! NewInput) as Any
         }
         
-        let erasedGen = generator
-            .map { $0 as Any }
+        let erasedGen = generator.erase()
 
         return .impure(operation: ReflectiveOperation.lmap(transform: erasedTransform, next: erasedGen)) { result in
             if let typed = result as? Output {
@@ -129,15 +135,14 @@ public enum Gen {
         _ transform: @escaping (NewInput) throws -> Input?,
         _ generator: ReflectiveGenerator<Output>
     ) -> ReflectiveGenerator<Output> {
-        lmap(transform, prune(generator))
+        return lmap(transform, prune(generator))
     }
     
     // A base generator that produces a single, constant value.
     @inlinable
     static func just<Output>(_ value: Output) -> ReflectiveGenerator<Output> {
-        liftF(ReflectiveOperation.just(value))
+        return liftF(ReflectiveOperation.just(value))
     }
-
 
     /// Creates a generator that produces an exact constant value with validation during reflection.
     ///
@@ -157,7 +162,7 @@ public enum Gen {
     static func exact<Value: Equatable>(_ value: Value) -> ReflectiveGenerator<Value> {
         // Use lmap with a transform that validates the target value during reflection.
         // The transform returns nil for mismatches, causing reflection to fail.
-        let baseGenerator = just(value).map { $0 as Any }
+        let baseGenerator = just(value as Any)
         
         let transform: (Any) -> Any? = { inputValue in
             guard let typedInput = inputValue as? Value, typedInput == value else {
@@ -189,7 +194,7 @@ public enum Gen {
             length: length ?? Gen.getSize().bind {
                 Gen.choose(in: ($0 / 10)...$0)
             },
-            gen: elementGenerator.map { $0 as Any }
+            gen: elementGenerator.erase()
         )
         // 4. Lift the operation. The continuation will decode the `[Any]` result.
         return .impure(operation: sequenceOp) { result in
@@ -217,7 +222,7 @@ public enum Gen {
                 return Gen.choose(in: range)
                 
             },
-            gen: elementGenerator.map { $0 as Any }
+            gen: elementGenerator.erase()
         )
         // 4. Lift the operation. The continuation will decode the `[Any]` result.
         return .impure(operation: sequenceOp) { result in
@@ -234,7 +239,7 @@ public enum Gen {
         // 2. Use `bind` to get the result of the length generator.
         let sequenceOp = ReflectiveOperation.sequence(
             length: ReflectiveGenerator<UInt64>.pure(exactly), // How do we wrap this in a Gen.just?
-            gen: elementGenerator.map { $0 as Any }
+            gen: elementGenerator.erase()
         )
         // 4. Lift the operation. The continuation will decode the `[Any]` result.
         return .impure(operation: sequenceOp) { result in
@@ -292,7 +297,7 @@ public enum Gen {
         _ newSize: UInt64,
         _ generator: ReflectiveGenerator<Output>
     ) -> ReflectiveGenerator<Output> {
-        let erasedGenerator = generator.map { $0 as Any }
+        let erasedGenerator = generator.erase()
         let op = ReflectiveOperation.resize(newSize: newSize, next: erasedGenerator)
         return liftF(op)
     }

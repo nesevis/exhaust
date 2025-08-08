@@ -25,4 +25,17 @@ extension FreerMonad {
     func map<NewValue>(_ transform: @escaping (Value) throws -> NewValue) rethrows -> FreerMonad<Operation, NewValue> {
         try self.bind { try .pure(transform($0)) }
     }
+    
+    @inlinable
+    func erase() -> FreerMonad<Operation, Any> {
+        switch self {
+            case let .pure(value):
+                return .pure(value as Any)
+            case let .impure(operation, continuation):
+                return .impure(operation: operation) { input in
+                    try continuation(input).erase()
+                }
+        }
+    }
+
 }

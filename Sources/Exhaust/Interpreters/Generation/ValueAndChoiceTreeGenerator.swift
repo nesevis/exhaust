@@ -254,7 +254,7 @@ public struct ValueAndChoiceTreeGenerator<FinalOutput>: IteratorProtocol, Sequen
                 // This will return `getSize`
                 guard let (length, lengthTrees) = try self.generateRecursive(
                     lengthGen,
-                    with: () as! Input,
+                    with: inputValue, // TODO: Does this cause trouble?
                     context: context,
                     sizeOverride: &sizeOverride,
                     prng: &prng
@@ -272,7 +272,7 @@ public struct ValueAndChoiceTreeGenerator<FinalOutput>: IteratorProtocol, Sequen
                     // It's a self-contained generator, so its input is `()`.
                     guard let elementResult = try self.generateRecursive(
                         elementGen,
-                        with: () as! Input,
+                        with: inputValue,
                         context: context,
                         sizeOverride: &sizeOverride,
                         prng: &prng
