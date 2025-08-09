@@ -60,13 +60,11 @@ public enum Gen {
     static func chooseCharacter(in range: ClosedRange<UInt64>? = nil) -> ReflectiveGenerator<Character> {
         // Default to the lower range
         let actualRange = range ?? Character.bitPatternRanges[0]
-        let op = ReflectiveOperation.chooseBits(min: actualRange.lowerBound, max: actualRange.upperBound, type: Character.self)
+        let op = ReflectiveOperation.chooseCharacter(min: actualRange.lowerBound, max: actualRange.upperBound)
         
         return .impure(operation: op) { result in
             if let character = result as? Character {
                 return .pure(character)
-            } else if let uint = result as? UInt64 {
-                return .pure(Character(bitPattern64: uint))
             } else {
                 throw GeneratorError.typeMismatch(expected: "Character", actual: String(describing: type(of: result)))
             }

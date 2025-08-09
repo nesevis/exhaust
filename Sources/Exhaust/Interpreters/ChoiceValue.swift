@@ -83,7 +83,7 @@ public enum ChoiceValue: Comparable, Hashable, Equatable, Sendable {
             let upper = underlyingType.init(bitPattern64: range.upperBound)
             return "\(lower)...\(upper)"
         case .character:
-            return range.description
+            return (Character(bitPattern64: range.lowerBound)...Character(bitPattern64: range.upperBound)).description
         }
     }
     
