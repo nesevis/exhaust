@@ -99,7 +99,7 @@ public struct ValueAndChoiceTreeGenerator<FinalOutput>: IteratorProtocol, Sequen
         switch gen {
         case let .pure(value):
             // The ChoiceTree value will be discarded from the caller if it's coming
-            // from .chooseBits or .chooseCharacter
+            // from .chooseBits
             return (value, ChoiceTree.just(String(String(describing: value).prefix(50))))
             
         case let .impure(operation, continuation):
@@ -234,20 +234,7 @@ public struct ValueAndChoiceTreeGenerator<FinalOutput>: IteratorProtocol, Sequen
                     return (result, choiceTree)
                 }
                 return nil
-            
-            case let .chooseCharacter(min, max):
-                // Generate a random Unicode scalar value and create a Character
-                let randomScalar = UInt64.random(in: min...max, using: &prng)
-                let unicodeScalar = Unicode.Scalar(UInt32(randomScalar)) ?? Unicode.Scalar(63)! // "?"
-                let character = Character(unicodeScalar)
-                let choiceTree = ChoiceTree.choice(ChoiceValue.character(character), .init(validRanges: [min...max]))
-                
-                // Run the continuation here, which is getting a .pure value, which we ignore
-                // for ChoiceTree purposes
-                if let (result, _) = try runContinuation(character, choiceTree) {
-                    return (result, choiceTree)
-                }
-                return nil
+
             case let .sequence(lengthGen, elementGen):
                 
                 // An iterative loop, not a recursive one. This will never overflow the stack.

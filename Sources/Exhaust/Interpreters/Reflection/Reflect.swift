@@ -177,40 +177,6 @@ public extension Interpreters {
             )
             return [(value: finalOutput, path: [.choice(.init(convertibleValue), metadata)])]
         
-        case let .chooseCharacter(min, max):
-            // Handle Character-specific reflection
-            if let optionalValue = finalOutput as? Optional<Any>, optionalValue == nil {
-                // We can't properly reflect on this generator without a valid finalOutput
-                // Can we create an instance though?
-                throw ReflectionError.reflectedNil(type: "Character")
-            }
-
-            guard let convertible = finalOutput as? any BitPatternConvertible else {
-                return []
-            }
-            let character = convertible as? Character ?? Character(bitPattern64: convertible.bitPattern64)
-            
-            // Validate that the character is within the expected range
-            let firstScalar = character.unicodeScalars.first?.value ?? 0
-            // Skipping validation for nil cases
-//            guard isNil || (min...max).contains(UInt64(firstScalar)) else {
-//                throw ReflectionError.inputWasOutOfGeneratorRange(character, min...max)
-//            }
-            
-            // Store the exact Character representation
-            let metadata = ChoiceMetadata(
-                validRanges: [min...max], // Character uses the provided range directly
-                // FIXME: We can clamp this here as well using the range
-                strategies: [
-                    FundamentalReducerStrategy(direction: .towardsLowerBound),
-                    BoundaryReducerStrategy(direction: .towardsLowerBound),
-//                    SpreadReducerStrategy(direction: .towardsLowerBound),
-                    BinaryReducerStrategy(direction: .towardsLowerBound),
-                    SaturationReducerStrategy(direction: .towardsLowerBound)
-                ]
-            )
-            return [(value: character, path: [.choice(.init(character), metadata)])]
-        
         case let .just(value):
             // Avoid expensive string interpolation and prefix operations
             return [(value: value, path: [.just("\(value)")])]
