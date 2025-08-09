@@ -7,7 +7,9 @@
 
 import Algorithms
 import Foundation
+import CasePaths
 
+@CasePathable
 public enum ChoiceTree: Hashable, Equatable, Sendable {
     /// A primitive choice, typically a number or a high-level semantic label.
     case choice(ChoiceValue, ChoiceMetadata)
@@ -41,6 +43,8 @@ public enum ChoiceTree: Hashable, Equatable, Sendable {
 }
 
 extension ChoiceTree {
+    static let emptyJust = Self.just("")
+    
     var isSizing: Bool {
         switch self {
         case .getSize, .resize:
@@ -429,7 +433,7 @@ extension ChoiceTree: CustomDebugStringConvertible {
             case let .unsigned(uint):
                 return prefix + connector + "\(locked)choice(unsigned:\(uint))\(locked) \(displayRange)"
             case let .signed(int, _, _):
-                return prefix + connector + "\(locked)choice(signed: \(int))\(locked) \(displayRange))"
+                return prefix + connector + "\(locked)choice(signed: \(int))\(locked) \(displayRange)"
             case let .floating(float, _, _):
                 return prefix + connector + "\(locked)choice(float: \(float))\(locked) \(displayRange)"
             }

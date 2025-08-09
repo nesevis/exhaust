@@ -35,7 +35,7 @@ func testReflectOnGetsize() throws {
     let generated2 = iterator.next()!
     let recipe2 = try Interpreters.reflect(gen, with: generated2)
     let replay = try Interpreters.replay(gen, using: recipe2!)
-    print("String reflection succeeded! \(recipe2!.debugDescription)")
+    #expect(generated2 == replay)
     print()
 }
 

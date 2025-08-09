@@ -151,7 +151,7 @@ public struct ValueGenerator<Element>: IteratorProtocol, Sequence {
                 // Should be unreachable if totalWeight > 0
                 return nil
 
-            case let .chooseBits(min, max):
+            case let .chooseBits(min, max, _):
                 // 1. Generate the raw, random bits. The interpreter's only job
                 //    is to produce entropy within the specified bounds. It has
                 //    no knowledge of the final `Output` type (e.g., Int, Float).

@@ -81,7 +81,7 @@ public enum Gen {
 
         // 2. Create the unified, type-agnostic operation. The interpreter only needs to know
         //    how to generate a UInt64 within these bounds.
-        let op = ReflectiveOperation.chooseBits(min: minBits, max: maxBits)
+        let op = ReflectiveOperation.chooseBits(min: minBits, max: maxBits, type: Output.self)
         
         // 3. Construct the FreerMonad by embedding the type-specific decoding logic
         //    inside the continuation. This is the core of the design.
