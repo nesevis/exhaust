@@ -221,12 +221,12 @@ public struct ValueAndChoiceTreeGenerator<FinalOutput>: IteratorProtocol, Sequen
                 
                 return (value, .group(branches))
 
-            case let .chooseBits(min, max):
+            case let .chooseBits(min, max, valueType):
                 // 1. Generate the raw, random bits. The interpreter's only job
                 //    is to produce entropy within the specified bounds. It has
                 //    no knowledge of the final `Output` type (e.g., Int, Float).
                 let randomBits = UInt64.random(in: min...max, using: &prng)
-                let choiceTree = ChoiceTree.choice(ChoiceValue(randomBits), .init(validRanges: [min...max]))
+                let choiceTree = ChoiceTree.choice(ChoiceValue(valueType.init(bitPattern64: randomBits)), .init(validRanges: [min...max]))
                 
                 // Run the continuation here, which is getting a .pure value, which we ignore
                 // for ChoiceTree purposes
@@ -272,7 +272,7 @@ public struct ValueAndChoiceTreeGenerator<FinalOutput>: IteratorProtocol, Sequen
                     // It's a self-contained generator, so its input is `()`.
                     guard let elementResult = try self.generateRecursive(
                         elementGen,
-                        with: inputValue,
+                        with: () as! Input,
                         context: context,
                         sizeOverride: &sizeOverride,
                         prng: &prng

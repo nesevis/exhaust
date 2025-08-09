@@ -134,7 +134,8 @@ public extension Interpreters {
             }
             return [(finalOutput, [ChoiceTree.group(returnData.map(\.1))])]
             
-        case let .chooseBits(min, max):
+        // FIXME: Use type here
+        case let .chooseBits(min, _, _):
             var isNil = false
             if let optionalValue = finalOutput as? Optional<Any>, optionalValue == nil {
                 // We can't properly reflect on this generator without a valid finalOutput
