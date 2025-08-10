@@ -6,22 +6,60 @@
 //
 
 public enum ChoiceValue: Comparable, Hashable, Equatable, Sendable {
+    public enum TypeSentinel: Equatable {
+        case uint
+        case uint64
+        case uint32
+        case uint16
+        case uint8
+        case int
+        case int64
+        case int32
+        case int16
+        case int8
+        case double
+        case float
+        case character
+    }
     case unsigned(UInt64)
     /// The UInt64 represents its hashable behaviour
     case signed(Int64, UInt64, any BitPatternConvertible.Type)
     case floating(Double, UInt64, any BitPatternConvertible.Type)
     case character(Character)
+    
+    init(_ value: any BitPatternConvertible, type: TypeSentinel) {
+        switch type {
+        case .uint, .uint64, .uint32, .uint16, .uint8:
+            self = .unsigned(value.bitPattern64)
+        case .int:
+            self = .signed(Int64(Int(bitPattern64: value.bitPattern64)), value.bitPattern64, Int.self)
+        case .int64:
+            self = .signed(Int64(bitPattern64: value.bitPattern64), value.bitPattern64, Int64.self)
+        case .int32:
+            self = .signed(Int64(Int32(bitPattern64: value.bitPattern64)), value.bitPattern64, Int32.self)
+        case .int16:
+            self = .signed(Int64(Int16(bitPattern64: value.bitPattern64)), value.bitPattern64, Int16.self)
+        case .int8:
+            self = .signed(Int64(Int16(bitPattern64: value.bitPattern64)), value.bitPattern64, Int16.self)
+        case .double:
+            self = .floating(Double(bitPattern64: value.bitPattern64), value.bitPattern64, Double.self)
+        case .float:
+            self = .floating(Double(Float(bitPattern64: value.bitPattern64)), value.bitPattern64, Float.self)
+        case .character:
+            self = .character(Character(bitPattern64: value.bitPattern64))
+        }
+    }
 
     // Make shrinkable?
     // 0 returns Int even when we want UInt
     init(_ value: any BitPatternConvertible) {
         switch value {
-        case is Double:
-            self = .floating(Double(bitPattern64: value.bitPattern64), value.bitPattern64, Double.self)
-        case is Float:
-            self = .floating(Double(Float(bitPattern64: value.bitPattern64)), value.bitPattern64, Float.self)
+        case is Character:
+            self = .character(value as! Character)
         case is Int:
             self = .signed(Int64(Int(bitPattern64: value.bitPattern64)), value.bitPattern64, Int.self)
+        case is Double:
+            self = .floating(Double(bitPattern64: value.bitPattern64), value.bitPattern64, Double.self)
         case is Int64:
             self = .signed(Int64(bitPattern64: value.bitPattern64), value.bitPattern64, Int64.self)
         case is Int32:
@@ -30,8 +68,8 @@ public enum ChoiceValue: Comparable, Hashable, Equatable, Sendable {
             self = .signed (Int64(Int16(bitPattern64: value.bitPattern64)), value.bitPattern64, Int16.self)
         case is Int8:
             self = .signed(Int64(Int8(bitPattern64: value.bitPattern64)), value.bitPattern64, Int8.self)
-        case is Character:
-            self = .character(value as! Character)
+        case is Float:
+            self = .floating(Double(Float(bitPattern64: value.bitPattern64)), value.bitPattern64, Float.self)
         default:
             self = .unsigned(value.bitPattern64)
         }

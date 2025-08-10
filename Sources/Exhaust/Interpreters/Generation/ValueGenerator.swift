@@ -162,14 +162,7 @@ public struct ValueGenerator<Element>: IteratorProtocol, Sequence {
                 //    constructed to specifically expect a `UInt64` and perform
                 //    the `T(bitPattern:)` decoding itself before continuing the chain.
                 return try runContinuation(randomBits)
-            
-            case let .chooseCharacter(min, max):
-                // Generate a random Unicode scalar value and create a Character
-                let randomScalar = UInt64.random(in: min...max, using: &prng)
-                let unicodeScalar = Unicode.Scalar(UInt32(randomScalar)) ?? Unicode.Scalar(63)! // "?"
-                let character = Character(unicodeScalar)
-                
-                return try runContinuation(character)
+
             case let .sequence(lengthGen, elementGen):
                 
                 // An iterative loop, not a recursive one. This will never overflow the stack.

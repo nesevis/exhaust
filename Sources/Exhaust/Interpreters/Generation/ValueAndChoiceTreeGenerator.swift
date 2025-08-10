@@ -221,12 +221,12 @@ public struct ValueAndChoiceTreeGenerator<FinalOutput>: IteratorProtocol, Sequen
                 
                 return (value, .group(branches))
 
-            case let .chooseBits(min, max, valueType):
+            case let .chooseBits(min, max, sentinel):
                 // 1. Generate the raw, random bits. The interpreter's only job
                 //    is to produce entropy within the specified bounds. It has
                 //    no knowledge of the final `Output` type (e.g., Int, Float).
                 let randomBits = UInt64.random(in: min...max, using: &prng)
-                let choiceTree = ChoiceTree.choice(ChoiceValue(valueType.init(bitPattern64: randomBits)), .init(validRanges: [min...max]))
+                let choiceTree = ChoiceTree.choice(ChoiceValue(randomBits, type: sentinel), .init(validRanges: [min...max]))
                 
                 // Run the continuation here, which is getting a .pure value, which we ignore
                 // for ChoiceTree purposes
@@ -234,20 +234,7 @@ public struct ValueAndChoiceTreeGenerator<FinalOutput>: IteratorProtocol, Sequen
                     return (result, choiceTree)
                 }
                 return nil
-            
-            case let .chooseCharacter(min, max):
-                // Generate a random Unicode scalar value and create a Character
-                let randomScalar = UInt64.random(in: min...max, using: &prng)
-                let unicodeScalar = Unicode.Scalar(UInt32(randomScalar)) ?? Unicode.Scalar(63)! // "?"
-                let character = Character(unicodeScalar)
-                let choiceTree = ChoiceTree.choice(ChoiceValue.character(character), .init(validRanges: [min...max]))
-                
-                // Run the continuation here, which is getting a .pure value, which we ignore
-                // for ChoiceTree purposes
-                if let (result, _) = try runContinuation(character, choiceTree) {
-                    return (result, choiceTree)
-                }
-                return nil
+
             case let .sequence(lengthGen, elementGen):
                 
                 // An iterative loop, not a recursive one. This will never overflow the stack.

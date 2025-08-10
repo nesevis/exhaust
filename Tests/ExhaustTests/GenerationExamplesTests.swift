@@ -14,6 +14,18 @@ struct GenerationExamplesTests {
     @Suite("Basic Examples")
     struct BasicExampleTests {
         
+        @Test("Profile memory allocations")
+        func testProfileMemAlloc() throws {
+            let generator = String.arbitrary
+            for n in 1...200 {
+                var iterator = ValueAndChoiceTreeGenerator(generator, materializePicks: true, seed: 1, maxRuns: 100)
+                while let (value, tree) = iterator.next() {
+                    let value = value
+                    let tree = tree
+                }                
+            }
+        }
+        
         @Test
         func example2() async throws {
             let gen = Gen.choose(in: 1...5)

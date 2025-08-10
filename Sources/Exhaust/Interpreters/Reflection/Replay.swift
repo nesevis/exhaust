@@ -76,18 +76,7 @@ extension Interpreters {
                     return nil
                 }
                 
-                let nextGen = try continuation(bits)
-                return try self.replayWithChoicesHelper(nextGen, choices: &choices)
-            
-            case .chooseCharacter:
-                // Consume the next choice which should be a Character
-                guard !choices.isEmpty else { return nil }
-                let choice = choices.removeFirst()
-                guard case let .choice(.character(character), _) = choice else {
-                    throw ReplayError.wrongInputChoice
-                }
-                
-                let nextGen = try continuation(character)
+                let nextGen = try continuation(bits.convertible)
                 return try self.replayWithChoicesHelper(nextGen, choices: &choices)
 
             case let .pick(pickChoices):
@@ -250,13 +239,7 @@ extension Interpreters {
                     return nil
                 }
                 return try runContinuation(bits)
-            
-            case .chooseCharacter:
-                // This operation expects a primitive `.characterChoice` node from the script.
-                guard case let .choice(.character(character), _) = script else {
-                    return nil
-                }
-                return try runContinuation(character)
+
             case let .just(value):
                 // This operation expects a `.just` node from the script.
                 guard case .just = script else {
@@ -275,7 +258,7 @@ extension Interpreters {
                     return nil
                 }
                 
-            case let .resize(newSize, nextGen):
+            case let .resize(_, nextGen):
                 // This operation expects a `.resize` node from the script.
                 guard case let .resize(_, subChoices) = script else {
                     return nil

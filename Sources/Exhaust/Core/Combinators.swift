@@ -3,7 +3,7 @@ public enum Gen {
     public static func liftF<Output>(
         _ op: ReflectiveOperation
     ) -> ReflectiveGenerator<Output> {
-        return .impure(operation: op) { result in
+        .impure(operation: op) { result in
             if let typedResult = result as? Output {
                 return .pure(typedResult)
             }
@@ -20,34 +20,31 @@ public enum Gen {
     }
     
     @inlinable
-    static func pick<Output>(
+    public static func pick<Output>(
         choices: [(weight: UInt64, generator: ReflectiveGenerator<Output>)]
     ) -> ReflectiveGenerator<Output> {
         // The nested generators must all have the same Output type.
         // We erase it to `Any` for the operation, but the `liftF` call
-        // ensures the final monad has bthe correct `Output` type.
+        // ensures the final monad has the correct `Output` type.
         var array = [(weight: UInt64, label: UInt64, generator: ReflectiveGenerator<Any>)]()
         array.reserveCapacity(choices.count)
-        for index in choices.indices {
-            let choice = choices[index]
+        var label: UInt64 = 1
+        for i in 0..<choices.count {
+            let choice = choices[i]
             array.append((
                 weight: choice.weight,
-                label: UInt64(index + 1),
+                label: label,
                 generator: choice.generator.erase()
             ))
+            label += 1
+            
         }
         return liftF(.pick(choices: array))
     }
     
     @inlinable
     static func prune<Output>(_ generator: ReflectiveGenerator<Output>) -> ReflectiveGenerator<Output> {
-        // The implementation is very similar to lmap: it uses mapOperation to erase
-        // the input type and wraps the generator in the .prune operation.
-        let erasedGenerator = generator.erase()
-        
-        let op = ReflectiveOperation.prune(next: erasedGenerator)
-        
-        return liftF(op)
+        liftF(.prune(next: generator.erase()))
     }
     
     /// Covariant version of prune that lifts a generator producing T into one that can handle T? during reflection
@@ -60,10 +57,17 @@ public enum Gen {
     static func chooseCharacter(in range: ClosedRange<UInt64>? = nil) -> ReflectiveGenerator<Character> {
         // Default to the lower range
         let actualRange = range ?? Character.bitPatternRanges[0]
-        let op = ReflectiveOperation.chooseCharacter(min: actualRange.lowerBound, max: actualRange.upperBound)
+        let op = ReflectiveOperation.chooseBits(
+            min: actualRange.lowerBound,
+            max: actualRange.upperBound,
+            type: .character
+        )
         
         return .impure(operation: op) { result in
-            if let character = result as? Character {
+            if let character = result as? UInt64 {
+                return .pure(Character(bitPattern64: character))
+            } else if let character = result as? Character {
+                // Not sure this is ever hit
                 return .pure(character)
             } else {
                 throw GeneratorError.typeMismatch(expected: "Character", actual: String(describing: type(of: result)))
@@ -81,7 +85,38 @@ public enum Gen {
 
         // 2. Create the unified, type-agnostic operation. The interpreter only needs to know
         //    how to generate a UInt64 within these bounds.
-        let op = ReflectiveOperation.chooseBits(min: minBits, max: maxBits, type: Output.self)
+        let sentinel: ChoiceValue.TypeSentinel = switch Output.self {
+        case is Character.Type:
+                .character
+        case is Double.Type:
+                .double
+        case is Int.Type:
+                .int
+        case is UInt.Type:
+                .uint
+        // More specific, less likely to be used
+        case is Float.Type:
+                .float
+        case is Int64.Type:
+                .int64
+        case is Int32.Type:
+                .int32
+        case is Int16.Type:
+                .int16
+        case is Int8.Type:
+                .int8
+        case is UInt64.Type:
+                .uint64
+        case is UInt32.Type:
+                .uint32
+        case is UInt16.Type:
+                .uint16
+        case is UInt8.Type:
+                .uint8
+        default:
+            fatalError("Unexpected type passed to \(#function): \(Output.self)")
+        }
+        let op = ReflectiveOperation.chooseBits(min: minBits, max: maxBits, type: sentinel)
         
         // 3. Construct the FreerMonad by embedding the type-specific decoding logic
         //    inside the continuation. This is the core of the design.
@@ -110,18 +145,20 @@ public enum Gen {
     }
     
     @inlinable
+    static func eraseTransform<Input, Output>(_ transform: @escaping (Input) throws -> Output) -> (Any) throws -> Any {
+        { try transform($0 as! Input) as Any }
+    }
+    
+    @inlinable
     static func lmap<NewInput, Input, Output>(_ transform: @escaping (NewInput) throws -> Input, _ generator: ReflectiveGenerator<Output>) -> ReflectiveGenerator<Output> {
-        let erasedTransform: (Any) throws -> Any = { newInput in
-            return try transform(newInput as! NewInput) as Any
-        }
         
-        let erasedGen = generator.erase()
-
-        return .impure(operation: ReflectiveOperation.lmap(transform: erasedTransform, next: erasedGen)) { result in
+        return .impure(operation: ReflectiveOperation.lmap(
+            transform: eraseTransform(transform),
+            next: generator.erase()
+        )) { result in
             if let typed = result as? Output {
                 // Backward pass - direct value
                 return .pure(typed)
-                
             }
             throw GeneratorError.typeMismatch(
                 expected: String(describing: Output.self),
@@ -135,13 +172,13 @@ public enum Gen {
         _ transform: @escaping (NewInput) throws -> Input?,
         _ generator: ReflectiveGenerator<Output>
     ) -> ReflectiveGenerator<Output> {
-        return lmap(transform, prune(generator))
+        lmap(transform, prune(generator))
     }
     
     // A base generator that produces a single, constant value.
     @inlinable
     static func just<Output>(_ value: Output) -> ReflectiveGenerator<Output> {
-        return liftF(ReflectiveOperation.just(value))
+        liftF(.just(value))
     }
 
     /// Creates a generator that produces an exact constant value with validation during reflection.
@@ -171,7 +208,7 @@ public enum Gen {
             return typedInput
         }
         
-        return liftF(ReflectiveOperation.lmap(transform: transform, next: baseGenerator))
+        return liftF(.lmap(transform: transform, next: baseGenerator))
     }
     
     /// Creates a generator for an array of random values.
@@ -236,16 +273,7 @@ public enum Gen {
         _ elementGenerator: ReflectiveGenerator<Output>,
         exactly: UInt64
     ) -> ReflectiveGenerator<[Output]> {
-        // 2. Use `bind` to get the result of the length generator.
-        let sequenceOp = ReflectiveOperation.sequence(
-            length: ReflectiveGenerator<UInt64>.pure(exactly), // How do we wrap this in a Gen.just?
-            gen: elementGenerator.erase()
-        )
-        // 4. Lift the operation. The continuation will decode the `[Any]` result.
-        return .impure(operation: sequenceOp) { result in
-            let array = result as! [Output]
-            return .pure(array)
-        }
+        arrayOf(elementGenerator, .pure(exactly))
     }
     
     @inlinable
@@ -297,9 +325,7 @@ public enum Gen {
         _ newSize: UInt64,
         _ generator: ReflectiveGenerator<Output>
     ) -> ReflectiveGenerator<Output> {
-        let erasedGenerator = generator.erase()
-        let op = ReflectiveOperation.resize(newSize: newSize, next: erasedGenerator)
-        return liftF(op)
+        liftF(.resize(newSize: newSize, next: generator.erase()))
     }
     
     /// Creates an array generator whose length is controlled by the current size parameter.

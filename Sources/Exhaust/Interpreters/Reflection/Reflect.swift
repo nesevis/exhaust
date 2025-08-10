@@ -135,7 +135,7 @@ public extension Interpreters {
             return [(finalOutput, [ChoiceTree.group(returnData.map(\.1))])]
             
         // FIXME: Use type here
-        case let .chooseBits(min, _, _):
+        case let .chooseBits(min, _, typeSentinel):
             var isNil = false
             if let optionalValue = finalOutput as? Optional<Any>, optionalValue == nil {
                 // We can't properly reflect on this generator without a valid finalOutput
@@ -175,41 +175,7 @@ public extension Interpreters {
                     SaturationReducerStrategy(direction: .towardsLowerBound)
                 ]
             )
-            return [(value: finalOutput, path: [.choice(.init(convertibleValue), metadata)])]
-        
-        case let .chooseCharacter(min, max):
-            // Handle Character-specific reflection
-            if let optionalValue = finalOutput as? Optional<Any>, optionalValue == nil {
-                // We can't properly reflect on this generator without a valid finalOutput
-                // Can we create an instance though?
-                throw ReflectionError.reflectedNil(type: "Character")
-            }
-
-            guard let convertible = finalOutput as? any BitPatternConvertible else {
-                return []
-            }
-            let character = convertible as? Character ?? Character(bitPattern64: convertible.bitPattern64)
-            
-            // Validate that the character is within the expected range
-            let firstScalar = character.unicodeScalars.first?.value ?? 0
-            // Skipping validation for nil cases
-//            guard isNil || (min...max).contains(UInt64(firstScalar)) else {
-//                throw ReflectionError.inputWasOutOfGeneratorRange(character, min...max)
-//            }
-            
-            // Store the exact Character representation
-            let metadata = ChoiceMetadata(
-                validRanges: [min...max], // Character uses the provided range directly
-                // FIXME: We can clamp this here as well using the range
-                strategies: [
-                    FundamentalReducerStrategy(direction: .towardsLowerBound),
-                    BoundaryReducerStrategy(direction: .towardsLowerBound),
-//                    SpreadReducerStrategy(direction: .towardsLowerBound),
-                    BinaryReducerStrategy(direction: .towardsLowerBound),
-                    SaturationReducerStrategy(direction: .towardsLowerBound)
-                ]
-            )
-            return [(value: character, path: [.choice(.init(character), metadata)])]
+            return [(value: finalOutput, path: [.choice(.init(convertibleValue, type: typeSentinel), metadata)])]
         
         case let .just(value):
             // Avoid expensive string interpolation and prefix operations

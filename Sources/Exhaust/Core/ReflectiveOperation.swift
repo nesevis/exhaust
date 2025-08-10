@@ -32,12 +32,7 @@ public enum ReflectiveOperation {
     /// Used by `Gen.choose` as the primitive random number generation operation.
     /// The continuation handles converting the raw UInt64 bits into the desired type.
     /// This unified approach supports all BitPatternConvertible types (Int, Float, etc.).
-    case chooseBits(min: UInt64, max: UInt64, type: any BitPatternConvertible.Type)
-    
-    /// Generates a Character from Unicode scalar values.
-    /// Used specifically for Character generation to preserve exact representation.
-    /// Stores the complete Unicode scalar array to avoid normalization issues.
-    case chooseCharacter(min: UInt64, max: UInt64)
+    case chooseBits(min: UInt64, max: UInt64, type: ChoiceValue.TypeSentinel)
     
     /// Generates a sequence of values using a repeated element generator.
     /// Used by `Gen.arrayOf` to create arrays of random length and content.
@@ -63,8 +58,6 @@ extension ReflectiveOperation: AnyReflectiveOperation {
     public var associatedRange: ClosedRange<UInt64>? {
         switch self {
         case .chooseBits(let min, let max, _):
-            return min...max
-        case .chooseCharacter(let min, let max):
             return min...max
         default:
             return nil
