@@ -107,11 +107,12 @@ public struct ValueAndChoiceTreeGenerator<FinalOutput>: IteratorProtocol, Sequen
             let continuationSizeOverride = sizeOverride
             
             let runContinuation = { (result: Any, calleeChoiceTree: ChoiceTree) -> (Output, ChoiceTree)? in
-                // Will this work properly now?
+                // Do not move these down. It messes with optimisation and slows things down
                 var sizeOverride = continuationSizeOverride
-                let nextGen = try continuation(result)
                 var continuationRng = jumpedRng
+                let nextGen = try continuation(result)
                 
+                // Optimisation! Do not remove. This early return custs 70% of the time for string generators
                 if calleeChoiceTree.isChoice, case let .pure(value) = nextGen {
                     // Early return for a pure case originating with a choice
                     return (value, calleeChoiceTree)
@@ -163,8 +164,6 @@ public struct ValueAndChoiceTreeGenerator<FinalOutput>: IteratorProtocol, Sequen
                 return try runContinuation(result.0, result.1)
                 
             case let .pick(choices):
-                guard !choices.isEmpty else { return nil }
-                
                 let totalWeight = choices.reduce(0) { $0 + $1.weight }
                 // This determines which of the branches will be selected
                 var randomRoll = UInt64.random(in: 1...totalWeight, using: &prng)
@@ -184,7 +183,6 @@ public struct ValueAndChoiceTreeGenerator<FinalOutput>: IteratorProtocol, Sequen
                 for choice in choices {
                     let isSelected = choice.label == selectedChoice?.label
                     var value: Output?
-                    
                     var branch: ChoiceTree?
                     
                     if isSelected || context.materializePicks {
@@ -259,7 +257,7 @@ public struct ValueAndChoiceTreeGenerator<FinalOutput>: IteratorProtocol, Sequen
                     // It's a self-contained generator, so its input is `()`.
                     guard let elementResult = try self.generateRecursive(
                         elementGen,
-                        with: () as! Input,
+                        with: inputValue, // Does this lead to weirdness?
                         context: context,
                         sizeOverride: &sizeOverride,
                         prng: &prng

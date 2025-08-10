@@ -23,21 +23,19 @@ public enum Gen {
     public static func pick<Output>(
         choices: [(weight: UInt64, generator: ReflectiveGenerator<Output>)]
     ) -> ReflectiveGenerator<Output> {
+        precondition(choices.isEmpty == false, "At least one choice must be provided")
         // The nested generators must all have the same Output type.
         // We erase it to `Any` for the operation, but the `liftF` call
         // ensures the final monad has the correct `Output` type.
-        var array = [(weight: UInt64, label: UInt64, generator: ReflectiveGenerator<Any>)]()
+        var array: [(weight: UInt64, label: UInt64, generator: ReflectiveGenerator<Any>)] = []
         array.reserveCapacity(choices.count)
-        var label: UInt64 = 1
-        for i in 0..<choices.count {
-            let choice = choices[i]
+        
+        for (index, choice) in choices.enumerated() {
             array.append((
                 weight: choice.weight,
-                label: label,
+                label: UInt64(index) + 1,
                 generator: choice.generator.erase()
             ))
-            label += 1
-            
         }
         return liftF(.pick(choices: array))
     }
@@ -77,17 +75,10 @@ public enum Gen {
     
     @inlinable
     public static func choose<Output: BitPatternConvertible>(in range: ClosedRange<Output>? = nil, type: Output.Type = Output.self) -> ReflectiveGenerator<Output> {
-        // 1. Determine the range of raw UInt64 bits to generate.
-        //    This logic delegates the responsibility of defining the range to the type `T` itself.
-        //    For example, for `Int`, this will now be the full `UInt64` range to support negatives.
         let minBits = range?.lowerBound.bitPattern64 ?? Output.bitPatternRanges[0].lowerBound
         let maxBits = range?.upperBound.bitPattern64 ?? Output.bitPatternRanges[0].upperBound
 
-        // 2. Create the unified, type-agnostic operation. The interpreter only needs to know
-        //    how to generate a UInt64 within these bounds.
         let sentinel: ChoiceValue.TypeSentinel = switch Output.self {
-        case is Character.Type:
-                .character
         case is Double.Type:
                 .double
         case is Int.Type:
@@ -113,47 +104,37 @@ public enum Gen {
                 .uint16
         case is UInt8.Type:
                 .uint8
+        case is Character.Type:
+                .character // This is handled by `chooseCharacter`
         default:
             fatalError("Unexpected type passed to \(#function): \(Output.self)")
         }
-        let op = ReflectiveOperation.chooseBits(min: minBits, max: maxBits, type: sentinel)
         
-        // 3. Construct the FreerMonad by embedding the type-specific decoding logic
-        //    inside the continuation. This is the core of the design.
-        return .impure(operation: op) { result in
-            // a. The interpreter will execute the operation and pass the raw `UInt64` result here.
-            var convertibleValue: (any BitPatternConvertible)?
-            // Forward pass
-            if let convertible = result as? (any BitPatternConvertible) {
-                convertibleValue = convertible
-            }
-            // Backward pass through reflect, passing a `ChoiceValue`
-            else if let convertible = (result as? ChoiceValue)?.convertible {
-                convertibleValue = convertible
-            }
-            // Forward pass, sequence
-            else if let convertible = result as? (any Sequence) {
-                convertibleValue = UInt64(convertible.underestimatedCount)
-            }
-            
-            if let convertibleValue {
-                return .pure(Output(bitPattern64: convertibleValue.bitPattern64))
-            } else {
-                throw GeneratorError.typeMismatch(expected: "any BitPatternConvertible", actual: String(describing: Swift.type(of: result)))
+        return .impure(operation: .chooseBits(min: minBits, max: maxBits, type: sentinel)) { result in
+            switch sentinel {
+            case .uint64:
+                // This catches [Character] and String
+                if let sequence = result as? any Sequence {
+                    return .pure(UInt64(sequence.underestimatedCount) as! Output)
+                }
+                return .pure(result as! Output)
+            default:
+                guard let convertible = result as? any BitPatternConvertible else {
+                    throw GeneratorError.typeMismatch(
+                        expected: "any BitPatternConvertible",
+                        actual: String(describing: Swift.type(of: result))
+                    )
+                }
+                return .pure(Output(bitPattern64: convertible.bitPattern64))
             }
         }
-    }
-    
-    @inlinable
-    static func eraseTransform<Input, Output>(_ transform: @escaping (Input) throws -> Output) -> (Any) throws -> Any {
-        { try transform($0 as! Input) as Any }
     }
     
     @inlinable
     static func lmap<NewInput, Input, Output>(_ transform: @escaping (NewInput) throws -> Input, _ generator: ReflectiveGenerator<Output>) -> ReflectiveGenerator<Output> {
         
         return .impure(operation: ReflectiveOperation.lmap(
-            transform: eraseTransform(transform),
+            transform: { try transform($0 as! NewInput) as Any },
             next: generator.erase()
         )) { result in
             if let typed = result as? Output {
@@ -302,7 +283,7 @@ public enum Gen {
     /// more complex values over time.
     @inlinable
     public static func getSize() -> ReflectiveGenerator<UInt64> {
-        return .impure(operation: .getSize) { result in
+        .impure(operation: .getSize) { result in
             if let typedResult = result as? UInt64 {
                 return .pure(typedResult)
             }
@@ -346,9 +327,8 @@ public enum Gen {
             let clampedMin = max(actualRange.lowerBound, 0)
             let clampedMax = min(actualRange.upperBound, size)
             let finalRange = clampedMin...clampedMax
-            
-            let lengthGen = choose(in: finalRange)
-            return arrayOf(elementGenerator, lengthGen)
+
+            return arrayOf(elementGenerator, choose(in: finalRange))
         }
     }
 }

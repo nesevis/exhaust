@@ -238,7 +238,7 @@ extension Interpreters {
                 guard case let .choice(bits, _) = script else {
                     return nil
                 }
-                return try runContinuation(bits)
+                return try runContinuation(bits.convertible)
 
             case let .just(value):
                 // This operation expects a `.just` node from the script.

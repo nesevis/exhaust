@@ -30,12 +30,9 @@ extension FreerMonad {
     func erase() -> FreerMonad<Operation, Any> {
         switch self {
             case let .pure(value):
-                return .pure(value as Any)
+                .pure(value as Any)
             case let .impure(operation, continuation):
-                return .impure(operation: operation) { input in
-                    try continuation(input).erase()
-                }
+                .impure(operation: operation) { try continuation($0).erase() }
         }
     }
-
 }
