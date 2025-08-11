@@ -7,6 +7,16 @@
 
 // MARK: - Unsigned Integers
 
+extension UInt: Arbitrary {
+    public static var arbitrary: ReflectiveGenerator<Self> {
+        Gen.getSize().bind { size in
+            // This needs a bit more work to slow the scaling down a tad. Counteract logarithm?
+            let expanded: UInt = size < 64 ? 1 << size : UInt.max
+            return Gen.choose(in: UInt.min...expanded)
+        }
+    }
+}
+
 extension UInt64: Arbitrary {
     public static var arbitrary: ReflectiveGenerator<Self> {
         Gen.getSize().bind { size in
@@ -17,16 +27,8 @@ extension UInt64: Arbitrary {
     }
 }
 
-extension UnsignedInteger {
-    public static var arbitrary: ReflectiveGenerator<Self> {
-        UInt64.arbitrary
-            .mapped(forward: { Self(truncatingIfNeeded: $0) }, backward: { UInt64($0) })
-    }
-}
-
 // MARK: - Signed integers
 
-extension UInt: Arbitrary {}
 extension UInt8: Arbitrary {
     public static var arbitrary: ReflectiveGenerator<Self> {
         Gen.getSize().bind { size in
@@ -52,15 +54,14 @@ extension UInt32: Arbitrary {
     }
 }
 
-extension SignedInteger {
-    // TODO: Implement individually. The ranges are all messed up
+extension Int: Arbitrary {
     public static var arbitrary: ReflectiveGenerator<Self> {
-        Int64.arbitrary
-            .mapped(forward: { Self(truncatingIfNeeded: $0) }, backward: { Int64($0) })
+        Gen.getSize().bind { size in
+            let expanded: UInt64 = size < 63 ? 1 << size : UInt64(Int64.max)
+            return Gen.choose(in: -Int(expanded)...Int(expanded))
+        }
     }
 }
-
-extension Int: Arbitrary {}
 extension Int8: Arbitrary {
     public static var arbitrary: ReflectiveGenerator<Self> {
         Gen.getSize().bind { size in
@@ -107,14 +108,15 @@ extension Double: Arbitrary {
     }
 }
 
-extension BinaryFloatingPoint {
+extension Float: Arbitrary {
     public static var arbitrary: ReflectiveGenerator<Self> {
-        Double.arbitrary
-            .mapped(forward: { Self($0) }, backward: { Double($0) })
+        Gen.getSize().bind { size in
+            // TODO: use pow() to scale range
+            let boundary = size == UInt64.max ? Float.greatestFiniteMagnitude : Float(size)
+            return Gen.choose(in: -boundary...boundary)
+        }
     }
 }
-
-extension Float: Arbitrary {}
 
 // MARK: - Boolean
 
