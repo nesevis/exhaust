@@ -7,17 +7,8 @@
 
 extension Gen {
     // Zip wraps plain generators in a lens to help them extract from the tuple that is returned when reflecting. If the generator is already a lens, the assumption is that the user is then mapping over the tuple to transform it into something else again.
-    public static func zip<A, B>(
-        _ a: ReflectiveGenerator<A>,
-        _ b: ReflectiveGenerator<B>
-    ) -> ReflectiveGenerator<(A, B)> {
-        typealias Tuple = (A, B)
-        return Gen.lens(extract: \Tuple.0, a).bind { a in
-            b.mapped(forward: { b in (a, b) }, backward: \.1)
-        }
-    }
     
-    public static func flatZip<A, B>(
+    public static func zip<A, B>(
         _ a: ReflectiveGenerator<A>,
         _ b: ReflectiveGenerator<B>
     ) -> ReflectiveGenerator<(A, B)> {
@@ -26,7 +17,6 @@ extension Gen {
             continuation: { .pure($0 as! [Any]) }
         )
 
-        // Both these work
         return impure.mapped(
             forward: { ($0[0] as! A, $0[1] as! B) },
             backward: { [$0.0, $0.1] }
@@ -38,12 +28,15 @@ extension Gen {
         _ b: ReflectiveGenerator<B>,
         _ c: ReflectiveGenerator<C>
     ) -> ReflectiveGenerator<(A, B, C)> {
-        typealias Tuple = (A, B, C)
-        return Gen.lens(extract: \Tuple.0, a).bind { a in
-            Gen.lens(extract: \Tuple.1, b).bind { b in
-                c.mapped(forward: { c in (a, b, c) }, backward: \.2)
-            }
-        }
+        let impure: ReflectiveGenerator<[Any]> = .impure(
+            operation: .zip([a.erase(), b.erase(), c.erase()]),
+            continuation: { .pure($0 as! [Any]) }
+        )
+
+        return impure.mapped(
+            forward: { ($0[0] as! A, $0[1] as! B, $0[2] as! C) },
+            backward: { [$0.0, $0.1, $0.2] }
+        )
     }
     
     public static func zip<A, B, C, D>(
@@ -52,14 +45,15 @@ extension Gen {
         _ c: ReflectiveGenerator<C>,
         _ d: ReflectiveGenerator<D>
     ) -> ReflectiveGenerator<(A, B, C, D)> {
-        typealias Tuple = (A, B, C, D)
-        return Gen.lens(extract: \Tuple.0, a).bind { a in
-            Gen.lens(extract: \Tuple.1, b).bind { b in
-                Gen.lens(extract: \Tuple.2, c).bind { c in
-                    d.mapped(forward: { d in (a, b, c, d) }, backward: \.3)
-                }
-            }
-        }
+        let impure: ReflectiveGenerator<[Any]> = .impure(
+            operation: .zip([a.erase(), b.erase(), c.erase(), d.erase()]),
+            continuation: { .pure($0 as! [Any]) }
+        )
+
+        return impure.mapped(
+            forward: { ($0[0] as! A, $0[1] as! B, $0[2] as! C, $0[3] as! D) },
+            backward: { [$0.0, $0.1, $0.2, $0.3] }
+        )
     }
     
     public static func zip<A, B, C, D, E>(
@@ -69,16 +63,15 @@ extension Gen {
         _ d: ReflectiveGenerator<D>,
         _ e: ReflectiveGenerator<E>
     ) -> ReflectiveGenerator<(A, B, C, D, E)> {
-        typealias Tuple = (A, B, C, D, E)
-        return Gen.lens(extract: \Tuple.0, a).bind { a in
-            Gen.lens(extract: \Tuple.1, b).bind { b in
-                Gen.lens(extract: \Tuple.2, c).bind { c in
-                    Gen.lens(extract: \Tuple.3, d).bind { d in
-                        e.mapped(forward: { e in (a, b, c, d, e) }, backward: \.4)
-                    }
-                }
-            }
-        }
+        let impure: ReflectiveGenerator<[Any]> = .impure(
+            operation: .zip([a.erase(), b.erase(), c.erase(), d.erase(), e.erase()]),
+            continuation: { .pure($0 as! [Any]) }
+        )
+
+        return impure.mapped(
+            forward: { ($0[0] as! A, $0[1] as! B, $0[2] as! C, $0[3] as! D, $0[4] as! E) },
+            backward: { [$0.0, $0.1, $0.2, $0.3, $0.4] }
+        )
     }
     
     public static func zip<A, B, C, D, E, F>(
@@ -89,18 +82,15 @@ extension Gen {
         _ e: ReflectiveGenerator<E>,
         _ f: ReflectiveGenerator<F>
     ) -> ReflectiveGenerator<(A, B, C, D, E, F)> {
-        typealias Tuple = (A, B, C, D, E, F)
-        return Gen.lens(extract: \Tuple.0, a).bind { a in
-            Gen.lens(extract: \Tuple.1, b).bind { b in
-                Gen.lens(extract: \Tuple.2, c).bind { c in
-                    Gen.lens(extract: \Tuple.3, d).bind { d in
-                        Gen.lens(extract: \Tuple.4, e).bind { e in
-                            f.mapped(forward: { f in (a, b, c, d, e, f) }, backward: \.5)
-                        }
-                    }
-                }
-            }
-        }
+        let impure: ReflectiveGenerator<[Any]> = .impure(
+            operation: .zip([a.erase(), b.erase(), c.erase(), d.erase(), e.erase(), f.erase()]),
+            continuation: { .pure($0 as! [Any]) }
+        )
+
+        return impure.mapped(
+            forward: { ($0[0] as! A, $0[1] as! B, $0[2] as! C, $0[3] as! D, $0[4] as! E, $0[5] as! F) },
+            backward: { [$0.0, $0.1, $0.2, $0.3, $0.4, $0.5] }
+        )
     }
     
     public static func zip<A, B, C, D, E, F, G>(
@@ -112,20 +102,15 @@ extension Gen {
         _ f: ReflectiveGenerator<F>,
         _ g: ReflectiveGenerator<G>
     ) -> ReflectiveGenerator<(A, B, C, D, E, F, G)> {
-        typealias Tuple = (A, B, C, D, E, F, G)
-        return Gen.lens(extract: \Tuple.0, a).bind { a in
-            Gen.lens(extract: \Tuple.1, b).bind { b in
-                Gen.lens(extract: \Tuple.2, c).bind { c in
-                    Gen.lens(extract: \Tuple.3, d).bind { d in
-                        Gen.lens(extract: \Tuple.4, e).bind { e in
-                            Gen.lens(extract: \Tuple.5, f).bind { f in
-                                g.mapped(forward: { g in (a, b, c, d, e, f, g) }, backward: \.6)
-                            }
-                        }
-                    }
-                }
-            }
-        }
+        let impure: ReflectiveGenerator<[Any]> = .impure(
+            operation: .zip([a.erase(), b.erase(), c.erase(), d.erase(), e.erase(), f.erase(), g.erase()]),
+            continuation: { .pure($0 as! [Any]) }
+        )
+
+        return impure.mapped(
+            forward: { ($0[0] as! A, $0[1] as! B, $0[2] as! C, $0[3] as! D, $0[4] as! E, $0[5] as! F, $0[6] as! G) },
+            backward: { [$0.0, $0.1, $0.2, $0.3, $0.4, $0.5, $0.6] }
+        )
     }
     
     public static func zip<A, B, C, D, E, F, G, H>(
@@ -138,22 +123,15 @@ extension Gen {
         _ g: ReflectiveGenerator<G>,
         _ h: ReflectiveGenerator<H>
     ) -> ReflectiveGenerator<(A, B, C, D, E, F, G, H)> {
-        typealias Tuple = (A, B, C, D, E, F, G, H)
-        return Gen.lens(extract: \Tuple.0, a).bind { a in
-            Gen.lens(extract: \Tuple.1, b).bind { b in
-                Gen.lens(extract: \Tuple.2, c).bind { c in
-                    Gen.lens(extract: \Tuple.3, d).bind { d in
-                        Gen.lens(extract: \Tuple.4, e).bind { e in
-                            Gen.lens(extract: \Tuple.5, f).bind { f in
-                                Gen.lens(extract: \Tuple.6, g).bind { g in
-                                    h.mapped(forward: { h in (a, b, c, d, e, f, g, h) }, backward: \.7)
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        }
+        let impure: ReflectiveGenerator<[Any]> = .impure(
+            operation: .zip([a.erase(), b.erase(), c.erase(), d.erase(), e.erase(), f.erase(), g.erase(), h.erase()]),
+            continuation: { .pure($0 as! [Any]) }
+        )
+
+        return impure.mapped(
+            forward: { ($0[0] as! A, $0[1] as! B, $0[2] as! C, $0[3] as! D, $0[4] as! E, $0[5] as! F, $0[6] as! G, $0[7] as! H) },
+            backward: { [$0.0, $0.1, $0.2, $0.3, $0.4, $0.5, $0.6, $0.7] }
+        )
     }
     
     public static func zip<A, B, C, D, E, F, G, H, I>(
@@ -167,24 +145,15 @@ extension Gen {
         _ h: ReflectiveGenerator<H>,
         _ i: ReflectiveGenerator<I>
     ) -> ReflectiveGenerator<(A, B, C, D, E, F, G, H, I)> {
-        typealias Tuple = (A, B, C, D, E, F, G, H, I)
-        return Gen.lens(extract: \Tuple.0, a).bind { a in
-            Gen.lens(extract: \Tuple.1, b).bind { b in
-                Gen.lens(extract: \Tuple.2, c).bind { c in
-                    Gen.lens(extract: \Tuple.3, d).bind { d in
-                        Gen.lens(extract: \Tuple.4, e).bind { e in
-                            Gen.lens(extract: \Tuple.5, f).bind { f in
-                                Gen.lens(extract: \Tuple.6, g).bind { g in
-                                    Gen.lens(extract: \Tuple.7, h).bind { h in
-                                        i.mapped(forward: { i in (a, b, c, d, e, f, g, h, i) }, backward: \.8)
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        }
+        let impure: ReflectiveGenerator<[Any]> = .impure(
+            operation: .zip([a.erase(), b.erase(), c.erase(), d.erase(), e.erase(), f.erase(), g.erase(), h.erase(), i.erase()]),
+            continuation: { .pure($0 as! [Any]) }
+        )
+
+        return impure.mapped(
+            forward: { ($0[0] as! A, $0[1] as! B, $0[2] as! C, $0[3] as! D, $0[4] as! E, $0[5] as! F, $0[6] as! G, $0[7] as! H, $0[8] as! I) },
+            backward: { [$0.0, $0.1, $0.2, $0.3, $0.4, $0.5, $0.6, $0.7, $0.8] }
+        )
     }
     
     public static func zip<A, B, C, D, E, F, G, H, I, J>(
@@ -199,25 +168,14 @@ extension Gen {
         _ i: ReflectiveGenerator<I>,
         _ j: ReflectiveGenerator<J>
     ) -> ReflectiveGenerator<(A, B, C, D, E, F, G, H, I, J)> {
-        typealias Tuple = (A, B, C, D, E, F, G, H, I, J)
-        return Gen.lens(extract: \Tuple.0, a).bind { a in
-            Gen.lens(extract: \Tuple.1, b).bind { b in
-                Gen.lens(extract: \Tuple.2, c).bind { c in
-                    Gen.lens(extract: \Tuple.3, d).bind { d in
-                        Gen.lens(extract: \Tuple.4, e).bind { e in
-                            Gen.lens(extract: \Tuple.5, f).bind { f in
-                                Gen.lens(extract: \Tuple.6, g).bind { g in
-                                    Gen.lens(extract: \Tuple.7, h).bind { h in
-                                        Gen.lens(extract: \Tuple.8, i).bind { i in
-                                            j.mapped(forward: { j in (a, b, c, d, e, f, g, h, i, j) }, backward: \.9)
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        }
+        let impure: ReflectiveGenerator<[Any]> = .impure(
+            operation: .zip([a.erase(), b.erase(), c.erase(), d.erase(), e.erase(), f.erase(), g.erase(), h.erase(), i.erase(), j.erase()]),
+            continuation: { .pure($0 as! [Any]) }
+        )
+
+        return impure.mapped(
+            forward: { ($0[0] as! A, $0[1] as! B, $0[2] as! C, $0[3] as! D, $0[4] as! E, $0[5] as! F, $0[6] as! G, $0[7] as! H, $0[8] as! I, $0[9] as! J) },
+            backward: { [$0.0, $0.1, $0.2, $0.3, $0.4, $0.5, $0.6, $0.7, $0.8, $0.9] }
+        )
     }
 }

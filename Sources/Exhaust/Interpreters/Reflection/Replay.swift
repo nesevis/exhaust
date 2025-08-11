@@ -142,8 +142,19 @@ extension Interpreters {
                 let nextGen = try continuation(accumulatedValues)
                 return try self.replayWithChoicesHelper(nextGen, choices: &choices)
 
-            case .zip:
-                fatalError("Unsupported")
+            case let .zip(generators):
+                guard generators.count == choices.count else {
+                    throw ReplayError.mismatchInChoicesAndGenerators
+                }
+                var subResults = [Any]()
+                for (generator, choiceTree) in zip(generators, choices) {
+                    guard let subResult = try self.replayRecursive(generator, with: choiceTree) else {
+                        return nil
+                    }
+                    subResults.append(subResult)
+                }
+                let nextGen = try continuation(subResults)
+                return try self.replayWithChoicesHelper(nextGen, choices: &choices)
             case let .lmap(_, subGenerator), let .prune(subGenerator):
                 // A left map or prune doesn't consume choices, just passes them to the sub-generator
                 guard let subResult = try self.replayWithChoicesHelper(subGenerator, choices: &choices) else {
@@ -347,5 +358,6 @@ extension Interpreters {
     enum ReplayError: LocalizedError {
         case wrongInputChoice
         case noSuccessfulBranch
+        case mismatchInChoicesAndGenerators
     }
 }

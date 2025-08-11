@@ -183,8 +183,24 @@ public struct ValueGenerator<Element>: IteratorProtocol, Sequence {
                 
                 // Pass the completed array to the continuation.
                 return try runContinuation(results)
-            case .zip:
-                fatalError("Unsupported")
+            case let .zip(generators):
+                // This will reduce these generators into an array of results that the continuation will convert into a tuple
+                var results = [Any]()
+                results.reserveCapacity(generators.count)
+                for generator in generators {
+                    guard let result = try Self.generateRecursive(
+                        generator,
+                        with: inputValue,
+                        size: size,
+                        maxRuns: maxRuns,
+                        sizeOverride: &sizeOverride,
+                        prng: &prng
+                    ) else {
+                        throw GeneratorError.couldNotGenerateConcomitantChoiceTree
+                    }
+                    results.append(result)
+                }
+                return try runContinuation(results)
             case let .just(value):
                 return try runContinuation(value)
                 

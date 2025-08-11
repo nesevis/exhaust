@@ -28,11 +28,12 @@ struct CoreGeneratorTests {
         
         @Test("Flatzip")
         func testflatzip() throws {
-            let gen = Gen.flatZip(Int.arbitrary, Double.arbitrary)
+            let gen = Gen.zip(Int.arbitrary, Double.arbitrary)
             var iterator = ValueAndChoiceTreeGenerator(gen)
             while let (next, choiceTree) = iterator.next() {
                 let reflected = try Interpreters.reflect(gen, with: next)
                 print()
+                // FIXME: Beyond the first result, the hash values go out of whack because reflection has no knowledge of the getSize parameter
                 #expect(choiceTree == reflected)
             }
         }
