@@ -26,6 +26,17 @@ struct CoreGeneratorTests {
             }
         }
         
+        @Test("Flatzip")
+        func testflatzip() throws {
+            let gen = Gen.flatZip(Int.arbitrary, Double.arbitrary)
+            var iterator = ValueAndChoiceTreeGenerator(gen)
+            while let (next, choiceTree) = iterator.next() {
+                let reflected = try Interpreters.reflect(gen, with: next)
+                print()
+                #expect(choiceTree == reflected)
+            }
+        }
+        
         @Test("Gen.choose with type produces valid values")
         func testGenChooseType() {
             let gen = Gen.choose(type: UInt32.self)
@@ -115,6 +126,7 @@ struct CoreGeneratorTests {
                     let generated = iterator.next()!
                     if let recipe = try Interpreters.reflect(gen, with: generated) {
                         if let replayed = try Interpreters.replay(gen, using: recipe) {
+                            // Expectation failed: (generated → "r>Q{gLuේiiꡦ") == (replayed → "r>Q{gLuiiꡦ"): Generator 0, iteration 2: r>Q{gLuේiiꡦ != r>Q{gLuiiꡦ
                             #expect(generated == replayed, "Generator \(index), iteration \(iteration): \(generated) != \(replayed)")
                         } else {
                             #expect(false, "Replay failed for generator \(index), iteration \(iteration)")

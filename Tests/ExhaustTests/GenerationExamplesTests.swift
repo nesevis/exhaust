@@ -17,12 +17,27 @@ struct GenerationExamplesTests {
         @Test("Profile memory allocations")
         func testProfileMemAlloc() throws {
             let generator = String.arbitrary
-            for n in 1...200 {
-                var iterator = ValueAndChoiceTreeGenerator(generator, materializePicks: true, seed: 1, maxRuns: 100)
-                while let (value, tree) = iterator.next() {
-                    let value = value
-                    let tree = tree
-                }                
+            var iterator = ValueAndChoiceTreeGenerator(generator, materializePicks: true, seed: 1, maxRuns: 100)
+            while let (value, tree) = iterator.next() {
+                let value = value
+                let tree = tree
+            }
+//            for n in 1...200 {
+//            }
+        }
+        
+        @Test("ValueAndChoiceTreeGeneratorDoesntSwallowMaps")
+        func testVACTGdoesntswallomaps() throws {
+            let gen = UInt.arbitrary.map {
+                // Heyo
+                $0
+            }.map { second in
+                second.description
+            }
+            var iterator = ValueAndChoiceTreeGenerator(gen)
+            while let (value, tree) = iterator.next() {
+                let value = value
+                let tree = tree
             }
         }
         

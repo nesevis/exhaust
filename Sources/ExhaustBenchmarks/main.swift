@@ -55,8 +55,8 @@ benchmark("String generation with choiceTree materialised") {
     let generator = String.arbitrary
     var iterator = ValueAndChoiceTreeGenerator(generator, materializePicks: true, seed: 1, maxRuns: 100)
     while let (value, tree) = iterator.next() {
-        let value = value
-        let tree = tree
+//        let value = value
+//        let tree = tree
     }
 }
 

@@ -587,40 +587,53 @@ struct SerializableCasePathTests {
     func testClassificationEndToEnd() async throws {
         typealias FiveTuple = ([Int16], [Int16], [Int16], [Int16], [Int16])
         let arrayGen = Gen.arrayOf(Int16.arbitrary, within: 1...10)
-//        let gen = Gen.zip(arrayGen, arrayGen, arrayGen, arrayGen, arrayGen)
-//        
-//        let property = { (value: FiveTuple) in
-//            let sum1 = value.0.reduce(0, (&+))
-//            let sum2 = value.1.reduce(0, (&+))
-//            let sum3 = value.2.reduce(0, (&+))
-//            let sum4 = value.3.reduce(0, (&+))
-//            let sum5 = value.4.reduce(0, (&+))
-//            let arr = [sum1, sum2, sum3, sum4, sum5]
-//            if arr.allSatisfy({ $0 < 256 }) {
-//                return arr.reduce(0, &+) < (arr.count * 256)
-//            }
-//            return false
-//        }
+        let tupleGen = Gen.zip(arrayGen, arrayGen, arrayGen, arrayGen, arrayGen)
+        let replay = try Interpreters.reflect(tupleGen, with: ([Int16(1)], [Int16(1)], [Int16(1)], [Int16(1)], [Int16(1)]))
         
+        let tupleProperty = { (value: FiveTuple) in
+            let sum1 = value.0.reduce(0, (&+))
+            let sum2 = value.1.reduce(0, (&+))
+            let sum3 = value.2.reduce(0, (&+))
+            let sum4 = value.3.reduce(0, (&+))
+            let sum5 = value.4.reduce(0, (&+))
+            let arr = [sum1, sum2, sum3, sum4, sum5]
+            if arr.allSatisfy({ $0 < 256 }) {
+                return arr.reduce(0, &+) < (arr.count * 256)
+            }
+            return false
+        }
+
+        struct Person: Equatable {
+            let name: String
+            let age: UInt8
+            let canWork: Bool
+        }
         typealias Tuple = (Int, Int)
         let limitedIntGen = Gen.choose(in: -500...500)
         let gen = Gen.zip(limitedIntGen, limitedIntGen)
         let property: (Tuple) -> Bool = { pair in
             pair.0 >= pair.1
         }
-        var generator = ValueAndChoiceTreeGenerator(gen, maxRuns: 200)
+        let gen2 = Gen.zip(UInt8.arbitrary, Bool.arbitrary, Gen.arrayOf(Character.arbitrary).map { String($0) })
+            .map { Person(name: $0.2, age: $0.0, canWork: $0.1) }
+        let prop2: (Person) -> Bool = { person in
+            person.age >= 18 && person.canWork == false
+        }
+        
+        var generator = ValueAndChoiceTreeGenerator(tupleGen, maxRuns: 400)
         var passes = [ChoiceTree]()
         var fails = [ChoiceTree]()
         while let (next, choiceTree) = generator.next() {
-            let passed = property(next)
+            let passed = tupleProperty(next)
             if passed {
                 passes.append(choiceTree)
             } else {
                 fails.append(choiceTree)
             }
         }
+        
         let schema = DynamicChoiceTreeSchema.generateSchema(from: passes + fails)
-        let dataSchema = schema.toSee5DataSchema(classes: ["pass", "fail"])
+        let dataSchema = schema.toSee5DataSchema(classes: ["pass", "fail"], fromTrees: passes + fails)
         let cases = schema.createSee5LabeledCases(from: passes.map { ($0, "pass") })
             + schema.createSee5LabeledCases(from: fails.map { ($0, "fail") })
         
@@ -768,6 +781,176 @@ struct SerializableCasePathTests {
         }
     }
     
+    @Test("Pick of just values extraction (Bool.arbitrary)")
+    func testPickOfJustsExtraction() async throws {
+        // Create a structure that mimics Bool.arbitrary: pick of just values
+        let justTrue = ChoiceTree.just("true")
+        let justFalse = ChoiceTree.just("false")
+        let branchTrue = ChoiceTree.branch(label: 0, children: [justTrue])
+        let branchFalse = ChoiceTree.branch(label: 1, children: [justFalse])
+        let selectedBranch = ChoiceTree.selected(branchTrue) // true is selected
+        let pickGroup = ChoiceTree.group([selectedBranch, branchFalse])
+        
+        // Verify this is recognized as a pick of justs
+        #expect(pickGroup.isPickOfJusts)
+        
+        let trees = [pickGroup]
+        let schema = DynamicChoiceTreeSchema.generateSchema(from: trees)
+        
+        // Should have a "pick" feature
+        let pickFeature = schema.features.first { $0.path == "pick" }
+        #expect(pickFeature != nil, "Schema should contain a 'pick' feature")
+        #expect(pickFeature?.type == .discrete, "Pick feature should be discrete type")
+        
+        // Extract features
+        let features = schema.extractFeatures(from: pickGroup)
+        
+        // Find the pick feature value
+        if let pickIndex = schema.features.firstIndex(where: { $0.path == "pick" }) {
+            #expect(features[pickIndex] == "true", "Should extract 'true' as the selected value")
+        }
+        
+        // Test with the other value selected
+        let selectedFalse = ChoiceTree.selected(branchFalse)
+        let pickGroupFalse = ChoiceTree.group([branchTrue, selectedFalse])
+        let featuresFalse = schema.extractFeatures(from: pickGroupFalse)
+        
+        if let pickIndex = schema.features.firstIndex(where: { $0.path == "pick" }) {
+            #expect(featuresFalse[pickIndex] == "false", "Should extract 'false' as the selected value")
+        }
+    }
+
+    @Test("Bool.arbitrary generator classification")
+    func testBoolArbitraryClassification() async throws {
+        // Test with actual Bool.arbitrary generator
+        var boolGen = ValueAndChoiceTreeGenerator(Bool.arbitrary, maxRuns: 5)
+        
+        var boolTrees: [ChoiceTree] = []
+        
+        while let (value, tree) = boolGen.next() {
+            boolTrees.append(tree)
+        }
+        
+        let schema = DynamicChoiceTreeSchema.generateSchema(from: boolTrees)
+        
+        // Should be able to extract features from Bool.arbitrary trees
+        let features = boolTrees.map { schema.extractFeatures(from: $0) }
+        
+        // Find pick features
+        let pickFeatures = schema.features.filter { $0.path.contains("pick") }
+        
+        // Check for isPickOfJusts on the generated trees
+        let arePickOfJusts = boolTrees.map(\.isPickOfJusts)
+        
+        // Verify that we can generate a schema and extract features
+        #expect(schema.features.count > 0, "Should generate a non-empty schema")
+        #expect(features.count == boolTrees.count, "Should extract features for all trees")
+        #expect(pickFeatures.count > 0, "Should have pick features for Bool.arbitrary")
+        #expect(arePickOfJusts.allSatisfy { $0 }, "All Bool.arbitrary trees should be identified as pick of justs")
+    }
+
+    @Test("String features integration")
+    func testStringFeaturesIntegration() async throws {
+        // Create a simple generator that produces character arrays (strings)
+        let stringGen = Gen.arrayOf(Character.arbitraryAscii, within: 3...5).map { String($0) }
+        
+        var generator = ValueAndChoiceTreeGenerator(stringGen, maxRuns: 5)
+        var trees: [ChoiceTree] = []
+        
+        while let (string, tree) = generator.next() {
+            print("Generated string: '\(string)'")
+            trees.append(tree)
+        }
+        
+        let schema = DynamicChoiceTreeSchema.generateSchema(from: trees)
+        
+        print("Schema features:")
+        for (index, feature) in schema.features.enumerated() {
+            print("  [\(index)] \(feature.path) (\(feature.type))")
+        }
+        
+        // Should have sequence metrics: length, complexity, entropy (all continuous)
+        let lengthFeatures = schema.features.filter { $0.path.contains("sequence.length") }
+        let complexityFeatures = schema.features.filter { $0.path.contains("sequence.complexity") }
+        let entropyFeatures = schema.features.filter { $0.path.contains("sequence.entropy") }
+        
+        #expect(lengthFeatures.count > 0, "Should have sequence.length")
+        #expect(complexityFeatures.count > 0, "Should have sequence.complexity") 
+        #expect(entropyFeatures.count > 0, "Should have sequence.entropy")
+        
+        #expect(lengthFeatures.allSatisfy { $0.type == .continuous }, "Length features should be continuous")
+        #expect(complexityFeatures.allSatisfy { $0.type == .continuous }, "Complexity features should be continuous")
+        #expect(entropyFeatures.allSatisfy { $0.type == .continuous }, "Entropy features should be continuous")
+        
+        // Test feature extraction
+        let features = trees.map { schema.extractFeatures(from: $0) }
+        
+        print("Sample feature extractions:")
+        for (i, treeFeatures) in features.enumerated() {
+            print("  Tree \(i): \(treeFeatures)")
+        }
+        
+        // Verify we get valid values for all sequence metrics
+        if let lengthFeatureIndex = schema.features.firstIndex(where: { $0.path.contains("sequence.length") }) {
+            let lengthValues = features.map { $0[lengthFeatureIndex] }
+            print("Length values: \(lengthValues)")
+            #expect(lengthValues.allSatisfy { $0 != "?" && Int($0) != nil }, "Should extract valid length values")
+        }
+        
+        if let complexityFeatureIndex = schema.features.firstIndex(where: { $0.path.contains("sequence.complexity") }) {
+            let complexityValues = features.map { $0[complexityFeatureIndex] }
+            print("Complexity values: \(complexityValues)")
+            #expect(complexityValues.allSatisfy { $0 != "?" && Double($0) != nil }, "Should extract valid complexity values")
+        }
+        
+        if let entropyFeatureIndex = schema.features.firstIndex(where: { $0.path.contains("sequence.entropy") }) {
+            let entropyValues = features.map { $0[entropyFeatureIndex] }
+            print("Entropy values: \(entropyValues)")
+            #expect(entropyValues.allSatisfy { $0 != "?" && Double($0) != nil }, "Should extract valid entropy values")
+        }
+    }
+
+    @Test("Debug character sequence detection")
+    func testDebugCharacterSequenceDetection() async throws {
+        // Test with a simple character array generator
+        let stringGen = Gen.arrayOf(Character.arbitrary, exactly: 3).map { String($0) }
+        
+        var generator = ValueAndChoiceTreeGenerator(stringGen, maxRuns: 1)
+        
+        if let (string, tree) = generator.next() {
+            print("Generated string: '\(string)'")
+            print("Tree structure:\n\(tree.debugDescription)")
+            
+            // Manually check if we can detect it as a character sequence
+            if case .sequence(_, let elements, _) = tree {
+                print("Sequence has \(elements.count) elements")
+                for (i, element) in elements.enumerated() {
+                    print("  Element \(i): \(element)")
+                    let unwrapped = element.unwrapped
+                    print("    Unwrapped: \(unwrapped)")
+                    
+                    switch unwrapped {
+                    case .choice(let value, _):
+                        print("    Choice value: \(value)")
+                        if case .character = value {
+                            print("    -> IS CHARACTER")
+                        } else {
+                            print("    -> NOT CHARACTER")
+                        }
+                    case .just(let str):
+                        print("    Just string: '\(str)' (length: \(str.count))")
+                    default:
+                        print("    Other type")
+                    }
+                }
+                
+                // Test our detection function
+                let isCharSeq = DynamicChoiceTreeSchema.isCharacterSequence(elements)
+                print("isCharacterSequence result: \(isCharSeq)")
+            }
+        }
+    }
+
     @Test("Sequence element alignment and padding behavior")
     func testSequenceElementAlignment() async throws {
         // Create sequences of different lengths to test padding behavior
@@ -844,4 +1027,5 @@ struct SerializableCasePathTests {
             #expect(longFeatures[elements3Index] == "400", "sequence.elements.3 should be 400 for long sequence")
         }
     }
+    
 }
