@@ -183,6 +183,8 @@ public struct ValueGenerator<Element>: IteratorProtocol, Sequence {
                 
                 // Pass the completed array to the continuation.
                 return try runContinuation(results)
+            case .zip:
+                fatalError("Unsupported")
             case let .just(value):
                 return try runContinuation(value)
                 

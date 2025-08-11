@@ -16,6 +16,7 @@ public struct ValueAndChoiceTreeGenerator<FinalOutput>: IteratorProtocol, Sequen
         let materializePicks: Bool
         var isFixed: Bool
         var size: UInt64
+        var runs: UInt64
         var sizeOverride: UInt64? = nil
     }
 
@@ -27,14 +28,17 @@ public struct ValueAndChoiceTreeGenerator<FinalOutput>: IteratorProtocol, Sequen
     public init(_ generator: ReflectiveGenerator<FinalOutput>, materializePicks: Bool = false, seed: UInt64? = nil, maxRuns: UInt64? = nil) {
         self.generator = generator
         self.prng = seed.map { Xoshiro256(seed: $0) } ?? Xoshiro256()
-        self.context = .init(maxRuns: maxRuns ?? 100, materializePicks: materializePicks, isFixed: false, size: 0)
+        self.context = .init(maxRuns: maxRuns ?? 100, materializePicks: materializePicks, isFixed: false, size: 0, runs: 0)
     }
     
     public mutating func next() -> Element? {
-        guard context.size < context.maxRuns else {
+        guard context.runs < context.maxRuns else {
             return nil
         }
-        defer { context.size += context.isFixed ? 0 : 1 }
+        defer {
+            context.size += context.isFixed ? 0 : 1
+            context.runs += 1
+        }
         // Iterators can't have throwing `next` functions
         do {
             return try Self.generate(generator, context: context, using: &prng)
@@ -112,7 +116,7 @@ public struct ValueAndChoiceTreeGenerator<FinalOutput>: IteratorProtocol, Sequen
                 var continuationRng = jumpedRng
                 let nextGen = try continuation(result)
                 
-                // Optimisation! Do not remove. This early return custs 70% of the time for string generators
+                // Optimisation! Do not remove. This early return cuts 70% of the time for string generators
                 if calleeChoiceTree.isChoice, case let .pure(value) = nextGen {
                     // Early return for a pure case originating with a choice
                     return (value, calleeChoiceTree)
@@ -129,6 +133,9 @@ public struct ValueAndChoiceTreeGenerator<FinalOutput>: IteratorProtocol, Sequen
                     } else {
                         // A large part of the trace is adding these arrays together
                         // Use chain?
+                        // FIXME: How do we discriminate between say a Gen.zip and a nested order?
+                        // This is possible going backward, but going forward, the bind chain makes it difficult
+                        // Can there be a ReflectiveOperation.zip([AnyGen])? This would make it very simple now that they're so type erased?
                         return (continuationResult, .group([calleeChoiceTree, innerChoiceTree]))
                     }
                 }
@@ -288,10 +295,31 @@ public struct ValueAndChoiceTreeGenerator<FinalOutput>: IteratorProtocol, Sequen
                     return (result, choiceTree)
                 }
                 return nil
+            case let .zip(generators):
+                // This will reduce these generators into an array of results that the continuation will convert into a tuple
+                var results = [Any]()
+                results.reserveCapacity(generators.count)
+                var choiceTrees = [ChoiceTree]()
+                results.reserveCapacity(generators.count)
+                for generator in generators {
+                    guard let (result, tree) = try Self.generateRecursive(
+                        generator,
+                        with: inputValue,
+                        context: context,
+                        sizeOverride: &sizeOverride,
+                        prng: &prng
+                    ) else {
+                        throw GeneratorError.couldNotGenerateConcomitantChoiceTree
+                    }
+                    results.append(result)
+                    choiceTrees.append(tree)
+                }
+                return try runContinuation(results, .group(choiceTrees))
+                
             case let .just(value):
                 // FIXME: Not sure about this one
                 // Ignore
-                return try runContinuation(value, .just("<value>"))
+                return try runContinuation(value, .just("\(value)"))
                 
             case .getSize:
                 let size = sizeOverride ?? logarithmicallyScaledSize(context.maxRuns, context.size)

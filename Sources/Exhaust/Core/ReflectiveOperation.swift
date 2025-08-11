@@ -40,6 +40,9 @@ public enum ReflectiveOperation {
     /// is applied iteratively to build the complete sequence.
     case sequence(length: ReflectiveGenerator<UInt64>, gen: ReflectiveGenerator<Any>)
     
+    /// Used by Gen.zip
+    case zip([ReflectiveGenerator<Any>])
+    
     /// A constant value baked into the generator
     case just(Any)
     

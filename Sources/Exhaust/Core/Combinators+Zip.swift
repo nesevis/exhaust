@@ -17,6 +17,22 @@ extension Gen {
         }
     }
     
+    public static func flatZip<A, B>(
+        _ a: ReflectiveGenerator<A>,
+        _ b: ReflectiveGenerator<B>
+    ) -> ReflectiveGenerator<(A, B)> {
+        let impure: ReflectiveGenerator<[Any]> = .impure(
+            operation: .zip([a.erase(), b.erase()]),
+            continuation: { .pure($0 as! [Any]) }
+        )
+
+        // Both these work
+        return impure.mapped(
+            forward: { ($0[0] as! A, $0[1] as! B) },
+            backward: { [$0.0, $0.1] }
+        )
+    }
+    
     public static func zip<A, B, C>(
         _ a: ReflectiveGenerator<A>,
         _ b: ReflectiveGenerator<B>,

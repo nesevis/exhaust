@@ -142,6 +142,8 @@ extension Interpreters {
                 let nextGen = try continuation(accumulatedValues)
                 return try self.replayWithChoicesHelper(nextGen, choices: &choices)
 
+            case .zip:
+                fatalError("Unsupported")
             case let .lmap(_, subGenerator), let .prune(subGenerator):
                 // A left map or prune doesn't consume choices, just passes them to the sub-generator
                 guard let subResult = try self.replayWithChoicesHelper(subGenerator, choices: &choices) else {
@@ -232,6 +234,8 @@ extension Interpreters {
             
             // This is the core structural match. We switch on the operation.
             switch operation {
+            case .zip:
+                fatalError("Unsupported")
                 
             case .chooseBits:
                 // This operation expects a primitive `.choice` node from the script.

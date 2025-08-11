@@ -135,7 +135,7 @@ public extension Interpreters {
             return [(finalOutput, [ChoiceTree.group(returnData.map(\.1))])]
             
         // FIXME: Use type here
-        case let .chooseBits(min, _, typeSentinel):
+        case let .chooseBits(min, max, typeSentinel):
             var isNil = false
             if let optionalValue = finalOutput as? Optional<Any>, optionalValue == nil {
                 // We can't properly reflect on this generator without a valid finalOutput
@@ -157,7 +157,6 @@ public extension Interpreters {
             }
 
             // FIXME: Do we turn off validation for nil-generated values?
-            let bitPattern = isNil ? min : convertibleValue.bitPattern64
 //            guard (min...max).contains(bitPattern) else {
 //                // We could be in a pick
 //                throw ReflectionError.inputWasOutOfGeneratorRange(convertibleValue, min...max)
@@ -165,7 +164,8 @@ public extension Interpreters {
 //            
             // Success! The result for the continuation is the value itself.
             let metadata = ChoiceMetadata(
-                validRanges: op.associatedRange.map { [$0] } ?? type(of: convertibleValue).bitPatternRanges,
+                // We can't know the proper range here
+                validRanges: [min...max],
                 // FIXME: We can clamp this here as well using the range
                 strategies: [
                     FundamentalReducerStrategy(direction: .towardsLowerBound),
@@ -185,7 +185,7 @@ public extension Interpreters {
             // We can't derive the getSize parameter when reflecting as the bind continuation that applies it is opaque to us. Ultimately it shouldn't matter for replay
             // But it does for reflection. Let's use 50 as a midpoint value
             // FIXME: Replays are deterministic, the getSize value shouldn't matter?
-            var derivedSize: UInt64 = 50
+            var derivedSize: UInt64 = 0
             if let sequence = finalOutput as? any Sequence {
                 derivedSize = UInt64(sequence.underestimatedCount)
             }
@@ -249,12 +249,29 @@ public extension Interpreters {
                 metadata
             )
             return [(value: combinedResults, path: [finalTree])]
+        case let .zip(generators):
+            guard
+                let outputs = finalOutput as? [Any],
+                outputs.count == generators.count
+            else {
+                throw ReflectionError.zipWasWrongLengthOrType
+            }
+            var results = [Any]()
+            var paths = [ChoiceTree]()
+
+            for (generator, output) in zip(generators, outputs) {
+                let result = try Self.reflectRecursive(generator, onFinalOutput: output)
+                paths.append(contentsOf: [.group(result.flatMap(\.path))])
+                results.append(contentsOf: result.map(\.value))
+            }
+            return [(value: results, path: [.group(paths)])]
         }
     }
     
     enum ReflectionError: LocalizedError {
         case reflectedNil(type: String)
         case lmapWasWrongType
+        case zipWasWrongLengthOrType
         case couldNotMapInputToGenerator
         case chooseBitsCouldNotConvertValue(String)
         case inputWasWrongForSequence(String)
