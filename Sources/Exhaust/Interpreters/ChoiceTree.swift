@@ -734,18 +734,63 @@ extension ChoiceTree: CustomDebugStringConvertible {
         }
     }
     
+    /// Recursively unwraps wrapper nodes (selected, important) to get to the core content
+    var unwrapped: ChoiceTree {
+        switch self {
+        case .selected(let inner), .important(let inner):
+            return inner.unwrapped
+        default:
+            return self
+        }
+    }
+    
     var isPickOfJusts: Bool {
         guard case let .group(array) = self else {
             return false
         }
-        // Now, does this array represent a series of branches containing justs?
-        guard
-            array.contains(where: { $0.isBranch }),
-            // This may fail if the branches are all resized
-            array.allSatisfy({ $0.isBranch || $0.isSelected || $0.isSizing })
-        else {
+        
+        // Unwrap all children and check if they're branches containing just values
+        let unwrappedChildren = array.map(\.unwrapped)
+        
+        // Check if we have at least one branch and all unwrapped children are branches
+        guard unwrappedChildren.contains(where: { $0.isBranch }),
+              unwrappedChildren.allSatisfy({ $0.isBranch || $0.isSizing }) else {
             return false
         }
+        
+        // Additional restriction: we should have only one selected branch at a time
+        // This distinguishes genuine pick-of-justs from string character selections
+        let selectedCount = array.count { element in
+            if case .selected = element { return true }
+            return false
+        }
+        guard selectedCount <= 1 else {
+            return false
+        }
+        
+        // Additional restriction: the just values should be meaningful discrete choices,
+        // not character codes. We'll check if all just values are non-numeric strings
+        // that could represent semantic choices (like "true"/"false", not character codes)
+        for child in unwrappedChildren {
+            if case .branch(_, let branchChildren) = child {
+                // All branch children should be just values with meaningful content
+                guard branchChildren.allSatisfy({ $0.isJust }) else {
+                    return false
+                }
+                
+                // Check if the just values look like semantic choices rather than character data
+                for branchChild in branchChildren {
+                    if case .just(let value) = branchChild {
+                        // If the value is a single character or looks like character data,
+                        // this is likely a string, not a semantic choice
+                        if value.count == 1 || value.allSatisfy(\.isWhitespace) || value == "<value>" {
+                            return false
+                        }
+                    }
+                }
+            }
+        }
+        
         return true
     }
 }

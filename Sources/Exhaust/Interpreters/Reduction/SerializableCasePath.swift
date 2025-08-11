@@ -269,12 +269,17 @@ public struct DynamicChoiceTreeSchema {
                     return length.description
                 } else if remaining.first == "length" {
                     return length.description
+                } else if remaining.first == "complexity" {
+                    return String(format: "%.6f", calculateSequenceComplexity(elements))
+                } else if remaining.first == "entropy" {
+                    return String(format: "%.6f", calculateSequenceEntropy(elements))
                 } else if remaining.first == "elements", remaining.count > 1 {
                     if let index = Int(remaining[1]), index < elements.count {
                         return extractValue(from: elements[index], components: Array(remaining.dropFirst(2)))
                     }
                 }
                 return nil
+                
                 
             case ("branch", .branch(let label, let children)):
                 if remaining.first == "label" {
@@ -299,6 +304,21 @@ public struct DynamicChoiceTreeSchema {
                 
             case ("selected", .selected(let inner)):
                 return extractValue(from: inner, components: remaining)
+                
+            case ("pick", .group(let children)) where tree.isPickOfJusts:
+                // Extract the selected value from a pick of just values
+                for child in children {
+                    // Check if this child is selected (could be wrapped)
+                    if case .selected = child {
+                        let unwrapped = child.unwrapped
+                        if case .branch(_, let branchChildren) = unwrapped,
+                           let justChild = branchChildren.first,
+                           case .just(let value) = justChild {
+                            return value
+                        }
+                    }
+                }
+                return nil
                 
             default:
                 return nil
@@ -359,10 +379,17 @@ public struct DynamicChoiceTreeSchema {
             paths.insert("\(currentPrefix)choice")
             
         case .sequence(_, let elements, _):
+            // Always include sequence metrics
             paths.insert("\(currentPrefix)sequence.length")
-            for (index, element) in elements.enumerated() {
-                let elementPaths = collectPaths(from: element, prefix: "\(currentPrefix)sequence.elements.\(index)", depth: depth + 1)
-                paths.formUnion(elementPaths)
+            paths.insert("\(currentPrefix)sequence.complexity")
+            paths.insert("\(currentPrefix)sequence.entropy")
+            
+            // For non-character sequences, also include individual elements
+            if !isCharacterSequence(elements) {
+                for (index, element) in elements.enumerated() {
+                    let elementPaths = collectPaths(from: element, prefix: "\(currentPrefix)sequence.elements.\(index)", depth: depth + 1)
+                    paths.formUnion(elementPaths)
+                }
             }
             
         case .branch(_, let children):
@@ -373,9 +400,14 @@ public struct DynamicChoiceTreeSchema {
             }
             
         case .group(let children):
-            for (index, child) in children.enumerated() {
-                let childPaths = collectPaths(from: child, prefix: "\(currentPrefix)group.children.\(index)", depth: depth + 1)
-                paths.formUnion(childPaths)
+            // Check if this is a pick of just values (like Bool.arbitrary)
+            if tree.isPickOfJusts {
+                paths.insert("\(currentPrefix)pick")
+            } else {
+                for (index, child) in children.enumerated() {
+                    let childPaths = collectPaths(from: child, prefix: "\(currentPrefix)group.children.\(index)", depth: depth + 1)
+                    paths.formUnion(childPaths)
+                }
             }
             
         case .important(let inner):
@@ -395,6 +427,11 @@ public struct DynamicChoiceTreeSchema {
     }
     
     private static func inferType(for path: String, in trees: [ChoiceTree]) -> FeatureDescriptor.FeatureType {
+        // Sequence metrics are always continuous
+        if path.contains("sequence.length") || path.contains("sequence.complexity") || path.contains("sequence.entropy") {
+            return .continuous
+        }
+        
         // Sample a few values to infer type
         let sampleValues = trees.prefix(10).compactMap { tree in
             FeatureDescriptor.createExtractor(for: path)(tree)
@@ -406,6 +443,147 @@ public struct DynamicChoiceTreeSchema {
         }
         
         return areNumeric ? .continuous : .discrete
+    }
+    
+    /// Extract a string from a sequence of character ChoiceTrees
+    private static func extractStringFromSequence(_ elements: [ChoiceTree]) -> String {
+        let characters = elements.compactMap { element -> Character? in
+            let unwrapped = element.unwrapped
+            switch unwrapped {
+            case .choice(let value, _):
+                if case .character(let char) = value {
+                    return char
+                }
+            case .just(let string):
+                return string.first
+            default:
+                break
+            }
+            return nil
+        }
+        return String(characters)
+    }
+    
+    /// Determines if a sequence of ChoiceTrees represents a character sequence
+    static func isCharacterSequence(_ elements: [ChoiceTree]) -> Bool {
+        guard !elements.isEmpty else { return false }
+        
+        // Heuristic: If we have more than a reasonable number of elements for normal sequences,
+        // and they look like single character values, treat as character sequence
+        if elements.count > 10 {
+            return true // Assume very long sequences are strings
+        }
+        
+        // Check if most elements look like characters by examining deeply nested structures
+        let characterLikeCount = elements.count { element in
+            return containsCharacterChoice(element)
+        }
+        
+        // If more than half the elements contain character choices, treat as character sequence
+        return Double(characterLikeCount) / Double(elements.count) > 0.5
+    }
+    
+    /// Recursively searches for character choices within nested tree structures
+    private static func containsCharacterChoice(_ tree: ChoiceTree) -> Bool {
+        switch tree {
+        case .choice(let value, _):
+            // Direct character choice
+            if case .character = value {
+                return true
+            }
+            // Small integers that could be character codes
+            switch value {
+            case .unsigned(let val) where val < 1114112: // Max Unicode codepoint
+                return true
+            default:
+                return false
+            }
+        case .just(let string):
+            // Single character strings are likely characters from character generators
+            return string.count == 1
+        case .group(let children), .branch(_, let children):
+            // Recursively search in children
+            return children.contains { containsCharacterChoice($0) }
+        case .sequence:
+            // Don't recurse into other sequences
+            return false
+        case .important(let inner), .selected(let inner):
+            // Unwrap and continue searching
+            return containsCharacterChoice(inner)
+        case .getSize, .resize:
+            return false
+        }
+    }
+    
+    /// Calculate sequence complexity (for strings, average Unicode value)
+    private static func calculateSequenceComplexity(_ elements: [ChoiceTree]) -> Double {
+        guard !elements.isEmpty else { return 0.0 }
+        
+        let values = elements.compactMap { element -> Double? in
+            let unwrapped = element.unwrapped
+            switch unwrapped {
+            case .choice(let value, _):
+                switch value {
+                case .character(let char):
+                    return Double(char.unicodeScalars.first?.value ?? 0)
+                case .unsigned(let uint):
+                    return Double(uint)
+                case .signed(let int, _, _):
+                    return Double(int)
+                case .floating(let double, _, _):
+                    return double
+                }
+            case .just(let string):
+                // For single character strings, use the character's Unicode value
+                if string.count == 1, let char = string.first {
+                    return Double(char.unicodeScalars.first?.value ?? 0)
+                }
+                // For other strings, use length as a proxy
+                return Double(string.count)
+            default:
+                return nil
+            }
+        }
+        
+        return values.isEmpty ? 0.0 : values.reduce(0, +) / Double(values.count)
+    }
+    
+    /// Calculate sequence entropy using Shannon entropy
+    private static func calculateSequenceEntropy(_ elements: [ChoiceTree]) -> Double {
+        guard !elements.isEmpty else { return 0.0 }
+        
+        // Extract comparable values from elements
+        let values = elements.compactMap { element -> String? in
+            let unwrapped = element.unwrapped
+            switch unwrapped {
+            case .choice(let value, _):
+                return String(describing: value.convertible)
+            case .just(let string):
+                return string
+            default:
+                return nil
+            }
+        }
+        
+        guard !values.isEmpty else { return 0.0 }
+        
+        // Count frequencies
+        var frequencies: [String: Int] = [:]
+        for value in values {
+            frequencies[value, default: 0] += 1
+        }
+        
+        let total = Double(values.count)
+        var entropy = 0.0
+        
+        for count in frequencies.values {
+            let probability = Double(count) / total
+            if probability > 0 {
+                entropy -= probability * log2(probability)
+            }
+        }
+        
+        return entropy
     }
     
     /// Extract features from a tree using this schema, returning "?" for missing values
