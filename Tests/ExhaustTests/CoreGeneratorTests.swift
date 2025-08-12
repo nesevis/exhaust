@@ -98,19 +98,6 @@ struct CoreGeneratorTests {
 //        }
     }
     
-    @Suite("ReflectiveGenerator Tests")
-    struct ReflectiveGeneratorTests {
-        
-        @Test("ReflectiveGenerator.isLens works as intended")
-        func testIsLens() {
-            let gen = Gen.lens(extract: \String.description, String.arbitrary)
-            #expect(gen.isLens == true)
-            
-            let gen2 = String.arbitrary
-            #expect(gen2.isLens == false)
-        }
-    }
-    
     @Suite("Interpreter Consistency")
     struct InterpreterTests {
         

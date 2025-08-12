@@ -919,7 +919,7 @@ struct SerializableCasePathTests {
         
         if let (string, tree) = generator.next() {
             print("Generated string: '\(string)'")
-            print("Tree structure:\n\(tree.debugDescription)")
+//            print("Tree structure:\n\(tree.debugDescription)")
             
             // Manually check if we can detect it as a character sequence
             if case .sequence(_, let elements, _) = tree {
