@@ -32,7 +32,7 @@ public extension Gen {
     /// - Returns: A generator that produces the constant and validates during reflection
     @inlinable
     static func exact<Value: Equatable>(_ value: Value) -> ReflectiveGenerator<Value> {
-        // Use lmap with a transform that validates the target value during reflection.
+        // Use contramap with a transform that validates the target value during reflection.
         // The transform returns nil for mismatches, causing reflection to fail.
         let baseGenerator = just(value as Any)
         
@@ -43,6 +43,6 @@ public extension Gen {
             return typedInput
         }
         
-        return liftF(.lmap(transform: transform, next: baseGenerator))
+        return liftF(.contramap(transform: transform, next: baseGenerator))
     }
 }

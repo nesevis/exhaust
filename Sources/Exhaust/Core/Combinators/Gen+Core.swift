@@ -61,12 +61,12 @@ public enum Gen {
     ///   - generator: The generator to apply the transformation to
     /// - Returns: A generator that accepts the new input type
     @inlinable
-    static func lmap<NewInput, Input, Output>(
+    static func contramap<NewInput, Input, Output>(
         _ transform: @escaping (NewInput) throws -> Input, 
         _ generator: ReflectiveGenerator<Output>
     ) -> ReflectiveGenerator<Output> {
         
-        return .impure(operation: ReflectiveOperation.lmap(
+        return .impure(operation: ReflectiveOperation.contramap(
             // This is where the backwards pass happens
             transform: {
                 // Handle optional inputs
@@ -90,7 +90,7 @@ public enum Gen {
     
     /// Applies a contravariant transformation with optional failure handling.
     ///
-    /// This is a specialized version of `lmap` that combines transformation with pruning.
+    /// This is a specialized version of `contramap` that combines transformation with pruning.
     /// If the transformation returns nil, the generator branch is pruned during reflection.
     /// This is useful for generators that should only succeed under certain conditions.
     ///
@@ -103,6 +103,6 @@ public enum Gen {
         _ transform: @escaping (NewInput) throws -> Input?,
         _ generator: ReflectiveGenerator<Output>
     ) -> ReflectiveGenerator<Output> {
-        lmap(transform, prune(generator))
+        contramap(transform, prune(generator))
     }
 }

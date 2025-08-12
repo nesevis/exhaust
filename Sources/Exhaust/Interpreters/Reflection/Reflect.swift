@@ -75,9 +75,9 @@ public extension Interpreters {
     ) throws -> [(value: Any, path: [ChoiceTree])] {
         switch op {
         // If the `onFinalOutput` is nil here, it must be an optional. How do we handle that?
-        case let .lmap(transform, nextGen):
+        case let .contramap(transform, nextGen):
             guard let subValue = try transform(finalOutput) else {
-                throw ReflectionError.lmapWasWrongType
+                throw ReflectionError.contramapWasWrongType
             }
             return try reflectRecursive(nextGen, onFinalOutput: subValue)
                 .map { ($0.value, $0.path) }
@@ -244,7 +244,7 @@ public extension Interpreters {
     
     enum ReflectionError: LocalizedError {
         case reflectedNil(type: String)
-        case lmapWasWrongType
+        case contramapWasWrongType
         case zipWasWrongLengthOrType
         case couldNotMapInputToGenerator
         case chooseBitsCouldNotConvertValue(String)

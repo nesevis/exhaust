@@ -8,21 +8,21 @@
 /// - `chooseBits`: Generates random UInt64 within range  
 /// - `pick`: Selects one choice based on weights
 /// - `sequence`: Builds arrays by repeated element generation
-/// - `lmap`/`prune`: Transform or filter the input context
+/// - `contramap`/`prune`: Transform or filter the input context
 ///
 /// ## Backward Pass (Reflection) 
 /// Operations analyze values to discover which random choices could have produced them:
 /// - `chooseBits`: Checks if value's bit pattern falls within range
 /// - `pick`: Tries all choices against the target value
 /// - `sequence`: Decomposes arrays into element-by-element reflection paths
-/// - `lmap`/`prune`: Transforms target through lens or checks validity
+/// - `contramap`/`prune`: Transforms target through lens or checks validity
 ///
 /// ## Replay Pass (Deterministic Recreation)
 /// Operations consume pre-recorded choices to recreate exact values:
 /// - `chooseBits`: Uses recorded bit pattern from choice tree
 /// - `pick`: Follows recorded branch selection  
 /// - `sequence`: Replays each element using recorded sub-trees
-/// - `lmap`/`prune`: Passes through recorded decisions
+/// - `contramap`/`prune`: Passes through recorded decisions
 ///
 /// ## Architecture
 ///
@@ -62,7 +62,7 @@ public enum ReflectiveOperation {
     /// - Parameters:
     ///   - transform: Function that extracts focus area, returning nil to prune branches
     ///   - next: Generator to apply to the extracted input
-    case lmap(transform: (Any) throws -> Any?, next: ReflectiveGenerator<Any>)
+    case contramap(transform: (Any) throws -> Any?, next: ReflectiveGenerator<Any>)
     
     /// Weighted random choice between multiple generation strategies.
     ///
@@ -81,15 +81,15 @@ public enum ReflectiveOperation {
     
     /// Conditional generation that prunes invalid branches during reflection.
     ///
-    /// This operation works with `lmap` to handle cases where the input transformation
-    /// might fail. When a preceding `lmap` returns `nil`, `prune` eliminates that
+    /// This operation works with `contramap` to handle cases where the input transformation
+    /// might fail. When a preceding `contramap` returns `nil`, `prune` eliminates that
     /// reflection path, focusing the search on valid branches.
     ///
     /// **Forward pass**: If input context is invalid (nil), generation fails gracefully
     /// **Backward pass**: Unwraps valid input and continues reflection with nested generator
     /// **Replay pass**: Passes through recorded valid inputs
     ///
-    /// **Why separate from lmap**: This separation allows interpreters to handle
+    /// **Why separate from contramap**: This separation allows interpreters to handle
     /// failure cases explicitly, enabling different strategies for invalid branches.
     ///
     /// - Parameter next: Generator to apply if the input is valid (non-nil)

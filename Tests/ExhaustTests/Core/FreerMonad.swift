@@ -129,17 +129,17 @@ struct MonadLawTests {
 @Suite("Partial Monadic Profunctor law tests")
 struct PartialMonadicProfunctorLawTests {
     
-    // MARK: - PMP Law 1: lmap Just . prune = id
+    // MARK: - PMP Law 1: contramap Just . prune = id
     
-    @Test("PMP Law 1: lmap(Just) . prune == identity")
-    /// A Partial Monadic Profunctor must satisfy: `Gen.lmap({ $0 }, Gen.prune(generator))` is equivalent to `generator`
-    func pmpLaw1_LmapJustPruneIsIdentity() throws {
+    @Test("PMP Law 1: contramap(Just) . prune == identity")
+    /// A Partial Monadic Profunctor must satisfy: `Gen.contramap({ $0 }, Gen.prune(generator))` is equivalent to `generator`
+    func pmpLaw1_ContramapJustPruneIsIdentity() throws {
         // Arrange
         let generator = Gen.just(Int(42))
         
-        // Act: lmap(Just) . prune should be identity
+        // Act: contramap(Just) . prune should be identity
         // Type discovery here is bad now with input parameterisation removed
-        let lhs = Gen.lmap({ $0 as Int }, Gen.prune(generator))
+        let lhs = Gen.contramap({ $0 as Int }, Gen.prune(generator))
         let rhs = generator
         
         var lhsIterator = ValueGenerator(lhs)
@@ -153,10 +153,10 @@ struct PartialMonadicProfunctorLawTests {
         #expect(lhsValue == rhsValue)
     }
     
-    // MARK: - PMP Law 2: lmap (f >=> g) . prune = lmap f . prune . lmap g . prune
+    // MARK: - PMP Law 2: contramap (f >=> g) . prune = contramap f . prune . contramap g . prune
     
     @Test("PMP Law 2: Composition associativity")
-    /// A PMP must satisfy: `lmap(compose(f,g)) . prune` is equivalent to `lmap(f) . prune . lmap(g) . prune`
+    /// A PMP must satisfy: `contramap(compose(f,g)) . prune` is equivalent to `contramap(f) . prune . contramap(g) . prune`
     func pmpLaw2_CompositionAssociativity() throws {
         // Arrange
         let generator = Gen.just("hello")
@@ -170,11 +170,11 @@ struct PartialMonadicProfunctorLawTests {
         }
         
         // Act
-        // LHS: lmap(compose(f,g)) . prune
-        let lhs = Gen.lmap(composed, Gen.prune(generator))
+        // LHS: contramap(compose(f,g)) . prune
+        let lhs = Gen.contramap(composed, Gen.prune(generator))
         
-        // RHS: lmap(f) . prune . lmap(g) . prune  
-        let rhs = Gen.lmap(g, Gen.prune(Gen.lmap(f, Gen.prune(generator))))
+        // RHS: contramap(f) . prune . contramap(g) . prune  
+        let rhs = Gen.contramap(g, Gen.prune(Gen.contramap(f, Gen.prune(generator))))
         
         var lhsIterator = ValueGenerator(lhs)
         var rhsIterator = ValueGenerator(rhs)
@@ -187,17 +187,17 @@ struct PartialMonadicProfunctorLawTests {
         #expect(lhsValue == rhsValue)
     }
     
-    // MARK: - PMP Law 3: (lmap f . prune) (return y) = return y
+    // MARK: - PMP Law 3: (contramap f . prune) (return y) = return y
     
-    @Test("PMP Law 3: lmap . prune over pure values")
-    /// A PMP must satisfy: `Gen.lmap(f, Gen.prune(.pure(y)))` is equivalent to `.pure(y)`
-    func pmpLaw3_LmapPruneOverPure() throws {
+    @Test("PMP Law 3: contramap . prune over pure values")
+    /// A PMP must satisfy: `Gen.contramap(f, Gen.prune(.pure(y)))` is equivalent to `.pure(y)`
+    func pmpLaw3_contramapPruneOverPure() throws {
         // Arrange
         let pureValue = "test"
         let transform: (String) -> Int? = { $0.count > 0 ? $0.count : nil }
         
         // Act
-        let lhs = Gen.lmap(transform, Gen.prune(ReflectiveGenerator.pure(pureValue)))
+        let lhs = Gen.contramap(transform, Gen.prune(ReflectiveGenerator.pure(pureValue)))
         let rhs = ReflectiveGenerator<String>.pure(pureValue)
         
         var lhsIterator = ValueGenerator(lhs)
@@ -211,11 +211,11 @@ struct PartialMonadicProfunctorLawTests {
         #expect(lhsValue == rhsValue)
     }
     
-    // MARK: - PMP Law 4: (lmap f . prune) (x >>= g) = (lmap f . prune) x >>= (lmap f . prune) . g
+    // MARK: - PMP Law 4: (contramap f . prune) (x >>= g) = (contramap f . prune) x >>= (contramap f . prune) . g
     
-    @Test("PMP Law 4: lmap . prune distributes over bind")
-    /// A PMP must satisfy: `(lmap f . prune)(x >>= g)` is equivalent to `(lmap f . prune) x >>= (lmap f . prune) . g`
-    func pmpLaw4_LmapPruneDistributesOverBind() throws {
+    @Test("PMP Law 4: contramap . prune distributes over bind")
+    /// A PMP must satisfy: `(contramap f . prune)(x >>= g)` is equivalent to `(contramap f . prune) x >>= (contramap f . prune) . g`
+    func pmpLaw4_contramapPruneDistributesOverBind() throws {
         // Arrange - carefully chosen types for the law to work
         let baseGenerator = ReflectiveGenerator<Int>.pure(5)
         // Crucial: bindFunction must return a generator with the SAME input type as base
@@ -228,17 +228,17 @@ struct PartialMonadicProfunctorLawTests {
         }
         
         // Act
-        // LHS: (lmap f . prune)(x >>= g)
+        // LHS: (contramap f . prune)(x >>= g)
         let boundGenerator = baseGenerator.bind(bindFunction)  // ReflectiveGenerator<Int, String>
-        let lhs = Gen.lmap(transform, Gen.prune(boundGenerator))  // ReflectiveGenerator<String, String>
+        let lhs = Gen.contramap(transform, Gen.prune(boundGenerator))  // ReflectiveGenerator<String, String>
         
-        // RHS: (lmap f . prune) x >>= (lmap f . prune) . g  
-        let transformedBase = Gen.lmap(transform, Gen.prune(baseGenerator))  // ReflectiveGenerator<String, Int>
+        // RHS: (contramap f . prune) x >>= (contramap f . prune) . g  
+        let transformedBase = Gen.contramap(transform, Gen.prune(baseGenerator))  // ReflectiveGenerator<String, Int>
         
-        // The bind function applies (lmap f . prune) to the result of g
+        // The bind function applies (contramap f . prune) to the result of g
         let transformedFunction: (Int) -> ReflectiveGenerator<String> = { val in
             let resultGenerator = bindFunction(val)  // ReflectiveGenerator<Int, String>
-            return Gen.lmap(transform, Gen.prune(resultGenerator))  // ReflectiveGenerator<String, String>
+            return Gen.contramap(transform, Gen.prune(resultGenerator))  // ReflectiveGenerator<String, String>
         }
         let rhs = transformedBase.bind(transformedFunction)  // ReflectiveGenerator<String, String>
         
@@ -255,15 +255,15 @@ struct PartialMonadicProfunctorLawTests {
     
     // MARK: - Additional Profunctor Laws
     
-    @Test("Profunctor Law 1: lmap(identity) == identity")
-    /// A Profunctor must satisfy: `Gen.lmap(identity, generator)` is equivalent to `generator`
-    func profunctorLaw1_LmapIdentity() throws {
+    @Test("Profunctor Law 1: contramap(identity) == identity")
+    /// A Profunctor must satisfy: `Gen.contramap(identity, generator)` is equivalent to `generator`
+    func profunctorLaw1_contramapIdentity() throws {
         // Arrange
         let generator = Gen.just(42)
         let identity: (Int) -> Int = { $0 }
         
         // Act
-        let lhs = Gen.lmap(identity, generator)
+        let lhs = Gen.contramap(identity, generator)
         let rhs = generator
         
         var lhsIterator = ValueGenerator(lhs)
@@ -277,9 +277,9 @@ struct PartialMonadicProfunctorLawTests {
         #expect(lhsValue == rhsValue)
     }
     
-    @Test("Profunctor Law 2: lmap(compose(f,g)) == lmap(g) . lmap(f)")
-    /// A Profunctor must satisfy: `lmap(f . g)` is equivalent to `lmap(g, lmap(f, generator))`
-    func profunctorLaw2_LmapComposition() throws {
+    @Test("Profunctor Law 2: contramap(compose(f,g)) == contramap(g) . contramap(f)")
+    /// A Profunctor must satisfy: `contramap(f . g)` is equivalent to `contramap(g, contramap(f, generator))`
+    func profunctorLaw2_contramapComposition() throws {
         // Arrange
         let generator = Gen.just(100)
         let f: (String) -> Int = { $0.count }
@@ -287,8 +287,8 @@ struct PartialMonadicProfunctorLawTests {
         let composed: (String) -> String = { str in g(f(str)) }
         
         // Act
-        let lhs = Gen.lmap(composed, generator)
-        let rhs = Gen.lmap(g, Gen.lmap(f, generator))
+        let lhs = Gen.contramap(composed, generator)
+        let rhs = Gen.contramap(g, Gen.contramap(f, generator))
         
         var lhsIterator = ValueGenerator(lhs)
         var rhsIterator = ValueGenerator(rhs)
@@ -303,8 +303,8 @@ struct PartialMonadicProfunctorLawTests {
     
     // MARK: - Comap Law Tests
     
-    @Test("Comap is equivalent to lmap . prune")
-    /// The comap combinator should be equivalent to `lmap(transform, prune(generator))`
+    @Test("Comap is equivalent to contramap . prune")
+    /// The comap combinator should be equivalent to `contramap(transform, prune(generator))`
     func comapEquivalence() throws {
         // Arrange
         let generator = Gen.just(42)
@@ -312,12 +312,12 @@ struct PartialMonadicProfunctorLawTests {
         
         // Act
         let comapResult = Gen.comap(transform, generator)
-        let lmapPruneResult = Gen.lmap(transform, Gen.prune(generator))
+        let contramapPruneResult = Gen.contramap(transform, Gen.prune(generator))
         
         // Test via generation with valid input
         
         var lhsIterator = ValueGenerator(comapResult)
-        var rhsIterator = ValueGenerator(lmapPruneResult)
+        var rhsIterator = ValueGenerator(contramapPruneResult)
         
         // Test via generation - both should produce same value
         let lhsValue = lhsIterator.next()

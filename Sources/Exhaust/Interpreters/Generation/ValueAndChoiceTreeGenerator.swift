@@ -142,8 +142,8 @@ public struct ValueAndChoiceTreeGenerator<FinalOutput>: IteratorProtocol, Sequen
             }
             
             switch operation {
-            case .lmap(_, let nextGen):
-                // The lmap transform is not used in the forward pass
+            case .contramap(_, let nextGen):
+                // The contramap transform is not used in the forward pass
                 // Run the nested generator and pass its result to the continuation
                 guard let result = try self.generateRecursive(
                     nextGen,

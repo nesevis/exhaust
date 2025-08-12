@@ -73,7 +73,7 @@ public extension ReflectiveGenerator where Operation == ReflectiveOperation {
         forward: @escaping (Value) throws -> NewOutput,
         backward: @escaping (NewOutput) throws -> Value
     ) rethrows -> ReflectiveGenerator<NewOutput> {
-        try Gen.lmap(backward, self.map(forward))
+        try Gen.contramap(backward, self.map(forward))
     }
     
     /// Creates a bidirectional transformation using a forward function and a partial path for backward.
@@ -98,7 +98,7 @@ public extension ReflectiveGenerator where Operation == ReflectiveOperation {
         let erasedGen = try self
             .map(forward)
 
-        return Gen.lmap(erasedBackward, erasedGen)
+        return Gen.contramap(erasedBackward, erasedGen)
     }
     
     /// Creates a bidirectional transformation using partial paths in both directions.
@@ -124,7 +124,7 @@ public extension ReflectiveGenerator where Operation == ReflectiveOperation {
         let erasedGen = try self
             .map { try forward.extract(from: $0) }
         
-        return Gen.lmap(erasedBackward, erasedGen)
+        return Gen.contramap(erasedBackward, erasedGen)
     }
     
     /// Converts this generator to produce optional values, enabling nil/non-nil choice patterns.
@@ -141,7 +141,7 @@ public extension ReflectiveGenerator where Operation == ReflectiveOperation {
     @inlinable
     func asOptional() -> ReflectiveGenerator<Value?> {
         let description = String(describing: Value.self)
-        return .impure(operation: .lmap(
+        return .impure(operation: .contramap(
             transform: { result in
                 // Backward pass. The calling function is expecting a non-optional, so we throw the `reflectedNil` error to indicate to the consumer — which should only be a `pick` exploring the nil and non-nil options — that they are trying to parse the `.some` branch using the `.none` value during reflection
                 if let optional = result as? Optional<Value>, optional == nil {
