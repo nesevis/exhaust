@@ -36,3 +36,11 @@ extension FreerMonad {
         }
     }
 }
+
+extension FreerMonad where Value == Any {
+    // This shouldn't be called, but on the off chance that erase is called on an already-erased generator, it is now a noop
+    @inlinable
+    func erase() -> FreerMonad<Operation, Any> {
+        self
+    }
+}
