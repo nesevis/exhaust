@@ -156,6 +156,27 @@ public extension ReflectiveGenerator where Operation == ReflectiveOperation {
             }
     }
     
+    /// Creates an array generator with length constrained to the specified range.
+    ///
+    /// This is a convenience method that transforms a single-value generator into an array generator
+    /// where the array length is randomly chosen from the given range. It provides a clean interface
+    /// for generating collections without manually composing `Gen.arrayOf` calls.
+    ///
+    /// **Forward pass**: Generates a random length within range, then generates that many elements
+    /// **Backward pass**: Decomposes target array and reflects on both length and individual elements  
+    /// **Replay pass**: Uses recorded length and element choices to recreate the exact array
+    ///
+    /// The method name "proliferate" suggests the multiplication of a single generator into many
+    /// instances, which is exactly what array generation accomplishes while maintaining the
+    /// bidirectional properties essential for reflection and replay.
+    ///
+    /// - Parameter range: The allowed range for the resulting array length
+    /// - Returns: A generator that produces arrays with length in the specified range
+    @inlinable
+    func proliferate(with range: ClosedRange<UInt64>) -> ReflectiveGenerator<[Value]> {
+        Gen.arrayOf(self, Gen.choose(in: range))
+    }
+    
     /// Transforms the operation type of this generator while preserving the value type.
     ///
     /// **Warning**: This operation has significant performance overhead as it must traverse
