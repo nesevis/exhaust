@@ -33,6 +33,9 @@ let package = Package(
                 .product(name: "CasePaths", package: "swift-case-paths"),
                 .product(name: "Algorithms", package: "swift-algorithms"),
                 .product(name: "See5", package: "See5")
+            ],
+            swiftSettings: [
+                .unsafeFlags(["-whole-module-optimization"], .when(configuration: .release))
             ]
         ),
         .testTarget(
@@ -44,6 +47,9 @@ let package = Package(
             dependencies: [
                 "Exhaust",
                 .product(name: "Benchmark", package: "swift-benchmark")
+            ],
+            swiftSettings: [
+                .unsafeFlags(["-whole-module-optimization"], .when(configuration: .release))
             ]
         ),
     ]
