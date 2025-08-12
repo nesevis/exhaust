@@ -50,7 +50,7 @@ public extension Gen {
         let operation = ReflectiveOperation.chooseBits(
             min: actualRange.lowerBound,
             max: actualRange.upperBound,
-            type: .character
+            tag: .character
         )
         
         return .impure(operation: operation) { result in
@@ -88,10 +88,10 @@ public extension Gen {
     ) -> ReflectiveGenerator<Output> {
         let minBits = range?.lowerBound.bitPattern64 ?? Output.bitPatternRanges[0].lowerBound
         let maxBits = range?.upperBound.bitPattern64 ?? Output.bitPatternRanges[0].upperBound
-        let sentinel = ChoiceValue.TypeSentinel(type: Output.self)
+        let tag = Output.tag
         
-        return .impure(operation: .chooseBits(min: minBits, max: maxBits, type: sentinel)) { result in
-            switch sentinel {
+        return .impure(operation: .chooseBits(min: minBits, max: maxBits, tag: tag)) { result in
+            switch tag {
             case .uint64:
                 // This catches [Character] and String
                 if let sequence = result as? any Sequence {

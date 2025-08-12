@@ -11,9 +11,9 @@ extension ChoiceTree {
         case .choice:
             return 1
         case .sequence(let length, let elements, _):
-            return length + elements.map(\.shortlexLength).reduce(0, +)
+            return length + elements.map(\.shortlexLength).reduce(0, &+)
         case .branch(_, let children), .group(let children):
-            return 1 + children.map(\.shortlexLength).reduce(0, +)
+            return 1 + children.map(\.shortlexLength).reduce(0, &+)
             // Cases with no intrinsic complexity
         case .getSize, .just:
             return 0
@@ -22,7 +22,7 @@ extension ChoiceTree {
         case .selected(let child):
             return child.shortlexLength
         case .resize(_, let choices):
-            return choices.map(\.shortlexLength).reduce(0, +)
+            return choices.map(\.shortlexLength).reduce(0, &+)
         }
     }
 }

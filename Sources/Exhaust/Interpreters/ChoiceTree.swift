@@ -544,7 +544,7 @@ extension ChoiceTree: CustomDebugStringConvertible {
         case .just:
             return 0
         case .sequence(_, let elements, let choiceMetadata):
-            let range = choiceMetadata.validRanges[0].cast(type: Int64.self)
+            let range = choiceMetadata.validRanges[0].cast(type: UInt64.self)
             if range.lowerBound == .min || range.upperBound == .max {
                 return Double(Int64.max)
             }
