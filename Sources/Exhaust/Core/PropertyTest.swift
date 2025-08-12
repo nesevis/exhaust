@@ -24,7 +24,8 @@ enum PropertyTest {
             if passed == false {
                 print("Failed after \(iterations)/\(maxIterations).")
                 print("Result: \(next)")
-                print("Blueprint:\n\(reflection!)")
+                print("Blueprint:\n\(reflection!.debugDescription)")
+                // Add seed and size
                 return
             }
         }

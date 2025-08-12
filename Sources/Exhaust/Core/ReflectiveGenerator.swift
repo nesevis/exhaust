@@ -108,18 +108,19 @@
 /// - SeeAlso: `ReflectiveOperation`, `Gen`, `Interpreters`, `ChoiceTree`
 public typealias ReflectiveGenerator<Output> = FreerMonad<ReflectiveOperation, Output>
 
-extension ReflectiveGenerator where Operation: AnyReflectiveOperation {
+public extension ReflectiveGenerator where Operation == ReflectiveOperation {
+
     var associatedRange: ClosedRange<UInt64>? {
         switch self {
         case .pure:
             return nil
         case let .impure(op, _):
-            return op.associatedRange
+            guard case .chooseBits(let min, let max, _) = op else {
+                return nil
+            }
+            return min...max
         }
     }
-}
-
-public extension ReflectiveGenerator where Operation == ReflectiveOperation {
 
     @inlinable
     func mapped<NewOutput>(
@@ -177,8 +178,7 @@ public extension ReflectiveGenerator where Operation == ReflectiveOperation {
     }
     
     #warning("This has performance overhead, use with caution")
-    @inlinable
-    func mapOperation<NewOperation>(_ transform: @escaping (Operation) -> NewOperation) -> FreerMonad<NewOperation, Value> {
+    private func mapOperation<NewOperation>(_ transform: @escaping (Operation) -> NewOperation) -> FreerMonad<NewOperation, Value> {
         switch self {
         case let .pure(value):
             // If we're at a pure value, there's no operation to transform. Return as is.

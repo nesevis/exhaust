@@ -6,8 +6,6 @@
 //
 
 extension Gen {
-    // Zip wraps plain generators in a lens to help them extract from the tuple that is returned when reflecting. If the generator is already a lens, the assumption is that the user is then mapping over the tuple to transform it into something else again.
-    
     @inlinable
     public static func zip<A, B>(
         _ a: ReflectiveGenerator<A>,

@@ -52,18 +52,3 @@ public enum ReflectiveOperation {
     /// The nested generator runs with the new size, then the original size is restored.
     case resize(newSize: UInt64, next: ReflectiveGenerator<Any>)
 }
-
-public protocol AnyReflectiveOperation {
-    var associatedRange: ClosedRange<UInt64>? { get }
-}
-
-extension ReflectiveOperation: AnyReflectiveOperation {
-    public var associatedRange: ClosedRange<UInt64>? {
-        switch self {
-        case .chooseBits(let min, let max, _):
-            return min...max
-        default:
-            return nil
-        }
-    }
-}

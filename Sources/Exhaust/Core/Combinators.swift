@@ -11,6 +11,7 @@ public enum Gen {
         }
     }
     
+    #warning("Remove this in favour of `.mapped`")
     @inlinable
     static func lens<Input, NewInput>(
         extract path: some PartialPath<NewInput, Input>,
@@ -128,8 +129,7 @@ public enum Gen {
     ) -> ReflectiveGenerator<Output> {
         lmap(transform, prune(generator))
     }
-    
-    // A base generator that produces a single, constant value.
+
     @inlinable
     static func just<Output>(_ value: Output) -> ReflectiveGenerator<Output> {
         liftF(.just(value))
