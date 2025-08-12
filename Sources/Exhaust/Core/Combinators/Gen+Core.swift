@@ -1,0 +1,108 @@
+/// Core fundamental operations for the generator combinators.
+/// These operations form the building blocks for more complex generator behavior.
+public enum Gen {
+    /// Lifts a reflective operation into a generator with type-safe result handling.
+    ///
+    /// This is the fundamental operation that bridges between raw reflective operations
+    /// and type-safe generators. It handles the unsafe casting and error reporting
+    /// when the reflection system returns unexpected types.
+    ///
+    /// - Parameter operation: The low-level reflective operation to lift
+    /// - Returns: A generator that executes the operation and validates the result type
+    @inlinable
+    static func liftF<Output>(
+        _ operation: ReflectiveOperation
+    ) -> ReflectiveGenerator<Output> {
+        .impure(operation: operation) { result in
+            if let typedResult = result as? Output {
+                return .pure(typedResult)
+            }
+            throw Interpreters.ReflectionError.reflectedNil(type: String(describing: Output.self))
+        }
+    }
+    
+    /// Legacy function for extracting values using partial paths.
+    /// 
+    /// - Warning: This function is marked for removal in favor of `.mapped`
+    /// - Parameters:
+    ///   - path: A partial path describing how to extract the input from a larger structure
+    ///   - next: The generator to apply to the extracted input
+    /// - Returns: A generator that operates on the extracted input
+    #warning("Remove this in favour of `.mapped`")
+    @inlinable
+    static func lens<Input, NewInput>(
+        extract path: some PartialPath<NewInput, Input>,
+        _ next: ReflectiveGenerator<Input>
+    ) -> ReflectiveGenerator<Input> {
+        comap(path.extract(from:), next)
+    }
+    
+    /// Applies a pruning operation to a generator.
+    ///
+    /// Pruning is used during shrinking to eliminate branches that don't contribute
+    /// to the final result. This optimization helps make property-based testing more efficient
+    /// by focusing on relevant test cases.
+    ///
+    /// - Parameter generator: The generator to apply pruning to
+    /// - Returns: A generator with pruning applied
+    @inlinable
+    static func prune<Output>(_ generator: ReflectiveGenerator<Output>) -> ReflectiveGenerator<Output> {
+        liftF(.prune(next: generator.erase()))
+    }
+    
+    /// Applies a contravariant transformation to a generator's input during reflection.
+    ///
+    /// This is the fundamental operation for transforming inputs in the backward direction
+    /// during reflection. It allows a generator expecting one input type to work with
+    /// a different input type via a transformation function.
+    ///
+    /// - Parameters:
+    ///   - transform: A function that transforms the new input type to the expected input type
+    ///   - generator: The generator to apply the transformation to
+    /// - Returns: A generator that accepts the new input type
+    @inlinable
+    static func lmap<NewInput, Input, Output>(
+        _ transform: @escaping (NewInput) throws -> Input, 
+        _ generator: ReflectiveGenerator<Output>
+    ) -> ReflectiveGenerator<Output> {
+        
+        return .impure(operation: ReflectiveOperation.lmap(
+            // This is where the backwards pass happens
+            transform: {
+                // Handle optional inputs
+                try transform($0 as! NewInput) as Any
+            },
+            next: generator.erase()
+        )) { result in
+            if let typed = result as? Output {
+                // Backward pass - direct value
+                return .pure(typed)
+            }
+            if let optional = result as? Optional<Output>, optional == nil {
+                throw Interpreters.ReflectionError.reflectedNil(type: String(describing: Output.self))
+            }
+            throw GeneratorError.typeMismatch(
+                expected: String(describing: Output.self),
+                actual: String(describing: type(of: result))
+            )
+        }
+    }
+    
+    /// Applies a contravariant transformation with optional failure handling.
+    ///
+    /// This is a specialized version of `lmap` that combines transformation with pruning.
+    /// If the transformation returns nil, the generator branch is pruned during reflection.
+    /// This is useful for generators that should only succeed under certain conditions.
+    ///
+    /// - Parameters:
+    ///   - transform: A function that transforms the input, returning nil to indicate failure
+    ///   - generator: The generator to apply the transformation to
+    /// - Returns: A generator that prunes on transformation failure
+    @inlinable
+    static func comap<NewInput, Input, Output>(
+        _ transform: @escaping (NewInput) throws -> Input?,
+        _ generator: ReflectiveGenerator<Output>
+    ) -> ReflectiveGenerator<Output> {
+        lmap(transform, prune(generator))
+    }
+}

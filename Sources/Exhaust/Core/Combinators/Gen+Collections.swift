@@ -1,0 +1,148 @@
+/// Operations for generating collections like arrays and dictionaries.
+/// These combinators handle the complexities of generating structured data with proper shrinking behavior.
+public extension Gen {
+    /// Creates a generator for an array of random values.
+    ///
+    /// This implementation is stack-safe and can generate very large arrays without overflowing.
+    /// It works by first generating a random length, then using a primitive `.sequence` operation
+    /// which the interpreter can execute iteratively.
+    ///
+    /// The array length is controlled by the provided length generator, which defaults to a
+    /// size-based range if not specified.
+    ///
+    /// - Parameters:
+    ///   - elementGenerator: A self-contained generator for the elements of the array
+    ///   - length: Optional generator for the array length. Defaults to size-based length
+    /// - Returns: A generator that produces an array of elements
+    @inlinable
+    static func arrayOf<Output>(
+        _ elementGenerator: ReflectiveGenerator<Output>,
+        _ length: ReflectiveGenerator<UInt64>? = nil
+    ) -> ReflectiveGenerator<[Output]> {
+        // Use `bind` to get the result of the length generator.
+        let sequenceOperation = ReflectiveOperation.sequence(
+            length: length ?? Gen.getSize().bind {
+                Gen.choose(in: ($0 / 10)...$0)
+            },
+            gen: elementGenerator.erase()
+        )
+        // Lift the operation. The continuation will decode the `[Any]` result.
+        return .impure(operation: sequenceOperation) { result in
+            guard let array = result as? [Output] else {
+                throw GeneratorError.typeMismatch(
+                    expected: String(describing: type(of: [Output].self)),
+                    actual: String(describing: type(of: result))
+                )
+            }
+            return .pure(array)
+        }
+    }
+    
+    /// Creates a generator for an array with length constrained to a specific range.
+    ///
+    /// This variant allows precise control over array length by specifying exact bounds.
+    /// The size parameter is still considered but only if it falls within the specified range.
+    ///
+    /// - Parameters:
+    ///   - elementGenerator: The generator for array elements
+    ///   - range: The allowed range for array length
+    /// - Returns: A generator that produces arrays with length in the specified range
+    @inlinable
+    static func arrayOf<Output>(
+        _ elementGenerator: ReflectiveGenerator<Output>,
+        within range: ClosedRange<UInt64>
+    ) -> ReflectiveGenerator<[Output]> {
+        // Use `bind` to get the result of the length generator.
+        let sequenceOperation = ReflectiveOperation.sequence(
+            length: Gen.getSize().bind { size in
+                if range.contains(size) {
+                    return Gen.choose(in: size...size)
+                }
+                return Gen.choose(in: range)
+                
+            },
+            gen: elementGenerator.erase()
+        )
+        // Lift the operation. The continuation will decode the `[Any]` result.
+        return .impure(operation: sequenceOperation) { result in
+            let array = result as! [Output]
+            return .pure(array)
+        }
+    }
+    
+    /// Creates a generator for an array with exactly the specified length.
+    ///
+    /// This is a convenience method that generates arrays of a fixed size,
+    /// useful when you need predictable collection sizes for testing.
+    ///
+    /// - Parameters:
+    ///   - elementGenerator: The generator for array elements
+    ///   - exactly: The exact length the array should have
+    /// - Returns: A generator that produces arrays of the specified length
+    @inlinable
+    static func arrayOf<Output>(
+        _ elementGenerator: ReflectiveGenerator<Output>,
+        exactly: UInt64
+    ) -> ReflectiveGenerator<[Output]> {
+        arrayOf(elementGenerator, .pure(exactly))
+    }
+    
+    /// Creates a generator for dictionaries with random key-value pairs.
+    ///
+    /// This combinator generates dictionaries by creating parallel arrays of keys and values,
+    /// then zipping them together. If duplicate keys are generated, the `uniquingKeysWith`
+    /// parameter determines which value to keep (currently keeps the first value).
+    ///
+    /// The dictionary size follows the same size-based generation as arrays, ensuring
+    /// consistent behavior across collection types.
+    ///
+    /// - Parameters:
+    ///   - keyGenerator: Generator for dictionary keys (must be Hashable)
+    ///   - valueGenerator: Generator for dictionary values
+    /// - Returns: A generator that produces dictionaries with random key-value pairs
+    @inlinable
+    static func dictionaryOf<KeyOutput: Hashable, ValueOutput>(
+        _ keyGenerator: ReflectiveGenerator<KeyOutput>,
+        _ valueGenerator: ReflectiveGenerator<ValueOutput>
+    ) -> ReflectiveGenerator<[KeyOutput: ValueOutput]> {
+        Gen.zip(
+            // These arrays use `getSize()` under the hood and will be the same length
+            Gen.arrayOf(keyGenerator),
+            Gen.arrayOf(valueGenerator)
+        )
+        .mapped(
+            forward: {
+                Dictionary(
+                    Swift.zip($0.0, $0.1).map { ($0.0, $0.1) },
+                    uniquingKeysWith: { key, _ in key }
+                )
+            },
+            backward: { (Array($0.keys), Array($0.values)) }
+        )
+    }
+    
+    /// Creates an array generator whose length is controlled by the current size parameter.
+    ///
+    /// This is a convenience method that combines `getSize` with `arrayOf` to create
+    /// arrays that grow in complexity as tests progress. The size parameter acts as
+    /// an upper bound, with the actual length chosen randomly within the constraint.
+    ///
+    /// - Parameters:
+    ///   - elementGenerator: The generator for array elements
+    ///   - lengthRange: Optional range to constrain the array length. If nil, uses 0...size
+    /// - Returns: A generator that produces arrays with size-controlled length
+    @inlinable
+    static func sized<Output>(
+        _ elementGenerator: ReflectiveGenerator<Output>,
+        lengthRange: ClosedRange<UInt64>? = nil
+    ) -> ReflectiveGenerator<[Output]> {
+        getSize().bind { size in
+            let actualRange = lengthRange ?? (0...size)
+            let clampedMin = max(actualRange.lowerBound, 0)
+            let clampedMax = min(actualRange.upperBound, size)
+            let finalRange = clampedMin...clampedMax
+
+            return arrayOf(elementGenerator, choose(in: finalRange))
+        }
+    }
+}
