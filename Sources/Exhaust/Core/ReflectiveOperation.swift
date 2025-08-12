@@ -36,7 +36,7 @@ public enum ReflectiveOperation {
     case sequence(length: ReflectiveGenerator<UInt64>, gen: ReflectiveGenerator<Any>)
     
     /// Used by Gen.zip to compose together N generators without creating "the pyramid of doom" with nested binds
-    case zip([ReflectiveGenerator<Any>])
+    case zip(ContiguousArray<ReflectiveGenerator<Any>>)
     
     /// A constant value baked into the generator
     case just(Any)
