@@ -1,15 +1,28 @@
 //
-//  TypeSentinel+Init.swift
+//  TypeTag.swift
 //  Exhaust
 //
 //  Created by Chris Kolbu on 12/8/2025.
 //
 
-extension ChoiceValue.TypeSentinel {
-    /// Throws a fatal error if initialised with an incompatible type
-    @inlinable
-    public init<T>(type: T) {
-        self = switch type {
+public enum TypeTag: Equatable {
+        case uint
+        case uint64
+        case uint32
+        case uint16
+        case uint8
+        case int
+        case int64
+        case int32
+        case int16
+        case int8
+        case double
+        case float
+        case character
+    
+        @inlinable
+        public init<T>(type: T) {
+            self = switch type {
             case is Double.Type:
                     .double
             case is Int.Type:
@@ -35,10 +48,11 @@ extension ChoiceValue.TypeSentinel {
                     .uint16
             case is UInt8.Type:
                     .uint8
+            // This case is explicitly handled by `chooseCharacter`, so is unlikely to be used here
             case is Character.Type:
-                    .character // This is handled by `chooseCharacter`
+                    .character
             default:
                 fatalError("Unexpected type passed to \(#function): \(T.self)")
             }
+        }
     }
-}

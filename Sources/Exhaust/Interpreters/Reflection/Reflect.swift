@@ -123,8 +123,7 @@ public extension Interpreters {
             }
             return [(finalOutput, [ChoiceTree.group(returnData.map(\.1))])]
 
-        // FIXME: Use type sentinel here
-        case let .chooseBits(min, max, typeSentinel):
+        case let .chooseBits(min, max, tag):
             var convertibleValue: (any BitPatternConvertible)?
             // In the reverse pass of a [[Char]] we'll be passed the array here and it will represent the length of the list. How can we know that?
             if let convertible = finalOutput as? any BitPatternConvertible {
@@ -151,7 +150,7 @@ public extension Interpreters {
                     SaturationReducerStrategy(direction: .towardsLowerBound)
                 ]
             )
-            return [(value: finalOutput, path: [.choice(.init(convertibleValue, type: typeSentinel), metadata)])]
+            return [(value: finalOutput, path: [.choice(.init(convertibleValue, tag: tag), metadata)])]
         
         case let .just(value):
             // Avoid expensive string interpolation and prefix operations

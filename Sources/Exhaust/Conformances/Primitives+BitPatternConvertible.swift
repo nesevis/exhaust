@@ -8,6 +8,8 @@
 import Foundation
 
 extension Optional: BitPatternConvertible where Wrapped: BitPatternConvertible {
+    public static var tag: TypeTag { Wrapped.tag }
+    
     public static var bitPatternRanges: [ClosedRange<UInt64>] {
         Wrapped.bitPatternRanges
     }
@@ -27,6 +29,8 @@ extension Optional: BitPatternConvertible where Wrapped: BitPatternConvertible {
 }
 
 extension UInt8: BitPatternConvertible {
+    public static var tag: TypeTag { .uint8 }
+    
     public init(bitPattern64: UInt64) {
         self = UInt8(bitPattern64)
     }
@@ -43,6 +47,8 @@ extension UInt8: BitPatternConvertible {
 }
 
 extension UInt16: BitPatternConvertible {
+    public static var tag: TypeTag { .uint16 }
+    
     public init(bitPattern64: UInt64) {
         self = UInt16(bitPattern64)
     }
@@ -59,6 +65,8 @@ extension UInt16: BitPatternConvertible {
 }
 
 extension UInt32: BitPatternConvertible {
+    public static var tag: TypeTag { .uint32 }
+    
     public init(bitPattern64: UInt64) {
         self = UInt32(bitPattern64)
     }
@@ -76,6 +84,8 @@ extension UInt32: BitPatternConvertible {
 
 /// Implemented for bidirectionality
 extension UInt64: BitPatternConvertible {
+    public static var tag: TypeTag { .uint64 }
+    
     public static var bitPatternRanges: [ClosedRange<UInt64>] {
         [
             UInt64.min...UInt64.max
@@ -92,6 +102,8 @@ extension UInt64: BitPatternConvertible {
 }
 
 extension UInt: BitPatternConvertible {
+    public static var tag: TypeTag { .uint }
+
     public static var bitPatternRanges: [ClosedRange<UInt64>] {
         [
             UInt64(UInt.min)...UInt64(UInt.max)
@@ -108,6 +120,7 @@ extension UInt: BitPatternConvertible {
 }
 
 extension Int8: BitPatternConvertible {
+    public static var tag: TypeTag { .int8 }
     private static let signBitMask: UInt8 = 0x80
     
     public init(bitPattern64: UInt64) {
@@ -126,6 +139,7 @@ extension Int8: BitPatternConvertible {
 }
 
 extension Int16: BitPatternConvertible {
+    public static var tag: TypeTag { .int16 }
     private static let signBitMask: UInt16 = 0x8000
     
     public init(bitPattern64: UInt64) {
@@ -144,6 +158,7 @@ extension Int16: BitPatternConvertible {
 }
 
 extension Int32: BitPatternConvertible {
+    public static var tag: TypeTag { .int32 }
     private static let signBitMask: UInt32 = 0x80000000
     
     public init(bitPattern64: UInt64) {
@@ -162,6 +177,7 @@ extension Int32: BitPatternConvertible {
 }
 
 extension Int64: BitPatternConvertible {
+    public static var tag: TypeTag { .int64 }
     private static let signBitMask: UInt64 = 0x8000000000000000
     
     public init(bitPattern64: UInt64) {
@@ -180,6 +196,7 @@ extension Int64: BitPatternConvertible {
 }
 
 extension Int: BitPatternConvertible {
+    public static var tag: TypeTag { .int }
     private static let signBitMask: UInt64 = 0x8000000000000000
     public init(bitPattern64: UInt64) {
         // Map UInt64 directly to Int using bit pattern, which handles the full range safely
@@ -201,6 +218,7 @@ extension Int: BitPatternConvertible {
 }
 
 extension Float: BitPatternConvertible {
+    public static var tag: TypeTag { .float }
     private static let signBitMask: UInt32 = 0x80000000
     
     /// A `Float` can use the entire `UInt32` space for its bit pattern.
@@ -242,6 +260,7 @@ extension Float: BitPatternConvertible {
 }
 
 extension Double: BitPatternConvertible {
+    public static var tag: TypeTag { .double }
     private static let signBitMask: UInt64 = 0x8000000000000000
     
     /// A `Double` uses the full `UInt64` space for its bit pattern.
@@ -282,6 +301,7 @@ extension Double: BitPatternConvertible {
 }
 
 extension Unicode.Scalar: BitPatternConvertible {
+    public static var tag: TypeTag { .character } // FIXME: Ehrm?
     public static var bitPatternRanges: [ClosedRange<UInt64> ]{
         [
             0x000000...0x00D7FF, // Basic Multilingual Plane before surrogates
@@ -299,6 +319,7 @@ extension Unicode.Scalar: BitPatternConvertible {
 }
 
 extension Character: BitPatternConvertible {
+    public static var tag: TypeTag { .character }
     /// Defines the range for characters.
     public static var bitPatternRanges: [ClosedRange<UInt64>] {
         [

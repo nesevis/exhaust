@@ -1,4 +1,3 @@
-
 /// A free monad implementation that separates effect descriptions from their interpretation.
 ///
 /// FreerMonad enables the description of computations with effects without executing them immediately.

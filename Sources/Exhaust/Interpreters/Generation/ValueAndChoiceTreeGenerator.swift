@@ -8,7 +8,6 @@
 import Algorithms
 import Foundation
 
-// TODO: Rename
 public struct ValueAndChoiceTreeGenerator<FinalOutput>: IteratorProtocol, Sequence {
     // TODO: This will have to be inout?
     private struct Context {
@@ -226,12 +225,12 @@ public struct ValueAndChoiceTreeGenerator<FinalOutput>: IteratorProtocol, Sequen
                 
                 return (value, .group(branches))
 
-            case let .chooseBits(min, max, sentinel):
+            case let .chooseBits(min, max, tag):
                 // 1. Generate the raw, random bits. The interpreter's only job
                 //    is to produce entropy within the specified bounds. It has
                 //    no knowledge of the final `Output` type (e.g., Int, Float).
                 let randomBits = UInt64.random(in: min...max, using: &prng)
-                let choiceTree = ChoiceTree.choice(ChoiceValue(randomBits, type: sentinel), .init(validRanges: [min...max]))
+                let choiceTree = ChoiceTree.choice(ChoiceValue(randomBits, tag: tag), .init(validRanges: [min...max]))
                 
                 // Run the continuation here, which is getting a .pure value, which we ignore
                 // for ChoiceTree purposes

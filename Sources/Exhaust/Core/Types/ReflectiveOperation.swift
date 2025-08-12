@@ -105,7 +105,7 @@ public enum ReflectiveOperation {
     /// **Backward pass**: Checks if target value's bit pattern falls within [min, max]
     /// **Replay pass**: Uses recorded bit pattern from choice tree
     ///
-    /// **Type handling**: The `TypeSentinel` enables type-specific interpretation:
+    /// **Type handling**: The `TypeTag` enables type-specific interpretation:
     /// - `Int`: Bit pattern represents signed integer
     /// - `Float`: Bit pattern represents IEEE 754 floating point  
     /// - `Character`: Bit pattern represents Unicode scalar value
@@ -117,8 +117,8 @@ public enum ReflectiveOperation {
     /// - Parameters:
     ///   - min: Minimum bit pattern value (inclusive)
     ///   - max: Maximum bit pattern value (inclusive)  
-    ///   - type: Type sentinel for proper interpretation of bit patterns
-    case chooseBits(min: UInt64, max: UInt64, type: ChoiceValue.TypeSentinel)
+    ///   - tag: Type tag for proper interpretation of bit patterns
+    case chooseBits(min: UInt64, max: UInt64, tag: TypeTag)
     
     /// Stack-safe sequence generation for creating arrays and collections.
     ///

@@ -6,29 +6,14 @@
 //
 
 public enum ChoiceValue: Comparable, Hashable, Equatable, Sendable {
-    public enum TypeSentinel: Equatable {
-        case uint
-        case uint64
-        case uint32
-        case uint16
-        case uint8
-        case int
-        case int64
-        case int32
-        case int16
-        case int8
-        case double
-        case float
-        case character
-    }
     case unsigned(UInt64)
     /// The UInt64 represents its hashable behaviour
     case signed(Int64, UInt64, any BitPatternConvertible.Type)
     case floating(Double, UInt64, any BitPatternConvertible.Type)
     case character(Character)
     
-    init(_ value: any BitPatternConvertible, type: TypeSentinel) {
-        switch type {
+    init(_ value: any BitPatternConvertible, tag: TypeTag) {
+        switch tag {
         case .uint, .uint64, .uint32, .uint16, .uint8:
             self = .unsigned(value.bitPattern64)
         case .int:
