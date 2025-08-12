@@ -50,8 +50,7 @@ public enum ChoiceValue: Comparable, Hashable, Equatable, Sendable {
         }
     }
 
-    // Make shrinkable?
-    // 0 returns Int even when we want UInt
+    #warning("Deprecated. Remove")
     init(_ value: any BitPatternConvertible) {
         switch value {
         case is Character:
