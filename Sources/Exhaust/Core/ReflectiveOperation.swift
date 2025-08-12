@@ -1,8 +1,3 @@
-public protocol AnyReflectiveOperation {
-//    associatedtype Input
-    var associatedRange: ClosedRange<UInt64>? { get }
-}
-
 /// The primitive operations that can be performed by the reflective generator system.
 /// These operations are only generic over their input types - the output type is managed
 /// by the continuation in the containing `ReflectiveGen` to enable the Freer Monad pattern.
@@ -40,7 +35,7 @@ public enum ReflectiveOperation {
     /// is applied iteratively to build the complete sequence.
     case sequence(length: ReflectiveGenerator<UInt64>, gen: ReflectiveGenerator<Any>)
     
-    /// Used by Gen.zip
+    /// Used by Gen.zip to compose together N generators without creating "the pyramid of doom" with nested binds
     case zip([ReflectiveGenerator<Any>])
     
     /// A constant value baked into the generator
@@ -55,6 +50,10 @@ public enum ReflectiveOperation {
     /// Used to control complexity of sub-generators (e.g., making smaller arrays).
     /// The nested generator runs with the new size, then the original size is restored.
     case resize(newSize: UInt64, next: ReflectiveGenerator<Any>)
+}
+
+public protocol AnyReflectiveOperation {
+    var associatedRange: ClosedRange<UInt64>? { get }
 }
 
 extension ReflectiveOperation: AnyReflectiveOperation {

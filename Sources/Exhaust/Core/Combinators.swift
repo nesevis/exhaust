@@ -45,12 +45,6 @@ public enum Gen {
         liftF(.prune(next: generator.erase()))
     }
     
-    /// Covariant version of prune that lifts a generator producing T into one that can handle T? during reflection
-    @inlinable
-    static func coprune<Output>(_ generator: ReflectiveGenerator<Output>) -> ReflectiveGenerator<Optional<Output>> {
-        generator.map { Optional($0) }
-    }
-    
     @inlinable
     static func chooseCharacter(in range: ClosedRange<UInt64>? = nil) -> ReflectiveGenerator<Character> {
         // Default to the lower range
@@ -67,6 +61,8 @@ public enum Gen {
             } else if let character = result as? Character {
                 // Not sure this is ever hit
                 return .pure(character)
+            } else if let optional = result as? Optional<Character>, optional == nil {
+                throw Interpreters.ReflectionError.reflectedNil(type: String(describing: Character.self))
             } else {
                 throw GeneratorError.typeMismatch(expected: "Character", actual: String(describing: type(of: result)))
             }
@@ -134,12 +130,19 @@ public enum Gen {
     static func lmap<NewInput, Input, Output>(_ transform: @escaping (NewInput) throws -> Input, _ generator: ReflectiveGenerator<Output>) -> ReflectiveGenerator<Output> {
         
         return .impure(operation: ReflectiveOperation.lmap(
-            transform: { try transform($0 as! NewInput) as Any },
+            // This is where the backwards pass happens
+            transform: {
+                // Handle optional inputs
+                try transform($0 as! NewInput) as Any
+            },
             next: generator.erase()
         )) { result in
             if let typed = result as? Output {
                 // Backward pass - direct value
                 return .pure(typed)
+            }
+            if let optional = result as? Optional<Output>, optional == nil {
+                throw Interpreters.ReflectionError.reflectedNil(type: String(describing: Output.self))
             }
             throw GeneratorError.typeMismatch(
                 expected: String(describing: Output.self),

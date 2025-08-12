@@ -109,18 +109,6 @@
 public typealias ReflectiveGenerator<Output> = FreerMonad<ReflectiveOperation, Output>
 
 extension ReflectiveGenerator where Operation: AnyReflectiveOperation {
-    var isLens: Bool {
-        switch self {
-        case .pure:
-            return false
-        case let .impure(op, _):
-            if let castOp = op as? ReflectiveOperation, case .lmap = castOp {
-                return true
-            }
-            return false
-        }
-    }
-    
     var associatedRange: ClosedRange<UInt64>? {
         switch self {
         case .pure:
@@ -133,29 +121,16 @@ extension ReflectiveGenerator where Operation: AnyReflectiveOperation {
 
 public extension ReflectiveGenerator where Operation == ReflectiveOperation {
 
+    @inlinable
     func mapped<NewOutput>(
         forward: @escaping (Value) throws -> NewOutput,
         backward: @escaping (NewOutput) throws -> Value
     ) rethrows -> ReflectiveGenerator<NewOutput> {
-        let erasedBackward: (Any) throws -> Any = { newOutput in
-            if let actual = newOutput as? NewOutput {
-                return try backward(actual)
-            }
-            
-            // Handle nil values by throwing the specific reflection error
-            // This allows the reflection system to skip this branch gracefully
-            if let optional = newOutput as? Optional<NewOutput>, optional == nil {
-                throw Interpreters.ReflectionError.reflectedNil(type: String(describing: NewOutput.self))
-            }
-            
-            throw GeneratorError.mappedBackwardError(expected: String(describing: NewOutput.self), actual: String(describing: type(of: newOutput)))
-        }
-        let erasedGen = try self
-            .map(forward)
-        return Gen.lmap(erasedBackward, erasedGen)
+        try Gen.lmap(backward, self.map(forward))
     }
     
     // extract path: some PartialPath<NewInput, Input>,
+    @inlinable
     func mapped<NewOutput>(
         forward: @escaping (Value) throws -> NewOutput,
         backward: some PartialPath<NewOutput, Value>
@@ -169,11 +144,13 @@ public extension ReflectiveGenerator where Operation == ReflectiveOperation {
         return Gen.lmap(erasedBackward, erasedGen)
     }
     
+    @inlinable
     func mapped<NewOutput>(
         forward: some PartialPath<Value, NewOutput>,
         backward: some PartialPath<NewOutput, Value>
     ) throws -> ReflectiveGenerator<NewOutput?> {
         let erasedBackward: (Any) throws -> Any = { newOutput in
+            // FIXME: Should we be force unwrapping here? What if it's optional?
             try backward.extract(from: newOutput)!
         }
         let erasedGen = try self
@@ -182,8 +159,25 @@ public extension ReflectiveGenerator where Operation == ReflectiveOperation {
         return Gen.lmap(erasedBackward, erasedGen)
     }
     
+    @inlinable
+    func asOptional() -> ReflectiveGenerator<Value?> {
+        let description = String(describing: Value.self)
+        return .impure(operation: .lmap(
+            transform: { result in
+                // Backward pass. The calling function is expecting a non-optional, so we throw the `reflectedNil` error to indicate to the consumer — which should only be a `pick` exploring the nil and non-nil options — that they are trying to parse the `.some` branch using the `.none` value during reflection
+                if let optional = result as? Optional<Value>, optional == nil {
+                    throw Interpreters.ReflectionError.reflectedNil(type: description)
+                }
+                return result as! Value
+            },
+            next: self.erase()
+        )) { result in
+                .pure(result as? Value)
+            }
+    }
     
-    // This is internal
+    #warning("This has performance overhead, use with caution")
+    @inlinable
     func mapOperation<NewOperation>(_ transform: @escaping (Operation) -> NewOperation) -> FreerMonad<NewOperation, Value> {
         switch self {
         case let .pure(value):

@@ -8,10 +8,12 @@
 extension Gen {
     // Zip wraps plain generators in a lens to help them extract from the tuple that is returned when reflecting. If the generator is already a lens, the assumption is that the user is then mapping over the tuple to transform it into something else again.
     
+    @inlinable
     public static func zip<A, B>(
         _ a: ReflectiveGenerator<A>,
         _ b: ReflectiveGenerator<B>
     ) -> ReflectiveGenerator<(A, B)> {
+        // TODO: These extensions are good candidates for InlineArrays with declared sizes
         let impure: ReflectiveGenerator<[Any]> = .impure(
             operation: .zip([a.erase(), b.erase()]),
             continuation: { .pure($0 as! [Any]) }
@@ -23,6 +25,7 @@ extension Gen {
         )
     }
     
+    @inlinable
     public static func zip<A, B, C>(
         _ a: ReflectiveGenerator<A>,
         _ b: ReflectiveGenerator<B>,
@@ -39,6 +42,7 @@ extension Gen {
         )
     }
     
+    @inlinable
     public static func zip<A, B, C, D>(
         _ a: ReflectiveGenerator<A>,
         _ b: ReflectiveGenerator<B>,
@@ -56,6 +60,7 @@ extension Gen {
         )
     }
     
+    @inlinable
     public static func zip<A, B, C, D, E>(
         _ a: ReflectiveGenerator<A>,
         _ b: ReflectiveGenerator<B>,
@@ -74,6 +79,7 @@ extension Gen {
         )
     }
     
+    @inlinable
     public static func zip<A, B, C, D, E, F>(
         _ a: ReflectiveGenerator<A>,
         _ b: ReflectiveGenerator<B>,
@@ -93,6 +99,7 @@ extension Gen {
         )
     }
     
+    @inlinable
     public static func zip<A, B, C, D, E, F, G>(
         _ a: ReflectiveGenerator<A>,
         _ b: ReflectiveGenerator<B>,
@@ -113,6 +120,7 @@ extension Gen {
         )
     }
     
+    @inlinable
     public static func zip<A, B, C, D, E, F, G, H>(
         _ a: ReflectiveGenerator<A>,
         _ b: ReflectiveGenerator<B>,
@@ -134,6 +142,7 @@ extension Gen {
         )
     }
     
+    @inlinable
     public static func zip<A, B, C, D, E, F, G, H, I>(
         _ a: ReflectiveGenerator<A>,
         _ b: ReflectiveGenerator<B>,
@@ -156,6 +165,7 @@ extension Gen {
         )
     }
     
+    @inlinable
     public static func zip<A, B, C, D, E, F, G, H, I, J>(
         _ a: ReflectiveGenerator<A>,
         _ b: ReflectiveGenerator<B>,

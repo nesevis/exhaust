@@ -10,7 +10,7 @@ import Foundation
 public extension Interpreters {
     // MARK: - Public-Facing Reflect Function (Unchanged, but now correct)
 
-    public static func reflect<Output>(
+    static func reflect<Output>(
         _ gen: ReflectiveGenerator<Output>,
         with outputValue: Output,
         /// Optional validation check
@@ -34,7 +34,7 @@ public extension Interpreters {
         }
     }
 
-    // MARK: - Private Recursive Engine (Signature is Key)
+    // MARK: - Private Recursive Engine
 
     /// The main recursive engine for reflection.
     /// It now takes the *final output value* as a constant target throughout the recursion.
@@ -64,7 +64,7 @@ public extension Interpreters {
         }
     }
     
-    // MARK: - Backward Interpreter for Individual Operations (Corrected Logic)
+    // MARK: - Backward Interpreter for Individual Operations
 
     /// This helper interprets a single operation. It receives the overall final output
     /// and determines what to do based on its own semantics.
@@ -76,24 +76,13 @@ public extension Interpreters {
         switch op {
         // If the `onFinalOutput` is nil here, it must be an optional. How do we handle that?
         case let .lmap(transform, nextGen):
-            do {
-                guard let subValue = try transform(finalOutput) else {
-                    throw ReflectionError.lmapWasWrongType
-                }
-                return try reflectRecursive(nextGen, onFinalOutput: subValue)
-                    .map { ($0.value, $0.path) }
-            } catch ReflectionError.reflectedNil {
-                // This branch cannot handle the nil value, skip it gracefully
-                return []
+            guard let subValue = try transform(finalOutput) else {
+                throw ReflectionError.lmapWasWrongType
             }
+            return try reflectRecursive(nextGen, onFinalOutput: subValue)
+                .map { ($0.value, $0.path) }
             
         case let .prune(nextGen):
-            // PRUNE's JOB: Check if the final output is nil and should be pruned.
-            // When case path extraction fails on wrong enum cases, it produces nil wrapped in Optional<Any>
-            // This needs to be filtered out to prevent invalid branches in reflection recipes
-//            if let optionalValue = finalOutput as? Optional<Any>, optionalValue == nil {
-//                return [] // Prune nil values from failed case path extractions
-//            }
             do {
                 return try reflectRecursive(nextGen, onFinalOutput: finalOutput).map { ($0.value, $0.path) }
             } catch ReflectionError.reflectedNil {
@@ -124,7 +113,7 @@ public extension Interpreters {
                     return labeledPaths
                     
                 } catch ReflectionError.reflectedNil {
-                    // Return the choice anyway?
+                    // Return the choice anyway; we want all branches materialised during reflection
                     return [(value: finalOutput, label: label, isPicked: false, path: [])]
                 }
             }
@@ -133,15 +122,9 @@ public extension Interpreters {
                 return (value: $0.value, path: $0.isPicked ? .selected(branch) : branch)
             }
             return [(finalOutput, [ChoiceTree.group(returnData.map(\.1))])]
-            
-        // FIXME: Use type here
+
+        // FIXME: Use type sentinel here
         case let .chooseBits(min, max, typeSentinel):
-            var isNil = false
-            if let optionalValue = finalOutput as? Optional<Any>, optionalValue == nil {
-                // We can't properly reflect on this generator without a valid finalOutput
-                // Can we create an instance though?
-                isNil = true
-            }
             var convertibleValue: (any BitPatternConvertible)?
             // In the reverse pass of a [[Char]] we'll be passed the array here and it will represent the length of the list. How can we know that?
             if let convertible = finalOutput as? any BitPatternConvertible {
@@ -155,16 +138,9 @@ public extension Interpreters {
             guard let convertibleValue else {
                 throw ReflectionError.chooseBitsCouldNotConvertValue("\(finalOutput)")
             }
-
-            // FIXME: Do we turn off validation for nil-generated values?
-//            guard (min...max).contains(bitPattern) else {
-//                // We could be in a pick
-//                throw ReflectionError.inputWasOutOfGeneratorRange(convertibleValue, min...max)
-//            }
-//            
             // Success! The result for the continuation is the value itself.
             let metadata = ChoiceMetadata(
-                // We can't know the proper range here
+                // We can't know the proper range here, and the min...max is _usually_ dependent on the getSize parameter
                 validRanges: [min...max],
                 // FIXME: We can clamp this here as well using the range
                 strategies: [
@@ -182,9 +158,8 @@ public extension Interpreters {
             return [(value: value, path: [.just("\(value)")])]
             
         case .getSize:
-            // We can't derive the getSize parameter when reflecting as the bind continuation that applies it is opaque to us. Ultimately it shouldn't matter for replay
-            // But it does for reflection. Let's use 50 as a midpoint value
-            // FIXME: Replays are deterministic, the getSize value shouldn't matter?
+            // FIXME We can't derive the getSize parameter when reflecting as the bind continuation that applies it is opaque to us. Ultimately it shouldn't matter for replay
+            // But it does for reflection.
             var derivedSize: UInt64 = 0
             if let sequence = finalOutput as? any Sequence {
                 derivedSize = UInt64(sequence.underestimatedCount)
