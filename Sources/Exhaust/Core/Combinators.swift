@@ -27,10 +27,11 @@ public enum Gen {
         // The nested generators must all have the same Output type.
         // We erase it to `Any` for the operation, but the `liftF` call
         // ensures the final monad has the correct `Output` type.
-        var array: [(weight: UInt64, label: UInt64, generator: ReflectiveGenerator<Any>)] = []
+        var array = ContiguousArray<ReflectiveOperation.PickTuple>()
         array.reserveCapacity(choices.count)
-        
-        for (index, choice) in choices.enumerated() {
+
+        for index in choices.indices {
+            let choice = choices[index]
             array.append((
                 weight: choice.weight,
                 label: UInt64(index) + 1,

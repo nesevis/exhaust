@@ -2,6 +2,7 @@
 /// These operations are only generic over their input types - the output type is managed
 /// by the continuation in the containing `ReflectiveGen` to enable the Freer Monad pattern.
 public enum ReflectiveOperation {
+    public typealias PickTuple = (weight: UInt64, label: UInt64, generator: ReflectiveGenerator<Any>)
     /// Transforms the input type of a generator using a lens-like function.
     /// Used by `Gen.lmap` and `Gen.comap` to focus on a specific part of the input.
     /// In the forward pass (generate), the transform is ignored.
@@ -14,7 +15,7 @@ public enum ReflectiveOperation {
     /// Each choice has a weight (for random selection), a label (for replay), and a generator.
     /// In the forward pass, one choice is selected randomly based on weights.
     /// In the backward pass, all choices are tried against the target value.
-    case pick(choices: [(weight: UInt64, label: UInt64, generator: ReflectiveGenerator<Any>)])
+    case pick(choices: ContiguousArray<PickTuple>)
     
     /// Handles conditional generation based on optional input values.
     /// Used by `Gen.prune` and `Gen.comap` to filter out invalid inputs.
