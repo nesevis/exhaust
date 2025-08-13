@@ -145,6 +145,35 @@ public struct ChoiceGradientSampler {
         }
     }
     
+    // MARK: - Structural Analysis
+    
+    /// Analyzes ChoiceTree structure to predict CGS effectiveness before expensive sampling
+    public static func analyzeCGSPotential(_ tree: ChoiceTree) -> CGSPotential {
+        var analysis = CGSStructuralAnalysis()
+        analysis.traverse(tree, depth: 0)
+        
+        return CGSPotential(
+            branchingScore: analysis.calculateBranchingScore(),
+            sequenceScore: analysis.calculateSequenceScore(), 
+            choiceScore: analysis.calculateChoiceScore(),
+            overallScore: analysis.calculateOverallScore(),
+            shouldUseCGS: analysis.calculateOverallScore() > 0.15
+        )
+    }
+    
+    /// Quick structural analysis of a generator's CGS potential
+    public static func predictViability<Output>(
+        for generator: ReflectiveGenerator<Output>
+    ) -> CGSPotential {
+        // Generate a single sample to analyze structure
+        var valueTreeGen = ValueAndChoiceTreeGenerator(generator, maxRuns: 1)
+        guard let (_, sampleTree) = valueTreeGen.next() else {
+            return CGSPotential.minimal
+        }
+        
+        return analyzeCGSPotential(sampleTree)
+    }
+    
     // MARK: - Public API
     
     /// Optimizes a generator to produce higher proportions of outputs satisfying the given property.
@@ -164,6 +193,29 @@ public struct ChoiceGradientSampler {
         iterations: Int = 5,
         improvementThreshold: Double = 0.1
     ) async -> OptimizedGenerator<Output> {
+        
+        // Fast structural analysis to predict CGS effectiveness
+        let potential = predictViability(for: generator)
+        print("CGS structural analysis: overall=\(potential.overallScore), branching=\(potential.branchingScore), sequence=\(potential.sequenceScore), choice=\(potential.choiceScore)")
+        
+        // Early exit if structure suggests CGS won't be effective
+        guard potential.shouldUseCGS else {
+            print("CGS skipped: low structural potential (\(potential.overallScore))")
+            let initialValidRate = await measureValidityRate(generator, property: property, samples: samples)
+            return OptimizedGenerator(
+                baseGenerator: generator,
+                gradient: GeneratorGradient(choiceGradients: [], structuralPatterns: [:], overallConfidence: 0.0),
+                tuningMetrics: TuningMetrics(
+                    originalValidRate: initialValidRate,
+                    optimizedValidRate: initialValidRate,
+                    improvementFactor: 1.0,
+                    convergenceIterations: 0,
+                    averageGradientConfidence: 0.0,
+                    gradientConfidenceStdDev: 0.0,
+                    totalOracleCalls: 0
+                )
+            )
+        }
         
         var currentGenerator = generator
         var allMetrics: [TuningMetrics] = []
@@ -366,13 +418,23 @@ public struct ChoiceGradientSampler {
         let validCount = relevantSamples.filter { $0.isValid }.count
         let fitness = Double(validCount) / Double(relevantSamples.count)
         
-        // Simple confidence metric based on sample size
-        let confidence = min(1.0, Double(relevantSamples.count) / Double(max(minSamples * 2, 20)))
-        
-        // Standard deviation for confidence calculation
+        // Improved confidence metric based on sample size and statistical variance
+        let sampleCount = relevantSamples.count
         let validProportion = fitness
+        
+        // Statistical variance: highest uncertainty at p=0.5, lowest at p=0.0 or p=1.0
         let variance = validProportion * (1.0 - validProportion)
-        let stdDev = sqrt(variance / Double(relevantSamples.count))
+        let stdDev = sqrt(variance / Double(sampleCount))
+        
+        // Sample size confidence: more samples = higher confidence
+        let sampleConfidence = min(1.0, Double(sampleCount) / Double(max(minSamples * 4, 50)))
+        
+        // Statistical confidence: lower variance = higher confidence
+        // Less aggressive penalty for moderate standard errors
+        let statisticalConfidence = max(0.5, 1.0 - (stdDev * 2.0)) // Less aggressive scaling
+        
+        // Combined confidence: both sample size and statistical reliability matter
+        let confidence = min(1.0, sampleConfidence * statisticalConfidence)
         
         return ChoiceGradient(
             choicePath: path,
@@ -444,10 +506,135 @@ public struct ChoiceGradientSampler {
         to generator: ReflectiveGenerator<Output>,
         using gradient: GeneratorGradient
     ) -> ReflectiveGenerator<Output> {
-        // For now, return the original generator
-        // TODO: Implement actual gradient-guided transformations
-        // This would involve modifying choice weights based on gradient fitness scores
-        return generator
+        // Apply gradient-guided transformations based on choice fitness scores
+        return transformGeneratorWithGradient(generator, gradient: gradient)
+    }
+    
+    /// Transforms a generator by applying gradient-guided optimizations.
+    private static func transformGeneratorWithGradient<Output>(
+        _ generator: ReflectiveGenerator<Output>,
+        gradient: GeneratorGradient
+    ) -> ReflectiveGenerator<Output> {
+        switch generator {
+        case .pure(let value):
+            return .pure(value)
+            
+        case .impure(let operation, let continuation):
+            let transformedOperation = transformOperationWithGradient(operation, gradient: gradient)
+            let transformedContinuation = { (result: Any) throws -> ReflectiveGenerator<Output> in
+                let nextGen = try continuation(result)
+                return transformGeneratorWithGradient(nextGen, gradient: gradient)
+            }
+            return .impure(operation: transformedOperation, continuation: transformedContinuation)
+        }
+    }
+    
+    /// Transforms an operation based on gradient information.
+    private static func transformOperationWithGradient(
+        _ operation: ReflectiveOperation,
+        gradient: GeneratorGradient
+    ) -> ReflectiveOperation {
+        switch operation {
+        case .chooseBits(let min, let max, let tag):
+            // Find relevant gradients for choice operations
+            let choiceGradients = gradient.choiceGradients.filter { 
+                $0.choicePath.description.contains("choice") 
+            }
+            
+            guard !choiceGradients.isEmpty else {
+                return operation  // No relevant gradients
+            }
+            
+            // Calculate average fitness for choice operations
+            let avgFitness = choiceGradients.map { $0.fitness }.reduce(0, +) / Double(choiceGradients.count)
+            
+            // If fitness is low (< 0.5), try to bias toward one end of the range
+            // If fitness is high (>= 0.5), keep the original range
+            if avgFitness < 0.5 {
+                // Bias toward lower values for better validity
+                let rangeSize = max - min
+                let biasedMax = min + UInt64(Double(rangeSize) * 0.7)  // Use only 70% of range
+                return .chooseBits(min: min, max: biasedMax, tag: tag)
+            } else {
+                return operation  // Keep original if gradient shows good fitness
+            }
+            
+        case .pick(let choices):
+            // Apply gradient-guided weight adjustment for pick operations
+            let branchGradients = gradient.choiceGradients.filter {
+                $0.choicePath.description.contains("branch.label_")
+            }
+            
+            guard !branchGradients.isEmpty else {
+                return operation
+            }
+            
+            // Create mapping from branch labels to their fitness scores
+            var labelFitness: [UInt64: Double] = [:]
+            for branchGrad in branchGradients {
+                if let labelRange = branchGrad.choicePath.description.range(of: "label_"),
+                   let labelStr = branchGrad.choicePath.description[labelRange.upperBound...].split(separator: ".").first,
+                   let label = UInt64(labelStr) {
+                    labelFitness[label] = max(labelFitness[label] ?? 0.0, branchGrad.fitness)
+                }
+            }
+            
+            guard !labelFitness.isEmpty else {
+                return operation
+            }
+            
+            // Apply fitness-based weight adjustments
+            let boostedChoices = choices.map { choice in
+                if let fitness = labelFitness[choice.label] {
+                    // Boost high-fitness branches, reduce low-fitness branches
+                    let multiplier = fitness > 0.7 ? 3.0 :  // High fitness: triple weight
+                                   fitness > 0.4 ? 1.0 :  // Medium fitness: keep weight
+                                   0.3                     // Low fitness: reduce weight
+                    let newWeight = max(1, UInt64(Double(choice.weight) * multiplier))
+                    return (weight: newWeight, label: choice.label, generator: choice.generator)
+                } else {
+                    return choice  // No gradient info, keep original weight
+                }
+            }
+            return .pick(choices: ContiguousArray(boostedChoices))
+            
+        case .sequence(let lengthGen, let elementGen):
+            // Apply structural pattern guidance for sequences
+            if let lengthPreference = gradient.structuralPatterns["sequence_length_preference"],
+               lengthPreference < 0.5 {
+                // Bias toward shorter sequences if they tend to be more valid
+                let transformedLengthGen = transformGeneratorWithGradient(lengthGen, gradient: gradient)
+                let transformedElementGen = transformGeneratorWithGradient(elementGen, gradient: gradient)
+                return .sequence(length: transformedLengthGen, gen: transformedElementGen)
+            } else {
+                // Recursively transform sub-generators
+                let transformedLengthGen = transformGeneratorWithGradient(lengthGen, gradient: gradient)
+                let transformedElementGen = transformGeneratorWithGradient(elementGen, gradient: gradient)
+                return .sequence(length: transformedLengthGen, gen: transformedElementGen)
+            }
+            
+        case .contramap(let transform, let nextGen):
+            let transformedNextGen = transformGeneratorWithGradient(nextGen, gradient: gradient)
+            return .contramap(transform: transform, next: transformedNextGen)
+            
+        case .prune(let nextGen):
+            let transformedNextGen = transformGeneratorWithGradient(nextGen, gradient: gradient)
+            return .prune(next: transformedNextGen)
+            
+        case .zip(let generators):
+            let transformedGenerators = generators.map { gen in
+                transformGeneratorWithGradient(gen, gradient: gradient)
+            }
+            return .zip(ContiguousArray(transformedGenerators))
+            
+        case .resize(let newSize, let nextGen):
+            let transformedNextGen = transformGeneratorWithGradient(nextGen, gradient: gradient)
+            return .resize(newSize: newSize, next: transformedNextGen)
+            
+        default:
+            // For other operations (just, getSize), return unchanged
+            return operation
+        }
     }
     
     private static func computeConfidenceStdDev(_ gradient: GeneratorGradient) -> Double {
@@ -472,6 +659,146 @@ public struct ChoiceTreePath: Hashable, CustomStringConvertible, Sendable {
     
     public var description: String {
         return pathComponents.joined(separator: ".")
+    }
+}
+
+// MARK: - CGS Structural Analysis Types
+
+/// Predicts CGS effectiveness based on ChoiceTree structural analysis
+public struct CGSPotential: Sendable {
+    /// Score for branching potential (0.0 to 1.0)
+    public let branchingScore: Double
+    
+    /// Score for sequence optimization potential (0.0 to 1.0)
+    public let sequenceScore: Double
+    
+    /// Score for choice range optimization potential (0.0 to 1.0)
+    public let choiceScore: Double
+    
+    /// Overall CGS effectiveness score (0.0 to 1.0)
+    public let overallScore: Double
+    
+    /// Whether CGS should be attempted for this structure
+    public let shouldUseCGS: Bool
+    
+    /// Minimal CGS potential for generators with no optimizable structure
+    public static let minimal = CGSPotential(
+        branchingScore: 0.0,
+        sequenceScore: 0.0,
+        choiceScore: 0.0,
+        overallScore: 0.0,
+        shouldUseCGS: false
+    )
+}
+
+/// Internal helper for analyzing ChoiceTree structure
+private struct CGSStructuralAnalysis {
+    var weightedBranches: [(depth: Int, branchCount: Int)] = []
+    var sequences: [(depth: Int, rangeSize: UInt64)] = []
+    var choices: [(depth: Int, rangeSize: UInt64)] = []
+    var maxDepth: Int = 0
+    
+    mutating func traverse(_ tree: ChoiceTree, depth: Int) {
+        maxDepth = max(maxDepth, depth)
+        
+        switch tree {
+        case .branch(_, let children):
+            // Weighted branches are prime CGS optimization targets
+            weightedBranches.append((depth: depth, branchCount: children.count))
+            for child in children {
+                traverse(child, depth: depth + 1)
+            }
+            
+        case let .sequence(_, elements, metadata):
+            // Sequences can be optimized by adjusting length ranges
+            let range = metadata.validRanges[0]
+            let rangeSize = range.upperBound - range.lowerBound
+            sequences.append((depth: depth, rangeSize: rangeSize))
+            for element in elements {
+                traverse(element, depth: depth + 1)
+            }
+            
+        case let .choice(_, metadata):
+            // Choices can be optimized by narrowing their valid ranges
+            let range = metadata.validRanges[0]
+            let rangeSize = range.upperBound - range.lowerBound
+            choices.append((depth: depth, rangeSize: rangeSize))
+            
+        case .group(let children):
+            for child in children {
+                traverse(child, depth: depth)
+            }
+            
+        case let .resize(_, childTrees):
+            for child in childTrees {
+                traverse(child, depth: depth + 1)
+            }
+            
+        case let .important(child), let .selected(child):
+            traverse(child, depth: depth)
+            
+        case .just, .getSize:
+            // No optimization potential
+            break
+        }
+    }
+    
+    func calculateBranchingScore() -> Double {
+        guard !weightedBranches.isEmpty else { return 0.0 }
+        
+        // Higher scores for: more branches, deeper in tree (more specific), more branch choices
+        let totalBranchValue = weightedBranches.reduce(0.0) { total, branch in
+            let depthBonus = 1.0 + Double(branch.depth) * 0.3  // Deeper branches are more valuable
+            let branchBonus = Double(branch.branchCount) * 0.5  // More choices = more optimization potential
+            return total + depthBonus * branchBonus
+        }
+        
+        // Normalize to 0-1 scale, with less aggressive normalization
+        return min(1.0, totalBranchValue / 3.0)
+    }
+    
+    func calculateSequenceScore() -> Double {
+        guard !sequences.isEmpty else { return 0.0 }
+        
+        // Higher scores for: sequences with large ranges (more to optimize), deeper sequences
+        let totalSequenceValue = sequences.reduce(0.0) { total, seq in
+            let depthBonus = 1.0 + Double(seq.depth) * 0.2
+            let rangeBonus = min(1.0, Double(seq.rangeSize) / 20.0)  // Cap at range size 20 for faster scoring
+            return total + depthBonus * rangeBonus
+        }
+        
+        return min(1.0, totalSequenceValue / 2.0)
+    }
+    
+    func calculateChoiceScore() -> Double {
+        guard !choices.isEmpty else { return 0.0 }
+        
+        // Higher scores for: choices with large ranges, multiple choice positions
+        let totalChoiceValue = choices.reduce(0.0) { total, choice in
+            let rangeBonus = min(1.0, Double(choice.rangeSize) / 100.0)  // Cap at range size 100 for faster scoring
+            return total + rangeBonus
+        }
+        
+        // Multiple choice positions provide coordination opportunities
+        let coordinationBonus = choices.count > 1 ? 0.5 : 0.0
+        
+        return min(1.0, (totalChoiceValue / Double(choices.count)) + coordinationBonus)
+    }
+    
+    func calculateOverallScore() -> Double {
+        // Weighted combination favoring branching (most impactful for CGS)
+        let branchWeight = 0.6
+        let sequenceWeight = 0.25
+        let choiceWeight = 0.15
+        
+        let score = (branchWeight * calculateBranchingScore() + 
+                    sequenceWeight * calculateSequenceScore() +
+                    choiceWeight * calculateChoiceScore())
+        
+        // Depth bonus: deeper structures have more optimization potential
+        let depthBonus = min(0.2, Double(maxDepth) * 0.05)
+        
+        return min(1.0, score + depthBonus)
     }
 }
 
