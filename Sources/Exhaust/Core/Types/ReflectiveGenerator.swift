@@ -233,6 +233,11 @@ public extension ReflectiveGenerator where Operation == ReflectiveOperation {
         }
     }
     
+    @inlinable
+    func compose<OtherValue>(with other: ReflectiveGenerator<OtherValue>) -> ReflectiveGenerator<(Value, OtherValue)> {
+        Gen.zip(self, other)
+    }
+    
     /// Transforms the operation type of this generator while preserving the value type.
     ///
     /// **Warning**: This operation has significant performance overhead as it must traverse

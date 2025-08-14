@@ -41,10 +41,6 @@ public enum ReflectiveOperation {
     /// - **weight**: Probability mass for random selection during generation
     /// - **label**: Unique identifier for deterministic replay from choice trees
     /// - **generator**: The sub-generator to execute if this choice is selected
-    ///
-    /// The type erasure to `Any` is necessary because all choices must be stored in the same
-    /// array, even though they may produce different output types. The containing generator's
-    /// continuation handles type-safe casting.
     public typealias PickTuple = (weight: UInt64, label: UInt64, generator: ReflectiveGenerator<Any>)
     /// Contravariant transformation that focuses on part of the input during reflection.
     ///
