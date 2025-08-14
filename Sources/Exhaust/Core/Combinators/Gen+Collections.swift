@@ -22,7 +22,7 @@ public extension Gen {
         // Use `bind` to get the result of the length generator.
         let sequenceOperation = ReflectiveOperation.sequence(
             length: length ?? Gen.getSize().bind {
-                Gen.choose(in: $0...$0)
+                Gen.choose(in: ($0 / 10)...$0)
             },
             gen: elementGenerator.erase()
         )
