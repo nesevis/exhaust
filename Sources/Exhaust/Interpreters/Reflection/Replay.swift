@@ -201,7 +201,7 @@ extension Interpreters {
                 let nextGen = try continuation(subResult)
                 return try self.replayWithChoicesHelper(nextGen, choices: &choices)
             
-            case let .filter(gen, _, _):
+            case let .filter(gen, _, _), let .classify(gen, _, _):
                 return try self.replayWithChoicesHelper(gen, choices: &choices) as? Output
             }
         }
@@ -354,7 +354,7 @@ extension Interpreters {
                     return nil
                 }
                 return result as? Output
-            case let .filter(gen, _, _):
+            case let .filter(gen, _, _), let .classify(gen, _, _):
                 guard let result = try self.replayRecursive(gen, with: script) else {
                     return nil
                 }

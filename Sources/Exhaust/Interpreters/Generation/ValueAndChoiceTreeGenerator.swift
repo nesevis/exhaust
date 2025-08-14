@@ -9,16 +9,6 @@ import Algorithms
 import Foundation
 
 public struct ValueAndChoiceTreeGenerator<FinalOutput>: IteratorProtocol, Sequence {
-    // TODO: This will have to be inout?
-    private struct Context {
-        let maxRuns: UInt64
-        let materializePicks: Bool
-        var isFixed: Bool
-        var size: UInt64
-        var runs: UInt64
-        var sizeOverride: UInt64? = nil
-    }
-
     public typealias Element = (value: FinalOutput, tree: ChoiceTree)
     let generator: ReflectiveGenerator<FinalOutput>
     private(set) var prng: Xoshiro256
@@ -32,6 +22,7 @@ public struct ValueAndChoiceTreeGenerator<FinalOutput>: IteratorProtocol, Sequen
     
     public mutating func next() -> Element? {
         guard context.runs < context.maxRuns else {
+            context.printClassifications()
             return nil
         }
         defer {
@@ -334,7 +325,51 @@ public struct ValueAndChoiceTreeGenerator<FinalOutput>: IteratorProtocol, Sequen
                     sizeOverride: &sizeOverride,
                     prng: &prng
                 ) else { return nil }
-                return try runContinuation(result, .resize(newSize: newSize, choices: [result.1]))
+                return try runContinuation(result.0, .resize(newSize: newSize, choices: [result.1]))
+            case let .filter(gen, fingerprint, predicate):
+                // Optimise the `gen` with CGS here and execute it.
+                // The predicate is by contract validating the output of `gen`
+                // Q: How do we statefully preserve the CGS-optimised generator within this iterator?
+                // A: Create an `inout [fingerprint: generator]` cache to thread through `generateRecursive`
+                // Q: This fingerprint is created when the generator is specified, before it is run.
+                // This means that if you Gen.zip(A, A, A), and A is a generator with a filter on it,
+                // it will be generated once and cached for the run.
+                // But what happens if the generator is statically declared as let gen = … and never changes?
+                // …It would be CGS'ed once per iterator. Do we want a lock on a static cache, or keep it thread-local?
+                // For now, let's use rejection sampling
+                var jumpedRng = Xoshiro256(seed: prng.next())
+                var attempts = 0 as UInt64
+                while attempts < context.maxFilterRuns {
+                    guard let result = try self.generateRecursive(
+                        gen,
+                        with: inputValue,
+                        context: context,
+                        sizeOverride: &sizeOverride,
+                        prng: &jumpedRng
+                    ) else { return nil }
+                    
+                    if predicate(result.0) {
+                        print("Gen.filter found result after \(attempts) attempts")
+                        return try runContinuation(result.0, result.1)
+                    }
+                    attempts += 1
+                }
+                throw GeneratorError.sparseValidityCondition
+            case let .classify(gen, fingerprint, classifiers):
+                guard let result = try self.generateRecursive(
+                    gen,
+                    with: inputValue,
+                    context: context,
+                    sizeOverride: &sizeOverride,
+                    prng: &prng
+                ) else { return nil }
+
+                for (classifier, label) in classifiers where classifier(result.0) {
+                    // Use the current run as the identifier for this value. We don't want to force `Equatable`
+                    context.classifications[fingerprint, default: [:]][label, default: []].insert(context.runs)
+                }
+                
+                return try runContinuation(result.0, result.1)
             }
         }
     }
@@ -344,6 +379,39 @@ public struct ValueAndChoiceTreeGenerator<FinalOutput>: IteratorProtocol, Sequen
     private static func logarithmicallyScaledSize(_ maxSize : UInt64, _ successfulTests : UInt64) -> UInt64 {
         let n = Double(successfulTests)
         return UInt64((log(n + 1)) * Double(maxSize) / log(100) / 2)
+    }
+    
+    // MARK: - Context
+    
+    private final class Context {
+        let maxRuns: UInt64
+        let materializePicks: Bool
+        var isFixed: Bool
+        var size: UInt64
+        var runs: UInt64
+        var sizeOverride: UInt64? = nil
+        let maxFilterRuns: UInt64 = 500
+        // A nested dictionary containing the results of classifying the results by provided predicates and labels
+        var classifications: [UInt64: [String: Set<UInt64>]] = [:]
+
+        internal init(maxRuns: UInt64, materializePicks: Bool, isFixed: Bool, size: UInt64, runs: UInt64, sizeOverride: UInt64? = nil, classifications: [UInt64 : [String : Set<UInt64>]] = [:]) {
+            self.maxRuns = maxRuns
+            self.materializePicks = materializePicks
+            self.isFixed = isFixed
+            self.size = size
+            self.runs = runs
+            self.sizeOverride = sizeOverride
+            self.classifications = classifications
+        }
+        
+        func printClassifications() {
+            for (_, classifications) in classifications {
+                print("Classifications for ??")
+                for (label, runs) in classifications {
+                    print("\(label):\t\(runs.count)")
+                }
+            }
+        }
     }
 }
 

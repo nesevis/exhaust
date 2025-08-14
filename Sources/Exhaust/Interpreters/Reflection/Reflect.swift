@@ -242,6 +242,8 @@ public extension Interpreters {
         
         case let .filter(gen, _, _):
             return try reflectRecursive(gen, onFinalOutput: finalOutput).map { ($0.value, $0.path) }
+        case let .classify(gen, _, _):
+            return try reflectRecursive(gen, onFinalOutput: finalOutput).map { ($0.value, $0.path) }
         }
     }
     
