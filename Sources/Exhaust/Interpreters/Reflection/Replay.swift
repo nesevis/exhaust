@@ -184,7 +184,7 @@ extension Interpreters {
                 let nextGen = try continuation(size)
                 return try self.replayWithChoicesHelper(nextGen, choices: &choices)
                 
-            case let .resize(newSize, subGenerator):
+            case let .resize(_, subGenerator):
                 // resize consumes a resize choice and replays the sub-generator
                 guard !choices.isEmpty else {
                     return nil
@@ -200,6 +200,9 @@ extension Interpreters {
                 }
                 let nextGen = try continuation(subResult)
                 return try self.replayWithChoicesHelper(nextGen, choices: &choices)
+            
+            case let .filter(gen, _, _):
+                return try self.replayWithChoicesHelper(gen, choices: &choices) as? Output
             }
         }
     }
@@ -348,6 +351,11 @@ extension Interpreters {
                 // A prune is a wrapper. It doesn't consume a node from the script itself.
                 // The choices are consumed by its sub-generator. We pass the same script down.
                 guard let result = try self.replayRecursive(subGenerator, with: script) else {
+                    return nil
+                }
+                return result as? Output
+            case let .filter(gen, _, _):
+                guard let result = try self.replayRecursive(gen, with: script) else {
                     return nil
                 }
                 return result as? Output

@@ -176,6 +176,63 @@ public extension ReflectiveGenerator where Operation == ReflectiveOperation {
         Gen.arrayOf(self, Gen.choose(in: range))
     }
     
+    /// Creates a filtered generator that only produces values satisfying a validity condition.
+    ///
+    /// This combinator wraps the current generator with a validity predicate, enabling automatic
+    /// optimization through Choice Gradient Sampling (CGS) or fallback to rejection sampling.
+    /// The filter operation signals to the framework that this generator has specific validity
+    /// requirements that could benefit from intelligent optimization.
+    ///
+    /// **Optimization Strategy**:
+    /// - **CGS-suitable generators**: The system analyzes which random choices lead to predicate
+    ///   satisfaction and biases future generation toward valid outputs
+    /// - **CGS-unsuitable generators**: Falls back to deterministic rejection sampling using a
+    ///   separate PRNG to maintain reproducibility
+    ///
+    /// **Deterministic Behavior**: Even with rejection sampling, the filtered generator maintains
+    /// deterministic behavior. Given the same seed, it will reject the same sequence of invalid
+    /// values and accept the same valid value, preserving reproducibility for testing.
+    ///
+    /// **Performance Considerations**: Filtering can significantly improve test efficiency by
+    /// reducing wasted generation attempts, especially when combined with CGS optimization.
+    /// However, overly restrictive predicates may still require many rejection attempts.
+    ///
+    /// ```swift
+    /// // Example: Generate only positive integers
+    /// let positiveInts = Gen.choose(in: Int.min...Int.max)
+    ///     .filter { $0 > 0 }
+    ///
+    /// // Example: Generate balanced binary search trees
+    /// let balancedBST = BinaryTree.arbitrary
+    ///     .filter { tree in tree.isBalanced && tree.satisfiesBSTProperty }
+    /// ```
+    ///
+    /// **Fingerprinting**: The implementation automatically generates a unique fingerprint for
+    /// each filter operation, enabling the optimization system to cache and reuse learned
+    /// gradients across different instances with the same logical constraints.
+    ///
+    /// - Parameter predicate: Validity condition that generated values must satisfy
+    /// - Returns: A filtered generator that only produces valid values
+    @inlinable
+    func filter(_ predicate: @escaping (Value) -> Bool) -> ReflectiveGenerator<Value> {
+        // TODO: This is probably slightly too expensive?
+        var prng = Xoshiro256()
+        return switch self {
+        case .pure:
+            // This shouldn't happen? Should it be a no-op, or an error? Should we throw in the continuation?
+            .impure(
+                operation: .filter(gen: self.erase(), fingerprint: prng.next(), predicate: { value in predicate(value as! Value) }),
+                continuation: { .pure($0 as! Value) }
+            )
+        case .impure:
+            // How can we fingerprint the generator here. Generate a random value? UUID?
+            .impure(
+                operation: .filter(gen: self.erase(), fingerprint: prng.next(), predicate: { value in predicate(value as! Value) }),
+                continuation: { .pure($0 as! Value) }
+            )
+        }
+    }
+    
     /// Transforms the operation type of this generator while preserving the value type.
     ///
     /// **Warning**: This operation has significant performance overhead as it must traverse

@@ -12,4 +12,5 @@ public enum GeneratorError: LocalizedError {
     case mappedBackwardError(expected: String, actual: String)
     case liftFTypeMismatch(expected: String, actual: String)
     case typeMismatch(expected: String, actual: String)
+    case sparseValidityCondition
 }

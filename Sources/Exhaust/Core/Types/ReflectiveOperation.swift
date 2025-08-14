@@ -236,4 +236,40 @@ public enum ReflectiveOperation {
     ///   - newSize: Temporary size parameter for the nested scope
     ///   - next: Generator to run with the modified size
     case resize(newSize: UInt64, next: ReflectiveGenerator<Any>)
+    
+    /// Identifies generators with validity conditions that can be optimized.
+    ///
+    /// This operation marks generators that have specific validity requirements or preconditions
+    /// that make them candidates for optimization through Choice Gradient Sampling (CGS) or
+    /// rejection sampling. The filter operation enables the framework to automatically detect
+    /// and improve generators that would otherwise waste computational resources on invalid inputs.
+    ///
+    /// **Forward pass**: Generates values using the wrapped generator and validates them with the predicate
+    /// **Backward pass**: Only reflects on values that satisfy the predicate condition
+    /// **Replay pass**: Replays the wrapped generator if the recorded choice satisfied the predicate
+    ///
+    /// **CGS Optimization**: When a `filter` operation is detected, the Choice Gradient Sampling
+    /// system can analyze which random choices lead to predicate satisfaction. This enables
+    /// automatic bias adjustment to increase the proportion of valid outputs without manual
+    /// generator tuning.
+    ///
+    /// **Rejection Sampling Fallback**: For generators that aren't suitable for CGS optimization,
+    /// the filter serves as a signal to use rejection sampling, generating candidates until
+    /// the predicate is satisfied.
+    ///
+    /// **Fingerprint**: The fingerprint parameter provides a unique identifier for the specific
+    /// validity condition, enabling the optimization system to cache learned gradients and
+    /// apply them across different generator instances with the same logical constraints.
+    ///
+    /// **Use cases**:
+    /// - Balanced binary search trees (structural validity)
+    /// - Valid email addresses (format constraints)
+    /// - Non-empty collections (size constraints)
+    /// - Mathematical invariants (value relationships)
+    ///
+    /// - Parameters:
+    ///   - gen: The base generator to filter
+    ///   - fingerprint: Unique identifier for this filter condition (for optimization caching)
+    ///   - predicate: Validity condition that generated values must satisfy
+    case filter(gen: ReflectiveGenerator<Any>, fingerprint: UInt64, predicate: (Any) -> Bool)
 }

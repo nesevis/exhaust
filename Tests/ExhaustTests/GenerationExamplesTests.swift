@@ -26,15 +26,27 @@ struct GenerationExamplesTests {
 //            }
         }
         
+        @Test("Test Gen filtering")
+        func testGenFiltering() throws {
+            let generator = UInt.arbitrary
+                .filter { $0.isMultiple(of: 3) }
+            var iterator = ValueAndChoiceTreeGenerator(generator, seed: 1, maxRuns: 100)
+            while let (value, tree) = iterator.next() {
+                #expect(value.isMultiple(of: 3))
+            }
+        }
+        
         @Test("ValueAndChoiceTreeGeneratorDoesntSwallowMaps")
         func testVACTGdoesntswallomaps() throws {
             let gen = UInt.arbitrary.map {
-                // Heyo
-                $0
+                print("First map called with \($0)")
+                return $0
             }.map { second in
-                second.description
+                print("Second map called with \(second)")
+                return second.description
             }
-            var iterator = ValueAndChoiceTreeGenerator(gen)
+            let filtered = Gen.filter(gen, { $0.contains("@") })
+            var iterator = ValueAndChoiceTreeGenerator(filtered, maxRuns: 2)
             while let (value, tree) = iterator.next() {
                 let value = value
                 let tree = tree

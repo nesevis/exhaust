@@ -239,6 +239,9 @@ public extension Interpreters {
                 results.append(contentsOf: result.map(\.value))
             }
             return [(value: results, path: [.group(paths)])]
+        
+        case let .filter(gen, _, _):
+            return try reflectRecursive(gen, onFinalOutput: finalOutput).map { ($0.value, $0.path) }
         }
     }
     

@@ -213,6 +213,9 @@ public struct ValueGenerator<Element>: IteratorProtocol, Sequence {
                 sizeOverride = newSize
                 guard let result = try self.generateRecursive(nextGen, with: inputValue, size: size, maxRuns: maxRuns, sizeOverride: &sizeOverride, prng: &prng) else { return nil }
                 return try runContinuation(result)
+            case let .filter(gen, _, _):
+                guard let result = try self.generateRecursive(gen, with: inputValue, size: size, maxRuns: maxRuns, sizeOverride: &sizeOverride, prng: &prng) else { return nil }
+                return try runContinuation(result)
             }
         }
     }
