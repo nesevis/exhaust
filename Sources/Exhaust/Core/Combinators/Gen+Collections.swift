@@ -145,32 +145,99 @@ public extension Gen {
             return arrayOf(elementGenerator, choose(in: finalRange))
         }
     }
-    
+
     @inlinable
-    static func subset<Output, AnyCollection: Collection>(
+    static func subset<AnyCollection: Collection>(
         of collection: AnyCollection
-    ) -> ReflectiveGenerator<AnyCollection.SubSequence>
-    where AnyCollection.Element == Output, AnyCollection.Index == Int, AnyCollection.Index == AnyCollection.Indices.Bound, AnyCollection.Indices: RangeExpression {
+    ) -> ReflectiveGenerator<AnyCollection.SubSequence> {
         getSize().bind { size in
             let count = collection.count
             let maxLength = min(((count * Int(size)) / 100) + 2, count)
+            
+            // Convert collection to array of indices for easier manipulation
+            // Surely there's a better way? 😬
+            let indices = ContiguousArray(collection.indices)
+            guard !indices.isEmpty else {
+                return .pure(collection[collection.startIndex..<collection.startIndex])
+            }
 
             return Gen.zip(
-                Gen.choose(in: ClosedRange(1..<maxLength)), // subset length
-                Gen.choose(in: ClosedRange(collection.startIndex..<collection.endIndex)) // start position
+                Gen.choose(in: 1...maxLength), // subset length
+                Gen.choose(in: 0...(count - 1)) // start position index
             )
-            .filter { length, startIndex in
-                startIndex + length <= collection.endIndex
+            .filter { length, startIndexPos in
+                startIndexPos + length <= count
             }
             .mapped(
-                forward: { length, startIndex in
-                    let endIndex = startIndex + length
+                forward: { length, startIndexPos in
+                    let startIndex = indices[startIndexPos]
+                    let endIndexPos = min(startIndexPos + length, indices.count)
+                    let endIndex = endIndexPos < indices.count ? indices[endIndexPos] : collection.endIndex
                     return collection[startIndex..<endIndex]
                 },
                 backward: { subset in
-                    (subset.count, subset.startIndex)
+                    // Find the position of start index in the indices array
+                    let startPos = indices.firstIndex(of: subset.startIndex) ?? 0
+                    return (subset.count, startPos)
                 }
             )
         }
+    }
+    
+    /// Creates a generator that picks a random element from a collection.
+    ///
+    /// This combinator generates individual elements by selecting random indices
+    /// from the provided collection. It works with any ``Collection`` type.
+    ///
+    /// - Parameter collection: The collection to pick elements from
+    /// - Returns: A generator that produces random elements from the collection
+    @inlinable
+    static func element<AnyCollection: Collection>(
+        from collection: AnyCollection
+    ) -> ReflectiveGenerator<AnyCollection.Element> {
+        precondition(collection.isEmpty == false, "Cannot return random element from empty collection")
+        let count = collection.count
+        let dict = Dictionary(grouping: collection.enumerated(), by: \.offset)
+            .mapValues { $0[0].element }
+        
+        return Gen.choose(in: 0...(count - 1))
+            .mapped(
+                forward: { dict[$0]! },
+                backward: { element in
+                    // Find the first index where this element appears
+                    // This is best-effort since elements might recur
+                    if let element = element as? any Equatable {
+                        if let (index, _) = dict.first(where: { element.isEqualToAny($0.value) }) {
+                            return index
+                        }
+                    }
+                    return 0
+                }
+            )
+    }
+    
+    /// Creates a generator that picks a random element from a collection.
+    ///
+    /// This combinator generates individual elements by selecting random indices
+    /// from the provided collection. It works with any ``Collection`` type.
+    ///
+    /// - Parameter collection: The collection to pick elements from
+    /// - Returns: A generator that produces random elements from the collection
+    @inlinable
+    static func element<AnyCollection: Collection>(
+        from collection: AnyCollection
+    ) -> ReflectiveGenerator<AnyCollection.Element> where AnyCollection.Element: Hashable {
+        precondition(collection.isEmpty == false, "Cannot return random element from empty collection")
+        let enumerated = collection.enumerated()
+        let elementDict = Dictionary(grouping: enumerated, by: \.element)
+            .mapValues { $0[0].offset }
+        let intDict = Dictionary(grouping: enumerated, by: \.offset)
+            .mapValues { $0[0].element }
+        
+        return Gen.choose(in: 0...(collection.count - 1))
+            .mapped(
+                forward: { intDict[$0]! },
+                backward: { elementDict[$0]! }
+            )
     }
 }

@@ -20,4 +20,11 @@ extension Equatable {
         }
         return self == other
     }
+    
+    public func isEqualToAny(_ other: Any) -> Bool {
+        guard let other = other as? any Equatable else {
+            return false
+        }
+        return self.isEqual(other)
+    }
 }
