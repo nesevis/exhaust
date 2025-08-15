@@ -46,7 +46,7 @@ public struct ValueAndChoiceTreeGenerator<FinalOutput>: IteratorProtocol, Sequen
     /// Used to generate results around a similar level of complexity.
     /// Intended to be used to increase pool of results to compare against
     func fixedAtSize() -> ValueAndChoiceTreeGenerator<FinalOutput> {
-        var fixed = ValueAndChoiceTreeGenerator(
+        let fixed = ValueAndChoiceTreeGenerator(
             generator,
             materializePicks: context.materializePicks,
             seed: context.prng.seed,
@@ -274,7 +274,7 @@ public struct ValueAndChoiceTreeGenerator<FinalOutput>: IteratorProtocol, Sequen
                 return try runContinuation(value, .just("\(value)"))
                 
             case .getSize:
-                let size = context.sizeOverride ?? logarithmicallyScaledSize(context.maxRuns, context.size)
+                let size = context.sizeOverride ?? logarithmicallyScaledSize(context.maxRuns, context.runs)
                 context.sizeOverride = nil // getSize consumes the `sizeOverride`
                 return try runContinuation(size, .getSize(size))
                 
@@ -282,7 +282,7 @@ public struct ValueAndChoiceTreeGenerator<FinalOutput>: IteratorProtocol, Sequen
                 context.sizeOverride = newSize
                 guard let result = try self.generateRecursive(gen, with: inputValue, context: context) else { return nil }
                 return try runContinuation(result.0, .resize(newSize: newSize, choices: [result.1]))
-            case let .filter(gen, fingerprint, predicate):
+            case let .filter(gen, _, predicate):
                 // Optimise the `gen` with CGS here and execute it.
                 // The predicate is by contract validating the output of `gen`
                 // Q: How do we statefully preserve the CGS-optimised generator within this iterator?
@@ -298,7 +298,7 @@ public struct ValueAndChoiceTreeGenerator<FinalOutput>: IteratorProtocol, Sequen
                     guard let result = try self.generateRecursive(gen, with: inputValue, context: context) else { return nil }
                     
                     if predicate(result.0) {
-                        print("Gen.filter found result after \(attempts) attempts")
+//                        print("Gen.filter found result after \(attempts) attempts")
                         return try runContinuation(result.0, result.1)
                     }
                     attempts += 1
