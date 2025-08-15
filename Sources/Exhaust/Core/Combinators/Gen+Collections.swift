@@ -145,4 +145,32 @@ public extension Gen {
             return arrayOf(elementGenerator, choose(in: finalRange))
         }
     }
+    
+    @inlinable
+    static func subset<Output, AnyCollection: Collection>(
+        of collection: AnyCollection
+    ) -> ReflectiveGenerator<AnyCollection.SubSequence>
+    where AnyCollection.Element == Output, AnyCollection.Index == Int, AnyCollection.Index == AnyCollection.Indices.Bound, AnyCollection.Indices: RangeExpression {
+        getSize().bind { size in
+            let count = collection.count
+            let maxLength = min(((count * Int(size)) / 100) + 2, count)
+
+            return Gen.zip(
+                Gen.choose(in: ClosedRange(1..<maxLength)), // subset length
+                Gen.choose(in: ClosedRange(collection.startIndex..<collection.endIndex)) // start position
+            )
+            .filter { length, startIndex in
+                startIndex + length <= collection.endIndex
+            }
+            .mapped(
+                forward: { length, startIndex in
+                    let endIndex = startIndex + length
+                    return collection[startIndex..<endIndex]
+                },
+                backward: { subset in
+                    (subset.count, subset.startIndex)
+                }
+            )
+        }
+    }
 }
