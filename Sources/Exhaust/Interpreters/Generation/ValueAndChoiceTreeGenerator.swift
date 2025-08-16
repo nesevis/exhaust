@@ -85,13 +85,26 @@ public struct ValueAndChoiceTreeGenerator<FinalOutput>: IteratorProtocol, Sequen
             // TODO: Extract the larger case-handlers into separate functions
             // Prebake the continuation and other parameters here for ease of calling
             let runContinuation: RunContinuation = { result, calleeChoiceTree in
-                try Self.runContinuation(
-                    continuation,
-                    context: context,
-                    inputValue: inputValue,
-                    result: result,
-                    calleeChoiceTree: calleeChoiceTree
-                )
+                let nextGen = try continuation(result)
+                
+                // Optimisation! Do not remove. This early return cuts 70% of the time for string generators
+                if calleeChoiceTree.isChoice, case let .pure(value) = nextGen {
+                    // Early return for a pure case originating with a choice
+                    return (value, calleeChoiceTree)
+                }
+                if let (continuationResult, innerChoiceTree) = try self.generateRecursive(
+                    nextGen,
+                    with: inputValue,
+                    context: context
+                ) {
+                    if nextGen.isPure {
+                        return (continuationResult, calleeChoiceTree)
+                    } else {
+                        // A large part of the trace is adding these arrays together. Chain?
+                        return (continuationResult, .group([calleeChoiceTree, innerChoiceTree]))
+                    }
+                }
+                return nil
             }
             
             // Ditto for recursing a generator
@@ -283,35 +296,6 @@ public struct ValueAndChoiceTreeGenerator<FinalOutput>: IteratorProtocol, Sequen
                 return try runContinuation(result.0, result.1)
             }
         }
-    }
-    
-    private static func runContinuation<Input, Output>(
-        _ continuation: (Any) throws -> ReflectiveGenerator<Output>,
-        context: Context,
-        inputValue: Input,
-        result: Any,
-        calleeChoiceTree: ChoiceTree,
-    ) throws -> (Output, ChoiceTree)? {
-        let nextGen = try continuation(result)
-        
-        // Optimisation! Do not remove. This early return cuts 70% of the time for string generators
-        if calleeChoiceTree.isChoice, case let .pure(value) = nextGen {
-            // Early return for a pure case originating with a choice
-            return (value, calleeChoiceTree)
-        }
-        if let (continuationResult, innerChoiceTree) = try self.generateRecursive(
-            nextGen,
-            with: inputValue,
-            context: context
-        ) {
-            if nextGen.isPure {
-                return (continuationResult, calleeChoiceTree)
-            } else {
-                // A large part of the trace is adding these arrays together. Chain?
-                return (continuationResult, .group([calleeChoiceTree, innerChoiceTree]))
-            }
-        }
-        return nil
     }
     
     // MARK: - Quickcheck logarithmic scaling of test cases
