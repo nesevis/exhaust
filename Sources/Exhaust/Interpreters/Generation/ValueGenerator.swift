@@ -216,8 +216,16 @@ public struct ValueGenerator<Element>: IteratorProtocol, Sequence {
             case let .filter(gen, _, _):
                 guard let result = try self.generateRecursive(gen, with: inputValue, size: size, maxRuns: maxRuns, sizeOverride: &sizeOverride, prng: &prng) else { return nil }
                 return try runContinuation(result)
-            case .classify:
-                fatalError(".classify generators are not supported by generateRecursive")
+            case let .classify(gen, fingerprint, classifiers):
+                guard let result = try self.generateRecursive(gen, with: inputValue, size: size, maxRuns: maxRuns, sizeOverride: &sizeOverride, prng: &prng) else { return nil }
+
+//                for (label, classifier) in classifiers where classifier(result) {
+                    // TODO: we need to thread state here too
+                    // Use the current run as the identifier for this value. We don't want to force `Equatable`
+//                    context.classifications[fingerprint, default: [:]][label, default: []].insert(context.runs)
+//                }
+                
+                return try runContinuation(result)
             }
         }
     }
@@ -226,6 +234,7 @@ public struct ValueGenerator<Element>: IteratorProtocol, Sequence {
     
     private static func logarithmicallyScaledSize(_ maxSize : UInt64, _ successfulTests : UInt64) -> UInt64 {
         let n = Double(successfulTests)
-        return UInt64((log(n + 1)) * Double(maxSize) / log(100) / 2)
+        
+        return UInt64((log(n + 1)) * Double(maxSize) / log(100))
     }
 }

@@ -58,13 +58,25 @@ public struct ChoiceGradientSampler {
         
         /// Computed viability score for CGS-guided shrinking (0.0 to 1.0)
         public var shrinkingViabilityScore: Double {
+            // If CGS was skipped entirely (0 iterations), it cannot help with shrinking
+            if convergenceIterations == 0 {
+                return 0.0
+            }
+            
             // Composite score combining multiple factors
             let improvementScore = min(improvementFactor / 3.0, 1.0)  // Cap at 3x improvement
             let confidenceScore = averageGradientConfidence
             let convergenceScore = max(0.1, 1.0 / Double(convergenceIterations))
             
-            // Weighted combination favoring improvement and confidence
-            return (0.5 * improvementScore + 0.4 * confidenceScore + 0.1 * convergenceScore)
+            // If no meaningful improvement was achieved, heavily penalize the score
+            // Shrinking viability depends primarily on actual demonstrated improvement
+            if improvementFactor < 1.1 {  // Less than 10% improvement
+                return (0.2 * improvementScore + 0.1 * confidenceScore + 0.1 * convergenceScore)
+                    .clamped(to: 0.0...1.0)
+            }
+            
+            // For cases with good improvement, weight improvement and confidence
+            return (0.6 * improvementScore + 0.3 * confidenceScore + 0.1 * convergenceScore)
                 .clamped(to: 0.0...1.0)
         }
     }
@@ -88,7 +100,7 @@ public struct ChoiceGradientSampler {
         
         /// Whether this choice position shows statistically significant gradient information
         public var isSignificant: Bool {
-            return confidence > 0.7 && sampleCount >= 10
+            return confidence > 0.4 && sampleCount >= 10
         }
     }
     
@@ -110,7 +122,7 @@ public struct ChoiceGradientSampler {
         
         /// Whether the generator shows gradient-friendly patterns
         public var isGradientFriendly: Bool {
-            return overallConfidence > 0.6 && significantChoiceCount >= 1
+            return overallConfidence > 0.3 && significantChoiceCount >= 1
         }
     }
     
@@ -157,7 +169,7 @@ public struct ChoiceGradientSampler {
             sequenceScore: analysis.calculateSequenceScore(), 
             choiceScore: analysis.calculateChoiceScore(),
             overallScore: analysis.calculateOverallScore(),
-            shouldUseCGS: analysis.calculateOverallScore() > 0.15
+            shouldUseCGS: analysis.calculateOverallScore() > 0.10
         )
     }
     
@@ -186,12 +198,33 @@ public struct ChoiceGradientSampler {
     ///   - improvementThreshold: Minimum improvement to continue optimization (typical: 0.1 = 10%)
     ///
     /// - Returns: Optimized generator with embedded gradient guidance and tuning metrics
+    
+    /// Scales all pick weights in a generator by the given factor to avoid UInt64 truncation
+    private static func scaleGeneratorWeights<Value>(
+        _ generator: ReflectiveGenerator<Value>, 
+        scaleFactor: UInt64
+    ) -> ReflectiveGenerator<Value> {
+        return generator.mapOperation { operation in
+            switch operation {
+            case .pick(let choices):
+                let scaledChoices = choices.map { choice in
+                    (weight: choice.weight * scaleFactor, label: choice.label, generator: choice.generator)
+                }
+                return .pick(choices: ContiguousArray(scaledChoices))
+                
+            default:
+                return operation  // Other operations don't need scaling
+            }
+        }
+    }
+    
     public static func optimize<Output>(
         _ generator: ReflectiveGenerator<Output>,
         for property: @escaping (Output) -> Bool,
         samples: Int = 500,
         iterations: Int = 5,
-        improvementThreshold: Double = 0.1
+        improvementThreshold: Double = 0.1,
+        seed: UInt64? = nil
     ) async -> OptimizedGenerator<Output> {
         
         // Fast structural analysis to predict CGS effectiveness
@@ -217,11 +250,12 @@ public struct ChoiceGradientSampler {
             )
         }
         
-        var currentGenerator = generator
+        // Pre-scale all weights by 100x to avoid UInt64 truncation in later adjustments
+        var currentGenerator = Self.scaleGeneratorWeights(generator, scaleFactor: 100)
         var allMetrics: [TuningMetrics] = []
         var bestGradient: GeneratorGradient?
         
-        let initialValidRate = await measureValidityRate(generator, property: property, samples: samples)
+        let initialValidRate = await measureValidityRate(generator, property: property, samples: samples, seed: seed)
         var currentValidRate = initialValidRate
         
         for iteration in 0..<iterations {
@@ -229,7 +263,8 @@ public struct ChoiceGradientSampler {
             let gradient = await computeGradient(
                 currentGenerator,
                 property: property,
-                samples: samples
+                samples: samples,
+                seed: seed.map { $0 + UInt64(iteration) }
             )
             
             // If gradient is not useful, stop early
@@ -239,8 +274,8 @@ public struct ChoiceGradientSampler {
             }
             
             // Apply gradient guidance to create improved generator
-            let guidedGenerator = applyGradientGuidance(to: currentGenerator, using: gradient)
-            let guidedValidRate = await measureValidityRate(guidedGenerator, property: property, samples: samples)
+            let guidedGenerator: ReflectiveGenerator<Output> = applyGradientGuidance(to: currentGenerator, using: gradient)
+            let guidedValidRate = await measureValidityRate(guidedGenerator, property: property, samples: samples, seed: seed.map { $0 + UInt64(iteration * 1000) })
             
             let improvement = (guidedValidRate - currentValidRate) / max(currentValidRate, 0.001)
             
@@ -294,12 +329,13 @@ public struct ChoiceGradientSampler {
     private static func computeGradient<Output>(
         _ generator: ReflectiveGenerator<Output>,
         property: @escaping (Output) -> Bool,
-        samples: Int
+        samples: Int,
+        seed: UInt64? = nil
     ) async -> GeneratorGradient {
         
         // Generate samples and collect choice trees
         var sampleData: [(value: Output, tree: ChoiceTree, isValid: Bool)] = []
-        let valueTreeGenerator = ValueAndChoiceTreeGenerator(generator, maxRuns: UInt64(samples))
+        let valueTreeGenerator = ValueAndChoiceTreeGenerator(generator, seed: seed, maxRuns: UInt64(samples))
         
         // Collect samples using the high-performance ValueAndChoiceTreeGenerator
         for (value, tree) in valueTreeGenerator {
@@ -312,13 +348,18 @@ public struct ChoiceGradientSampler {
         
         // Compute gradient for each choice position (sequential for now)
         var choiceGradients: [ChoiceGradient] = []
+        print("CGS debug: Found \(allChoicePaths.count) choice paths")
         for choicePath in allChoicePaths {
+            print("CGS debug: Processing path \(choicePath)")
             if let gradient = computeChoiceGradient(
                 for: choicePath,
                 in: sampleData,
                 minSamples: max(10, samples / 20)
             ) {
+                print("CGS debug: Added gradient for \(choicePath) with fitness \(gradient.fitness)")
                 choiceGradients.append(gradient)
+            } else {
+                print("CGS debug: No gradient computed for \(choicePath)")
             }
         }
         
@@ -328,6 +369,11 @@ public struct ChoiceGradientSampler {
         // Calculate overall confidence
         let overallConfidence = choiceGradients.isEmpty ? 0.0 :
             choiceGradients.map { $0.confidence }.reduce(0, +) / Double(choiceGradients.count)
+        
+        print("CGS debug: Final gradients: \(choiceGradients.count), overall confidence: \(overallConfidence)")
+        for gradient in choiceGradients {
+            print("CGS debug: Gradient \(gradient.choicePath) - fitness: \(gradient.fitness), confidence: \(gradient.confidence), significant: \(gradient.isSignificant)")
+        }
         
         return GeneratorGradient(
             choiceGradients: choiceGradients,
@@ -340,9 +386,10 @@ public struct ChoiceGradientSampler {
     private static func measureValidityRate<Output>(
         _ generator: ReflectiveGenerator<Output>,
         property: @escaping (Output) -> Bool,
-        samples: Int
+        samples: Int,
+        seed: UInt64? = nil
     ) async -> Double {
-        let valueGenerator = ValueGenerator(generator, maxRuns: UInt64(samples))
+        let valueGenerator = ValueGenerator(generator, seed: seed, maxRuns: UInt64(samples))
         
         var validCount = 0
         var totalCount = 0
@@ -586,11 +633,15 @@ public struct ChoiceGradientSampler {
             // Apply fitness-based weight adjustments
             let boostedChoices = choices.map { choice in
                 if let fitness = labelFitness[choice.label] {
-                    // Boost high-fitness branches, reduce low-fitness branches
-                    let multiplier = fitness > 0.7 ? 3.0 :  // High fitness: triple weight
-                                   fitness > 0.4 ? 1.0 :  // Medium fitness: keep weight
-                                   0.3                     // Low fitness: reduce weight
-                    let newWeight = max(1, UInt64(Double(choice.weight) * multiplier))
+                    // More aggressive fitness-based weight adjustments
+                    let multiplier = fitness > 0.8 ? 5.0 :   // Excellent fitness: 5x weight
+                                   fitness > 0.6 ? 3.0 :   // Good fitness: 3x weight  
+                                   fitness > 0.4 ? 1.5 :   // Medium fitness: 1.5x weight
+                                   fitness > 0.2 ? 0.5 :   // Low fitness: halve weight
+                                   fitness > 0.0 ? 0.2 :   // Very low fitness: reduce severely
+                                   0.05                     // Zero fitness: minimal weight but not zero
+                    let adjustedWeight = Double(choice.weight) * multiplier
+                    let newWeight = UInt64(max(1.0, adjustedWeight))
                     return (weight: newWeight, label: choice.label, generator: choice.generator)
                 } else {
                     return choice  // No gradient info, keep original weight
@@ -773,6 +824,12 @@ private struct CGSStructuralAnalysis {
     func calculateChoiceScore() -> Double {
         guard !choices.isEmpty else { return 0.0 }
         
+        // Single uniform choices cannot be meaningfully optimized by CGS
+        // CGS requires structural patterns or multiple coordinated choices
+        if choices.count == 1 {
+            return 0.05  // Very low score for single uniform choices
+        }
+        
         // Higher scores for: choices with large ranges, multiple choice positions
         let totalChoiceValue = choices.reduce(0.0) { total, choice in
             let rangeBonus = min(1.0, Double(choice.rangeSize) / 100.0)  // Cap at range size 100 for faster scoring
@@ -800,6 +857,7 @@ private struct CGSStructuralAnalysis {
         
         return min(1.0, score + depthBonus)
     }
+    
 }
 
 // MARK: - Extensions

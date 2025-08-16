@@ -253,7 +253,7 @@ public extension ReflectiveGenerator where Operation == ReflectiveOperation {
     /// - Returns: An equivalent generator with transformed operation type
     /// - Note: Marked private due to performance concerns and specialized use cases
     #warning("This has performance overhead, use with caution")
-    private func mapOperation<NewOperation>(_ transform: @escaping (Operation) -> NewOperation) -> FreerMonad<NewOperation, Value> {
+    func mapOperation<NewOperation>(_ transform: @escaping (Operation) -> NewOperation) -> FreerMonad<NewOperation, Value> {
         switch self {
         case let .pure(value):
             // If we're at a pure value, there's no operation to transform. Return as is.
