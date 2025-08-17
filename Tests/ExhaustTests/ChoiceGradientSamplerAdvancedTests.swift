@@ -83,7 +83,7 @@ struct ChoiceGradientSamplerAdvancedTests {
         let property: (Int) -> Bool = { $0 % 2 == 0 }
         
         // Generate samples manually to inspect choice trees
-        let valueTreeGen = ValueAndChoiceTreeGenerator(generator, maxRuns: 50)
+        let valueTreeGen = ValueAndChoiceTreeInterpreter(generator, maxRuns: 50)
         var sampleData: [(value: Int, tree: ChoiceTree, isValid: Bool)] = []
         
         for (value, tree) in valueTreeGen {

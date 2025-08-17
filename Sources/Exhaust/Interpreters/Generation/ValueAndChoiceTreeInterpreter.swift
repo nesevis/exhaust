@@ -1,5 +1,5 @@
 //
-//  ValueAndChoiceTreeIterator.swift
+//  ValueAndChoiceTreeInterpreter.swift
 //  Exhaust
 //
 //  Created by Chris Kolbu on 27/7/2025.
@@ -8,7 +8,7 @@
 import Algorithms
 import Foundation
 
-public struct ValueAndChoiceTreeGenerator<FinalOutput>: IteratorProtocol, Sequence {
+public struct ValueAndChoiceTreeInterpreter<FinalOutput>: IteratorProtocol, Sequence {
     public typealias Element = (value: FinalOutput, tree: ChoiceTree)
     typealias RunContinuation<Output> = (Any, ChoiceTree) throws -> (Output, ChoiceTree)?
     typealias RunGenerator<Output> = (ReflectiveGenerator<Any>) throws -> (Output, ChoiceTree)?
@@ -55,8 +55,8 @@ public struct ValueAndChoiceTreeGenerator<FinalOutput>: IteratorProtocol, Sequen
 
     /// Used to generate results around a similar level of complexity.
     /// Intended to be used to increase pool of results to compare against
-    func fixedAtSize() -> ValueAndChoiceTreeGenerator<FinalOutput> {
-        let fixed = ValueAndChoiceTreeGenerator(
+    func fixedAtSize() -> ValueAndChoiceTreeInterpreter<FinalOutput> {
+        let fixed = ValueAndChoiceTreeInterpreter(
             generator,
             materializePicks: context.materializePicks,
             seed: context.prng.seed,

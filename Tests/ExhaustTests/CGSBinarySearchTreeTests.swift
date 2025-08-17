@@ -144,9 +144,9 @@ struct CGSBinarySearchTreeTests {
         
         let seed: UInt64 = 12345
         let maxRuns: UInt64 = 1_000_000
-        var naiveIterator = ValueGenerator(naive, seed: seed, maxRuns: maxRuns)
-        var rejectionIterator = ValueGenerator(rejectionSampled, seed: seed, maxRuns: maxRuns)
-        var cgsIterator = ValueGenerator(cgsOptimised, seed: seed, maxRuns: maxRuns)
+        var naiveIterator = ValueInterpreter(naive, seed: seed, maxRuns: maxRuns)
+        var rejectionIterator = ValueInterpreter(rejectionSampled, seed: seed, maxRuns: maxRuns)
+        var cgsIterator = ValueInterpreter(cgsOptimised, seed: seed, maxRuns: maxRuns)
         var validNaive = [Int: Int]()
         var validRejection = validNaive
         var validCGS = validNaive
@@ -175,8 +175,8 @@ struct CGSBinarySearchTreeTests {
         }
         print("Generated \(validCGS.sorted(by: { $0.key < $1 .key })) (total: \(validCGS.values.reduce(0, +))) valid values using choice gradient samplng-optimised generator.")
         
-        let cgs = ValueAndChoiceTreeGenerator(cgsOptimised, seed: seed, maxRuns: 1).first(where: { _ in true })
-        let rejection = ValueAndChoiceTreeGenerator(cgsOptimised, seed: seed, maxRuns: 1).first(where: { _ in true })
+        let cgs = ValueAndChoiceTreeInterpreter(cgsOptimised, seed: seed, maxRuns: 1).first(where: { _ in true })
+        let rejection = ValueAndChoiceTreeInterpreter(cgsOptimised, seed: seed, maxRuns: 1).first(where: { _ in true })
         
         print()
     }
@@ -206,9 +206,9 @@ struct CGSBinarySearchTreeTests {
         
         let seed: UInt64 = 12345
         let maxRuns: UInt64 = 1_000_000
-        var naiveIterator = ValueGenerator(naive, seed: seed, maxRuns: maxRuns)
-        var rejectionIterator = ValueGenerator(rejectionSampled, seed: seed, maxRuns: maxRuns)
-        var cgs2Iterator = ValueGenerator(optimized.optimizedGenerator, seed: seed, maxRuns: maxRuns)
+        var naiveIterator = ValueInterpreter(naive, seed: seed, maxRuns: maxRuns)
+        var rejectionIterator = ValueInterpreter(rejectionSampled, seed: seed, maxRuns: maxRuns)
+        var cgs2Iterator = ValueInterpreter(optimized.optimizedGenerator, seed: seed, maxRuns: maxRuns)
         var validNaive = [Int: Int]()
         var validRejection = validNaive
         var validCGS2 = validNaive
@@ -265,7 +265,7 @@ struct CGSBinarySearchTreeTests {
         print("  Should Use CGS: \(potential.shouldUseCGS)")
         
         // Debug: Generate a few samples to see the ChoiceTree structure
-        var valueTreeGen = ValueAndChoiceTreeGenerator(naiveGenerator, maxRuns: 3)
+        var valueTreeGen = ValueAndChoiceTreeInterpreter(naiveGenerator, maxRuns: 3)
         for i in 0..<3 {
             if let (value, tree) = valueTreeGen.next() {
                 print("Sample \(i + 1):")
@@ -311,7 +311,7 @@ struct CGSBinarySearchTreeTests {
         // Test that the optimized generator actually produces valid BSTs more frequently
         var validCount = 0
         let testSamples = 100
-        var iterator = ValueGenerator(optimized.baseGenerator, seed: 67890)
+        var iterator = ValueInterpreter(optimized.baseGenerator, seed: 67890)
         
         // Track height distribution
         var heightCounts: [Int: Int] = [:]
@@ -393,7 +393,7 @@ struct CGSBinarySearchTreeTests {
     @Test("BST generation analysis")
     func testBSTGenerationAnalysis() {
         let generator = BinarySearchTree<Int>.arbitrary
-        var iterator = ValueGenerator(generator, seed: 42)
+        var iterator = ValueInterpreter(generator, seed: 42)
         
         var totalTrees = 0
         var validBSTs = 0

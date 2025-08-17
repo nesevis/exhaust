@@ -72,7 +72,7 @@ Rule 1: (16, lift 3.0)
     func testMergingClassifications() async throws {
         typealias SchemaTuple = (label: String, type: String, value: String)
         let gen = Gen.zip(Bool.arbitrary, Int.arbitrary, String.arbitraryAscii)
-        var iterator = ValueGenerator(gen, maxRuns: 200)
+        var iterator = ValueInterpreter(gen, maxRuns: 200)
         let property: ((Bool, Int, String)) -> Bool = { triple in
             triple.2.count < 50
         }
@@ -96,7 +96,7 @@ Rule 1: (16, lift 3.0)
         print("Found a failure after \(duration * 1000)ms and \(results.count) runs")
         startTime = Date()
         
-        iterator = ValueGenerator(gen, maxRuns: 200)
+        iterator = ValueInterpreter(gen, maxRuns: 200)
         
         // Run for 500ms or 200 instances
         let paddingStart = Date()

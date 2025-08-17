@@ -1,5 +1,5 @@
 //
-//  GeneratorIterator.swift
+//  ValueInterpreter.swift
 //  Exhaust
 //
 //  Created by Chris Kolbu on 27/7/2025.
@@ -7,7 +7,7 @@
 
 import Foundation
 
-public struct ValueGenerator<Element>: IteratorProtocol, Sequence {
+public struct ValueInterpreter<Element>: IteratorProtocol, Sequence {
     let generator: ReflectiveGenerator<Element>
     private(set) var prng: Xoshiro256
     private var size: UInt64 = 0
@@ -36,8 +36,8 @@ public struct ValueGenerator<Element>: IteratorProtocol, Sequence {
 
     /// Used to generate results around a similar level of complexity.
     /// Intended to be used to increase pool of results to compare against
-    func fixedAtSize() -> ValueGenerator<Element> {
-        var fixed = ValueGenerator(generator, seed: prng.seed, maxRuns: maxRuns)
+    func fixedAtSize() -> ValueInterpreter<Element> {
+        var fixed = ValueInterpreter(generator, seed: prng.seed, maxRuns: maxRuns)
         fixed.isFixed = true
         fixed.size = size
         return fixed

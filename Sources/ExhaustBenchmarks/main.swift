@@ -3,7 +3,7 @@ import Exhaust
 
 benchmark("Int Generation") {
     let generator = Gen.choose(in: 0...1000)
-    var iterator = ValueGenerator(generator, seed: 1, maxRuns: 100)
+    var iterator = ValueInterpreter(generator, seed: 1, maxRuns: 100)
     while let next = iterator.next() {
         let bla = next
         let bla2 = bla
@@ -12,7 +12,7 @@ benchmark("Int Generation") {
 
 benchmark("String generation") {
     let generator = String.arbitrary
-    var iterator = ValueGenerator(generator, seed: 1, maxRuns: 100)
+    var iterator = ValueInterpreter(generator, seed: 1, maxRuns: 100)
     while let next = iterator.next() {
         let next = next
     }
@@ -21,7 +21,7 @@ benchmark("String generation") {
 
 benchmark("String generation with reflection") {
     let generator = String.arbitrary
-    var iterator = ValueGenerator(generator, seed: 1, maxRuns: 100)
+    var iterator = ValueInterpreter(generator, seed: 1, maxRuns: 100)
     while let next = iterator.next() {
         let reflection = try Interpreters.reflect(generator, with: next)
     }
@@ -29,7 +29,7 @@ benchmark("String generation with reflection") {
 
 benchmark("String generation with choiceTree") {
     let generator = String.arbitrary
-    var iterator = ValueAndChoiceTreeGenerator(generator, seed: 1, maxRuns: 100)
+    var iterator = ValueAndChoiceTreeInterpreter(generator, seed: 1, maxRuns: 100)
     while let (value, tree) = iterator.next() {
         let value = value
         let tree = tree
@@ -44,7 +44,7 @@ benchmark("Double generation with choiceTree materialised") {
         (UInt64(2), Double.arbitrary),
         (UInt64(4), Double.arbitrary)
     ])
-    var iterator = ValueAndChoiceTreeGenerator(generator, materializePicks: true, seed: 1, maxRuns: 100)
+    var iterator = ValueAndChoiceTreeInterpreter(generator, materializePicks: true, seed: 1, maxRuns: 100)
     while let (value, tree) = iterator.next() {
         let value = value
         let tree = tree
@@ -53,7 +53,7 @@ benchmark("Double generation with choiceTree materialised") {
 
 benchmark("String generation with choiceTree materialised") {
     let generator = String.arbitrary
-    var iterator = ValueAndChoiceTreeGenerator(generator, materializePicks: true, seed: 1, maxRuns: 100)
+    var iterator = ValueAndChoiceTreeInterpreter(generator, materializePicks: true, seed: 1, maxRuns: 100)
     while let (value, tree) = iterator.next() {
 //        let value = value
 //        let tree = tree
@@ -69,7 +69,7 @@ fileprivate struct Person {
 benchmark("Zipped person") {
     let generator = Gen.zip(String.arbitraryAscii, UInt8.arbitrary, Double.arbitrary)
         .mapped(forward: { Person(name: $0.0, age: $0.1, height: $0.2) }, backward: { ($0.name, $0.age, $0.height) })
-    var iterator = ValueGenerator(generator, seed: 1, maxRuns: 100)
+    var iterator = ValueInterpreter(generator, seed: 1, maxRuns: 100)
     while let next = iterator.next() {
         let next = next
     }
@@ -78,7 +78,7 @@ benchmark("Zipped person") {
 benchmark("Zipped person with reflection") {
     let generator = Gen.zip(String.arbitraryAscii, UInt8.arbitrary, Double.arbitrary)
         .mapped(forward: { Person(name: $0.0, age: $0.1, height: $0.2) }, backward: { ($0.name, $0.age, $0.height) })
-    var iterator = ValueGenerator(generator, seed: 1, maxRuns: 100)
+    var iterator = ValueInterpreter(generator, seed: 1, maxRuns: 100)
     while let next = iterator.next() {
         let reflection = try Interpreters.reflect(generator, with: next)
     }
@@ -92,7 +92,7 @@ benchmark("Zipped person with ChoiceTree") {
         Double.arbitrary
     )
     .mapped(forward: { Person(name: $0.0, age: $0.1, height: $0.2) }, backward: { ($0.name, $0.age, $0.height) })
-    var iterator = ValueAndChoiceTreeGenerator(generator, materializePicks: true, seed: 1, maxRuns: 100)
+    var iterator = ValueAndChoiceTreeInterpreter(generator, materializePicks: true, seed: 1, maxRuns: 100)
     while let (value, tree) = iterator.next() {
         let value = value
         let tree = tree

@@ -17,7 +17,7 @@ struct GenerationExamplesTests {
         @Test("Profile memory allocations")
         func testProfileMemAlloc() throws {
             let generator = String.arbitrary
-            var iterator = ValueAndChoiceTreeGenerator(generator, materializePicks: true, seed: 1, maxRuns: 100)
+            var iterator = ValueAndChoiceTreeInterpreter(generator, materializePicks: true, seed: 1, maxRuns: 100)
             while let (value, tree) = iterator.next() {
                 let value = value
                 let tree = tree
@@ -33,7 +33,7 @@ struct GenerationExamplesTests {
                 ("even", { n in n % 2 == 0}),
                 ("odd", { n in n % 2 != 0}),
             )
-            var iterator = ValueAndChoiceTreeGenerator(generator, seed: 1, maxRuns: 100)
+            var iterator = ValueAndChoiceTreeInterpreter(generator, seed: 1, maxRuns: 100)
             while let (value, _) = iterator.next() {
                 #expect(value.isMultiple(of: 3))
             }
@@ -44,7 +44,7 @@ struct GenerationExamplesTests {
             let collection = "What in the devil is the purpose of this?"
 //            let stringCollection = String(collection)
             let generator = Gen.subset(of: collection)
-            var iterator = ValueAndChoiceTreeGenerator(generator, seed: 2, maxRuns: 100)
+            var iterator = ValueAndChoiceTreeInterpreter(generator, seed: 2, maxRuns: 100)
             var max: Int = 0
             while let (value, _) = iterator.next() {
                 // This is a subset
@@ -61,7 +61,7 @@ struct GenerationExamplesTests {
             let collection = "What in the devil is the purpose of this?"
 //            let stringCollection = String(collection)
             let generator = Gen.element(from: collection)
-            var iterator = ValueAndChoiceTreeGenerator(generator, seed: 2, maxRuns: 100)
+            var iterator = ValueAndChoiceTreeInterpreter(generator, seed: 2, maxRuns: 100)
             while let (value, _) = iterator.next() {
                 // This is a subset
                 // This is a continuous subset, not a sampling
@@ -79,7 +79,7 @@ struct GenerationExamplesTests {
                 return second.description
             }
 //            let filtered = Gen.filter(gen, { $0.contains("@") })
-            var iterator = ValueAndChoiceTreeGenerator(gen, maxRuns: 2)
+            var iterator = ValueAndChoiceTreeInterpreter(gen, maxRuns: 2)
             while let (value, tree) = iterator.next() {
                 let value = value
                 let tree = tree
@@ -89,7 +89,7 @@ struct GenerationExamplesTests {
         @Test
         func example2() async throws {
             let gen = Gen.choose(in: 1...5)
-            var iterator = ValueGenerator(gen)
+            var iterator = ValueInterpreter(gen)
             let results = iterator.next()
             let nonNilResults = try #require(results)
             let choices = try Interpreters.reflect(gen, with: nonNilResults, where: { _ in true })
@@ -99,7 +99,7 @@ struct GenerationExamplesTests {
         @Test("Test Gen.dictionaryof")
         func testGenDictionaryOf() throws {
             let gen = Gen.dictionaryOf(String.arbitrary, Int.arbitrary)
-            let iterator = ValueGenerator(gen)
+            let iterator = ValueInterpreter(gen)
             let result = try #require(Array(iterator.prefix(2)).last) // Skip the first length=0 response
             let reflection = try #require(try Interpreters.reflect(gen, with: result))
             let replay = try #require(try Interpreters.replay(gen, using: reflection))
@@ -119,7 +119,7 @@ struct GenerationExamplesTests {
                     Person(age: age, height: height)
                 }
             }    
-            var iterator = ValueGenerator(zipped)
+            var iterator = ValueInterpreter(zipped)
             let result = iterator.next()!
             let choices = try Interpreters.reflect(zipped, with: result)
             if let choices {
@@ -143,7 +143,7 @@ struct GenerationExamplesTests {
             // 1. Test String.arbitrary alone
             let stringGen = String.arbitrary
             for i in 0..<3 {
-                var iterator = ValueGenerator(stringGen)
+                var iterator = ValueInterpreter(stringGen)
                 let generated = iterator.next()!
                 if let recipe = try Interpreters.reflect(stringGen, with: generated) {
                     if let replayed = try Interpreters.replay(stringGen, using: recipe) {
@@ -159,7 +159,7 @@ struct GenerationExamplesTests {
             // 2. Test proliferate alone (without map)
             let proliferateGen = String.arbitrary.proliferate(with: 1...3)
             for i in 0..<3 {
-                var iterator = ValueGenerator(proliferateGen)
+                var iterator = ValueInterpreter(proliferateGen)
                 let generated = iterator.next()!
                 if let recipe = try Interpreters.reflect(proliferateGen, with: generated) {
                     if let replayed = try Interpreters.replay(proliferateGen, using: recipe) {

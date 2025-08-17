@@ -620,7 +620,7 @@ struct SerializableCasePathTests {
             person.age >= 18 && person.canWork == false
         }
         
-        var generator = ValueAndChoiceTreeGenerator(tupleGen, maxRuns: 400)
+        var generator = ValueAndChoiceTreeInterpreter(tupleGen, maxRuns: 400)
         var passes = [ChoiceTree]()
         var fails = [ChoiceTree]()
         while let (next, choiceTree) = generator.next() {
@@ -823,7 +823,7 @@ struct SerializableCasePathTests {
     @Test("Bool.arbitrary generator classification")
     func testBoolArbitraryClassification() async throws {
         // Test with actual Bool.arbitrary generator
-        var boolGen = ValueAndChoiceTreeGenerator(Bool.arbitrary, maxRuns: 5)
+        var boolGen = ValueAndChoiceTreeInterpreter(Bool.arbitrary, maxRuns: 5)
         
         var boolTrees: [ChoiceTree] = []
         
@@ -854,7 +854,7 @@ struct SerializableCasePathTests {
         // Create a simple generator that produces character arrays (strings)
         let stringGen = Gen.arrayOf(Character.arbitraryAscii, within: 3...5).map { String($0) }
         
-        var generator = ValueAndChoiceTreeGenerator(stringGen, maxRuns: 5)
+        var generator = ValueAndChoiceTreeInterpreter(stringGen, maxRuns: 5)
         var trees: [ChoiceTree] = []
         
         while let (string, tree) = generator.next() {
@@ -915,7 +915,7 @@ struct SerializableCasePathTests {
         // Test with a simple character array generator
         let stringGen = Gen.arrayOf(Character.arbitrary, exactly: 3).map { String($0) }
         
-        var generator = ValueAndChoiceTreeGenerator(stringGen, maxRuns: 1)
+        var generator = ValueAndChoiceTreeInterpreter(stringGen, maxRuns: 1)
         
         if let (string, tree) = generator.next() {
             print("Generated string: '\(string)'")

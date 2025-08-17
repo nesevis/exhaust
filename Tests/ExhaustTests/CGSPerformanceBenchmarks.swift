@@ -129,7 +129,7 @@ struct CGSPerformanceBenchmarks {
         let property: (Int) -> Bool = { $0 <= 30 }
         
         // Manual gradient analysis
-        let valueTreeGen = ValueAndChoiceTreeGenerator(generator, maxRuns: 100)
+        let valueTreeGen = ValueAndChoiceTreeInterpreter(generator, maxRuns: 100)
         var samples: [(value: Int, tree: ChoiceTree, isValid: Bool)] = []
         
         for (value, tree) in valueTreeGen {

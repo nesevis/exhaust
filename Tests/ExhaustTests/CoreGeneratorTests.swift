@@ -18,7 +18,7 @@ struct CoreGeneratorTests {
         @Test("Gen.choose produces values within specified range")
         func testGenChooseRange() {
             let gen = Gen.choose(in: 10...20)
-            var iterator = ValueGenerator(gen)
+            var iterator = ValueInterpreter(gen)
             
             for _ in 0..<50 {
                 let value = iterator.next()!
@@ -29,7 +29,7 @@ struct CoreGeneratorTests {
         @Test("Flatzip")
         func testflatzip() throws {
             let gen = Gen.zip(Int.arbitrary, Double.arbitrary)
-            var iterator = ValueAndChoiceTreeGenerator(gen)
+            var iterator = ValueAndChoiceTreeInterpreter(gen)
             while let (next, choiceTree) = iterator.next() {
                 let reflected = try Interpreters.reflect(gen, with: next)
                 print()
@@ -41,7 +41,7 @@ struct CoreGeneratorTests {
         @Test("Gen.choose with type produces valid values")
         func testGenChooseType() {
             let gen = Gen.choose(type: UInt32.self)
-            var iterator = ValueGenerator(gen)
+            var iterator = ValueInterpreter(gen)
             
             for _ in 0..<20 {
                 let value = iterator.next()!
@@ -78,7 +78,7 @@ struct CoreGeneratorTests {
         func testGenJust() {
             let value = "constant"
             let gen = Gen.just(value)
-            var iterator = ValueGenerator(gen)
+            var iterator = ValueInterpreter(gen)
             
             for _ in 0..<10 {
                 let generated = iterator.next()!
@@ -109,7 +109,7 @@ struct CoreGeneratorTests {
             ]
             
             for (index, gen) in generators.enumerated() {
-                var iterator = ValueGenerator(gen)
+                var iterator = ValueInterpreter(gen)
                 for iteration in 0..<10 {
                     let generated = iterator.next()!
                     if let recipe = try Interpreters.reflect(gen, with: generated) {
@@ -149,7 +149,7 @@ struct CoreGeneratorTests {
             let gen = String.arbitrary
                 .proliferate(with: 2...5)
                 .map { $0.joined() } // Using mapped here wouldn't be possible; we don't know what the string boundaries were
-            var iterator = ValueGenerator(gen)
+            var iterator = ValueInterpreter(gen)
             
             // String.arbitrary takes getSize so the first output will be empty
             let _ = iterator.next()!
@@ -165,7 +165,7 @@ struct CoreGeneratorTests {
         @Test("High-frequency generation performance")
         func testHighFrequencyGeneration() {
             let gen = Gen.choose(in: 1...1000)
-            var iterator = ValueGenerator(gen, maxRuns: 10000)
+            var iterator = ValueInterpreter(gen, maxRuns: 10000)
             
             // Should be able to generate many values quickly
             for _ in 0..<10000 {
@@ -183,11 +183,11 @@ struct CoreGeneratorTests {
         @Test("Kick tyres")
         func kickTheTyres() throws {
             let gen = String.arbitrary
-            var iterator = ValueGenerator(gen, seed: 4)
+            var iterator = ValueInterpreter(gen, seed: 4)
             _ = iterator.next()
             _ = iterator.next()
             var output = iterator.next()!
-            var thing = ValueAndChoiceTreeGenerator(gen, materializePicks: true, seed: 4)
+            var thing = ValueAndChoiceTreeInterpreter(gen, materializePicks: true, seed: 4)
             _ = thing.next()
             _ = thing.next()
             let test = thing.next()!

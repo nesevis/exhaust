@@ -16,7 +16,7 @@ let signposter = OSSignposter(
 @Test("Profile mem alloc")
 func testProfileMemAllocations() throws {
     let generator = String.arbitrary
-    var iterator = ValueAndChoiceTreeGenerator(generator, materializePicks: true, seed: 1, maxRuns: 100)
+    var iterator = ValueAndChoiceTreeInterpreter(generator, materializePicks: true, seed: 1, maxRuns: 100)
     let interval = signposter.beginInterval("prop")
     while let (value, tree) = iterator.next() {
         let value = value

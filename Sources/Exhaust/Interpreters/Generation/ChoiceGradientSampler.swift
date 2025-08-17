@@ -138,10 +138,10 @@ public struct ChoiceGradientSampler {
         public let tuningMetrics: TuningMetrics
         
         /// Generates values using gradient-guided choice selection
-        public func generate(seed: UInt64? = nil, maxRuns: UInt64 = 100) -> ValueAndChoiceTreeGenerator<Output> {
+        public func generate(seed: UInt64? = nil, maxRuns: UInt64 = 100) -> ValueAndChoiceTreeInterpreter<Output> {
             // Create a modified generator that uses gradient information to bias choices
             let guidedGenerator = applyGradientGuidance(to: baseGenerator, using: gradient)
-            return ValueAndChoiceTreeGenerator(guidedGenerator, seed: seed, maxRuns: maxRuns)
+            return ValueAndChoiceTreeInterpreter(guidedGenerator, seed: seed, maxRuns: maxRuns)
         }
         
         /// Validates that the optimization actually improved validity rates
@@ -178,7 +178,7 @@ public struct ChoiceGradientSampler {
         for generator: ReflectiveGenerator<Output>
     ) -> CGSPotential {
         // Generate a single sample to analyze structure
-        var valueTreeGen = ValueAndChoiceTreeGenerator(generator, maxRuns: 1)
+        var valueTreeGen = ValueAndChoiceTreeInterpreter(generator, maxRuns: 1)
         guard let (value, sampleTree) = valueTreeGen.next() else {
             return CGSPotential.minimal
         }
@@ -335,7 +335,7 @@ public struct ChoiceGradientSampler {
         
         // Generate samples and collect choice trees
         var sampleData: [(value: Output, tree: ChoiceTree, isValid: Bool)] = []
-        let valueTreeGenerator = ValueAndChoiceTreeGenerator(generator, seed: seed, maxRuns: UInt64(samples))
+        let valueTreeGenerator = ValueAndChoiceTreeInterpreter(generator, seed: seed, maxRuns: UInt64(samples))
         
         // Collect samples using the high-performance ValueAndChoiceTreeGenerator
         for (value, tree) in valueTreeGenerator {
@@ -389,7 +389,7 @@ public struct ChoiceGradientSampler {
         samples: Int,
         seed: UInt64? = nil
     ) async -> Double {
-        let valueGenerator = ValueGenerator(generator, seed: seed, maxRuns: UInt64(samples))
+        let valueGenerator = ValueInterpreter(generator, seed: seed, maxRuns: UInt64(samples))
         
         var validCount = 0
         var totalCount = 0

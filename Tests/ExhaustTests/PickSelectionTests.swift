@@ -14,7 +14,7 @@ struct PickSelectionTests {
     @Test("Boolean arbitrary produces selected branch")
     func booleanArbitraryProducesSelectedBranch() throws {
         for _ in 0..<100 {
-            var iterator = ValueGenerator(Bool.arbitrary)
+            var iterator = ValueInterpreter(Bool.arbitrary)
             let value = iterator.next()!
             let recipe = try #require(try Interpreters.reflect(Bool.arbitrary, with: value))
             
@@ -49,7 +49,7 @@ struct PickSelectionTests {
     @Test("Optional Character arbitrary produces selected branch")
     func optionalCharacterGeneratorProducesSelectedBranch2() throws {
         let gen = Character?.arbitrary
-        var iterator = ValueGenerator(gen)
+        var iterator = ValueInterpreter(gen)
         let value = iterator.next()!
         let recipe = try #require(try Interpreters.reflect(gen, with: value))
         guard case let .group(branches) = recipe else {
@@ -70,7 +70,7 @@ struct PickSelectionTests {
     func optionalIntGeneratorProducesSelectedBranch() throws {
         for _ in 0..<10 {
             let gen = Int?.arbitrary
-            var iterator = ValueGenerator(gen)
+            var iterator = ValueInterpreter(gen)
             guard let value = iterator.next() else {
                 continue
             }
@@ -121,7 +121,7 @@ struct PickSelectionTests {
         ])
         
         for _ in 0..<100 {
-            var iterator = ValueGenerator(customGen)
+            var iterator = ValueInterpreter(customGen)
             let value = iterator.next()!
             let recipe = try #require(try Interpreters.reflect(customGen, with: value))
             
@@ -154,7 +154,7 @@ struct PickSelectionTests {
     @Test("Replay with selected branches")
     func replayWithSelectedBranches() throws {
         // Test that we can replay a recipe with selected branches
-        var iterator = ValueGenerator(Bool.arbitrary)
+        var iterator = ValueInterpreter(Bool.arbitrary)
         let value = iterator.next()!
         let recipe = try #require(try Interpreters.reflect(Bool.arbitrary, with: value))
         

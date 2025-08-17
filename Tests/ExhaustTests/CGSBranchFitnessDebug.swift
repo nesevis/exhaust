@@ -22,7 +22,7 @@ struct CGSBranchFitnessDebug {
         let property: (Int) -> Bool = { $0 % 2 == 0 }
         
         // Generate samples manually to see the branch performance
-        let valueTreeGen = ValueAndChoiceTreeGenerator(generator, maxRuns: 300)
+        let valueTreeGen = ValueAndChoiceTreeInterpreter(generator, maxRuns: 300)
         var branchStats: [UInt64: (total: Int, valid: Int)] = [:]
         
         for (value, tree) in valueTreeGen {

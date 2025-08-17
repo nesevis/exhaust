@@ -25,7 +25,7 @@ struct CGSWeightAdjustmentTest {
         
         // Generate some baseline samples to see original distribution
         print("\n=== Original Weight Distribution ===")
-        let originalGen = ValueAndChoiceTreeGenerator(generator, maxRuns: 100)
+        let originalGen = ValueAndChoiceTreeInterpreter(generator, maxRuns: 100)
         var originalBranchCounts: [UInt64: Int] = [:]
         
         for (_, tree) in originalGen {
