@@ -179,7 +179,7 @@ public struct ChoiceGradientSampler {
     ) -> CGSPotential {
         // Generate a single sample to analyze structure
         var valueTreeGen = ValueAndChoiceTreeGenerator(generator, maxRuns: 1)
-        guard let (_, sampleTree) = valueTreeGen.next() else {
+        guard let (value, sampleTree) = valueTreeGen.next() else {
             return CGSPotential.minimal
         }
         
@@ -229,7 +229,7 @@ public struct ChoiceGradientSampler {
         
         // Fast structural analysis to predict CGS effectiveness
         let potential = predictViability(for: generator)
-        print("CGS structural analysis: overall=\(potential.overallScore), branching=\(potential.branchingScore), sequence=\(potential.sequenceScore), choice=\(potential.choiceScore)")
+//        print("CGS structural analysis: overall=\(potential.overallScore), branching=\(potential.branchingScore), sequence=\(potential.sequenceScore), choice=\(potential.choiceScore)")
         
         // Early exit if structure suggests CGS won't be effective
         guard potential.shouldUseCGS else {
@@ -295,7 +295,7 @@ public struct ChoiceGradientSampler {
                 currentGenerator = guidedGenerator
                 currentValidRate = guidedValidRate
                 bestGradient = gradient
-                print("CGS iteration \(iteration): \(improvement * 100)% improvement")
+//                print("CGS iteration \(iteration): \(improvement * 100)% improvement")
             } else {
                 print("CGS converged at iteration \(iteration)")
                 break
@@ -348,18 +348,18 @@ public struct ChoiceGradientSampler {
         
         // Compute gradient for each choice position (sequential for now)
         var choiceGradients: [ChoiceGradient] = []
-        print("CGS debug: Found \(allChoicePaths.count) choice paths")
+//        print("CGS debug: Found \(allChoicePaths.count) choice paths")
         for choicePath in allChoicePaths {
-            print("CGS debug: Processing path \(choicePath)")
+//            print("CGS debug: Processing path \(choicePath)")
             if let gradient = computeChoiceGradient(
                 for: choicePath,
                 in: sampleData,
                 minSamples: max(10, samples / 20)
             ) {
-                print("CGS debug: Added gradient for \(choicePath) with fitness \(gradient.fitness)")
+//                print("CGS debug: Added gradient for \(choicePath) with fitness \(gradient.fitness)")
                 choiceGradients.append(gradient)
             } else {
-                print("CGS debug: No gradient computed for \(choicePath)")
+//                print("CGS debug: No gradient computed for \(choicePath)")
             }
         }
         
@@ -372,7 +372,7 @@ public struct ChoiceGradientSampler {
         
         print("CGS debug: Final gradients: \(choiceGradients.count), overall confidence: \(overallConfidence)")
         for gradient in choiceGradients {
-            print("CGS debug: Gradient \(gradient.choicePath) - fitness: \(gradient.fitness), confidence: \(gradient.confidence), significant: \(gradient.isSignificant)")
+//            print("CGS debug: Gradient \(gradient.choicePath) - fitness: \(gradient.fitness), confidence: \(gradient.confidence), significant: \(gradient.isSignificant)")
         }
         
         return GeneratorGradient(
@@ -630,6 +630,13 @@ public struct ChoiceGradientSampler {
                 return operation
             }
             
+            // Check if all fitnesses are zero (thesis algorithm line 16)
+            let maxFitness = labelFitness.values.max() ?? 0.0
+            if maxFitness == 0.0 {
+                // Fall back to original weights as per thesis algorithm line 17
+                return operation
+            }
+            
             // Apply fitness-based weight adjustments
             let boostedChoices = choices.map { choice in
                 if let fitness = labelFitness[choice.label] {
@@ -638,8 +645,7 @@ public struct ChoiceGradientSampler {
                                    fitness > 0.6 ? 3.0 :   // Good fitness: 3x weight  
                                    fitness > 0.4 ? 1.5 :   // Medium fitness: 1.5x weight
                                    fitness > 0.2 ? 0.5 :   // Low fitness: halve weight
-                                   fitness > 0.0 ? 0.2 :   // Very low fitness: reduce severely
-                                   0.05                     // Zero fitness: minimal weight but not zero
+                                   0.1                      // Very low but non-zero fitness: minimal weight
                     let adjustedWeight = Double(choice.weight) * multiplier
                     let newWeight = UInt64(max(1.0, adjustedWeight))
                     return (weight: newWeight, label: choice.label, generator: choice.generator)

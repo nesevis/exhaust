@@ -28,11 +28,44 @@ struct GenerationExamplesTests {
         
         @Test("Test Gen filtering")
         func testGenFiltering() throws {
-            let generator = UInt.arbitrary
-                .filter { $0.isMultiple(of: 3) }
+            let generator = Gen.classify(
+                UInt.arbitrary.filter { $0.isMultiple(of: 3) },
+                ("even", { n in n % 2 == 0}),
+                ("odd", { n in n % 2 != 0}),
+            )
             var iterator = ValueAndChoiceTreeGenerator(generator, seed: 1, maxRuns: 100)
-            while let (value, tree) = iterator.next() {
+            while let (value, _) = iterator.next() {
                 #expect(value.isMultiple(of: 3))
+            }
+        }
+        
+        @Test("Test Gen subset")
+        func testGenSubset() throws {
+            let collection = "What in the devil is the purpose of this?"
+//            let stringCollection = String(collection)
+            let generator = Gen.subset(of: collection)
+            var iterator = ValueAndChoiceTreeGenerator(generator, seed: 2, maxRuns: 100)
+            var max: Int = 0
+            while let (value, _) = iterator.next() {
+                // This is a subset
+                max = Swift.max(value.count, max)
+                #expect(collection.count > value.count)
+                // This is a continuous subset, not a sampling
+                #expect(collection.contains(value))
+            }
+            print("max: \(max)")
+        }
+        
+        @Test("Test Gen element")
+        func testGenElement() throws {
+            let collection = "What in the devil is the purpose of this?"
+//            let stringCollection = String(collection)
+            let generator = Gen.element(from: collection)
+            var iterator = ValueAndChoiceTreeGenerator(generator, seed: 2, maxRuns: 100)
+            while let (value, _) = iterator.next() {
+                // This is a subset
+                // This is a continuous subset, not a sampling
+                #expect(collection.contains(value))
             }
         }
         
@@ -45,8 +78,8 @@ struct GenerationExamplesTests {
                 print("Second map called with \(second)")
                 return second.description
             }
-            let filtered = Gen.filter(gen, { $0.contains("@") })
-            var iterator = ValueAndChoiceTreeGenerator(filtered, maxRuns: 2)
+//            let filtered = Gen.filter(gen, { $0.contains("@") })
+            var iterator = ValueAndChoiceTreeGenerator(gen, maxRuns: 2)
             while let (value, tree) = iterator.next() {
                 let value = value
                 let tree = tree

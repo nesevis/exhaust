@@ -152,6 +152,7 @@ public extension Gen {
     ) -> ReflectiveGenerator<AnyCollection.SubSequence> {
         getSize().bind { size in
             let count = collection.count
+            // Max length with size as percentage of total space/count
             let maxLength = min(((count * Int(size)) / 100) + 2, count)
             
             // Convert collection to array of indices for easier manipulation
