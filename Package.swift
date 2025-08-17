@@ -49,7 +49,7 @@ let package = Package(
                 .product(name: "Benchmark", package: "swift-benchmark")
             ],
             swiftSettings: [
-                .unsafeFlags(["-whole-module-optimization"], .when(configuration: .release))
+                .unsafeFlags(["-whole-module-optimization"], .when(configuration: .release)),
             ]
         ),
     ]
