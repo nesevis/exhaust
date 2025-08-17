@@ -187,12 +187,8 @@ public struct ValueAndChoiceTreeGenerator<FinalOutput>: IteratorProtocol, Sequen
             case let .chooseBits(min, max, tag):
                 let randomBits = UInt64.random(in: min...max, using: &context.prng)
                 let choiceTree = ChoiceTree.choice(ChoiceValue(randomBits, tag: tag), .init(validRanges: [min...max]))
-                
-                // Run the continuation here, which is getting a .pure value, which we ignore for ChoiceTree purposes
-                if let (result, _) = try runContinuation(randomBits, choiceTree) {
-                    return (result, choiceTree)
-                }
-                return nil
+
+                return try runContinuation(randomBits, choiceTree)
             
             // MARK: - Sequence
             case let .sequence(lengthGen, elementGen):
