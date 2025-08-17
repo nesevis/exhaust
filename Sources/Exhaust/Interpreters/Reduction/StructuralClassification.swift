@@ -174,7 +174,7 @@ private struct StructuralAnalysis {
                 analyze(element, depth: depth + 1)
             }
             
-        case let .branch(_, children):
+        case let .branch(_, _, children):
             nodeTypeCounts["branch", default: 0] += 1
             branchingFactors.append(Double(children.count))
             for child in children {

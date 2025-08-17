@@ -297,7 +297,7 @@ extension ChoiceTree {
             choiceMetadata.strategies.isEmpty
         case .sequence(let length, let elements, let choiceMetadata):
             choiceMetadata.strategies.isEmpty
-        case .branch(let label, let children):
+        case .branch(_, _, let children):
             children.contains(where: \.rangeIsExhausted)
         case .group(let array):
             array.contains(where: \.rangeIsExhausted)

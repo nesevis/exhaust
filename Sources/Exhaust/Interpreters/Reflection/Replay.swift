@@ -99,7 +99,7 @@ extension Interpreters {
                 let nextGen = try branches
                     .firstNonNil { branch -> ReflectiveGenerator<Output>? in
                         switch branch {
-                        case let .branch(label, children), let .selected(.branch(label, children)):
+                        case let .branch(weight, label, children), let .selected(.branch(weight, label, children)):
                             guard
                                 // Find the sub-generator that matches the label
                                 let chosenGen = pickChoices.first(where: { $0.label == label })?.generator,
@@ -292,7 +292,7 @@ extension Interpreters {
 
             case let .pick(choices):
                 // This operation expects a `.branch` node from the script.
-                guard case .branch(let label, let children) = script else {
+                guard case .branch(_, let label, let children) = script else {
                     return nil
                 }
                 

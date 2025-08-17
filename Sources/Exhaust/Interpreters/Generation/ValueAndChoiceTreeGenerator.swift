@@ -158,7 +158,7 @@ public struct ValueAndChoiceTreeGenerator<FinalOutput>: IteratorProtocol, Sequen
                             let final = try runContinuation(result.0, result.1)
                         {
                             value = final.0
-                            branch = ChoiceTree.branch(label: choice.label, children: [final.1])
+                            branch = ChoiceTree.branch(weight: choice.weight, label: choice.label, children: [final.1])
                         }
                     }
                     

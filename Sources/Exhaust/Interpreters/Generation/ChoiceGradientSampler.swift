@@ -426,7 +426,7 @@ public struct ChoiceGradientSampler {
                     extractRecursive(tree: child, currentPath: currentPath + ["group", "child_\(index)"])
                 }
                 
-            case .branch(let label, let children):
+            case .branch(_, let label, let children):
                 let branchPath = currentPath + ["branch", "label_\(label)"]
                 paths.append(ChoiceTreePath(branchPath))
                 for (index, child) in children.enumerated() {
@@ -540,7 +540,7 @@ public struct ChoiceGradientSampler {
             return 1 + (elements.map(computeTreeDepth).max() ?? 0)
         case .group(let children):
             return children.map(computeTreeDepth).max() ?? 0
-        case .branch(_, let children):
+        case .branch(_, _, let children):
             return 1 + (children.map(computeTreeDepth).max() ?? 0)
         case .selected(let tree):
             return computeTreeDepth(tree)
@@ -759,7 +759,7 @@ private struct CGSStructuralAnalysis {
         maxDepth = max(maxDepth, depth)
         
         switch tree {
-        case .branch(_, let children):
+        case .branch(_, _, let children):
             // Weighted branches are prime CGS optimization targets
             weightedBranches.append((depth: depth, branchCount: children.count))
             for child in children {

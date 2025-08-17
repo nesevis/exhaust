@@ -12,7 +12,7 @@ extension ChoiceTree {
         switch self {
         case let .sequence(_, elements, _):
             elements
-        case let .branch(_, children):
+        case let .branch(_, _, children):
             children
         case let .group(array):
             array
@@ -142,8 +142,8 @@ extension ChoiceTree {
         case let .sequence(length, elements, meta):
             let newMeta = ChoiceMetadata(validRanges: meta.validRanges, strategies: strategies)
             return .sequence(length: length, elements: elements/*.map { $0.setStrategies(strategies) }*/, newMeta)
-        case let .branch(label, children):
-            return .branch(label: label, children: children.map { $0.setStrategies(strategies) })
+        case let .branch(weight, label, children):
+            return .branch(weight: weight, label: label, children: children.map { $0.setStrategies(strategies) })
         case let .group(array):
             return .group(array.map { $0.setStrategies(strategies) })
         case let .important(element), let .selected(element):
@@ -164,7 +164,7 @@ extension ChoiceTree {
             fatalError()
         case .sequence(let length, let elements, let choiceMetadata):
             fatalError()
-        case .branch(let label, let children):
+        case .branch:
             fatalError()
         case .group(let array):
             fatalError()
@@ -189,7 +189,7 @@ extension ChoiceTree {
         case let .sequence(length, elements, meta):
             return .sequence(length: length, elements: elements, meta)
                 .setStrategiesForRangeAndType(direction: direction)
-        case let .branch(label, children):
+        case let .branch(_, label, children):
             return self
         case let .group(array):
             return .group(array.map { $0.resetStrategies(direction: direction) })
