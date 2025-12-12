@@ -210,7 +210,7 @@ struct ChoiceTreeShortlexTests {
         let meta = ChoiceMetadata(validRanges: UInt64.bitPatternRanges, strategies: [])
         let choice = ChoiceTree.choice(.unsigned(42), meta)
         let group = ChoiceTree.group([choice])
-        let branch = ChoiceTree.branch(label: 1, children: [choice])
+        let branch = ChoiceTree.branch(weight: 1, label: 1, children: [choice])
         
         #expect(group.shortlexLength == 2) // 1 (structural) + 1 (choice)
         #expect(branch.shortlexLength == 2) // 1 (structural) + 1 (choice)
@@ -310,15 +310,15 @@ struct ChoiceTreeShortlexTests {
         let choice1 = ChoiceTree.choice(.unsigned(1), meta)
         let choice2 = ChoiceTree.choice(.unsigned(2), meta)
         
-        let branch1 = ChoiceTree.branch(label: 1, children: [choice2])
-        let branch2 = ChoiceTree.branch(label: 2, children: [choice1])
+        let branch1 = ChoiceTree.branch(weight: 1, label: 1, children: [choice2])
+        let branch2 = ChoiceTree.branch(weight: 1, label: 2, children: [choice1])
         
         // Label 1 < label 2
         #expect(branch1.shortlexPrecedes(branch2))
         
         // Same label: compare children
-        let branchA = ChoiceTree.branch(label: 1, children: [choice1])
-        let branchB = ChoiceTree.branch(label: 1, children: [choice2])
+        let branchA = ChoiceTree.branch(weight: 1, label: 1, children: [choice1])
+        let branchB = ChoiceTree.branch(weight: 1, label: 1, children: [choice2])
         
         #expect(branchA.shortlexPrecedes(branchB))
     }

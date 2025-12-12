@@ -130,7 +130,7 @@ private func extractChoicePaths(from tree: ChoiceTree) -> [String] {
                 extractRecursive(tree: child, currentPath: currentPath + ["group", "child_\(index)"])
             }
             
-        case .branch(let label, let children):
+        case .branch(let label, _, let children):
             let branchPath = currentPath + ["branch", "label_\(label)"]
             paths.append(branchPath.joined(separator: "."))
             for (index, child) in children.enumerated() {

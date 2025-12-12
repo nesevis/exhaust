@@ -29,8 +29,8 @@ public struct ValueAndChoiceTreeInterpreter<FinalOutput>: IteratorProtocol, Sequ
             isFixed: false,
             size: 0,
             runs: 0,
-            prng: seed.map { Xoshiro256(seed: $0)
-            } ?? Xoshiro256())
+            prng: seed.map { Xoshiro256(seed: $0) } ?? Xoshiro256()
+        )
     }
     
     // MARK: - Next

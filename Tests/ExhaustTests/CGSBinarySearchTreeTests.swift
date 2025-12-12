@@ -12,7 +12,7 @@ import Foundation
 
 // MARK: - Binary Search Tree Definition
 
-enum BinarySearchTree<T: Comparable & Arbitrary & BitPatternConvertible>: Equatable, Arbitrary {
+enum BinarySearchTree<T: Comparable & Arbitrary & BitPatternConvertible & Hashable>: Equatable, Arbitrary, Hashable {
     case leaf
     indirect case node(left: BinarySearchTree<T>, value: T, right: BinarySearchTree<T>)
     
@@ -40,6 +40,17 @@ enum BinarySearchTree<T: Comparable & Arbitrary & BitPatternConvertible>: Equata
             })
         ])
     }
+    
+//    func hash(into hasher: inout Hasher) {
+//        switch self {
+//        case .leaf:
+//            hasher.combine(1)
+//        case .node(let left, let value, let right):
+//            hasher.combine(left)
+//            hasher.combine(value)
+//            hasher.combine(right)
+//        }
+//    }
 }
 
 
@@ -95,7 +106,7 @@ func countChoicesInTree(_ tree: ChoiceTree) -> Int {
         return 0
     case let .sequence(_, elements, _):
         return elements.reduce(0) { $0 + countChoicesInTree($1) }
-    case let .branch(_, children):
+    case let .branch(_, _, children):
         return children.reduce(0) { $0 + countChoicesInTree($1) }
     case let .group(children):
         return children.reduce(0) { $0 + countChoicesInTree($1) }
@@ -115,6 +126,39 @@ func countChoicesInTree(_ tree: ChoiceTree) -> Int {
 @Suite("CGS Binary Search Tree Tests")
 struct CGSBinarySearchTreeTests {
     
+    @Test("CGS adaptation versus rejection sampling")
+    func testCGSAdaptationVsRejectionSampling() async throws {
+        let naive = BinarySearchTree<UInt>.arbitrary
+        
+        let validBst: (BinarySearchTree<UInt>) -> Bool = { tree in
+            return tree.isValidBST() && tree != .leaf
+        }
+        
+        var start = Date()
+        let rejectionSampled = naive.filter(validBst)
+        let rejection = ValueInterpreter(rejectionSampled, maxRuns: 100000)
+        let rsampled = Array(rejection)
+        let results = rsampled.map { validBst($0) }
+        print("Rejection sampling: true \(results.count(where: { $0 })) false: \(results.count(where: { !$0 }))")
+        print("Rejection sampling: Unique BSTs: \(Set(rsampled.filter(validBst)).count)")
+        print("Rejection sampling: \(Date().timeIntervalSince(start) * 1000)ms")
+        
+        start = Date()
+        let adapted = try SpeculativeAdaptationInterpreter.adapt(original: naive, input: (), samples: 1000, choiceTree: .just(""), validBst)
+        print("CGS: adaptation \(Date().timeIntervalSince(start) * 1000)ms")
+        start = Date()
+        let cgs = ValueInterpreter(adapted, maxRuns: 100000)
+        let cgsArr = Array(cgs)
+        var cgsResults = cgsArr.map { validBst($0) }
+//        print("CGS: \(adapted.debugDescription)")
+        print("CGS sampling: true \(cgsResults.count(where: { $0 })) false: \(cgsResults.count(where: { !$0 }))")
+        print("CGS: Unique BSTs: \(Set(cgsArr.filter(validBst)).count)")
+        print("CGS: \(Date().timeIntervalSince(start) * 1000)ms")
+        
+        print("Rejection: \(rejectionSampled.debugDescription)")
+        print("CGS: \(adapted.debugDescription)")
+    }
+    
     @Test("CGS optimisation versus rejection sampling")
     func testCGSVsRejectionSampling() async throws {
         let naive = BinarySearchTree<UInt>.arbitrary
@@ -124,6 +168,8 @@ struct CGSBinarySearchTreeTests {
         }
         
         let rejectionSampled = naive.filter(validBst)
+        
+        let adapted = try SpeculativeAdaptationInterpreter.adapt(original: naive, input: (), choiceTree: .just(""), validBst)
         
         let optimized = await ChoiceGradientSampler.optimize(
             naive,
@@ -181,64 +227,64 @@ struct CGSBinarySearchTreeTests {
         print()
     }
     
-    @Test("CGS2 reference implementation versus rejection sampling")
-    func testCGS2VsRejectionSampling() async throws {
-        let naive = BinarySearchTree<UInt>.arbitrary
-        
-        let validBst: (BinarySearchTree<UInt>) -> Bool = { tree in
-            return tree.isValidBST()
-        }
-        
-        let rejectionSampled = naive.filter(validBst)
-        
-        let optimized = await ChoiceGradientSampler2.optimize(
-            naive,
-            for: validBst,
-            samples: 50,  // Thesis parameter: N=50
-            maxIterations: 5
-        )
-        
-        print("BST CGS2 (Reference) Results:")
-        print("  Original validity rate: \(String(format: "%.3f", optimized.originalValidRate))")
-        print("  Final validity rate: \(String(format: "%.3f", optimized.finalValidRate))")
-        print("  Improvement factor: \(String(format: "%.2fx", optimized.improvementFactor))")
-        print("  Valid values discovered: \(optimized.validValues.count)")
-        
-        let seed: UInt64 = 12345
-        let maxRuns: UInt64 = 1_000_000
-        var naiveIterator = ValueInterpreter(naive, seed: seed, maxRuns: maxRuns)
-        var rejectionIterator = ValueInterpreter(rejectionSampled, seed: seed, maxRuns: maxRuns)
-        var cgs2Iterator = ValueInterpreter(optimized.optimizedGenerator, seed: seed, maxRuns: maxRuns)
-        var validNaive = [Int: Int]()
-        var validRejection = validNaive
-        var validCGS2 = validNaive
-        
-        var start = Date()
-        while Date().timeIntervalSince(start) < 1, let next = naiveIterator.next() {
-            if validBst(next) {
-                validNaive[next.height, default: 0] += 1
-            }
-        }
-        print("Generated \(validNaive.sorted(by: { $0.key < $1.key })) (total: \(validNaive.values.reduce(0, +))) valid values using the naive method.")
-        
-        start = Date()
-        while Date().timeIntervalSince(start) < 1, let next = rejectionIterator.next() {
-            if validBst(next) {
-                validRejection[next.height, default: 0] += 1
-            }
-        }
-        print("Generated \(validRejection.sorted(by: { $0.key < $1.key })) (total: \(validRejection.values.reduce(0, +))) valid values using rejection sampling.")
-        
-        start = Date()
-        while Date().timeIntervalSince(start) < 1, let next = cgs2Iterator.next() {
-            if validBst(next) {
-                validCGS2[next.height, default: 0] += 1
-            }
-        }
-        print("Generated \(validCGS2.sorted(by: { $0.key < $1.key })) (total: \(validCGS2.values.reduce(0, +))) valid values using CGS2 reference implementation.")
-        
-        print()
-    }
+//    @Test("CGS2 reference implementation versus rejection sampling")
+//    func testCGS2VsRejectionSampling() async throws {
+//        let naive = BinarySearchTree<UInt>.arbitrary
+//        
+//        let validBst: (BinarySearchTree<UInt>) -> Bool = { tree in
+//            return tree.isValidBST()
+//        }
+//        
+//        let rejectionSampled = naive.filter(validBst)
+//        
+//        let optimized = await ChoiceGradientSampler2.optimize(
+//            naive,
+//            for: validBst,
+//            samples: 50,  // Thesis parameter: N=50
+//            maxIterations: 5
+//        )
+//        
+//        print("BST CGS2 (Reference) Results:")
+//        print("  Original validity rate: \(String(format: "%.3f", optimized.originalValidRate))")
+//        print("  Final validity rate: \(String(format: "%.3f", optimized.finalValidRate))")
+//        print("  Improvement factor: \(String(format: "%.2fx", optimized.improvementFactor))")
+//        print("  Valid values discovered: \(optimized.validValues.count)")
+//        
+//        let seed: UInt64 = 12345
+//        let maxRuns: UInt64 = 1_000_000
+//        var naiveIterator = ValueInterpreter(naive, seed: seed, maxRuns: maxRuns)
+//        var rejectionIterator = ValueInterpreter(rejectionSampled, seed: seed, maxRuns: maxRuns)
+//        var cgs2Iterator = ValueInterpreter(optimized.optimizedGenerator, seed: seed, maxRuns: maxRuns)
+//        var validNaive = [Int: Int]()
+//        var validRejection = validNaive
+//        var validCGS2 = validNaive
+//        
+//        var start = Date()
+//        while Date().timeIntervalSince(start) < 1, let next = naiveIterator.next() {
+//            if validBst(next) {
+//                validNaive[next.height, default: 0] += 1
+//            }
+//        }
+//        print("Generated \(validNaive.sorted(by: { $0.key < $1.key })) (total: \(validNaive.values.reduce(0, +))) valid values using the naive method.")
+//        
+//        start = Date()
+//        while Date().timeIntervalSince(start) < 1, let next = rejectionIterator.next() {
+//            if validBst(next) {
+//                validRejection[next.height, default: 0] += 1
+//            }
+//        }
+//        print("Generated \(validRejection.sorted(by: { $0.key < $1.key })) (total: \(validRejection.values.reduce(0, +))) valid values using rejection sampling.")
+//        
+//        start = Date()
+//        while Date().timeIntervalSince(start) < 1, let next = cgs2Iterator.next() {
+//            if validBst(next) {
+//                validCGS2[next.height, default: 0] += 1
+//            }
+//        }
+//        print("Generated \(validCGS2.sorted(by: { $0.key < $1.key })) (total: \(validCGS2.values.reduce(0, +))) valid values using CGS2 reference implementation.")
+//        
+//        print()
+//    }
     
     @Test("CGS optimization for BST validity")
     func testCGSBSTOptimization() async throws {

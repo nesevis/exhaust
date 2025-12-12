@@ -352,15 +352,63 @@ Total samples = Σ(N * baseSampleRate / 2^d) for d in 0...maxDepth
 - **Derivative caching**: Reuse computed derivatives across optimization passes
 - **Statistics collection**: Track optimization effectiveness and sample efficiency
 
-### AdaptationInterpreter Requirements
+### Resolved Architectural Challenge: The Bind Closure Problem ✅ RESOLVED
 
-The Adapt interpreter must:
-1. **Recognize derivative opportunities**: Detect when picks should be eliminated
-2. **Apply early returns**: Skip unnecessary continuation processing
-3. **Maintain type safety**: Preserve generator semantics during transformation
-4. **Handle path targeting**: Use `SerializableChoiceTreePath` for precise modifications
+**The Problem**: Initial attempts to adapt generators during execution failed because Swift's `.bind` closures are opaque at runtime. Since virtually every non-trivial generator uses `.bind` for monadic composition, this made generator introspection impossible.
+
+**The Solution**: Work on ChoiceTree data structures rather than generator code:
+
+1. **Materialization First**: Use `ValueAndChoiceTreeGenerator(materializePicks: true)` to reify all choice structure
+2. **ChoiceTree Transformation**: Apply CGS optimizations to the materialized tree data
+3. **Guided Replay**: Use optimized trees to guide new generator execution
+
+### New Architecture: ReflectiveOperation.adapt(gen, choiceTree)
+
+Instead of trying to introspect generators, CGS optimization is encapsulated as a new `ReflectiveOperation`:
+
+```swift
+case adapt(ReflectiveGenerator<Any>, ChoiceTree)
+```
+
+**Benefits:**
+- **Clean encapsulation**: Optimization is part of the operation specification  
+- **Interpreter awareness**: All interpreters can recognize and handle optimization
+- **Composability**: Optimized generators remain normal `ReflectiveGenerator` instances
+- **Natural threading**: ChoiceTree guidance threads through execution automatically
+
+**Usage:**
+```swift
+let optimizedGen = ReflectiveGenerator.impure(
+    operation: .adapt(originalGen, optimizedChoiceTree),
+    continuation: { result in .pure(result) }
+)
+```
+
+### Required Interpreter Extensions
+
+**1. Non-Deterministic Replay Interpreter** (NEW - Critical)
+- **Purpose**: Sample derivatives with statistical diversity for weight calculation
+- **Function**: Execute generators guided by ChoiceTree weights, making probabilistic choices
+- **Key insight**: This is the inverse of `ValueAndChoiceTreeInterpreter`
+  - **ValueAndChoiceTree**: Generator → (Value + ChoiceTree) - records choices
+  - **NonDeterministicReplay**: (Generator + ChoiceTree) → Value - uses recorded weights
+
+**2. Guided ValueInterpreter** (ENHANCED)
+- Recognizes `.adapt(gen, choiceTree)` operations
+- Executes `gen` using `choiceTree` for choice guidance  
+- Ensures optimized generators work in standard generation contexts
+
+**3. Guided ValueAndChoiceTreeInterpreter** (ENHANCED)
+- Handles composition: when optimized generators are bound with others
+- Preserves optimization through monadic composition chains
+- Critical for composability: `optimizedBST.bind { bst in otherGen.map { (bst, $0) } }`
 
 ## Future Considerations
+
+- **Shrinking integration**: How CGS-optimized generators interact with test case reduction
+  - Potential issue: Optimized paths vs. minimal counterexamples
+  - Potential benefit: Optimization may concentrate generation near validity boundaries where interesting counterexamples exist
+  - Investigation needed once core CGS implementation is complete
 
 - **Adaptive base sample rates**: Adjust initial sampling based on generator complexity
 - **Parallel derivative sampling**: Evaluate multiple derivatives concurrently
@@ -556,6 +604,9 @@ let optimized = generator.optimize(predicate).take(1000).measure()
 ```
 
 ### 2. Implementation Details (Priority: Medium)
+- Add `ReflectiveOperation.adapt(gen, choiceTree)` case 
+- Implement non-deterministic replay interpreter for derivative sampling
+- Extend ValueInterpreter and ValueAndChoiceTreeInterpreter to handle `.adapt` operations
 - Implement `.optimize()` extension method with viability analysis
 - Build timeout and graceful fallback mechanisms  
 - Add derivative caching by generator fingerprint

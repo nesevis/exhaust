@@ -124,12 +124,10 @@ public struct ValueInterpreter<Element>: IteratorProtocol, Sequence {
                 return try runContinuation(result)
                 
             case let .pick(choices):
-                // --- Production-Ready Weighted Choice ---
                 guard !choices.isEmpty else { return nil }
                 
                 let totalWeight = choices.reduce(0) { $0 + $1.weight }
                 guard totalWeight > 0 else {
-                    // If all weights are 0, pick uniformly.
                     let randomIndex = Int.random(in: 0..<choices.count, using: &prng)
                     let chosenGenerator = choices[randomIndex].generator
                     guard let result = try self.generateRecursive(chosenGenerator, with: inputValue, size: size, maxRuns: maxRuns, sizeOverride: &sizeOverride, prng: &prng) else { return nil }

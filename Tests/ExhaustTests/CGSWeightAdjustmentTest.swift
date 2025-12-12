@@ -106,7 +106,7 @@ struct CGSWeightAdjustmentTest {
         case .selected(let innerTree):
             return extractBranchLabel(from: innerTree)
             
-        case .branch(let label, _):
+        case .branch(let label, _, _):
             return label
             
         default:

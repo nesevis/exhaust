@@ -254,7 +254,7 @@ struct SerializableCasePathTests {
         let group1 = ChoiceTree.group([choice1, choice2])
         let sequence1 = ChoiceTree.sequence(length: 1, elements: [choice3], ChoiceMetadata(validRanges: [0...10], strategies: []))
         
-        let branch = ChoiceTree.branch(label: 42, children: [group1, sequence1])
+        let branch = ChoiceTree.branch(weight: 1, label: 42, children: [group1, sequence1])
         
         let branchChildrenPath = ChoiceTreeCasePaths.branchChildren
         
@@ -290,7 +290,7 @@ struct SerializableCasePathTests {
         }
         
         // Verify modification
-        if case let .branch(label, newChildren) = modifiedBranch {
+        if case let .branch(weight, label, newChildren) = modifiedBranch {
             #expect(label == 42)
             #expect(newChildren.count == 2)
             
@@ -426,6 +426,7 @@ struct SerializableCasePathTests {
         )
         
         let tree3 = ChoiceTree.branch(
+            weight: 1,
             label: 5,
             children: [
                 .group([.choice(ChoiceValue.unsigned(10), ChoiceMetadata(validRanges: [0...100], strategies: []))]),
@@ -544,7 +545,7 @@ struct SerializableCasePathTests {
             elements: [.choice(ChoiceValue.unsigned(1), ChoiceMetadata(validRanges: [0...10], strategies: []))],
             ChoiceMetadata(validRanges: [0...10], strategies: [])
         )
-        let tree3 = ChoiceTree.branch(label: 3, children: [tree1])
+        let tree3 = ChoiceTree.branch(weight: 1, label: 3, children: [tree1])
         
         let trees = [tree1, tree2, tree3]
         let schema = DynamicChoiceTreeSchema.generateSchema(from: trees)
@@ -721,7 +722,7 @@ struct SerializableCasePathTests {
             ],
             ChoiceMetadata(validRanges: [0...10], strategies: [])
         )
-        let tree3 = ChoiceTree.branch(label: 3, children: [tree1])
+        let tree3 = ChoiceTree.branch(weight: 1, label: 3, children: [tree1])
         
         // Generate schema with trees in different orders
         let schema1 = DynamicChoiceTreeSchema.generateSchema(from: [tree1, tree2, tree3])
@@ -760,7 +761,7 @@ struct SerializableCasePathTests {
         #expect(sequenceElementPaths == sortedExpected, "Sequence element paths should be in numeric order")
         
         // Test discrete value ordering consistency
-        let discreteTree = ChoiceTree.branch(label: 5, children: [
+        let discreteTree = ChoiceTree.branch(weight: 1, label: 5, children: [
             .choice(ChoiceValue.unsigned(1), ChoiceMetadata(validRanges: [0...10], strategies: [])),
             .choice(ChoiceValue.unsigned(3), ChoiceMetadata(validRanges: [0...10], strategies: [])),
             .choice(ChoiceValue.unsigned(2), ChoiceMetadata(validRanges: [0...10], strategies: []))
@@ -786,8 +787,8 @@ struct SerializableCasePathTests {
         // Create a structure that mimics Bool.arbitrary: pick of just values
         let justTrue = ChoiceTree.just("true")
         let justFalse = ChoiceTree.just("false")
-        let branchTrue = ChoiceTree.branch(label: 0, children: [justTrue])
-        let branchFalse = ChoiceTree.branch(label: 1, children: [justFalse])
+        let branchTrue = ChoiceTree.branch(weight: 1, label: 0, children: [justTrue])
+        let branchFalse = ChoiceTree.branch(weight: 1, label: 1, children: [justFalse])
         let selectedBranch = ChoiceTree.selected(branchTrue) // true is selected
         let pickGroup = ChoiceTree.group([selectedBranch, branchFalse])
         
