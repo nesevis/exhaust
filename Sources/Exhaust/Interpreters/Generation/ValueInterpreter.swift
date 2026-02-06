@@ -8,6 +8,7 @@
 import Foundation
 
 public struct ValueInterpreter<Element>: IteratorProtocol, Sequence {
+    
     let generator: ReflectiveGenerator<Element>
     private(set) var prng: Xoshiro256
     private var size: UInt64 = 0
@@ -55,7 +56,7 @@ public struct ValueInterpreter<Element>: IteratorProtocol, Sequence {
         return try self.generate(gen, with: (), initialSize: initialSize, maxRuns: maxRuns, using: &rng)
     }
 
-    fileprivate static func generate<Input, Output>(
+    static func generate<Input, Output>(
         _ gen: ReflectiveGenerator<Output>,
         with input: Input,
         initialSize: UInt64 = 0,
@@ -234,5 +235,11 @@ public struct ValueInterpreter<Element>: IteratorProtocol, Sequence {
         let n = Double(successfulTests)
         
         return UInt64((log(n + 1)) * Double(maxSize) / log(100))
+    }
+    
+    // MARK: - Hashable
+    
+    public func hash(into hasher: inout Hasher) {
+        hasher.combine(prng.seed)
     }
 }

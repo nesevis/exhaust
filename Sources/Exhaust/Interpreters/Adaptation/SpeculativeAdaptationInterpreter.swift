@@ -34,17 +34,16 @@ enum SpeculativeAdaptationInterpreter {
 
     // MARK: - Main Adaptation Entry Point
 
-    static func adapt<Input, Output>(
+    static func adapt<Output>(
         original: ReflectiveGenerator<Output>,
-        input: Input,
         samples: UInt64 = 100,
-        choiceTree: ChoiceTree,
+        maxSize: UInt64 = 100,
         _ validityPredicate: @escaping (Output) -> Bool
     ) throws -> ReflectiveGenerator<Output> {
-        let context = SpeculativeContext(baseSampleCount: samples)
+        let context = SpeculativeContext(baseSampleCount: samples, maxSize: maxSize)
         return try adaptRecursive(
             gen: original,
-            input: input,
+            input: (),
             context: context,
             insideSubdividedChooseBits: false,
             validityPredicate: validityPredicate
@@ -69,13 +68,12 @@ enum SpeculativeAdaptationInterpreter {
             case let .contramap(transform, next):
                 // For contramap, we can't apply the original predicate to the inner generator
                 // since it may have a different output type. Just recurse without adaptation.
-                return .impure(operation: .contramap(transform: transform, next: next), continuation: continuation)
+                return gen
 
             case let .pick(choices):
                 // Increment depth for nested pick operations
                 context.depth += 1
                 defer { context.depth -= 1 }
-
 
                 // This is where the magic happens - speculative execution
                 return try speculativelyAdaptPick(
@@ -93,7 +91,7 @@ enum SpeculativeAdaptationInterpreter {
 
             case let .chooseBits(min, max, tag):
                 // Only subdivide chooseBits if we're not already inside a subdivided range
-                if !insideSubdividedChooseBits {
+                if insideSubdividedChooseBits == false {
                     // Convert chooseBits into a pick of subranges for adaptation
                     return try adaptChooseBitsToPickOfSubranges(
                         min: min,
@@ -107,7 +105,7 @@ enum SpeculativeAdaptationInterpreter {
                     )
                 } else {
                     // Already inside subdivided chooseBits, pass through without further subdivision
-                    return .impure(operation: .chooseBits(min: min, max: max, tag: tag), continuation: continuation)
+                    return gen
                 }
 
             case let .sequence(lengthGen, elementGen):
@@ -123,24 +121,53 @@ enum SpeculativeAdaptationInterpreter {
                 )
 
             case let .zip(gens):
-                // For zip, sub-generators may have different types, so we can't adapt them individually
-                // TODO: Optimise each of the generators
-                return .impure(operation: .zip(gens), continuation: continuation)
+                // Turn zip into a pick where each choice focuses adaptation on one component
+                // This provides signal about which component is most critical for validity
+                return try adaptZipToPickOfFocusedComponents(
+                    gens: gens,
+                    continuation: continuation,
+                    input: input,
+                    context: context,
+                    insideSubdividedChooseBits: insideSubdividedChooseBits,
+                    validityPredicate: validityPredicate
+                )
 
-            case .just, .getSize:
+            case .getSize:
+                // getSize is difficult to adapt because the generator structure depends on
+                // runtime size values. For now, pass through without adaptation.
+                // TODO: Could potentially adapt for representative sizes and cache results
+                let lengthGen = try adaptChooseBitsToPickOfSubranges(
+                    min: 0,
+                    max: context.maxSize,
+                    tag: .uint64,
+                    continuation: continuation,
+                    input: input,
+                    context: context,
+                    insideSubdividedChooseBits: false,
+                    validityPredicate: validityPredicate
+                )
+                return try adaptRecursive(
+                    gen: lengthGen,
+                    input: (),
+                    context: context,
+                    insideSubdividedChooseBits: insideSubdividedChooseBits,
+                    validityPredicate: validityPredicate
+                )
+
+            case .just:
                 return gen
 
             case let .resize(newSize, next):
                 // For resize, the inner generator is type-erased, so we can't adapt it
-                return .impure(operation: .resize(newSize: newSize, next: next), continuation: continuation)
+                return gen
 
             case let .filter(subGen, fingerprint, predicate):
                 // For filter, the inner generator is type-erased, so we can't adapt it
-                return .impure(operation: .filter(gen: subGen, fingerprint: fingerprint, predicate: predicate), continuation: continuation)
+                return gen
 
             case let .classify(subGen, fingerprint, classifiers):
                 // For classify, the inner generator is type-erased, so we can't adapt it
-                return .impure(operation: .classify(gen: subGen, fingerprint: fingerprint, classifiers: classifiers), continuation: continuation)
+                return gen
             }
         }
     }
@@ -205,9 +232,9 @@ enum SpeculativeAdaptationInterpreter {
         )
 
         // If subdivision doesn't provide significant benefit, revert to original chooseBits
-        if !subdivisionResult.isSignificant {
-            return .impure(operation: .chooseBits(min: min, max: max, tag: tag), continuation: continuation)
-        }
+//        if subdivisionResult.isSignificant == false {
+//            return .impure(operation: .chooseBits(min: min, max: max, tag: tag), continuation: continuation)
+//        }
 
         // Subdivision is beneficial, use speculative adaptation on these subranges
         // Set the flag to true since we're now inside subdivided chooseBits
@@ -239,12 +266,28 @@ enum SpeculativeAdaptationInterpreter {
         // Look for chooseBits in the length generator structure
         if case let .impure(.chooseBits(min, max, tag), _) = lengthGen {
             foundChooseBits = (min, max, tag)
-        } else if case let .impure(.getSize, _) = lengthGen {
-            // Handle getSize().bind { ... choose(...) } pattern from Gen.arrayOf
-            // This requires more complex analysis of the bound structure
-            // For now, skip this complex case and just adapt the element generator
-        } else if case let .pure(val) = lengthGen,
-                  let _ = val as? UInt64 {
+        } else if case let .impure(.getSize, lengthContinuation) = lengthGen {
+            // Try to resolve the getSize and recurse
+            let lengthGenContinuation = try adaptChooseBitsToPickOfSubranges(
+                min: 0,
+                max: context.maxSize,
+                tag: .uint64,
+                continuation: lengthContinuation,
+                input: input,
+                context: context,
+                insideSubdividedChooseBits: false,
+                validityPredicate: { _ in true }
+            )
+            return try adaptSequenceLengthGeneration(
+                lengthGen: lengthGenContinuation,
+                elementGen: elementGen,
+                continuation: continuation,
+                input: input,
+                context: context,
+                insideSubdividedChooseBits: insideSubdividedChooseBits,
+                validityPredicate: validityPredicate
+            )
+        } else if case let .pure(val) = lengthGen {
             // Fixed length, no adaptation needed for length
         }
 
@@ -357,9 +400,9 @@ enum SpeculativeAdaptationInterpreter {
         )
 
         // If subdivision doesn't provide significant benefit, revert to original sequence
-        if !subdivisionResult.isSignificant {
-            return .impure(operation: .sequence(length: .impure(operation: .chooseBits(min: lengthMin, max: lengthMax, tag: lengthTag)) { .pure($0 as! UInt64) }, gen: elementGen), continuation: continuation)
-        }
+//        if !subdivisionResult.isSignificant {
+//            return .impure(operation: .sequence(length: .impure(operation: .chooseBits(min: lengthMin, max: lengthMax, tag: lengthTag)) { .pure($0 as! UInt64) }, gen: elementGen), continuation: continuation)
+//        }
 
 
         // Subdivision is beneficial, use speculative adaptation on these length ranges
@@ -514,6 +557,138 @@ enum SpeculativeAdaptationInterpreter {
         return isSignificant
     }
 
+    // MARK: - Zip Adaptation
+
+    /// Adapt zip by creating a pick where each choice focuses on adapting one component
+    private static func adaptZipToPickOfFocusedComponents<Input, Output>(
+        gens: ContiguousArray<ReflectiveGenerator<Any>>,
+        continuation: @escaping (Any) throws -> ReflectiveGenerator<Output>,
+        input: Input,
+        context: SpeculativeContext,
+        insideSubdividedChooseBits: Bool,
+        validityPredicate: @escaping (Output) -> Bool
+    ) throws -> ReflectiveGenerator<Output> {
+        guard !gens.isEmpty else {
+            // Empty zip, just return it as-is
+            return .impure(operation: .zip(gens), continuation: continuation)
+        }
+
+        // Only adapt zips at shallow depths to prevent exponential blowup and recursion
+        // Zip adaptation is expensive (creates N choices for N components), so limit it
+        guard context.depth <= 1 else {
+            // Too deep, return as-is without adaptation
+            return .impure(operation: .zip(gens), continuation: continuation)
+        }
+
+        // Increment depth for zip adaptation
+        context.depth += 1
+        defer { context.depth -= 1 }
+
+        // For single-component zips, just adapt that component directly
+        if gens.count == 1 {
+            let adaptedGen = try adaptRecursive(
+                gen: gens[0],
+                input: input,
+                context: context,
+                insideSubdividedChooseBits: insideSubdividedChooseBits,
+                validityPredicate: { componentValue in
+                    // Test if this component value leads to valid output
+                    do {
+                        let continuationResult = try continuation(componentValue)
+                        var rng = Xoshiro256()
+                        if let output = try ValueInterpreter<Output>.generate(continuationResult, maxRuns: 1, using: &rng) {
+                            return validityPredicate(output)
+                        }
+                        return false
+                    } catch {
+                        return false
+                    }
+                }
+            )
+            return .impure(operation: .zip(ContiguousArray([adaptedGen])), continuation: continuation)
+        }
+
+        // Create a choice for each component, where that component gets focused adaptation
+        var choices: ContiguousArray<ReflectiveOperation.PickTuple> = []
+
+        for focusIndex in 0..<gens.count {
+            // Adapt the focused component with a sampling-based predicate
+            let adaptedFocusedGen = try adaptRecursive(
+                gen: gens[focusIndex],
+                input: input,
+                context: context,
+                insideSubdividedChooseBits: insideSubdividedChooseBits,
+                validityPredicate: { focusedValue in
+                    // Sample other components to test if this focused value contributes to validity
+                    // Use small sample count to keep it fast (depth system handles budget)
+                    let sampleCount = 3
+                    var rng = Xoshiro256()
+
+                    for _ in 0..<sampleCount {
+                        // Generate values for all components
+                        var allValues: [Any] = []
+                        var generationSucceeded = true
+
+                        for (i, gen) in gens.enumerated() {
+                            if i == focusIndex {
+                                allValues.append(focusedValue)
+                            } else {
+                                if let value = try? ValueInterpreter<Any>.generate(gen, maxRuns: 1, using: &rng) {
+                                    allValues.append(value)
+                                } else {
+                                    generationSucceeded = false
+                                    break
+                                }
+                            }
+                        }
+
+                        if generationSucceeded {
+                            // Test the tuple with continuation
+                            do {
+                                let continuationResult = try continuation(allValues as Any)
+                                if let output = try ValueInterpreter<Output>.generate(continuationResult, maxRuns: 1, using: &rng) {
+                                    if validityPredicate(output) {
+                                        return true  // Found at least one valid combination
+                                    }
+                                }
+                            } catch {
+                                continue
+                            }
+                        }
+                    }
+
+                    return false  // No valid combination found in samples
+                }
+            )
+
+            // Create a zip with the focused component adapted and others unadapted
+            var gensForThisChoice = gens
+            gensForThisChoice[focusIndex] = adaptedFocusedGen
+
+            let zipGenerator = ReflectiveGenerator<Any>.impure(
+                operation: .zip(gensForThisChoice)
+            ) { value in
+                .pure(value)
+            }
+
+            choices.append((
+                weight: 1,
+                label: UInt64(focusIndex),
+                generator: zipGenerator
+            ))
+        }
+
+        // Use speculative adaptation to find which component matters most
+        return try speculativelyAdaptPick(
+            choices: choices,
+            continuation: continuation,
+            input: input,
+            context: context,
+            insideSubdividedChooseBits: insideSubdividedChooseBits,
+            validityPredicate: validityPredicate
+        )
+    }
+
     // MARK: - Speculative Pick Adaptation
 
     /// Fork execution at a pick point to evaluate which choice leads to highest success rate
@@ -591,11 +766,6 @@ enum SpeculativeAdaptationInterpreter {
             adaptedChoices.append((weight: choice.weight, label: choice.label, generator: adaptedChoiceGenerator))
         }
 
-        // Find the choice with the highest success count
-        guard let bestChoice = choiceSuccessCounts.max(by: { $0.1 < $1.1 }) else {
-            throw SpeculativeAdaptationError.noValidChoice
-        }
-
         // Create new choices array with weights reflecting actual success counts using the adapted generators
         let finalAdaptedChoices = choiceSuccessCounts.map { (index, successCount) in
             let choice = adaptedChoices[index]
@@ -657,10 +827,12 @@ enum SpeculativeAdaptationInterpreter {
     /// Context for speculative execution with depth tracking
     final class SpeculativeContext {
         let baseSampleCount: UInt64
+        let maxSize: UInt64
         var depth: UInt64 = 0
 
-        init(baseSampleCount: UInt64) {
+        init(baseSampleCount: UInt64, maxSize: UInt64) {
             self.baseSampleCount = baseSampleCount
+            self.maxSize = maxSize
         }
 
         /// Calculate sample count for current depth using exponential decay

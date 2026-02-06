@@ -144,7 +144,7 @@ struct CGSBinarySearchTreeTests {
         print("Rejection sampling: \(Date().timeIntervalSince(start) * 1000)ms")
         
         start = Date()
-        let adapted = try SpeculativeAdaptationInterpreter.adapt(original: naive, input: (), samples: 1000, choiceTree: .just(""), validBst)
+        let adapted = try SpeculativeAdaptationInterpreter.adapt(original: naive, samples: 1000, validBst)
         print("CGS: adaptation \(Date().timeIntervalSince(start) * 1000)ms")
         start = Date()
         let cgs = ValueInterpreter(adapted, maxRuns: 100000)
@@ -169,7 +169,7 @@ struct CGSBinarySearchTreeTests {
         
         let rejectionSampled = naive.filter(validBst)
         
-        let adapted = try SpeculativeAdaptationInterpreter.adapt(original: naive, input: (), choiceTree: .just(""), validBst)
+        let adapted = try SpeculativeAdaptationInterpreter.adapt(original: naive, validBst)
         
         let optimized = await ChoiceGradientSampler.optimize(
             naive,

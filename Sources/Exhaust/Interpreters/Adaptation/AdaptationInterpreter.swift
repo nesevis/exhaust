@@ -41,9 +41,11 @@ enum AdaptationInterpreter {
      So the transform is (depth, tree) -> ReflectiveGenerator<Output> — BUT!
      We've now found the generator we would like to create a derivative of, but we are now somewhere like this
      [entrypoint]...[n/a]...[n/a]...<target generator, continuation>...?
+     // The thinking below this point is forgetting that we are in a recursive chain that means that the "here" is reflective of where the optimisation is taking place.
      So we have access to the target generator, but to fully execute the generator we will need to start from the entrypoint, so effectively we'll have to walk GenA with a ChoiceTree and build up GenA-2 as we go. Once we hit a derivation point, we complete the generator by wrapping it in an impure with the same continuation, then execute it against sampleN to discover the new weight. While still in the closure, we then modify the reflectiveOperation to apply the new sample-adjusted weights, then return the CGSed generator.
     Or do we even return? Do we keep going until we run out of significant sampleN? So this is all done in one (slow) walk of the generator, ultimately returning GenA-2? Yes! It happens in a single walk of the original generator!
      `.map`s result in a `.pure(transform($0))`, so we need to be handling it as well. Opaque as it might be, a value transformation is a value transformation
+     
      */
     
     // Effectively lets you map over a generator as it's being walked
