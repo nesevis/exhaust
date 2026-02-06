@@ -10,25 +10,26 @@ import Foundation
 public struct ValueInterpreter<Element>: IteratorProtocol, Sequence {
     
     let generator: ReflectiveGenerator<Element>
-    private(set) var prng: Xoshiro256
-    private var size: UInt64 = 0
-    private var isFixed = false
-    private(set) var maxRuns: UInt64
+    private var context: Context
     
     public init(_ generator: ReflectiveGenerator<Element>, seed: UInt64? = nil, maxRuns: UInt64? = nil) {
         self.generator = generator
-        self.prng = seed.map { Xoshiro256(seed: $0) } ?? Xoshiro256()
-        self.maxRuns = maxRuns ?? 100
+        self.context = .init(
+            maxRuns: maxRuns ?? 100,
+            isFixed: false,
+            size: 0,
+            prng: seed.map { Xoshiro256(seed: $0) } ?? Xoshiro256()
+        )
     }
     
     public mutating func next() -> Element? {
-        guard size < maxRuns else {
+        guard context.size < context.maxRuns else {
             return nil
         }
-        defer { size += isFixed ? 0 : 1 }
+        defer { context.size += context.isFixed ? 0 : 1 }
         // Iterators can't have throwing `next` functions
         do {
-            return try Self.generate(generator, initialSize: size, maxRuns: maxRuns, using: &prng)
+            return try Self.generateRecursive(generator, with: (), context: context)
         } catch {
             let error = error
             fatalError(error.localizedDescription)
@@ -38,9 +39,9 @@ public struct ValueInterpreter<Element>: IteratorProtocol, Sequence {
     /// Used to generate results around a similar level of complexity.
     /// Intended to be used to increase pool of results to compare against
     func fixedAtSize() -> ValueInterpreter<Element> {
-        var fixed = ValueInterpreter(generator, seed: prng.seed, maxRuns: maxRuns)
-        fixed.isFixed = true
-        fixed.size = size
+        let fixed = ValueInterpreter(generator, seed: context.prng.seed, maxRuns: context.maxRuns)
+        fixed.context.isFixed = true
+        fixed.context.size = context.size
         return fixed
     }
     
@@ -52,46 +53,25 @@ public struct ValueInterpreter<Element>: IteratorProtocol, Sequence {
         maxRuns: UInt64,
         using rng: inout Xoshiro256
     ) throws -> Output? {
-        // Delegate to the main generate function, providing the placeholder input.
-        return try self.generate(gen, with: (), initialSize: initialSize, maxRuns: maxRuns, using: &rng)
-    }
-
-    static func generate<Input, Output>(
-        _ gen: ReflectiveGenerator<Output>,
-        with input: Input,
-        initialSize: UInt64 = 0,
-        sizeOverride: UInt64? = nil,
-        maxRuns: UInt64,
-        using prng: inout Xoshiro256
-    ) throws -> Output? {
-        var sizeOverride: UInt64? = nil
-        let startTime = Date()
-        let result = try generateRecursive(gen, with: input, size: initialSize, maxRuns: maxRuns, sizeOverride: &sizeOverride, prng: &prng)
-        let duration = Date().timeIntervalSince(startTime)
-        
-        // Report generation event if Tyche reporting is enabled
-        if let result = result {
-            let metadata = GenerationMetadata(
-                operationType: "generate",
-                generatorType: String(describing: type(of: gen)),
-                size: initialSize,
-                duration: duration
-            )
-            TycheReportContext.safeRecordGeneration(result, metadata: metadata)
-        }
-        
+        // Create a wrapper context that will be mutated during generation
+        let context = Context(
+            maxRuns: maxRuns,
+            isFixed: false,
+            size: initialSize,
+            prng: rng
+        )
+        let result = try generateRecursive(gen, with: (), context: context)
+        // Copy the mutated PRNG state back to the caller's inout parameter
+        rng = context.prng
         return result
     }
-
-     // MARK: - Recursive Engine
+    
+    // MARK: - Recursive Engine
     
     private static func generateRecursive<Input, Output>(
         _ gen: ReflectiveGenerator<Output>,
         with inputValue: Input,
-        size: UInt64,
-        maxRuns: UInt64,
-        sizeOverride: inout UInt64?,
-        prng: inout Xoshiro256
+        context: Context
     ) throws -> Output? {
         // Size override only affects the first call, not all subsequent ones
         switch gen {
@@ -99,48 +79,35 @@ public struct ValueInterpreter<Element>: IteratorProtocol, Sequence {
             return value
             
         case let .impure(operation, continuation):
-            let jumpedRng = Xoshiro256(seed: prng.next())
-            let continuationSizeOverride = sizeOverride
             let runContinuation = { (result: Any) -> Output? in
-                // Will this work properly now?
-                var sizeOverride = continuationSizeOverride
                 let nextGen = try continuation(result)
                 // PERF: Potential early return here if this op is a terminal one (just, chooseBits, chooseCharacter) and the nextGen is pure
-                var continuationRng = jumpedRng
-                return try self.generateRecursive(nextGen, with: inputValue, size: size, maxRuns: maxRuns, sizeOverride: &sizeOverride, prng: &continuationRng)
+                return try self.generateRecursive(nextGen, with: inputValue, context: context)
             }
             
             switch operation {
             case .contramap(_, let nextGen):
                 // The contramap transform is not used in the forward pass
                 // Run the nested generator and pass its result to the continuation
-                guard let result = try self.generateRecursive(nextGen, with: inputValue, size: size, maxRuns: maxRuns, sizeOverride: &sizeOverride, prng: &prng) else { return nil }
+                guard let result = try self.generateRecursive(nextGen, with: inputValue, context: context) else { return nil }
                 return try runContinuation(result)
 
             case let .prune(nextGen):
                 guard let optional = .some(inputValue as Optional<Any>), let wrappedValue = optional else {
                     return nil // Pruned!
                 }
-                guard let result = try self.generateRecursive(nextGen, with: wrappedValue, size: size, maxRuns: maxRuns, sizeOverride: &sizeOverride, prng: &prng) else { return nil }
+                guard let result = try self.generateRecursive(nextGen, with: wrappedValue, context: context) else { return nil }
                 return try runContinuation(result)
                 
             case let .pick(choices):
-                guard !choices.isEmpty else { return nil }
-                
                 let totalWeight = choices.reduce(0) { $0 + $1.weight }
-                guard totalWeight > 0 else {
-                    let randomIndex = Int.random(in: 0..<choices.count, using: &prng)
-                    let chosenGenerator = choices[randomIndex].generator
-                    guard let result = try self.generateRecursive(chosenGenerator, with: inputValue, size: size, maxRuns: maxRuns, sizeOverride: &sizeOverride, prng: &prng) else { return nil }
-                    
-                    return try runContinuation(result)
-                }
-                
-                var randomRoll = UInt64.random(in: 1...totalWeight, using: &prng)
+                var randomRoll = UInt64.random(in: 1...totalWeight, using: &context.prng)
+                // This will not be used, but we always have to consume it for parity with ValueAndChoiceTreeInterpreter's materializePicks
+                _ = context.prng.next()
                 
                 for choice in choices {
                     if randomRoll <= choice.weight {
-                        guard let result = try self.generateRecursive(choice.generator, with: inputValue, size: size, maxRuns: maxRuns, sizeOverride: &sizeOverride, prng: &prng) else { return nil }
+                        guard let result = try self.generateRecursive(choice.generator, with: inputValue, context: context) else { return nil }
                         
                         return try runContinuation(result)
                     }
@@ -154,7 +121,7 @@ public struct ValueInterpreter<Element>: IteratorProtocol, Sequence {
                 // 1. Generate the raw, random bits. The interpreter's only job
                 //    is to produce entropy within the specified bounds. It has
                 //    no knowledge of the final `Output` type (e.g., Int, Float).
-                let randomBits = UInt64.random(in: min...max, using: &prng)
+                let randomBits = UInt64.random(in: min...max, using: &context.prng)
                 
                 // 2. Pass the raw UInt64 bits to the continuation.
                 //    The `continuation` for a `FreeFunctions.choose<T>()` call was
@@ -165,7 +132,7 @@ public struct ValueInterpreter<Element>: IteratorProtocol, Sequence {
             case let .sequence(lengthGen, elementGen):
                 
                 // An iterative loop, not a recursive one. This will never overflow the stack.
-                guard let length = try self.generateRecursive(lengthGen, with: () as! Input, size: size, maxRuns: maxRuns, sizeOverride: &sizeOverride, prng: &prng) else {
+                guard let length = try self.generateRecursive(lengthGen, with: () as! Input, context: context) else {
                     return nil
                 }
                 var results: [Any] = []
@@ -173,7 +140,7 @@ public struct ValueInterpreter<Element>: IteratorProtocol, Sequence {
                 for _ in 0..<length {
                     // Run the element generator once for each item.
                     // It's a self-contained generator, so its input is `()`.
-                    guard let element = try self.generateRecursive(elementGen, with: () as! Input, size: size, maxRuns: maxRuns, sizeOverride: &sizeOverride, prng: &prng) else {
+                    guard let element = try self.generateRecursive(elementGen, with: () as! Input, context: context) else {
                         // If any element fails to generate, the whole sequence fails.
                         return nil
                     }
@@ -190,10 +157,7 @@ public struct ValueInterpreter<Element>: IteratorProtocol, Sequence {
                     guard let result = try Self.generateRecursive(
                         generator,
                         with: inputValue,
-                        size: size,
-                        maxRuns: maxRuns,
-                        sizeOverride: &sizeOverride,
-                        prng: &prng
+                        context: context
                     ) else {
                         throw GeneratorError.couldNotGenerateConcomitantChoiceTree
                     }
@@ -204,23 +168,21 @@ public struct ValueInterpreter<Element>: IteratorProtocol, Sequence {
                 return try runContinuation(value)
                 
             case .getSize:
-                let size = sizeOverride ?? logarithmicallyScaledSize(maxRuns, size)
-                sizeOverride = nil // getSize consumes the `sizeOverride`
+                let size = context.sizeOverride ?? logarithmicallyScaledSize(context.maxRuns, context.size)
+                context.sizeOverride = nil // getSize consumes the `sizeOverride`
                 return try runContinuation(size)
                 
             case let .resize(newSize, nextGen):
-                sizeOverride = newSize
-                guard let result = try self.generateRecursive(nextGen, with: inputValue, size: size, maxRuns: maxRuns, sizeOverride: &sizeOverride, prng: &prng) else { return nil }
+                context.sizeOverride = newSize
+                guard let result = try self.generateRecursive(nextGen, with: inputValue, context: context) else { return nil }
                 return try runContinuation(result)
             case let .filter(gen, _, _):
-                guard let result = try self.generateRecursive(gen, with: inputValue, size: size, maxRuns: maxRuns, sizeOverride: &sizeOverride, prng: &prng) else { return nil }
+                guard let result = try self.generateRecursive(gen, with: inputValue, context: context) else { return nil }
                 return try runContinuation(result)
-            case let .classify(gen, fingerprint, classifiers):
-                guard let result = try self.generateRecursive(gen, with: inputValue, size: size, maxRuns: maxRuns, sizeOverride: &sizeOverride, prng: &prng) else { return nil }
+            case let .classify(gen, _, _):
+                guard let result = try self.generateRecursive(gen, with: inputValue, context: context) else { return nil }
 
 //                for (label, classifier) in classifiers where classifier(result) {
-                    // TODO: we need to thread state here too
-                    // Use the current run as the identifier for this value. We don't want to force `Equatable`
 //                    context.classifications[fingerprint, default: [:]][label, default: []].insert(context.runs)
 //                }
                 
@@ -240,6 +202,30 @@ public struct ValueInterpreter<Element>: IteratorProtocol, Sequence {
     // MARK: - Hashable
     
     public func hash(into hasher: inout Hasher) {
-        hasher.combine(prng.seed)
+        hasher.combine(context.prng.seed)
+    }
+    
+    // MARK: - Context
+    
+    private final class Context {
+        let maxRuns: UInt64
+        var isFixed: Bool
+        var size: UInt64
+        var sizeOverride: UInt64? = nil
+        var prng: Xoshiro256
+        
+        internal init(
+            maxRuns: UInt64,
+            isFixed: Bool,
+            size: UInt64,
+            sizeOverride: UInt64? = nil,
+            prng: Xoshiro256
+        ) {
+            self.maxRuns = maxRuns
+            self.isFixed = isFixed
+            self.size = size
+            self.sizeOverride = sizeOverride
+            self.prng = prng
+        }
     }
 }

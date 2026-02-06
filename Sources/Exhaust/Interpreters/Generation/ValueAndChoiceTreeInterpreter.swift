@@ -108,7 +108,7 @@ public struct ValueAndChoiceTreeInterpreter<FinalOutput>: IteratorProtocol, Sequ
             }
             
             // Ditto for recursing a generator
-            let runGenerator = { (gen: ReflectiveGenerator<Any>) in
+            let runGenerator = { (gen: ReflectiveGenerator<Any>, context: Context) in
                 try Self.generateRecursive(gen, with: inputValue, context: context)
             }
             
@@ -117,7 +117,7 @@ public struct ValueAndChoiceTreeInterpreter<FinalOutput>: IteratorProtocol, Sequ
             case .contramap(_, let nextGen):
                 // The contramap transform is not used in the forward pass
                 // Run the nested generator and pass its result to the continuation
-                guard let result = try runGenerator(nextGen) else { return nil }
+                guard let result = try runGenerator(nextGen, context) else { return nil }
                 // At this stage we have the result.
                 return try runContinuation(result.0, result.1)
                 
@@ -134,6 +134,8 @@ public struct ValueAndChoiceTreeInterpreter<FinalOutput>: IteratorProtocol, Sequ
                 let totalWeight = choices.reduce(0) { $0 + $1.weight }
                 // This determines which of the branches will be selected
                 var randomRoll = UInt64.random(in: 1...totalWeight, using: &context.prng)
+                // This may or may not be used, but we always have to consume it
+                var jumpSeed = context.prng.next()
                 var selectedChoice: (weight: UInt64, label: UInt64, generator: ReflectiveGenerator<Any>)?
                 for choice in choices {
                     if randomRoll <= choice.weight {
@@ -154,7 +156,7 @@ public struct ValueAndChoiceTreeInterpreter<FinalOutput>: IteratorProtocol, Sequ
                     
                     if isSelected || context.materializePicks {
                         if
-                            let result = try runGenerator(choice.generator),
+                            let result = try runGenerator(choice.generator, isSelected ? context : context.jump(seed: jumpSeed)),
                             let final = try runContinuation(result.0, result.1)
                         {
                             value = final.0
@@ -207,7 +209,7 @@ public struct ValueAndChoiceTreeInterpreter<FinalOutput>: IteratorProtocol, Sequ
                 elements.reserveCapacity(Int(length))
                 
                 for _ in 0..<length {
-                    guard let (result, element) = try runGenerator(elementGen) else { return nil}
+                    guard let (result, element) = try runGenerator(elementGen, context) else { return nil}
                     results.append(result)
                     elements.append(element)
                 }
@@ -232,7 +234,7 @@ public struct ValueAndChoiceTreeInterpreter<FinalOutput>: IteratorProtocol, Sequ
                 var choiceTrees = [ChoiceTree]()
                 results.reserveCapacity(generators.count)
                 for gen in generators {
-                    guard let (result, tree) = try runGenerator(gen) else {
+                    guard let (result, tree) = try runGenerator(gen, context) else {
                         throw GeneratorError.couldNotGenerateConcomitantChoiceTree
                     }
                     results.append(result)
@@ -253,7 +255,7 @@ public struct ValueAndChoiceTreeInterpreter<FinalOutput>: IteratorProtocol, Sequ
             // MARK: - Resize
             case let .resize(newSize, gen):
                 context.sizeOverride = newSize // TODO: Investigate whether this has unintended consequences
-                guard let result = try runGenerator(gen) else { return nil }
+                guard let result = try runGenerator(gen, context) else { return nil }
                 return try runContinuation(result.0, .resize(newSize: newSize, choices: [result.1]))
                 
             // MARK: - Filter
@@ -270,7 +272,7 @@ public struct ValueAndChoiceTreeInterpreter<FinalOutput>: IteratorProtocol, Sequ
                 // For now, let's use rejection sampling
                 var attempts = 0 as UInt64
                 while attempts < context.maxFilterRuns {
-                    guard let (result, tree) = try runGenerator(gen) else { return nil }
+                    guard let (result, tree) = try runGenerator(gen, context) else { return nil }
                     
                     if predicate(result) {
                         // print("Gen.filter found result after \(attempts) attempts")
@@ -282,7 +284,7 @@ public struct ValueAndChoiceTreeInterpreter<FinalOutput>: IteratorProtocol, Sequ
                 
             // MARK: - Classify
             case let .classify(gen, fingerprint, classifiers):
-                guard let result = try runGenerator(gen) else { return nil }
+                guard let result = try runGenerator(gen, context) else { return nil }
                 
                 for (label, classifier) in classifiers where classifier(result.0) {
                     // Use the current run as the identifier for this value. We don't want to force `Equatable`
@@ -333,6 +335,10 @@ public struct ValueAndChoiceTreeInterpreter<FinalOutput>: IteratorProtocol, Sequ
             self.sizeOverride = sizeOverride
             self.classifications = classifications
             self.prng = prng
+        }
+        
+        func jump(seed: UInt64) -> Context {
+            .init(maxRuns: maxRuns, materializePicks: materializePicks, isFixed: isFixed, size: size, runs: runs, prng: .init(seed: seed))
         }
         
         func printClassifications() {

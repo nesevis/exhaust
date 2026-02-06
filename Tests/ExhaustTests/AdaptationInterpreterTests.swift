@@ -25,7 +25,7 @@ struct AdaptationInterpreterTests {
         }
         
         print("Result: \(result.debugDescription)")
-        print("true: \(results.count(where: { $0 }))/\(valueIterator.maxRuns)")
+//        print("true: \(results.count(where: { $0 }))/\(valueIterator.context.maxRuns)")
     }
     
     @Test("GetSize")

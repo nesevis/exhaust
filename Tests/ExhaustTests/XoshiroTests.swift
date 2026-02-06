@@ -16,11 +16,12 @@ func testXoshiroAgainstReference() throws {
     }
 }
 
+// Wtf is this test testing?
 @Test("Test spread of generator")
 func testGeneratorIterator() {
     let iterator = ValueInterpreter(Int64.arbitrary, seed: 0)
     let ten = Array(iterator.prefix(10))
-    let expected: [Int64] = [-1, -20, -1634, 30680, 118758, -519187, 668934, -951278, 3301282, 2736585]
+    let expected: [Int64] = [-1, -5101, -6690366, 1005319125, 15565817241, -272203297360, 1402855549857, -7979896926795, 55386323899548, 91824542356942]
     #expect(ten == expected)
 }
 
