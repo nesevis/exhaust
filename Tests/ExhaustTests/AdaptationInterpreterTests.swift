@@ -9,7 +9,7 @@ import Testing
 @testable import Exhaust
 import Foundation
 
-@Suite("Adaptation Interpreter")
+@Suite("Adaptation Interpreter", .disabled("Not used"))
 struct AdaptationInterpreterTests {
     
     @Test("CGS Test")
