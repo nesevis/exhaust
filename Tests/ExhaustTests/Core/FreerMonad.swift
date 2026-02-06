@@ -142,8 +142,8 @@ struct PartialMonadicProfunctorLawTests {
         let lhs = Gen.contramap({ $0 as Int }, Gen.prune(generator))
         let rhs = generator
         
-        var lhsIterator = ValueGenerator(lhs)
-        var rhsIterator = ValueGenerator(rhs)
+        var lhsIterator = ValueInterpreter(lhs)
+        var rhsIterator = ValueInterpreter(rhs)
         
         // Test via generation - both should produce same value
         let lhsValue = lhsIterator.next()
@@ -176,8 +176,8 @@ struct PartialMonadicProfunctorLawTests {
         // RHS: contramap(f) . prune . contramap(g) . prune  
         let rhs = Gen.contramap(g, Gen.prune(Gen.contramap(f, Gen.prune(generator))))
         
-        var lhsIterator = ValueGenerator(lhs)
-        var rhsIterator = ValueGenerator(rhs)
+        var lhsIterator = ValueInterpreter(lhs)
+        var rhsIterator = ValueInterpreter(rhs)
         
         // Test via generation - both should produce same value
         let lhsValue = lhsIterator.next()
@@ -200,8 +200,8 @@ struct PartialMonadicProfunctorLawTests {
         let lhs = Gen.contramap(transform, Gen.prune(ReflectiveGenerator.pure(pureValue)))
         let rhs = ReflectiveGenerator<String>.pure(pureValue)
         
-        var lhsIterator = ValueGenerator(lhs)
-        var rhsIterator = ValueGenerator(rhs)
+        var lhsIterator = ValueInterpreter(lhs)
+        var rhsIterator = ValueInterpreter(rhs)
         
         // Test via generation - both should produce same value
         let lhsValue = lhsIterator.next()
@@ -242,8 +242,8 @@ struct PartialMonadicProfunctorLawTests {
         }
         let rhs = transformedBase.bind(transformedFunction)  // ReflectiveGenerator<String, String>
         
-        var lhsIterator = ValueGenerator(lhs)
-        var rhsIterator = ValueGenerator(rhs)
+        var lhsIterator = ValueInterpreter(lhs)
+        var rhsIterator = ValueInterpreter(rhs)
         
         // Test via generation - both should produce same value
         let lhsValue = lhsIterator.next()
@@ -266,8 +266,8 @@ struct PartialMonadicProfunctorLawTests {
         let lhs = Gen.contramap(identity, generator)
         let rhs = generator
         
-        var lhsIterator = ValueGenerator(lhs)
-        var rhsIterator = ValueGenerator(rhs)
+        var lhsIterator = ValueInterpreter(lhs)
+        var rhsIterator = ValueInterpreter(rhs)
         
         // Test via generation - both should produce same value
         let lhsValue = lhsIterator.next()
@@ -290,8 +290,8 @@ struct PartialMonadicProfunctorLawTests {
         let lhs = Gen.contramap(composed, generator)
         let rhs = Gen.contramap(g, Gen.contramap(f, generator))
         
-        var lhsIterator = ValueGenerator(lhs)
-        var rhsIterator = ValueGenerator(rhs)
+        var lhsIterator = ValueInterpreter(lhs)
+        var rhsIterator = ValueInterpreter(rhs)
         
         // Test via generation - both should produce same value
         let lhsValue = lhsIterator.next()
@@ -316,8 +316,8 @@ struct PartialMonadicProfunctorLawTests {
         
         // Test via generation with valid input
         
-        var lhsIterator = ValueGenerator(comapResult)
-        var rhsIterator = ValueGenerator(contramapPruneResult)
+        var lhsIterator = ValueInterpreter(comapResult)
+        var rhsIterator = ValueInterpreter(contramapPruneResult)
         
         // Test via generation - both should produce same value
         let lhsValue = lhsIterator.next()

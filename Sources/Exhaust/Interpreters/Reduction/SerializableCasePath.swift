@@ -86,11 +86,11 @@ public enum ChoiceTreeCasePaths {
     public static let branchChildren = SerializableChoiceTreePath<[ChoiceTree]>(
         serializedPath: "branch.children",
         extract: { tree in
-            tree[case: \ChoiceTree.Cases.branch]?.1
+            tree[case: \ChoiceTree.Cases.branch]?.2
         },
         apply: { newChildren, tree in
-            guard let (label, _) = tree[case: \ChoiceTree.Cases.branch] else { return nil }
-            return .branch(label: label, children: newChildren)
+            guard let (weight, label, _) = tree[case: \ChoiceTree.Cases.branch] else { return nil }
+            return .branch(weight: weight, label: label, children: newChildren)
         }
     )
     
@@ -281,7 +281,7 @@ public struct DynamicChoiceTreeSchema {
                 return nil
                 
                 
-            case ("branch", .branch(let label, let children)):
+            case ("branch", let .branch(weight, label, children)):
                 if remaining.first == "label" {
                     return label.description
                 } else if remaining.first == "children", remaining.count > 1 {
@@ -311,7 +311,7 @@ public struct DynamicChoiceTreeSchema {
                     // Check if this child is selected (could be wrapped)
                     if case .selected = child {
                         let unwrapped = child.unwrapped
-                        if case .branch(_, let branchChildren) = unwrapped,
+                        if case .branch(_, _, let branchChildren) = unwrapped,
                            let justChild = branchChildren.first,
                            case .just(let value) = justChild {
                             return value
@@ -392,7 +392,7 @@ public struct DynamicChoiceTreeSchema {
                 }
             }
             
-        case .branch(_, let children):
+        case .branch(_, _, let children):
             paths.insert("\(currentPrefix)branch.label")
             for (index, child) in children.enumerated() {
                 let childPaths = collectPaths(from: child, prefix: "\(currentPrefix)branch.children.\(index)", depth: depth + 1)
@@ -501,7 +501,7 @@ public struct DynamicChoiceTreeSchema {
         case .just(let string):
             // Single character strings are likely characters from character generators
             return string.count == 1
-        case .group(let children), .branch(_, let children):
+        case .group(let children), .branch(_, _, let children):
             // Recursively search in children
             return children.contains { containsCharacterChoice($0) }
         case .sequence:

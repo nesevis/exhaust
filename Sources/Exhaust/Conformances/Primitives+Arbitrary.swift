@@ -163,6 +163,15 @@ extension String: Arbitrary {
     }
 }
 
+// MARK: - AnyIndex
+
+extension AnyIndex : Arbitrary {
+    /// Returns a generator of `AnyForwardIndex` values.
+    public static var arbitrary : ReflectiveGenerator<AnyIndex> {
+        Gen.choose(in: 0...Int.max).map(AnyIndex.init)
+    }
+}
+
 // MARK: - Optional
 
 extension Optional: Arbitrary where Wrapped: Arbitrary, Wrapped: Equatable {

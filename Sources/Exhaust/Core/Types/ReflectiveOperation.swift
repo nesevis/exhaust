@@ -41,10 +41,6 @@ public enum ReflectiveOperation {
     /// - **weight**: Probability mass for random selection during generation
     /// - **label**: Unique identifier for deterministic replay from choice trees
     /// - **generator**: The sub-generator to execute if this choice is selected
-    ///
-    /// The type erasure to `Any` is necessary because all choices must be stored in the same
-    /// array, even though they may produce different output types. The containing generator's
-    /// continuation handles type-safe casting.
     public typealias PickTuple = (weight: UInt64, label: UInt64, generator: ReflectiveGenerator<Any>)
     /// Contravariant transformation that focuses on part of the input during reflection.
     ///
@@ -236,4 +232,66 @@ public enum ReflectiveOperation {
     ///   - newSize: Temporary size parameter for the nested scope
     ///   - next: Generator to run with the modified size
     case resize(newSize: UInt64, next: ReflectiveGenerator<Any>)
+    
+    /// Identifies generators with validity conditions that can be optimized.
+    ///
+    /// This operation marks generators that have specific validity requirements or preconditions
+    /// that make them candidates for optimization through Choice Gradient Sampling (CGS) or
+    /// rejection sampling. The filter operation enables the framework to automatically detect
+    /// and improve generators that would otherwise waste computational resources on invalid inputs.
+    ///
+    /// **Forward pass**: Generates values using the wrapped generator and validates them with the predicate
+    /// **Backward pass**: Only reflects on values that satisfy the predicate condition
+    /// **Replay pass**: Replays the wrapped generator if the recorded choice satisfied the predicate
+    ///
+    /// **CGS Optimization**: When a `filter` operation is detected, the Choice Gradient Sampling
+    /// system can analyze which random choices lead to predicate satisfaction. This enables
+    /// automatic bias adjustment to increase the proportion of valid outputs without manual
+    /// generator tuning.
+    ///
+    /// **Rejection Sampling Fallback**: For generators that aren't suitable for CGS optimization,
+    /// the filter serves as a signal to use rejection sampling, generating candidates until
+    /// the predicate is satisfied.
+    ///
+    /// **Fingerprint**: The fingerprint parameter provides a unique identifier for the specific
+    /// validity condition, enabling the optimization system to cache learned gradients and
+    /// apply them across different generator instances with the same logical constraints.
+    ///
+    /// **Use cases**:
+    /// - Balanced binary search trees (structural validity)
+    /// - Valid email addresses (format constraints)
+    /// - Non-empty collections (size constraints)
+    /// - Mathematical invariants (value relationships)
+    ///
+    /// - Parameters:
+    ///   - gen: The base generator to filter
+    ///   - fingerprint: Unique identifier for this filter condition (for optimization caching)
+    ///   - predicate: Validity condition that generated values must satisfy
+    case filter(gen: ReflectiveGenerator<Any>, fingerprint: UInt64, predicate: (Any) -> Bool)
+    
+    /// Categorizes generated values for statistical analysis and test coverage reporting.
+    ///
+    /// This operation enables developers to understand the distribution of generated test data
+    /// by applying labeled predicates to each generated value. The framework automatically
+    /// collects statistics and reports percentages when testing completes.
+    ///
+    /// **Forward pass**: Generates values normally while testing against all classifiers
+    /// **Backward pass**: Reflects normally (classification doesn't affect reflection)
+    /// **Replay pass**: Replays normally (classification is analysis, not generation)
+    ///
+    /// **Statistical reporting**: When test execution reaches `maxRuns`, the interpreter
+    /// automatically prints distribution statistics showing what percentage of generated
+    /// values satisfied each classifier, enabling developers to verify test coverage and
+    /// identify generator bias.
+    ///
+    /// **Use cases**:
+    /// - Debug generator coverage: "Am I generating edge cases?"
+    /// - Verify test quality: "Are tests exercising the scenarios I care about?"
+    /// - Tune generator weights: "Should I adjust probabilities?"
+    ///
+    /// - Parameters:
+    ///   - gen: The base generator to classify
+    ///   - fingerprint: Unique identifier for this classification operation
+    ///   - classifiers: Array of (label, predicate) pairs for categorizing values
+    case classify(gen: ReflectiveGenerator<Any>, fingerprint: UInt64, classifiers: [(label: String, predicate: (Any) -> Bool)])
 }

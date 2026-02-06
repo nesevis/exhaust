@@ -51,7 +51,7 @@ enum TestCaseReducer {
                 return choice
             }
         // Let's generate a few samples
-        let iterator = ValueGenerator(generator, maxRuns: UInt64(limit))
+        let iterator = ValueInterpreter(generator, maxRuns: UInt64(limit))
         let candidates = Array(iterator.prefix(limit))
         let (failing, passing) = candidates.partitioned(by: property)
         // Is it better to start with the failing?
@@ -297,7 +297,7 @@ extension ChoiceTree {
             choiceMetadata.strategies.isEmpty
         case .sequence(let length, let elements, let choiceMetadata):
             choiceMetadata.strategies.isEmpty
-        case .branch(let label, let children):
+        case .branch(_, _, let children):
             children.contains(where: \.rangeIsExhausted)
         case .group(let array):
             array.contains(where: \.rangeIsExhausted)

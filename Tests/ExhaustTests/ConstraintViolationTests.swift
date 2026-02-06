@@ -15,7 +15,7 @@ struct ConstraintViolationTests {
     @Test("Range-constrained generators never exceed bounds")
     func testRangeBoundsNeverViolated() throws {
         let gen = Gen.choose(in: 10...50)
-        var iterator = ValueGenerator(gen)
+        var iterator = ValueInterpreter(gen)
         
         // Generate many values to test constraint
         for _ in 0..<100 {
@@ -28,7 +28,7 @@ struct ConstraintViolationTests {
     @Test("Array size constraints never violated")
     func testArraySizeConstraintsNeverViolated() throws {
         let gen = Int.arbitrary.proliferate(with: 3...7)
-        var iterator = ValueGenerator(gen)
+        var iterator = ValueInterpreter(gen)
         
         // Generate many arrays
         for _ in 0..<50 {
@@ -42,7 +42,7 @@ struct ConstraintViolationTests {
     func testFilteredGeneratorsNeverViolate() throws {
         // Generator for even numbers only
         let evenGen = Int.arbitrary.map { $0 &* 2 }
-        var iterator = ValueGenerator(evenGen)
+        var iterator = ValueInterpreter(evenGen)
         
         // All generated values must be even
         for _ in 0..<50 {
@@ -55,7 +55,7 @@ struct ConstraintViolationTests {
     func testMappedGeneratorConstraints() throws {
         // Generator that produces only positive values after mapping
         let positiveGen = UInt32.arbitrary.map { Int($0) + 1 }
-        var iterator = ValueGenerator(positiveGen)
+        var iterator = ValueInterpreter(positiveGen)
         
         for _ in 0..<50 {
             let value = iterator.next()!
@@ -72,7 +72,7 @@ struct ConstraintViolationTests {
             }
         }
         
-        var iterator = ValueGenerator(orderedPairGen)
+        var iterator = ValueInterpreter(orderedPairGen)
         for _ in 0..<50 {
             let (first, second) = iterator.next()!
             #expect(second > first)
@@ -88,7 +88,7 @@ struct ConstraintViolationTests {
         // Adapt based on your actual string generation API
         let shortStringGen = Gen.chooseCharacter(in: 0...30).map(String.init)
         
-        var iterator = ValueGenerator(shortStringGen)
+        var iterator = ValueInterpreter(shortStringGen)
         for _ in 0..<30 {
             let str = iterator.next()!
             #expect(str.count <= 10)
@@ -116,7 +116,7 @@ struct ConstraintViolationTests {
         
         let combinedGen = Gen.zip(positiveGen, evenGen, shortArrayGen)
         
-        var iterator = ValueGenerator(combinedGen)
+        var iterator = ValueInterpreter(combinedGen)
         for _ in 0..<30 {
             let (positive, even, array) = iterator.next()!
             

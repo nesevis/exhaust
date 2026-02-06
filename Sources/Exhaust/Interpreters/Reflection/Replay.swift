@@ -99,7 +99,7 @@ extension Interpreters {
                 let nextGen = try branches
                     .firstNonNil { branch -> ReflectiveGenerator<Output>? in
                         switch branch {
-                        case let .branch(label, children), let .selected(.branch(label, children)):
+                        case let .branch(weight, label, children), let .selected(.branch(weight, label, children)):
                             guard
                                 // Find the sub-generator that matches the label
                                 let chosenGen = pickChoices.first(where: { $0.label == label })?.generator,
@@ -184,7 +184,7 @@ extension Interpreters {
                 let nextGen = try continuation(size)
                 return try self.replayWithChoicesHelper(nextGen, choices: &choices)
                 
-            case let .resize(newSize, subGenerator):
+            case let .resize(_, subGenerator):
                 // resize consumes a resize choice and replays the sub-generator
                 guard !choices.isEmpty else {
                     return nil
@@ -200,6 +200,9 @@ extension Interpreters {
                 }
                 let nextGen = try continuation(subResult)
                 return try self.replayWithChoicesHelper(nextGen, choices: &choices)
+            
+            case let .filter(gen, _, _), let .classify(gen, _, _):
+                return try self.replayWithChoicesHelper(gen, choices: &choices) as? Output
             }
         }
     }
@@ -289,7 +292,7 @@ extension Interpreters {
 
             case let .pick(choices):
                 // This operation expects a `.branch` node from the script.
-                guard case .branch(let label, let children) = script else {
+                guard case .branch(_, let label, let children) = script else {
                     return nil
                 }
                 
@@ -348,6 +351,11 @@ extension Interpreters {
                 // A prune is a wrapper. It doesn't consume a node from the script itself.
                 // The choices are consumed by its sub-generator. We pass the same script down.
                 guard let result = try self.replayRecursive(subGenerator, with: script) else {
+                    return nil
+                }
+                return result as? Output
+            case let .filter(gen, _, _), let .classify(gen, _, _):
+                guard let result = try self.replayRecursive(gen, with: script) else {
                     return nil
                 }
                 return result as? Output

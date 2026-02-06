@@ -1,5 +1,5 @@
 //
-//  GeneratorIterator.swift
+//  ValueInterpreter.swift
 //  Exhaust
 //
 //  Created by Chris Kolbu on 27/7/2025.
@@ -7,7 +7,8 @@
 
 import Foundation
 
-public struct ValueGenerator<Element>: IteratorProtocol, Sequence {
+public struct ValueInterpreter<Element>: IteratorProtocol, Sequence {
+    
     let generator: ReflectiveGenerator<Element>
     private(set) var prng: Xoshiro256
     private var size: UInt64 = 0
@@ -36,8 +37,8 @@ public struct ValueGenerator<Element>: IteratorProtocol, Sequence {
 
     /// Used to generate results around a similar level of complexity.
     /// Intended to be used to increase pool of results to compare against
-    func fixedAtSize() -> ValueGenerator<Element> {
-        var fixed = ValueGenerator(generator, seed: prng.seed, maxRuns: maxRuns)
+    func fixedAtSize() -> ValueInterpreter<Element> {
+        var fixed = ValueInterpreter(generator, seed: prng.seed, maxRuns: maxRuns)
         fixed.isFixed = true
         fixed.size = size
         return fixed
@@ -55,7 +56,7 @@ public struct ValueGenerator<Element>: IteratorProtocol, Sequence {
         return try self.generate(gen, with: (), initialSize: initialSize, maxRuns: maxRuns, using: &rng)
     }
 
-    fileprivate static func generate<Input, Output>(
+    static func generate<Input, Output>(
         _ gen: ReflectiveGenerator<Output>,
         with input: Input,
         initialSize: UInt64 = 0,
@@ -124,12 +125,10 @@ public struct ValueGenerator<Element>: IteratorProtocol, Sequence {
                 return try runContinuation(result)
                 
             case let .pick(choices):
-                // --- Production-Ready Weighted Choice ---
                 guard !choices.isEmpty else { return nil }
                 
                 let totalWeight = choices.reduce(0) { $0 + $1.weight }
                 guard totalWeight > 0 else {
-                    // If all weights are 0, pick uniformly.
                     let randomIndex = Int.random(in: 0..<choices.count, using: &prng)
                     let chosenGenerator = choices[randomIndex].generator
                     guard let result = try self.generateRecursive(chosenGenerator, with: inputValue, size: size, maxRuns: maxRuns, sizeOverride: &sizeOverride, prng: &prng) else { return nil }
@@ -213,6 +212,19 @@ public struct ValueGenerator<Element>: IteratorProtocol, Sequence {
                 sizeOverride = newSize
                 guard let result = try self.generateRecursive(nextGen, with: inputValue, size: size, maxRuns: maxRuns, sizeOverride: &sizeOverride, prng: &prng) else { return nil }
                 return try runContinuation(result)
+            case let .filter(gen, _, _):
+                guard let result = try self.generateRecursive(gen, with: inputValue, size: size, maxRuns: maxRuns, sizeOverride: &sizeOverride, prng: &prng) else { return nil }
+                return try runContinuation(result)
+            case let .classify(gen, fingerprint, classifiers):
+                guard let result = try self.generateRecursive(gen, with: inputValue, size: size, maxRuns: maxRuns, sizeOverride: &sizeOverride, prng: &prng) else { return nil }
+
+//                for (label, classifier) in classifiers where classifier(result) {
+                    // TODO: we need to thread state here too
+                    // Use the current run as the identifier for this value. We don't want to force `Equatable`
+//                    context.classifications[fingerprint, default: [:]][label, default: []].insert(context.runs)
+//                }
+                
+                return try runContinuation(result)
             }
         }
     }
@@ -221,6 +233,13 @@ public struct ValueGenerator<Element>: IteratorProtocol, Sequence {
     
     private static func logarithmicallyScaledSize(_ maxSize : UInt64, _ successfulTests : UInt64) -> UInt64 {
         let n = Double(successfulTests)
-        return UInt64((log(n + 1)) * Double(maxSize) / log(100) / 2)
+        
+        return UInt64((log(n + 1)) * Double(maxSize) / log(100))
+    }
+    
+    // MARK: - Hashable
+    
+    public func hash(into hasher: inout Hasher) {
+        hasher.combine(prng.seed)
     }
 }

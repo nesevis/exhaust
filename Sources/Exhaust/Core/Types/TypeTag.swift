@@ -56,3 +56,23 @@ public enum TypeTag: Equatable {
             }
         }
     }
+
+extension TypeTag: CustomStringConvertible {
+    public var description: String {
+        switch self {
+        case .uint: return "UInt"
+        case .uint64: return "UInt64" 
+        case .uint32: return "UInt32"
+        case .uint16: return "UInt16"
+        case .uint8: return "UInt8"
+        case .int: return "Int"
+        case .int64: return "Int64"
+        case .int32: return "Int32"
+        case .int16: return "Int16"
+        case .int8: return "Int8"
+        case .double: return "Double"
+        case .float: return "Float"
+        case .character: return "Character"
+        }
+    }
+}

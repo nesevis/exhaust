@@ -17,7 +17,7 @@ struct ReplayDeterminismTests {
         let gen = Gen.zip(String.arbitrary, UInt.arbitrary, Int.arbitrary)
         
         // Generate initial value
-        var iterator = ValueGenerator(gen)
+        var iterator = ValueInterpreter(gen)
         let initial = iterator.next()!
         
         // Get recipe for that value

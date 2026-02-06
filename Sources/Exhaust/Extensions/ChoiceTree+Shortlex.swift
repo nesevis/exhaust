@@ -12,7 +12,8 @@ extension ChoiceTree {
             return 1
         case .sequence(let length, let elements, _):
             return length + elements.map(\.shortlexLength).reduce(0, &+)
-        case .branch(_, let children), .group(let children):
+        case .branch(_, _, let children), .group(let children):
+            // TODO: Weight for shortlex?
             return 1 + children.map(\.shortlexLength).reduce(0, &+)
             // Cases with no intrinsic complexity
         case .getSize, .just:
@@ -54,7 +55,7 @@ extension ChoiceTree {
                 $0.shortlexPrecedes($1)
             }
             
-        case let (.branch(lhsLabel, lhsChildren), .branch(rhsLabel, rhsChildren)):
+        case let (.branch(_, lhsLabel, lhsChildren), .branch(_, rhsLabel, rhsChildren)):
             if lhsLabel != rhsLabel {
                 return lhsLabel < rhsLabel
             }
