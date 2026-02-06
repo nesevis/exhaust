@@ -25,7 +25,7 @@ public enum ChoiceValue: Comparable, Hashable, Equatable, Sendable {
         case .int16:
             self = .signed(Int64(Int16(bitPattern64: value.bitPattern64)), value.bitPattern64, Int16.self)
         case .int8:
-            self = .signed(Int64(Int16(bitPattern64: value.bitPattern64)), value.bitPattern64, Int16.self)
+            self = .signed(Int64(Int8(bitPattern64: value.bitPattern64)), value.bitPattern64, Int8.self)
         case .double:
             self = .floating(Double(bitPattern64: value.bitPattern64), value.bitPattern64, Double.self)
         case .float:
