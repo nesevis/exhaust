@@ -255,7 +255,7 @@ extension ChoiceTree {
                     ? .important(.choice(failingChoice, meta))
                     : .choice(failingChoice, meta)
             case let (.sequence(failingLength, failingElements, _), .sequence(passingLength, passingElements, passingMeta)):
-                guard let newRange = ChoiceValue(failingLength).refineRange(against: .init(passingLength), direction: direction) else {
+                guard let newRange = ChoiceValue(failingLength, tag: .uint64).refineRange(against: .init(passingLength, tag: .uint64), direction: direction) else {
                     return failing
                 }
                 let meta = ChoiceMetadata(validRanges: [newRange], strategies: passingMeta.strategies)
@@ -278,7 +278,7 @@ extension ChoiceTree {
                 let meta = ChoiceMetadata(validRanges: [range], strategies: newMeta.strategies)
                 return .choice(newChoice, meta)
             case let (.sequence(newLength, newElements, newMeta), .sequence(oldLength, _, _)):
-                guard let newRange = ChoiceValue(newLength).refineOneEndOfRange(against: .init(oldLength), range: newMeta.validRanges[0]) else {
+                guard let newRange = ChoiceValue(newLength, tag: .uint64).refineOneEndOfRange(against: .init(oldLength, tag: .uint64), range: newMeta.validRanges[0]) else {
                     return new
                 }
                 let meta = ChoiceMetadata(validRanges: [newRange], strategies: newMeta.strategies)

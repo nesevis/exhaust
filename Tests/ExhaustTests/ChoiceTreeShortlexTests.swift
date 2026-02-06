@@ -348,8 +348,8 @@ struct ChoiceTreeShortlexTests {
     
     @Test("Signed positive range refinements work")
     func testSignedPositiveRangesWork() throws {
-        let f = ChoiceValue(Int64(45))
-        let p = ChoiceValue(Int64(900))
+        let f = ChoiceValue(Int64(45), tag: .int64)
+        let p = ChoiceValue(Int64(900), tag: .int64)
         let ab = f.refineRange(against: p, direction: .towardsHigherBound)
         let ba = p.refineRange(against: f, direction: .towardsLowerBound)
         #expect(ab?.cast(type: Int64.self) == 45...899)
@@ -358,8 +358,8 @@ struct ChoiceTreeShortlexTests {
     
     @Test("Signed negative range refinements work")
     func testSignedNegativeRangesWork() throws {
-        let f = ChoiceValue(Int64(-45))
-        let p = ChoiceValue(Int64(-900))
+        let f = ChoiceValue(Int64(-45), tag: .int64)
+        let p = ChoiceValue(Int64(-900), tag: .int64)
         let ab = f.refineRange(against: p, direction: .towardsHigherBound)
         let ba = p.refineRange(against: f, direction: .towardsLowerBound)
         #expect(ab?.cast(type: Int64.self) == (-900)...(-46))
@@ -368,8 +368,8 @@ struct ChoiceTreeShortlexTests {
     
     @Test("Float positive range refinements work")
     func testFloatPositiveRangesWork() throws {
-        let f = ChoiceValue(Double(45))
-        let p = ChoiceValue(Double(900))
+        let f = ChoiceValue(Double(45), tag: .double)
+        let p = ChoiceValue(Double(900), tag: .double)
         let ab = f.refineRange(against: p, direction: .towardsHigherBound)
         let ba = p.refineRange(against: f, direction: .towardsLowerBound)
         #expect(ab?.cast(type: Double.self) == 45...899.9999999999999)
@@ -378,8 +378,8 @@ struct ChoiceTreeShortlexTests {
     
     @Test("Float negative range refinements work")
     func testFloatNegativeRangesWork() throws {
-        let f = ChoiceValue(Double(-45))
-        let p = ChoiceValue(Double(-900))
+        let f = ChoiceValue(Double(-45), tag: .double)
+        let p = ChoiceValue(Double(-900), tag: .double)
         let ab = f.refineRange(against: p, direction: .towardsHigherBound)
         let ba = p.refineRange(against: f, direction: .towardsLowerBound)
         #expect(ab?.cast(type: Double.self) == (-900)...(-45.00000000000001))

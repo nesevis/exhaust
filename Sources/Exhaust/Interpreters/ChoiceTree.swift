@@ -387,7 +387,7 @@ extension ChoiceTree {
                         newLhs = lhs
                     }
                     return keepStrategies
-                        ? newLhs.resetStrategies(direction: ChoiceValue(lhsLength).shrinkingDirection(given: ChoiceValue(rhsLength))) // This will apply strategies based on the effective range
+                        ? newLhs.resetStrategies(direction: ChoiceValue(lhsLength, tag: .uint64).shrinkingDirection(given: ChoiceValue(rhsLength, tag: .uint64))) // This will apply strategies based on the effective range
                         : newLhs.with(strategies: rhsMeta.strategies)
                 }
                 // The sequence content is important

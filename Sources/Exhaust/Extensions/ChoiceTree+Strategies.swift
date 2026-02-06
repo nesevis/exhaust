@@ -84,7 +84,7 @@ extension ChoiceTree {
             }
             let halvingPoint = length / 2
             return [(halvingPoint, true), (length - halvingPoint, false)]
-                .filter { ChoiceValue($0.0).fits(in: metadata.validRanges) }
+                .filter { ChoiceValue($0.0, tag: .uint64).fits(in: metadata.validRanges) }
                 .map { length, prefix in
                     let subArray = prefix
                         ? Array(elements.prefix(Int(length)))
@@ -110,7 +110,7 @@ extension ChoiceTree {
             let chunks = elements.evenlyChunked(in: Int(length) / 10)
             
             return chunks
-                .filter { ChoiceValue(UInt64($0.count)).fits(in: metadata.validRanges) }
+                .filter { ChoiceValue(UInt64($0.count), tag: .uint64).fits(in: metadata.validRanges) }
                 .map { chunk in
                         .sequence(length: UInt64(chunk.count), elements: Array(chunk), metadata)
                             .resetStrategies(direction: direction)

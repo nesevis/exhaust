@@ -365,24 +365,24 @@ final class ShrinkingIterator: IteratorProtocol {
                 switch choiceValue {
                 case .unsigned(let uint):
                     return StrategyIterator(initial: uint, strategy: current, inRange: [rawRange], current.next(for:)) { next in
-                        ChoiceTree.choice(ChoiceValue(next), metadata).with(strategies: remaining)
+                        ChoiceTree.choice(ChoiceValue(next, tag: .uint64), metadata).with(strategies: remaining)
                     }
                 case .signed(let int, _, _):
                     let castRange = Int64(bitPattern64: rawRange.lowerBound)...Int64(bitPattern64: rawRange.upperBound)
                     return StrategyIterator(initial: int, strategy: current, inRange: [castRange], current.next(for:)) { next in
-                        ChoiceTree.choice(ChoiceValue(next), metadata).with(strategies: remaining)
+                        ChoiceTree.choice(ChoiceValue(next, tag: .int64), metadata).with(strategies: remaining)
                     }
                 case .floating(let double, _, _):
                     let castRange = Double(bitPattern64: rawRange.lowerBound)...Double(bitPattern64: rawRange.upperBound)
                     return StrategyIterator(initial: double, strategy: current, inRange: [castRange], current.next(for:)) { next in
-                        ChoiceTree.choice(ChoiceValue(next), metadata).with(strategies: remaining)
+                        ChoiceTree.choice(ChoiceValue(next, tag: .double), metadata).with(strategies: remaining)
                     }
                 case .character(let character):
                     let castRanges = metadata.validRanges.map { range in
                         Character(bitPattern64: range.lowerBound)...Character(bitPattern64: range.upperBound)
                     }
                     return StrategyIterator(initial: character, strategy: current, inRange: castRanges, current.next(for:)) { next in
-                        ChoiceTree.choice(ChoiceValue(next), metadata).with(strategies: remaining)
+                        ChoiceTree.choice(ChoiceValue(next, tag: .character), metadata).with(strategies: remaining)
                     }
                 }
             case .sequence(_, let elements, let metadata):

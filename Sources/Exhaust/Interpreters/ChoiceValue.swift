@@ -35,30 +35,6 @@ public enum ChoiceValue: Comparable, Hashable, Equatable, Sendable {
         }
     }
 
-    #warning("Deprecated. Remove")
-    init(_ value: any BitPatternConvertible) {
-        switch value {
-        case is Character:
-            self = .character(value as! Character)
-        case is Int:
-            self = .signed(Int64(Int(bitPattern64: value.bitPattern64)), value.bitPattern64, Int.self)
-        case is Double:
-            self = .floating(Double(bitPattern64: value.bitPattern64), value.bitPattern64, Double.self)
-        case is Int64:
-            self = .signed(Int64(bitPattern64: value.bitPattern64), value.bitPattern64, Int64.self)
-        case is Int32:
-            self = .signed(Int64(Int32(bitPattern64: value.bitPattern64)), value.bitPattern64, Int32.self)
-        case is Int16:
-            self = .signed (Int64(Int16(bitPattern64: value.bitPattern64)), value.bitPattern64, Int16.self)
-        case is Int8:
-            self = .signed(Int64(Int8(bitPattern64: value.bitPattern64)), value.bitPattern64, Int8.self)
-        case is Float:
-            self = .floating(Double(Float(bitPattern64: value.bitPattern64)), value.bitPattern64, Float.self)
-        default:
-            self = .unsigned(value.bitPattern64)
-        }
-    }
-    
     var complexity: UInt64 {
         switch self {
         case let .unsigned(value):

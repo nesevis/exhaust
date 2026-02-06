@@ -11,15 +11,15 @@ extension ChoiceValue {
         case .unsigned:
             let values: [UInt64] = [0, 1, 2]
             return values
-                .map(ChoiceValue.init)
+                .map { ChoiceValue($0, tag: .uint64) }
         case .signed:
             let values: [Int64] = [0, -1, 1, 2, -2]
             return values
-                .map(ChoiceValue.init)
+                .map { ChoiceValue($0, tag: .int64) }
         case .floating:
             let values: [Double] = [0, -0.1, -0.01, -0.001, -Double.ulpOfOne, -0.0001, Double.ulpOfOne, 0.001, 0.01, 0.1]
             return values
-                .map(ChoiceValue.init)
+                .map { ChoiceValue($0, tag: .double) }
         case .character:
             // TODO: unicode band, invisible characters, etc (in a second tier?)
             // [ "a", "b", "c", "A", "B", "C", "1", "2", "3", "\n", " " ]
@@ -32,10 +32,10 @@ extension ChoiceValue {
         switch self {
         case .unsigned:
             return [UInt64.max]
-                .map(ChoiceValue.init)
+                .map { ChoiceValue($0, tag: .uint64) }
         case .signed:
             return [Int64.min, Int64.max]
-                .map(ChoiceValue.init)
+                .map { ChoiceValue($0, tag: .int64) }
         case .floating:
             // We'll lose the magical values here?
             return [
@@ -58,7 +58,7 @@ extension ChoiceValue {
 //                Double.nan,
 //                Double.infinity
             ]
-                .map(ChoiceValue.init)
+                .map { ChoiceValue($0, tag: .double) }
         case .character:
             // TODO: unicode band, invisible characters, etc (in a second tier?)
             return []
@@ -85,7 +85,7 @@ extension ChoiceValue {
                 }
             }
             return halvings
-                .map(ChoiceValue.init)
+                .map { ChoiceValue($0, tag: .uint64) }
         case let .signed(value, _, _):
             var halvings = [Int64]()
             switch direction {
@@ -106,7 +106,7 @@ extension ChoiceValue {
                 }
             }
             return halvings
-                .map(ChoiceValue.init)
+                .map { ChoiceValue($0, tag: .int64) }
         case let .floating(value, _, _):
             var halvings = [Double]()
             switch direction {
@@ -130,7 +130,7 @@ extension ChoiceValue {
                 }
             }
             return halvings
-                .map(ChoiceValue.init)
+                .map { ChoiceValue($0, tag: .double) }
         case let .character(character):
             guard let range = ranges.first(where: { $0.contains(character.bitPattern64) }) else {
                 return []
@@ -167,7 +167,7 @@ extension ChoiceValue {
                 }
             }
             return values
-                .map(ChoiceValue.init)
+                .map { ChoiceValue($0, tag: .uint64) }
         case let .signed(value, _, _):
             guard value != 0 else {
                 return []
@@ -192,7 +192,7 @@ extension ChoiceValue {
                 }
             }
             return values
-                .map(ChoiceValue.init)
+                .map { ChoiceValue($0, tag: .int64) }
         case let .floating(value, _, _):
             guard value != 0 else {
                 return []
@@ -219,7 +219,7 @@ extension ChoiceValue {
                 }
             }
             return values
-                .map(ChoiceValue.init)
+                .map { ChoiceValue($0, tag: .double) }
         case let .character(character):
             guard let range = ranges.first(where: { $0.contains(character.bitPattern64) }) else {
                 return []
@@ -260,7 +260,7 @@ extension ChoiceValue {
                 }
             }
             return values
-                .map(ChoiceValue.init)
+                .map { ChoiceValue($0, tag: .uint64) }
         case let .signed(value, _, _):
             var values = [Int64]()
             let limit = 50
@@ -284,7 +284,7 @@ extension ChoiceValue {
                 }
             }
             return values
-                .map(ChoiceValue.init)
+                .map { ChoiceValue($0, tag: .int64) }
         case let .floating(value, _, _):
             var values = [Double]()
             let limit = 50
@@ -308,7 +308,7 @@ extension ChoiceValue {
                 }
             }
             return values
-                .map(ChoiceValue.init)
+                .map { ChoiceValue($0, tag: .double) }
         case let .character(character):
             guard let range = ranges.first(where: { $0.contains(character.bitPattern64) }) else {
                 return []
