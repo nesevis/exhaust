@@ -9,12 +9,15 @@ public enum ChoiceSequence {
     public enum SequenceValue: Hashable, Equatable {
         // The values within the `true`---`false` range are logically grouped
         case group(Bool)
+        // Values that repeat within a sequence
+        case sequence(Bool)
         case value(Value)
         
         public var isValue: Bool {
             switch self {
             case .value: return true
             case .group: return false
+            case .sequence: return false
             }
         }
     }
@@ -33,9 +36,9 @@ public enum ChoiceSequence {
         case .just:
             return []
         case let .sequence(_, elements, _):
-            return CollectionOfOne(.group(true))
+            return CollectionOfOne(.sequence(true))
                 + elements.flatMap(flatten)
-                + CollectionOfOne(.group(false))
+                + CollectionOfOne(.sequence(false))
         // Do we only do the selected branch?
         case let .branch(_, _, gen):
             return flatten(gen)
@@ -55,5 +58,44 @@ public enum ChoiceSequence {
         case let .selected(tree):
             return flatten(tree)
         }
+    }
+    
+    static func validate(_ sequence: ChoiceSequence.Sequence) -> Bool {
+        var sequenceCount = 0
+        var groupCount = 0
+        for element in sequence {
+            switch element {
+            case .sequence(true):
+                sequenceCount += 1
+            case .sequence(false):
+                sequenceCount -= 1
+            case .group(true):
+                groupCount += 1
+            case .group(false):
+                groupCount -= 1
+            case .value:
+                break
+            }
+        }
+        return sequenceCount == 0 && groupCount == 0
+    }
+}
+
+extension ChoiceSequence.Sequence {
+    var shortString: String {
+        self.map { element in
+            switch element {
+            case .group(true):
+                return "("
+            case .group(false):
+                return ")"
+            case .sequence(true):
+                return "\n[\n"
+            case .sequence(false):
+                return "\n]\n"
+            case .value:
+                return "V"
+            }
+        }.joined()
     }
 }
