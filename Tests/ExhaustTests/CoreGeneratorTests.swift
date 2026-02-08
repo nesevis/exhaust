@@ -27,7 +27,7 @@ struct CoreGeneratorTests {
         }
         
         @Test("Flatzip")
-        func testflatzip() throws {
+        func testReflectionHashStability() throws {
             let gen = Gen.zip(Int.arbitrary, Double.arbitrary)
             var iterator = ValueAndChoiceTreeInterpreter(gen)
             while let (next, choiceTree) = iterator.next() {

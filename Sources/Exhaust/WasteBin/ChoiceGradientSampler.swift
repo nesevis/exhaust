@@ -426,12 +426,9 @@ public struct ChoiceGradientSampler {
                     extractRecursive(tree: child, currentPath: currentPath + ["group", "child_\(index)"])
                 }
                 
-            case .branch(_, let label, let children):
+            case .branch(_, let label, let choice):
                 let branchPath = currentPath + ["branch", "label_\(label)"]
-                paths.append(ChoiceTreePath(branchPath))
-                for (index, child) in children.enumerated() {
-                    extractRecursive(tree: child, currentPath: branchPath + ["child_\(index)"])
-                }
+                extractRecursive(tree: choice, currentPath: branchPath + ["child_0"])
                 
             case .selected(let tree):
                 extractRecursive(tree: tree, currentPath: currentPath + ["selected"])
@@ -540,8 +537,8 @@ public struct ChoiceGradientSampler {
             return 1 + (elements.map(computeTreeDepth).max() ?? 0)
         case .group(let children):
             return children.map(computeTreeDepth).max() ?? 0
-        case .branch(_, _, let children):
-            return 1 + (children.map(computeTreeDepth).max() ?? 0)
+        case .branch(_, _, let choice):
+            return 1 + computeTreeDepth(choice)
         case .selected(let tree):
             return computeTreeDepth(tree)
         default:
@@ -759,12 +756,10 @@ private struct CGSStructuralAnalysis {
         maxDepth = max(maxDepth, depth)
         
         switch tree {
-        case .branch(_, _, let children):
+        case .branch(_, _, let choice):
             // Weighted branches are prime CGS optimization targets
-            weightedBranches.append((depth: depth, branchCount: children.count))
-            for child in children {
-                traverse(child, depth: depth + 1)
-            }
+            weightedBranches.append((depth: depth, branchCount: 1))
+            traverse(choice, depth: depth + 1)
             
         case let .sequence(_, elements, metadata):
             // Sequences can be optimized by adjusting length ranges

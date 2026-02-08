@@ -140,7 +140,7 @@ extension Interpreters {
 
             case let .pick(choices):
                 // This operation expects a `.branch` node from the script.
-                guard case .branch(_, let label, let children) = tree else {
+                guard case .branch(_, let label, let choice) = tree else {
                     return nil
                 }
                 
@@ -153,8 +153,7 @@ extension Interpreters {
                 
                 // Recursively replay the chosen sub-generator with the children of this branch node.
                 // A group of children is replayed as a single unit.
-                let childScript = ChoiceTree.group(children)
-                guard let result = try self.materializeRecursive(chosenGen, with: childScript, context: context) else {
+                guard let result = try self.materializeRecursive(chosenGen, with: choice, context: context) else {
                     return nil
                 }
                 return result as? Output
@@ -282,7 +281,7 @@ extension Interpreters {
                 let nextGen = try branches
                     .firstNonNil { branch -> ReflectiveGenerator<Output>? in
                         switch branch {
-                        case let .branch(_, label, children), let .selected(.branch(_, label, children)):
+                        case let .branch(_, label, choice), let .selected(.branch(_, label, choice)):
                             guard context.nextIsValue == false, case .group(true) = context.values.removeFirst() else {
                                 throw ReplaySequenceError.groupNotOpen
                             }
@@ -290,7 +289,7 @@ extension Interpreters {
                                 // Find the sub-generator that matches the label
                                 let chosenGen = pickChoices.first(where: { $0.label == label })?.generator,
                                 // Process the chosen sub-generator with its children
-                                let result = try replayWithChoices(chosenGen, with: children, context: context)
+                                let result = try replayWithChoices(chosenGen, with: [choice], context: context)
                             else {
                                 return nil
                             }

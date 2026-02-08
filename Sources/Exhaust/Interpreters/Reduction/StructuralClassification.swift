@@ -174,13 +174,11 @@ private struct StructuralAnalysis {
                 analyze(element, depth: depth + 1)
             }
             
-        case let .branch(_, _, children):
+        case let .branch(_, _, choice):
             nodeTypeCounts["branch", default: 0] += 1
-            branchingFactors.append(Double(children.count))
-            for child in children {
-                analyze(child, depth: depth + 1)
-            }
-            
+            branchingFactors.append(Double(1))
+            analyze(choice, depth: depth + 1)
+
         case let .group(children):
             nodeTypeCounts["group", default: 0] += 1
             branchingFactors.append(Double(children.count))

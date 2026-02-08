@@ -57,8 +57,8 @@ extension ChoiceTree {
             case let .sequence(_, elements, _):
                 elements.forEach(analyzeBoundaries)
                 
-            case let .branch(_, _, children):
-                children.forEach(analyzeBoundaries)
+            case let .branch(_, _, gen):
+                analyzeBoundaries(gen)
                 
             case let .group(children):
                 children.forEach(analyzeBoundaries)
@@ -127,8 +127,8 @@ extension ChoiceTree {
                 choiceRanges.append((current: Double(length), rangeSize: lengthRangeSize, utilization: lengthUtilization))
                 elements.forEach(analyzeRanges)
                 
-            case let .branch(_, _, children):
-                children.forEach(analyzeRanges)
+            case let .branch(_, _, gen):
+                analyzeRanges(gen)
                 
             case let .group(children):
                 children.forEach(analyzeRanges)

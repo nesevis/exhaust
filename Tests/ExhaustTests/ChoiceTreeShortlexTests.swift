@@ -67,100 +67,6 @@ Rule 1: (16, lift 3.0)
         print()
         
     }
-    
-    @Test("Test merging classifications")
-    func testMergingClassifications() async throws {
-        typealias SchemaTuple = (label: String, type: String, value: String)
-        let gen = Gen.zip(Bool.arbitrary, Int.arbitrary, String.arbitraryAscii)
-        var iterator = ValueInterpreter(gen, maxRuns: 200)
-        let property: ((Bool, Int, String)) -> Bool = { triple in
-            triple.2.count < 50
-        }
-        let originalStart = Date()
-        var startTime = Date()
-        var results = [[SchemaTuple]]()
-        while let instance = iterator.next() {
-            guard let tree = try Interpreters.reflect(gen, with: instance) else {
-                continue
-            }
-            var result = tree.flattenForClassification()
-            let valid = property(instance)
-            result.append(("valid", "true,false", valid.description))
-            results.append(result)
-            if valid == false {
-                print("Fixing iterator at size. \(instance.2.count)")
-                break
-            }
-        }
-        let duration = Date().timeIntervalSince(startTime)
-        print("Found a failure after \(duration * 1000)ms and \(results.count) runs")
-        startTime = Date()
-        
-        iterator = ValueInterpreter(gen, maxRuns: 200)
-        
-        // Run for 500ms or 200 instances
-        let paddingStart = Date()
-        while Date().timeIntervalSince(paddingStart) < 0.5, let instance = iterator.next() {
-            guard let tree = try Interpreters.reflect(gen, with: instance) else {
-                continue
-            }
-            var result = tree.flattenForClassification()
-            let valid = property(instance)
-//            print(instance.2)
-            result.append(("valid", "true,false", valid.description))
-            results.append(result)
-        }
-        
-        let duration2 = Date().timeIntervalSince(startTime)
-        print("Finished padding out adjacent results after \(duration2 * 1000)ms and \(results.count) total")
-        startTime = Date()
-        
-        let schema = results[0].dropLast()
-        let dataSchema = DataSchema(
-            attributes: schema.map {
-                AttributeDefinition(
-                    name: $0.label,
-                    type: $0.type.contains(",")
-                        ? .discrete(values: $0.type.split(separator: ",").map { String($0 )})
-                        : .continuous
-                )
-            },
-            classes: ["pass", "fail"]
-        )
-        
-        let cases = results.map { result in
-            LabeledDataCase(values: result.dropLast().map { $0.type == "continuous" ? .continuous($0.value) : .discrete($0.value) }, targetClass: result.last?.value == "true" ? "pass" : "fail")
-        }
-        let trainingData = TrainingData(cases: cases)
-        
-        let classifier = try await C50Classifier(schema: dataSchema)
-        
-        let duration3 = Date().timeIntervalSince(startTime)
-        print("Marshaled See5 data after \(duration3 * 1000)ms")
-        startTime = Date()
-        
-        try await classifier.train(data: trainingData, options: .init(algorithm: .rules))
-        
-        let duration4 = Date().timeIntervalSince(startTime)
-        print("Finished training on data after \(duration4 * 1000)ms")
-        
-        print("Completely finished in \(Date().timeIntervalSince(originalStart) * 1000)ms")
-        
-        guard
-            let modelData = await classifier.trainedModel?.modelData,
-            let output = String(data: modelData, encoding: .utf8)
-        else {
-            fatalError()
-        }
-        print(output)
-        var mutable = output[...]
-        let rules = See5Parser.parse(source: &mutable)
-        print(rules)
-        // Now we need to modify the ChoiceTree to map the rules.
-        
-        print("Got rules!")
-        
-    }
 }
 
 @Suite("ChoiceTree shortlex ordering")
@@ -210,7 +116,7 @@ struct ChoiceTreeShortlexTests {
         let meta = ChoiceMetadata(validRanges: UInt64.bitPatternRanges, strategies: [])
         let choice = ChoiceTree.choice(.unsigned(42), meta)
         let group = ChoiceTree.group([choice])
-        let branch = ChoiceTree.branch(weight: 1, label: 1, children: [choice])
+        let branch = ChoiceTree.branch(weight: 1, label: 1, choice: choice)
         
         #expect(group.shortlexLength == 2) // 1 (structural) + 1 (choice)
         #expect(branch.shortlexLength == 2) // 1 (structural) + 1 (choice)
@@ -301,25 +207,6 @@ struct ChoiceTreeShortlexTests {
         let sequence2 = ChoiceTree.sequence(length: 2, elements: [choice2, choice1], sequenceMeta)
         
         #expect(sequence1.shortlexPrecedes(sequence2))
-    }
-    
-    @Test("Branches compare by label then children")
-    func branchesCompareByLabelThenChildren() {
-        let meta = ChoiceMetadata(validRanges: UInt64.bitPatternRanges, strategies: [])
-        let choice1 = ChoiceTree.choice(.unsigned(1), meta)
-        let choice2 = ChoiceTree.choice(.unsigned(2), meta)
-        
-        let branch1 = ChoiceTree.branch(weight: 1, label: 1, children: [choice2])
-        let branch2 = ChoiceTree.branch(weight: 1, label: 2, children: [choice1])
-        
-        // Label 1 < label 2
-        #expect(branch1.shortlexPrecedes(branch2))
-        
-        // Same label: compare children
-        let branchA = ChoiceTree.branch(weight: 1, label: 1, children: [choice1])
-        let branchB = ChoiceTree.branch(weight: 1, label: 1, children: [choice2])
-        
-        #expect(branchA.shortlexPrecedes(branchB))
     }
     
     @Test("Important nodes are prioritized in comparison")

@@ -106,8 +106,8 @@ func countChoicesInTree(_ tree: ChoiceTree) -> Int {
         return 0
     case let .sequence(_, elements, _):
         return elements.reduce(0) { $0 + countChoicesInTree($1) }
-    case let .branch(_, _, children):
-        return children.reduce(0) { $0 + countChoicesInTree($1) }
+    case let .branch(_, _, choice):
+        return countChoicesInTree(choice)
     case let .group(children):
         return children.reduce(0) { $0 + countChoicesInTree($1) }
     case let .selected(child):

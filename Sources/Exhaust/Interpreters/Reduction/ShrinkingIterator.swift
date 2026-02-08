@@ -69,12 +69,9 @@ final class ShrinkingIterator: IteratorProtocol {
             }
             // FIXME: Don't materialise the sequence here
             return (first, .sequence(shrinks: shrinks, original: shrinks, metadata: meta, strategy: first.strategy))
-        case let .branch(weight, label, array):
-            guard array.isEmpty == false else {
-                return (nil, .exhausted)
-            }
-            let subIterators = array.map { ShrinkingIterator($0) }
-            return (first, .branch(label: label, weight: weight, children: array, childIndex: 0, subIterators: subIterators, exhaustedChildren: []))
+        case let .branch(weight, label, gen):
+            let subIterators = [ShrinkingIterator(gen)]
+            return (first, .branch(label: label, weight: weight, children: [gen], childIndex: 0, subIterators: subIterators, exhaustedChildren: []))
         case let .group(array):
             // If a group contains branches, we should look for the selected one and only shrink that. This means there is no round robin.
             guard array.isEmpty == false else {
@@ -303,7 +300,7 @@ final class ShrinkingIterator: IteratorProtocol {
                         return nil
                     }
                     state = .branch(label: label, weight: weight, children: children, childIndex: index, subIterators: subIterators, exhaustedChildren: exhaustedChildren)
-                    return ChoiceTree.branch(weight: weight, label: label, children: children)
+                    return ChoiceTree.branch(weight: weight, label: label, choice: children[0])
                 } else {
                     // This child is exhausted, mark it and move to next
                     exhaustedChildren.insert(index)

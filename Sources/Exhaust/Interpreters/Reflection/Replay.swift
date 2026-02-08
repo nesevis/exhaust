@@ -99,12 +99,12 @@ extension Interpreters {
                 let nextGen = try branches
                     .firstNonNil { branch -> ReflectiveGenerator<Output>? in
                         switch branch {
-                        case let .branch(weight, label, children), let .selected(.branch(weight, label, children)):
+                        case let .branch(_, label, choice), let .selected(.branch(_, label, choice)):
                             guard
                                 // Find the sub-generator that matches the label
                                 let chosenGen = pickChoices.first(where: { $0.label == label })?.generator,
                                 // Process the chosen sub-generator with its children
-                                let result = try replayWithChoices(chosenGen, choices: children)
+                                let result = try replayWithChoices(chosenGen, choices: [choice])
                             else {
                                 return nil
                             }
@@ -292,7 +292,7 @@ extension Interpreters {
 
             case let .pick(choices):
                 // This operation expects a `.branch` node from the script.
-                guard case .branch(_, let label, let children) = script else {
+                guard case .branch(_, let label, let choice) = script else {
                     return nil
                 }
                 
@@ -303,8 +303,7 @@ extension Interpreters {
                 
                 // Recursively replay the chosen sub-generator with the children of this branch node.
                 // A group of children is replayed as a single unit.
-                let childScript = ChoiceTree.group(children)
-                guard let result = try self.replayRecursive(chosenGen, with: childScript) else {
+                guard let result = try self.replayRecursive(chosenGen, with: choice) else {
                     return nil
                 }
                 return result as? Output

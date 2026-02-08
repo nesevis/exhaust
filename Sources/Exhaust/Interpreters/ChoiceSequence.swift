@@ -37,10 +37,8 @@ public enum ChoiceSequence {
                 + elements.flatMap(flatten)
                 + CollectionOfOne(.group(false))
         // Do we only do the selected branch?
-        case let .branch(_, _, children):
-            return CollectionOfOne(.group(true))
-                + children.flatMap(flatten)
-                + CollectionOfOne(.group(false))
+        case let .branch(_, _, gen):
+            return flatten(gen)
         case let .group(array):
             return CollectionOfOne(.group(true))
                 + array.flatMap(flatten)

@@ -91,7 +91,7 @@ public extension Interpreters {
 
         case let .pick(choices):
             // PICK's JOB: Try all branches against the same final output value.
-            let results = try choices.flatMap { (weight, label, generator) -> [(value: Any, weight: UInt64, label: UInt64,  isPicked: Bool, path: [ChoiceTree])] in
+            let results = try choices.flatMap { (weight, label, generator) -> [(value: Any, weight: UInt64, label: UInt64,  isPicked: Bool, path: ChoiceTree?)] in
                 do {
                     let subPaths = try reflectRecursive(generator, onFinalOutput: finalOutput)
                     let value = subPaths.firstNonNil(\.value)
@@ -108,17 +108,17 @@ public extension Interpreters {
                     }
                     
                     let labeledPaths = subPaths.map { (value, pathTree) in
-                        (value, weight, label, isPicked, pathTree)
+                        (value, weight, label, isPicked, pathTree.first)
                     }
                     return labeledPaths
                     
                 } catch ReflectionError.reflectedNil {
                     // Return the choice anyway; we want all branches materialised during reflection
-                    return [(value: finalOutput, weight: weight, label: label, isPicked: false, path: [])]
+                    return [(value: finalOutput, weight: weight, label: label, isPicked: false, path: nil)]
                 }
             }
             let returnData = results.map {
-                let branch = ChoiceTree.branch(weight: $0.weight, label: $0.label, children: $0.path)
+                let branch = ChoiceTree.branch(weight: $0.weight, label: $0.label, choice: $0.path!)
                 return (value: $0.value, path: $0.isPicked ? .selected(branch) : branch)
             }
             return [(finalOutput, [ChoiceTree.group(returnData.map(\.1))])]

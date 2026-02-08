@@ -184,46 +184,6 @@ struct ChoiceSequenceTests {
         }
     }
 
-    @Test("Flatten branch with all children")
-    func flattenBranch() throws {
-        let tree = ChoiceTree.branch(
-            weight: 1,
-            label: 0,
-            children: [
-                .choice(.unsigned(42), ChoiceMetadata(validRanges: [0...100])),
-                .choice(.unsigned(99), ChoiceMetadata(validRanges: [0...100]))
-            ]
-        )
-
-        let flattened = ChoiceSequence.flatten(tree)
-
-        // Should be: group(true), value(42), value(99), group(false)
-        // Note: This flattens ALL children, not just selected one
-        #expect(flattened.count == 4)
-
-        guard case .group(true) = flattened[0] else {
-            Issue.record("Expected opening group marker")
-            return
-        }
-
-        guard case let .value(value1) = flattened[1] else {
-            Issue.record("Expected first child value")
-            return
-        }
-        #expect(value1.choice == .unsigned(42))
-
-        guard case let .value(value2) = flattened[2] else {
-            Issue.record("Expected second child value")
-            return
-        }
-        #expect(value2.choice == .unsigned(99))
-
-        guard case .group(false) = flattened[3] else {
-            Issue.record("Expected closing group marker")
-            return
-        }
-    }
-
     @Test("Flatten group")
     func flattenGroup() throws {
         let tree = ChoiceTree.group([

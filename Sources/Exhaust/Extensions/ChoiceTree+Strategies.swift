@@ -12,8 +12,8 @@ extension ChoiceTree {
         switch self {
         case let .sequence(_, elements, _):
             elements
-        case let .branch(_, _, children):
-            children
+        case let .branch(_, _, choice):
+            [choice]
         case let .group(array):
             array
         default:
@@ -142,8 +142,8 @@ extension ChoiceTree {
         case let .sequence(length, elements, meta):
             let newMeta = ChoiceMetadata(validRanges: meta.validRanges, strategies: strategies)
             return .sequence(length: length, elements: elements/*.map { $0.setStrategies(strategies) }*/, newMeta)
-        case let .branch(weight, label, children):
-            return .branch(weight: weight, label: label, children: children.map { $0.setStrategies(strategies) })
+        case let .branch(weight, label, choice):
+            return .branch(weight: weight, label: label, choice: choice.setStrategies(strategies))
         case let .group(array):
             return .group(array.map { $0.setStrategies(strategies) })
         case let .important(element), let .selected(element):

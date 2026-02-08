@@ -160,7 +160,7 @@ public struct ValueAndChoiceTreeInterpreter<FinalOutput>: IteratorProtocol, Sequ
                             let final = try runContinuation(result.0, result.1)
                         {
                             value = final.0
-                            branch = ChoiceTree.branch(weight: choice.weight, label: choice.label, children: [final.1])
+                            branch = ChoiceTree.branch(weight: choice.weight, label: choice.label, choice: final.1)
                         }
                     }
                     

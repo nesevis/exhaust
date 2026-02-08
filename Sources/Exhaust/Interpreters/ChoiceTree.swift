@@ -24,7 +24,7 @@ public enum ChoiceTree: Hashable, Equatable, Sendable {
     indirect case sequence(length: UInt64, elements: [ChoiceTree], ChoiceMetadata)
     
     /// A node that represents a branching choice made via `pick`.
-    indirect case branch(weight: UInt64, label: UInt64, children: [ChoiceTree])
+    indirect case branch(weight: UInt64, label: UInt64, choice: ChoiceTree)
     
     /// Represents a nested group of choices that usually represent objects or tuples
     indirect case group([ChoiceTree])
@@ -96,8 +96,8 @@ extension ChoiceTree {
             return 0
         case .sequence(_, let elements, _):
             return 2 + elements.map(\.structuralComplexity).reduce(0, +)
-        case .branch(_, _, let children):
-            return 3 + children.map(\.structuralComplexity).reduce(0, +)
+        case .branch(_, _, let gen):
+            return 3 + gen.structuralComplexity
         case .group(let array):
             return 1 + array.map(\.structuralComplexity).reduce(0, +)
         case .important(let choiceTree), .selected(let choiceTree):
@@ -130,7 +130,9 @@ extension ChoiceTree {
                 return UInt64.max
             }
             return includingLength
-        case .branch(_, _, var elements), .group(var elements):
+        case .branch(_, _, let gen):
+            return gen.complexity
+        case .group(var elements):
             var complexity = UInt64(0)
             while elements.isEmpty == false {
                 let element = elements.removeLast()
@@ -175,9 +177,9 @@ extension ChoiceTree {
         case let .sequence(length, elements, metadata):
             // For a sequence, recursively map over its elements.
             return try .sequence(length: length, elements: elements.map { try $0.map(transform) }, metadata)
-        case let .branch(weight, label, children):
+        case let .branch(weight, label, choice):
             // For a branch, recursively map over its children.
-            return try .branch(weight: weight, label: label, children: children.map { try $0.map(transform) })
+            return try .branch(weight: weight, label: label, choice: transform(choice))
         case let .group(children):
             // For a group, recursively map over its children.
             return try .group(children.map { try $0.map(transform) })
@@ -202,7 +204,9 @@ extension ChoiceTree {
         switch self {
         case .choice, .just, .getSize:
             return selfResult
-        case let .sequence(_, elements, _), let .branch(_, _, elements), let .group(elements):
+        case let .branch(_, _, gen):
+            return predicate(gen)
+        case let .sequence(_, elements, _), let .group(elements):
             // For a sequence, recursively map over its elements.
             return elements.contains(where: predicate)
         case let .important(child), let .selected(child):
@@ -244,15 +248,13 @@ extension ChoiceTree {
                 return .sequence(length: lhsLength, elements: mergedElements, metadata)
 
             // If both are branches, merge their children recursively.
-            case let (.branch(weight, label, lhsChildren), .branch(_, _, rhsChildren)):
+            case let (.branch(weight, label, lhsChoice), .branch(_, _, rhsChoice)):
                 if let containerResult = combine(self, other) {
                     return containerResult
                 }
-                let mergedChildren = zip(lhsChildren, rhsChildren).map { (lhsChild, rhsChild) in
-                    lhsChild.merge(with: rhsChild, using: combine)
-                }
+                let merged = lhsChoice.merge(with: rhsChoice, using: combine)
                 // The new branch preserves the left tree's weight and label.
-                return .branch(weight: weight, label: label, children: mergedChildren)
+                return .branch(weight: weight, label: label, choice: merged)
 
             // If both are groups, merge their children recursively.
             case let (.group(lhsChildren), .group(rhsChildren)):
@@ -447,8 +449,8 @@ extension ChoiceTree: CustomDebugStringConvertible {
                 case let .group(array) = elements.first,
                 // Dropping the first one as it is a getSize
                 case let .group(branches) = array.dropFirst().first,
-                case let .branch(_, _, children) = branches.first(where: { $0.isSelected == false }),
-                case .choice(.character(_), _) = children.first
+                case let .branch(_, _, gen) = branches.first(where: { $0.isSelected == false }),
+                case .choice(.character(_), _) = gen
             {
                 // A special case displaying all the characters in a string inline
                 let characters = elements.dropFirst().compactMap { element in
@@ -457,8 +459,8 @@ extension ChoiceTree: CustomDebugStringConvertible {
                         case let .group(branches) = array.dropFirst().first,
                         // Why are we getting a nonselected branch?
                         // FIXME: The assumption that the character value of all branches is identical no longer holds with the Value|ChoiceTree generator, and this special case is broken because reflected generators come back as all being selected now :|
-                        case let .branch(_, _, children) = branches.first(where: { $0.isSelected == false }),
-                        case let .choice(.character(char), _) = children.first
+                        case let .branch(_, _, gen) = branches.first(where: { $0.isSelected == false }),
+                        case let .choice(.character(char), _) = gen
                     {
                         return char
                     }
@@ -473,12 +475,9 @@ extension ChoiceTree: CustomDebugStringConvertible {
             }
             return result
             
-        case let .branch(weight, label, children):
+        case let .branch(weight, label, gen):
             var result = prefix + connector + "\(selected)\(locked)branch(label: \(label), weight: \(weight))\(locked)"
-            for (index, child) in children.enumerated() {
-                let isLastChild = index == children.count - 1
-                result += "\n" + child.treeDescription(prefix: childPrefix, isLast: isLastChild)
-            }
+            result += "\n" + gen.treeDescription(prefix: childPrefix, isLast: true)
             return result
             
         case let .group(children):
@@ -524,8 +523,8 @@ extension ChoiceTree: CustomDebugStringConvertible {
                 return "\"\(elements.map(\.elementDescription).joined())\""
             }
             return "[" + elements.map(\.elementDescription).joined(separator: ", ") + "]"
-        case let .branch(weight, label, children):
-            return "\(weight),\(label): \(children.map(\.elementDescription).joined(separator: " | "))"
+        case let .branch(weight, label, gen):
+            return "\(weight),\(label): \(gen.elementDescription)"
         case .group(let array):
             return "{" + array.map(\.elementDescription).joined() + "}"
         case .important(let choiceTree), .selected(let choiceTree):
@@ -549,8 +548,8 @@ extension ChoiceTree: CustomDebugStringConvertible {
                 return Double(Int64.max)
             }
             return Double(range.upperBound - range.lowerBound) + elements.reduce(0, { $0 + $1.combinatoryComplexity })
-        case .branch(_, _, let children):
-            return children.reduce(0, { $0 + $1.combinatoryComplexity })
+        case .branch(_, _, let gen):
+            return gen.combinatoryComplexity
         case .group(let array):
             return array.reduce(0, { $0 + $1.combinatoryComplexity })
         case .getSize:
@@ -600,10 +599,10 @@ extension ChoiceTree: CustomDebugStringConvertible {
             }
         case .just:
             return 0
-        case .sequence(let length, let elements, _):
+        case .sequence(_, let elements, _):
             return elements.reduce(into: Double(0)) { $0 += $1.valueComplexity }
-        case let .branch(_, _, children):
-            return children.reduce(into: Double(0)) { $0 += $1.valueComplexity }
+        case let .branch(_, _, gen):
+            return gen.valueComplexity
         case .group(let array):
             return array.reduce(into: Double(0)) { $0 += $1.valueComplexity }
         case .getSize:
@@ -704,16 +703,9 @@ extension ChoiceTree: CustomDebugStringConvertible {
             }
             
             return features
-        case .branch(_, let label, let children):
+        case .branch(_, let label, let gen):
             // If the branches all return .just shoul
-            return children.flatMap { child in
-                // Only return selected branches
-                // FIXME: What if a generator has two valid selected branches?
-//                guard case .selected = child else {
-//                    return [(label: String, type: String, value: String)]()
-//                }
-                return child.flattenForClassification(prefix: label.description, depth: depth + 1)
-            }
+            return gen.flattenForClassification(prefix: label.description, depth: depth + 1)
         case .group(let array):
             if self.isPickOfJusts {
                 // We can return a discrete type representing all the possible values here?
@@ -772,20 +764,18 @@ extension ChoiceTree: CustomDebugStringConvertible {
         // not character codes. We'll check if all just values are non-numeric strings
         // that could represent semantic choices (like "true"/"false", not character codes)
         for child in unwrappedChildren {
-            if case .branch(_, _, let branchChildren) = child {
+            if case .branch(_, _, let gen) = child {
                 // All branch children should be just values with meaningful content
-                guard branchChildren.allSatisfy({ $0.isJust }) else {
+                guard gen.isJust else {
                     return false
                 }
                 
                 // Check if the just values look like semantic choices rather than character data
-                for branchChild in branchChildren {
-                    if case .just(let value) = branchChild {
-                        // If the value is a single character or looks like character data,
-                        // this is likely a string, not a semantic choice
-                        if value.count == 1 || value.allSatisfy(\.isWhitespace) || value == "<value>" {
-                            return false
-                        }
+                if case .just(let value) = gen {
+                    // If the value is a single character or looks like character data,
+                    // this is likely a string, not a semantic choice
+                    if value.count == 1 || value.allSatisfy(\.isWhitespace) || value == "<value>" {
+                        return false
                     }
                 }
             }
