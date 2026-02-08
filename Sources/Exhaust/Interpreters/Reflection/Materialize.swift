@@ -16,6 +16,34 @@ extension Interpreters {
             values.first?.isValue ?? false
         }
         
+        var isSequenceStart: Bool {
+            if case .sequence(true) = values.first {
+                return true
+            }
+            return false
+        }
+        
+        var isSequenceEnd: Bool {
+            if case .sequence(false) = values.first {
+                return true
+            }
+            return false
+        }
+        
+        var isStart: Bool {
+            if case .group(true) = values.first {
+                return true
+            }
+            return false
+        }
+        
+        var isEnd: Bool {
+            if case .group(false) = values.first {
+                return true
+            }
+            return false
+        }
+        
         init(values: ChoiceSequence.Sequence) {
             self.originalValues = values
             self.values = values[...]
@@ -39,10 +67,14 @@ extension Interpreters {
     ) throws -> Output? {
         // Start the recursive process. The helper returns the value and any *unconsumed*
         // parts of the tree. A successful top-level replay should consume the entire tree.
-        let result = try materializeRecursive(gen, with: tree, context: .init(values: values))
+        let context = Context(values: values)
+        let result = try materializeRecursive(gen, with: tree, context: context)
         
         // We can add a check here to ensure no parts of the tree were left over,
         // but the recursive logic should handle this correctly.
+        if context.values.isEmpty == false {
+            print("Unexpected result: the `ChoiceSequence` should have been fully consumed")
+        }
         return result
     }
     
@@ -55,21 +87,22 @@ extension Interpreters {
         // Groups containing branches represent `picks` and are handled together
         if case let .group(choices) = tree {
             var result: Output?
-            guard context.nextIsValue == false, case .group(true) = context.values.removeFirst() else {
-                throw ReplaySequenceError.groupNotOpen
-            }
             
             if choices.allSatisfy({ $0.isBranch || $0.isSelected }) == false {
+                guard context.isStart, case .group(true) = context.values.removeFirst() else {
+                    throw ReplaySequenceError.groupNotOpen
+                }
                 result = try replayWithChoices(gen, with: choices, context: context)
+                guard context.isEnd, case .group(false) = context.values.removeFirst() else {
+                    throw ReplaySequenceError.groupNotClosed
+                }
             } else {
                 // Handle all the pick branches together
                 result = try replayWithChoices(gen, with: [tree], context: context)
             }
             
             // We are now expecting to clean up this group, but as only one branch was evaluated this won't work.
-            guard context.nextIsValue == false, case .group(false) = context.values.removeFirst() else {
-                throw ReplaySequenceError.groupNotClosed
-            }
+            
             return result
         }
         
@@ -164,23 +197,39 @@ extension Interpreters {
                     return nil
                 }
                 
-                guard case .group(true) = context.values.first else {
+                guard context.isSequenceStart else {
                     fatalError("Expected group open")
 //                    return nil
                 }
                 _ = context.values.removeFirst()
                 
                 var accumulatedValues: [Any] = []
-                for elementScript in elements where context.values.first?.isValue ?? false {
-                    // Replay each element with its corresponding sub-tree from the script.
+                // We don't know how many elements there can be here.
+                // We want the ChoiceSequence to dictate how we do this.
+                // Do we do a while loop?
+                let elementScript = elements[0]
+                while true {
+                    // We don't really care about the `elementScript` here except as a blueprint for how to invoke the generator
                     if let elementValue = try self.materializeRecursive(elementGenerator, with: elementScript, context: context) {
                         accumulatedValues.append(elementValue)
                     }
+                    if context.isSequenceEnd {
+                        break
+                    }
                 }
                 
-                guard case .group(false) = context.values.first else {
+//                for elementScript in elements {
+//                    // Replay each element with its corresponding sub-tree from the script.
+//                    if let elementValue = try self.materializeRecursive(elementGenerator, with: elementScript, context: context) {
+//                        accumulatedValues.append(elementValue)
+//                    }
+//                    if context.isSequenceEnd {
+//                        break
+//                    }
+//                }
+                
+                guard context.isSequenceEnd else {
                     fatalError("Expected group close")
-//                    return nil
                 }
                 _ = context.values.removeFirst()
                 
@@ -269,8 +318,13 @@ extension Interpreters {
                 let choice = choices.removeFirst()
                 
                 guard case var .group(branches) = choice else {
-                    throw ReplayError.wrongInputChoice
+                    throw ReplaySequenceError.wrongInputChoice
                 }
+                
+                guard context.isStart else {
+                    throw ReplaySequenceError.groupNotOpen
+                }
+                _ = context.values.removeFirst()
                 
                 // There can only be one selected pick in a group of branches
                 // If one is selected, we don't have to replay the others
@@ -282,9 +336,6 @@ extension Interpreters {
                     .firstNonNil { branch -> ReflectiveGenerator<Output>? in
                         switch branch {
                         case let .branch(_, label, choice), let .selected(.branch(_, label, choice)):
-                            guard context.nextIsValue == false, case .group(true) = context.values.removeFirst() else {
-                                throw ReplaySequenceError.groupNotOpen
-                            }
                             guard
                                 // Find the sub-generator that matches the label
                                 let chosenGen = pickChoices.first(where: { $0.label == label })?.generator,
@@ -293,11 +344,7 @@ extension Interpreters {
                             else {
                                 return nil
                             }
-                            let pickResult = try continuation(result)
-                            guard context.nextIsValue == false, case .group(false) = context.values.removeFirst() else {
-                                throw ReplaySequenceError.groupNotClosed
-                            }
-                            return pickResult
+                            return try continuation(result)
                         default:
                             throw ReplayError.wrongInputChoice
                         }
@@ -306,6 +353,11 @@ extension Interpreters {
                 guard let nextGen else {
                     throw ReplayError.noSuccessfulBranch
                 }
+                
+                guard context.isEnd else {
+                    throw ReplaySequenceError.groupNotClosed
+                }
+                _ = context.values.removeFirst()
 
                 return try self.replayWithChoicesHelper(nextGen, with: &choices, context: context)
 
