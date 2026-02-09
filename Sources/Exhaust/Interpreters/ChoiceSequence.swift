@@ -7,10 +7,16 @@
 
 public enum ChoiceSequence {
     public enum SequenceValue: Hashable, Equatable {
-        // The values within the `true`---`false` range are logically grouped
+        /// The elements within the `true`---`false` range are logically grouped
         case group(Bool)
-        // Values that repeat within a sequence
+        /// Values that repeat within a sequence
+        /// The elements within the `true`---`false` range are elements of the sequence
         case sequence(Bool)
+        /// A marker for a branching choice.
+        /// The `Value` contains the chosen index in the array
+        /// This marker has no explicit closing marker
+        case branch(Value)
+        /// Individual values
         case value(Value)
         
         public var isValue: Bool {
@@ -18,6 +24,7 @@ public enum ChoiceSequence {
             case .value: return true
             case .group: return false
             case .sequence: return false
+            case .branch: return false
             }
         }
     }
@@ -41,8 +48,22 @@ public enum ChoiceSequence {
                 + CollectionOfOne(.sequence(false))
         // Do we only do the selected branch?
         case let .branch(_, _, gen):
-            return flatten(gen)
+             return flatten(gen)
         case let .group(array):
+            if
+                array.allSatisfy({ $0.isBranch || $0.isSelected }),
+                case let .selected(.branch(_, label, choice)) = array.first(where: \.isSelected),
+                choice.isCharacterChoice == false
+            {
+                let value = SequenceValue.branch(.init(
+                    // The label is one-indexed
+                    choice: .init(label - 1, tag: .uint64),
+                    validRanges: []
+                ))
+                return [.group(true), value]
+                    + array.flatMap(flatten)
+                    + [.group(false)]
+            }
             return CollectionOfOne(.group(true))
                 + array.flatMap(flatten)
                 + CollectionOfOne(.group(false))
@@ -73,11 +94,59 @@ public enum ChoiceSequence {
                 groupCount += 1
             case .group(false):
                 groupCount -= 1
-            case .value:
+            case .value, .branch:
                 break
             }
         }
         return sequenceCount == 0 && groupCount == 0
+    }
+    
+    // Claude opus
+
+    public struct ChoiceSpan {
+        let kind: ChoiceSequence.SequenceValue
+        let range: ClosedRange<Int>
+        let depth: Int
+    }
+
+    public static func extractSpans(from sequence: ChoiceSequence.Sequence) -> [ChoiceSpan] {
+        var spans: [ChoiceSpan] = []
+        var stack: [(kind: ChoiceSequence.SequenceValue, start: Int)] = []
+        // Maps stack depth to the span indices of children
+        // collected while that frame was open
+        var childrenAtDepth: [[Int]] = []
+
+        for (i, entry) in sequence.enumerated() {
+            switch entry {
+            case .sequence(true):
+                stack.append((.sequence(true), i))
+                childrenAtDepth.append([])
+
+            case .group(true):
+                stack.append((.group(true), i))
+                childrenAtDepth.append([])
+
+            case .sequence(false), .group(false):
+                guard let frame = stack.popLast() else { continue }
+
+                let spanIndex = spans.count
+                spans.append(ChoiceSpan(
+                    kind: frame.kind,
+                    range: frame.start...i,
+                    depth: stack.count
+                ))
+
+                // Register this span as a child of the enclosing frame
+                if !childrenAtDepth.isEmpty {
+                    childrenAtDepth[childrenAtDepth.count - 1].append(spanIndex)
+                }
+
+            case .value, .branch:
+                break
+            }
+        }
+
+        return spans.reversed()
     }
 }
 
@@ -90,11 +159,13 @@ extension ChoiceSequence.Sequence {
             case .group(false):
                 return ")"
             case .sequence(true):
-                return "\n[\n"
+                return "["
             case .sequence(false):
-                return "\n]\n"
+                return "]"
             case .value:
                 return "V"
+            case let .branch(value):
+                return "B\(value.choice.convertible):"
             }
         }.joined()
     }

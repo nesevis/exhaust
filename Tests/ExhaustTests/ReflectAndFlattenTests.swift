@@ -603,18 +603,32 @@ struct ReflectAndFlattenTests {
 
         // Flatten the reflected tree
         // and reduce the values to their most semantically simple form
-        // this is a proto-shrinking step
+        // the sequence is a representation that lends itself to direct mutation in ways shrinking via a ChoiceTree cannot
         var sequence = ChoiceSequence.flatten(tree)
+        let spans = ChoiceSequence.extractSpans(from: sequence)
         
-        // Now let's collapse this array of arrays down to two arrays, preserving the contents
-        let sequenceStarts = sequence
-            .enumerated()
-            .filter { $0.element == .sequence(true) }
-            .map(\.offset)
-            .dropFirst()
+//        let sequenceStarts = sequence
+//            .enumerated()
+//            .filter { $0.element == .sequence(true) }
+//            .map(\.offset)
+//            .dropFirst()
+//        
+//        // Remove a sequence close and open to remove the barrier between two arrays, collapsing them
+//        let candidate = sequenceStarts[3]
+//        sequence.removeSubrange((candidate - 1)...candidate)
         
-        let candidate = sequenceStarts[3]
-        sequence.removeSubrange((candidate - 1)...candidate) // Remove a close and open
+        let sequenceRanges = spans.filter { $0.kind == .sequence(true) }
+        
+        var rangeSet = RangeSet<Int>()
+        rangeSet.insert(contentsOf: sequenceRanges[1].range)
+        rangeSet.insert(contentsOf: sequenceRanges[2].range)
+        rangeSet.insert(contentsOf: sequenceRanges[3].range)
+        rangeSet.insert(contentsOf: sequenceRanges[4].range)
+        rangeSet.insert(contentsOf: sequenceRanges[5].range)
+        rangeSet.insert(contentsOf: sequenceRanges[6].range)
+        sequence.removeSubranges(rangeSet)
+        print()
+//        sequence.removeSubrange(spans[1].range) // Remove an array completely
 
         try #require(ChoiceSequence.validate(sequence))
             
@@ -629,5 +643,11 @@ struct ReflectAndFlattenTests {
         #expect(materialized.count == 9)
         // Elements are the same, even if the exact division isn't
         #expect(valueFlat == materializedFlat)
+    }
+}
+
+extension RangeSet where Bound == Int {
+    mutating func insert(contentsOf closedRange: ClosedRange<Bound>) {
+        self.insert(contentsOf: closedRange.lowerBound..<(closedRange.upperBound + 1))
     }
 }

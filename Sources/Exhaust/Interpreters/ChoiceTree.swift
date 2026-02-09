@@ -67,6 +67,13 @@ extension ChoiceTree {
         return false
     }
     
+    var isCharacterChoice: Bool {
+        if case .choice(.character, _) = self {
+            return true
+        }
+        return false
+    }
+    
     var isSelected: Bool {
         if case .selected = self {
             return true
