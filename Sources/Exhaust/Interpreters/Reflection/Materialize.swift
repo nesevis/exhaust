@@ -198,8 +198,7 @@ extension Interpreters {
                 }
                 
                 guard context.isSequenceStart else {
-                    fatalError("Expected group open")
-//                    return nil
+                    return nil
                 }
                 _ = context.values.removeFirst()
                 
@@ -303,14 +302,6 @@ extension Interpreters {
                 return try self.replayWithChoicesHelper(nextGen, with: &choices, context: context)
 
             case let .pick(pickChoices):
-//                guard context.nextIsValue == false, case .group(true) = context.values.removeFirst() else {
-//                    throw ReplaySequenceError.groupNotOpen
-//                }
-//                defer {
-//                    guard context.nextIsValue == false, case .group(false) = context.values.removeFirst() else {
-//                        fatalError("Expected group tag")
-//                    }
-//                }
                 // Consume the next choice which should be a branch
                 guard !choices.isEmpty else {
                     return nil
