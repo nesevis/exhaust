@@ -404,41 +404,41 @@
 //    }
 //}
 //
-//extension ChoiceTree {
-//    var metadata: ChoiceMetadata {
-//        switch self {
-//        case let .choice(_, meta), let .sequence(_, _, meta):
-//            return meta
-//        case let .group(array):
-//            if let meta = array.first(where: { $0.metadata.validRanges.isEmpty == false })?.metadata {
-//                return meta
-//            }
-//            fallthrough
-//        default:
-//            return ChoiceMetadata(validRanges: [], strategies: [])
-//        }
-//    }
-//    
-//    var strategy: [any TemporaryDualPurposeStrategy] {
-//        self.metadata.strategies
-//    }
-//    
-//    func with(strategies: [any TemporaryDualPurposeStrategy]) -> ChoiceTree {
-//        switch self {
-//        case let .choice(value, meta):
-//            let newMeta = ChoiceMetadata(validRanges: meta.validRanges, strategies: strategies)
-//            return .choice(value, newMeta)
-//        case let .sequence(length, elements, meta):
-//            let newMeta = ChoiceMetadata(validRanges: meta.validRanges, strategies: strategies)
-//            return .sequence(length: length, elements: elements, newMeta)
-//        case let .important(value):
-//            return .important(value.with(strategies: strategies))
-//        case let .selected(value):
-//            return .selected(value.with(strategies: strategies))
-//        default:
-//            fatalError("\(#function) should not be accessed directly by \(self)")
-//        }
-//    }
-//}
-//
-//
+extension ChoiceTree {
+    var metadata: ChoiceMetadata {
+        switch self {
+        case let .choice(_, meta), let .sequence(_, _, meta):
+            return meta
+        case let .group(array):
+            if let meta = array.first(where: { $0.metadata.validRanges.isEmpty == false })?.metadata {
+                return meta
+            }
+            fallthrough
+        default:
+            return ChoiceMetadata(validRanges: [], strategies: [])
+        }
+    }
+    
+    var strategy: [any TemporaryDualPurposeStrategy] {
+        self.metadata.strategies
+    }
+    
+    func with(strategies: [any TemporaryDualPurposeStrategy]) -> ChoiceTree {
+        switch self {
+        case let .choice(value, meta):
+            let newMeta = ChoiceMetadata(validRanges: meta.validRanges, strategies: strategies)
+            return .choice(value, newMeta)
+        case let .sequence(length, elements, meta):
+            let newMeta = ChoiceMetadata(validRanges: meta.validRanges, strategies: strategies)
+            return .sequence(length: length, elements: elements, newMeta)
+        case let .important(value):
+            return .important(value.with(strategies: strategies))
+        case let .selected(value):
+            return .selected(value.with(strategies: strategies))
+        default:
+            fatalError("\(#function) should not be accessed directly by \(self)")
+        }
+    }
+}
+
+

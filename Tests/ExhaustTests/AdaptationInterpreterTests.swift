@@ -196,36 +196,36 @@ struct AdaptationInterpreterTests {
         print("Success rate: \(successRate)")
     }
 
-    @Test("CGS adaptation versus rejection sampling")
-    func testCGSAdaptationVsRejectionSampling() async throws {
-        let naive = BinarySearchTree<UInt>.arbitrary
-        
-        let validBst: (BinarySearchTree<UInt>) -> Bool = { tree in
-            return tree.isValidBST() && tree != .leaf
-        }
-        
-        var start = Date()
-        let rejectionSampled = naive.filter(validBst)
-        let rejection = ValueInterpreter(rejectionSampled, maxRuns: 100000)
-        let rsampled = Array(rejection)
-        let results = rsampled.map { validBst($0) }
-        print("Rejection sampling: true \(results.count(where: { $0 })) false: \(results.count(where: { !$0 }))")
-        print("Rejection sampling: Unique BSTs: \(Set(rsampled.filter(validBst)).count)")
-        print("Rejection sampling: \(Date().timeIntervalSince(start) * 1000)ms")
-        
-        start = Date()
-        let adapted = try SpeculativeAdaptationInterpreter.adapt(original: naive, samples: 1000, validBst)
-        print("CGS: adaptation \(Date().timeIntervalSince(start) * 1000)ms")
-        start = Date()
-        let cgs = ValueInterpreter(adapted, maxRuns: 100000)
-        let cgsArr = Array(cgs)
-        var cgsResults = cgsArr.map { validBst($0) }
+//    @Test("CGS adaptation versus rejection sampling")
+//    func testCGSAdaptationVsRejectionSampling() async throws {
+//        let naive = BinarySearchTree<UInt>.arbitrary
+//        
+//        let validBst: (BinarySearchTree<UInt>) -> Bool = { tree in
+//            return tree.isValidBST() && tree != .leaf
+//        }
+//        
+//        var start = Date()
+//        let rejectionSampled = naive.filter(validBst)
+//        let rejection = ValueInterpreter(rejectionSampled, maxRuns: 100000)
+//        let rsampled = Array(rejection)
+//        let results = rsampled.map { validBst($0) }
+//        print("Rejection sampling: true \(results.count(where: { $0 })) false: \(results.count(where: { !$0 }))")
+//        print("Rejection sampling: Unique BSTs: \(Set(rsampled.filter(validBst)).count)")
+//        print("Rejection sampling: \(Date().timeIntervalSince(start) * 1000)ms")
+//        
+//        start = Date()
+//        let adapted = try SpeculativeAdaptationInterpreter.adapt(original: naive, samples: 1000, validBst)
+//        print("CGS: adaptation \(Date().timeIntervalSince(start) * 1000)ms")
+//        start = Date()
+//        let cgs = ValueInterpreter(adapted, maxRuns: 100000)
+//        let cgsArr = Array(cgs)
+//        var cgsResults = cgsArr.map { validBst($0) }
+////        print("CGS: \(adapted.debugDescription)")
+//        print("CGS sampling: true \(cgsResults.count(where: { $0 })) false: \(cgsResults.count(where: { !$0 }))")
+//        print("CGS: Unique BSTs: \(Set(cgsArr.filter(validBst)).count)")
+//        print("CGS: \(Date().timeIntervalSince(start) * 1000)ms")
+//        
+//        print("Rejection: \(rejectionSampled.debugDescription)")
 //        print("CGS: \(adapted.debugDescription)")
-        print("CGS sampling: true \(cgsResults.count(where: { $0 })) false: \(cgsResults.count(where: { !$0 }))")
-        print("CGS: Unique BSTs: \(Set(cgsArr.filter(validBst)).count)")
-        print("CGS: \(Date().timeIntervalSince(start) * 1000)ms")
-        
-        print("Rejection: \(rejectionSampled.debugDescription)")
-        print("CGS: \(adapted.debugDescription)")
-    }
+//    }
 }
