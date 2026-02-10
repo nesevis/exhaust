@@ -7,10 +7,10 @@
 
 import Foundation
 
-public extension Interpreters {
+public enum Interpreters {
     // MARK: - Public-Facing Reflect Function (Unchanged, but now correct)
 
-    static func reflect<Output>(
+    public static func reflect<Output>(
         _ gen: ReflectiveGenerator<Output>,
         with outputValue: Output,
         /// Optional validation check
@@ -247,7 +247,7 @@ public extension Interpreters {
         }
     }
     
-    enum ReflectionError: LocalizedError {
+    public enum ReflectionError: LocalizedError {
         case reflectedNil(type: String)
         case contramapWasWrongType
         case zipWasWrongLengthOrType

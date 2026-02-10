@@ -9,6 +9,7 @@ import Foundation
 
 /// A speculative execution adaptation interpreter that forks at pick points
 /// to evaluate which choice leads to the highest success rate.
+#warning("Largely outdated")
 enum SpeculativeAdaptationInterpreter {
 
     // MARK: - Speculative Execution Strategy

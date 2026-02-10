@@ -5,6 +5,7 @@
 //  Created by Chris Kolbu on 19/12/2025.
 //
 
+#warning("Work in progress, but promising")
 enum CGSAdaptationInterpreter {
     
     /// Context for execution with depth tracking

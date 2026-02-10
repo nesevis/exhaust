@@ -6,6 +6,19 @@
 //
 
 extension ChoiceValue {
+    var bitPattern64: UInt64 {
+        switch self {
+        case let .unsigned(uint):
+            uint
+        case let .signed(_, uint, _):
+            uint
+        case let .floating(_, uint, _):
+            uint
+        case let .character(char):
+            char.bitPattern64
+        }
+    }
+    
     var fundamentalValues: [ChoiceValue] {
         switch self {
         case .unsigned:

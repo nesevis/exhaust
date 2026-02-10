@@ -1,4 +1,4 @@
-//
+    //
 //  ChoiceTree.swift
 //  Exhaust
 //
@@ -412,10 +412,6 @@ extension ChoiceTree {
             }
         }
     }
-    
-//    func diffMap(other: ChoiceTree, _ transform: (ChoiceTree, ChoiceTree) throws -> ChoiceTree) rethrows -> ChoiceTree {
-//        self
-//    }
 }
 
 extension ChoiceTree: CustomDebugStringConvertible {

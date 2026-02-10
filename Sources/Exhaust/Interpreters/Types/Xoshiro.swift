@@ -1,5 +1,5 @@
 //
-//  XoshiroOpus.swift
+//  Xoshiro.swift
 //  Exhaust
 //
 //  Created by Chris Kolbu on 27/7/2025.
