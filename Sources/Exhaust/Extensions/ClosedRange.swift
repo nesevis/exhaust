@@ -11,3 +11,9 @@ extension ClosedRange where Bound == UInt64 {
         ToType(bitPattern64: lowerBound)...ToType(bitPattern64: upperBound)
     }
 }
+
+public extension ClosedRange where Bound: Strideable {
+    var asRange: Range<Bound> {
+        lowerBound..<upperBound.advanced(by: 1)
+    }
+}
