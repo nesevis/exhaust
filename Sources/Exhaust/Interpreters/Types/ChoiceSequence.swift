@@ -7,8 +7,6 @@
 
 public typealias ChoiceSequence = [ChoiceSequenceValue]
 
-
-
 // MARK: - Helper functions
 
 extension ChoiceSequence {
@@ -18,6 +16,7 @@ extension ChoiceSequence {
     }
 
     /// Flattens the tree structure of ``ChoiceTree`` to a flat list for mutation/shrinking purposes
+//    @inlinable
     static func flatten(_ tree: ChoiceTree) -> ChoiceSequence {
         switch tree {
         case let .choice(value, meta):
@@ -85,13 +84,24 @@ extension ChoiceSequence {
     
     // Claude opus
 
-    public struct ChoiceSpan {
+    public struct ChoiceSpan: CustomDebugStringConvertible {
+        public init(kind: ChoiceSequenceValue, range: ClosedRange<Int>, depth: Int) {
+            self.kind = kind
+            self.range = range
+            self.depth = depth
+        }
+        
         let kind: ChoiceSequenceValue
         let range: ClosedRange<Int>
         let depth: Int
+        
+        public var debugDescription: String {
+            "<\(kind.shortString)> \(range.lowerBound)...\(range.upperBound) @ \(depth)"
+        }
     }
 
-    public static func extractSpans(from sequence: ChoiceSequence) -> [ChoiceSpan] {
+    @inlinable
+    public static func extractContainerSpans(from sequence: ChoiceSequence) -> [ChoiceSpan] {
         var spans: [ChoiceSpan] = []
         var stack: [(kind: ChoiceSequenceValue, start: Int)] = []
         // Maps stack depth to the span indices of children
@@ -131,22 +141,61 @@ extension ChoiceSequence {
         return spans.reversed()
     }
     
-    var shortString: String {
-        self.map { element in
-            switch element {
-            case .group(true):
-                return "("
-            case .group(false):
-                return ")"
-            case .sequence(true):
-                return "["
-            case .sequence(false):
-                return "]"
-            case .value:
-                return "V"
-            case let .branch(value):
-                return "B\(value.choice.convertible):"
+    /// Returns the spans of values not inside groups
+    @inlinable
+    public static func extractValueSpans(from sequence: ChoiceSequence) -> [ChoiceSpan] {
+        var spans: [ChoiceSpan] = []
+        // Maps stack depth to the span indices of children
+        // collected while that frame was open
+        var depth = 0
+
+        for (i, entry) in sequence.enumerated() {
+            let preceding = i > 0 ? sequence[i - 1] : nil
+            
+            switch (preceding, entry) {
+            case (nil, .value):
+                spans.append(ChoiceSpan(kind: entry, range: i...i, depth: depth))
+            case (.value, .value):
+                spans.append(ChoiceSpan(kind: entry, range: i...i, depth: depth))
+            case (.sequence(true), .value):
+                spans.append(ChoiceSpan(kind: entry, range: i...i, depth: depth))
+            case (.group(true), _), (.sequence(true), _):
+                depth += 1
+            case (.group(false), _), (.sequence(false), _):
+                depth -= 1
+            default:
+                continue
             }
-        }.joined()
+        }
+
+        return spans.reversed()
+    }
+    
+    var shortString: String {
+        self.map(\.shortString).joined()
+    }
+    
+    @inlinable
+    mutating func removeSubranges(_ ranges: [ClosedRange<Int>]) {
+        let set = RangeSet(ranges.map(\.asRange))
+        self.removeSubranges(set)
+    }
+    
+    func shortLexPrecedes(_ other: ChoiceSequence) -> Bool {
+        // Shorter sequences are always better
+        if self.count != other.count {
+            return self.count < other.count
+        }
+        // Equal length compares lexicographically
+        for (lhs, rhs) in zip(self, other) {
+            switch lhs.shortLexCompare(rhs) {
+            case .lt:
+                return true
+            case .gt:
+                return false
+            case .eq: continue
+            }
+        }
+        return false // equal
     }
 }

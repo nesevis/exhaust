@@ -8,7 +8,7 @@
 public struct ChoiceMetadata: Hashable, Equatable, Sendable {
     private static let noStrategies = [any TemporaryDualPurposeStrategy]()
     // `Character` has discontiguous ranges, and `RangeSet` isn't available until the very newest releases
-    let validRanges: [ClosedRange<UInt64>]
+    public let validRanges: [ClosedRange<UInt64>]
     let strategies: [any TemporaryDualPurposeStrategy]
     
     init(validRanges: [ClosedRange<UInt64>], strategies: [any TemporaryDualPurposeStrategy]) {
