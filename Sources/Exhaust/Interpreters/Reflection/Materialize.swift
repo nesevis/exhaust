@@ -9,8 +9,8 @@ import Foundation
 
 extension Interpreters {
     private final class Context {
-        let originalValues: ChoiceSequence.Sequence
-        var values: ChoiceSequence.Sequence.SubSequence
+        let originalValues: ChoiceSequence
+        var values: ChoiceSequence.SubSequence
         
         var nextIsValue: Bool {
             values.first?.isValue ?? false
@@ -37,6 +37,13 @@ extension Interpreters {
             return false
         }
         
+        var isBranch: Bool {
+            if case .branch = values.first {
+                return true
+            }
+            return false
+        }
+        
         var isEnd: Bool {
             if case .group(false) = values.first {
                 return true
@@ -44,7 +51,7 @@ extension Interpreters {
             return false
         }
         
-        init(values: ChoiceSequence.Sequence) {
+        init(values: ChoiceSequence) {
             self.originalValues = values
             self.values = values[...]
         }
@@ -63,7 +70,7 @@ extension Interpreters {
     public static func materialize<Output>(
         _ gen: ReflectiveGenerator<Output>,
         with tree: ChoiceTree,
-        using values: ChoiceSequence.Sequence
+        using values: ChoiceSequence
     ) throws -> Output? {
         // Start the recursive process. The helper returns the value and any *unconsumed*
         // parts of the tree. A successful top-level replay should consume the entire tree.
@@ -316,10 +323,12 @@ extension Interpreters {
                     throw ReplaySequenceError.groupNotOpen
                 }
                 _ = context.values.removeFirst()
-                
-                // There can only be one selected pick in a group of branches
-                // If one is selected, we don't have to replay the others
-                if branches.contains(where: \.isSelected) {
+                if context.isBranch, case let .branch(sequenceBranch) = context.values.removeFirst(), let index = sequenceBranch.choice.convertible as? Int {
+                    // Now we set the branch explicitly
+                    branches = branches.indices.contains(index) ? [branches[index]] : branches
+                } else if branches.contains(where: \.isSelected) {
+                    // There can only be one selected pick in a group of branches
+                    // If one is selected, we don't have to replay the others
                     branches = branches.filter(\.isSelected)
                 }
                 
@@ -342,7 +351,7 @@ extension Interpreters {
                     }
                 
                 guard let nextGen else {
-                    throw ReplayError.noSuccessfulBranch
+                    throw ReplaySequenceError.noSuccessfulBranch
                 }
                 
                 guard context.isEnd else {
