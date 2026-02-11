@@ -606,7 +606,7 @@ struct ReflectAndFlattenTests {
         // and reduce the values to their most semantically simple form
         // the sequence is a representation that lends itself to direct mutation in ways shrinking via a ChoiceTree cannot
         var sequence = ChoiceSequence.flatten(tree)
-        let spans = ChoiceSequence.extractSpans(from: sequence)
+        let spans = ChoiceSequence.extractContainerSpans(from: sequence)
         
         let sequenceStarts = sequence
             .enumerated()
