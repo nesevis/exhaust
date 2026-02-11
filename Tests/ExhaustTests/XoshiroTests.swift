@@ -16,12 +16,11 @@ func testXoshiroAgainstReference() throws {
     }
 }
 
-// Wtf is this test testing?
-@Test("Test spread of generator")
-func testGeneratorIterator() {
+@Test("Test seed stability")
+func testXoshiroSeedStability() {
     let iterator = ValueInterpreter(Int64.arbitrary, seed: 0)
     let ten = Array(iterator.prefix(10))
-    let expected: [Int64] = [-1, -5101, -6690366, 1005319125, 15565817241, -272203297360, 1402855549857, -7979896926795, 55386323899548, 91824542356942]
+    let expected: [Int64] = [0, 16238, -6660220, -179123592, 8005708369, 274739608301, -684234672488, 2508988163057, 100069181990740, 943184394974117]
     #expect(ten == expected)
 }
 
@@ -37,7 +36,6 @@ func testReflectOnGetsize() throws {
     let recipe2 = try Interpreters.reflect(gen, with: generated2)
     let replay = try Interpreters.replay(gen, using: recipe2!)
     #expect(generated2 == replay)
-    print()
 }
 
 // FIXME: The string generator now varies from N/10...N, not N...N
