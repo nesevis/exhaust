@@ -30,7 +30,7 @@ struct ReflectAndFlattenTests {
         #expect(flattened.count >= 1)
 
         // Find the actual value choice (skipping group markers)
-        let valueChoices = flattened.compactMap { element -> ChoiceSequence.Value? in
+        let valueChoices = flattened.compactMap { element -> ChoiceSequenceValue.Value? in
             if case let .value(v) = element {
                 return v
             }
@@ -57,7 +57,7 @@ struct ReflectAndFlattenTests {
         let flattened = ChoiceSequence.flatten(tree)
 
         // Extract value choices
-        let valueChoices = flattened.compactMap { element -> ChoiceSequence.Value? in
+        let valueChoices = flattened.compactMap { element -> ChoiceSequenceValue.Value? in
             if case let .value(v) = element {
                 return v
             }
@@ -99,7 +99,7 @@ struct ReflectAndFlattenTests {
         let flattened = ChoiceSequence.flatten(tree)
 
         // Extract value choices
-        let valueChoices = flattened.compactMap { element -> ChoiceSequence.Value? in
+        let valueChoices = flattened.compactMap { element -> ChoiceSequenceValue.Value? in
             if case let .value(v) = element {
                 return v
             }
@@ -171,7 +171,7 @@ struct ReflectAndFlattenTests {
         let flattened = ChoiceSequence.flatten(tree)
 
         // Extract value choices
-        let valueChoices = flattened.compactMap { element -> ChoiceSequence.Value? in
+        let valueChoices = flattened.compactMap { element -> ChoiceSequenceValue.Value? in
             if case let .value(v) = element {
                 return v
             }
@@ -211,7 +211,7 @@ struct ReflectAndFlattenTests {
         let flattened = ChoiceSequence.flatten(tree)
 
         // Extract value choices
-        let valueChoices = flattened.compactMap { element -> ChoiceSequence.Value? in
+        let valueChoices = flattened.compactMap { element -> ChoiceSequenceValue.Value? in
             if case let .value(v) = element {
                 return v
             }
@@ -264,7 +264,7 @@ struct ReflectAndFlattenTests {
         let flattened = ChoiceSequence.flatten(tree)
 
         // Extract value choices
-        let valueChoices = flattened.compactMap { element -> ChoiceSequence.Value? in
+        let valueChoices = flattened.compactMap { element -> ChoiceSequenceValue.Value? in
             if case let .value(v) = element {
                 return v
             }
@@ -301,7 +301,7 @@ struct ReflectAndFlattenTests {
         let flattened = ChoiceSequence.flatten(tree)
 
         // Extract value choices
-        let valueChoices = flattened.compactMap { element -> ChoiceSequence.Value? in
+        let valueChoices = flattened.compactMap { element -> ChoiceSequenceValue.Value? in
             if case let .value(v) = element {
                 return v
             }
@@ -397,7 +397,7 @@ struct ReflectAndFlattenTests {
         let flattened = ChoiceSequence.flatten(tree)
 
         // Extract value choices
-        let valueChoices = flattened.compactMap { element -> ChoiceSequence.Value? in
+        let valueChoices = flattened.compactMap { element -> ChoiceSequenceValue.Value? in
             if case let .value(v) = element {
                 return v
             }
@@ -500,7 +500,7 @@ struct ReflectAndFlattenTests {
         var flattened = ChoiceSequence.flatten(tree)
         
         // Mess with it
-        flattened[1] = .value(.init(choice: .character("@"), validRanges: []))
+        flattened[2] = .value(.init(choice: .character("@"), validRanges: []))
 
         let materialized = try Interpreters.materialize(gen, with: tree, using: flattened)
         
@@ -535,8 +535,8 @@ struct ReflectAndFlattenTests {
         
         // Mess with it by setting the age to 123 and
         // removing the equivalent of the two leading characters in the name
-        flattened[2] = .value(.init(choice: .unsigned(123), validRanges: []))
-        flattened.removeSubrange(5...14)
+        flattened[3] = .value(.init(choice: .unsigned(123), validRanges: []))
+        flattened.removeSubrange(6...15)
 
         let materialized = try Interpreters.materialize(gen, with: tree, using: flattened)
         
@@ -585,9 +585,10 @@ struct ReflectAndFlattenTests {
                 }
             }
 
-        let materialized = try Interpreters.materialize(gen, with: tree, using: sequence)
-        #expect(materialized?.age == 0)
-        #expect(materialized?.name == Array(repeating: "A", count: value.name.count).joined())
+        print()
+        let materialized = try #require(try Interpreters.materialize(gen, with: tree, using: sequence))
+        #expect(materialized.age == 0)
+        #expect(materialized.name == Array(repeating: "A", count: value.name.count).joined())
     }
     
     @Test("Test cross-boundary shrinking")
@@ -607,34 +608,21 @@ struct ReflectAndFlattenTests {
         var sequence = ChoiceSequence.flatten(tree)
         let spans = ChoiceSequence.extractSpans(from: sequence)
         
-//        let sequenceStarts = sequence
-//            .enumerated()
-//            .filter { $0.element == .sequence(true) }
-//            .map(\.offset)
-//            .dropFirst()
-//        
-//        // Remove a sequence close and open to remove the barrier between two arrays, collapsing them
-//        let candidate = sequenceStarts[3]
-//        sequence.removeSubrange((candidate - 1)...candidate)
+        let sequenceStarts = sequence
+            .enumerated()
+            .filter { $0.element == .sequence(true) }
+            .map(\.offset)
+            .dropFirst()
         
-        let sequenceRanges = spans.filter { $0.kind == .sequence(true) }
-        
-        var rangeSet = RangeSet<Int>()
-        rangeSet.insert(contentsOf: sequenceRanges[1].range)
-        rangeSet.insert(contentsOf: sequenceRanges[2].range)
-        rangeSet.insert(contentsOf: sequenceRanges[3].range)
-        rangeSet.insert(contentsOf: sequenceRanges[4].range)
-        rangeSet.insert(contentsOf: sequenceRanges[5].range)
-        rangeSet.insert(contentsOf: sequenceRanges[6].range)
-        sequence.removeSubranges(rangeSet)
-        print()
-//        sequence.removeSubrange(spans[1].range) // Remove an array completely
+        // Remove a sequence close and open to remove the barrier between two arrays, collapsing them
+        let candidate = sequenceStarts[3]
+        sequence.removeSubrange((candidate - 1)...candidate)
 
         try #require(ChoiceSequence.validate(sequence))
             
         let materialized = try #require(try Interpreters.materialize(gen, with: tree, using: sequence))
-        print("Materialized array count: \(materialized.count)")
-        print("Materialized child array counts: \(materialized.map(\.count))")
+//        print("Materialized array count: \(materialized.count)")
+//        print("Materialized child array counts: \(materialized.map(\.count))")
         
         let valueFlat = value.flatMap(\.self)
         let materializedFlat = materialized.flatMap(\.self)
