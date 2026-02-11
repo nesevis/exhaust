@@ -5,38 +5,20 @@
 //  Created by Chris Kolbu on 8/2/2026.
 //
 
-public enum ChoiceSequence {
-    public enum SequenceValue: Hashable, Equatable {
-        /// The elements within the `true`---`false` range are logically grouped
-        case group(Bool)
-        /// Values that repeat within a sequence
-        /// The elements within the `true`---`false` range are elements of the sequence
-        case sequence(Bool)
-        /// A marker for a branching choice.
-        /// The `Value` contains the chosen index in the array
-        /// This marker has no explicit closing marker
-        case branch(Value)
-        /// Individual values
-        case value(Value)
-        
-        public var isValue: Bool {
-            switch self {
-            case .value: return true
-            case .group: return false
-            case .sequence: return false
-            case .branch: return false
-            }
-        }
+public typealias ChoiceSequence = [ChoiceSequenceValue]
+
+
+
+// MARK: - Helper functions
+
+extension ChoiceSequence {
+    /// Creates a projection of a `ChoiceTree` to a flat list
+    init (_ tree: ChoiceTree) {
+        self = Self.flatten(tree)
     }
-    
-    public struct Value: Hashable, Equatable {
-        let choice: ChoiceValue
-        let validRanges: [ClosedRange<UInt64>]
-    }
-    public typealias Sequence = [SequenceValue]
-    
+
     /// Flattens the tree structure of ``ChoiceTree`` to a flat list for mutation/shrinking purposes
-    static func flatten(_ tree: ChoiceTree) -> Sequence {
+    static func flatten(_ tree: ChoiceTree) -> ChoiceSequence {
         switch tree {
         case let .choice(value, meta):
             return [.value(.init(choice: value, validRanges: meta.validRanges))]
@@ -53,12 +35,12 @@ public enum ChoiceSequence {
             if
                 array.allSatisfy({ $0.isBranch || $0.isSelected }),
                 case let .selected(.branch(_, label, choice)) = array.first(where: \.isSelected),
-                choice.isCharacterChoice == false
+                choice.isCharacterChoice == false // Do not add this marker for characters
             {
-                let value = SequenceValue.branch(.init(
-                    // The label is one-indexed
-                    choice: .init(label - 1, tag: .uint64),
-                    validRanges: []
+                let value = ChoiceSequenceValue.branch(.init(
+                    // The label is one-indexed, take away one to make it correspond to the group array index
+                    choice: .init(Int(label - 1), tag: .int),
+                    validRanges: [UInt64(0)...UInt64(array.count - 1)]
                 ))
                 return [.group(true), value]
                     + array.flatMap(flatten)
@@ -81,7 +63,7 @@ public enum ChoiceSequence {
         }
     }
     
-    static func validate(_ sequence: ChoiceSequence.Sequence) -> Bool {
+    static func validate(_ sequence: ChoiceSequence) -> Bool {
         var sequenceCount = 0
         var groupCount = 0
         for element in sequence {
@@ -104,14 +86,14 @@ public enum ChoiceSequence {
     // Claude opus
 
     public struct ChoiceSpan {
-        let kind: ChoiceSequence.SequenceValue
+        let kind: ChoiceSequenceValue
         let range: ClosedRange<Int>
         let depth: Int
     }
 
-    public static func extractSpans(from sequence: ChoiceSequence.Sequence) -> [ChoiceSpan] {
+    public static func extractSpans(from sequence: ChoiceSequence) -> [ChoiceSpan] {
         var spans: [ChoiceSpan] = []
-        var stack: [(kind: ChoiceSequence.SequenceValue, start: Int)] = []
+        var stack: [(kind: ChoiceSequenceValue, start: Int)] = []
         // Maps stack depth to the span indices of children
         // collected while that frame was open
         var childrenAtDepth: [[Int]] = []
@@ -148,9 +130,7 @@ public enum ChoiceSequence {
 
         return spans.reversed()
     }
-}
-
-extension ChoiceSequence.Sequence {
+    
     var shortString: String {
         self.map { element in
             switch element {
