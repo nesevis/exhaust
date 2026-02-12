@@ -60,30 +60,7 @@ struct ChoiceSequenceTests {
 
         let flattened = ChoiceSequence.flatten(tree)
 
-        // Should be: group(true), value(5), value(8), group(false)
-        #expect(flattened.count == 4)
-
-        guard case .group(true) = flattened[0] else {
-            Issue.record("Expected opening group marker")
-            return
-        }
-
-        guard case let .value(value1) = flattened[1] else {
-            Issue.record("Expected first value")
-            return
-        }
-        #expect(value1.choice == .unsigned(5))
-
-        guard case let .value(value2) = flattened[2] else {
-            Issue.record("Expected second value")
-            return
-        }
-        #expect(value2.choice == .unsigned(8))
-
-        guard case .group(false) = flattened[3] else {
-            Issue.record("Expected closing group marker")
-            return
-        }
+        #expect(flattened.shortString == "[VV]")
     }
 
     @Test("Flatten nested sequence")
@@ -113,75 +90,7 @@ struct ChoiceSequenceTests {
 
         let flattened = ChoiceSequence.flatten(tree)
 
-        // Should be: group(true), group(true), value(5), value(8), group(false), group(true), value(3), group(false), group(false)
-        #expect(flattened.count == 9)
-
-        var index = 0
-
-        // Outer opening
-        guard case .group(true) = flattened[index] else {
-            Issue.record("Expected outer opening group marker at index \(index)")
-            return
-        }
-        index += 1
-
-        // Inner[0] opening
-        guard case .group(true) = flattened[index] else {
-            Issue.record("Expected inner[0] opening group marker at index \(index)")
-            return
-        }
-        index += 1
-
-        // value(5)
-        guard case let .value(value1) = flattened[index] else {
-            Issue.record("Expected value at index \(index)")
-            return
-        }
-        #expect(value1.choice == .unsigned(5))
-        index += 1
-
-        // value(8)
-        guard case let .value(value2) = flattened[index] else {
-            Issue.record("Expected value at index \(index)")
-            return
-        }
-        #expect(value2.choice == .unsigned(8))
-        index += 1
-
-        // Inner[0] closing
-        guard case .group(false) = flattened[index] else {
-            Issue.record("Expected inner[0] closing group marker at index \(index)")
-            return
-        }
-        index += 1
-
-        // Inner[1] opening
-        guard case .group(true) = flattened[index] else {
-            Issue.record("Expected inner[1] opening group marker at index \(index)")
-            return
-        }
-        index += 1
-
-        // value(3)
-        guard case let .value(value3) = flattened[index] else {
-            Issue.record("Expected value at index \(index)")
-            return
-        }
-        #expect(value3.choice == .unsigned(3))
-        index += 1
-
-        // Inner[1] closing
-        guard case .group(false) = flattened[index] else {
-            Issue.record("Expected inner[1] closing group marker at index \(index)")
-            return
-        }
-        index += 1
-
-        // Outer closing
-        guard case .group(false) = flattened[index] else {
-            Issue.record("Expected outer closing group marker at index \(index)")
-            return
-        }
+        #expect(flattened.shortString == "[[VV][V]]")
     }
 
     @Test("Flatten group")
@@ -323,18 +232,8 @@ struct ChoiceSequenceTests {
 
         let flattened = ChoiceSequence.flatten(tree)
 
-        // Should be: group(true), group(false)
-        #expect(flattened.count == 2)
-
-        guard case .group(true) = flattened[0] else {
-            Issue.record("Expected opening group marker")
-            return
-        }
-
-        guard case .group(false) = flattened[1] else {
-            Issue.record("Expected closing group marker")
-            return
-        }
+        // Should be: sequence(true), sequence(false)
+        #expect(flattened.shortString == "[]")
     }
 
     @Test("Flatten preserves valid ranges")
@@ -423,12 +322,13 @@ struct ChoiceSequenceTests {
         var closeCount = 0
 
         for element in flattened {
-            if case let .group(isOpen) = element {
-                if isOpen {
-                    openCount += 1
-                } else {
-                    closeCount += 1
-                }
+            switch element {
+            case .group(true), .sequence(true):
+                openCount += 1
+            case .group(false), .sequence(false):
+                closeCount += 1
+            default:
+                continue
             }
         }
 

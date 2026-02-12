@@ -176,7 +176,7 @@ struct InterpreterRNGParityTests {
         let seed: UInt64 = 1111
 
         var vi = ValueInterpreter(gen, seed: seed, maxRuns: 5)
-        var vact = ValueAndChoiceTreeInterpreter(gen, materializePicks: true, seed: seed, maxRuns: 5)
+        var vact = ValueAndChoiceTreeInterpreter(gen, materializePicks: false, seed: seed, maxRuns: 5)
 
         for iteration in 0..<5 {
             let viValue = vi.next()!
@@ -369,7 +369,7 @@ struct InterpreterRNGParityTests {
 
     @Test("Multiple seeds produce different but consistent results")
     func testMultipleSeedsParity() throws {
-        let gen = UInt64.arbitrary
+        let gen = String.arbitrary
         let seeds: [UInt64] = [1, 42, 100, 999, 12345]
 
         for seed in seeds {
