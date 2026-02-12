@@ -7,7 +7,7 @@
 
 import Foundation
 
-public enum ChoiceSequenceValue: Hashable, Equatable {
+public enum ChoiceSequenceValue: Hashable, Equatable, Sendable {
     /// The elements within the `true`---`false` range are logically grouped
     case group(Bool)
     /// Values that repeat within a sequence
@@ -79,7 +79,7 @@ public enum ChoiceSequenceValue: Hashable, Equatable {
     
     // MARK: - Inner type
     
-    public struct Value: Hashable, Equatable {
+    public struct Value: Hashable, Equatable, Sendable {
         let choice: ChoiceValue
         let validRanges: [ClosedRange<UInt64>]
 
