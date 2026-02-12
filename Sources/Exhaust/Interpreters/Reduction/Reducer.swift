@@ -46,7 +46,16 @@ extension Interpreters {
                 // TODO: Continue to next pass, do not return from here
                 return (currentSequence, currentOutput)
             }
-            // Pass 2: Sequence element deletion, i.e the individual Vs in [VVVVV]
+            // Pass 2a: Collapse sequence boundaries, i.e [[V][V][V]] -> [[VVV]]
+            let boundarySpans = ChoiceSequence.extractSequenceBoundarySpans(from: currentSequence)
+            if boundarySpans.isEmpty == false, let (newSequence, output) = try adaptiveDeleteSpans(gen, tree: currentTree, property: property, sequence: currentSequence, spans: boundarySpans) {
+                currentSequence = newSequence
+                currentOutput = output
+                didImprove = true
+                // TODO: Continue to next pass, do not return from here
+                return (currentSequence, currentOutput)
+            }
+            // Pass 2b: Sequence element deletion, i.e the individual Vs in [VVVVV]
             let valueSpans = ChoiceSequence.extractValueSpans(from: currentSequence)
             if valueSpans.isEmpty == false, let (newSequence, output) = try adaptiveDeleteSpans(gen, tree: currentTree, property: property, sequence: currentSequence, spans: valueSpans) {
                 currentSequence = newSequence
@@ -57,8 +66,12 @@ extension Interpreters {
             }
             print(didImprove)
             // Pass 3: Zero within range
-            // Re
-            // Pass 4: Minimise individual values
+            // Set all values to their semantic zero. Can use value span extraction
+            // Pass 4: Pass to descendant
+            // "For each span taht contains child spans, try replacing the parent span with each child span individually"
+            // I wonder if this will work well for Exhaust's architecture
+            // Pass 5: Minimise individual values
+            // Set all values to their semantic zero. Can use value span extraction
             // Pass 5: Shortlex order results for consistency?
         }
         
@@ -77,13 +90,12 @@ extension Interpreters {
         var latestOutput: Output?
         
         // Sort spans by depth (outermost first = lowest depth), preserving order within depth
-        let sortedSpanIndices = spans.indices.sorted { spans[$0].depth < spans[$1].depth }
-        
+        let sortedSpans = spans.sorted { $0.depth < $1.depth }
+
         var i = 0
-        while i < sortedSpanIndices.count {
-            let spanIndex = sortedSpanIndices[i]
-            let span = spans[spanIndex]
-            
+        while i < sortedSpans.count {
+            let span = sortedSpans[i]
+
             // Use the adaptive probe `findInteger` to find the largest batch we can delete
             let k = AdaptiveProbe.findInteger { (size: Int) in
                 // Holy shit this entire closure is so expensive!
@@ -91,22 +103,20 @@ extension Interpreters {
                 var ii = 0
                 while ii < size {
                     let index = i + ii
-                    
-                    guard index < sortedSpanIndices.count else {
+
+                    guard index < sortedSpans.count else {
                         return false
                     }
-                    
-                    let innerSpanIndex = sortedSpanIndices[index]
-                    
+
                     // Only batch spans at the same depth
-                    guard spans[innerSpanIndex].depth == span.depth else {
+                    guard sortedSpans[index].depth == span.depth else {
                         return false
                     }
-                    rangesToDelete.append(spans[innerSpanIndex].range)
-                    
+                    rangesToDelete.append(sortedSpans[index].range)
+
                     ii += 1
                 }
-                
+
                 // Apply deletion
                 var candidate = current
                 candidate.removeSubranges(rangesToDelete)
@@ -122,13 +132,12 @@ extension Interpreters {
                 }
                 return false
             }
-            
+
             if k > 0 {
                 // Apply the deletion
                 var rangeSet = RangeSet<Int>()
                 for j in 0..<k {
-                    let innerSpanIndex = sortedSpanIndices[i + j]
-                    rangeSet.insert(contentsOf: spans[innerSpanIndex].range.asRange)
+                    rangeSet.insert(contentsOf: sortedSpans[i + j].range.asRange)
                 }
                 
                 var candidate = current
@@ -146,10 +155,7 @@ extension Interpreters {
             }
             i += 1
         }
-//        
-//        if progress, let output = latestOutput {
-//            return (current, output)
-//        }
+
         return nil
     }
 }

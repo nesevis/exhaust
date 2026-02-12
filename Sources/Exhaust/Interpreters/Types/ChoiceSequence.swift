@@ -141,6 +141,38 @@ extension ChoiceSequence {
         return spans.reversed()
     }
     
+    /// Returns spans representing `][` boundaries (`.sequence(false)` followed by `.sequence(true)`)
+    /// that occur while nested inside an outer sequence (sequence depth > 1).
+    /// Removing such a boundary merges two adjacent inner sequences into one.
+    @inlinable
+    public static func extractSequenceBoundarySpans(from sequence: ChoiceSequence) -> [ChoiceSpan] {
+        var spans: [ChoiceSpan] = []
+        var sequenceDepth = 0
+
+        for (i, entry) in sequence.enumerated() {
+            switch entry {
+            case .sequence(true):
+                sequenceDepth += 1
+            case .sequence(false):
+                // Check if the next element is .sequence(true) and we're nested (depth > 1)
+                if sequenceDepth > 1,
+                   i + 1 < sequence.count,
+                   case .sequence(true) = sequence[i + 1] {
+                    spans.append(ChoiceSpan(
+                        kind: .sequence(false), // arbitrary; the span covers both markers
+                        range: i...i + 1,
+                        depth: sequenceDepth
+                    ))
+                }
+                sequenceDepth -= 1
+            default:
+                break
+            }
+        }
+
+        return spans
+    }
+
     /// Returns the spans of values not inside groups
     @inlinable
     public static func extractValueSpans(from sequence: ChoiceSequence) -> [ChoiceSpan] {

@@ -11,55 +11,54 @@ extension Interpreters {
     private final class Context {
         let originalValues: ChoiceSequence
         var values: ChoiceSequence.SubSequence
-        
-        var nextIsValue: Bool {
-            values.first?.isValue ?? false
+
+        var peek: ChoiceSequenceValue? {
+            values.first
         }
-        
-        var isSequenceStart: Bool {
-            if case .sequence(true) = values.first {
-                return true
-            }
-            return false
-        }
-        
-        var isSequenceEnd: Bool {
-            if case .sequence(false) = values.first {
-                return true
-            }
-            return false
-        }
-        
-        var isStart: Bool {
-            if case .group(true) = values.first {
-                return true
-            }
-            return false
-        }
-        
-        var isBranch: Bool {
-            if case .branch = values.first {
-                return true
-            }
-            return false
-        }
-        
-        var isEnd: Bool {
-            if case .group(false) = values.first {
-                return true
-            }
-            return false
-        }
-        
+
         init(values: ChoiceSequence) {
             self.originalValues = values
             self.values = values[...]
+        }
+
+        // MARK: - Consume methods
+
+        @discardableResult
+        func consumeGroup(_ isOpen: Bool) throws -> ChoiceSequenceValue {
+            guard case .group(isOpen) = values.first else {
+                throw isOpen ? ReplaySequenceError.groupNotOpen : .groupNotClosed
+            }
+            return values.removeFirst()
+        }
+
+        @discardableResult
+        func consumeSequence(_ isOpen: Bool) throws -> ChoiceSequenceValue {
+            guard case .sequence(isOpen) = values.first else {
+                throw isOpen ? ReplaySequenceError.groupNotOpen : .groupNotClosed
+            }
+            return values.removeFirst()
+        }
+
+        func consumeValue() throws -> ChoiceSequenceValue.Value {
+            guard case let .value(v) = values.first else {
+                throw ReplaySequenceError.wrongInputChoice
+            }
+            values.removeFirst()
+            return v
+        }
+
+        func consumeBranch() throws -> ChoiceSequenceValue.Value {
+            guard case let .branch(v) = values.first else {
+                throw ReplaySequenceError.wrongInputChoice
+            }
+            values.removeFirst()
+            return v
         }
     }
     // ... `generate` and `reflect` and their helpers ...
 
     /// MARK: - Public-Facing Materialize Function
-    
+
     /// Deterministically reproduces a value by executing a generator with a structured `ChoiceSequence.Sequence`.
     ///
     /// - Parameters:
@@ -76,7 +75,7 @@ extension Interpreters {
         // parts of the tree. A successful top-level replay should consume the entire tree.
         let context = Context(values: values)
         let result = try materializeRecursive(gen, with: tree, context: context)
-        
+
         // We can add a check here to ensure no parts of the tree were left over,
         // but the recursive logic should handle this correctly.
         if context.values.isEmpty == false {
@@ -84,7 +83,7 @@ extension Interpreters {
         }
         return result
     }
-    
+
     private static func materializeRecursive<Output>(
         _ gen: ReflectiveGenerator<Output>,
         with tree: ChoiceTree,
@@ -94,76 +93,60 @@ extension Interpreters {
         // Groups containing branches represent `picks` and are handled together
         if case let .group(choices) = tree {
             var result: Output?
-            
+
             if choices.allSatisfy({ $0.isBranch || $0.isSelected }) == false {
-                guard context.isStart, case .group(true) = context.values.removeFirst() else {
-                    throw ReplaySequenceError.groupNotOpen
-                }
+                try context.consumeGroup(true)
                 result = try materializeWithChoices(gen, with: choices, context: context)
-                guard context.isEnd, case .group(false) = context.values.removeFirst() else {
-                    throw ReplaySequenceError.groupNotClosed
-                }
+                try context.consumeGroup(false)
             } else {
                 // Handle all the pick branches together
                 result = try materializeWithChoices(gen, with: [tree], context: context)
             }
-            
-            // We are now expecting to clean up this group, but as only one branch was evaluated this won't work.
-            
+
             return result
         }
-        
+
         switch gen {
         case let .pure(value):
             // Base case: The generator is done. Return the final value.
-            // Any remaining script would indicate a mismatch, but the logic
-            // for the calling operation handles passing the correct sub-tree.
             return value
 
         case let .impure(operation, continuation):
-            // This helper simplifies calling the continuation with a result.
-            let runContinuation = { (result: Any) -> Output? in
-                // The crucial difference: we are NOT passing the script down.
-                // The continuation represents the rest of the generator, which
-                // will be handled by the next level of the .impure case.
-                let nextGen = try continuation(result)
-                // We replay the rest of the generator with the *same* script,
-                // as the operation itself doesn't consume the whole tree.
-                return try self.materializeRecursive(nextGen, with: tree, context: context)
-            }
-            
             // This is the core structural match. We switch on the operation.
             switch operation {
             case .zip:
-                // TODO: Why is this unsupported?
-                fatalError("Unsupported")
-                
+                fatalError("When being materialized this should be a group")
+
             case .chooseBits:
                 // This operation expects a primitive `.choice` node from the script.
-                guard context.nextIsValue, case let .value(value) = context.values.removeFirst() else {
+                guard let value = try? context.consumeValue() else {
                     return nil
                 }
-                return try runContinuation(value.choice.convertible)
+                let nextGen = try continuation(value.choice.convertible)
+                return try materializeRecursive(nextGen, with: tree, context: context)
 
             case let .just(value):
                 // This operation expects a `.just` node from the script.
                 guard case .just = tree else {
                     return nil
                 }
-                return try runContinuation(value)
-                
+                let nextGen = try continuation(value)
+                return try materializeRecursive(nextGen, with: tree, context: context)
+
             case .getSize:
                 // This operation expects a `.getSize` node from the script.
                 switch tree {
                 case let .choice(.unsigned(value), _):
-                    return try runContinuation(value)
+                    let nextGen = try continuation(value)
+                    return try materializeRecursive(nextGen, with: tree, context: context)
                 case let .getSize(value):
-                    return try runContinuation(value)
+                    let nextGen = try continuation(value)
+                    return try materializeRecursive(nextGen, with: tree, context: context)
                 default:
                     return nil
                 }
-                
-            case let .resize(_, nextGen):
+
+            case let .resize(_, resizedGen):
                 // This operation expects a `.resize` node from the script.
                 guard case let .resize(_, subChoices) = tree else {
                     return nil
@@ -173,84 +156,69 @@ extension Interpreters {
                 guard let firstChoice = subChoices.first else {
                     return nil
                 }
-                guard let subResult = try self.materializeRecursive(nextGen, with: firstChoice, context: context) else {
+                
+                try context.consumeGroup(true)
+                
+                guard let subResult = try self.materializeRecursive(resizedGen, with: firstChoice, context: context) else {
                     return nil
                 }
-                return try runContinuation(subResult)
+                
+                try context.consumeGroup(false)
+                
+                let nextGen = try continuation(subResult)
+                return try materializeRecursive(nextGen, with: tree, context: context)
 
             case let .pick(choices):
-                // This operation expects a `.branch` node from the script.
-                guard case .branch(_, let label, let choice) = tree else {
-                    return nil
-                }
-                
-                // TODO: This is a big one. With materialized picks we can branch out here?
-                
-                // Find the sub-generator that matches the label from the script.
-                guard let chosenGen = choices.first(where: { $0.label == label })?.generator else {
-                    return nil
-                }
-                
-                // Recursively replay the chosen sub-generator with the children of this branch node.
-                // A group of children is replayed as a single unit.
-                guard let result = try self.materializeRecursive(chosenGen, with: choice, context: context) else {
-                    return nil
-                }
-                return result as? Output
+                fatalError("No 'naked' picks should be materialized. They will all be wrapped in a group")
+//                // This operation expects a `.branch` node from the script.
+//                guard case .branch(_, let label, let choice) = tree else {
+//                    return nil
+//                }
+//
+//                // Find the sub-generator that matches the label from the script.
+//                guard let chosenGen = choices.first(where: { $0.label == label })?.generator else {
+//                    return nil
+//                }
+//
+//                // Recursively replay the chosen sub-generator with the children of this branch node.
+//                guard let result = try self.materializeRecursive(chosenGen, with: choice, context: context) else {
+//                    return nil
+//                }
+//                return result as? Output
 
             case let .sequence(_, elementGenerator):
                 // This operation expects a `.sequence` node from the script.
                 guard case let .sequence(_, elements, _) = tree else {
                     return nil
                 }
-                
-                guard context.isSequenceStart else {
+
+                guard let result = try materializeSequenceElements(
+                    using: elementGenerator,
+                    elementScript: elements.first,
+                    context: context,
+                    requireElements: false
+                ) else {
                     return nil
                 }
-                _ = context.values.removeFirst()
-                
-                var accumulatedValues: [Any] = []
-                // We don't know how many elements there can be here.
-                // We want the ChoiceSequence to dictate how we do this.
-                // Do we do a while loop?
-                
-                if let elementScript = elements.first {
-                    while true {
-                        // We don't really care about the `elementScript` here except as a blueprint for how to invoke the generator
-                        if let elementValue = try self.materializeRecursive(elementGenerator, with: elementScript, context: context) {
-                            accumulatedValues.append(elementValue)
-                        }
-                        if context.isSequenceEnd {
-                            break
-                        }
-                    }
-                }
-                
-                // If there were no elements then the next marker should still be the sequence closer
-                
-                guard context.isSequenceEnd else {
-                    fatalError("Expected group close")
-                }
-                _ = context.values.removeFirst()
-                
-                return try runContinuation(accumulatedValues)
-                 
+
+                let nextGen = try continuation(result)
+                return try materializeRecursive(nextGen, with: tree, context: context)
+
             // Forward-only ops don't consume choices. Their presence in a reflectable
             // generator is an error.
             case let .contramap(_, subGenerator):
+                fatalError("Should not be encountered")
                 // A lens/contramap is a wrapper. It doesn't consume a node from the script itself.
                 // The choices are consumed by its sub-generator. We pass the same script down.
                 guard let subResult = try self.materializeRecursive(subGenerator, with: tree, context: context) else {
                     return nil
                 }
-                
-                // Call the continuation with the subResult to handle the transformation
+
                 let nextGen = try continuation(subResult)
                 return try self.materializeRecursive(nextGen, with: tree, context: context)
-                
+
             case let .prune(subGenerator):
-                // A prune is a wrapper. It doesn't consume a node from the script itself.
-                // The choices are consumed by its sub-generator. We pass the same script down.
+                fatalError("Should not be encountered")
                 guard let result = try self.materializeRecursive(subGenerator, with: tree, context: context) else {
                     return nil
                 }
@@ -264,20 +232,50 @@ extension Interpreters {
         }
     }
 
+    // MARK: - Shared Helpers
+
+    /// Materializes a sequence of elements by consuming sequence open/close markers
+    /// and looping over elements until the sequence end marker is reached.
+    private static func materializeSequenceElements(
+        using elementGenerator: ReflectiveGenerator<Any>,
+        elementScript: ChoiceTree?,
+        context: Context,
+        requireElements: Bool
+    ) throws -> [Any]? {
+        try context.consumeSequence(true)
+
+        var accumulatedValues: [Any] = []
+
+        if let elementScript {
+            while context.peek != .sequence(false) {
+                let elementValue = try self.materializeRecursive(elementGenerator, with: elementScript, context: context)
+                if let elementValue {
+                    accumulatedValues.append(elementValue)
+                } else if requireElements {
+                    return nil
+                }
+            }
+        }
+
+        try context.consumeSequence(false)
+
+        return accumulatedValues
+    }
+
     // MARK: - Private Recursive Materialization Engine
-    
+
     private static func materializeWithChoices<Output>(
         _ gen: ReflectiveGenerator<Output>,
         with choices: [ChoiceTree],
         context: Context
     ) throws -> Output? {
         var remainingChoices = choices
-        return try materializeWithChoicesHelper(gen, with: &remainingChoices, context: context)
+        return try materializeWithChoicesHelper(gen, with: &remainingChoices[...], context: context)
     }
-    
+
     private static func materializeWithChoicesHelper<Output>(
         _ gen: ReflectiveGenerator<Output>,
-        with choices: inout [ChoiceTree],
+        with choices: inout [ChoiceTree].SubSequence,
         context: Context
     ) throws -> Output? {
         switch gen {
@@ -288,17 +286,17 @@ extension Interpreters {
         case let .impure(operation, continuation):
             // Handle each operation by consuming appropriate choices
             switch operation {
-                
+
             case .chooseBits:
                 // Consume the next choice
                 guard !choices.isEmpty else {
                     return nil
                 }
                 _ = choices.removeFirst()
-                guard context.nextIsValue, case let .value(value) = context.values.removeFirst() else {
+                guard let value = try? context.consumeValue() else {
                     return nil
                 }
-                
+
                 let nextGen = try continuation(value.choice.convertible)
                 return try self.materializeWithChoicesHelper(nextGen, with: &choices, context: context)
 
@@ -308,16 +306,14 @@ extension Interpreters {
                     return nil
                 }
                 let choice = choices.removeFirst()
-                
+
                 guard case var .group(branches) = choice else {
                     throw ReplaySequenceError.wrongInputChoice
                 }
+
+                try context.consumeGroup(true)
                 
-                guard context.isStart else {
-                    throw ReplaySequenceError.groupNotOpen
-                }
-                _ = context.values.removeFirst()
-                if context.isBranch, case let .branch(sequenceBranch) = context.values.removeFirst(), let index = sequenceBranch.choice.convertible as? Int {
+                if let sequenceBranch = try? context.consumeBranch(), let index = sequenceBranch.choice.convertible as? Int {
                     // Now we set the branch explicitly
                     branches = branches.indices.contains(index) ? [branches[index]] : branches
                 } else if branches.contains(where: \.isSelected) {
@@ -325,7 +321,7 @@ extension Interpreters {
                     // If one is selected, we don't have to replay the others
                     branches = branches.filter(\.isSelected)
                 }
-                
+
                 let nextGen = try branches
                     .firstNonNil { branch -> ReflectiveGenerator<Output>? in
                         switch branch {
@@ -343,15 +339,12 @@ extension Interpreters {
                             throw ReplayError.wrongInputChoice
                         }
                     }
-                
+
                 guard let nextGen else {
                     throw ReplaySequenceError.noSuccessfulBranch
                 }
-                
-                guard context.isEnd else {
-                    throw ReplaySequenceError.groupNotClosed
-                }
-                _ = context.values.removeFirst()
+
+                try context.consumeGroup(false)
 
                 return try self.materializeWithChoicesHelper(nextGen, with: &choices, context: context)
 
@@ -361,37 +354,21 @@ extension Interpreters {
                     return nil
                 }
                 let choice = choices.removeFirst()
-                
+
                 guard case let .sequence(_, elements, _) = choice else {
                     throw ReplayError.wrongInputChoice
                 }
-                
-                guard context.isSequenceStart else {
-                    throw ReplaySequenceError.groupNotOpen
+
+                guard let result = try materializeSequenceElements(
+                    using: elementGenerator,
+                    elementScript: elements.first,
+                    context: context,
+                    requireElements: true
+                ) else {
+                    return nil
                 }
-                _ = context.values.removeFirst()
-                
-                var accumulatedValues: [Any] = []
-                
-                if let elementScript = elements.first {
-                    while true {
-                        guard let elementValue = try self.materializeRecursive(elementGenerator, with: elementScript, context: context) else {
-                            return nil
-                        }
-                        accumulatedValues.append(elementValue)
-                        
-                        if context.isSequenceEnd {
-                            break
-                        }
-                    }
-                }
-                
-                guard context.isSequenceEnd else {
-                    throw ReplaySequenceError.groupNotClosed
-                }
-                _ = context.values.removeFirst()
-                
-                let nextGen = try continuation(accumulatedValues)
+
+                let nextGen = try continuation(result)
                 return try self.materializeWithChoicesHelper(nextGen, with: &choices, context: context)
 
             case let .zip(generators):
@@ -421,10 +398,10 @@ extension Interpreters {
                 guard case .just = choice else {
                     return nil
                 }
-                
+
                 let nextGen = try continuation(value)
                 return try self.materializeWithChoicesHelper(nextGen, with: &choices, context: context)
-                
+
             case .getSize:
                 // getSize doesn't consume choices, just returns the current size
                 guard !choices.isEmpty else { return nil }
@@ -432,10 +409,10 @@ extension Interpreters {
                 guard case let .getSize(size) = choice else {
                     return nil
                 }
-                
+
                 let nextGen = try continuation(size)
                 return try self.materializeWithChoicesHelper(nextGen, with: &choices, context: context)
-                
+
             case let .resize(_, subGenerator):
                 // resize consumes a resize choice and replays the sub-generator
                 guard !choices.isEmpty else {
@@ -445,20 +422,22 @@ extension Interpreters {
                 guard case let .resize(_, subChoices) = choice else {
                     return nil
                 }
-                
-                var subChoicesCopy = subChoices
-                guard let subResult = try self.materializeWithChoicesHelper(subGenerator, with: &subChoicesCopy, context: context) else {
+
+                var subChoicesSlice = subChoices[...]
+                guard let subResult = try self.materializeWithChoicesHelper(subGenerator, with: &subChoicesSlice, context: context) else {
                     return nil
                 }
                 let nextGen = try continuation(subResult)
                 return try self.materializeWithChoicesHelper(nextGen, with: &choices, context: context)
-            
+
             case let .filter(gen, _, _), let .classify(gen, _, _):
+                // filter/classify delegate to the inner generator; the as? Output cast is safe
+                // because the inner generator's output type matches Output at runtime
                 return try self.materializeWithChoicesHelper(gen, with: &choices, context: context) as? Output
             }
         }
     }
-    
+
     enum ReplaySequenceError: LocalizedError {
         case wrongInputChoice
         case noSuccessfulBranch

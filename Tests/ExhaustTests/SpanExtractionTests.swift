@@ -606,3 +606,191 @@ struct ExtractValueSpansTests {
         #expect(spans[2].range == 0...0)
     }
 }
+
+// MARK: - extractSequenceBoundarySpans
+
+@Suite("Sequence boundary span extraction tests")
+struct ExtractSequenceBoundarySpansTests {
+
+    @Test("Empty sequence returns no spans")
+    func emptySequence() {
+        let spans = ChoiceSequence.extractSequenceBoundarySpans(from: [])
+        #expect(spans.isEmpty)
+    }
+
+    @Test("Single flat sequence has no boundaries")
+    func singleFlatSequence() {
+        // [V V V]
+        let seq: ChoiceSequence = [seqOpen, val(1), val(2), val(3), seqClose]
+        let spans = ChoiceSequence.extractSequenceBoundarySpans(from: seq)
+        #expect(spans.isEmpty)
+    }
+
+    @Test("Two sibling sequences at depth 1 are not detected")
+    func siblingSequencesAtTopLevel() {
+        // [V][V] — depth never exceeds 1
+        let seq: ChoiceSequence = [seqOpen, val(1), seqClose, seqOpen, val(2), seqClose]
+        let spans = ChoiceSequence.extractSequenceBoundarySpans(from: seq)
+        #expect(spans.isEmpty)
+    }
+
+    @Test("Two inner sequences inside outer sequence produce one boundary")
+    func twoInnerSequences() {
+        // [[V][V]]
+        let seq: ChoiceSequence = [
+            seqOpen,
+                seqOpen, val(1), seqClose,
+                seqOpen, val(2), seqClose,
+            seqClose,
+        ]
+        let spans = ChoiceSequence.extractSequenceBoundarySpans(from: seq)
+
+        #expect(spans.count == 1)
+        // The ][ boundary is at indices 3...4
+        #expect(spans[0].range == 3...4)
+        #expect(spans[0].depth == 2)
+    }
+
+    @Test("Three inner sequences produce two boundaries")
+    func threeInnerSequences() {
+        // [[V][V][V]]
+        let seq: ChoiceSequence = [
+            seqOpen,                          // 0
+                seqOpen, val(1), seqClose,    // 1, 2, 3
+                seqOpen, val(2), seqClose,    // 4, 5, 6
+                seqOpen, val(3), seqClose,    // 7, 8, 9
+            seqClose,                         // 10
+        ]
+        let spans = ChoiceSequence.extractSequenceBoundarySpans(from: seq)
+
+        #expect(spans.count == 2)
+        #expect(spans[0].range == 3...4)
+        #expect(spans[1].range == 6...7)
+    }
+
+    @Test("Boundary depth reflects sequence nesting depth")
+    func boundaryDepthIsCorrect() {
+        // [[[V][V]]]
+        let seq: ChoiceSequence = [
+            seqOpen,                                      // 0, depth 1
+                seqOpen,                                  // 1, depth 2
+                    seqOpen, val(1), seqClose,            // 2, 3, 4
+                    seqOpen, val(2), seqClose,            // 5, 6, 7
+                seqClose,                                 // 8
+            seqClose,                                     // 9
+        ]
+        let spans = ChoiceSequence.extractSequenceBoundarySpans(from: seq)
+
+        #expect(spans.count == 1)
+        #expect(spans[0].range == 4...5)
+        // At the point of the ][, sequence depth is 3 (outer + middle + inner closing at 3)
+        #expect(spans[0].depth == 3)
+    }
+
+    @Test("Groups between sequences do not produce false boundaries")
+    func groupsBetweenSequences() {
+        // [(V)(V)] — groups, not sequences, so no ][ boundary
+        let seq: ChoiceSequence = [
+            seqOpen,
+                grpOpen, val(1), grpClose,
+                grpOpen, val(2), grpClose,
+            seqClose,
+        ]
+        let spans = ChoiceSequence.extractSequenceBoundarySpans(from: seq)
+        #expect(spans.isEmpty)
+    }
+
+    @Test("Only sequence markers count toward depth, not groups")
+    func groupsDoNotAffectSequenceDepth() {
+        // ([V][V]) — inner sequences are inside a group, not a sequence
+        // sequence depth is only 1 at the ][ boundary
+        let seq: ChoiceSequence = [
+            grpOpen,
+                seqOpen, val(1), seqClose,
+                seqOpen, val(2), seqClose,
+            grpClose,
+        ]
+        let spans = ChoiceSequence.extractSequenceBoundarySpans(from: seq)
+        #expect(spans.isEmpty)
+    }
+
+    @Test("Non-adjacent sequence close and open are not detected")
+    func nonAdjacentBoundary() {
+        // [[V] V [V]] — value between ] and [
+        let seq: ChoiceSequence = [
+            seqOpen,                          // 0
+                seqOpen, val(1), seqClose,    // 1, 2, 3
+                val(99),                      // 4
+                seqOpen, val(2), seqClose,    // 5, 6, 7
+            seqClose,                         // 8
+        ]
+        let spans = ChoiceSequence.extractSequenceBoundarySpans(from: seq)
+        #expect(spans.isEmpty)
+    }
+
+    @Test("Multiple boundaries at different nesting levels")
+    func multipleLevels() {
+        // [[[V][V]][[V][V]]]
+        let seq: ChoiceSequence = [
+            seqOpen,                                          // 0
+                seqOpen,                                      // 1
+                    seqOpen, val(1), seqClose,                // 2, 3, 4
+                    seqOpen, val(2), seqClose,                // 5, 6, 7
+                seqClose,                                     // 8
+                seqOpen,                                      // 9
+                    seqOpen, val(3), seqClose,                // 10, 11, 12
+                    seqOpen, val(4), seqClose,                // 13, 14, 15
+                seqClose,                                     // 16
+            seqClose,                                         // 17
+        ]
+        let spans = ChoiceSequence.extractSequenceBoundarySpans(from: seq)
+
+        // Boundaries: 4...5 (depth 3), 8...9 (depth 2), 12...13 (depth 3)
+        #expect(spans.count == 3)
+        #expect(spans[0].range == 4...5)
+        #expect(spans[0].depth == 3)
+        #expect(spans[1].range == 8...9)
+        #expect(spans[1].depth == 2)
+        #expect(spans[2].range == 12...13)
+        #expect(spans[2].depth == 3)
+    }
+
+    @Test("Values only, no sequences")
+    func valuesOnly() {
+        let seq: ChoiceSequence = [val(1), val(2), val(3)]
+        let spans = ChoiceSequence.extractSequenceBoundarySpans(from: seq)
+        #expect(spans.isEmpty)
+    }
+
+    @Test("Each boundary span covers exactly two indices")
+    func spanCoversExactlyTwoIndices() {
+        // [[V][V][V]]
+        let seq: ChoiceSequence = [
+            seqOpen,
+                seqOpen, val(1), seqClose,
+                seqOpen, val(2), seqClose,
+                seqOpen, val(3), seqClose,
+            seqClose,
+        ]
+        let spans = ChoiceSequence.extractSequenceBoundarySpans(from: seq)
+
+        for span in spans {
+            #expect(span.range.upperBound - span.range.lowerBound == 1)
+        }
+    }
+
+    @Test("Empty inner sequences produce boundary")
+    func emptyInnerSequences() {
+        // [[][]]
+        let seq: ChoiceSequence = [
+            seqOpen,
+                seqOpen, seqClose,
+                seqOpen, seqClose,
+            seqClose,
+        ]
+        let spans = ChoiceSequence.extractSequenceBoundarySpans(from: seq)
+
+        #expect(spans.count == 1)
+        #expect(spans[0].range == 2...3)
+    }
+}
