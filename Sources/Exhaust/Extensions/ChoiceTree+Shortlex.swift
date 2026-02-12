@@ -1,95 +1,13 @@
-//
-//  ChoiceTree+Shortlex.swift
-//  Exhaust
-//
-//  Created by Chris Kolbu on 29/7/2025.
-//
+////
+////  ChoiceTree+Shortlex.swift
+////  Exhaust
+////
+////  Created by Chris Kolbu on 29/7/2025.
+////
+
 
 extension ChoiceTree {
-    var shortlexLength: UInt64 {
-        switch self {
-        case .choice:
-            return 1
-        case .sequence(let length, let elements, _):
-            return length + elements.map(\.shortlexLength).reduce(0, &+)
-        case .branch(_, _, let choice):
-            return 1 + choice.shortlexLength
-        case .group(let children):
-            // TODO: Weight for shortlex?
-            return 1 + children.map(\.shortlexLength).reduce(0, &+)
-            // Cases with no intrinsic complexity
-        case .getSize, .just:
-            return 0
-        case .important(let child):
-            return child.shortlexLength // > 0 ? child.shortlexLength - 1 : 0
-        case .selected(let child):
-            return child.shortlexLength
-        case .resize(_, let choices):
-            return choices.map(\.shortlexLength).reduce(0, &+)
-        }
-    }
-}
-
-extension ChoiceTree {
-    func shortlexPrecedes(_ other: ChoiceTree) -> Bool {
-        // 1. SHORT: Compare by length (shorter is better)
-        let lhsLength = self.shortlexLength
-        let rhsLength = other.shortlexLength
-        
-        if lhsLength != rhsLength {
-            return lhsLength < rhsLength
-        }
-        
-        // 2. LEX: For equal lengths, compare lexicographically
-        return self.lexicographicallyPrecedes(other)
-    }
-    
-    private func lexicographicallyPrecedes(_ other: ChoiceTree) -> Bool {
-        switch (self, other) {
-        case let (.choice(lhsValue, _), .choice(rhsValue, _)):
-            return lhsValue < rhsValue
-            
-        case let (.sequence(lhsLength, lhsElements, _), .sequence(rhsLength, rhsElements, _)):
-            if lhsLength != rhsLength {
-                return lhsLength < rhsLength
-            }
-            return lhsElements.lexicographicallyPrecedes(rhsElements) {
-                $0.shortlexPrecedes($1)
-            }
-            
-        case let (.branch(_, lhsLabel, lhsChoice), .branch(_, rhsLabel, rhsChoice)):
-            if lhsLabel != rhsLabel {
-                return lhsLabel < rhsLabel
-            }
-            return lhsChoice.shortlexPrecedes(lhsChoice)
-            
-        case let (.group(lhsChildren), .group(rhsChildren)):
-            return lhsChildren.lexicographicallyPrecedes(rhsChildren) {
-                $0.shortlexPrecedes($1) }
-            
-        case let (.resize(lhsSize, lhsChoices), .resize(rhsSize, rhsChoices)):
-            if lhsSize != rhsSize {
-                return lhsSize < rhsSize
-            }
-            return lhsChoices.lexicographicallyPrecedes(rhsChoices) {
-                $0.shortlexPrecedes($1) }
-            
-        case let (.important(lhsChild), .important(rhsChild)),
-            let (.selected(lhsChild), .selected(rhsChild)):
-            return lhsChild.shortlexPrecedes(rhsChild)
-            
-        case let (.getSize(lhsSize), .getSize(rhsSize)):
-            return lhsSize < rhsSize
-            
-        case (.just(let lhsType), .just(let rhsType)):
-            return lhsType < rhsType
-            
-        // Different node types: establish canonical ordering
-        default:
-            return self.typeOrder < other.typeOrder
-        }
-    }
-    
+    #warning("Deprecated — remove")
     var typeOrder: Int {
         switch self {
         case .important: return -2     // Highest priority - guides shrinking
@@ -104,6 +22,7 @@ extension ChoiceTree {
         }
     }
     
+    #warning("Deprecated — remove")
     var typeId: Int {
         switch self {
         case .important: return 0     // Highest priority - guides shrinking

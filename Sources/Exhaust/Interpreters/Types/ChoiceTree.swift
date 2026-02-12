@@ -493,7 +493,7 @@ extension ChoiceTree: CustomDebugStringConvertible {
         case .getSize:
             return prefix + connector + "getSize(?)"
         case let .resize(newSize, choices):
-            var result = prefix + connector + "resize(?)"
+            var result = prefix + connector + "resize(\(newSize))"
             for (index, choice) in choices.enumerated() {
                 let isLastChoice = index == choices.count - 1
                 result += "\n" + choice.treeDescription(prefix: childPrefix, isLast: isLastChoice)
@@ -532,33 +532,6 @@ extension ChoiceTree: CustomDebugStringConvertible {
             return "getSize(\(size))"
         case let .resize(newSize, choices):
             return "resize(\(newSize): [\(choices.map(\.elementDescription).joined(separator: ", "))])"
-        }
-    }
-    
-    var combinatoryComplexity: Double {
-        switch self {
-        case .choice(let choiceValue, let choiceMetadata):
-            return choiceValue.combinatoryComplexity(for: choiceMetadata.validRanges[0])
-        case .just:
-            return 0
-        case .sequence(_, let elements, let choiceMetadata):
-            let range = choiceMetadata.validRanges[0].cast(type: UInt64.self)
-            if range.lowerBound == .min || range.upperBound == .max {
-                return Double(Int64.max)
-            }
-            return Double(range.upperBound - range.lowerBound) + elements.reduce(0, { $0 + $1.combinatoryComplexity })
-        case .branch(_, _, let gen):
-            return gen.combinatoryComplexity
-        case .group(let array):
-            return array.reduce(0, { $0 + $1.combinatoryComplexity })
-        case .getSize:
-            return 0
-        case .resize(_, let choices):
-            return choices.reduce(0, { $0 + $1.combinatoryComplexity })
-        case .important(let choiceTree):
-            return choiceTree.combinatoryComplexity
-        case .selected(let choiceTree):
-            return choiceTree.combinatoryComplexity
         }
     }
     
