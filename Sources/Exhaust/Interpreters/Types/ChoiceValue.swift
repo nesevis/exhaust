@@ -31,7 +31,11 @@ public enum ChoiceValue: Comparable, Hashable, Equatable, Sendable {
         case .float:
             self = .floating(Double(Float(bitPattern64: value.bitPattern64)), value.bitPattern64, Float.self)
         case .character:
-            self = .character(Character(bitPattern64: value.bitPattern64))
+            if let character = value as? Character {
+                self = .character(character)
+            } else {
+                self = .character(Character(bitPattern64: value.bitPattern64))
+            }
         }
     }
 
