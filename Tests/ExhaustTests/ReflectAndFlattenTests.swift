@@ -119,6 +119,29 @@ struct ReflectAndFlattenTests {
         #expect(unsignedValues.contains(42))
         #expect(unsignedValues.contains(99))
     }
+    
+    @Test("Reflect and flatten tuple of arrays")
+    func reflectAndFlattenTupleOfArrays() throws {
+        let gen = Gen.zip(
+            Gen.choose(in: UInt64(0)...100).proliferate(with: 1...10),
+            Gen.choose(in: UInt64(0)...100).proliferate(with: 10...20)
+        )
+        let value: ([UInt64], [UInt64]) = ([42], [99, 100, 101])
+
+        // Reflect the generator with the value
+        let tree = try Interpreters.reflect(gen, with: value)
+
+        #expect(tree != nil)
+        guard let tree else { return }
+
+        // Flatten the reflected tree
+        let flattened = ChoiceSequence.flatten(tree)
+        
+        let materialised = try Interpreters.materialize(gen, with: tree, using: flattened)
+
+        #expect(value.0 == materialised?.0)
+        #expect(value.1 == materialised?.1)
+    }
 
     @Test("Reflect and flatten pick/branch")
     func reflectAndFlattenPick() throws {

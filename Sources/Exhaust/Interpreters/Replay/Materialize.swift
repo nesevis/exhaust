@@ -99,13 +99,13 @@ extension Interpreters {
                 guard context.isStart, case .group(true) = context.values.removeFirst() else {
                     throw ReplaySequenceError.groupNotOpen
                 }
-                result = try replayWithChoices(gen, with: choices, context: context)
+                result = try materializeWithChoices(gen, with: choices, context: context)
                 guard context.isEnd, case .group(false) = context.values.removeFirst() else {
                     throw ReplaySequenceError.groupNotClosed
                 }
             } else {
                 // Handle all the pick branches together
-                result = try replayWithChoices(gen, with: [tree], context: context)
+                result = try materializeWithChoices(gen, with: [tree], context: context)
             }
             
             // We are now expecting to clean up this group, but as only one branch was evaluated this won't work.
@@ -264,18 +264,18 @@ extension Interpreters {
         }
     }
 
-    // MARK: - Private Recursive Replay Engine
+    // MARK: - Private Recursive Materialization Engine
     
-    private static func replayWithChoices<Output>(
+    private static func materializeWithChoices<Output>(
         _ gen: ReflectiveGenerator<Output>,
         with choices: [ChoiceTree],
         context: Context
     ) throws -> Output? {
         var remainingChoices = choices
-        return try replayWithChoicesHelper(gen, with: &remainingChoices, context: context)
+        return try materializeWithChoicesHelper(gen, with: &remainingChoices, context: context)
     }
     
-    private static func replayWithChoicesHelper<Output>(
+    private static func materializeWithChoicesHelper<Output>(
         _ gen: ReflectiveGenerator<Output>,
         with choices: inout [ChoiceTree],
         context: Context
@@ -300,7 +300,7 @@ extension Interpreters {
                 }
                 
                 let nextGen = try continuation(value.choice.convertible)
-                return try self.replayWithChoicesHelper(nextGen, with: &choices, context: context)
+                return try self.materializeWithChoicesHelper(nextGen, with: &choices, context: context)
 
             case let .pick(pickChoices):
                 // Consume the next choice which should be a branch
@@ -334,7 +334,7 @@ extension Interpreters {
                                 // Find the sub-generator that matches the label
                                 let chosenGen = pickChoices.first(where: { $0.label == label })?.generator,
                                 // Process the chosen sub-generator with its children
-                                let result = try replayWithChoices(chosenGen, with: [choice], context: context)
+                                let result = try materializeWithChoices(chosenGen, with: [choice], context: context)
                             else {
                                 return nil
                             }
@@ -353,7 +353,7 @@ extension Interpreters {
                 }
                 _ = context.values.removeFirst()
 
-                return try self.replayWithChoicesHelper(nextGen, with: &choices, context: context)
+                return try self.materializeWithChoicesHelper(nextGen, with: &choices, context: context)
 
             case let .sequence(_, elementGenerator):
                 // Consume the next choice which should be a sequence
@@ -366,16 +366,33 @@ extension Interpreters {
                     throw ReplayError.wrongInputChoice
                 }
                 
+                guard context.isSequenceStart else {
+                    throw ReplaySequenceError.groupNotOpen
+                }
+                _ = context.values.removeFirst()
+                
                 var accumulatedValues: [Any] = []
-                for elementScript in elements {
-                    guard let elementValue = try self.materializeRecursive(elementGenerator, with: elementScript, context: context) else {
-                        return nil
+                
+                if let elementScript = elements.first {
+                    while true {
+                        guard let elementValue = try self.materializeRecursive(elementGenerator, with: elementScript, context: context) else {
+                            return nil
+                        }
+                        accumulatedValues.append(elementValue)
+                        
+                        if context.isSequenceEnd {
+                            break
+                        }
                     }
-                    accumulatedValues.append(elementValue)
                 }
                 
+                guard context.isSequenceEnd else {
+                    throw ReplaySequenceError.groupNotClosed
+                }
+                _ = context.values.removeFirst()
+                
                 let nextGen = try continuation(accumulatedValues)
-                return try self.replayWithChoicesHelper(nextGen, with: &choices, context: context)
+                return try self.materializeWithChoicesHelper(nextGen, with: &choices, context: context)
 
             case let .zip(generators):
                 guard generators.count == choices.count else {
@@ -389,14 +406,14 @@ extension Interpreters {
                     subResults.append(subResult)
                 }
                 let nextGen = try continuation(subResults)
-                return try self.replayWithChoicesHelper(nextGen, with: &choices, context: context)
+                return try self.materializeWithChoicesHelper(nextGen, with: &choices, context: context)
             case let .contramap(_, subGenerator), let .prune(subGenerator):
                 // A left map or prune doesn't consume choices, just passes them to the sub-generator
-                guard let subResult = try self.replayWithChoicesHelper(subGenerator, with: &choices, context: context) else {
+                guard let subResult = try self.materializeWithChoicesHelper(subGenerator, with: &choices, context: context) else {
                     return nil
                 }
                 let nextGen = try continuation(subResult)
-                return try self.replayWithChoicesHelper(nextGen, with: &choices, context: context)
+                return try self.materializeWithChoicesHelper(nextGen, with: &choices, context: context)
             case let .just(value):
                 // Consume the next choice which should be a just
                 guard !choices.isEmpty else { return nil }
@@ -406,7 +423,7 @@ extension Interpreters {
                 }
                 
                 let nextGen = try continuation(value)
-                return try self.replayWithChoicesHelper(nextGen, with: &choices, context: context)
+                return try self.materializeWithChoicesHelper(nextGen, with: &choices, context: context)
                 
             case .getSize:
                 // getSize doesn't consume choices, just returns the current size
@@ -417,7 +434,7 @@ extension Interpreters {
                 }
                 
                 let nextGen = try continuation(size)
-                return try self.replayWithChoicesHelper(nextGen, with: &choices, context: context)
+                return try self.materializeWithChoicesHelper(nextGen, with: &choices, context: context)
                 
             case let .resize(_, subGenerator):
                 // resize consumes a resize choice and replays the sub-generator
@@ -430,14 +447,14 @@ extension Interpreters {
                 }
                 
                 var subChoicesCopy = subChoices
-                guard let subResult = try self.replayWithChoicesHelper(subGenerator, with: &subChoicesCopy, context: context) else {
+                guard let subResult = try self.materializeWithChoicesHelper(subGenerator, with: &subChoicesCopy, context: context) else {
                     return nil
                 }
                 let nextGen = try continuation(subResult)
-                return try self.replayWithChoicesHelper(nextGen, with: &choices, context: context)
+                return try self.materializeWithChoicesHelper(nextGen, with: &choices, context: context)
             
             case let .filter(gen, _, _), let .classify(gen, _, _):
-                return try self.replayWithChoicesHelper(gen, with: &choices, context: context) as? Output
+                return try self.materializeWithChoicesHelper(gen, with: &choices, context: context) as? Output
             }
         }
     }
