@@ -142,13 +142,7 @@ public enum Interpreters {
                 // We can't know the proper range here, and the min...max is _usually_ dependent on the getSize parameter
                 validRanges: [min...max],
                 // FIXME: We can clamp this here as well using the range
-                strategies: [
-                    FundamentalReducerStrategy(direction: .towardsLowerBound),
-                    BoundaryReducerStrategy(direction: .towardsLowerBound),
-//                    SpreadReducerStrategy(direction: .towardsLowerBound),
-                    BinaryReducerStrategy(direction: .towardsLowerBound),
-                    SaturationReducerStrategy(direction: .towardsLowerBound)
-                ]
+                strategies: []
             )
             return [(value: finalOutput, path: [.choice(.init(convertibleValue, tag: tag), metadata)])]
         

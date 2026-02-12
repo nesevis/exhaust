@@ -38,9 +38,9 @@ enum ShrinkingStrategy: CaseIterable, Hashable, Equatable {
     
     static var sequenceStrategies: [any TemporaryDualPurposeStrategy] {
         [
-            BoundaryReducerStrategy(direction: .towardsLowerBound),
-            BinaryReducerStrategy(direction: .towardsLowerBound),
-            SaturationReducerStrategy(direction: .towardsLowerBound)
+//            BoundaryReducerStrategy(direction: .towardsLowerBound),
+//            BinaryReducerStrategy(direction: .towardsLowerBound),
+//            SaturationReducerStrategy(direction: .towardsLowerBound)
         ]
     }
 }

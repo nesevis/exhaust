@@ -378,9 +378,7 @@ extension ChoiceTree {
                     newLhs = lhs
                 }
                 
-                return keepStrategies
-                    ? newLhs.resetStrategies(direction: lhsValue.shrinkingDirection(given: rhsValue)) // This will apply strategies based on the effective range
-                    : newLhs.with(strategies: rhsMeta.strategies)
+                return newLhs.with(strategies: rhsMeta.strategies)
             case let (.sequence(lhsLength, lhsElements, lhsMeta), .sequence(rhsLength, rhsElements, rhsMeta)):
                 // The sequence itself is important
                 if lhsLength != rhsLength {
@@ -395,9 +393,7 @@ extension ChoiceTree {
                     } else {
                         newLhs = lhs
                     }
-                    return keepStrategies
-                        ? newLhs.resetStrategies(direction: ChoiceValue(lhsLength, tag: .uint64).shrinkingDirection(given: ChoiceValue(rhsLength, tag: .uint64))) // This will apply strategies based on the effective range
-                        : newLhs.with(strategies: rhsMeta.strategies)
+                    return newLhs.with(strategies: rhsMeta.strategies)
                 }
                 // The sequence content is important
                 if lhsElements.elementsEqual(rhsElements) == false {
