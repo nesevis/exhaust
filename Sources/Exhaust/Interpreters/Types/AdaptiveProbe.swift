@@ -25,15 +25,15 @@ public enum AdaptiveProbe {
     /// - Returns: The largest `k >= 0` for which `predicate(k)` holds.
     @inlinable
     public static func findInteger<T: BinaryInteger>(_ predicate: (T) -> Bool) -> T {
-        var low: T = 1
+        var low: T = 0
         var high: T = 5
         
         // Step 1: Linear scan of neighbouring values
-        while low < high - 1 {
+        while low < high {
+            low += 1
             if predicate(low) == false {
                 return low - 1
             }
-            low += 1
         }
 
         // Step 2: Exponential upward probe
