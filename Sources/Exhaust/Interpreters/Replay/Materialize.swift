@@ -213,26 +213,20 @@ extension Interpreters {
                 // We don't know how many elements there can be here.
                 // We want the ChoiceSequence to dictate how we do this.
                 // Do we do a while loop?
-                let elementScript = elements[0]
-                while true {
-                    // We don't really care about the `elementScript` here except as a blueprint for how to invoke the generator
-                    if let elementValue = try self.materializeRecursive(elementGenerator, with: elementScript, context: context) {
-                        accumulatedValues.append(elementValue)
-                    }
-                    if context.isSequenceEnd {
-                        break
+                
+                if let elementScript = elements.first {
+                    while true {
+                        // We don't really care about the `elementScript` here except as a blueprint for how to invoke the generator
+                        if let elementValue = try self.materializeRecursive(elementGenerator, with: elementScript, context: context) {
+                            accumulatedValues.append(elementValue)
+                        }
+                        if context.isSequenceEnd {
+                            break
+                        }
                     }
                 }
                 
-//                for elementScript in elements {
-//                    // Replay each element with its corresponding sub-tree from the script.
-//                    if let elementValue = try self.materializeRecursive(elementGenerator, with: elementScript, context: context) {
-//                        accumulatedValues.append(elementValue)
-//                    }
-//                    if context.isSequenceEnd {
-//                        break
-//                    }
-//                }
+                // If there were no elements then the next marker should still be the sequence closer
                 
                 guard context.isSequenceEnd else {
                     fatalError("Expected group close")
