@@ -25,14 +25,16 @@ extension Interpreters {
         tree: ChoiceTree,
         config: ShrinkConfiguration,
         property: (Output) -> Bool
-    ) throws -> (ChoiceSequence, Output?)? {
+    ) throws -> (ChoiceSequence, Output)? {
         // Mutable variables
         var currentSequence = ChoiceSequence.flatten(tree)
         // I don't think we need to reflect to regenerate this?
         // There is then a hard dependency on having to have reflectable generators, which is a pain
         let currentTree = tree
-        var currentOutput = try materialize(gen, with: tree, using: currentSequence)
-        let stallBudget = config.maxStalls
+        guard var currentOutput = try materialize(gen, with: tree, using: currentSequence) else {
+            return nil
+        }
+        var stallBudget = config.maxStalls
         
         while stallBudget > 0 {
             var didImprove = false
@@ -44,8 +46,10 @@ extension Interpreters {
                 currentOutput = output
                 didImprove = true
                 // TODO: Continue to next pass, do not return from here
-                return (currentSequence, currentOutput)
             }
+            
+            if didImprove { stallBudget = config.maxStalls; continue }
+            
             // Pass 2a: Collapse sequence boundaries, i.e [[V][V][V]] -> [[VVV]]
             let boundarySpans = ChoiceSequence.extractSequenceBoundarySpans(from: currentSequence)
             if boundarySpans.isEmpty == false, let (newSequence, output) = try adaptiveDeleteSpans(gen, tree: currentTree, property: property, sequence: currentSequence, spans: boundarySpans) {
@@ -53,8 +57,10 @@ extension Interpreters {
                 currentOutput = output
                 didImprove = true
                 // TODO: Continue to next pass, do not return from here
-                return (currentSequence, currentOutput)
             }
+            
+            if didImprove { stallBudget = config.maxStalls; continue }
+            
             // Pass 2b: Sequence element deletion, i.e the individual Vs in [VVVVV]
             let valueSpans = ChoiceSequence.extractValueSpans(from: currentSequence)
             if valueSpans.isEmpty == false, let (newSequence, output) = try adaptiveDeleteSpans(gen, tree: currentTree, property: property, sequence: currentSequence, spans: valueSpans) {
@@ -62,9 +68,10 @@ extension Interpreters {
                 currentOutput = output
                 didImprove = true
                 // TODO: Continue to next pass, do not return from here
-                return (currentSequence, currentOutput)
             }
-            print(didImprove)
+            
+            if didImprove { stallBudget = config.maxStalls; continue }
+            
             // Pass 3: Zero within range
             // Set all values to their semantic zero. Can use value span extraction
             // Pass 4: Pass to descendant
@@ -73,9 +80,11 @@ extension Interpreters {
             // Pass 5: Minimise individual values
             // Set all values to their semantic zero. Can use value span extraction
             // Pass 5: Shortlex order results for consistency?
+            
+            stallBudget -= 1
         }
         
-        return (currentSequence, nil)
+        return (currentSequence, currentOutput)
     }
     
     private static func adaptiveDeleteSpans<Output>(
