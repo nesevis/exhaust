@@ -27,8 +27,8 @@ struct ReverseShrinkingChallenge {
         let iterator = ValueAndChoiceTreeInterpreter(arrGen, seed: 1337)
         let (value, tree) = Array(iterator.dropFirst(2)).first!
         let (seq, output) = try #require(try Interpreters.reduce(gen: arrGen, tree: tree, config: .fast, property: property))
-        #expect(value.count > output?.count ?? Int.max)
-        #expect(output?.count == 2)
+        #expect(value.count > output.count ?? Int.max)
+        #expect(output.count == 2)
         print()
     }
 }
