@@ -84,7 +84,7 @@ public enum AdaptiveProbe {
             return guess + findInteger { n in guess + n < high && predicate(guess + n) == good }
         } else {
             // Our guess was equivalent to high, so we want to find some point before it.
-            return guess - findInteger { n in guess - n >= low && predicate(guess - n) != good } - 1
+            return guess - findInteger { n in n <= guess && guess - n >= low && predicate(guess - n) != good } - 1
         }
     }
 }

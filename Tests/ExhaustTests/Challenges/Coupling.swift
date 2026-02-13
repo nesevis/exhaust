@@ -24,7 +24,6 @@ struct CouplingShrinkingChallenge {
             .bind { n in
                 Gen.arrayOf(Gen.choose(in: 0...n - 1), exactly: UInt64(n))
             }
-//        let gen = Gen.arrayOf(Gen.choose(in: Int(0)...9), within: 2...10)
         
         // The array cannot contain any 2-cycles, ie where arr[arr[n]] == n
         var count = 0
@@ -47,6 +46,31 @@ struct CouplingShrinkingChallenge {
         print()
         let (seq, output) = try #require(try Interpreters.reduce(gen: gen, tree: tree, config: .fast, property: property))
         
+        // We expect this array to be shortened to only include the two values that cause a cycle
+        // And for those two values to be reduced to [0,1] rather than [15, 4]
+        /*
+         └── group
+             ├── choice(signed: 18) 2...20
+             └── sequence(length: 18) 18...18 // This is the issue. It can't shrink the length, so the positions/indices can't be shrunk either
+                 ├── choice(signed: 2) 0...17
+                 ├── choice(signed: 7) 0...17
+                 ├── choice(signed: 7) 0...17
+                 ├── choice(signed: 4) 0...17
+                 ├── choice(signed: 15) 0...17
+                 ├── choice(signed: 16) 0...17
+                 ├── choice(signed: 6) 0...17
+                 ├── choice(signed: 10) 0...17
+                 ├── choice(signed: 10) 0...17
+                 ├── choice(signed: 16) 0...17
+                 ├── choice(signed: 9) 0...17
+                 ├── choice(signed: 3) 0...17
+                 ├── choice(signed: 17) 0...17
+                 ├── choice(signed: 2) 0...17
+                 ├── choice(signed: 8) 0...17
+                 ├── choice(signed: 4) 0...17
+                 ├── choice(signed: 11) 0...17
+         */
+        #expect(output.count == 2)
         print()
         
         // Will require a value reduction pass
