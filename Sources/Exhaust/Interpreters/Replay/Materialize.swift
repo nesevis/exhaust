@@ -40,11 +40,13 @@ extension Interpreters {
         }
 
         func consumeValue() throws -> ChoiceSequenceValue.Value {
-            guard case let .value(v) = values.first else {
+            switch values.first {
+            case let .value(v), let .reduced(v):
+                values.removeFirst()
+                return v
+            default:
                 throw ReplaySequenceError.wrongInputChoice
             }
-            values.removeFirst()
-            return v
         }
 
         func consumeBranch() throws -> ChoiceSequenceValue.Value {

@@ -18,6 +18,23 @@ extension ChoiceValue {
             char.bitPattern64
         }
     }
+
+    /// Key for shortlex ordering where values closer to zero are smaller.
+    /// - Signed integers: absolute value (0 → 0, ±1 → 1, ±2 → 2, ...)
+    /// - Floating point: absolute value's raw IEEE 754 bit pattern (0.0 → 0, ±small → small, ±large → large)
+    /// - Unsigned integers and characters: identical to `bitPattern64`
+    var shortlexKey: UInt64 {
+        switch self {
+        case let .unsigned(uint):
+            uint
+        case let .signed(value, _, _):
+            value == Int64.min ? UInt64(Int64.max) + 1 : UInt64(abs(value))
+        case let .floating(value, _, _):
+            abs(value).bitPattern
+        case let .character(char):
+            char.bitPattern64
+        }
+    }
     
     var fundamentalValues: [ChoiceValue] {
         switch self {

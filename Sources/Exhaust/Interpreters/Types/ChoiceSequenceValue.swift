@@ -19,17 +19,8 @@ public enum ChoiceSequenceValue: Hashable, Equatable, Sendable {
     case branch(Value)
     /// Individual values
     case value(Value)
-    
-    public var isValue: Bool {
-        switch self {
-        case .value: return true
-        case .group: return false
-        case .sequence: return false
-        case .branch: return false
-        }
-    }
-    
-    
+    /// A value that has been set to its semantically simplest form that should not be individually shrunk further
+    case reduced(Value)
     
     // MARK: - Shortlex
     
@@ -43,6 +34,8 @@ public enum ChoiceSequenceValue: Hashable, Equatable, Sendable {
             return .gt
         case (.branch(let a), .branch(let b)), (.value(let a), .value(let b)):
             return a.shortLexCompare(b)
+        case (.reduced, .value):
+            return .lt
         default:
             if self.kindOrder < other.kindOrder { return .lt }
             if self.kindOrder > other.kindOrder { return .gt }
@@ -57,6 +50,7 @@ public enum ChoiceSequenceValue: Hashable, Equatable, Sendable {
         case .sequence: return 1
         case .branch:   return 2
         case .value:    return 3
+        case .reduced:  return 3
         }
     }
     
@@ -72,6 +66,8 @@ public enum ChoiceSequenceValue: Hashable, Equatable, Sendable {
             return "]"
         case .value:
             return "V"
+        case .reduced:
+            return "_"
         case let .branch(value):
             return "B\(value.choice.convertible):"
         }
@@ -89,26 +85,11 @@ public enum ChoiceSequenceValue: Hashable, Equatable, Sendable {
         }
 
         func shortLexCompare(_ other: Value) -> ShortlexOrder {
-            switch (self.choice, other.choice) {
-            case let (.unsigned(lhs), .unsigned(rhs)):
-                if lhs != rhs { return lhs < rhs ? .lt : .gt }
-                return .eq
-            case let (.signed(lhs, _, _), .signed(rhs, _, _)):
-                if lhs != rhs { return lhs < rhs ? .lt : .gt }
-                return .eq
-            case let (.floating(lhs, _, _), .floating(rhs, _, _)):
-                if lhs != rhs { return lhs < rhs ? .lt : .gt }
-                return .eq
-            case let (.character(lhs), .character(rhs)):
-                if lhs != rhs { return lhs < rhs ? .lt : .gt }
-                return .eq
-            default:
-                // This won't work well when comparing floats
-                if self.choice.bitPattern64 != other.choice.bitPattern64 {
-                    return self.choice.bitPattern64 < other.choice.bitPattern64 ? .lt : .gt
-                }
-                return .eq
-            }
+            let lhs = self.choice.shortlexKey
+            let rhs = other.choice.shortlexKey
+            if lhs < rhs { return .lt }
+            if lhs > rhs { return .gt }
+            return .eq
         }
     }
 }

@@ -75,7 +75,7 @@ extension ChoiceSequence {
                 groupCount += 1
             case .group(false):
                 groupCount -= 1
-            case .value, .branch:
+            case .value, .reduced, .branch:
                 break
             }
         }
@@ -133,7 +133,7 @@ extension ChoiceSequence {
                     childrenAtDepth[childrenAtDepth.count - 1].append(spanIndex)
                 }
 
-            case .value, .branch:
+            case .value, .reduced, .branch:
                 break
             }
         }

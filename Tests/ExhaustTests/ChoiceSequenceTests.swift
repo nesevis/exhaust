@@ -258,8 +258,8 @@ struct ChoiceSequenceTests {
     func flattenDifferentTypes() throws {
         let tree = ChoiceTree.group([
             .choice(.unsigned(42), ChoiceMetadata(validRanges: [0...100])),
-            .choice(.signed(-10, 0, Int64.self), ChoiceMetadata(validRanges: [0...100])),
-            .choice(.floating(3.14, 0, Double.self), ChoiceMetadata(validRanges: [0...100])),
+            .choice(.signed(-10, Int64(-10).bitPattern64, Int64.self), ChoiceMetadata(validRanges: [0...100])),
+            .choice(.floating(3.14, Double(3.14).bitPattern64, Double.self), ChoiceMetadata(validRanges: [0...100])),
             .choice(.character("A"), ChoiceMetadata(validRanges: [0...100]))
         ])
 
