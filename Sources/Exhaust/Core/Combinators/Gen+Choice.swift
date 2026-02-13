@@ -119,7 +119,6 @@ public extension Gen {
                     return .pure(UInt64(sequence.underestimatedCount) as! Output)
                 }
                 fallthrough
-//                return .pure(result as! Output)
             default:
                 guard let convertible = result as? any BitPatternConvertible else {
                     throw GeneratorError.typeMismatch(
