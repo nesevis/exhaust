@@ -19,6 +19,17 @@ struct CouplingShrinkingChallenge {
      */
     @Test("Coupling, Full", .disabled("Not implemented"))
     func couplingFull() {
-        // …etc
+        // A generator that will create an array of length 10 with elements corresponding to possible indices
+        let gen = Gen.arrayOf(Gen.choose(in: Int(0)...9), exactly: 10)
+        
+        // The array cannot contain any 2-cycles, ie where arr[arr[n]] == n
+        let prop: ([Int]) -> Bool = { arr in
+            arr.enumerated().allSatisfy { index, lhs in
+                let rhs = arr[index]
+                return arr[rhs] != lhs
+            }
+        }
+        
+        // Will require a value reduction pass
     }
 }
