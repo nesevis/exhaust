@@ -172,10 +172,30 @@ extension ChoiceSequence {
 
         return spans
     }
+    
+    @inlinable
+    public static func extractAllValueSpans(from sequence: ChoiceSequence) -> [ChoiceSpan] {
+        var spans: [ChoiceSpan] = []
+        var depth = 0
+        
+        for (i, entry) in sequence.enumerated() {
+            switch entry {
+            case let .value(value):
+                spans.append(ChoiceSpan(kind: entry, range: i...i, depth: depth))
+            case .group(true), .sequence(true):
+                depth += 1
+            case .group(false), .sequence(false):
+                depth -= 1
+            default:
+                continue
+            }
+        }
+        return spans.reversed()
+    }
 
     /// Returns the spans of values not inside groups
     @inlinable
-    public static func extractValueSpans(from sequence: ChoiceSequence) -> [ChoiceSpan] {
+    public static func extractFreeStandingValueSpans(from sequence: ChoiceSequence) -> [ChoiceSpan] {
         var spans: [ChoiceSpan] = []
         // Maps stack depth to the span indices of children
         // collected while that frame was open

@@ -280,14 +280,14 @@ struct ExtractValueSpansTests {
 
     @Test("Empty sequence returns no spans")
     func emptySequence() {
-        let spans = ChoiceSequence.extractValueSpans(from: [])
+        let spans = ChoiceSequence.extractFreeStandingValueSpans(from: [])
         #expect(spans.isEmpty)
     }
 
     @Test("Single value at start of sequence")
     func singleValue() {
         let seq: ChoiceSequence = [val(42)]
-        let spans = ChoiceSequence.extractValueSpans(from: seq)
+        let spans = ChoiceSequence.extractFreeStandingValueSpans(from: seq)
 
         #expect(spans.count == 1)
         #expect(spans[0].range == 0...0)
@@ -297,7 +297,7 @@ struct ExtractValueSpansTests {
     @Test("Multiple consecutive values")
     func consecutiveValues() {
         let seq: ChoiceSequence = [val(1), val(2), val(3)]
-        let spans = ChoiceSequence.extractValueSpans(from: seq)
+        let spans = ChoiceSequence.extractFreeStandingValueSpans(from: seq)
 
         #expect(spans.count == 3)
         // Reversed, so last value is first in result
@@ -312,7 +312,7 @@ struct ExtractValueSpansTests {
     func valueAfterSequenceOpen() {
         // [V V]
         let seq: ChoiceSequence = [seqOpen, val(1), val(2), seqClose]
-        let spans = ChoiceSequence.extractValueSpans(from: seq)
+        let spans = ChoiceSequence.extractFreeStandingValueSpans(from: seq)
 
         // Case (.sequence(true), .value) adds span without incrementing depth
         // Case (.value, .value) adds span
@@ -325,7 +325,7 @@ struct ExtractValueSpansTests {
     func valueAfterGroupOpen() {
         // (V)
         let seq: ChoiceSequence = [grpOpen, val(1), grpClose]
-        let spans = ChoiceSequence.extractValueSpans(from: seq)
+        let spans = ChoiceSequence.extractFreeStandingValueSpans(from: seq)
 
         // (.group(true), .value) matches case 4 → depth++ only, no span
         #expect(spans.isEmpty)
@@ -335,7 +335,7 @@ struct ExtractValueSpansTests {
     func secondValueInsideGroup() {
         // (V V)
         let seq: ChoiceSequence = [grpOpen, val(1), val(2), grpClose]
-        let spans = ChoiceSequence.extractValueSpans(from: seq)
+        let spans = ChoiceSequence.extractFreeStandingValueSpans(from: seq)
 
         // First value: (.group(true), .value) → depth++ (to 1), no span
         // Second value: (.value, .value) → span at depth 1
@@ -347,7 +347,7 @@ struct ExtractValueSpansTests {
     @Test("No containers, only values")
     func onlyValues() {
         let seq: ChoiceSequence = [val(10), val(20)]
-        let spans = ChoiceSequence.extractValueSpans(from: seq)
+        let spans = ChoiceSequence.extractFreeStandingValueSpans(from: seq)
 
         #expect(spans.count == 2)
         #expect(spans[0].range == 1...1)
@@ -357,7 +357,7 @@ struct ExtractValueSpansTests {
     @Test("Only containers, no values")
     func onlyContainers() {
         let seq: ChoiceSequence = [seqOpen, grpOpen, grpClose, seqClose]
-        let spans = ChoiceSequence.extractValueSpans(from: seq)
+        let spans = ChoiceSequence.extractFreeStandingValueSpans(from: seq)
         #expect(spans.isEmpty)
     }
 
@@ -365,7 +365,7 @@ struct ExtractValueSpansTests {
     func valueAfterSequenceClose() {
         // [V] V
         let seq: ChoiceSequence = [seqOpen, val(1), seqClose, val(2)]
-        let spans = ChoiceSequence.extractValueSpans(from: seq)
+        let spans = ChoiceSequence.extractFreeStandingValueSpans(from: seq)
 
         // i=1: (.sequence(true), .value) → span at depth 0
         // i=3: (.sequence(false), .value) → case 5: depth -= 1, no span
@@ -377,7 +377,7 @@ struct ExtractValueSpansTests {
     func valueAfterGroupClose() {
         // (V V) V
         let seq: ChoiceSequence = [grpOpen, val(1), val(2), grpClose, val(3)]
-        let spans = ChoiceSequence.extractValueSpans(from: seq)
+        let spans = ChoiceSequence.extractFreeStandingValueSpans(from: seq)
 
         // i=1: (.group(true), .value) → depth++ (to 1)
         // i=2: (.value, .value) → span at depth 1
@@ -390,7 +390,7 @@ struct ExtractValueSpansTests {
     @Test("Branch marker does not produce value span")
     func branchMarkerNotCaptured() {
         let seq: ChoiceSequence = [branch(0)]
-        let spans = ChoiceSequence.extractValueSpans(from: seq)
+        let spans = ChoiceSequence.extractFreeStandingValueSpans(from: seq)
         #expect(spans.isEmpty)
     }
 
@@ -398,7 +398,7 @@ struct ExtractValueSpansTests {
     func valueAfterBranch() {
         // B V
         let seq: ChoiceSequence = [branch(0), val(1)]
-        let spans = ChoiceSequence.extractValueSpans(from: seq)
+        let spans = ChoiceSequence.extractFreeStandingValueSpans(from: seq)
 
         // (.branch, .value) → default case, no span
         #expect(spans.isEmpty)
@@ -408,7 +408,7 @@ struct ExtractValueSpansTests {
     func valueAfterBranchThenValue() {
         // B V V
         let seq: ChoiceSequence = [branch(0), val(1), val(2)]
-        let spans = ChoiceSequence.extractValueSpans(from: seq)
+        let spans = ChoiceSequence.extractFreeStandingValueSpans(from: seq)
 
         // i=1: (.branch, .value) → default
         // i=2: (.value, .value) → span at depth 0
@@ -420,7 +420,7 @@ struct ExtractValueSpansTests {
     func groupWithBranchAndValues() {
         // (B V V)
         let seq: ChoiceSequence = [grpOpen, branch(0), val(1), val(2), grpClose]
-        let spans = ChoiceSequence.extractValueSpans(from: seq)
+        let spans = ChoiceSequence.extractFreeStandingValueSpans(from: seq)
 
         // i=1: (.group(true), .branch) → depth++ (to 1)
         // i=2: (.branch, .value) → default
@@ -434,7 +434,7 @@ struct ExtractValueSpansTests {
     func depthTrackingNested() {
         // ([V V])
         let seq: ChoiceSequence = [grpOpen, seqOpen, val(1), val(2), seqClose, grpClose]
-        let spans = ChoiceSequence.extractValueSpans(from: seq)
+        let spans = ChoiceSequence.extractFreeStandingValueSpans(from: seq)
 
         // i=1: (.group(true), .sequence(true)) → depth++ (to 1)
         // i=2: (.sequence(true), .value) → span at depth 1
@@ -454,7 +454,7 @@ struct ExtractValueSpansTests {
             val(2), val(3),
             seqOpen, val(4), seqClose,
         ]
-        let spans = ChoiceSequence.extractValueSpans(from: seq)
+        let spans = ChoiceSequence.extractFreeStandingValueSpans(from: seq)
 
         // i=1: (.sequence(true), .value) → span at depth 0
         // i=3: (.sequence(false), .value) → depth-- (-1), no span
@@ -467,7 +467,7 @@ struct ExtractValueSpansTests {
     func spanPreservesValueKind() {
         let v = val(99)
         let seq: ChoiceSequence = [v]
-        let spans = ChoiceSequence.extractValueSpans(from: seq)
+        let spans = ChoiceSequence.extractFreeStandingValueSpans(from: seq)
 
         #expect(spans.count == 1)
         #expect(spans[0].kind == v)
@@ -476,7 +476,7 @@ struct ExtractValueSpansTests {
     @Test("Each span covers a single index")
     func singleIndexSpans() {
         let seq: ChoiceSequence = [val(1), val(2), val(3)]
-        let spans = ChoiceSequence.extractValueSpans(from: seq)
+        let spans = ChoiceSequence.extractFreeStandingValueSpans(from: seq)
 
         for span in spans {
             #expect(span.range.lowerBound == span.range.upperBound)
@@ -487,7 +487,7 @@ struct ExtractValueSpansTests {
     func sequenceOpenFollowedByContainer() {
         // [()] — sequence open, then group open
         let seq: ChoiceSequence = [seqOpen, grpOpen, grpClose, seqClose]
-        let spans = ChoiceSequence.extractValueSpans(from: seq)
+        let spans = ChoiceSequence.extractFreeStandingValueSpans(from: seq)
         #expect(spans.isEmpty)
     }
 
@@ -501,7 +501,7 @@ struct ExtractValueSpansTests {
                 seqOpen, val(30), val(40), val(50), seqClose,
             grpClose,
         ]
-        let spans = ChoiceSequence.extractValueSpans(from: seq)
+        let spans = ChoiceSequence.extractFreeStandingValueSpans(from: seq)
 
         // i=1:  (.group(true), .branch) → depth++ (to 1)
         // i=2:  (.branch, .sequence(true)) → default
@@ -536,7 +536,7 @@ struct ExtractValueSpansTests {
     @Test("Value at index zero is always captured")
     func valueAtIndexZero() {
         let seq: ChoiceSequence = [val(1)]
-        let spans = ChoiceSequence.extractValueSpans(from: seq)
+        let spans = ChoiceSequence.extractFreeStandingValueSpans(from: seq)
         #expect(spans.count == 1)
         #expect(spans[0].range == 0...0)
     }
@@ -545,13 +545,13 @@ struct ExtractValueSpansTests {
     func containerAtIndexZeroFollowedByValue() {
         // Group at start
         let seqG: ChoiceSequence = [grpOpen, val(1), grpClose]
-        let spansG = ChoiceSequence.extractValueSpans(from: seqG)
+        let spansG = ChoiceSequence.extractFreeStandingValueSpans(from: seqG)
         // (.group(true), .value) → depth++, no span
         #expect(spansG.isEmpty)
 
         // Sequence at start
         let seqS: ChoiceSequence = [seqOpen, val(1), seqClose]
-        let spansS = ChoiceSequence.extractValueSpans(from: seqS)
+        let spansS = ChoiceSequence.extractFreeStandingValueSpans(from: seqS)
         // (.sequence(true), .value) → span at depth 0
         #expect(spansS.count == 1)
         #expect(spansS[0].range == 1...1)
@@ -561,7 +561,7 @@ struct ExtractValueSpansTests {
     func nestedGroupDepth() {
         // ((V V))
         let seq: ChoiceSequence = [grpOpen, grpOpen, val(1), val(2), grpClose, grpClose]
-        let spans = ChoiceSequence.extractValueSpans(from: seq)
+        let spans = ChoiceSequence.extractFreeStandingValueSpans(from: seq)
 
         // i=1: (.group(true), .group(true)) → depth++ (to 1)
         // i=2: (.group(true), .value) → depth++ (to 2), no span
@@ -578,7 +578,7 @@ struct ExtractValueSpansTests {
             grpOpen, grpOpen, val(1), val(2), grpClose, grpClose,
             val(10), val(20),
         ]
-        let spans = ChoiceSequence.extractValueSpans(from: seq)
+        let spans = ChoiceSequence.extractFreeStandingValueSpans(from: seq)
 
         // i=1: (.group(true), .group(true)) → depth++ (to 1)
         // i=2: (.group(true), .value) → depth++ (to 2), no span
@@ -597,7 +597,7 @@ struct ExtractValueSpansTests {
     @Test("Results are returned in reversed order")
     func reversedOrder() {
         let seq: ChoiceSequence = [val(1), val(2), val(3)]
-        let spans = ChoiceSequence.extractValueSpans(from: seq)
+        let spans = ChoiceSequence.extractFreeStandingValueSpans(from: seq)
 
         // Original collection order is index 0, 1, 2
         // Reversed means index 2 first

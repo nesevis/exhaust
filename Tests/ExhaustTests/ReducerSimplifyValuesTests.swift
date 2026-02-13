@@ -205,15 +205,17 @@ struct ReducerSimplifyValuesTests {
 
         // Property fails only for 3-element arrays — prevents element deletion,
         // but allows Pass 3 to simplify values within the array
+        var iterationCount = 0
         let property: ([UInt64]) -> Bool = { arr in
-            arr.count != 3
+            iterationCount += 1
+            return arr.count != 3
         }
 
         let result = try #require(
             try Interpreters.reduce(gen: gen, tree: tree, config: .fast, property: property)
         )
 
-        print()
+        #expect(iterationCount == 6)
         #expect(result.1.count == 3)
         #expect(result.1.allSatisfy { $0 == 0 })
     }

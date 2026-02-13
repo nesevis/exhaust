@@ -62,8 +62,8 @@ extension Interpreters {
             if didImprove { stallBudget = config.maxStalls; continue }
 
             // Pass 2b: Sequence element deletion, i.e the individual Vs in [VVVVV]
-            let valueSpans = ChoiceSequence.extractValueSpans(from: currentSequence)
-            if valueSpans.isEmpty == false, let (newSequence, output) = try adaptiveDeleteSpans(gen, tree: currentTree, property: property, sequence: currentSequence, spans: valueSpans) {
+            let freeStandingValueSpans = ChoiceSequence.extractFreeStandingValueSpans(from: currentSequence)
+            if freeStandingValueSpans.isEmpty == false, let (newSequence, output) = try adaptiveDeleteSpans(gen, tree: currentTree, property: property, sequence: currentSequence, spans: freeStandingValueSpans) {
                 currentSequence = newSequence
                 currentOutput = output
                 didImprove = true
@@ -73,7 +73,8 @@ extension Interpreters {
             if didImprove { stallBudget = config.maxStalls; continue }
 
             // Pass 3: Simplify values to semantic simplest
-            if let (newSequence, output) = try simplifyValues(gen, tree: currentTree, property: property, sequence: currentSequence, valueSpans: valueSpans) {
+            let valueSpans = ChoiceSequence.extractAllValueSpans(from: currentSequence)
+            if valueSpans.isEmpty == false, let (newSequence, output) = try simplifyValues(gen, tree: currentTree, property: property, sequence: currentSequence, valueSpans: valueSpans) {
                 currentSequence = newSequence
                 currentOutput = output
                 didImprove = true

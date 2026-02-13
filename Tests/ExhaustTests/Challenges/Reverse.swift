@@ -17,7 +17,7 @@ struct ReverseShrinkingChallenge {
      */
     @Test("Reverse, Full")
     func reverseFull() async throws {
-        let arrGen = Gen.arrayOf(Int.arbitrary, within: 100...1000) // produces [(V)...]
+        let arrGen = Gen.arrayOf(Int.arbitrary, within: 1...1000) // produces [(V)...]
         // let arrGen = Gen.arrayOf(Gen.choose(in: 0...1000), within: 100...1000) produces [VVVVV]
         var count = 0 // This is 5 in this case, which is surprisingly small. 14 for an array of 338 elements.
         let property: ([Int]) -> Bool = { arr in
