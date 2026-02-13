@@ -68,6 +68,15 @@ public enum ChoiceValue: Comparable, Hashable, Equatable, Sendable {
         }
     }
 
+    var tag: TypeTag {
+        switch self {
+        case .unsigned:   return .uint64
+        case let .signed(_, _, type):   return type.tag
+        case let .floating(_, _, type): return type.tag
+        case .character:  return .character
+        }
+    }
+
     var complexity: UInt64 {
         switch self {
         case let .unsigned(value):

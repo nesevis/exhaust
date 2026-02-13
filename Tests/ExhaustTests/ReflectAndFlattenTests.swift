@@ -485,7 +485,8 @@ struct ReflectAndFlattenTests {
     
     @Test("Materialising works for sequences")
     func testMaterializationWithSequence() throws {
-        let gen = Gen.arrayOf(Gen.choose(in: UInt64(0)...10), exactly:5)
+        // Use a variable-length generator so element deletion is valid
+        let gen = Gen.arrayOf(Gen.choose(in: UInt64(0)...10), within: 0...10)
         let value: [UInt64] = [1, 2, 3, 4, 5]
 
         // Reflect the generator with the value
@@ -496,13 +497,13 @@ struct ReflectAndFlattenTests {
 
         // Flatten the reflected tree
         var flattened = ChoiceSequence.flatten(tree)
-        
+
         // Do some shrinking!
         flattened.remove(at: 2)
         flattened.remove(at: 2)
 
         let materialized = try Interpreters.materialize(gen, with: tree, using: flattened)
-        
+
         #expect(materialized == [1,4,5])
     }
     
@@ -616,8 +617,8 @@ struct ReflectAndFlattenTests {
     
     @Test("Test cross-boundary shrinking")
     func testCrossBoundaryShrinkingWorks() throws {
-        let arrayGen = Gen.arrayOf(Int.arbitrary, exactly: 10)
-        let gen = Gen.arrayOf(arrayGen, exactly: 10)
+        let arrayGen = Gen.arrayOf(Int.arbitrary, within: 1...10)
+        let gen = Gen.arrayOf(arrayGen, within: 1...10)
 
         // Reflect the generator with the value
         // For now it does not work with `materializePicks`

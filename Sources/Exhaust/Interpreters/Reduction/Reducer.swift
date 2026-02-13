@@ -82,15 +82,16 @@ extension Interpreters {
 
             if didImprove { stallBudget = config.maxStalls; continue }
             
-            // Pass 4: Pass to descendant
-            // "For each span that contains child spans, try replacing the parent span with each child span individually"
-            // I wonder if this will work well for Exhaust's architecture
-            // Pass 5: Minimise individual values
-            // Set all values to their semantic zero. Can use value span extraction
-            // Pass 5: Shortlex order results for consistency?
+            // Pass 5: Reduce individual values via binary search toward their reduction target
+            if valueSpans.isEmpty == false, let (newSequence, output) = try reduceValues(gen, tree: currentTree, property: property, sequence: currentSequence, valueSpans: valueSpans) {
+                currentSequence = newSequence
+                currentOutput = output
+                didImprove = true
+            }
+
+            if didImprove { stallBudget = config.maxStalls; continue }
 
             // No pass improved the sequence — further iterations are deterministic, so stop.
-            // (Future passes 4/5 will go here before the break.)
             break
         }
         
@@ -161,6 +162,111 @@ extension Interpreters {
                 i += k
             } else {
                 i += 1
+            }
+        }
+
+        if progress, let output = latestOutput {
+            return (current, output)
+        }
+        return nil
+    }
+
+    /// Pass 5: Binary search each individual value toward its reduction target.
+    /// For each `.value` entry, computes the ideal target (semantic simplest clamped to valid ranges),
+    /// then binary searches between the current bit pattern and the target to find the minimum failing value.
+    private static func reduceValues<Output>(
+        _ gen: ReflectiveGenerator<Output>,
+        tree: ChoiceTree,
+        property: (Output) -> Bool,
+        sequence: ChoiceSequence,
+        valueSpans: [ChoiceSequence.ChoiceSpan]
+    ) throws -> (ChoiceSequence, Output)? {
+        var current = sequence
+        var progress = false
+        var latestOutput: Output?
+
+        for span in valueSpans {
+            let seqIdx = span.range.lowerBound
+            guard case let .value(v) = current[seqIdx] else { continue }
+
+            let currentBP = v.choice.bitPattern64
+            let targetBP = v.choice.reductionTarget(in: v.validRanges)
+
+            guard currentBP != targetBP else { continue }
+
+            let searchUpward = targetBP > currentBP
+            let distance = searchUpward
+                ? targetBP - currentBP
+                : currentBP - targetBP
+
+            // Try target directly
+            let targetChoice = ChoiceValue(
+                v.choice.tag.makeConvertible(bitPattern64: targetBP),
+                tag: v.choice.tag
+            )
+            var candidate = current
+            candidate[seqIdx] = .reduced(.init(choice: targetChoice, validRanges: v.validRanges))
+            if candidate.shortLexPrecedes(current),
+               let output = try? materialize(gen, with: tree, using: candidate),
+               property(output) == false {
+                current = candidate
+                latestOutput = output
+                progress = true
+                continue
+            }
+
+            // Binary search: predicate(delta) means "can we move delta steps toward the target and still fail?"
+            // predicate(0) = true (no change), predicate(distance) = false (target was just rejected)
+            guard distance > 1 else { continue }
+
+            // Compute a guess: midpoint of the containing valid range, converted to delta space
+            let guess: UInt64? = {
+                guard let containingRange = v.validRanges.first(where: { $0.contains(currentBP) }) else {
+                    return nil
+                }
+                let rangeMid = containingRange.lowerBound / 2 + containingRange.upperBound / 2
+                let guessDelta: UInt64
+                if searchUpward {
+                    guessDelta = rangeMid > currentBP ? rangeMid - currentBP : 0
+                } else {
+                    guessDelta = currentBP > rangeMid ? currentBP - rangeMid : 0
+                }
+                // Clamp to valid delta range [0, distance)
+                guard guessDelta > 0 && guessDelta < distance else { return nil }
+                return guessDelta
+            }()
+
+            let bestDelta = AdaptiveProbe.binarySearchWithGuess(
+                { (delta: UInt64) -> Bool in
+                    guard delta > 0 else { return true } // predicate(0) assumed true
+                    let newBP = searchUpward ? currentBP + delta : currentBP - delta
+                    let newChoice = ChoiceValue(
+                        v.choice.tag.makeConvertible(bitPattern64: newBP),
+                        tag: v.choice.tag
+                    )
+                    guard newChoice.fits(in: v.validRanges) else { return false }
+                    var probe = current
+                    probe[seqIdx] = .reduced(.init(choice: newChoice, validRanges: v.validRanges))
+                    guard probe.shortLexPrecedes(current) else { return false }
+                    guard let output = try? materialize(gen, with: tree, using: probe) else { return false }
+                    return property(output) == false
+                },
+                low: UInt64(0),
+                high: distance,
+                guess: guess
+            )
+
+            if bestDelta > 0 {
+                let newBP = searchUpward ? currentBP + bestDelta : currentBP - bestDelta
+                let newChoice = ChoiceValue(
+                    v.choice.tag.makeConvertible(bitPattern64: newBP),
+                    tag: v.choice.tag
+                )
+                current[seqIdx] = .reduced(.init(choice: newChoice, validRanges: v.validRanges))
+                if let output = try? materialize(gen, with: tree, using: current) {
+                    latestOutput = output
+                    progress = true
+                }
             }
         }
 

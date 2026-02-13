@@ -36,6 +36,42 @@ extension ChoiceValue {
         }
     }
     
+    /// The bit pattern of the ideal shrink target for this value type.
+    /// - Unsigned/Character: lowest valid bit pattern (smallest value)
+    /// - Signed/Float: 0's bit pattern if in range, else the range bound closest to 0's bit pattern
+    func reductionTarget(in ranges: [ClosedRange<UInt64>]) -> UInt64 {
+        let target = semanticSimplest.bitPattern64
+        if fits(in: ranges, bitPattern: target) {
+            return target
+        }
+        // Find the range bound closest to the target
+        var bestBound = ranges[0].lowerBound
+        var bestDistance = target > bestBound
+            ? target - bestBound
+            : bestBound - target
+        for range in ranges {
+            for bound in [range.lowerBound, range.upperBound] {
+                let distance = target > bound
+                    ? target - bound
+                    : bound - target
+                if distance < bestDistance {
+                    bestDistance = distance
+                    bestBound = bound
+                }
+            }
+        }
+        return bestBound
+    }
+
+    private func fits(in ranges: [ClosedRange<UInt64>], bitPattern: UInt64) -> Bool {
+        for range in ranges {
+            if range.contains(bitPattern) {
+                return true
+            }
+        }
+        return false
+    }
+
     var fundamentalValues: [ChoiceValue] {
         switch self {
         case .unsigned:

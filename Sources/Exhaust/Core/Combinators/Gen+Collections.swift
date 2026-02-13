@@ -84,7 +84,7 @@ public extension Gen {
         _ elementGenerator: ReflectiveGenerator<Output>,
         exactly: UInt64
     ) -> ReflectiveGenerator<[Output]> {
-        arrayOf(elementGenerator, .pure(exactly))
+        arrayOf(elementGenerator, Gen.choose(in: exactly...exactly))
     }
     
     /// Creates a generator for dictionaries with random key-value pairs.

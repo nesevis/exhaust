@@ -18,17 +18,16 @@ struct ReverseShrinkingChallenge {
     @Test("Reverse, Full")
     func reverseFull() async throws {
         let arrGen = Gen.arrayOf(Int.arbitrary, within: 1...1000) // produces [(V)...]
-        // let arrGen = Gen.arrayOf(Gen.choose(in: 0...1000), within: 100...1000) produces [VVVVV]
-        var count = 0 // This is 5 in this case, which is surprisingly small. 14 for an array of 338 elements.
+        var count = 0
         let property: ([Int]) -> Bool = { arr in
             count += 1
             return arr.elementsEqual(arr.reversed())
         }
         let iterator = ValueAndChoiceTreeInterpreter(arrGen, seed: 1337)
-        let (value, tree) = Array(iterator.dropFirst(2)).first!
-        let (seq, output) = try #require(try Interpreters.reduce(gen: arrGen, tree: tree, config: .fast, property: property))
-        #expect(value.count > output.count ?? Int.max)
-        #expect(output.count == 2)
-        print()
+        let (value, tree) = Array(iterator.prefix(3)).last! // 23 values
+        let (_, output) = try #require(try Interpreters.reduce(gen: arrGen, tree: tree, config: .fast, property: property))
+        #expect(count == 53) // Oracle/property calls
+        #expect(value.count > output.count)
+        #expect(output == [-1, 0])
     }
 }

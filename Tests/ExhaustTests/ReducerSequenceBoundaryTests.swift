@@ -82,10 +82,20 @@ struct ReducerSequenceBoundaryTests {
 
     @Test("Reduced sequence has fewer boundaries than original")
     func reducedSequenceHasFewerBoundaries() throws {
-        let innerGen = Gen.arrayOf(Gen.choose(in: UInt64(0)...100), exactly: 2)
-        let gen = Gen.arrayOf(innerGen, exactly: 3)
+        let innerGen = Gen.arrayOf(Gen.choose(in: UInt64(0)...100), within: 1...5)
+        let gen = Gen.arrayOf(innerGen, within: 2...5)
 
-        let (_, tree) = try generate(gen)
+        // Find a seed that produces multiple inner sequences (i.e. boundaries exist)
+        var foundTree: ChoiceTree?
+        for seed: UInt64 in 0...100 {
+            let (_, tree) = try generate(gen, seed: seed)
+            let seq = ChoiceSequence.flatten(tree)
+            if ChoiceSequence.extractSequenceBoundarySpans(from: seq).isEmpty == false {
+                foundTree = tree
+                break
+            }
+        }
+        let tree = try #require(foundTree)
         let originalSequence = ChoiceSequence.flatten(tree)
         let originalBoundaries = ChoiceSequence.extractSequenceBoundarySpans(from: originalSequence)
         #expect(originalBoundaries.isEmpty == false)
@@ -181,10 +191,20 @@ struct ReducerSequenceBoundaryTests {
 
     @Test("Reduce with two inner sequences collapses the single boundary")
     func twoInnerSequencesCollapseSingleBoundary() throws {
-        let innerGen = Gen.arrayOf(Gen.choose(in: UInt64(0)...100), exactly: 2)
-        let gen = Gen.arrayOf(innerGen, exactly: 2)
+        let innerGen = Gen.arrayOf(Gen.choose(in: UInt64(0)...100), within: 1...5)
+        let gen = Gen.arrayOf(innerGen, within: 2...5)
 
-        let (_, tree) = try generate(gen)
+        // Find a seed that produces exactly 1 boundary (2 inner sequences)
+        var foundTree: ChoiceTree?
+        for seed: UInt64 in 0...200 {
+            let (_, tree) = try generate(gen, seed: seed)
+            let seq = ChoiceSequence.flatten(tree)
+            if ChoiceSequence.extractSequenceBoundarySpans(from: seq).count == 1 {
+                foundTree = tree
+                break
+            }
+        }
+        let tree = try #require(foundTree)
         let originalSequence = ChoiceSequence.flatten(tree)
         #expect(ChoiceSequence.extractSequenceBoundarySpans(from: originalSequence).count == 1)
 

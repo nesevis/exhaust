@@ -17,18 +17,37 @@ struct CouplingShrinkingChallenge {
 
      The expected smallest falsified sample is [1, 0].
      */
-    @Test("Coupling, Full", .disabled("Not implemented"))
-    func couplingFull() {
-        // A generator that will create an array of length 10 with elements corresponding to possible indices
-        let gen = Gen.arrayOf(Gen.choose(in: Int(0)...9), exactly: 10)
+    @Test("Coupling, Full")
+    func couplingFull() throws {
+        // A generator that will create an array of length 2...10 with elements corresponding to possible indices
+        let gen = Gen.choose(in: Int(2)...20)
+            .bind { n in
+                Gen.arrayOf(Gen.choose(in: 0...n - 1), exactly: UInt64(n))
+            }
+//        let gen = Gen.arrayOf(Gen.choose(in: Int(0)...9), within: 2...10)
         
         // The array cannot contain any 2-cycles, ie where arr[arr[n]] == n
-        let prop: ([Int]) -> Bool = { arr in
-            arr.enumerated().allSatisfy { index, lhs in
-                let rhs = arr[index]
-                return arr[rhs] != lhs
+        var count = 0
+        let property: ([Int]) -> Bool = { arr in
+            print("Arr count: \(arr.count), indices within bounds \(arr.allSatisfy { arr.indices.contains($0) })")
+            count += 1
+            // This crashed binarySearchWithGuess.. Wtf?
+            return arr.indices.allSatisfy { index in
+                let lhs = arr[index]
+                if lhs != index {
+                    return arr[lhs] != index
+                }
+                return true
             }
         }
+        
+        let iterator = ValueAndChoiceTreeInterpreter(gen, seed: 1337)
+        
+        let (value, tree) = Array(iterator.prefix(2)).last!
+        print()
+        let (seq, output) = try #require(try Interpreters.reduce(gen: gen, tree: tree, config: .fast, property: property))
+        
+        print()
         
         // Will require a value reduction pass
     }

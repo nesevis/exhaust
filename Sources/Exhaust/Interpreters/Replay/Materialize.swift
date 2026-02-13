@@ -190,7 +190,7 @@ extension Interpreters {
 
             case let .sequence(_, elementGenerator):
                 // This operation expects a `.sequence` node from the script.
-                guard case let .sequence(_, elements, _) = tree else {
+                guard case let .sequence(_, elements, lengthMeta) = tree else {
                     return nil
                 }
 
@@ -198,7 +198,8 @@ extension Interpreters {
                     using: elementGenerator,
                     elementScript: elements.first,
                     context: context,
-                    requireElements: false
+                    requireElements: false,
+                    validLengthRanges: lengthMeta.validRanges
                 ) else {
                     return nil
                 }
@@ -238,11 +239,16 @@ extension Interpreters {
 
     /// Materializes a sequence of elements by consuming sequence open/close markers
     /// and looping over elements until the sequence end marker is reached.
+    ///
+    /// When `validLengthRanges` is non-empty, the materialized element count must fall
+    /// within one of the ranges — otherwise the candidate is rejected. This enforces
+    /// constraints from the sequence's length generator (e.g. `exactly: 10`).
     private static func materializeSequenceElements(
         using elementGenerator: ReflectiveGenerator<Any>,
         elementScript: ChoiceTree?,
         context: Context,
-        requireElements: Bool
+        requireElements: Bool,
+        validLengthRanges: [ClosedRange<UInt64>] = []
     ) throws -> [Any]? {
         try context.consumeSequence(true)
 
@@ -260,6 +266,13 @@ extension Interpreters {
         }
 
         try context.consumeSequence(false)
+
+        if validLengthRanges.isEmpty == false {
+            let count = UInt64(accumulatedValues.count)
+            if validLengthRanges.contains(where: { $0.contains(count) }) == false {
+                return nil
+            }
+        }
 
         return accumulatedValues
     }
@@ -357,7 +370,7 @@ extension Interpreters {
                 }
                 let choice = choices.removeFirst()
 
-                guard case let .sequence(_, elements, _) = choice else {
+                guard case let .sequence(_, elements, lengthMeta) = choice else {
                     throw ReplayError.wrongInputChoice
                 }
 
@@ -365,7 +378,8 @@ extension Interpreters {
                     using: elementGenerator,
                     elementScript: elements.first,
                     context: context,
-                    requireElements: true
+                    requireElements: true,
+                    validLengthRanges: lengthMeta.validRanges
                 ) else {
                     return nil
                 }

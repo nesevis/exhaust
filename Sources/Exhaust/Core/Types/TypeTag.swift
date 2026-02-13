@@ -57,6 +57,27 @@ public enum TypeTag: Equatable {
         }
     }
 
+extension TypeTag {
+    /// Creates a ``BitPatternConvertible`` value from a raw bit pattern using this tag's type.
+    func makeConvertible(bitPattern64: UInt64) -> any BitPatternConvertible {
+        switch self {
+        case .uint:      return UInt(bitPattern64: bitPattern64)
+        case .uint64:    return UInt64(bitPattern64: bitPattern64)
+        case .uint32:    return UInt32(bitPattern64: bitPattern64)
+        case .uint16:    return UInt16(bitPattern64: bitPattern64)
+        case .uint8:     return UInt8(bitPattern64: bitPattern64)
+        case .int:       return Int(bitPattern64: bitPattern64)
+        case .int64:     return Int64(bitPattern64: bitPattern64)
+        case .int32:     return Int32(bitPattern64: bitPattern64)
+        case .int16:     return Int16(bitPattern64: bitPattern64)
+        case .int8:      return Int8(bitPattern64: bitPattern64)
+        case .double:    return Double(bitPattern64: bitPattern64)
+        case .float:     return Float(bitPattern64: bitPattern64)
+        case .character: return Character(bitPattern64: bitPattern64)
+        }
+    }
+}
+
 extension TypeTag: CustomStringConvertible {
     public var description: String {
         switch self {
