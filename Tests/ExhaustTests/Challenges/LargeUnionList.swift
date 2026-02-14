@@ -17,11 +17,21 @@ struct LargeUnionListShrinkingChallenge {
 
      In particular, a shrinker cannot hope to normalise this unless it is able to either split or join elements of the larger list. For example, it would have to be able to transform one of [[0, 1, -1, 2, -2]] and [[0], [1], [-1], [2], [-2]] into the other.
      */
-    @Test("Large Union List, Full", .disabled("Not implemented"))
-    func largeUnionListFull() {
+    @Test("Large Union List, Full")
+    func largeUnionListFull() throws {
         let arrGen = Gen.arrayOf(Int.arbitrary, within: 1...10)
         let gen = Gen.arrayOf(arrGen, within: 1...10)
         
-        // …etc
+        var count = 0
+        let property: ([[Int]]) -> Bool = { arr in
+            count += 1
+            return Set(arr.flatMap(\.self)).count <= 4
+        }
+        
+        let iterator = ValueAndChoiceTreeInterpreter(gen, seed: 1337)
+        let (value, tree) = Array(iterator.prefix(3)).last! // 23 values
+        let (sequence, output) = try #require(try Interpreters.reduce(gen: gen, tree: tree, config: .fast, property: property))
+        print()
+        #expect(output.flatMap(\.self) == [-2, -1, 0, 1, 2])
     }
 }
