@@ -248,7 +248,7 @@ extension Interpreters {
                 tag: v.choice.tag
             )
             var candidate = current
-            candidate[seqIdx] = .reduced(.init(choice: targetChoice, validRanges: v.validRanges))
+            candidate[seqIdx] = .value(.init(choice: targetChoice, validRanges: v.validRanges))
             if candidate.shortLexPrecedes(current),
                let output = try? materialize(gen, with: tree, using: candidate),
                property(output) == false {
@@ -305,7 +305,7 @@ extension Interpreters {
                     v.choice.tag.makeConvertible(bitPattern64: newBP),
                     tag: v.choice.tag
                 )
-                current[seqIdx] = .reduced(.init(choice: newChoice, validRanges: v.validRanges))
+                current[seqIdx] = .value(.init(choice: newChoice, validRanges: v.validRanges))
                 if let output = try? materialize(gen, with: tree, using: current) {
                     latestOutput = output
                     progress = true

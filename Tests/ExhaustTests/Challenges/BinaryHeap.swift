@@ -9,7 +9,7 @@
 import Foundation
 import Testing
 
-@Suite("Binary Heap Shrinking Challenge")
+@Suite("Shrinking Challenge: Binary Heap")
 struct BinaryHeapShrinkingChallenge {
     /*
      https://github.com/jlink/shrinking-challenge/blob/main/challenges/binheap.md

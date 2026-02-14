@@ -9,7 +9,7 @@
 import Foundation
 import Testing
 
-@Suite("Deletion Shrinking Challenge")
+@Suite("Shrinking Challenge: Deletion")
 struct DeletionShrinkingChallenge {
     /*
      https://github.com/jlink/shrinking-challenge/blob/main/challenges/deletion.md

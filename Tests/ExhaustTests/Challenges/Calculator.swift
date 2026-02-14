@@ -9,7 +9,7 @@
 import Foundation
 import Testing
 
-@Suite("Calculator Shrinking Challenge")
+@Suite("Shrinking Challenge: Calculator")
 struct CalculatorShrinkingChallenge {
     /*
      https://github.com/jlink/shrinking-challenge/blob/main/challenges/calculator.md

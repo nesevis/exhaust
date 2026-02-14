@@ -9,7 +9,7 @@
 import Foundation
 import Testing
 
-@Suite("Large Union List Shrinking Challenge")
+@Suite("Shrinking Challenge: Large Union List")
 struct LargeUnionListShrinkingChallenge {
     /*
      https://github.com/jlink/shrinking-challenge/blob/main/challenges/large_union_list.md
@@ -31,7 +31,7 @@ struct LargeUnionListShrinkingChallenge {
         let iterator = ValueAndChoiceTreeInterpreter(gen, seed: 1337)
         let (value, tree) = Array(iterator.prefix(3)).last! // 23 values
         let (sequence, output) = try #require(try Interpreters.reduce(gen: gen, tree: tree, config: .fast, property: property))
-        #expect(count == 194)
+        #expect(count == 216)
         #expect(output.flatMap(\.self) == [-2, -1, 0, 1, 2])
     }
 }

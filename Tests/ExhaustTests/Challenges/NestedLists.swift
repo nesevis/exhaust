@@ -9,7 +9,7 @@
 import Foundation
 import Testing
 
-@Suite("Nested Lists Shrinking Challenge")
+@Suite("Shrinking Challenge: Nested Lists")
 struct NestedListsShrinkingChallenge {
     /*
      https://github.com/jlink/shrinking-challenge/blob/main/challenges/nestedlists.md

@@ -9,7 +9,7 @@
 import Foundation
 import Testing
 
-@Suite("Difference Shrinking Challenge")
+@Suite("Shrinking Challenge: Difference")
 struct DifferenceShrinkingChallenge {
     /*
      https://github.com/jlink/shrinking-challenge/blob/main/challenges/difference.md
@@ -41,10 +41,17 @@ struct DifferenceShrinkingChallenge {
             return arr[0] < 10 || arr[0] != arr[1]
         }
         
-        let iterator = ValueAndChoiceTreeInterpreter(gen, seed: 1337)
-        let (value, tree) = Array(iterator.prefix(2)).last!
+        let value = [700, 700] // A failing example
+        let tree = try #require(try Interpreters.reflect(gen, with: value))
         let (seq, output) = try #require(try Interpreters.reduce(gen: gen, tree: tree, config: .fast, property: property))
-        print()
+        
+        // The challenge here is that the two values need to change in tandem, otherwise there won't be a continual failure signal to guide shrinking.
+        // Use `ChoiceSequence.extractSiblingGroups` to greedily reduce all spans through the same binary search at the same time. 2, then 3, then 4… Must be able to do VVV and (V)(V)(V)
+        
+        print("Original value: \(value)")
+        print("Shrunk value: \(output)")
+        print("Expected shrunk value: [10, 10]")
+        #expect(output == [10, 10])
     }
     
     // …etc
