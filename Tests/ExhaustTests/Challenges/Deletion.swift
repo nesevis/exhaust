@@ -24,8 +24,28 @@ struct DeletionShrinkingChallenge {
      
      The expected smallest falsified sample is ([0, 0], 0).
      */
-    @Test("Deletion, Full", .disabled("Not implemented"))
-    func deletionFull() {
-        // …etc
+    @Test("Deletion, Full")
+    func deletionFull() throws {
+        let numberGen = Gen.choose(in: 0...20)
+        let gen = Gen.zip(Gen.arrayOf(numberGen, within: 2...20), numberGen).filter { $0.contains($1) }
+        
+        var count = 0
+        let property: ([Int], Int) -> Bool = { xs, x in
+            count += 1
+            var xs = xs
+            guard let index = xs.firstIndex(of: x) else {
+                return true
+            }
+            xs.remove(at: index)
+            return xs.contains(x) == false
+        }
+        
+        let iterator = ValueAndChoiceTreeInterpreter(gen, seed: 1337)
+        let (value, tree) = Array(iterator.prefix(2)).last!
+        let (seq, output) = try #require(try Interpreters.reduce(gen: gen, tree: tree, config: .fast, property: property))
+
+        #expect(count == 9)
+        #expect(output.0 == [0,0])
+        #expect(output.1 == 0)
     }
 }
