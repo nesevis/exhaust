@@ -244,24 +244,7 @@ extension ChoiceSequence {
     
     // MARK: - Sibling groups
 
-    struct SiblingGroup {
-        /// Each sibling's range in the sequence. Contiguous, non-overlapping, in order.
-        let ranges: [ClosedRange<Int>]
-        let depth: Int
-    }
 
-    private enum SiblingChildKind: Equatable {
-        case bareValue
-        case sequence
-        case group
-    }
-
-    private struct SiblingFrame {
-        var children: [(range: ClosedRange<Int>, kind: SiblingChildKind)] = []
-        let depth: Int
-        let startIndex: Int
-        let isSequence: Bool
-    }
 
     /// Extracts groups of sibling elements within containers. A sibling group contains
     /// the immediate children of a sequence or group container, where all children are
@@ -315,7 +298,7 @@ extension ChoiceSequence {
             }
         }
 
-        return result
+        return result.reversed()
     }
 
     /// Returns the flattened `ChoiceValue`s within the given range, ignoring structural markers.
