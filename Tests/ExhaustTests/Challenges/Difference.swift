@@ -31,9 +31,20 @@ struct DifferenceShrinkingChallenge {
 
      Test 3 seems the most difficult one to shrink because shrinking parameters individually will never lead to a smaller and falsifying sample. This is also the hardest to find a falsifying sample in the first place.
      */
-    @Test("Difference, Test 1", .disabled("Not implemented"))
-    func differenceTest1() {
-        // …etc
+    @Test("Difference must not be zero")
+    func differenceTest1() throws {
+        let gen = Gen.arrayOf(Gen.choose(in: Int(1)...1000), exactly: 2)
+        
+        var count = 0
+        let property: ([Int]) -> Bool = { arr in
+            count += 1
+            return arr[0] < 10 || arr[0] != arr[1]
+        }
+        
+        let iterator = ValueAndChoiceTreeInterpreter(gen, seed: 1337)
+        let (value, tree) = Array(iterator.prefix(2)).last!
+        let (seq, output) = try #require(try Interpreters.reduce(gen: gen, tree: tree, config: .fast, property: property))
+        print()
     }
     
     // …etc

@@ -289,7 +289,7 @@ extension Interpreters {
                     )
                     guard newChoice.fits(in: v.validRanges) else { return false }
                     var probe = current
-                    probe[seqIdx] = .reduced(.init(choice: newChoice, validRanges: v.validRanges))
+                    probe[seqIdx] = .value(.init(choice: newChoice, validRanges: v.validRanges))
                     guard probe.shortLexPrecedes(current) else { return false }
                     guard let output = try? materialize(gen, with: tree, using: probe) else { return false }
                     return property(output) == false
