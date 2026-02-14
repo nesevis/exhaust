@@ -35,10 +35,18 @@ extension Interpreters {
             return nil
         }
         var stallBudget = config.maxStalls
+        var didNaivelyMinimise = false
         
         while stallBudget > 0 {
             var didImprove = false
 
+            let valueSpans = ChoiceSequence.extractAllValueSpans(from: currentSequence)
+            if didNaivelyMinimise == false, valueSpans.isEmpty == false, let (newSequence, output) = try naiveSimplifyValues(gen, tree: currentTree, property: property, sequence: currentSequence, valueSpans: valueSpans) {
+                currentSequence = newSequence
+                currentOutput = output
+                didNaivelyMinimise = true // TODO: Run this once only, or try it every run?
+            }
+            
             let containerSpans = ChoiceSequence.extractContainerSpans(from: currentSequence)
             // Pass 1: Adaptive container span deletion, ie the […] and (…) spans in [(V)(V)]
             if containerSpans.isEmpty == false, let (newSequence, output) = try adaptiveDeleteSpans(gen, tree: currentTree, property: property, sequence: currentSequence, spans: containerSpans) {
@@ -73,7 +81,6 @@ extension Interpreters {
             if didImprove { stallBudget = config.maxStalls; continue }
 
             // Pass 3: Simplify values to semantic simplest
-            let valueSpans = ChoiceSequence.extractAllValueSpans(from: currentSequence)
             if valueSpans.isEmpty == false, let (newSequence, output) = try simplifyValues(gen, tree: currentTree, property: property, sequence: currentSequence, valueSpans: valueSpans) {
                 currentSequence = newSequence
                 currentOutput = output
@@ -107,6 +114,31 @@ extension Interpreters {
         }
         
         return (currentSequence, currentOutput)
+    }
+    
+    /// Pass 0: Try setting values to their semantically simplest form
+    private static func naiveSimplifyValues<Output>(
+        _ gen: ReflectiveGenerator<Output>,
+        tree: ChoiceTree,
+        property: (Output) -> Bool,
+        sequence: ChoiceSequence,
+        valueSpans: [ChoiceSequence.ChoiceSpan]
+    ) throws -> (ChoiceSequence, Output)? {
+        var updatedSequence = sequence
+        for span in valueSpans {
+            let seqIdx = span.range.lowerBound
+            guard case let .value(v) = sequence[seqIdx] else { continue }
+            let simplified = v.choice.semanticSimplest
+            guard simplified != v.choice, simplified.fits(in: v.validRanges) else { continue }
+            updatedSequence[seqIdx] = .value(.init(choice: simplified, validRanges: v.validRanges))
+        }
+        guard updatedSequence != sequence else {
+            return nil
+        }
+        if let output = try? materialize(gen, with: tree, using: updatedSequence), property(output) == false {
+            return (updatedSequence, output)
+        }
+        return nil
     }
     
     /// Pass 3: Try setting values to their semantically simplest form (0 for numbers, "a" for characters).
