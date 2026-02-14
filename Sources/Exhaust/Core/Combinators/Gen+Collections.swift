@@ -41,7 +41,8 @@ public extension Gen {
     /// Creates a generator for an array with length constrained to a specific range.
     ///
     /// This variant allows precise control over array length by specifying exact bounds.
-    /// The size parameter is still considered but only if it falls within the specified range.
+    /// The size parameter acts as an upper bound within the range, so early (small-size)
+    /// test cases produce shorter arrays while the full range remains available for shrinking.
     ///
     /// - Parameters:
     ///   - elementGenerator: The generator for array elements
@@ -55,11 +56,9 @@ public extension Gen {
         // Use `bind` to get the result of the length generator.
         let sequenceOperation = ReflectiveOperation.sequence(
             length: Gen.getSize().bind { size in
-                if range.contains(size) {
-                    return Gen.choose(in: size...size)
-                }
-                return Gen.choose(in: range)
-                
+                let upper = min(size, range.upperBound)
+                let clamped = range.lowerBound...max(range.lowerBound, upper)
+                return Gen.choose(in: clamped)
             },
             gen: elementGenerator.erase()
         )
