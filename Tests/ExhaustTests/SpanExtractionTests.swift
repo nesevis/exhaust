@@ -794,3 +794,147 @@ struct ExtractSequenceBoundarySpansTests {
         #expect(spans[0].range == 2...3)
     }
 }
+
+// MARK: - extractSiblingGroups
+
+@Suite("Sibling group extraction tests")
+struct ExtractSiblingGroupsTests {
+
+    @Test("Bare values inside sequence produce one group")
+    func bareValuesInSequence() {
+        // [V V V]
+        let seq: ChoiceSequence = [seqOpen, val(3), val(1), val(2), seqClose]
+        let groups = ChoiceSequence.extractSiblingGroups(from: seq)
+
+        #expect(groups.count == 1)
+        #expect(groups[0].ranges == [1...1, 2...2, 3...3])
+        #expect(groups[0].depth == 0)
+    }
+
+    @Test("Two sequence siblings inside outer sequence")
+    func sequenceSiblingsInsideSequence() {
+        // [[VV][VV]]
+        let seq: ChoiceSequence = [
+            seqOpen,
+                seqOpen, val(1), val(2), seqClose,
+                seqOpen, val(3), val(4), seqClose,
+            seqClose,
+        ]
+        let groups = ChoiceSequence.extractSiblingGroups(from: seq)
+
+        // The outer sequence has 2 sequence children, and each inner has 2 bare values
+        // Outer: group of 2 sequence siblings
+        // Each inner: group of 2 bare value siblings
+        let outerGroups = groups.filter { $0.depth == 0 }
+        #expect(outerGroups.count == 1)
+        #expect(outerGroups[0].ranges == [1...4, 5...8])
+
+        let innerGroups = groups.filter { $0.depth == 1 }
+        #expect(innerGroups.count == 2)
+    }
+
+    @Test("Three group siblings inside sequence")
+    func groupSiblingsInsideSequence() {
+        // [(V)(V)(V)]
+        let seq: ChoiceSequence = [
+            seqOpen,
+                grpOpen, val(1), grpClose,
+                grpOpen, val(2), grpClose,
+                grpOpen, val(3), grpClose,
+            seqClose,
+        ]
+        let groups = ChoiceSequence.extractSiblingGroups(from: seq)
+
+        let outerGroups = groups.filter { $0.depth == 0 }
+        #expect(outerGroups.count == 1)
+        #expect(outerGroups[0].ranges.count == 3)
+        #expect(outerGroups[0].ranges == [1...3, 4...6, 7...9])
+    }
+
+    @Test("Single child produces no group")
+    func singleChild() {
+        // [V]
+        let seq: ChoiceSequence = [seqOpen, val(1), seqClose]
+        let groups = ChoiceSequence.extractSiblingGroups(from: seq)
+        #expect(groups.isEmpty)
+    }
+
+    @Test("Values inside group are not sequence siblings")
+    func valuesInsideGroup() {
+        // (V V) — group children, not sequence children
+        let seq: ChoiceSequence = [grpOpen, val(1), val(2), grpClose]
+        let groups = ChoiceSequence.extractSiblingGroups(from: seq)
+
+        // Groups still have children — 2 bare values in a group
+        #expect(groups.count == 1)
+        #expect(groups[0].ranges == [1...1, 2...2])
+        #expect(groups[0].depth == 0)
+    }
+
+    @Test("Mixed children types produce no group")
+    func mixedChildrenTypes() {
+        // [V [VV]] — one bare value and one sequence container
+        let seq: ChoiceSequence = [
+            seqOpen,
+                val(1),
+                seqOpen, val(2), val(3), seqClose,
+            seqClose,
+        ]
+        let groups = ChoiceSequence.extractSiblingGroups(from: seq)
+
+        // Outer has heterogeneous children (bare + sequence) → no group at depth 0
+        let outerGroups = groups.filter { $0.depth == 0 }
+        #expect(outerGroups.isEmpty)
+
+        // Inner sequence has 2 bare values → one group at depth 1
+        let innerGroups = groups.filter { $0.depth == 1 }
+        #expect(innerGroups.count == 1)
+    }
+
+    @Test("Already sorted group is still extracted")
+    func alreadySortedGroupExtracted() {
+        // [V V V] with values in order
+        let seq: ChoiceSequence = [seqOpen, val(1), val(2), val(3), seqClose]
+        let groups = ChoiceSequence.extractSiblingGroups(from: seq)
+
+        #expect(groups.count == 1)
+        #expect(groups[0].ranges.count == 3)
+    }
+
+    @Test("Empty sequence returns no groups")
+    func emptySequence() {
+        let groups = ChoiceSequence.extractSiblingGroups(from: [])
+        #expect(groups.isEmpty)
+    }
+
+    @Test("Branch markers between siblings are ignored")
+    func branchMarkersIgnored() {
+        // (B V V)
+        let seq: ChoiceSequence = [grpOpen, branch(0), val(1), val(2), grpClose]
+        let groups = ChoiceSequence.extractSiblingGroups(from: seq)
+
+        #expect(groups.count == 1)
+        #expect(groups[0].ranges == [2...2, 3...3])
+    }
+
+    @Test("Nested groups each produce their own sibling group")
+    func nestedGroupsSiblings() {
+        // [[(V)(V)][(V)(V)]]
+        let seq: ChoiceSequence = [
+            seqOpen,
+                seqOpen, grpOpen, val(1), grpClose, grpOpen, val(2), grpClose, seqClose,
+                seqOpen, grpOpen, val(3), grpClose, grpOpen, val(4), grpClose, seqClose,
+            seqClose,
+        ]
+        let groups = ChoiceSequence.extractSiblingGroups(from: seq)
+
+        // Depth 0: 2 sequence siblings
+        let depth0 = groups.filter { $0.depth == 0 }
+        #expect(depth0.count == 1)
+        #expect(depth0[0].ranges.count == 2)
+
+        // Depth 1: 2 group siblings in each inner sequence = 2 groups
+        let depth1 = groups.filter { $0.depth == 1 }
+        #expect(depth1.count == 2)
+    }
+}

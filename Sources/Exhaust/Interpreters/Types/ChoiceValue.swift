@@ -192,8 +192,14 @@ public enum ChoiceValue: Comparable, Hashable, Equatable, Sendable {
     
     public static func < (lhs: Self, rhs: Self) -> Bool {
         switch (lhs, rhs) {
-        case (.unsigned, .unsigned), (.signed, .signed), (.floating, .floating), (.character, .character):
-            // The bitpattern64 representation is sequential across all types
+        case (.unsigned, .unsigned):
+            return lhs.bitPattern64 < rhs.bitPattern64
+        case let (.signed(lhsInt, _, _), .signed(rhsInt, _, _)):
+            return lhsInt < rhsInt
+        case let (.floating(lhsDouble, _, _), .floating(rhsDouble, _, _)):
+            return lhsDouble < rhsDouble
+        case (.character, .character):
+            // TODO: If there are multiple unicode components use both?
             return lhs.bitPattern64 < rhs.bitPattern64
         default:
             fatalError("Can't compare two different choice values!")

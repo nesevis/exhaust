@@ -34,7 +34,7 @@ extension Interpreters {
         @discardableResult
         func consumeSequence(_ isOpen: Bool) throws -> ChoiceSequenceValue {
             guard case .sequence(isOpen) = values.first else {
-                throw isOpen ? ReplaySequenceError.groupNotOpen : .groupNotClosed
+                throw isOpen ? ReplaySequenceError.sequenceNotOpen : .sequenceNotClosed
             }
             return values.removeFirst()
         }
@@ -460,5 +460,7 @@ extension Interpreters {
         case mismatchInChoicesAndGenerators
         case groupNotOpen
         case groupNotClosed
+        case sequenceNotOpen
+        case sequenceNotClosed
     }
 }

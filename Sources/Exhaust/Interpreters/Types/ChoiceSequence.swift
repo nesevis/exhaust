@@ -233,6 +233,100 @@ extension ChoiceSequence {
         self.removeSubranges(set)
     }
     
+    // MARK: - Sibling groups
+
+    struct SiblingGroup {
+        /// Each sibling's range in the sequence. Contiguous, non-overlapping, in order.
+        let ranges: [ClosedRange<Int>]
+        let depth: Int
+    }
+
+    private enum SiblingChildKind: Equatable {
+        case bareValue
+        case sequence
+        case group
+    }
+
+    private struct SiblingFrame {
+        var children: [(range: ClosedRange<Int>, kind: SiblingChildKind)] = []
+        let depth: Int
+        let startIndex: Int
+        let isSequence: Bool
+    }
+
+    /// Extracts groups of sibling elements within containers. A sibling group contains
+    /// the immediate children of a sequence or group container, where all children are
+    /// the same kind (all bare values or all containers of the same type).
+    /// Only groups with >= 2 siblings are returned.
+    static func extractSiblingGroups(from sequence: ChoiceSequence) -> [SiblingGroup] {
+        var result: [SiblingGroup] = []
+        var stack: [SiblingFrame] = []
+
+        for (i, entry) in sequence.enumerated() {
+            switch entry {
+            case .sequence(true):
+                stack.append(SiblingFrame(depth: stack.count, startIndex: i, isSequence: true))
+
+            case .group(true):
+                stack.append(SiblingFrame(depth: stack.count, startIndex: i, isSequence: false))
+
+            case .sequence(false), .group(false):
+                guard let frame = stack.popLast() else { continue }
+
+                // Emit a sibling group if there are >= 2 children of homogeneous kind
+                if frame.children.count >= 2 {
+                    let firstKind = frame.children[0].kind
+                    if frame.children.allSatisfy({ $0.kind == firstKind }) {
+                        result.append(SiblingGroup(
+                            ranges: frame.children.map(\.range),
+                            depth: frame.depth
+                        ))
+                    }
+                }
+
+                // Register this closed container as a child of the enclosing frame
+                if !stack.isEmpty {
+                    let childKind: SiblingChildKind = frame.isSequence ? .sequence : .group
+                    stack[stack.count - 1].children.append(
+                        (range: frame.startIndex...i, kind: childKind)
+                    )
+                }
+
+            case .value, .reduced:
+                // A bare value is a single-index child of the current frame
+                if !stack.isEmpty {
+                    stack[stack.count - 1].children.append(
+                        (range: i...i, kind: .bareValue)
+                    )
+                }
+
+            case .branch:
+                // Branch markers are structural, skip them
+                break
+            }
+        }
+
+        return result
+    }
+
+    /// Returns the flattened `ChoiceValue`s within the given range, ignoring structural markers.
+    /// Used as a lexicographic comparison key for sibling reordering.
+    static func siblingComparisonKey(
+        from sequence: ChoiceSequence,
+        range: ClosedRange<Int>
+    ) -> [ChoiceValue] {
+        var keys: [ChoiceValue] = []
+        for idx in range {
+            switch sequence[idx] {
+            case let .value(v), let .reduced(v):
+                keys.append(v.choice)
+            case .branch, .sequence, .group:
+                continue
+            }
+        }
+        return keys
+    }
+
     func shortLexPrecedes(_ other: ChoiceSequence) -> Bool {
         // Shorter sequences are always better
         if self.count != other.count {

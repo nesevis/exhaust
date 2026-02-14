@@ -32,7 +32,7 @@ public enum ChoiceSequenceValue: Hashable, Equatable, Sendable {
             return .lt
         case (.group(true), .group(false)), (.sequence(true), .sequence(false)):
             return .gt
-        case (.branch(let a), .branch(let b)), (.value(let a), .value(let b)):
+        case (.branch(let a), .branch(let b)), (.value(let a), .value(let b)), (.reduced(let a), .reduced(let b)):
             return a.shortLexCompare(b)
         case (.reduced, .value):
             return .lt

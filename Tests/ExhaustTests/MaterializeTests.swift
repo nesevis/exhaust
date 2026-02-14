@@ -196,7 +196,7 @@ struct MaterializeTests {
         // Use a variable-length generator so element deletion is valid
         let gen = Gen.arrayOf(Gen.choose(in: UInt64(0)...10), within: 0...10)
         let (_, tree) = try #require(
-            Array(ValueAndChoiceTreeInterpreter(gen, materializePicks: false, seed: 42).prefix(1)).first
+            Array(ValueAndChoiceTreeInterpreter(gen, materializePicks: false, seed: 42).prefix(2)).last
         )
         var flattened = ChoiceSequence.flatten(tree)
         let originalCount = flattened.count

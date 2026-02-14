@@ -91,6 +91,17 @@ extension Interpreters {
 
             if didImprove { stallBudget = config.maxStalls; continue }
 
+            // Pass 6: Reorder siblings for normalization
+            let siblingGroups = ChoiceSequence.extractSiblingGroups(from: currentSequence)
+            if siblingGroups.isEmpty == false,
+               let (newSequence, output) = try reorderSiblings(gen, tree: currentTree, property: property, sequence: currentSequence, siblingGroups: siblingGroups) {
+                currentSequence = newSequence
+                currentOutput = output
+                didImprove = true
+            }
+
+            if didImprove { stallBudget = config.maxStalls; continue }
+
             // No pass improved the sequence — further iterations are deterministic, so stop.
             break
         }
@@ -274,6 +285,135 @@ extension Interpreters {
             return (current, output)
         }
         return nil
+    }
+
+    /// Pass 6: Reorder sibling elements within containers to produce normalized output.
+    /// For each sibling group, tries sorting all siblings by their comparison keys.
+    /// Falls back to adjacent swaps (bubble-sort style) if the full sort is rejected.
+    private static func reorderSiblings<Output>(
+        _ gen: ReflectiveGenerator<Output>,
+        tree: ChoiceTree,
+        property: (Output) -> Bool,
+        sequence: ChoiceSequence,
+        siblingGroups: [ChoiceSequence.SiblingGroup]
+    ) throws -> (ChoiceSequence, Output)? {
+        var current = sequence
+        var progress = false
+        var latestOutput: Output?
+
+        for group in siblingGroups {
+            let ranges = group.ranges
+            guard ranges.count >= 2 else { continue }
+
+            // Compute comparison keys for each sibling
+            let keys = ranges.map { ChoiceSequence.siblingComparisonKey(from: current, range: $0) }
+
+            // Check if already sorted
+            let sortedIndices = keys.indices.sorted { lhs, rhs in
+                lexicographicallyPrecedes(keys[lhs], keys[rhs])
+            }
+
+            if sortedIndices == Array(keys.indices) {
+                continue // Already sorted
+            }
+
+            // Build a candidate with siblings in sorted order
+            if let (newSeq, output) = try applySiblingPermutation(
+                gen, tree: tree, property: property,
+                sequence: current, ranges: ranges, permutation: sortedIndices
+            ) {
+                current = newSeq
+                latestOutput = output
+                progress = true
+                continue
+            }
+
+            // Full sort failed — try adjacent swaps (bubble sort style)
+            var improved = true
+            while improved {
+                improved = false
+                for j in 0..<(ranges.count - 1) {
+                    let currentRanges = ChoiceSequence.extractSiblingGroups(from: current)
+                        .first(where: { $0.depth == group.depth && $0.ranges.count == ranges.count })?.ranges
+                    guard let liveRanges = currentRanges, j + 1 < liveRanges.count else { break }
+
+                    let keyA = ChoiceSequence.siblingComparisonKey(from: current, range: liveRanges[j])
+                    let keyB = ChoiceSequence.siblingComparisonKey(from: current, range: liveRanges[j + 1])
+
+                    guard !lexicographicallyPrecedes(keyA, keyB) && keyA != keyB else { continue }
+
+                    // Swap j and j+1
+                    var swapPerm = Array(0..<liveRanges.count)
+                    swapPerm.swapAt(j, j + 1)
+
+                    if let (newSeq, output) = try applySiblingPermutation(
+                        gen, tree: tree, property: property,
+                        sequence: current, ranges: liveRanges, permutation: swapPerm
+                    ) {
+                        current = newSeq
+                        latestOutput = output
+                        progress = true
+                        improved = true
+                    }
+                }
+            }
+        }
+
+        if progress, let output = latestOutput {
+            return (current, output)
+        }
+        return nil
+    }
+
+    /// Applies a permutation to sibling ranges in a sequence, checks shortlex precedence,
+    /// materializes, and tests the property.
+    private static func applySiblingPermutation<Output>(
+        _ gen: ReflectiveGenerator<Output>,
+        tree: ChoiceTree,
+        property: (Output) -> Bool,
+        sequence: ChoiceSequence,
+        ranges: [ClosedRange<Int>],
+        permutation: [Int]
+    ) throws -> (ChoiceSequence, Output)? {
+        // Extract the slices in original order
+        let slices = ranges.map { Array(sequence[$0]) }
+
+        // Build candidate by reconstructing: prefix + permuted siblings interleaved + suffix
+        // Since siblings are contiguous within their parent container, we can replace the
+        // entire span from first range start to last range end.
+        let spanStart = ranges.first!.lowerBound
+        let spanEnd = ranges.last!.upperBound
+
+        var candidate = Array(sequence[..<spanStart])
+        for i in ranges.indices {
+            // If there's a gap between previous range end and current range start, include it
+            if i > 0 {
+                let gapStart = ranges[i - 1].upperBound + 1
+                let gapEnd = ranges[i].lowerBound
+                if gapStart < gapEnd {
+                    candidate.append(contentsOf: sequence[gapStart..<gapEnd])
+                }
+            }
+            candidate.append(contentsOf: slices[permutation[i]])
+        }
+        if spanEnd + 1 < sequence.count {
+            candidate.append(contentsOf: sequence[(spanEnd + 1)...])
+        }
+
+        guard candidate.shortLexPrecedes(sequence) else { return nil }
+        guard let output = try materialize(gen, with: tree, using: candidate) else { return nil }
+        guard property(output) == false else { return nil }
+
+        return (candidate, output)
+    }
+
+    /// Lexicographic comparison of two `[ChoiceValue]` arrays.
+    private static func lexicographicallyPrecedes(_ lhs: [ChoiceValue], _ rhs: [ChoiceValue]) -> Bool {
+        for (a, b) in zip(lhs, rhs) {
+            if a < b { return true }
+            if b < a { return false }
+        }
+        return lhs.count < rhs.count
     }
 
     private static func adaptiveDeleteSpans<Output>(
