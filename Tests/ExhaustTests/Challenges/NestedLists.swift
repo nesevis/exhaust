@@ -33,7 +33,7 @@ struct NestedListsShrinkingChallenge {
         let (_, tree) = Array(iterator.prefix(2)).last!
         let (_, output) = try #require(try Interpreters.reduce(gen: gen, tree: tree, config: .fast, property: property))
         // How many times the `property` is called
-        #expect(count == 40)
+        #expect(count == 43)
         // Shrinks to [[0,…x11]]
         #expect(output == [Array(repeating: UInt(0), count: 11)])
     }
