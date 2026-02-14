@@ -127,6 +127,15 @@ extension ChoiceSequence {
                     range: frame.start...i,
                     depth: stack.count
                 ))
+                
+                if frame.kind == .sequence(true), frame.start < i - 1 {
+                    // A span representing all the contents, not inclusive sequence markers
+                    spans.append(ChoiceSpan(
+                        kind: frame.kind,
+                        range: (frame.start + 1)...(i - 1),
+                        depth: stack.count
+                    ))
+                }
 
                 // Register this span as a child of the enclosing frame
                 if !childrenAtDepth.isEmpty {
