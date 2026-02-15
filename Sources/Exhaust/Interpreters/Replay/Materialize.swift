@@ -210,7 +210,7 @@ extension Interpreters {
             // Forward-only ops don't consume choices. Their presence in a reflectable
             // generator is an error.
             case let .contramap(_, subGenerator):
-                fatalError("Should not be encountered")
+//                fatalError("Should not be encountered")
                 // A lens/contramap is a wrapper. It doesn't consume a node from the script itself.
                 // The choices are consumed by its sub-generator. We pass the same script down.
                 guard let subResult = try self.materializeRecursive(subGenerator, with: tree, context: context) else {
