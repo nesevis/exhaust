@@ -226,8 +226,19 @@ extension Interpreters {
                     return nil
                 }
                 return result as? Output
-            case let .filter(gen, _, _), let .classify(gen, _, _):
-                guard let result = try self.materializeRecursive(gen, with: tree, context: context) else {
+            case let .filter(gen, _, predicate):
+                let result = try self.materializeRecursive(gen, with: tree, context: context) as? Output
+                guard
+                    let result,
+                    predicate(result)
+                else {
+                    return nil
+                }
+                return result
+            case let .classify(gen, _, _):
+                guard
+                    let result = try self.materializeRecursive(gen, with: tree, context: context)
+                else {
                     return nil
                 }
                 return result as? Output
@@ -446,9 +457,17 @@ extension Interpreters {
                 let nextGen = try continuation(subResult)
                 return try self.materializeWithChoicesHelper(nextGen, with: &choices, context: context)
 
-            case let .filter(gen, _, _), let .classify(gen, _, _):
-                // filter/classify delegate to the inner generator; the as? Output cast is safe
-                // because the inner generator's output type matches Output at runtime
+            case let .filter(gen, _, predicate):
+                let result = try self.materializeWithChoicesHelper(gen, with: &choices, context: context) as? Output
+                guard
+                    let result,
+                    predicate(result)
+                else {
+                    return nil
+                }
+                return result
+                
+            case let .classify(gen, _, _):
                 return try self.materializeWithChoicesHelper(gen, with: &choices, context: context) as? Output
             }
         }
