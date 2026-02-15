@@ -220,9 +220,9 @@ extension ChoiceSequence {
                 spans.append(ChoiceSpan(kind: entry, range: i...i, depth: depth))
             case (.sequence(true), .value):
                 spans.append(ChoiceSpan(kind: entry, range: i...i, depth: depth))
-            case (.group(true), _), (.sequence(true), _):
+            case (_, .group(true)), (_, .sequence(true)):
                 depth += 1
-            case (.group(false), _), (.sequence(false), _):
+            case (_, .group(false)), (_, .sequence(false)):
                 depth -= 1
             default:
                 continue

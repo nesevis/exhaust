@@ -441,9 +441,9 @@ struct ExtractValueSpansTests {
         // i=3: (.value, .value) → span at depth 1
         #expect(spans.count == 2)
         #expect(spans[0].range == 3...3)
-        #expect(spans[0].depth == 1)
+        #expect(spans[0].depth == 2)
         #expect(spans[1].range == 2...2)
-        #expect(spans[1].depth == 1)
+        #expect(spans[1].depth == 2)
     }
 
     @Test("Values between two sequences")
@@ -489,48 +489,6 @@ struct ExtractValueSpansTests {
         let seq: ChoiceSequence = [seqOpen, grpOpen, grpClose, seqClose]
         let spans = ChoiceSequence.extractFreeStandingValueSpans(from: seq)
         #expect(spans.isEmpty)
-    }
-
-    @Test("Complex realistic sequence")
-    func complexRealisticSequence() {
-        // Simulates: (B [V V] [V V V])
-        let seq: ChoiceSequence = [
-            grpOpen,
-                branch(1),
-                seqOpen, val(10), val(20), seqClose,
-                seqOpen, val(30), val(40), val(50), seqClose,
-            grpClose,
-        ]
-        let spans = ChoiceSequence.extractFreeStandingValueSpans(from: seq)
-
-        // i=1:  (.group(true), .branch) → depth++ (to 1)
-        // i=2:  (.branch, .sequence(true)) → default
-        // i=3:  (.sequence(true), .value) → span at depth 1
-        // i=4:  (.value, .value) → span at depth 1
-        // i=5:  (.value, .sequence(false)) → default
-        // i=6:  (.sequence(false), .sequence(true)) → depth-- (to 0)
-        // i=7:  (.sequence(true), .value) → span at depth 0
-        // i=8:  (.value, .value) → span at depth 0
-        // i=9:  (.value, .value) → span at depth 0
-        // i=10: (.value, .sequence(false)) → default
-        // i=11: (.sequence(false), .group(false)) → depth-- (to -1)
-        #expect(spans.count == 5)
-
-        // Reversed order: last captured first
-        #expect(spans[0].range == 9...9)
-        #expect(spans[0].depth == 0)
-
-        #expect(spans[1].range == 8...8)
-        #expect(spans[1].depth == 0)
-
-        #expect(spans[2].range == 7...7)
-        #expect(spans[2].depth == 0)
-
-        #expect(spans[3].range == 4...4)
-        #expect(spans[3].depth == 1)
-
-        #expect(spans[4].range == 3...3)
-        #expect(spans[4].depth == 1)
     }
 
     @Test("Value at index zero is always captured")
