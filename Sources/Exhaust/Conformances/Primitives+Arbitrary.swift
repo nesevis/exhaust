@@ -57,32 +57,45 @@ extension UInt32: Arbitrary {
 extension Int: Arbitrary {
     public static var arbitrary: ReflectiveGenerator<Self> {
         Gen.getSize().bind { size in
-            let expanded: UInt64 = size < 63 ? 1 << size : UInt64(Int64.max)
-            return Gen.choose(in: -Int(expanded)...Int(expanded))
+            if size < 63 {
+                let expanded: UInt64 = 1 << size
+                return Gen.choose(in: -Int(expanded)...Int(expanded))
+            }
+            return Gen.choose(in: Int.min...Int.max)
         }
     }
 }
 extension Int8: Arbitrary {
     public static var arbitrary: ReflectiveGenerator<Self> {
         Gen.getSize().bind { size in
-            let expanded: UInt64 = size < 7 ? 1 << size : UInt64(Int8.max)
-            return Gen.choose(in: -Int8(expanded)...Int8(expanded))
+            if size < 7 {
+                let expanded: UInt64 = 1 << size
+                return Gen.choose(in: -Int8(expanded)...Int8(expanded))
+            }
+            return Gen.choose(in: Int8.min...Int8.max)
         }
     }
 }
 extension Int16: Arbitrary {
     public static var arbitrary: ReflectiveGenerator<Self> {
         Gen.getSize().bind { size in
-            let expanded: UInt64 = size < 15 ? 1 << size : UInt64(Int16.max)
-            return Gen.choose(in: -Int16(expanded)...Int16(expanded))
+            if size < 15 {
+                let expanded: UInt64 = 1 << size
+                return Gen.choose(in: -Int16(expanded)...Int16(expanded))
+            }
+            // TODO: Fix this elsewhere
+            return Gen.choose(in: Int16.min...Int16.max)
         }
     }
 }
 extension Int32: Arbitrary {
     public static var arbitrary: ReflectiveGenerator<Self> {
         Gen.getSize().bind { size in
-            let expanded: UInt64 = size < 31 ? 1 << size : UInt64(Int32.max)
-            return Gen.choose(in: -Int32(expanded)...Int32(expanded))
+            if size < 31 {
+                let expanded: UInt64 = 1 << size
+                return Gen.choose(in: -Int32(expanded)...Int32(expanded))
+            }
+            return Gen.choose(in: Int32.min...Int32.max)
         }
     }
 }
@@ -90,8 +103,11 @@ extension Int32: Arbitrary {
 extension Int64: Arbitrary {
     public static var arbitrary: ReflectiveGenerator<Self> {
         Gen.getSize().bind { size in
-            let expanded: UInt64 = size < 63 ? 1 << size : UInt64(Int64.max)
-            return Gen.choose(in: -Int64(expanded)...Int64(expanded))
+            if size < 63 {
+                let expanded: UInt64 = 1 << size
+                return Gen.choose(in: -Int64(expanded)...Int64(expanded))
+            }
+            return Gen.choose(in: Int64.min...Int64.max)
         }
     }
 }

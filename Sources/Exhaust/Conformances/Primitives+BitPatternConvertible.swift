@@ -32,7 +32,7 @@ extension UInt8: BitPatternConvertible {
     public static var tag: TypeTag { .uint8 }
     
     public init(bitPattern64: UInt64) {
-        self = UInt8(bitPattern64)
+        self = UInt8(truncatingIfNeeded: bitPattern64)
     }
     
     public static var bitPatternRanges: [ClosedRange<UInt64>] {
