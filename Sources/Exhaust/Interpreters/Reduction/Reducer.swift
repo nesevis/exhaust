@@ -571,8 +571,8 @@ extension Interpreters {
                             return true
                         }
                         let newValue = searchUpward
-                            ? v.choice.bitPattern64 + delta
-                            : v.choice.bitPattern64 - delta
+                            ? v.choice.bitPattern64 &+ delta
+                            : v.choice.bitPattern64 &- delta
                         let newChoice = ChoiceValue(
                             v.choice.tag.makeConvertible(bitPattern64: newValue),
                             tag: v.choice.tag
