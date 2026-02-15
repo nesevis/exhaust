@@ -15,10 +15,40 @@ extension Interpreters {
         var maxStalls: Int {
             switch self {
             case .fast:
-                8
+                1
             }
         }
     }
+    
+    private enum ShrinkPass: String, CaseIterable, Hashable, Equatable, Comparable {
+        case naiveSimplifyValuesToSemanticSimplest
+        case deleteContainerSpans
+        case deleteSequenceBoundaries
+        case deleteFreeStandingValues
+        case simplifyValuesToSemanticSimplest
+        case reduceValues
+        case reduceValuesInTandem
+        case normaliseSiblingOrder
+        
+        static func < (lhs: Interpreters.ShrinkPass, rhs: Interpreters.ShrinkPass) -> Bool {
+            (Self.allCases.firstIndex(of: lhs) ?? 0) < (Self.allCases.firstIndex(of: rhs) ?? 0)
+        }
+    }
+    
+//    private static func instrument<Output>(
+//        _ pass: ShrinkPass,
+//        _ active: Bool,
+//        _ store: inout [ShrinkPass: Int],
+//        _ property: @escaping (Output) -> Bool
+//    ) -> (Output) -> Bool {
+//        if active {
+//            return { v in
+//                store[pass, default: 0] += 1
+//                return property(v)
+//            }
+//        }
+//        return property
+//    }
     
     public static func reduce<Output>(
         gen: ReflectiveGenerator<Output>,
@@ -34,22 +64,37 @@ extension Interpreters {
         guard var currentOutput = try materialize(gen, with: tree, using: currentSequence) else {
             return nil
         }
+        var isInstrumented: Bool = true
+        var oracleCalls = [ShrinkPass: Int]()
         var stallBudget = config.maxStalls
         var didNaivelyMinimise = false
-        
+        var loops = 0
         while stallBudget > 0 {
+            loops += 1
             var didImprove = false
 
             let valueSpans = ChoiceSequence.extractAllValueSpans(from: currentSequence)
-            if didNaivelyMinimise == false, valueSpans.isEmpty == false, let (newSequence, output) = try naiveSimplifyValues(gen, tree: currentTree, property: property, sequence: currentSequence, valueSpans: valueSpans) {
+            var oracle = isInstrumented == false
+                ? property
+            : { v in
+                oracleCalls[.naiveSimplifyValuesToSemanticSimplest, default: 0] += 1
+                return property(v)
+            }
+            if didNaivelyMinimise == false, valueSpans.isEmpty == false, let (newSequence, output) = try naiveSimplifyValues(gen, tree: currentTree, property: oracle, sequence: currentSequence, valueSpans: valueSpans) {
                 currentSequence = newSequence
                 currentOutput = output
-                didNaivelyMinimise = true // TODO: Run this once only, or try it every run?
             }
+            didNaivelyMinimise = true // TODO: Run this once only, or try it every run?
             
             let containerSpans = ChoiceSequence.extractContainerSpans(from: currentSequence)
             // Pass 1: Adaptive container span deletion, ie the […] and (…) spans in [(V)(V)]
-            if containerSpans.isEmpty == false, let (newSequence, output) = try adaptiveDeleteSpans(gen, tree: currentTree, property: property, sequence: currentSequence, spans: containerSpans) {
+            oracle = isInstrumented == false
+                ? property
+            : { v in
+                oracleCalls[.deleteContainerSpans, default: 0] += 1
+                return property(v)
+            }
+            if containerSpans.isEmpty == false, let (newSequence, output) = try adaptiveDeleteSpans(gen, tree: currentTree, property: oracle, sequence: currentSequence, spans: containerSpans) {
                 currentSequence = newSequence
                 currentOutput = output
                 didImprove = true
@@ -60,7 +105,13 @@ extension Interpreters {
 
             // Pass 2a: Collapse sequence boundaries, i.e [[V][V][V]] -> [[VVV]]
             let boundarySpans = ChoiceSequence.extractSequenceBoundarySpans(from: currentSequence)
-            if boundarySpans.isEmpty == false, let (newSequence, output) = try adaptiveDeleteSpans(gen, tree: currentTree, property: property, sequence: currentSequence, spans: boundarySpans) {
+            oracle = isInstrumented == false
+                ? property
+            : { v in
+                oracleCalls[.deleteSequenceBoundaries, default: 0] += 1
+                return property(v)
+            }
+            if boundarySpans.isEmpty == false, let (newSequence, output) = try adaptiveDeleteSpans(gen, tree: currentTree, property: oracle, sequence: currentSequence, spans: boundarySpans) {
                 currentSequence = newSequence
                 currentOutput = output
                 didImprove = true
@@ -71,7 +122,13 @@ extension Interpreters {
 
             // Pass 2b: Sequence element deletion, i.e the individual Vs in [VVVVV]
             let freeStandingValueSpans = ChoiceSequence.extractFreeStandingValueSpans(from: currentSequence)
-            if freeStandingValueSpans.isEmpty == false, let (newSequence, output) = try adaptiveDeleteSpans(gen, tree: currentTree, property: property, sequence: currentSequence, spans: freeStandingValueSpans) {
+            oracle = isInstrumented == false
+                ? property
+            : { v in
+                oracleCalls[.deleteFreeStandingValues, default: 0] += 1
+                return property(v)
+            }
+            if freeStandingValueSpans.isEmpty == false, let (newSequence, output) = try adaptiveDeleteSpans(gen, tree: currentTree, property: oracle, sequence: currentSequence, spans: freeStandingValueSpans) {
                 currentSequence = newSequence
                 currentOutput = output
                 didImprove = true
@@ -81,7 +138,13 @@ extension Interpreters {
             if didImprove { stallBudget = config.maxStalls; continue }
 
             // Pass 3: Simplify values to semantic simplest
-            if valueSpans.isEmpty == false, let (newSequence, output) = try simplifyValues(gen, tree: currentTree, property: property, sequence: currentSequence, valueSpans: valueSpans) {
+            oracle = isInstrumented == false
+                ? property
+            : { v in
+                oracleCalls[.simplifyValuesToSemanticSimplest, default: 0] += 1
+                return property(v)
+            }
+            if valueSpans.isEmpty == false, let (newSequence, output) = try simplifyValues(gen, tree: currentTree, property: oracle, sequence: currentSequence, valueSpans: valueSpans) {
                 currentSequence = newSequence
                 currentOutput = output
                 didImprove = true
@@ -90,7 +153,30 @@ extension Interpreters {
             if didImprove { stallBudget = config.maxStalls; continue }
             
             // Pass 5: Reduce individual values via binary search toward their reduction target
-            if valueSpans.isEmpty == false, let (newSequence, output) = try reduceValues(gen, tree: currentTree, property: property, sequence: currentSequence, valueSpans: valueSpans) {
+            oracle = isInstrumented == false
+                ? property
+            : { v in
+                oracleCalls[.reduceValues, default: 0] += 1
+                return property(v)
+            }
+            if valueSpans.isEmpty == false, let (newSequence, output) = try reduceValues(gen, tree: currentTree, property: oracle, sequence: currentSequence, valueSpans: valueSpans) {
+                currentSequence = newSequence
+                currentOutput = output
+                didImprove = true
+            }
+
+            if didImprove { stallBudget = config.maxStalls; continue }
+            
+            // Pass 6: Reduce individual values in tandem by equal amounts, via binary search
+            let siblingGroups = ChoiceSequence.extractSiblingGroups(from: currentSequence)
+            oracle = isInstrumented == false
+                ? property
+            : { v in
+                oracleCalls[.reduceValuesInTandem, default: 0] += 1
+                return property(v)
+            }
+
+            if siblingGroups.isEmpty == false, let (newSequence, output) = try reduceValuesInTandem(gen, tree: currentTree, property: oracle, sequence: currentSequence, siblingGroups: siblingGroups) {
                 currentSequence = newSequence
                 currentOutput = output
                 didImprove = true
@@ -98,10 +184,15 @@ extension Interpreters {
 
             if didImprove { stallBudget = config.maxStalls; continue }
 
-            // Pass 6: Reorder siblings for normalization
-            let siblingGroups = ChoiceSequence.extractSiblingGroups(from: currentSequence)
+            // Pass 7: Reorder siblings for normalization
+            oracle = isInstrumented == false
+                ? property
+            : { v in
+                oracleCalls[.normaliseSiblingOrder, default: 0] += 1
+                return property(v)
+            }
             if siblingGroups.isEmpty == false,
-               let (newSequence, output) = try reorderSiblings(gen, tree: currentTree, property: property, sequence: currentSequence, siblingGroups: siblingGroups) {
+               let (newSequence, output) = try reorderSiblings(gen, tree: currentTree, property: oracle, sequence: currentSequence, siblingGroups: siblingGroups) {
                 currentSequence = newSequence
                 currentOutput = output
                 didImprove = true
@@ -110,7 +201,18 @@ extension Interpreters {
             if didImprove { stallBudget = config.maxStalls; continue }
 
             // No pass improved the sequence — further iterations are deterministic, so stop.
-            break
+            stallBudget -= 1
+        }
+        
+        print("Shrinker stalled after \(loops) loops")
+        if isInstrumented {
+            oracleCalls
+                .map { ($0.key, $0.value) }
+                .sorted(by: { $0.0 < $1.0 })
+                .forEach { key, value in
+                    print("— \(value):\t\(key)")
+                }
+            print("\(oracleCalls.values.reduce(0, +)) oracle calls, total")
         }
         
         return (currentSequence, currentOutput)
@@ -310,6 +412,33 @@ extension Interpreters {
                     latestOutput = output
                     progress = true
                 }
+            } else {
+                // No reduction was possible here. Let's try
+                // **Local boundary search**: Are there better shrinks just beyond the horizon?
+                let offsets = [bestDelta + 1, bestDelta + 2, bestDelta + 4, bestDelta + 8, bestDelta + 16]
+                var boundary = current
+                for offset in offsets {
+                    // Let's make sure we don't under or overflow
+                    guard (searchUpward ? UInt64.max - offset >= currentBP : currentBP >= offset) else {
+                        continue
+                    }
+                    let testBP = searchUpward ? currentBP + offset : currentBP - offset
+                    let boundaryChoice = ChoiceValue(
+                        v.choice.tag.makeConvertible(bitPattern64: testBP),
+                        tag: v.choice.tag
+                    )
+                    guard boundaryChoice.fits(in: v.validRanges) else { continue }
+                    boundary[seqIdx] = .value(.init(choice: boundaryChoice, validRanges: v.validRanges))
+                    
+                    guard boundary.shortLexPrecedes(current) else { continue }
+                    
+                    if let output = try? materialize(gen, with: tree, using: boundary), property(output) == false {
+                        latestOutput = output
+                        current = boundary
+                        progress = true
+                        break
+                    }
+                }
             }
         }
 
@@ -327,7 +456,7 @@ extension Interpreters {
         tree: ChoiceTree,
         property: (Output) -> Bool,
         sequence: ChoiceSequence,
-        siblingGroups: [ChoiceSequence.SiblingGroup]
+        siblingGroups: [SiblingGroup]
     ) throws -> (ChoiceSequence, Output)? {
         var current = sequence
         var progress = false
@@ -388,6 +517,91 @@ extension Interpreters {
                         improved = true
                     }
                 }
+            }
+        }
+
+        if progress, let output = latestOutput {
+            return (current, output)
+        }
+        return nil
+    }
+    
+    /// Pass 7: Binary search multiple values toward their reduction target.
+    /// For each sibling group of values will test how much it can reduce all siblings by the same amount
+    private static func reduceValuesInTandem<Output>(
+        _ gen: ReflectiveGenerator<Output>,
+        tree: ChoiceTree,
+        property: (Output) -> Bool,
+        sequence: ChoiceSequence,
+        siblingGroups: [SiblingGroup]
+    ) throws -> (ChoiceSequence, Output)? {
+        var current = sequence
+        var progress = false
+        var latestOutput: Output?
+        
+        for group in siblingGroups {
+            // Since all values will be reduced in tandem, grab the distance from semantic zero
+            // from the first of the values in this sibling span
+            guard
+                let firstValueIndex = group.ranges.first?.lowerBound,
+                case let .value(v) = current[firstValueIndex] else
+            {
+                continue
+            }
+            let currentBP = v.choice.bitPattern64
+            let targetBP = v.choice.reductionTarget(in: v.validRanges)
+
+            guard currentBP != targetBP else { continue }
+
+            let searchUpward = targetBP > currentBP
+            let distance = searchUpward
+                ? targetBP - currentBP
+                : currentBP - targetBP
+            
+            guard distance > 1 else { continue }
+
+            var lastProbe: ChoiceSequence?
+            var lastProbeOutput: Output?
+            let bestDelta = AdaptiveProbe.binarySearchWithGuess(
+                { (delta: UInt64) -> Bool in
+                    guard delta > 0 else { return true } // predicate(0) assumed true
+                    var probe = current
+                    for tandemCandidate in group.ranges {
+                        guard case let .value(v) = current[tandemCandidate.lowerBound] else {
+                            return true
+                        }
+                        let newValue = searchUpward
+                            ? v.choice.bitPattern64 + delta
+                            : v.choice.bitPattern64 - delta
+                        let newChoice = ChoiceValue(
+                            v.choice.tag.makeConvertible(bitPattern64: newValue),
+                            tag: v.choice.tag
+                        )
+                        guard newChoice.fits(in: v.validRanges) else { continue }
+                        probe[tandemCandidate.lowerBound] = .value(.init(choice: newChoice, validRanges: v.validRanges))
+                    }
+                    
+                    guard
+                        probe.shortLexPrecedes(current),
+                        let output = try? materialize(gen, with: tree, using: probe)
+                    else {
+                        return false
+                    }
+                    let success = property(output) == false
+                    if success {
+                        lastProbeOutput = output
+                        lastProbe = probe
+                    }
+                    return success
+                },
+                low: UInt64(0),
+                high: distance
+            )
+            
+            if let lastProbeOutput, let lastProbe, lastProbe.shortLexPrecedes(current) {
+                latestOutput = lastProbeOutput
+                current = lastProbe
+                progress = true
             }
         }
 

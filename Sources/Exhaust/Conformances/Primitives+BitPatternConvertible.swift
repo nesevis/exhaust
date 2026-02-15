@@ -124,7 +124,7 @@ extension Int8: BitPatternConvertible {
     private static let signBitMask: UInt8 = 0x80
     
     public init(bitPattern64: UInt64) {
-        self = Int8(Int8(bitPattern: UInt8(bitPattern64) ^ Self.signBitMask))
+        self = Int8(Int8(bitPattern: UInt8(truncatingIfNeeded: bitPattern64) ^ Self.signBitMask))
     }
     
     public static var bitPatternRanges: [ClosedRange<UInt64>] {
@@ -143,7 +143,7 @@ extension Int16: BitPatternConvertible {
     private static let signBitMask: UInt16 = 0x8000
     
     public init(bitPattern64: UInt64) {
-        self = Int16(Int16(bitPattern: UInt16(bitPattern64) ^ Self.signBitMask))
+        self = Int16(Int16(bitPattern: UInt16(truncatingIfNeeded: bitPattern64) ^ Self.signBitMask))
     }
     
     public static var bitPatternRanges: [ClosedRange<UInt64>] {
@@ -162,7 +162,7 @@ extension Int32: BitPatternConvertible {
     private static let signBitMask: UInt32 = 0x80000000
     
     public init(bitPattern64: UInt64) {
-        self = Int32(Int32(bitPattern: UInt32(bitPattern64) ^ Self.signBitMask))
+        self = Int32(Int32(bitPattern: UInt32(truncatingIfNeeded: bitPattern64) ^ Self.signBitMask))
     }
     
     public static var bitPatternRanges: [ClosedRange<UInt64>] {

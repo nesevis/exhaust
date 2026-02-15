@@ -45,6 +45,7 @@ struct CouplingShrinkingChallenge {
         
         // We expect this array to be shortened to only include the two values that cause a cycle
         // And for those two values to be reduced to [0,1] rather than [15, 4]
+        #expect(count == 26)
         #expect(output.count == 2)
         #expect(output == [1, 0])
     }

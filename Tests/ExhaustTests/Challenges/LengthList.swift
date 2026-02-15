@@ -31,7 +31,7 @@ struct LengthListShrinkingChallenge {
         let iterator = ValueAndChoiceTreeInterpreter(gen, seed: 1337)
         let (_, tree) = Array(iterator.prefix(3)).last! // 23 values
         let (_, output) = try #require(try Interpreters.reduce(gen: gen, tree: tree, config: .fast, property: property))
-        #expect(count == 68)
+        #expect(count == 70)
         #expect(output == [900])
     }
 }

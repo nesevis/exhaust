@@ -45,14 +45,45 @@ struct DifferenceShrinkingChallenge {
         let tree = try #require(try Interpreters.reflect(gen, with: value))
         let (seq, output) = try #require(try Interpreters.reduce(gen: gen, tree: tree, config: .fast, property: property))
         
-        // The challenge here is that the two values need to change in tandem, otherwise there won't be a continual failure signal to guide shrinking.
-        // Use `ChoiceSequence.extractSiblingGroups` to greedily reduce all spans through the same binary search at the same time. 2, then 3, then 4… Must be able to do VVV and (V)(V)(V)
-        
-        print("Original value: \(value)")
-        print("Shrunk value: \(output)")
-        print("Expected shrunk value: [10, 10]")
+        #expect(count == 79)
         #expect(output == [10, 10])
     }
     
-    // …etc
+    @Test("Difference must not be small")
+    func differenceTest2() throws {
+        let gen = Gen.arrayOf(Gen.choose(in: Int(1)...1000), exactly: 2)
+        
+        var count = 0
+        let property: ([Int]) -> Bool = { arr in
+            count += 1
+            let diff = abs(arr[0] - arr[1])
+            return arr[0] < 10 || diff < 1 || diff > 4
+        }
+        
+        let value = [700, 700] // A failing example
+        let tree = try #require(try Interpreters.reflect(gen, with: value))
+        let (seq, output) = try #require(try Interpreters.reduce(gen: gen, tree: tree, config: .fast, property: property))
+        #expect(count == 2704)
+        #expect(output == [10, 6])
+    }
+    
+    @Test("Difference must not be one")
+    func differenceTest3() throws {
+        let gen = Gen.arrayOf(Gen.choose(in: Int(1)...1000), exactly: 2)
+        
+        var count = 0
+        let property: ([Int]) -> Bool = { arr in
+            count += 1
+            let diff = abs(arr[0] - arr[1])
+            return arr[0] < 10 || diff != 1
+        }
+        
+        let value = [700, 701] // A failing example
+        let tree = try #require(try Interpreters.reflect(gen, with: value))
+        let (seq, output) = try #require(try Interpreters.reduce(gen: gen, tree: tree, config: .fast, property: property))
+        print()
+        #expect(property(value) == false)
+        #expect(count == 5062)
+        #expect(output == [10, 9])
+    }
 }

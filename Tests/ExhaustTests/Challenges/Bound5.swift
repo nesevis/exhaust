@@ -17,11 +17,25 @@ struct Bound5ShrinkingChallenge {
 
      The interesting thing about this example is the interdependence between separate parts of the sample data. A single list in the tuple will never break the invariant, but you need at least two lists together. This prevents most of trivial shrinking algorithms from getting close to a minimum example, which would look something like ([-32768], [-1], [], [], []).
      */
-    @Test("Bound5, Full", .disabled("Not implemented"))
-    func bound5Full() {
-        let arrGen = Gen.arrayOf(Int16.arbitrary, within: 1...10)
+    @Test("Bound5, Full")
+    func bound5Full() throws {
+        let arrGen = Gen.arrayOf(Int16.arbitrary, within: 0...10)
+            .filter { $0.isEmpty || $0.dropFirst().reduce($0[0], &+) < 256 }
         let gen = Gen.zip(arrGen, arrGen, arrGen, arrGen, arrGen)
         
-        // …etc
+        var count = 0
+        let property: ([Int16], [Int16], [Int16], [Int16], [Int16]) -> Bool = { a, b, c, d, e in
+            count += 1
+            let arr = a + b + c + d + e
+            return arr.isEmpty || arr.dropFirst()
+                .reduce(arr[0], &+) < 5 * 256 // Don't start with 0 when reducing, use the first entry
+        }
+        
+        let iterator = ValueAndChoiceTreeInterpreter(gen, seed: 1337)
+        let (value, tree) = Array(iterator.prefix(4)).last!
+        let (seq, output) = try #require(try Interpreters.reduce(gen: gen, tree: tree, config: .fast, property: property))
+        print("Original value: \(value)")
+        print("Output: \(output)")
+        print("Expected output: ([-32768], [-1], [], [], [])")
     }
 }
