@@ -268,7 +268,7 @@ extension Interpreters {
             case .getSize:
                 // This operation expects a `.getSize` node from the script.
                 switch script {
-                case let .choice(.unsigned(value), _):
+                case let .choice(.unsigned(value, _), _):
                     return try runContinuation(value)
                 case let .getSize(value):
                     return try runContinuation(value)
@@ -318,7 +318,7 @@ extension Interpreters {
                     validRanges: [lengthGen.associatedRange ?? length...length],
                     strategies: ShrinkingStrategy.sequenceStrategies
                 )
-                guard  let _ = try self.replayRecursive(lengthGen, with: .choice(.unsigned(length), lengthMetadata)) else {
+                guard  let _ = try self.replayRecursive(lengthGen, with: .choice(.unsigned(length, UInt64.self), lengthMetadata)) else {
                     return nil
                 }
                 

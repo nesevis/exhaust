@@ -30,7 +30,7 @@ extension ChoiceValue {
         if self < other {
             // This represents a refinement of the top range to the value of other - 1
             switch (self, other) {
-            case let (.unsigned(lhs), .unsigned(rhs)):
+            case let (.unsigned(lhs, _), .unsigned(rhs, _)):
                 return range.lowerBound...min(range.upperBound, rhs)
             case let (.signed(_, lhs, _), .signed(_, rhs, _)):
                 return range.lowerBound...min(range.upperBound, rhs)
@@ -46,7 +46,7 @@ extension ChoiceValue {
             // This represents a refinement of the bottom of the range to the value of the other + 1
             // Does it matter if the range is wholly negative?
             switch (self, other) {
-            case let (.unsigned(lhs), .unsigned(rhs)):
+            case let (.unsigned(lhs, _), .unsigned(rhs, _)):
                 return max(range.lowerBound, rhs + 1)...range.upperBound
             case let (.signed(lhs, _, _), .signed(_, rhs, _)):
                 return max(range.lowerBound, rhs + 1)...range.upperBound

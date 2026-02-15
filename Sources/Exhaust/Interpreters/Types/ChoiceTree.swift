@@ -506,7 +506,7 @@ extension ChoiceTree: CustomDebugStringConvertible {
         switch self {
         case .choice(let choiceValue, _):
             switch choiceValue {
-            case .unsigned(let uInt64):
+            case .unsigned(let uInt64, _):
                 return uInt64.description
             case .signed(let int, _, _):
                 return int.description
@@ -540,7 +540,7 @@ extension ChoiceTree: CustomDebugStringConvertible {
         switch self {
         case .choice(let choiceValue, let meta):
             switch choiceValue {
-            case .unsigned(let uInt64):
+            case .unsigned(let uInt64, _):
                 let range = meta.validRanges[0]
                 if range.contains(0) {
                     return Double(uInt64)
@@ -594,7 +594,7 @@ extension ChoiceTree: CustomDebugStringConvertible {
             let label = "choice\(prefix.isEmpty ? "" : "_b\(prefix)")_d\(depth)"
             let type = "continuous"
             switch choiceValue {
-            case .unsigned(let uInt64):
+            case .unsigned(let uInt64, _):
                 return [(label, type, uInt64.description)]
             case .signed(let int64, _, _):
                 return [(label, type, int64.description)]

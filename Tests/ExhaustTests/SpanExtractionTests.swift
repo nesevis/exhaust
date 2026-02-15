@@ -12,11 +12,11 @@ import Testing
 
 /// Shorthand for building test sequences without the noise of full ChoiceSequenceValue construction
 private func val(_ n: UInt64) -> ChoiceSequenceValue {
-    .value(.init(choice: .unsigned(n), validRanges: [0...100]))
+    .value(.init(choice: .unsigned(n, UInt64.self), validRanges: [0...100]))
 }
 
 private func branch(_ n: Int) -> ChoiceSequenceValue {
-    .branch(.init(choice: .unsigned(UInt64(n)), validRanges: [0...10]))
+    .branch(.init(choice: .unsigned(UInt64(n), UInt64.self), validRanges: [0...10]))
 }
 
 private let seqOpen  = ChoiceSequenceValue.sequence(true)

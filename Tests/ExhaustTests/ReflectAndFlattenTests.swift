@@ -39,7 +39,7 @@ struct ReflectAndFlattenTests {
 
         #expect(valueChoices.count >= 1)
         // The reflected tree contains the value - verify via bit pattern since it could be signed or unsigned
-        #expect(valueChoices[0].choice == .unsigned(42))
+        #expect(valueChoices[0].choice == .unsigned(42, UInt64.self))
     }
 
     @Test("Reflect and flatten array")
@@ -70,7 +70,7 @@ struct ReflectAndFlattenTests {
 
         // Verify the array elements are present
         let elementValues = valueChoices.compactMap { choice -> UInt64? in
-            if case let .unsigned(val) = choice.choice {
+            if case let .unsigned(val, _) = choice.choice {
                 return val
             }
             return nil
@@ -110,7 +110,7 @@ struct ReflectAndFlattenTests {
         #expect(valueChoices.count >= 2)
 
         let unsignedValues = valueChoices.compactMap { choice -> UInt64? in
-            if case let .unsigned(val) = choice.choice {
+            if case let .unsigned(val, _) = choice.choice {
                 return val
             }
             return nil
@@ -205,7 +205,7 @@ struct ReflectAndFlattenTests {
         #expect(valueChoices.count >= 3)
 
         let unsignedValues = valueChoices.compactMap { choice -> UInt64? in
-            if case let .unsigned(val) = choice.choice {
+            if case let .unsigned(val, _) = choice.choice {
                 return val
             }
             return nil
@@ -245,7 +245,7 @@ struct ReflectAndFlattenTests {
 
         // The reflected tree should contain 42 (the original choice before mapping)
         let unsignedValues = valueChoices.compactMap { choice -> UInt64? in
-            if case let .unsigned(val) = choice.choice {
+            if case let .unsigned(val, _) = choice.choice {
                 return val
             }
             return nil
@@ -559,7 +559,7 @@ struct ReflectAndFlattenTests {
         
         // Mess with it by setting the age to 123 and
         // removing the equivalent of the two leading characters in the name
-        flattened[3] = .value(.init(choice: .unsigned(123), validRanges: []))
+        flattened[3] = .value(.init(choice: .unsigned(123, UInt64.self), validRanges: []))
         flattened.removeSubrange(6...15)
 
         let materialized = try Interpreters.materialize(gen, with: tree, using: flattened)
@@ -603,7 +603,7 @@ struct ReflectAndFlattenTests {
                 case .character:
                     return .value(.init(choice: .character("A"), validRanges: []))
                 case .unsigned:
-                    return .value(.init(choice: .unsigned(.min), validRanges: []))
+                    return .value(.init(choice: .unsigned(.min, UInt64.self), validRanges: []))
                 default:
                     return element
                 }

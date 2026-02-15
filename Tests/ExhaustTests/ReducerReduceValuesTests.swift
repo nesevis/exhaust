@@ -29,14 +29,14 @@ struct ReductionTargetTests {
 
     @Test("Unsigned target is 0 when 0 is in range")
     func unsignedTargetIsZero() {
-        let value = ChoiceValue.unsigned(247)
+        let value = ChoiceValue.unsigned(247, UInt64.self)
         let target = value.reductionTarget(in: [0...1000])
         #expect(target == 0)
     }
 
     @Test("Unsigned target is range lower bound when 0 is not in range")
     func unsignedTargetIsLowerBound() {
-        let value = ChoiceValue.unsigned(500)
+        let value = ChoiceValue.unsigned(500, UInt64.self)
         let target = value.reductionTarget(in: [10...1000])
         #expect(target == 10)
     }

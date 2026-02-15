@@ -8,7 +8,7 @@
 extension ChoiceValue {
     var bitPattern64: UInt64 {
         switch self {
-        case let .unsigned(uint):
+        case let .unsigned(uint, _):
             uint
         case let .signed(_, uint, _):
             uint
@@ -25,7 +25,7 @@ extension ChoiceValue {
     /// - Unsigned integers and characters: identical to `bitPattern64`
     var shortlexKey: UInt64 {
         switch self {
-        case let .unsigned(uint):
+        case let .unsigned(uint, _):
             uint
         case let .signed(value, _, _):
             value == Int64.min ? UInt64(Int64.max) + 1 : UInt64(abs(value))
@@ -134,7 +134,7 @@ extension ChoiceValue {
     
     func binary(for ranges: [ClosedRange<UInt64>], direction: ShrinkingDirection) -> [ChoiceValue] {
         switch self {
-        case let .unsigned(value):
+        case let .unsigned(value, _):
             var halvings = [UInt64]()
             switch direction {
             case .towardsLowerBound:
@@ -201,7 +201,7 @@ extension ChoiceValue {
             guard let range = ranges.first(where: { $0.contains(character.bitPattern64) }) else {
                 return []
             }
-            let uints = ChoiceValue.unsigned(character.bitPattern64).binary(for: [range], direction: direction)
+            let uints = ChoiceValue.unsigned(character.bitPattern64, UInt64.self).binary(for: [range], direction: direction)
             // TODO: A lot of indirection here
             return uints.map {
                 ChoiceValue.character(Character(bitPattern64: $0.convertible.bitPattern64))
@@ -212,7 +212,7 @@ extension ChoiceValue {
     // Decreases or increases number by 10%
     func saturation(for ranges: [ClosedRange<UInt64>], direction: ShrinkingDirection) -> [ChoiceValue] {
         switch self {
-        case let .unsigned(value):
+        case let .unsigned(value, _):
             let max = 50
             var count = 0
             var values = [UInt64]()
@@ -290,7 +290,7 @@ extension ChoiceValue {
             guard let range = ranges.first(where: { $0.contains(character.bitPattern64) }) else {
                 return []
             }
-            let uints = ChoiceValue.unsigned(character.bitPattern64).saturation(for: [range], direction: direction)
+            let uints = ChoiceValue.unsigned(character.bitPattern64, UInt64.self).saturation(for: [range], direction: direction)
             // TODO: A lot of indirection here
             return uints.map {
                 ChoiceValue.character(Character(bitPattern64: $0.convertible.bitPattern64))
@@ -300,7 +300,7 @@ extension ChoiceValue {
     
     func ultraSaturation(for ranges: [ClosedRange<UInt64>], direction: ShrinkingDirection) -> [ChoiceValue] {
         switch self {
-        case let .unsigned(value):
+        case let .unsigned(value, _):
             guard value > 0 else {
                 return []
             }
@@ -379,7 +379,7 @@ extension ChoiceValue {
             guard let range = ranges.first(where: { $0.contains(character.bitPattern64) }) else {
                 return []
             }
-            let uints = ChoiceValue.unsigned(character.bitPattern64).ultraSaturation(for: [range], direction: direction)
+            let uints = ChoiceValue.unsigned(character.bitPattern64, UInt64.self).ultraSaturation(for: [range], direction: direction)
             // TODO: A lot of indirection here
             return uints.map {
                 ChoiceValue.character(Character(bitPattern64: $0.convertible.bitPattern64))

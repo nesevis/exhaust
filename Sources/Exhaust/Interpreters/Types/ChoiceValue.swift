@@ -6,7 +6,7 @@
 //
 
 public enum ChoiceValue: Comparable, Hashable, Equatable, Sendable {
-    case unsigned(UInt64)
+    case unsigned(UInt64, any BitPatternConvertible.Type)
     /// The UInt64 represents its hashable behaviour
     case signed(Int64, UInt64, any BitPatternConvertible.Type)
     case floating(Double, UInt64, any BitPatternConvertible.Type)
@@ -14,8 +14,16 @@ public enum ChoiceValue: Comparable, Hashable, Equatable, Sendable {
     
     init(_ value: any BitPatternConvertible, tag: TypeTag) {
         switch tag {
-        case .uint, .uint64, .uint32, .uint16, .uint8:
-            self = .unsigned(value.bitPattern64)
+        case .uint:
+            self = .unsigned(value.bitPattern64, UInt.self)
+        case .uint64:
+            self = .unsigned(value.bitPattern64, UInt64.self)
+        case .uint32:
+            self = .unsigned(value.bitPattern64, UInt32.self)
+        case .uint16:
+            self = .unsigned(value.bitPattern64, UInt16.self)
+        case .uint8:
+            self = .unsigned(value.bitPattern64, UInt8.self)
         case .int:
             self = .signed(Int64(Int(bitPattern64: value.bitPattern64)), value.bitPattern64, Int.self)
         case .int64:
@@ -46,8 +54,8 @@ public enum ChoiceValue: Comparable, Hashable, Equatable, Sendable {
     /// - Characters: "a"
     var semanticSimplest: ChoiceValue {
         switch self {
-        case .unsigned:
-            return .unsigned(0)
+        case let .unsigned(_, type):
+            return .init(type.init(bitPattern64: 0), tag: self.tag)
         case let .signed(_, _, type):
             let zeroBitPattern: UInt64
             if type is Int8.Type { zeroBitPattern = Int8(0).bitPattern64 }
@@ -70,16 +78,33 @@ public enum ChoiceValue: Comparable, Hashable, Equatable, Sendable {
 
     var tag: TypeTag {
         switch self {
-        case .unsigned:   return .uint64
-        case let .signed(_, _, type):   return type.tag
-        case let .floating(_, _, type): return type.tag
-        case .character:  return .character
+        case let .unsigned(_, type):
+            return type.tag
+        case let .signed(_, _, type):
+            return type.tag
+        case let .floating(_, _, type):
+            return type.tag
+        case .character:
+            return .character
+        }
+    }
+    
+    var convertibleType: any BitPatternConvertible.Type {
+        switch self {
+        case let .unsigned(_, type):
+            type
+        case let .signed(_, _, type):
+            type
+        case let .floating(_, _, type):
+            type
+        case .character:
+            Character.self
         }
     }
 
     var complexity: UInt64 {
         switch self {
-        case let .unsigned(value):
+        case let .unsigned(value, _):
             return value
         case let .signed(value, _, _):
             return UInt64(abs(value))
@@ -126,41 +151,35 @@ public enum ChoiceValue: Comparable, Hashable, Equatable, Sendable {
     
     var doubleValue: Double {
         switch self {
-        case .unsigned(let uInt64):
+        case .unsigned:
             // Clamp?
-            return Double(uInt64)
-        case .signed(_, let uint64, let underlyingType):
-            guard let value = underlyingType.init(bitPattern64: uint64) as? (any FixedWidthInteger) else {
+            return Double(bitPattern64)
+        case .signed:
+            guard let this = convertible as? (any FixedWidthInteger) else {
                 fatalError()
             }
-            return Double(value)
-        case .floating(_, let uint64, let underlyingType):
-            guard let value = underlyingType.init(bitPattern64: uint64) as? (any BinaryFloatingPoint) else {
+            return Double(this)
+        case .floating:
+            guard let this = convertible as? (any BinaryFloatingPoint) else {
                 fatalError()
             }
-            return Double(value)
+            return Double(this)
         case .character(let character):
             return Double(character.bitPattern64)
         }
     }
 
     public var convertible: any BitPatternConvertible {
-        switch self {
-        case .unsigned(let uInt64):
-            return uInt64
-        case .signed(let int64, _, _):
-            return int64
-        case .floating(let double, _, _):
-            return double
-        case .character(let character):
-            return character
+        if case let .character(value) = self {
+            return value
         }
+        return convertibleType.init(bitPattern64: bitPattern64)
     }
     
     // The case here is that `self` failed the property and `other` passed, so they represent both the range and the direction between them
     func shrinkingDirection(given other: Self) -> ShrinkingDirection {
         switch (self, other) {
-        case let (.unsigned(lhs), .unsigned(rhs)):
+        case let (.unsigned(lhs, _), .unsigned(rhs, _)):
             return lhs <= rhs ? .towardsHigherBound : .towardsLowerBound
         case let (.signed(lhs, _, _), .signed(rhs, _, _)):
             return lhs <= rhs ? .towardsHigherBound : .towardsLowerBound
@@ -175,7 +194,7 @@ public enum ChoiceValue: Comparable, Hashable, Equatable, Sendable {
     
     public func hash(into hasher: inout Hasher) {
         switch self {
-        case .unsigned(let uInt64):
+        case .unsigned(let uInt64, _):
             hasher.combine(uInt64)
         case .signed(_, let uInt64, _):
             hasher.combine(uInt64)

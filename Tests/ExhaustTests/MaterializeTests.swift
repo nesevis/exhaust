@@ -240,10 +240,11 @@ struct MaterializeTests {
 
     @Test("Materialize mapped generator")
     func materializeMapped() throws {
-        let gen = UInt64.arbitrary.mapped(
-            forward: { Int($0) },
-            backward: { UInt64($0) }
-        )
+        let gen = UInt64.arbitrary
+            .mapped(
+                forward: { Int($0) },
+                backward: { UInt64($0) }
+            )
         let (original, materialized) = try roundTrip(gen)
         #expect(original == materialized)
     }
@@ -408,7 +409,7 @@ struct MaterializeTests {
         let (_, tree) = try #require(
             Array(ValueAndChoiceTreeInterpreter(gen, materializePicks: false, seed: 42).prefix(1)).first
         )
-        let replacement = ChoiceSequenceValue.Value(choice: .unsigned(777), validRanges: [0...1000])
+        let replacement = ChoiceSequenceValue.Value(choice: .unsigned(777, UInt64.self), validRanges: [0...1000])
         let modified: ChoiceSequence = [.value(replacement)]
         let materialized = try Interpreters.materialize(gen, with: tree, using: modified)
         #expect(materialized == 777)
@@ -423,7 +424,7 @@ struct MaterializeTests {
         let flattened = ChoiceSequence.flatten(tree)
         let minimized = flattened.map { element -> ChoiceSequenceValue in
             guard case .value = element else { return element }
-            return .value(.init(choice: .unsigned(0), validRanges: []))
+            return .value(.init(choice: .unsigned(0, UInt64.self), validRanges: []))
         }
         let materialized = try #require(try Interpreters.materialize(gen, with: tree, using: minimized))
         #expect(materialized == [0, 0, 0, 0, 0])
@@ -486,7 +487,11 @@ struct MaterializeTests {
     @Test("Materialize contramap/prune through group path")
     func materializeContramapThroughGroup() throws {
         let gen = Gen.zip(
-            UInt64.arbitrary.mapped(forward: { Int($0) }, backward: { UInt64($0) }),
+            Gen.choose(in: UInt64(100)...1000)
+                .mapped(
+                    forward: { Int($0) },
+                    backward: { UInt64($0) }
+                ),
             UInt64.arbitrary
         )
         let (original, materialized) = try roundTripUntyped(gen)
