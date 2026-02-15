@@ -242,7 +242,7 @@ public enum Interpreters {
     }
     
     public enum ReflectionError: LocalizedError {
-        case reflectedNil(type: String)
+        case reflectedNil(type: String, resultType: String)
         case contramapWasWrongType
         case zipWasWrongLengthOrType
         case couldNotMapInputToGenerator

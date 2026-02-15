@@ -81,7 +81,7 @@ public extension Gen {
                 // Not sure this is ever hit
                 return .pure(character)
             } else if let optional = result as? Optional<Character>, optional == nil {
-                throw Interpreters.ReflectionError.reflectedNil(type: String(describing: Character.self))
+                throw Interpreters.ReflectionError.reflectedNil(type: String(describing: Character.self), resultType: String(describing: type(of: result)))
             } else {
                 throw GeneratorError.typeMismatch(expected: "Character", actual: String(describing: type(of: result)))
             }

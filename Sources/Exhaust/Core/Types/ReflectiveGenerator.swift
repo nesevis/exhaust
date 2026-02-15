@@ -146,7 +146,7 @@ public extension ReflectiveGenerator where Operation == ReflectiveOperation {
                 // Backward pass. The calling function is expecting a non-optional, so we throw the `reflectedNil` error to indicate to the consumer — which should only be a `pick` exploring the nil and non-nil options — that they are trying to parse the `.some` branch using the `.none` value during reflection
                 // TODO: Can we verify that this closure is executed from a `pick`?
                 if let optional = result as? Optional<Value>, optional == nil {
-                    throw Interpreters.ReflectionError.reflectedNil(type: description)
+                    throw Interpreters.ReflectionError.reflectedNil(type: description, resultType: String(describing: type(of: result)))
                 }
                 return result as! Value
             },

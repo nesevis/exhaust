@@ -17,7 +17,7 @@ public enum Gen {
             if let typedResult = result as? Output {
                 return .pure(typedResult)
             }
-            throw Interpreters.ReflectionError.reflectedNil(type: String(describing: Output.self))
+            throw Interpreters.ReflectionError.reflectedNil(type: String(describing: Output.self), resultType: String(describing: result.self))
         }
     }
     
@@ -79,7 +79,7 @@ public enum Gen {
                 return .pure(typed)
             }
             if let optional = result as? Optional<Output>, optional == nil {
-                throw Interpreters.ReflectionError.reflectedNil(type: String(describing: Output.self))
+                throw Interpreters.ReflectionError.reflectedNil(type: String(describing: Output.self), resultType: String(describing: type(of: result)))
             }
             throw GeneratorError.typeMismatch(
                 expected: String(describing: Output.self),
