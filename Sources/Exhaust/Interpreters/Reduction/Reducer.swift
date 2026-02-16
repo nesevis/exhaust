@@ -855,7 +855,7 @@ extension Interpreters {
             // Since all values will be reduced in tandem, grab the distance from semantic zero
             // from the first of the values in this sibling span
             guard
-                let firstValueIndex = group.valueRanges.first?.lowerBound,
+                let firstValueIndex = group.valueRanges?.first?.lowerBound,
                 case let v = current[firstValueIndex].value, let v else
             {
                 continue
@@ -874,11 +874,12 @@ extension Interpreters {
 
             var lastProbe: ChoiceSequence?
             var lastProbeOutput: Output?
+            // Why is this never used?
             let bestDelta = AdaptiveProbe.binarySearchWithGuess(
                 { (delta: UInt64) -> Bool in
                     guard delta > 0 else { return true } // predicate(0) assumed true
                     var probe = current
-                    for tandemCandidate in group.valueRanges {
+                    for tandemCandidate in group.valueRanges ?? [] {
                         guard let v = current[tandemCandidate.lowerBound].value else {
                             return true
                         }

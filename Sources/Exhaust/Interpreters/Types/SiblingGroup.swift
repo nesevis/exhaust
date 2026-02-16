@@ -13,14 +13,14 @@ struct SiblingGroup: Equatable {
     let depth: Int
     let kind: SiblingChildKind
     
-    var valueRanges: [ClosedRange<Int>] {
+    var valueRanges: [ClosedRange<Int>]? {
         switch kind {
         case .bareValue:
             return ranges
         case .sequence:
-            #warning("We need metadata here to know which values are in the sequence")
-            return ranges
+            return nil
         case .group:
+            return nil
             guard ranges.allSatisfy({ $0.count == 3 }) else {
                 fatalError("Too hard basket?")
             }
