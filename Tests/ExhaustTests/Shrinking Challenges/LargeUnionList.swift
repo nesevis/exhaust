@@ -46,7 +46,6 @@ struct LargeUnionListShrinkingChallenge {
         let tree = try #require(try Interpreters.reflect(Self.gen, with: value))
         print()
         let (_, output) = try #require(try Interpreters.reduce(gen: Self.gen, tree: tree, config: .fast, property: Self.property))
-        print(output)
         #expect(output.flatMap(\.self) == [-3, -2, -1, 0, 1])
     }
     
