@@ -5,6 +5,22 @@
 //  Created by Chris Kolbu on 8/2/2026.
 //
 
+public struct ChoiceSpan: CustomDebugStringConvertible {
+    public init(kind: ChoiceSequenceValue, range: ClosedRange<Int>, depth: Int) {
+        self.kind = kind
+        self.range = range
+        self.depth = depth
+    }
+    
+    public let kind: ChoiceSequenceValue
+    public let range: ClosedRange<Int>
+    public let depth: Int
+    
+    public var debugDescription: String {
+        "<\(kind.shortString)> \(range.lowerBound)...\(range.upperBound) @ \(depth)"
+    }
+}
+
 public typealias ChoiceSequence = [ChoiceSequenceValue]
 
 // MARK: - Helper functions
@@ -81,24 +97,6 @@ extension ChoiceSequence {
         }
         return sequenceCount == 0 && groupCount == 0
     }
-    
-    // Claude opus
-
-    public struct ChoiceSpan: CustomDebugStringConvertible {
-        public init(kind: ChoiceSequenceValue, range: ClosedRange<Int>, depth: Int) {
-            self.kind = kind
-            self.range = range
-            self.depth = depth
-        }
-        
-        let kind: ChoiceSequenceValue
-        let range: ClosedRange<Int>
-        let depth: Int
-        
-        public var debugDescription: String {
-            "<\(kind.shortString)> \(range.lowerBound)...\(range.upperBound) @ \(depth)"
-        }
-    }
 
     @inlinable
     public static func extractContainerSpans(from sequence: ChoiceSequence) -> [ChoiceSpan] {
@@ -147,7 +145,15 @@ extension ChoiceSequence {
             }
         }
 
-        return spans.reversed()
+        return spans.sorted(by: { lhs, rhs in
+            if lhs.depth == rhs.depth {
+                if lhs.range.count == rhs.range.count {
+                    return lhs.range.count < rhs.range.count
+                }
+                return lhs.range.lowerBound < rhs.range.lowerBound
+            }
+            return lhs.depth < rhs.depth
+        })
     }
     
     /// Returns spans representing `][` boundaries (`.sequence(false)` followed by `.sequence(true)`)
@@ -271,7 +277,8 @@ extension ChoiceSequence {
                     if frame.children.allSatisfy({ $0.kind == firstKind }) {
                         result.append(SiblingGroup(
                             ranges: frame.children.map(\.range),
-                            depth: frame.depth
+                            depth: frame.depth,
+                            kind: frame.children[0].kind
                         ))
                     }
                 }

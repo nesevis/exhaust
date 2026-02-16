@@ -11,6 +11,22 @@ struct SiblingGroup {
     /// Each sibling's range in the sequence. Contiguous, non-overlapping, in order.
     let ranges: [ClosedRange<Int>]
     let depth: Int
+    let kind: SiblingChildKind
+    
+    var valueRanges: [ClosedRange<Int>] {
+        switch kind {
+        case .bareValue:
+            return ranges
+        case .sequence:
+            #warning("We need metadata here to know which values are in the sequence")
+            return ranges
+        case .group:
+            guard ranges.allSatisfy({ $0.count == 3 }) else {
+                fatalError("Too hard basket?")
+            }
+            return ranges.map { ($0.lowerBound + 1)...($0.upperBound - 1) }
+        }
+    }
 }
 
 enum SiblingChildKind: Equatable {

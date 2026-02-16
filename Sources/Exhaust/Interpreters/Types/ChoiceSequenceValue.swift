@@ -22,20 +22,31 @@ public enum ChoiceSequenceValue: Hashable, Equatable, Sendable {
     /// A value that has been set to its semantically simplest form that should not be individually shrunk further
     case reduced(Value)
     
+    var value: Value? {
+        switch self {
+        case .value(let value):
+            value
+        case .reduced(let value):
+            value
+        default:
+            nil
+        }
+    }
+    
     // MARK: - Shortlex
     
     public func shortLexCompare(_ other: ChoiceSequenceValue) -> ShortlexOrder {
         switch (self, other) {
         case (.group(true), .group(true)), (.sequence(true), .sequence(true)):
             return .eq
+        case (.group(false), .group(false)), (.sequence(false), .sequence(false)):
+            return .eq
         case (.group(false), .group(true)), (.sequence(false), .sequence(true)):
             return .lt
         case (.group(true), .group(false)), (.sequence(true), .sequence(false)):
             return .gt
-        case (.branch(let a), .branch(let b)), (.value(let a), .value(let b)), (.reduced(let a), .reduced(let b)):
+        case (.branch(let a), .branch(let b)), (.value(let a), .value(let b)), (.reduced(let a), .reduced(let b)), (.value(let a), .reduced(let b)), (.reduced(let a), .value(let b)):
             return a.shortLexCompare(b)
-        case (.reduced, .value):
-            return .lt
         default:
             if self.kindOrder < other.kindOrder { return .lt }
             if self.kindOrder > other.kindOrder { return .gt }
@@ -90,6 +101,10 @@ public enum ChoiceSequenceValue: Hashable, Equatable, Sendable {
             if lhs < rhs { return .lt }
             if lhs > rhs { return .gt }
             return .eq
+        }
+        
+        public func hash(into hasher: inout Hasher) {
+            hasher.combine(choice)
         }
     }
 }
