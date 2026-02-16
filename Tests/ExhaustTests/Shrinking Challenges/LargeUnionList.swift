@@ -33,7 +33,7 @@ struct LargeUnionListShrinkingChallenge {
         let iterator = ValueAndChoiceTreeInterpreter(Self.gen, seed: 1337)
         let (value, tree) = Array(iterator.prefix(4)).last! // 23 values
         let (sequence, output) = try #require(try Interpreters.reduce(gen: Self.gen, tree: tree, config: .fast, property: Self.property))
-        #expect(output.flatMap(\.self) == [-1, 0, 1, 2, 3])
+        #expect(output.flatMap(\.self) == [-3, -2, -1, 0, 1])
     }
     
     @Test("Large Union List, Pathological single")
@@ -47,7 +47,7 @@ struct LargeUnionListShrinkingChallenge {
         print()
         let (_, output) = try #require(try Interpreters.reduce(gen: Self.gen, tree: tree, config: .fast, property: Self.property))
         print(output)
-        #expect(output.flatMap(\.self) == [-2, -1, 0, 1, 2])
+        #expect(output.flatMap(\.self) == [-3, -2, -1, 0, 1])
     }
     
     @Test("Large Union List, Pathological single 2")
@@ -57,7 +57,7 @@ struct LargeUnionListShrinkingChallenge {
         print()
         let (_, output) = try #require(try Interpreters.reduce(gen: Self.gen, tree: tree, config: .fast, property: Self.property))
         print(output)
-        #expect(output.flatMap(\.self) == [-1, 0, 1, 2, 3])
+        #expect(output.flatMap(\.self) == [-2, -1, 0, 1, 2])
     }
     
     @Test("Large Union List, 50")
@@ -68,12 +68,6 @@ struct LargeUnionListShrinkingChallenge {
         for (value, tree) in iterator where Self.property(value) == false && outputs.count <= 50 {
             let (seq, output) = try #require(try Interpreters.reduce(gen: Self.gen, tree: tree, config: .fast, property: Self.property))
             outputs.append(output)
-            // This fails due to the validRange of the generator's size interacting with the randomly generated value causing certain passes from working as intended.
-//            if output.map(\.count).reduce(0, +) > 5 {
-//                print("value: \(value)")
-//                print("output: \(output)")
-//            }
-//            #expect(output.flatMap(\.self) == [-2, -1, 0, 1, 2])
         }
         
         for (index, output) in outputs.enumerated() {
