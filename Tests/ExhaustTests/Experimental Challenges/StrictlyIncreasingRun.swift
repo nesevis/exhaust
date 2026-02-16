@@ -31,7 +31,7 @@ struct StrictlyIncreasingRunChallenge {
 
     @Test("Strictly increasing run")
     func strictlyIncreasingRun() throws {
-        let gen = Gen.arrayOf(Gen.choose(in: UInt64(0)...100), within: 1...50)
+        let gen = Gen.arrayOf(Gen.choose(in: UInt64(0)...10_000), within: 1...50)
 
         let property: ([UInt64]) -> Bool = { arr in
             guard arr.count >= 3 else { return true }
@@ -39,15 +39,9 @@ struct StrictlyIncreasingRunChallenge {
                 .dropFirst()
                 .reduce(into: (count: 1, last: arr[0], valid: true)) { acc, n in
                     guard acc.valid else { return }
-                    if n > acc.last {
-                        acc.count += 1
-                    } else {
-                        acc.count = 1
-                    }
+                    acc.count = n > acc.last ? acc.count + 1 : 1
                     acc.last = n
-                    if acc.count > 2 {
-                        acc.valid = false
-                    }
+                    acc.valid = acc.count < 3
                 }.valid
         }
     
@@ -56,12 +50,12 @@ struct StrictlyIncreasingRunChallenge {
         
         let startingValue: [UInt64] = [6000, 344, 3750]
         let tree = try #require(try Interpreters.reflect(gen, with: startingValue))
+        let initialSeq = ChoiceSequence.flatten(tree)
+        let initialValueSpans = ChoiceSequence.extractAllValueSpans(from: initialSeq)
 
         let (seq, output) = try #require(try Interpreters.reduce(
             gen: gen, tree: tree, config: .slow, property: property
         ))
-
-        print("\(startingValue) shrunk to: \(output) – \(seq.shortString)")
 
         // Should be the minimal strictly increasing triple
         #expect(output == counterExample)

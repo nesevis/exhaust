@@ -195,7 +195,7 @@ extension ChoiceSequence {
         
         for (i, entry) in sequence.enumerated() {
             switch entry {
-            case let .value(value):
+            case let .value(value), let .reduced(value):
                 spans.append(ChoiceSpan(kind: entry, range: i...i, depth: depth))
             case .group(true), .sequence(true):
                 depth += 1
