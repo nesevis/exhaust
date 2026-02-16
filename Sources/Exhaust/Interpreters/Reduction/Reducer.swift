@@ -411,7 +411,9 @@ extension Interpreters {
         var progress = false
         var latestOutput: Output?
 
-        for group in siblingGroups {
+        // By the time this iterates again, the siblingGroups are stale, and the ranges
+        // do not point to where they should. We can only reorder once, so this function needs to be rethought, or perhaps changed to use RangeSet
+        groupIteration: for group in siblingGroups {
             let ranges = group.ranges
             guard ranges.count >= 2 else { continue }
 
@@ -424,7 +426,7 @@ extension Interpreters {
             }
 
             if sortedIndices == Array(keys.indices) {
-                continue // Already sorted
+                break groupIteration // Already sorted
             }
 
             // Build a candidate with siblings in sorted order
@@ -435,7 +437,7 @@ extension Interpreters {
                 current = newSeq
                 latestOutput = output
                 progress = true
-                continue
+                break groupIteration
             }
 
             // Full sort failed — try adjacent swaps (bubble sort style)
@@ -464,6 +466,7 @@ extension Interpreters {
                         latestOutput = output
                         progress = true
                         improved = true
+                        break groupIteration
                     }
                 }
             }
