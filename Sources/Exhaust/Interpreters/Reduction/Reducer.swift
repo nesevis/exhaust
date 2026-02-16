@@ -653,17 +653,14 @@ extension Interpreters {
                 // Apply deletion
                 var candidate = current
                 candidate.removeSubranges(rangesToDelete)
-                if candidate.shortLexPrecedes(current) {
-                    do {
-                        guard let output = try materialize(gen, with: tree, using: candidate) else {
-                            return false
-                        }
-                        return property(output) == false
-                    } catch {
+                do {
+                    guard let output = try materialize(gen, with: tree, using: candidate) else {
                         return false
                     }
+                    return property(output) == false
+                } catch {
+                    return false
                 }
-                return false
             }
 
             if k > 0 {
