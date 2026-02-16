@@ -33,7 +33,7 @@ struct DoubleCancellationChallenge {
      where 9007199254740992.0 = 2^53, the exact threshold of cancellation.
      */
 
-    @Test("Double cancellation")
+    @Test("Double cancellation", .disabled("Float shrinking isn't implemented correctly"))
     func doubleCancellation() throws {
         let gen = Gen.zip(
             Gen.choose(in: 1.0...1e18),

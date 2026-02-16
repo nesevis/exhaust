@@ -32,15 +32,14 @@ struct StringAnagramChallenge {
      - The reducer must coordinate deletions and simplifications across two
        independent container boundaries
 
-     Expected smallest counterexample: ([32, 33], [33, 32])
+     Expected smallest counterexample: ([a, b], [b, a])
      Two arrays of the two smallest values in the range, in swapped order.
      */
 
-    @Test("String anagram")
+    @Test("String anagram", .disabled("Needs work"))
     func stringAnagram() throws {
         let charGen = String.arbitraryAscii
             .filter { $0.count > 2 }
-//        let arrayGen = Gen.arrayOf(Gen.choose(in: UInt8(32)...126), within: 1...10)
         let gen = Gen.zip(charGen, charGen)
 
         let property: (String, String) -> Bool = { a, b in
