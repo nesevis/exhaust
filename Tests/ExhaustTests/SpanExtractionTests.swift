@@ -15,6 +15,10 @@ private func val(_ n: UInt64) -> ChoiceSequenceValue {
     .value(.init(choice: .unsigned(n, UInt64.self), validRanges: [0...100]))
 }
 
+private func reduced(_ n: UInt64) -> ChoiceSequenceValue {
+    .reduced(.init(choice: .unsigned(n, UInt64.self), validRanges: [0...100]))
+}
+
 private func branch(_ n: Int) -> ChoiceSequenceValue {
     .branch(.init(choice: .unsigned(UInt64(n), UInt64.self), validRanges: [0...10]))
 }
@@ -24,7 +28,7 @@ private let seqClose = ChoiceSequenceValue.sequence(false)
 private let grpOpen  = ChoiceSequenceValue.group(true)
 private let grpClose = ChoiceSequenceValue.group(false)
 
-private typealias Span = ChoiceSequence.ChoiceSpan
+private typealias Span = ChoiceSpan
 
 // MARK: - extractContainerSpans
 
@@ -757,6 +761,64 @@ struct ExtractSequenceBoundarySpansTests {
 
 @Suite("Sibling group extraction tests")
 struct ExtractSiblingGroupsTests {
+    @Test("Test nested arrays mixing value with reduced works")
+    func nestedArraysMixingReducedAndValue() {
+        // [[(V)(_)(_)(_)(_)(_)(_)][(V)(V)(V)(V)]]
+        // [[(V)(V)(V)(V)][(V)(_)(_)(_)(_)(_)(_)]]
+        let seq: ChoiceSequence = [
+            seqOpen,
+            seqOpen,
+            grpOpen,
+            val(3),
+            grpClose,
+            grpOpen,
+            val(3),
+            grpClose,
+            grpOpen,
+            val(3),
+            grpClose,
+            grpOpen,
+            val(3),
+            grpClose,
+            seqClose,
+            seqOpen,
+            grpOpen,
+            val(3),
+            grpClose,
+            grpOpen,
+            reduced(3),
+            grpClose,
+            grpOpen,
+            reduced(3),
+            grpClose,
+            grpOpen,
+            reduced(3),
+            grpClose,
+            grpOpen,
+            reduced(3),
+            grpClose,
+            grpOpen,
+            reduced(3),
+            grpClose,
+            grpOpen,
+            reduced(3),
+            grpClose,
+            seqClose,
+            seqClose
+        ]
+        #expect(seq.shortString == "[[(V)(V)(V)(V)][(V)(_)(_)(_)(_)(_)(_)]] ")
+        let groups = ChoiceSequence.extractSiblingGroups(from: seq)
+        for group in groups {
+            for range in group.ranges {
+                print("\(range): \(Array(seq[range]).shortString)")
+            }
+        }
+        print()
+
+        #expect(groups.count == 1)
+        #expect(groups[0].ranges == [1...1, 2...2, 3...3])
+        #expect(groups[0].depth == 0)
+    }
 
     @Test("Bare values inside sequence produce one group")
     func bareValuesInSequence() {
