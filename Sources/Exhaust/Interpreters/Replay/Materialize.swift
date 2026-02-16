@@ -1,5 +1,5 @@
 //
-//  ReplaySequence.swift
+//  Materialize.swift
 //  Exhaust
 //
 //  Created by Chris Kolbu on 8/2/2026.
@@ -26,7 +26,7 @@ extension Interpreters {
         @discardableResult
         func consumeGroup(_ isOpen: Bool) throws -> ChoiceSequenceValue {
             guard case .group(isOpen) = values.first else {
-                throw isOpen ? ReplaySequenceError.groupNotOpen : .groupNotClosed
+                throw isOpen ? MaterializeError.groupNotOpen : .groupNotClosed
             }
             return values.removeFirst()
         }
@@ -34,7 +34,7 @@ extension Interpreters {
         @discardableResult
         func consumeSequence(_ isOpen: Bool) throws -> ChoiceSequenceValue {
             guard case .sequence(isOpen) = values.first else {
-                throw isOpen ? ReplaySequenceError.sequenceNotOpen : .sequenceNotClosed
+                throw isOpen ? MaterializeError.sequenceNotOpen : .sequenceNotClosed
             }
             return values.removeFirst()
         }
@@ -45,13 +45,13 @@ extension Interpreters {
                 values.removeFirst()
                 return v
             default:
-                throw ReplaySequenceError.wrongInputChoice
+                throw MaterializeError.wrongInputChoice
             }
         }
 
         func consumeBranch() throws -> ChoiceSequenceValue.Value {
             guard case let .branch(v) = values.first else {
-                throw ReplaySequenceError.wrongInputChoice
+                throw MaterializeError.wrongInputChoice
             }
             values.removeFirst()
             return v
@@ -191,6 +191,11 @@ extension Interpreters {
             case let .sequence(_, elementGenerator):
                 // This operation expects a `.sequence` node from the script.
                 guard case let .sequence(_, elements, lengthMeta) = tree else {
+                    return nil
+                }
+                
+                guard context.peek == .sequence(true) else {
+                    // This sequence may have been deleted, which violates the contract
                     return nil
                 }
 
@@ -334,7 +339,7 @@ extension Interpreters {
                 let choice = choices.removeFirst()
 
                 guard case var .group(branches) = choice else {
-                    throw ReplaySequenceError.wrongInputChoice
+                    throw MaterializeError.wrongInputChoice
                 }
 
                 try context.consumeGroup(true)
@@ -362,12 +367,12 @@ extension Interpreters {
                             }
                             return try continuation(result)
                         default:
-                            throw ReplayError.wrongInputChoice
+                            throw MaterializeError.wrongInputChoice
                         }
                     }
 
                 guard let nextGen else {
-                    throw ReplaySequenceError.noSuccessfulBranch
+                    throw MaterializeError.noSuccessfulBranch
                 }
 
                 try context.consumeGroup(false)
@@ -382,7 +387,12 @@ extension Interpreters {
                 let choice = choices.removeFirst()
 
                 guard case let .sequence(_, elements, lengthMeta) = choice else {
-                    throw ReplayError.wrongInputChoice
+                    throw MaterializeError.wrongInputChoice
+                }
+                
+                guard context.peek == .sequence(true) else {
+                    // This sequence may have been deleted, which violates the contract
+                    return nil
                 }
 
                 guard let result = try materializeSequenceElements(
@@ -400,7 +410,7 @@ extension Interpreters {
 
             case let .zip(generators):
                 guard generators.count == choices.count else {
-                    throw ReplayError.mismatchInChoicesAndGenerators
+                    throw MaterializeError.mismatchInChoicesAndGenerators
                 }
                 var subResults = [Any]()
                 for (generator, choiceTree) in zip(generators, choices) {
@@ -473,7 +483,7 @@ extension Interpreters {
         }
     }
 
-    enum ReplaySequenceError: LocalizedError {
+    enum MaterializeError: LocalizedError {
         case wrongInputChoice
         case noSuccessfulBranch
         case mismatchInChoicesAndGenerators
