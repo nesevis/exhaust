@@ -28,7 +28,8 @@ extension ChoiceValue {
         case let .unsigned(uint, _):
             uint
         case let .signed(value, _, _):
-            value == Int64.min ? UInt64(Int64.max) + 1 : UInt64(abs(value))
+//            value == Int64.min ? UInt64(Int64.max) + 1 : UInt64(abs(value))
+            UInt64(bitPattern: (value << 1) ^ (value >> 63))
         case let .floating(value, _, _):
             abs(value).bitPattern
         case let .character(char):
