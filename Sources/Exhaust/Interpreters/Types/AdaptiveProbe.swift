@@ -44,7 +44,7 @@ public enum AdaptiveProbe {
         
         // Step 3: Binary search between low...high
         while low + 1 < high {
-            let midpoint = (low + high) / 2
+            let midpoint = low + (high - low) / 2
             if predicate(midpoint) {
                 low = midpoint
             } else {
