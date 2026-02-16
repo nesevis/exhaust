@@ -266,7 +266,7 @@ extension Interpreters {
                     return false
                 }
                 do {
-                    guard let output = try materialize(gen, with: tree, using: candidate) else {
+                    guard let output = try? materialize(gen, with: tree, using: candidate) else {
                         return false
                     }
                     return property(output) == false
@@ -788,7 +788,7 @@ extension Interpreters {
 
         // FIXME This is using shortlex, which is where the inconsistency comes in
 //        guard candidate.shortLexPrecedes(sequence) else { return nil }
-        guard let output = try materialize(gen, with: tree, using: candidate) else { return nil }
+        guard let output = try? materialize(gen, with: tree, using: candidate) else { return nil }
         guard property(output) == false else { return nil }
 
         return (candidate, output)
@@ -848,7 +848,7 @@ extension Interpreters {
                 var candidate = current
                 candidate.removeSubranges(rangesToDelete)
                 do {
-                    guard let output = try materialize(gen, with: tree, using: candidate) else {
+                    guard let output = try? materialize(gen, with: tree, using: candidate) else {
                         return false
                     }
                     return property(output) == false

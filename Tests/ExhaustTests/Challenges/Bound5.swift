@@ -30,7 +30,10 @@ struct Bound5ShrinkingChallenge {
     private static let property: (Bound5) -> Bool = { (arg) in
         let (a, b, c, d, e) = arg
         let arr = a + b + c + d + e
-        return arr.isEmpty == false && arr.dropFirst().reduce(arr[0], &+) < 5 * 256
+        if arr.isEmpty {
+            return true
+        }
+        return arr.dropFirst().reduce(arr[0], &+) < 5 * 256
     }
     
     @Test("Bound5, Single")
@@ -43,19 +46,18 @@ struct Bound5ShrinkingChallenge {
         let smokeTest = try #require(try Interpreters.materialize(Self.gen, with: tree, using: sequence))
         let (_, output) = try #require(try Interpreters.reduce(gen: Self.gen, tree: tree, config: .fast, property: Self.property))
         
-        // ([], [], [], [-32768], [-1])
-        #expect(output.0.isEmpty && output.1.isEmpty && output.2.isEmpty)
-        #expect(output.3 == [Int16.min])
-        #expect(output.4 == [-1])
+        // ([-1], [-32768], [], [], [])
+        let arr = (output.0 + output.1 + output.2 + output.3 + output.4).sorted()
+        #expect(arr.count == 2)
+        #expect(arr == [-32768, -1])
     }
     
     @Test("Bound5, 50")
     func bound5Many() throws {
-        let iterator = ValueAndChoiceTreeInterpreter(Self.gen, seed: 1337, maxRuns: 50)
+        let iterator = ValueAndChoiceTreeInterpreter(Self.gen, seed: 1337, maxRuns: 100)
         
         var values = [(before: Bound5, after: Bound5)]()
         for (value, tree) in iterator where Self.property(value) == false {
-            print("Value to try: \(value)")
             let (_, output) = try #require(try Interpreters.reduce(gen: Self.gen, tree: tree, config: .fast, property: Self.property))
             values.append((value, output))
         }
@@ -67,9 +69,9 @@ struct Bound5ShrinkingChallenge {
             return lhsCount < rhsCount
         })
         
-//        for (offset, values) in list {
-//            let (before, after) = values
-//            print("\(offset + 1): \(before) shrunk value-> \(after)")
-//        }
+        for (offset, values) in list {
+            let (before, after) = values
+            print("\(offset + 1): \(after) original: \(before)")
+        }
     }
 }

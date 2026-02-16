@@ -193,11 +193,6 @@ extension Interpreters {
                 guard case let .sequence(_, elements, lengthMeta) = tree else {
                     return nil
                 }
-                
-                guard context.peek == .sequence(true) else {
-                    // This sequence may have been deleted, which violates the contract
-                    return nil
-                }
 
                 guard let result = try materializeSequenceElements(
                     using: elementGenerator,
@@ -388,11 +383,6 @@ extension Interpreters {
 
                 guard case let .sequence(_, elements, lengthMeta) = choice else {
                     throw MaterializeError.wrongInputChoice
-                }
-                
-                guard context.peek == .sequence(true) else {
-                    // This sequence may have been deleted, which violates the contract
-                    return nil
                 }
 
                 guard let result = try materializeSequenceElements(
