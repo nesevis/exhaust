@@ -431,7 +431,7 @@ extension ChoiceTree: CustomDebugStringConvertible {
             switch value {
             case let .character(char):
                 return prefix + connector + "\(locked)choice(char: \"\(char)\")\(locked) \(displayRange)"
-            case let .unsigned(uint):
+            case let .unsigned(uint, _):
                 return prefix + connector + "\(locked)choice(unsigned:\(uint))\(locked) \(displayRange)"
             case let .signed(int, _, _):
                 return prefix + connector + "\(locked)choice(signed: \(int))\(locked) \(displayRange)"

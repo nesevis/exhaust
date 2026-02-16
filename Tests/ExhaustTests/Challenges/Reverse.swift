@@ -17,9 +17,10 @@ struct ReverseShrinkingChallenge {
      */
     @Test("Reverse, Full")
     func reverseFull() async throws {
-        let arrGen = Gen.arrayOf(Int.arbitrary, within: 1...1000) // produces [(V)...]
+        // Using UInts for consistency, as signed numbers can reduce to -1 or 1
+        let arrGen = Gen.arrayOf(UInt.arbitrary, within: 1...1000) // produces [(V)...]
         var count = 0
-        let property: ([Int]) -> Bool = { arr in
+        let property: ([UInt]) -> Bool = { arr in
             count += 1
             return arr.elementsEqual(arr.reversed())
         }

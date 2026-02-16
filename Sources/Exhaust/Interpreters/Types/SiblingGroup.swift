@@ -7,7 +7,7 @@
 
 import Foundation
 
-struct SiblingGroup {
+struct SiblingGroup: Equatable {
     /// Each sibling's range in the sequence. Contiguous, non-overlapping, in order.
     let ranges: [ClosedRange<Int>]
     let depth: Int

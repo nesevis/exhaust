@@ -19,8 +19,8 @@ struct BinaryHeapShrinkingChallenge {
         (0, None, (0, (0, None, None), (1, None, None)))
      This is essentially because small examples are "too sparse", so it's very hard to find one by luck.
      */
-    @Test("Length List, Full", .disabled("Not implemented"))
-    func lengthListFull() {
+    @Test("Binary heap, Full", .disabled("Not implemented"))
+    func binaryHeapFull() {
         // …etc
     }
 }

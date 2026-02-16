@@ -338,7 +338,8 @@ extension ChoiceSequence {
                 return true
             case .gt:
                 return false
-            case .eq: continue
+            case .eq:
+                continue
             }
         }
         return false // equal

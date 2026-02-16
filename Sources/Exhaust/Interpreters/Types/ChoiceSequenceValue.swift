@@ -57,11 +57,11 @@ public enum ChoiceSequenceValue: Hashable, Equatable, Sendable {
     /// Canonical ordering of entry kinds for cross-kind comparison.
     private var kindOrder: Int {
         switch self {
-        case .group:    return 0
-        case .sequence: return 1
-        case .branch:   return 2
-        case .value:    return 3
-        case .reduced:  return 3
+        case .group:    return 1
+        case .sequence: return 2
+        case .branch:   return 3
+        case .value:    return 4
+        case .reduced:  return 4
         }
     }
     
