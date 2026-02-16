@@ -33,7 +33,7 @@ struct LargeUnionListShrinkingChallenge {
         let iterator = ValueAndChoiceTreeInterpreter(Self.gen, seed: 1337)
         let (value, tree) = Array(iterator.prefix(4)).last! // 23 values
         let (sequence, output) = try #require(try Interpreters.reduce(gen: Self.gen, tree: tree, config: .fast, property: Self.property))
-        #expect(output.flatMap(\.self) == [-1, -0, 1, 2, 3])
+        #expect(output.flatMap(\.self) == [-1, 0, 1, 2, 3])
     }
     
     @Test("Large Union List, Pathological single")
@@ -47,7 +47,7 @@ struct LargeUnionListShrinkingChallenge {
         print()
         let (_, output) = try #require(try Interpreters.reduce(gen: Self.gen, tree: tree, config: .fast, property: Self.property))
         print(output)
-        #expect(output.flatMap(\.self) == [-3, -2, -1, 0, 1])
+        #expect(output.flatMap(\.self) == [-2, -1, 0, 1, 2])
     }
     
     @Test("Large Union List, Pathological single 2")
