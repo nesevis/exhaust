@@ -32,6 +32,7 @@ extension Interpreters {
         case reduceValuesInTandem
         case reduceValues
         case redistributeNumericPairs
+        case speculativeDeleteAndRepair
         case normaliseSiblingOrder
         
         static func < (lhs: Interpreters.ShrinkPass, rhs: Interpreters.ShrinkPass) -> Bool {
@@ -141,6 +142,17 @@ extension Interpreters {
                         currentOutput = output
                         passImproved = true
                     }
+                case .speculativeDeleteAndRepair:
+                    let freeValueSpans = ChoiceSequence.extractFreeStandingValueSpans(from: currentSequence)
+                    let containerSpans = ChoiceSequence.extractContainerSpans(from: currentSequence)
+                    let deletableSpans = freeValueSpans + containerSpans
+                    if !deletableSpans.isEmpty,
+                       let (newSequence, output) = try speculativeDeleteAndRepair(gen, tree: currentTree, property: oracle, sequence: currentSequence, spans: deletableSpans) {
+                        previousSequence = currentSequence
+                        currentSequence = newSequence
+                        currentOutput = output
+                        passImproved = true
+                    }
                 case .reduceValuesInTandem:
                     // Reduce individual values in tandem by equal amounts, via binary search
                     let siblingGroups = ChoiceSequence.extractSiblingGroups(from: currentSequence)
@@ -160,20 +172,21 @@ extension Interpreters {
                         passImproved = true
                     }
                 }
-                if currentOutput as? [[Int]] == [[-2, -1, 0, 1, 2]] {
-                    let bla = currentTree
-                }
                 if passImproved {
-                    print("> \(pass) succeeded \(oracleCalls[pass, default: 0]) \(currentOutput)")
+                    if isInstrumented {
+                        print("> \(pass) succeeded \(oracleCalls[pass, default: 0]) \(currentOutput)")
+                    }
                     didImprove = true
                     nextPasses.insert(pass, at: 0)
                 } else {
-                    print("x \(pass) failed \(oracleCalls[pass, default: 0])")
+                    if isInstrumented {
+                        print("x \(pass) failed \(oracleCalls[pass, default: 0])")
+                    }
                     nextPasses.append(pass)
                 }
             }
             passes = nextPasses
-            if didImprove, seen[currentSequence, default: 0] < 2 {
+            if didImprove, seen[currentSequence, default: 0] < 1 {
                 seen[currentSequence, default: 0] += 1
 //                print("! improved! \(currentOutput)")
                 numberOfImprovements += 1
@@ -569,6 +582,167 @@ extension Interpreters {
             return (current, output)
         }
         return nil
+    }
+
+    /// Pass 5c: Speculative deletion with proportional value repair.
+    /// Tries deleting spans AND adjusting remaining values toward their reduction targets
+    /// by a uniform delta. This handles cases where deletion alone fails because values encode
+    /// positions that become out-of-bounds after deletion.
+    private static func speculativeDeleteAndRepair<Output>(
+        _ gen: ReflectiveGenerator<Output>,
+        tree: ChoiceTree,
+        property: (Output) -> Bool,
+        sequence: ChoiceSequence,
+        spans: [ChoiceSpan]
+    ) throws -> (ChoiceSequence, Output)? {
+        // Group spans by depth to process each level independently
+        var spansByDepth = [Int: [ChoiceSpan]]()
+        for span in spans {
+            spansByDepth[span.depth, default: []].append(span)
+        }
+
+        for depth in spansByDepth.keys.sorted() {
+            let depthSpans = spansByDepth[depth]!
+            guard !depthSpans.isEmpty else { continue }
+
+            for startIdx in depthSpans.indices {
+                let remaining = depthSpans.count - startIdx
+
+                // Try strategic batch sizes: max, max/2, max/4, ..., 1
+                // This limits to O(log n) batch candidates per starting position
+                var batchSizes = [Int]()
+                var b = remaining
+                while b >= 1 {
+                    batchSizes.append(b)
+                    b /= 2
+                }
+                if batchSizes.last != 1 { batchSizes.append(1) }
+
+                for batchSize in batchSizes {
+                    let batch = depthSpans[startIdx..<(startIdx + batchSize)]
+
+                    var shortened = sequence
+                    shortened.removeSubranges(batch.map(\.range))
+
+                    // Only try repair when materialization fails (nil).
+                    // If materialization succeeds, the values are structurally valid —
+                    // either the property fails (handled by other passes) or passes
+                    // (repair can't help since values are already in-range).
+                    let pureDeletion = try? materialize(gen, with: tree, using: shortened)
+                    if pureDeletion != nil { continue }
+
+                    if let result = try repairAfterDeletion(
+                        gen, tree: tree, property: property,
+                        original: sequence, shortened: shortened
+                    ) {
+                        return result
+                    }
+                }
+            }
+        }
+        return nil
+    }
+
+    /// Given a shortened sequence (after deletion), tries uniform value repair to find
+    /// a valid, property-failing configuration.
+    private static func repairAfterDeletion<Output>(
+        _ gen: ReflectiveGenerator<Output>,
+        tree: ChoiceTree,
+        property: (Output) -> Bool,
+        original: ChoiceSequence,
+        shortened: ChoiceSequence
+    ) throws -> (ChoiceSequence, Output)? {
+        typealias ValueInfo = (index: Int, bp: UInt64, target: UInt64, distance: UInt64, upward: Bool, value: ChoiceSequenceValue.Value)
+        var values = [ValueInfo]()
+        for (i, entry) in shortened.enumerated() {
+            guard let v = entry.value else { continue }
+            let bp = v.choice.bitPattern64
+            let target = v.choice.reductionTarget(in: v.validRanges)
+            guard bp != target else { continue }
+            let upward = target > bp
+            let distance = upward ? target - bp : bp - target
+            values.append((i, bp, target, distance, upward, v))
+        }
+        guard !values.isEmpty else { return nil }
+        let maxDist = values.map(\.distance).max()!
+        guard maxDist > 0 else { return nil }
+
+        // Coarse sweep: ~16 probes from maxDist down to 1
+        let sweepStride = max(1, maxDist / 16)
+        var bestK: UInt64 = 0
+        var bestOutput: Output?
+
+        var k = maxDist
+        while k >= 1 {
+            let probe = applyUniformRepair(shortened, values: values, k: k)
+            if let output = try? materialize(gen, with: tree, using: probe),
+               property(output) == false,
+               probe.shortLexPrecedes(original) {
+                bestK = k
+                bestOutput = output
+                break
+            }
+            if k <= sweepStride { break }
+            k -= sweepStride
+        }
+
+        // If coarse sweep didn't find k but stride > 1, try k=1 as well
+        if bestK == 0 && sweepStride > 1 {
+            let probe = applyUniformRepair(shortened, values: values, k: 1)
+            if let output = try? materialize(gen, with: tree, using: probe),
+               property(output) == false,
+               probe.shortLexPrecedes(original) {
+                bestK = 1
+                bestOutput = output
+            }
+        }
+
+        guard bestK > 0, let foundOutput = bestOutput else { return nil }
+
+        // Refine: binary search between bestK and bestK-sweepStride
+        let lowerBound = bestK > sweepStride ? bestK - sweepStride : 1
+        if lowerBound < bestK {
+            var lo = lowerBound
+            var hi = bestK
+            var refinedK = bestK
+            var refinedOutput = foundOutput
+            while lo < hi {
+                let mid = lo + (hi - lo) / 2
+                let probe = applyUniformRepair(shortened, values: values, k: mid)
+                if let output = try? materialize(gen, with: tree, using: probe),
+                   property(output) == false,
+                   probe.shortLexPrecedes(original) {
+                    refinedK = mid
+                    refinedOutput = output
+                    hi = mid
+                } else {
+                    lo = mid + 1
+                }
+            }
+            return (applyUniformRepair(shortened, values: values, k: refinedK), refinedOutput)
+        }
+
+        return (applyUniformRepair(shortened, values: values, k: bestK), foundOutput)
+    }
+
+    /// Applies uniform repair: moves each value min(distance_i, k) toward its reduction target.
+    private static func applyUniformRepair(
+        _ sequence: ChoiceSequence,
+        values: [(index: Int, bp: UInt64, target: UInt64, distance: UInt64, upward: Bool, value: ChoiceSequenceValue.Value)],
+        k: UInt64
+    ) -> ChoiceSequence {
+        var result = sequence
+        for v in values {
+            let delta = min(v.distance, k)
+            guard delta > 0 else { continue }
+            let newBP = v.upward ? v.bp + delta : v.bp - delta
+            let newChoice = ChoiceValue(
+                v.value.choice.tag.makeConvertible(bitPattern64: newBP),
+                tag: v.value.choice.tag
+            )
+            result[v.index] = .reduced(.init(choice: newChoice, validRanges: v.value.validRanges))
+        }
+        return result
     }
 
     /// Pass 6: Reorder sibling elements within containers to produce normalized output.
