@@ -433,12 +433,16 @@ extension Interpreters {
         var current = sequence
         var progress = false
         var latestOutput: Output?
+        var liveGroups = siblingGroups
 
-        // By the time this iterates again, the siblingGroups are stale, and the ranges
-        // do not point to where they should. We can only reorder once, so this function needs to be rethought, or perhaps changed to use RangeSet
-        groupIteration: for group in siblingGroups {
+        var groupIndex = 0
+        while groupIndex < liveGroups.count {
+            let group = liveGroups[groupIndex]
             let ranges = group.ranges
-            guard ranges.count >= 2 else { continue }
+            guard ranges.count >= 2 else {
+                groupIndex += 1
+                continue
+            }
 
             // Compute comparison keys for each sibling
             let keys = ranges.map { ChoiceSequence.siblingComparisonKey(from: current, range: $0) }
@@ -449,7 +453,8 @@ extension Interpreters {
             }
 
             if sortedIndices == Array(keys.indices) {
-                break groupIteration // Already sorted
+                groupIndex += 1
+                continue
             }
 
             // Build a candidate with siblings in sorted order
@@ -460,18 +465,21 @@ extension Interpreters {
                 current = newSeq
                 latestOutput = output
                 progress = true
-                break groupIteration
+                // Re-extract all groups with fresh ranges
+                liveGroups = ChoiceSequence.extractSiblingGroups(from: current)
+                groupIndex = 0
+                continue
             }
 
-            // Full sort failed — try adjacent swaps (bubble sort style)
+            // Full sort failed — bubble sort with live range re-extraction
             var improved = true
             while improved {
                 improved = false
-                for j in 0..<(ranges.count - 1) {
-                    let currentRanges = ChoiceSequence.extractSiblingGroups(from: current)
-                        .first(where: { $0.depth == group.depth && $0.ranges.count == ranges.count })?.ranges
-                    guard let liveRanges = currentRanges, j + 1 < liveRanges.count else { break }
+                let freshRanges = ChoiceSequence.extractSiblingGroups(from: current)
+                    .first(where: { $0.depth == group.depth && $0.ranges.count == ranges.count })?.ranges
+                guard let liveRanges = freshRanges else { break }
 
+                for j in 0..<(liveRanges.count - 1) {
                     let keyA = ChoiceSequence.siblingComparisonKey(from: current, range: liveRanges[j])
                     let keyB = ChoiceSequence.siblingComparisonKey(from: current, range: liveRanges[j + 1])
 
@@ -489,10 +497,14 @@ extension Interpreters {
                         latestOutput = output
                         progress = true
                         improved = true
-                        break groupIteration
+                        break // Restart bubble pass with fresh ranges
                     }
                 }
             }
+
+            // Re-extract for subsequent groups after finishing this one
+            liveGroups = ChoiceSequence.extractSiblingGroups(from: current)
+            groupIndex += 1
         }
 
         if progress, let output = latestOutput {
