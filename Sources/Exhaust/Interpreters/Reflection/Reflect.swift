@@ -129,10 +129,20 @@ public enum Interpreters {
             if let convertible = finalOutput as? any BitPatternConvertible {
                 convertibleValue = convertible
             }
+            var reflectedMin = UInt64.min
+            var reflectedMax = UInt64.max
             // This is awful. What about triply nested arrays?
             if let convertible = finalOutput as? any Sequence {
                 // Due to the mapping on Ints, this number's bitPattern64 will be an outrageously high number.
                 convertibleValue = UInt64(convertible.underestimatedCount)
+            } else if let convertibleValue {
+                // There's no way to know the valid range of this type as specified by the generator when reflecting, so we set it to the supported range.
+                // Reflection is used primarily for shrinking, so we don't want to artifically constrain ourselves
+                // When materializing, the generator constraints come into play
+                let validRange = type(of: convertibleValue).bitPatternRanges
+                    .first(where: { $0.contains(convertibleValue.bitPattern64)})
+                reflectedMin = validRange?.lowerBound ?? reflectedMin
+                reflectedMax = validRange?.upperBound ?? reflectedMax
             }
             guard let convertibleValue else {
                 throw ReflectionError.chooseBitsCouldNotConvertValue("\(finalOutput)")
@@ -140,7 +150,7 @@ public enum Interpreters {
             // Success! The result for the continuation is the value itself.
             let metadata = ChoiceMetadata(
                 // We can't know the proper range here, and the min...max is _usually_ dependent on the getSize parameter
-                validRanges: [min...max],
+                validRanges: [reflectedMin...reflectedMax],
                 // FIXME: We can clamp this here as well using the range
                 strategies: []
             )
@@ -153,6 +163,7 @@ public enum Interpreters {
         case .getSize:
             // FIXME We can't derive the getSize parameter when reflecting as the bind continuation that applies it is opaque to us. Ultimately it shouldn't matter for replay
             // But it does for reflection.
+            //
             var derivedSize: UInt64 = 0
             if let sequence = finalOutput as? any Sequence {
                 derivedSize = UInt64(sequence.underestimatedCount)
