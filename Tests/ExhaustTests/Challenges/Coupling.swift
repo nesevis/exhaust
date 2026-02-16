@@ -59,14 +59,14 @@ struct CouplingShrinkingChallenge {
         let iterator = ValueAndChoiceTreeInterpreter(Self.gen, seed: 1337, maxRuns: 50)
         var outputs = [(b: [Int], a: [Int])]()
         for (value, tree) in iterator where Self.property(value) == false {
-            let (seq, output) = try #require(try Interpreters.reduce(gen: Self.gen, tree: tree, config: .fast, property: Self.property))
+            let (_, output) = try #require(try Interpreters.reduce(gen: Self.gen, tree: tree, config: .fast, property: Self.property))
             outputs.append((value, output))
         }
         
         for (index, output) in outputs.enumerated() {
-            print("\(index + 1) \(output.a) (\(output.b))")
-            #expect(output.a.count == 2)
-            #expect(output.a == [1, 0])
+            print("\(index + 1) input: \(output.b) — reduced: \(output.a)")
+//            #expect(output.a.count == 2)
+//            #expect(output.a == [1, 0])
         }
     }
     

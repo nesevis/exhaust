@@ -41,31 +41,35 @@ struct Bound5ShrinkingChallenge {
         let sequence = ChoiceSequence.flatten(tree)
         print()
         let smokeTest = try #require(try Interpreters.materialize(Self.gen, with: tree, using: sequence))
-        #expect(value.0 == smokeTest.0 && value.1 == smokeTest.1 && value.2 == smokeTest.2 && value.3 == smokeTest.3 && value.4 == smokeTest.4)
-        print()
-        let (seq, output) = try #require(try Interpreters.reduce(gen: Self.gen, tree: tree, config: .fast, property: Self.property))
-        print("Original value: \(value)")
-        print("Output: \(output)")
-        print("Expected output(ish): ([-32768], [-1], [], [], [])")
+        let (_, output) = try #require(try Interpreters.reduce(gen: Self.gen, tree: tree, config: .fast, property: Self.property))
+        
+        // ([], [], [], [-32768], [-1])
+        #expect(output.0.isEmpty && output.1.isEmpty && output.2.isEmpty)
+        #expect(output.3 == [Int16.min])
+        #expect(output.4 == [-1])
     }
     
     @Test("Bound5, 50")
     func bound5Many() throws {
         let iterator = ValueAndChoiceTreeInterpreter(Self.gen, seed: 1337, maxRuns: 50)
         
-        var values = [Bound5]()
+        var values = [(before: Bound5, after: Bound5)]()
         for (value, tree) in iterator where Self.property(value) == false {
+            print("Value to try: \(value)")
             let (_, output) = try #require(try Interpreters.reduce(gen: Self.gen, tree: tree, config: .fast, property: Self.property))
-            values.append(output)
+            values.append((value, output))
         }
         let list = values.enumerated().sorted(by: { lhs, rhs in
-            let lhsCount = lhs.element.0.count + lhs.element.1.count + lhs.element.2.count + lhs.element.3.count + lhs.element.4.count
-            let rhsCount = rhs.element.0.count + rhs.element.1.count + rhs.element.2.count + rhs.element.3.count + rhs.element.4.count
+            let lhs = lhs.element.after
+            let rhs = rhs.element.after
+            let lhsCount = lhs.0.count + lhs.1.count + lhs.2.count + lhs.3.count + lhs.4.count
+            let rhsCount = rhs.0.count + rhs.1.count + rhs.2.count + rhs.3.count + rhs.4.count
             return lhsCount < rhsCount
         })
         
-        for (offset, value) in list {
-            print("\(offset + 1): \(String(describing: value).prefix(50))")
-        }
+//        for (offset, values) in list {
+//            let (before, after) = values
+//            print("\(offset + 1): \(before) shrunk value-> \(after)")
+//        }
     }
 }
