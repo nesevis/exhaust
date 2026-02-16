@@ -62,16 +62,16 @@ struct SemanticSimplestTests {
         }
     }
 
-    @Test("Character simplest is 'a'")
+    @Test("Character simplest is ' '")
     func characterSimplest() {
         let value = ChoiceValue.character("Z")
         let simplest = value.semanticSimplest
-        #expect(simplest == .character("a"))
+        #expect(simplest == .character(" "))
     }
 
-    @Test("Character 'a' is already simplest")
+    @Test("Character ' ' is already simplest")
     func characterAlreadySimplest() {
-        let value = ChoiceValue.character("a")
+        let value = ChoiceValue.character(" ")
         #expect(value.semanticSimplest == value)
     }
 }
@@ -344,7 +344,7 @@ struct ReducerSimplifyValuesTests {
 
     @Test("Simplification works with characters")
     func characterSimplification() throws {
-        let gen = Gen.arrayOf(Gen.choose(in: Character("a")...Character("z")), exactly: 3)
+        let gen = Gen.arrayOf(Gen.choose(in: Character(" ")...Character("z")), exactly: 3)
 
         let (_, tree) = try generate(gen)
 
@@ -355,8 +355,8 @@ struct ReducerSimplifyValuesTests {
             try Interpreters.reduce(gen: gen, tree: tree, config: .fast, property: property)
         )
 
-        // All characters should be "a"
-        #expect(result.1.allSatisfy { $0 == "a" })
+        // All characters should be " "
+        #expect(result.1.allSatisfy { $0 == " " })
     }
 
     @Test("Partial simplification when some values are failure-relevant")

@@ -72,7 +72,8 @@ public enum ChoiceValue: Comparable, Hashable, Equatable, Sendable {
             else { return self }
             return .floating(0.0, zeroBitPattern, type)
         case .character:
-            return .character("a")
+            // Space is ascii 32
+            return .character(" ")
         }
     }
 
