@@ -12,11 +12,14 @@ extension ReducerStrategies {
     /// by a uniform delta. This handles cases where deletion alone fails because values encode
     /// positions that become out-of-bounds after deletion.
     ///
-    /// - Complexity: O(*D* · *n* · log *n* · *M*ᵣ) in the worst case, where *D* is the number
-    ///   of distinct depths, *n* is the number of spans at a given depth, and *M*ᵣ is the cost of
-    ///   `repairAfterDeletion` (see below). For each of *n* starting positions, O(log *n*) batch
-    ///   sizes are attempted. Returns on the first successful repair, so amortised cost is often
-    ///   much lower.
+    /// Uses divide-and-conquer: tries deleting all spans at a given depth, then recursively
+    /// splits into halves on failure. The recursion tree has O(2*n* − 1) nodes, so total
+    /// candidates are O(*n*) per depth level.
+    ///
+    /// - Complexity: O(*D* · *n* · *M*ᵣ) in the worst case, where *D* is the number of distinct
+    ///   depths, *n* is the number of spans at a given depth, and *M*ᵣ is the cost of
+    ///   `repairAfterDeletion` (see below). Returns on the first successful repair, so amortised
+    ///   cost is often much lower.
     static func speculativeDeleteAndRepair<Output>(
         _ gen: ReflectiveGenerator<Output>,
         tree: ChoiceTree,
@@ -34,42 +37,59 @@ extension ReducerStrategies {
             let depthSpans = spansByDepth[depth]!
             guard !depthSpans.isEmpty else { continue }
 
-            for startIdx in depthSpans.indices {
-                let remaining = depthSpans.count - startIdx
-
-                // Try strategic batch sizes: max, max/2, max/4, ..., 1
-                // This limits to O(log n) batch candidates per starting position
-                var batchSizes = [Int]()
-                var b = remaining
-                while b >= 1 {
-                    batchSizes.append(b)
-                    b /= 2
-                }
-                if batchSizes.last != 1 { batchSizes.append(1) }
-
-                for batchSize in batchSizes {
-                    let batch = depthSpans[startIdx..<(startIdx + batchSize)]
-
-                    var shortened = sequence
-                    shortened.removeSubranges(batch.map(\.range))
-
-                    // Only try repair when materialization fails (nil).
-                    // If materialization succeeds, the values are structurally valid —
-                    // either the property fails (handled by other passes) or passes
-                    // (repair can't help since values are already in-range).
-                    let pureDeletion = try? Interpreters.materialize(gen, with: tree, using: shortened)
-                    if pureDeletion != nil { continue }
-
-                    if let result = try repairAfterDeletion(
-                        gen, tree: tree, property: property,
-                        original: sequence, shortened: shortened
-                    ) {
-                        return result
-                    }
-                }
+            if let result = try divideAndConquerDeleteRepair(
+                gen, tree: tree, property: property,
+                sequence: sequence, spans: depthSpans[...]
+            ) {
+                return result
             }
         }
         return nil
+    }
+
+    /// Recursively tries deleting the given span slice and repairing. On failure, splits
+    /// into halves and recurses on each. The recursion tree has at most 2*n* − 1 nodes.
+    private static func divideAndConquerDeleteRepair<Output>(
+        _ gen: ReflectiveGenerator<Output>,
+        tree: ChoiceTree,
+        property: (Output) -> Bool,
+        sequence: ChoiceSequence,
+        spans: ArraySlice<ChoiceSpan>
+    ) throws -> (ChoiceSequence, Output)? {
+        guard !spans.isEmpty else { return nil }
+
+        var shortened = sequence
+        shortened.removeSubranges(spans.map(\.range))
+
+        // Only try repair when materialization fails (nil).
+        // If materialization succeeds, the values are structurally valid —
+        // either the property fails (handled by other passes) or passes
+        // (repair can't help since values are already in-range).
+        let pureDeletion = try? Interpreters.materialize(gen, with: tree, using: shortened)
+        if pureDeletion == nil {
+            if let result = try repairAfterDeletion(
+                gen, tree: tree, property: property,
+                original: sequence, shortened: shortened
+            ) {
+                return result
+            }
+        }
+
+        // Base case: single span, nothing more to split
+        guard spans.count > 1 else { return nil }
+
+        // Split and recurse on each half
+        let mid = spans.startIndex + spans.count / 2
+        if let result = try divideAndConquerDeleteRepair(
+            gen, tree: tree, property: property,
+            sequence: sequence, spans: spans[spans.startIndex..<mid]
+        ) {
+            return result
+        }
+        return try divideAndConquerDeleteRepair(
+            gen, tree: tree, property: property,
+            sequence: sequence, spans: spans[mid..<spans.endIndex]
+        )
     }
 
     /// Given a shortened sequence (after deletion), tries uniform value repair to find
