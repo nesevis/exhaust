@@ -83,7 +83,7 @@ struct DifferenceShrinkingChallenge {
         let (seq, output) = try #require(try Interpreters.reduce(gen: gen, tree: tree, config: .fast, property: property))
         print()
         #expect(property(value) == false)
-        #expect(count == 92)
+        #expect(count == 41)
         #expect(output == [10, 9])
     }
 }
