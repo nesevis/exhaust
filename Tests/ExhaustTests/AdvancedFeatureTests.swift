@@ -62,7 +62,7 @@ struct AdvancedFeatureTests {
 
             for _ in 0 ..< 10 {
                 var iterator = ValueInterpreter(gen)
-                let tree = try #require(iterator.next())
+                let tree = iterator.next()!
 
                 /// Validate tree structure
                 func validateDepth(_ tree: TestTree<Int>, maxDepth: Int) -> Bool {
@@ -175,7 +175,7 @@ struct AdvancedFeatureTests {
 
             for _ in 0 ..< 10 {
                 var iterator = ValueInterpreter(graphGen)
-                let graph = try #require(iterator.next())
+                let graph = iterator.next()!
 
                 // Validate graph constraints
                 #expect(5 ... 10 ~= graph.nodes.count)
@@ -215,7 +215,7 @@ struct AdvancedFeatureTests {
             for (index, gen) in extremeGenerators.enumerated() {
                 for _ in 0 ..< 10 {
                     var iterator = ValueInterpreter(gen)
-                    let value = try #require(iterator.next())
+                    let value = iterator.next()!
 
                     // Test round-trip even with extreme values
                     if let recipe = try Interpreters.reflect(gen, with: value) {
@@ -240,7 +240,7 @@ struct AdvancedFeatureTests {
                 .proliferate(with: 2 ... 2) // 2 outer arrays
 
             var iterator = ValueInterpreter(largeNestedGen)
-            let large = try #require(iterator.next())
+            let large = iterator.next()!
 
             // Validate structure
             #expect(large.count == 2)

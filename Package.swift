@@ -6,7 +6,7 @@ import PackageDescription
 let package = Package(
     name: "Exhaust",
     platforms: [
-        .macOS(.v15),
+        .macOS(.v26),
         .iOS(.v13),
         .tvOS(.v13),
         .watchOS(.v6)

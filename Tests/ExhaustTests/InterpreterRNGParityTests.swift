@@ -22,8 +22,8 @@ struct InterpreterRNGParityTests {
         var vact = ValueAndChoiceTreeInterpreter(gen, materializePicks: true, seed: seed, maxRuns: 10)
 
         for iteration in 0 ..< 10 {
-            let viValue = try #require(vi.next())
-            let (vactValue, _) = try #require(vact.next())
+            let viValue = vi.next()!
+            let (vactValue, _) = vact.next()!
             #expect(viValue == vactValue, "Iteration \(iteration): ValueInterpreter=\(viValue), ValueAndChoiceTreeInterpreter=\(vactValue)")
         }
     }
@@ -37,8 +37,8 @@ struct InterpreterRNGParityTests {
         var vact = ValueAndChoiceTreeInterpreter(gen, materializePicks: true, seed: seed, maxRuns: 10)
 
         for iteration in 0 ..< 10 {
-            let viValue = try #require(vi.next())
-            let (vactValue, _) = try #require(vact.next())
+            let viValue = vi.next()!
+            let (vactValue, _) = vact.next()!
             #expect(viValue == vactValue, "Iteration \(iteration): ValueInterpreter=\(viValue), ValueAndChoiceTreeInterpreter=\(vactValue)")
         }
     }
@@ -52,8 +52,8 @@ struct InterpreterRNGParityTests {
         var vact = ValueAndChoiceTreeInterpreter(gen, materializePicks: true, seed: seed, maxRuns: 20)
 
         for iteration in 0 ..< 20 {
-            let viValue = try #require(vi.next())
-            let (vactValue, _) = try #require(vact.next())
+            let viValue = vi.next()!
+            let (vactValue, _) = vact.next()!
             #expect(viValue == vactValue, "Iteration \(iteration): ValueInterpreter=\(viValue), ValueAndChoiceTreeInterpreter=\(vactValue)")
         }
     }
@@ -67,8 +67,8 @@ struct InterpreterRNGParityTests {
         var vact = ValueAndChoiceTreeInterpreter(gen, materializePicks: true, seed: seed, maxRuns: 10)
 
         for iteration in 0 ..< 10 {
-            let viValue = try #require(vi.next())
-            let (vactValue, _) = try #require(vact.next())
+            let viValue = vi.next()!
+            let (vactValue, _) = vact.next()!
             #expect(viValue.bitPattern == vactValue.bitPattern, "Iteration \(iteration): ValueInterpreter=\(viValue), ValueAndChoiceTreeInterpreter=\(vactValue)")
         }
     }
@@ -82,8 +82,8 @@ struct InterpreterRNGParityTests {
         var vact = ValueAndChoiceTreeInterpreter(gen, materializePicks: true, seed: seed, maxRuns: 10)
 
         for iteration in 0 ..< 10 {
-            let viValue = try #require(vi.next())
-            let (vactValue, _) = try #require(vact.next())
+            let viValue = vi.next()!
+            let (vactValue, _) = vact.next()!
             #expect(viValue.bitPattern == vactValue.bitPattern, "Iteration \(iteration): ValueInterpreter=\(viValue), ValueAndChoiceTreeInterpreter=\(vactValue)")
         }
     }
@@ -102,8 +102,8 @@ struct InterpreterRNGParityTests {
         var vact = ValueAndChoiceTreeInterpreter(gen, materializePicks: true, seed: seed, maxRuns: 20)
 
         for iteration in 0 ..< 20 {
-            let viValue = try #require(vi.next())
-            let (vactValue, _) = try #require(vact.next())
+            let viValue = vi.next()!
+            let (vactValue, _) = vact.next()!
             #expect(viValue == vactValue, "Iteration \(iteration): ValueInterpreter=\(viValue), ValueAndChoiceTreeInterpreter=\(vactValue)")
         }
     }
@@ -121,8 +121,8 @@ struct InterpreterRNGParityTests {
         var vact = ValueAndChoiceTreeInterpreter(gen, materializePicks: true, seed: seed, maxRuns: 30)
 
         for iteration in 0 ..< 30 {
-            let viValue = try #require(vi.next())
-            let (vactValue, _) = try #require(vact.next())
+            let viValue = vi.next()!
+            let (vactValue, _) = vact.next()!
             #expect(viValue == vactValue, "Iteration \(iteration): ValueInterpreter=\(viValue), ValueAndChoiceTreeInterpreter=\(vactValue)")
         }
     }
@@ -139,8 +139,8 @@ struct InterpreterRNGParityTests {
         var vact = ValueAndChoiceTreeInterpreter(gen, materializePicks: true, seed: seed, maxRuns: 15)
 
         for iteration in 0 ..< 15 {
-            let viValue = try #require(vi.next())
-            let (vactValue, _) = try #require(vact.next())
+            let viValue = vi.next()!
+            let (vactValue, _) = vact.next()!
             #expect(viValue == vactValue, "Iteration \(iteration): ValueInterpreter=\(viValue), ValueAndChoiceTreeInterpreter=\(vactValue)")
         }
     }
@@ -161,8 +161,8 @@ struct InterpreterRNGParityTests {
         var vact = ValueAndChoiceTreeInterpreter(outerPick, materializePicks: true, seed: seed, maxRuns: 20)
 
         for iteration in 0 ..< 20 {
-            let viValue = try #require(vi.next())
-            let (vactValue, _) = try #require(vact.next())
+            let viValue = vi.next()!
+            let (vactValue, _) = vact.next()!
             #expect(viValue == vactValue, "Iteration \(iteration): ValueInterpreter=\(viValue), ValueAndChoiceTreeInterpreter=\(vactValue)")
         }
     }
@@ -178,8 +178,8 @@ struct InterpreterRNGParityTests {
         var vact = ValueAndChoiceTreeInterpreter(gen, materializePicks: false, seed: seed, maxRuns: 5)
 
         for iteration in 0 ..< 5 {
-            let viValue = try #require(vi.next())
-            let (vactValue, _) = try #require(vact.next())
+            let viValue = vi.next()!
+            let (vactValue, _) = vact.next()!
             #expect(viValue == vactValue, "Iteration \(iteration): ValueInterpreter=\(viValue), ValueAndChoiceTreeInterpreter=\(vactValue)")
         }
     }
@@ -193,8 +193,8 @@ struct InterpreterRNGParityTests {
         var vact = ValueAndChoiceTreeInterpreter(gen, materializePicks: true, seed: seed, maxRuns: 5)
 
         for iteration in 0 ..< 5 {
-            let viValue = try #require(vi.next())
-            let (vactValue, _) = try #require(vact.next())
+            let viValue = vi.next()!
+            let (vactValue, _) = vact.next()!
             #expect(viValue == vactValue, "Iteration \(iteration): arrays have different values")
         }
     }
@@ -210,8 +210,8 @@ struct InterpreterRNGParityTests {
         var vact = ValueAndChoiceTreeInterpreter(gen, materializePicks: true, seed: seed, maxRuns: 10)
 
         for iteration in 0 ..< 10 {
-            let viValue = try #require(vi.next())
-            let (vactValue, _) = try #require(vact.next())
+            let viValue = vi.next()!
+            let (vactValue, _) = vact.next()!
             #expect(viValue.0 == vactValue.0 && viValue.1 == vactValue.1, "Iteration \(iteration): tuples don't match")
         }
     }
@@ -225,8 +225,8 @@ struct InterpreterRNGParityTests {
         var vact = ValueAndChoiceTreeInterpreter(gen, materializePicks: true, seed: seed, maxRuns: 10)
 
         for iteration in 0 ..< 10 {
-            let viValue = try #require(vi.next())
-            let (vactValue, _) = try #require(vact.next())
+            let viValue = vi.next()!
+            let (vactValue, _) = vact.next()!
             #expect(viValue.0 == vactValue.0 && viValue.1 == vactValue.1 && viValue.2 == vactValue.2, "Iteration \(iteration): tuples don't match")
         }
     }
@@ -242,8 +242,8 @@ struct InterpreterRNGParityTests {
         var vact = ValueAndChoiceTreeInterpreter(gen, materializePicks: true, seed: seed, maxRuns: 10)
 
         for iteration in 0 ..< 10 {
-            let viValue = try #require(vi.next())
-            let (vactValue, _) = try #require(vact.next())
+            let viValue = vi.next()!
+            let (vactValue, _) = vact.next()!
             #expect(viValue == vactValue, "Iteration \(iteration): ValueInterpreter=\(viValue), ValueAndChoiceTreeInterpreter=\(vactValue)")
         }
     }
@@ -259,8 +259,8 @@ struct InterpreterRNGParityTests {
         var vact = ValueAndChoiceTreeInterpreter(gen, materializePicks: true, seed: seed, maxRuns: 5)
 
         for iteration in 0 ..< 5 {
-            let viValue = try #require(vi.next())
-            let (vactValue, _) = try #require(vact.next())
+            let viValue = vi.next()!
+            let (vactValue, _) = vact.next()!
             #expect(viValue == vactValue, "Iteration \(iteration): arrays have different values")
         }
     }
@@ -283,8 +283,8 @@ struct InterpreterRNGParityTests {
         var vact = ValueAndChoiceTreeInterpreter(gen, materializePicks: true, seed: seed, maxRuns: 10)
 
         for iteration in 0 ..< 10 {
-            let viValue = try #require(vi.next())
-            let (vactValue, _) = try #require(vact.next())
+            let viValue = vi.next()!
+            let (vactValue, _) = vact.next()!
             #expect(viValue.0 == vactValue.0, "Iteration \(iteration): first component mismatch")
             #expect(viValue.1 == vactValue.1, "Iteration \(iteration): second component mismatch")
             #expect(viValue.2 == vactValue.2, "Iteration \(iteration): third component mismatch")
@@ -305,8 +305,8 @@ struct InterpreterRNGParityTests {
         var vact = ValueAndChoiceTreeInterpreter(outerGen, materializePicks: true, seed: seed, maxRuns: 5)
 
         for iteration in 0 ..< 5 {
-            let viValue = try #require(vi.next())
-            let (vactValue, _) = try #require(vact.next())
+            let viValue = vi.next()!
+            let (vactValue, _) = vact.next()!
 
             #expect(viValue.count == vactValue.count, "Iteration \(iteration): array lengths differ")
             for (idx, (viElem, vactElem)) in zip(viValue, vactValue).enumerated() {
@@ -329,8 +329,8 @@ struct InterpreterRNGParityTests {
         var vact = ValueAndChoiceTreeInterpreter(gen, materializePicks: true, seed: seed, maxRuns: 5)
 
         for iteration in 0 ..< 5 {
-            let viValue = try #require(vi.next())
-            let (vactValue, _) = try #require(vact.next())
+            let viValue = vi.next()!
+            let (vactValue, _) = vact.next()!
             #expect(viValue == vactValue, "Iteration \(iteration): ValueInterpreter=\(viValue), ValueAndChoiceTreeInterpreter=\(vactValue)")
         }
     }
@@ -344,8 +344,8 @@ struct InterpreterRNGParityTests {
         var vact = ValueAndChoiceTreeInterpreter(gen, materializePicks: true, seed: seed, maxRuns: 5)
 
         for iteration in 0 ..< 5 {
-            let viValue = try #require(vi.next())
-            let (vactValue, _) = try #require(vact.next())
+            let viValue = vi.next()!
+            let (vactValue, _) = vact.next()!
             #expect(viValue.isEmpty && vactValue.isEmpty, "Iteration \(iteration): both should be empty arrays")
         }
     }
@@ -359,8 +359,8 @@ struct InterpreterRNGParityTests {
         var vact = ValueAndChoiceTreeInterpreter(gen, materializePicks: true, seed: seed, maxRuns: 100)
 
         for iteration in 0 ..< 100 {
-            let viValue = try #require(vi.next())
-            let (vactValue, _) = try #require(vact.next())
+            let viValue = vi.next()!
+            let (vactValue, _) = vact.next()!
             #expect(viValue.0 == vactValue.0 && viValue.1 == vactValue.1 && viValue.2 == vactValue.2,
                     "Iteration \(iteration): tuples don't match")
         }
@@ -376,8 +376,8 @@ struct InterpreterRNGParityTests {
             var vact = ValueAndChoiceTreeInterpreter(gen, materializePicks: true, seed: seed, maxRuns: 5)
 
             for iteration in 0 ..< 5 {
-                let viValue = try #require(vi.next())
-                let (vactValue, _) = try #require(vact.next())
+                let viValue = vi.next()!
+                let (vactValue, _) = vact.next()!
                 #expect(viValue == vactValue, "Seed \(seed), iteration \(iteration): ValueInterpreter=\(viValue), ValueAndChoiceTreeInterpreter=\(vactValue)")
             }
         }

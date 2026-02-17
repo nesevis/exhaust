@@ -17,7 +17,7 @@ struct ReplayDeterminismTests {
 
         // Generate initial value
         var iterator = ValueInterpreter(gen)
-        let initial = try #require(iterator.next())
+        let initial = iterator.next()!
 
         // Get recipe for that value
         let recipe = try #require(try Interpreters.reflect(gen, with: initial))

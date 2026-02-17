@@ -30,9 +30,9 @@ func reflectOnGetsize() throws {
     let gen = String.arbitrary
     var iterator = ValueInterpreter(gen, seed: 123)
     _ = iterator.next()
-    let generated = try #require(iterator.next())
+    let generated = iterator.next()!
     print("Generated string: '\(generated)'")
-    let generated2 = try #require(iterator.next())
+    let generated2 = iterator.next()!
     let recipe2 = try Interpreters.reflect(gen, with: generated2)
     let replay = try Interpreters.replay(gen, using: #require(recipe2))
     #expect(generated2 == replay)

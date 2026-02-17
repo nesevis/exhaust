@@ -118,7 +118,7 @@ struct GenerationExamplesTests {
                 }
             }
             var iterator = ValueInterpreter(zipped)
-            let result = try #require(iterator.next())
+            let result = iterator.next()!
             let choices = try Interpreters.reflect(zipped, with: result)
             if let choices {
                 let replayed = try Interpreters.replay(zipped, using: choices)
@@ -140,7 +140,7 @@ struct GenerationExamplesTests {
             let stringGen = String.arbitrary
             for i in 0 ..< 3 {
                 var iterator = ValueInterpreter(stringGen)
-                let generated = try #require(iterator.next())
+                let generated = iterator.next()!
                 if let recipe = try Interpreters.reflect(stringGen, with: generated) {
                     if let replayed = try Interpreters.replay(stringGen, using: recipe) {
                         // Round-trip successful
@@ -156,7 +156,7 @@ struct GenerationExamplesTests {
             let proliferateGen = String.arbitrary.proliferate(with: 1 ... 3)
             for i in 0 ..< 3 {
                 var iterator = ValueInterpreter(proliferateGen)
-                let generated = try #require(iterator.next())
+                let generated = iterator.next()!
                 if let recipe = try Interpreters.reflect(proliferateGen, with: generated) {
                     if let replayed = try Interpreters.replay(proliferateGen, using: recipe) {
                         // Round-trip successful

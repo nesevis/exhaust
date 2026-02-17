@@ -19,7 +19,7 @@ struct CoreGeneratorTests {
             var iterator = ValueInterpreter(gen)
 
             for _ in 0 ..< 50 {
-                let value = try #require(iterator.next())
+                let value = iterator.next()!
                 #expect(10 ... 20 ~= value)
             }
         }
@@ -41,7 +41,7 @@ struct CoreGeneratorTests {
             var iterator = ValueInterpreter(gen)
 
             for _ in 0 ..< 20 {
-                let value = try #require(iterator.next())
+                let value = iterator.next()!
                 #expect(value is UInt32)
             }
         }
@@ -78,7 +78,7 @@ struct CoreGeneratorTests {
             var iterator = ValueInterpreter(gen)
 
             for _ in 0 ..< 10 {
-                let generated = try #require(iterator.next())
+                let generated = iterator.next()!
                 #expect(generated == value)
             }
         }
@@ -107,9 +107,9 @@ struct CoreGeneratorTests {
             let seeds = Array(ValueInterpreter(UInt64.arbitrary).prefix(10))
 
             for (index, gen) in generators.enumerated() {
-                var iterator = try ValueInterpreter(gen, seed: #require(seeds.randomElement()))
+                var iterator = ValueInterpreter(gen, seed: seeds.randomElement()!)
                 for iteration in 0 ..< 10 {
-                    let generated = try #require(iterator.next())
+                    let generated = iterator.next()!
                     if let recipe = try Interpreters.reflect(gen, with: generated) {
                         if let replayed = try Interpreters.replay(gen, using: recipe) {
                             #expect(generated == replayed)
@@ -149,8 +149,8 @@ struct CoreGeneratorTests {
             var iterator = ValueInterpreter(gen)
 
             // String.arbitrary takes getSize so the first output will be empty
-            _ = try #require(iterator.next())
-            let generated = try #require(iterator.next())
+            _ = iterator.next()!
+            let generated = iterator.next()!
             let reflect = try? Interpreters.reflect(gen, with: generated)
             #expect(reflect == nil)
         }
@@ -165,7 +165,7 @@ struct CoreGeneratorTests {
 
             // Should be able to generate many values quickly
             for _ in 0 ..< 10000 {
-                _ = try #require(iterator.next())
+                _ = iterator.next()!
             }
 
             // If we get here without timeout, performance is acceptable
@@ -179,10 +179,10 @@ struct CoreGeneratorTests {
         func simpleIntegerRNGConsistency() throws {
             let gen = Int.arbitrary
             var iterator = ValueInterpreter(gen, seed: 42)
-            let output1 = try #require(iterator.next())
+            let output1 = iterator.next()!
 
             var thing = ValueAndChoiceTreeInterpreter(gen, materializePicks: true, seed: 42)
-            let (output2, _) = try #require(thing.next())
+            let (output2, _) = thing.next()!
 
             #expect(output1 == output2, "First values should match: \(output1) vs \(output2)")
         }
@@ -198,16 +198,16 @@ struct CoreGeneratorTests {
             var vi = ValueInterpreter(gen, seed: 42, maxRuns: 5)
             var vact = ValueAndChoiceTreeInterpreter(gen, materializePicks: false, seed: 42, maxRuns: 5)
 
-            let vi1 = try #require(vi.next())
-            let (vact1, _) = try #require(vact.next())
+            let vi1 = vi.next()!
+            let (vact1, _) = vact.next()!
             print("First: VI=\(vi1), VACT=\(vact1), match=\(vi1 == vact1)")
 
-            let vi2 = try #require(vi.next())
-            let (vact2, _) = try #require(vact.next())
+            let vi2 = vi.next()!
+            let (vact2, _) = vact.next()!
             print("Second: VI=\(vi2), VACT=\(vact2), match=\(vi2 == vact2)")
 
-            let vi3 = try #require(vi.next())
-            let (vact3, _) = try #require(vact.next())
+            let vi3 = vi.next()!
+            let (vact3, _) = vact.next()!
             print("Third: VI=\(vi3), VACT=\(vact3), match=\(vi3 == vact3)")
 
             #expect(vi1 == vact1, "First: \(vi1) vs \(vact1)")
@@ -221,7 +221,7 @@ struct CoreGeneratorTests {
             var iterator = ValueInterpreter(gen, seed: 4)
             _ = iterator.next()
             _ = iterator.next()
-            let output = try #require(iterator.next())
+            let output = iterator.next()!
             var thing = ValueAndChoiceTreeInterpreter(gen, materializePicks: true, seed: 4)
             _ = thing.next()
             _ = thing.next()

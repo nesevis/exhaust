@@ -18,7 +18,7 @@ struct ConstraintViolationTests {
 
         // Generate many values to test constraint
         for _ in 0 ..< 100 {
-            let value = try #require(iterator.next())
+            let value = iterator.next()!
             #expect(value >= 10)
             #expect(value <= 50)
         }
@@ -31,7 +31,7 @@ struct ConstraintViolationTests {
 
         // Generate many arrays
         for _ in 0 ..< 50 {
-            let array = try #require(iterator.next())
+            let array = iterator.next()!
             #expect(array.count >= 3)
             #expect(array.count <= 7)
         }
@@ -45,7 +45,7 @@ struct ConstraintViolationTests {
 
         // All generated values must be even
         for _ in 0 ..< 50 {
-            let value = try #require(iterator.next())
+            let value = iterator.next()!
             #expect(value % 2 == 0)
         }
     }
@@ -57,7 +57,7 @@ struct ConstraintViolationTests {
         var iterator = ValueInterpreter(positiveGen)
 
         for _ in 0 ..< 50 {
-            let value = try #require(iterator.next())
+            let value = iterator.next()!
             #expect(value > 0)
         }
     }
@@ -73,7 +73,7 @@ struct ConstraintViolationTests {
 
         var iterator = ValueInterpreter(orderedPairGen)
         for _ in 0 ..< 50 {
-            let (first, second) = try #require(iterator.next())
+            let (first, second) = iterator.next()!
             #expect(second > first)
             #expect(first >= 1)
             #expect(first <= 100)
@@ -89,7 +89,7 @@ struct ConstraintViolationTests {
 
         var iterator = ValueInterpreter(shortStringGen)
         for _ in 0 ..< 30 {
-            let str = try #require(iterator.next())
+            let str = iterator.next()!
             #expect(str.count <= 10)
         }
     }
@@ -117,7 +117,7 @@ struct ConstraintViolationTests {
 
         var iterator = ValueInterpreter(combinedGen)
         for _ in 0 ..< 30 {
-            let (positive, even, array) = try #require(iterator.next())
+            let (positive, even, array) = iterator.next()!
 
             #expect(positive >= 1)
             #expect(positive <= 100)
