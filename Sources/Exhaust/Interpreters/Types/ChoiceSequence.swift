@@ -235,7 +235,7 @@ extension ChoiceSequence {
             switch (preceding, entry) {
             case (nil, .value):
                 spans.append(ChoiceSpan(kind: entry, range: i...i, depth: depth))
-            case (.value, .value):
+            case (.value, .value), (.reduced, .value):
                 spans.append(ChoiceSpan(kind: entry, range: i...i, depth: depth))
             case (.sequence(true), .value):
                 spans.append(ChoiceSpan(kind: entry, range: i...i, depth: depth))
