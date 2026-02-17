@@ -12,29 +12,29 @@ public struct ValueAndChoiceTreeInterpreter<FinalOutput>: IteratorProtocol, Sequ
     public typealias Element = (value: FinalOutput, tree: ChoiceTree)
     typealias RunContinuation<Output> = (Any, ChoiceTree) throws -> (Output, ChoiceTree)?
     typealias RunGenerator<Output> = (ReflectiveGenerator<Any>) throws -> (Output, ChoiceTree)?
-    
+
     let generator: ReflectiveGenerator<FinalOutput>
     private var context: Context
-    
+
     public init(
         _ generator: ReflectiveGenerator<FinalOutput>,
         materializePicks: Bool = false,
         seed: UInt64? = nil,
-        maxRuns: UInt64? = nil
+        maxRuns: UInt64? = nil,
     ) {
         self.generator = generator
-        self.context = .init(
+        context = .init(
             maxRuns: maxRuns ?? 100,
             materializePicks: materializePicks,
             isFixed: false,
             size: 0,
             runs: 0,
-            prng: seed.map { Xoshiro256(seed: $0) } ?? Xoshiro256()
+            prng: seed.map { Xoshiro256(seed: $0) } ?? Xoshiro256(),
         )
     }
-    
+
     // MARK: - Next
-    
+
     public mutating func next() -> Element? {
         guard context.runs < context.maxRuns else {
             context.printClassifications()
@@ -60,19 +60,19 @@ public struct ValueAndChoiceTreeInterpreter<FinalOutput>: IteratorProtocol, Sequ
             generator,
             materializePicks: context.materializePicks,
             seed: context.prng.seed,
-            maxRuns: context.maxRuns
+            maxRuns: context.maxRuns,
         )
         fixed.context.isFixed = true
         return fixed
     }
 
-     // MARK: - Recursive Engine
-    
-    // This code is all inline for performance reasons
-    private static func generateRecursive<Input, Output>(
+    // MARK: - Recursive Engine
+
+    /// This code is all inline for performance reasons
+    private static func generateRecursive<Output>(
         _ gen: ReflectiveGenerator<Output>,
-        with inputValue: Input,
-        context: Context
+        with inputValue: some Any,
+        context: Context,
     ) throws -> (Output, ChoiceTree)? {
         // Size override only affects the first call, not all subsequent ones
         switch gen {
@@ -80,22 +80,22 @@ public struct ValueAndChoiceTreeInterpreter<FinalOutput>: IteratorProtocol, Sequ
             // The ChoiceTree value will be discarded from the caller if it's coming
             // from .chooseBits or .chooseCharacter
             return (value, ChoiceTree.just(String(String(describing: value).prefix(50))))
-            
+
         case let .impure(operation, continuation):
             // TODO: Extract the larger case-handlers into separate functions
             // Prebake the continuation and other parameters here for ease of calling
             let runContinuation: RunContinuation = { result, calleeChoiceTree in
                 let nextGen = try continuation(result)
-                
+
                 // Optimisation! Do not remove. This early return cuts 70% of the time for string generators
                 if calleeChoiceTree.isChoice, case let .pure(value) = nextGen {
                     // Early return for a pure case originating with a choice
                     return (value, calleeChoiceTree)
                 }
-                if let (continuationResult, innerChoiceTree) = try self.generateRecursive(
+                if let (continuationResult, innerChoiceTree) = try generateRecursive(
                     nextGen,
                     with: inputValue,
-                    context: context
+                    context: context,
                 ) {
                     if nextGen.isPure {
                         return (continuationResult, calleeChoiceTree)
@@ -106,22 +106,24 @@ public struct ValueAndChoiceTreeInterpreter<FinalOutput>: IteratorProtocol, Sequ
                 }
                 return nil
             }
-            
+
             // Ditto for recursing a generator
             let runGenerator = { (gen: ReflectiveGenerator<Any>, context: Context) in
                 try Self.generateRecursive(gen, with: inputValue, context: context)
             }
-            
+
             switch operation {
-            // MARK: - Contramap
-            case .contramap(_, let nextGen):
+                    // MARK: - Contramap
+
+            case let .contramap(_, nextGen):
                 // The contramap transform is not used in the forward pass
                 // Run the nested generator and pass its result to the continuation
                 guard let result = try runGenerator(nextGen, context) else { return nil }
                 // At this stage we have the result.
                 return try runContinuation(result.0, result.1)
-                
-            // MARK: - Prune
+
+                    // MARK: - Prune
+
             case let .prune(nextGen):
                 guard let optional = .some(inputValue as Any?), let wrappedValue = optional else {
                     return nil // Pruned!
@@ -129,11 +131,12 @@ public struct ValueAndChoiceTreeInterpreter<FinalOutput>: IteratorProtocol, Sequ
                 guard let result = try Self.generateRecursive(nextGen, with: wrappedValue, context: context) else { return nil }
                 return try runContinuation(result.0, result.1)
 
-            // MARK: - Pick
+                    // MARK: - Pick
+
             case let .pick(choices):
                 let totalWeight = choices.reduce(0) { $0 + $1.weight }
                 // This determines which of the branches will be selected
-                var randomRoll = UInt64.random(in: 1...totalWeight, using: &context.prng)
+                var randomRoll = UInt64.random(in: 1 ... totalWeight, using: &context.prng)
                 // This may or may not be used, but we always have to consume it
                 let jumpSeed = context.prng.next()
                 var selectedChoice: (weight: UInt64, label: UInt64, generator: ReflectiveGenerator<Any>)?
@@ -144,26 +147,25 @@ public struct ValueAndChoiceTreeInterpreter<FinalOutput>: IteratorProtocol, Sequ
                     }
                     randomRoll -= choice.weight
                 }
-                
+
                 var branches = [ChoiceTree]()
                 branches.reserveCapacity(choices.count)
                 var finalValue: Output?
-                
+
                 for choice in choices {
                     let isSelected = choice.label == selectedChoice?.label
                     var value: Output?
                     var branch: ChoiceTree?
-                    
+
                     if isSelected || context.materializePicks {
-                        if
-                            let result = try runGenerator(choice.generator, isSelected ? context : context.jump(seed: jumpSeed)),
-                            let final = try runContinuation(result.0, result.1)
+                        if let result = try runGenerator(choice.generator, isSelected ? context : context.jump(seed: jumpSeed)),
+                           let final = try runContinuation(result.0, result.1)
                         {
                             value = final.0
                             branch = ChoiceTree.branch(weight: choice.weight, label: choice.label, choice: final.1)
                         }
                     }
-                    
+
                     if isSelected, let branch {
                         // Wrap in selected
                         finalValue = value
@@ -176,57 +178,59 @@ public struct ValueAndChoiceTreeInterpreter<FinalOutput>: IteratorProtocol, Sequ
                         branches.append(branch)
                     }
                 }
-                
-                guard
-                    let value = finalValue
+
+                guard let value = finalValue
                 else {
                     throw GeneratorError.couldNotGenerateConcomitantChoiceTree
                 }
-                
+
                 return (value, .group(branches))
 
-            // MARK: - Choosebits
+                    // MARK: - Choosebits
+
             case let .chooseBits(min, max, tag):
-                let randomBits = UInt64.random(in: min...max, using: &context.prng)
-                let choiceTree = ChoiceTree.choice(ChoiceValue(randomBits, tag: tag), .init(validRanges: [min...max]))
+                let randomBits = UInt64.random(in: min ... max, using: &context.prng)
+                let choiceTree = ChoiceTree.choice(ChoiceValue(randomBits, tag: tag), .init(validRanges: [min ... max]))
 
                 return try runContinuation(randomBits, choiceTree)
-            
-            // MARK: - Sequence
+
+                    // MARK: - Sequence
+
             case let .sequence(lengthGen, elementGen):
                 // An iterative loop, not a recursive one. This will never overflow the stack.
-                guard let (length, lengthTrees) = try self.generateRecursive(
+                guard let (length, lengthTrees) = try generateRecursive(
                     lengthGen,
                     with: inputValue,
-                    context: context
+                    context: context,
                 ) else {
                     return nil
                 }
-                
+
                 var results: [Any] = []
                 var elements: [ChoiceTree] = []
                 results.reserveCapacity(Int(length))
                 elements.reserveCapacity(Int(length))
-                
-                for _ in 0..<length {
-                    guard let (result, element) = try runGenerator(elementGen, context) else { return nil}
+
+                for _ in 0 ..< length {
+                    guard let (result, element) = try runGenerator(elementGen, context) else { return nil }
                     results.append(result)
                     elements.append(element)
                 }
-                
+
                 let choiceTree = ChoiceTree.sequence(
                     length: length,
                     elements: elements,
-                    lengthTrees.metadata // FIXME: This will now be a group
+                    lengthTrees.metadata, // FIXME: This will now be a group
                 )
-                
+
                 // Ignore the result ChoiceTree here; it will be a `just` value
                 if let (result, _) = try runContinuation(results, choiceTree) {
                     return (result, choiceTree)
                 }
                 return nil
-                
-            // MARK: - Zip
+
+                    // MARK: - Zip
+
             case let .zip(generators):
                 // This will reduce these generators into an array of results that the continuation will convert into a tuple
                 var results = [Any]()
@@ -241,24 +245,28 @@ public struct ValueAndChoiceTreeInterpreter<FinalOutput>: IteratorProtocol, Sequ
                     choiceTrees.append(tree)
                 }
                 return try runContinuation(results, .group(choiceTrees))
-            
-            // MARK: - Just
+
+                    // MARK: - Just
+
             case let .just(value):
                 return try runContinuation(value, .just("\(value)"))
-            
-            // MARK: - GetSize
+
+                    // MARK: - GetSize
+
             case .getSize:
                 let size = context.sizeOverride ?? logarithmicallyScaledSize(context.maxRuns, context.runs)
                 context.sizeOverride = nil // getSize consumes the `sizeOverride`
                 return try runContinuation(size, .getSize(size))
-                
-            // MARK: - Resize
+
+                    // MARK: - Resize
+
             case let .resize(newSize, gen):
                 context.sizeOverride = newSize // TODO: Investigate whether this has unintended consequences
                 guard let result = try runGenerator(gen, context) else { return nil }
                 return try runContinuation(result.0, .resize(newSize: newSize, choices: [result.1]))
-                
-            // MARK: - Filter
+
+                    // MARK: - Filter
+
             case let .filter(gen, _, predicate):
                 // Optimise the `gen` with CGS here and execute it.
                 // The predicate is by contract validating the output of `gen`
@@ -273,7 +281,7 @@ public struct ValueAndChoiceTreeInterpreter<FinalOutput>: IteratorProtocol, Sequ
                 var attempts = 0 as UInt64
                 while attempts < context.maxFilterRuns {
                     guard let (result, tree) = try runGenerator(gen, context) else { return nil }
-                    
+
                     if predicate(result) {
                         // print("Gen.filter found result after \(attempts) attempts")
                         return try runContinuation(result, tree)
@@ -281,30 +289,31 @@ public struct ValueAndChoiceTreeInterpreter<FinalOutput>: IteratorProtocol, Sequ
                     attempts += 1
                 }
                 throw GeneratorError.sparseValidityCondition
-                
-            // MARK: - Classify
+
+                    // MARK: - Classify
+
             case let .classify(gen, fingerprint, classifiers):
                 guard let result = try runGenerator(gen, context) else { return nil }
-                
+
                 for (label, classifier) in classifiers where classifier(result.0) {
                     // Use the current run as the identifier for this value. We don't want to force `Equatable`
                     context.classifications[fingerprint, default: [:]][label, default: []].insert(context.runs)
                 }
-                
+
                 return try runContinuation(result.0, result.1)
             }
         }
     }
-    
+
     // MARK: - Quickcheck logarithmic scaling of test cases
-    
+
     private static func logarithmicallyScaledSize(_ maxSize: UInt64, _ successfulTests: UInt64) -> UInt64 {
         let n = Double(successfulTests)
-        return UInt64((log(n + 1)) * Double(maxSize) / log(100))
+        return UInt64(log(n + 1) * Double(maxSize) / log(100))
     }
-    
+
     // MARK: - Context
-    
+
     private final class Context {
         let maxRuns: UInt64
         let materializePicks: Bool
@@ -317,7 +326,7 @@ public struct ValueAndChoiceTreeInterpreter<FinalOutput>: IteratorProtocol, Sequ
         var classifications: [UInt64: [String: Set<UInt64>]] = [:]
         var prng: Xoshiro256
 
-        internal init(
+        init(
             maxRuns: UInt64,
             materializePicks: Bool,
             isFixed: Bool,
@@ -325,7 +334,7 @@ public struct ValueAndChoiceTreeInterpreter<FinalOutput>: IteratorProtocol, Sequ
             runs: UInt64,
             sizeOverride: UInt64? = nil,
             classifications: [UInt64: [String: Set<UInt64>]] = [:],
-            prng: Xoshiro256
+            prng: Xoshiro256,
         ) {
             self.maxRuns = maxRuns
             self.materializePicks = materializePicks
@@ -336,11 +345,11 @@ public struct ValueAndChoiceTreeInterpreter<FinalOutput>: IteratorProtocol, Sequ
             self.classifications = classifications
             self.prng = prng
         }
-        
+
         func jump(seed: UInt64) -> Context {
             .init(maxRuns: maxRuns, materializePicks: materializePicks, isFixed: isFixed, size: size, runs: runs, prng: .init(seed: seed))
         }
-        
+
         func printClassifications() {
             for (_, classifications) in classifications {
                 print("Classifications for ??")

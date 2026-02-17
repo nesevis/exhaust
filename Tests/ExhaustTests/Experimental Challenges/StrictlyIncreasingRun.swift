@@ -5,9 +5,9 @@
 //  Created by Chris Kolbu on 17/2/2026.
 //
 
-@testable import Exhaust
 import Foundation
 import Testing
+@testable import Exhaust
 
 @Suite("Experimental Challenge: Strictly Increasing Run")
 struct StrictlyIncreasingRunChallenge {
@@ -54,7 +54,7 @@ struct StrictlyIncreasingRunChallenge {
         let initialValueSpans = ChoiceSequence.extractAllValueSpans(from: initialSeq)
 
         let (seq, output) = try #require(try Interpreters.reduce(
-            gen: gen, tree: tree, config: .slow, property: property
+            gen: gen, tree: tree, config: .slow, property: property,
         ))
 
         // Should be the minimal strictly increasing triple

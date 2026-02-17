@@ -5,8 +5,8 @@
 //  Tests for BitPatternConvertible implementations, particularly Int.
 //
 
-@testable import Exhaust
 import Testing
+@testable import Exhaust
 
 @Suite("BitPattern Conversion")
 struct BitPatternConvertibleTests {
@@ -126,7 +126,7 @@ struct BitPatternConvertibleTests {
     func propertyTestFloatBitPatternSequentiality() throws {
         let gen = Gen.zip(
             Gen.choose(in: -Float.greatestFiniteMagnitude ... 0),
-            Gen.choose(in: 1 ... Float.greatestFiniteMagnitude.nextDown)
+            Gen.choose(in: 1 ... Float.greatestFiniteMagnitude.nextDown),
         )
         try PropertyTest.test(gen) { low, high in
             low.bitPattern64 < high.bitPattern64
@@ -183,7 +183,7 @@ struct BitPatternConvertibleTests {
     func propertyTestDoubleBitPatternSequentiality() throws {
         let gen = Gen.zip(
             Gen.choose(in: -Double.greatestFiniteMagnitude ... 0),
-            Gen.choose(in: 1 ... Double.greatestFiniteMagnitude.nextDown)
+            Gen.choose(in: 1 ... Double.greatestFiniteMagnitude.nextDown),
         )
         try PropertyTest.test(gen) { low, high in
             low.bitPattern64 < high.bitPattern64
@@ -300,7 +300,7 @@ struct BitPatternConvertibleTests {
     func propertyTestSignedIntegerBitPatternSequentiality() throws {
         let gen = Gen.zip(
             Gen.choose(in: Int64.min ... 0),
-            Gen.choose(in: 1 ... Int64.max)
+            Gen.choose(in: 1 ... Int64.max),
         )
         try PropertyTest.test(gen) { low, high in
             low.bitPattern64 < high.bitPattern64

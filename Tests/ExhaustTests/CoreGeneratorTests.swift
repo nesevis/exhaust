@@ -6,15 +6,15 @@
 //  basic composition, and interpreter consistency.
 //
 
-@testable import Exhaust
 import Testing
+@testable import Exhaust
 
 @Suite("Core Generator Functionality")
 struct CoreGeneratorTests {
     @Suite("Gen Factory Methods")
     struct GenFactoryTests {
         @Test("Gen.choose produces values within specified range")
-        func genChooseRange() throws {
+        func genChooseRange() {
             let gen = Gen.choose(in: 10 ... 20)
             var iterator = ValueInterpreter(gen)
 
@@ -36,7 +36,7 @@ struct CoreGeneratorTests {
         }
 
         @Test("Gen.choose with type produces valid values")
-        func genChooseType() throws {
+        func genChooseType() {
             let gen = Gen.choose(type: UInt32.self)
             var iterator = ValueInterpreter(gen)
 
@@ -60,7 +60,7 @@ struct CoreGeneratorTests {
             #expect(badRecipe == nil)
 
             // Test replay
-            guard let recipe = recipe else {
+            guard let recipe else {
                 #expect(false, "Reflection failed for Gen.exact test")
                 return
             }
@@ -72,7 +72,7 @@ struct CoreGeneratorTests {
         }
 
         @Test("Gen.just produces constant value")
-        func genJust() throws {
+        func genJust() {
             let value = "constant"
             let gen = Gen.just(value)
             var iterator = ValueInterpreter(gen)
@@ -142,7 +142,7 @@ struct CoreGeneratorTests {
         }
 
         @Test("Expect failure")
-        func opaqueMapReplayFailure() throws {
+        func opaqueMapReplayFailure() {
             let gen = String.arbitrary
                 .proliferate(with: 2 ... 5)
                 .map { $0.joined() } // Using mapped here wouldn't be possible; we don't know what the string boundaries were
@@ -159,7 +159,7 @@ struct CoreGeneratorTests {
     @Suite("Performance Tests")
     struct PerformanceTests {
         @Test("High-frequency generation performance")
-        func highFrequencyGeneration() throws {
+        func highFrequencyGeneration() {
             let gen = Gen.choose(in: 1 ... 1000)
             var iterator = ValueInterpreter(gen, maxRuns: 10000)
 
@@ -176,7 +176,7 @@ struct CoreGeneratorTests {
     @Suite("ChoiceTreeGeneratorTests")
     struct ChoiceTreeGeneratorTests {
         @Test("Simple integer test for RNG consistency")
-        func simpleIntegerRNGConsistency() throws {
+        func simpleIntegerRNGConsistency() {
             let gen = Int.arbitrary
             var iterator = ValueInterpreter(gen, seed: 42)
             let output1 = iterator.next()!
@@ -188,7 +188,7 @@ struct CoreGeneratorTests {
         }
 
         @Test("RNG state consistency between interpreters")
-        func rNGStateConsistency() throws {
+        func rNGStateConsistency() {
             // Use a simple generator that just picks between two values
             let gen = Gen.pick(choices: [
                 (1, Gen.just(100)),

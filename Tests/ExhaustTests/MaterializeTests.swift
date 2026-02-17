@@ -5,8 +5,8 @@
 //  Created by Chris Kolbu on 12/2/2026.
 //
 
-@testable import Exhaust
 import Testing
+@testable import Exhaust
 
 @Suite("Materialize")
 struct MaterializeTests {
@@ -16,10 +16,10 @@ struct MaterializeTests {
     private func roundTrip<Output: Equatable>(
         _ gen: ReflectiveGenerator<Output>,
         seed: UInt64 = 42,
-        materializePicks: Bool = false
+        materializePicks: Bool = false,
     ) throws -> (original: Output, materialized: Output) {
         let (value, tree) = try #require(
-            Array(ValueAndChoiceTreeInterpreter(gen, materializePicks: materializePicks, seed: seed).prefix(1)).first
+            Array(ValueAndChoiceTreeInterpreter(gen, materializePicks: materializePicks, seed: seed).prefix(1)).first,
         )
         let flattened = ChoiceSequence.flatten(tree)
         let materialized = try #require(try Interpreters.materialize(gen, with: tree, using: flattened))
@@ -30,10 +30,10 @@ struct MaterializeTests {
     private func roundTripUntyped<Output>(
         _ gen: ReflectiveGenerator<Output>,
         seed: UInt64 = 42,
-        materializePicks: Bool = false
+        materializePicks: Bool = false,
     ) throws -> (original: Output, materialized: Output) {
         let (value, tree) = try #require(
-            Array(ValueAndChoiceTreeInterpreter(gen, materializePicks: materializePicks, seed: seed).prefix(1)).first
+            Array(ValueAndChoiceTreeInterpreter(gen, materializePicks: materializePicks, seed: seed).prefix(1)).first,
         )
         let flattened = ChoiceSequence.flatten(tree)
         let materialized = try #require(try Interpreters.materialize(gen, with: tree, using: flattened))
@@ -158,7 +158,7 @@ struct MaterializeTests {
         // Use a variable-length generator so element deletion is valid
         let gen = Gen.arrayOf(Gen.choose(in: UInt64(0) ... 10), within: 0 ... 10)
         let (_, tree) = try #require(
-            Array(ValueAndChoiceTreeInterpreter(gen, materializePicks: false, seed: 42).prefix(1)).first
+            Array(ValueAndChoiceTreeInterpreter(gen, materializePicks: false, seed: 42).prefix(1)).first,
         )
         let flattened = ChoiceSequence.flatten(tree)
         // Keep only non-element tokens: strip values inside the sequence
@@ -195,7 +195,7 @@ struct MaterializeTests {
         // Use a variable-length generator so element deletion is valid
         let gen = Gen.arrayOf(Gen.choose(in: UInt64(0) ... 10), within: 0 ... 10)
         let (_, tree) = try #require(
-            Array(ValueAndChoiceTreeInterpreter(gen, materializePicks: false, seed: 42).prefix(2)).last
+            Array(ValueAndChoiceTreeInterpreter(gen, materializePicks: false, seed: 42).prefix(2)).last,
         )
         var flattened = ChoiceSequence.flatten(tree)
         let originalCount = flattened.count
@@ -228,7 +228,7 @@ struct MaterializeTests {
     func materializeZipWithArrays() throws {
         let gen = Gen.zip(
             Gen.choose(in: UInt64(0) ... 100).proliferate(with: 1 ... 5),
-            Gen.choose(in: UInt64(0) ... 100).proliferate(with: 1 ... 5)
+            Gen.choose(in: UInt64(0) ... 100).proliferate(with: 1 ... 5),
         )
         let (original, materialized) = try roundTripUntyped(gen)
         #expect(original.0 == materialized.0)
@@ -242,7 +242,7 @@ struct MaterializeTests {
         let gen = UInt64.arbitrary
             .mapped(
                 forward: { Int($0) },
-                backward: { UInt64($0) }
+                backward: { UInt64($0) },
             )
         let (original, materialized) = try roundTrip(gen)
         #expect(original == materialized)
@@ -256,10 +256,10 @@ struct MaterializeTests {
         }
         let gen = Gen.zip(
             Gen.choose(in: UInt64(0) ... 100),
-            Gen.choose(in: UInt64(0) ... 100)
+            Gen.choose(in: UInt64(0) ... 100),
         ).mapped(
             forward: { Point(x: $0.0, y: $0.1) },
-            backward: { ($0.x, $0.y) }
+            backward: { ($0.x, $0.y) },
         )
         let (original, materialized) = try roundTrip(gen)
         #expect(original == materialized)
@@ -282,7 +282,7 @@ struct MaterializeTests {
         let gen = Gen.classify(
             Gen.choose(in: UInt64(0) ... 100),
             ("small", { $0 < 50 }),
-            ("large", { $0 >= 50 })
+            ("large", { $0 >= 50 }),
         )
         let (original, materialized) = try roundTrip(gen)
         #expect(original == materialized)
@@ -376,7 +376,7 @@ struct MaterializeTests {
         let gen = Gen.zip(ageGen, String.arbitrary)
             .mapped(
                 forward: { Person(age: $0.0, name: $0.1) },
-                backward: { ($0.age, $0.name) }
+                backward: { ($0.age, $0.name) },
             )
         let (original, materialized) = try roundTrip(gen)
         #expect(original == materialized)
@@ -392,7 +392,7 @@ struct MaterializeTests {
                 (1, Gen.just("a")),
                 (1, Gen.just("b")),
             ]),
-            Bool.arbitrary
+            Bool.arbitrary,
         )
         let (original, materialized) = try roundTripUntyped(gen, seed: seed)
         #expect(original.0 == materialized.0)
@@ -406,7 +406,7 @@ struct MaterializeTests {
     func materializeModifiedValues() throws {
         let gen = Gen.choose(in: UInt64(0) ... 1000)
         let (_, tree) = try #require(
-            Array(ValueAndChoiceTreeInterpreter(gen, materializePicks: false, seed: 42).prefix(1)).first
+            Array(ValueAndChoiceTreeInterpreter(gen, materializePicks: false, seed: 42).prefix(1)).first,
         )
         let replacement = ChoiceSequenceValue.Value(choice: .unsigned(777, UInt64.self), validRanges: [0 ... 1000])
         let modified: ChoiceSequence = [.value(replacement)]
@@ -418,7 +418,7 @@ struct MaterializeTests {
     func materializeArrayMinimized() throws {
         let gen = Gen.arrayOf(Gen.choose(in: UInt64(0) ... 100), exactly: 5)
         let (_, tree) = try #require(
-            Array(ValueAndChoiceTreeInterpreter(gen, materializePicks: false, seed: 42).prefix(1)).first
+            Array(ValueAndChoiceTreeInterpreter(gen, materializePicks: false, seed: 42).prefix(1)).first,
         )
         let flattened = ChoiceSequence.flatten(tree)
         let minimized = flattened.map { element -> ChoiceSequenceValue in
@@ -436,7 +436,7 @@ struct MaterializeTests {
         let gen = Gen.zip(
             Gen.choose(in: UInt64(0) ... 100),
             Gen.choose(in: UInt64(0) ... 100),
-            Gen.choose(in: UInt64(0) ... 100)
+            Gen.choose(in: UInt64(0) ... 100),
         )
         let (original, materialized) = try roundTripUntyped(gen)
         #expect(original.0 == materialized.0)
@@ -465,7 +465,7 @@ struct MaterializeTests {
         // resize is exercised via proliferate (variable-length array)
         let gen = Gen.zip(
             UInt64.arbitrary.proliferate(with: 2 ... 4),
-            Gen.choose(in: UInt64(0) ... 100)
+            Gen.choose(in: UInt64(0) ... 100),
         )
         let (original, materialized) = try roundTripUntyped(gen)
         #expect(original.0 == materialized.0)
@@ -476,7 +476,7 @@ struct MaterializeTests {
     func materializeSequenceThroughGroup() throws {
         let gen = Gen.zip(
             Gen.arrayOf(Gen.choose(in: UInt64(0) ... 10), exactly: 3),
-            Gen.choose(in: UInt64(0) ... 100)
+            Gen.choose(in: UInt64(0) ... 100),
         )
         let (original, materialized) = try roundTripUntyped(gen)
         #expect(original.0 == materialized.0)
@@ -489,9 +489,9 @@ struct MaterializeTests {
             Gen.choose(in: UInt64(100) ... 1000)
                 .mapped(
                     forward: { Int($0) },
-                    backward: { UInt64($0) }
+                    backward: { UInt64($0) },
                 ),
-            UInt64.arbitrary
+            UInt64.arbitrary,
         )
         let (original, materialized) = try roundTripUntyped(gen)
         #expect(original.0 == materialized.0)
@@ -502,7 +502,7 @@ struct MaterializeTests {
     func materializeFilterThroughGroup() throws {
         let gen = Gen.zip(
             Gen.choose(in: UInt64(0) ... 100).filter { $0 % 2 == 0 },
-            UInt64.arbitrary
+            UInt64.arbitrary,
         )
         let (original, materialized) = try roundTripUntyped(gen)
         #expect(original.0 == materialized.0)
@@ -513,7 +513,7 @@ struct MaterializeTests {
     func materializeClassifyThroughGroup() throws {
         let gen = Gen.zip(
             Gen.classify(Gen.choose(in: UInt64(0) ... 100), ("low", { $0 < 50 })),
-            UInt64.arbitrary
+            UInt64.arbitrary,
         )
         let (original, materialized) = try roundTripUntyped(gen)
         #expect(original.0 == materialized.0)
@@ -527,7 +527,7 @@ struct MaterializeTests {
                 (1, Gen.choose(in: UInt64(0) ... 10)),
                 (1, Gen.choose(in: UInt64(11) ... 20)),
             ]),
-            Gen.choose(in: UInt64(0) ... 100)
+            Gen.choose(in: UInt64(0) ... 100),
         )
         let (original, materialized) = try roundTripUntyped(gen)
         #expect(original.0 == materialized.0)
@@ -554,7 +554,7 @@ struct MaterializeTests {
                 (1, Gen.just("first")),
                 (1, Gen.just("second")),
             ]),
-            Gen.arrayOf(UInt64.arbitrary, exactly: 3)
+            Gen.arrayOf(UInt64.arbitrary, exactly: 3),
         )
         let (original, materialized) = try roundTripUntyped(gen, materializePicks: false)
         #expect(original.0 == materialized.0)
@@ -570,10 +570,10 @@ struct MaterializeTests {
                 (1, Gen.choose(in: UInt64(0) ... 10)),
                 (1, Gen.choose(in: UInt64(11) ... 20)),
             ]),
-            Gen.arrayOf(UInt64.arbitrary, exactly: 3)
+            Gen.arrayOf(UInt64.arbitrary, exactly: 3),
         )
         let (_, tree) = try #require(
-            Array(ValueAndChoiceTreeInterpreter(gen, materializePicks: false, seed: 42).prefix(1)).first
+            Array(ValueAndChoiceTreeInterpreter(gen, materializePicks: false, seed: 42).prefix(1)).first,
         )
         let flattened = ChoiceSequence.flatten(tree)
         let first = try #require(try Interpreters.materialize(gen, with: tree, using: flattened))

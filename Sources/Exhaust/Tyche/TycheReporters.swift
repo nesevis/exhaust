@@ -153,20 +153,20 @@ public struct ConsoleReporter: TycheReporter {
     }
 
     private func format(_ value: Double) -> String {
-        return String(format: "%.3f", value)
+        String(format: "%.3f", value)
     }
 
     private func formatPercentage(_ value: Double) -> String {
-        return String(format: "%.1f%%", value * 100)
+        String(format: "%.1f%%", value * 100)
     }
 
     private func formatDuration(_ duration: TimeInterval) -> String {
         if duration < 0.001 {
-            return String(format: "%.2fμs", duration * 1_000_000)
+            String(format: "%.2fμs", duration * 1_000_000)
         } else if duration < 1.0 {
-            return String(format: "%.2fms", duration * 1000)
+            String(format: "%.2fms", duration * 1000)
         } else {
-            return String(format: "%.2fs", duration)
+            String(format: "%.2fs", duration)
         }
     }
 
@@ -175,15 +175,15 @@ public struct ConsoleReporter: TycheReporter {
 
         var ansiCode: String {
             switch self {
-            case .red: return "\u{001B}[31m"
-            case .green: return "\u{001B}[32m"
-            case .yellow: return "\u{001B}[33m"
-            case .blue: return "\u{001B}[34m"
-            case .magenta: return "\u{001B}[35m"
-            case .cyan: return "\u{001B}[36m"
-            case .gray: return "\u{001B}[37m"
-            case .bold: return "\u{001B}[1m"
-            case .reset: return "\u{001B}[0m"
+            case .red: "\u{001B}[31m"
+            case .green: "\u{001B}[32m"
+            case .yellow: "\u{001B}[33m"
+            case .blue: "\u{001B}[34m"
+            case .magenta: "\u{001B}[35m"
+            case .cyan: "\u{001B}[36m"
+            case .gray: "\u{001B}[37m"
+            case .bold: "\u{001B}[1m"
+            case .reset: "\u{001B}[0m"
             }
         }
     }
@@ -406,21 +406,21 @@ public struct HTMLReporter: TycheReporter {
 
     private func formatDuration(_ duration: TimeInterval) -> String {
         if duration < 0.001 {
-            return String(format: "%.2fμs", duration * 1_000_000)
+            String(format: "%.2fμs", duration * 1_000_000)
         } else if duration < 1.0 {
-            return String(format: "%.2fms", duration * 1000)
+            String(format: "%.2fms", duration * 1000)
         } else {
-            return String(format: "%.2fs", duration)
+            String(format: "%.2fs", duration)
         }
     }
 
     private func getScoreClass(_ score: Double) -> String {
         if score >= 0.8 {
-            return "good"
+            "good"
         } else if score >= 0.6 {
-            return "medium"
+            "medium"
         } else {
-            return "poor"
+            "poor"
         }
     }
 }

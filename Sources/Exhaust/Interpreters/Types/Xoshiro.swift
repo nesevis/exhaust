@@ -37,7 +37,7 @@ public struct Xoshiro256: RandomNumberGenerator {
             splitmix.next(),
             splitmix.next(),
             splitmix.next(),
-            splitmix.next()
+            splitmix.next(),
         )
     }
 
@@ -57,7 +57,7 @@ public struct Xoshiro256: RandomNumberGenerator {
 
     @inline(__always)
     private func rotateLeft(_ x: UInt64, _ k: Int) -> UInt64 {
-        return (x &<< k) | (x &>> (64 - k))
+        (x &<< k) | (x &>> (64 - k))
     }
 
     /// Jump ahead 2^128 steps for parallel streams

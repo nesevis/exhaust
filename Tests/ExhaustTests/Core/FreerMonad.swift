@@ -5,8 +5,8 @@
 //  Created by Chris Kolbu on 16/7/2025.
 //
 
-@testable import Exhaust
 import Testing
+@testable import Exhaust
 
 // MARK: - Test Cases
 
@@ -35,7 +35,7 @@ struct MonadLawTests {
         let functor = log("Action").map { 42 }
 
         // Act
-        let lhsResult = try interpret(functor.map { $0 })
+        let lhsResult = try interpret(functor.map(\.self))
         let rhsResult = try interpret(functor)
 
         // Assert

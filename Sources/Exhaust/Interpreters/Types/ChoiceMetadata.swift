@@ -6,7 +6,7 @@
 //
 
 public struct ChoiceMetadata: Hashable, Equatable, Sendable {
-    // `Character` has discontiguous ranges, and `RangeSet` isn't available until the very newest releases
+    /// `Character` has discontiguous ranges, and `RangeSet` isn't available until the very newest releases
     public let validRanges: [ClosedRange<UInt64>]
 
     public func hash(into hasher: inout Hasher) {

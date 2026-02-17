@@ -17,21 +17,21 @@ public extension Gen {
     @inlinable
     static func arrayOf<Output>(
         _ elementGenerator: ReflectiveGenerator<Output>,
-        _ length: ReflectiveGenerator<UInt64>? = nil
+        _ length: ReflectiveGenerator<UInt64>? = nil,
     ) -> ReflectiveGenerator<[Output]> {
         // Use `bind` to get the result of the length generator.
         let sequenceOperation = ReflectiveOperation.sequence(
             length: length ?? Gen.getSize().bind {
                 Gen.choose(in: ($0 / 10) ... $0)
             },
-            gen: elementGenerator.erase()
+            gen: elementGenerator.erase(),
         )
         // Lift the operation. The continuation will decode the `[Any]` result.
         return .impure(operation: sequenceOperation) { result in
             guard let array = result as? [Output] else {
                 throw GeneratorError.typeMismatch(
                     expected: String(describing: type(of: [Output].self)),
-                    actual: String(describing: type(of: result))
+                    actual: String(describing: type(of: result)),
                 )
             }
             return .pure(array)
@@ -51,7 +51,7 @@ public extension Gen {
     @inlinable
     static func arrayOf<Output>(
         _ elementGenerator: ReflectiveGenerator<Output>,
-        within range: ClosedRange<UInt64>
+        within range: ClosedRange<UInt64>,
     ) -> ReflectiveGenerator<[Output]> {
         // Use `bind` to get the result of the length generator.
         let sequenceOperation = ReflectiveOperation.sequence(
@@ -60,7 +60,7 @@ public extension Gen {
                 let clamped = range.lowerBound ... max(range.lowerBound, upper)
                 return Gen.choose(in: clamped)
             },
-            gen: elementGenerator.erase()
+            gen: elementGenerator.erase(),
         )
         // Lift the operation. The continuation will decode the `[Any]` result.
         return .impure(operation: sequenceOperation) { result in
@@ -81,7 +81,7 @@ public extension Gen {
     @inlinable
     static func arrayOf<Output>(
         _ elementGenerator: ReflectiveGenerator<Output>,
-        exactly: UInt64
+        exactly: UInt64,
     ) -> ReflectiveGenerator<[Output]> {
         arrayOf(elementGenerator, Gen.choose(in: exactly ... exactly))
     }
@@ -102,21 +102,21 @@ public extension Gen {
     @inlinable
     static func dictionaryOf<KeyOutput: Hashable, ValueOutput>(
         _ keyGenerator: ReflectiveGenerator<KeyOutput>,
-        _ valueGenerator: ReflectiveGenerator<ValueOutput>
+        _ valueGenerator: ReflectiveGenerator<ValueOutput>,
     ) -> ReflectiveGenerator<[KeyOutput: ValueOutput]> {
         Gen.zip(
             // These arrays use `getSize()` under the hood and will be the same length
             Gen.arrayOf(keyGenerator),
-            Gen.arrayOf(valueGenerator)
+            Gen.arrayOf(valueGenerator),
         )
         .mapped(
             forward: {
                 Dictionary(
                     Swift.zip($0.0, $0.1).map { ($0.0, $0.1) },
-                    uniquingKeysWith: { key, _ in key }
+                    uniquingKeysWith: { key, _ in key },
                 )
             },
-            backward: { (Array($0.keys), Array($0.values)) }
+            backward: { (Array($0.keys), Array($0.values)) },
         )
     }
 
@@ -133,7 +133,7 @@ public extension Gen {
     @inlinable
     static func sized<Output>(
         _ elementGenerator: ReflectiveGenerator<Output>,
-        lengthRange: ClosedRange<UInt64>? = nil
+        lengthRange: ClosedRange<UInt64>? = nil,
     ) -> ReflectiveGenerator<[Output]> {
         getSize().bind { size in
             let actualRange = lengthRange ?? (0 ... size)
@@ -147,7 +147,7 @@ public extension Gen {
 
     @inlinable
     static func subset<AnyCollection: Collection>(
-        of collection: AnyCollection
+        of collection: AnyCollection,
     ) -> ReflectiveGenerator<AnyCollection.SubSequence> {
         getSize().bind { size in
             let count = collection.count
@@ -163,7 +163,7 @@ public extension Gen {
 
             return Gen.zip(
                 Gen.choose(in: 1 ... maxLength), // subset length
-                Gen.choose(in: 0 ... (count - 1)) // start position index
+                Gen.choose(in: 0 ... (count - 1)), // start position index
             )
             .filter { length, startIndexPos in
                 startIndexPos + length <= count
@@ -179,7 +179,7 @@ public extension Gen {
                     // Find the position of start index in the indices array
                     let startPos = indices.firstIndex(of: subset.startIndex) ?? 0
                     return (subset.count, startPos)
-                }
+                },
             )
         }
     }
@@ -193,7 +193,7 @@ public extension Gen {
     /// - Returns: A generator that produces random elements from the collection
     @inlinable
     static func element<AnyCollection: Collection>(
-        from collection: AnyCollection
+        from collection: AnyCollection,
     ) -> ReflectiveGenerator<AnyCollection.Element> {
         precondition(collection.isEmpty == false, "Cannot return random element from empty collection")
         let count = collection.count
@@ -212,7 +212,7 @@ public extension Gen {
                         }
                     }
                     return 0
-                }
+                },
             )
     }
 
@@ -225,7 +225,7 @@ public extension Gen {
     /// - Returns: A generator that produces random elements from the collection
     @inlinable
     static func element<AnyCollection: Collection>(
-        from collection: AnyCollection
+        from collection: AnyCollection,
     ) -> ReflectiveGenerator<AnyCollection.Element> where AnyCollection.Element: Hashable {
         precondition(collection.isEmpty == false, "Cannot return random element from empty collection")
         let enumerated = collection.enumerated()
@@ -237,7 +237,7 @@ public extension Gen {
         return Gen.choose(in: 0 ... (collection.count - 1))
             .mapped(
                 forward: { intDict[$0]! },
-                backward: { elementDict[$0]! }
+                backward: { elementDict[$0]! },
             )
     }
 }

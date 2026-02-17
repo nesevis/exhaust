@@ -5,8 +5,8 @@
 //  Tests for ChoiceSequence.extractContainerSpans and ChoiceSequence.extractValueSpans
 //
 
-@testable import Exhaust
 import Testing
+@testable import Exhaust
 
 // MARK: - Helpers
 

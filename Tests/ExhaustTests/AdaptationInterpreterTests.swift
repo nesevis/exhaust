@@ -5,9 +5,9 @@
 //  Created by Chris Kolbu on 24/8/2025.
 //
 
-@testable import Exhaust
 import Foundation
 import Testing
+@testable import Exhaust
 
 @Suite("Adaptation Interpreter", .disabled("Not used"))
 struct AdaptationInterpreterTests {
@@ -83,8 +83,8 @@ struct AdaptationInterpreterTests {
         let gen: ReflectiveGenerator<[Int]> = .impure(
             operation: .sequence(
                 length: lengthGen,
-                gen: elementGen.erase()
-            )
+                gen: elementGen.erase(),
+            ),
         ) { result in
             guard let array = result as? [Int] else {
                 throw GeneratorError.typeMismatch(expected: "Array<Int>", actual: String(describing: type(of: result)))
@@ -100,7 +100,7 @@ struct AdaptationInterpreterTests {
         let result = try SpeculativeAdaptationInterpreter.adapt(
             original: gen,
             samples: 100, // Increase samples for better statistical significance
-            predicate
+            predicate,
         )
 
         let valueIterator = ValueInterpreter(result, maxRuns: 200)
@@ -134,8 +134,8 @@ struct AdaptationInterpreterTests {
         let arrayGen: ReflectiveGenerator<[Int]> = .impure(
             operation: .sequence(
                 length: Gen.choose(in: 1 ... 50),
-                gen: Gen.choose(in: 1 ... 10).erase()
-            )
+                gen: Gen.choose(in: 1 ... 10).erase(),
+            ),
         ) { result in
             guard let array = result as? [Int] else {
                 throw GeneratorError.typeMismatch(expected: "Array<Int>", actual: String(describing: type(of: result)))
@@ -149,7 +149,7 @@ struct AdaptationInterpreterTests {
                 intGen1.erase(),
                 intGen2.erase(),
                 arrayGen.erase(),
-            ]))
+            ])),
         ) { result in
             guard let values = result as? [Any],
                   values.count == 3,
@@ -171,7 +171,7 @@ struct AdaptationInterpreterTests {
         let result = try SpeculativeAdaptationInterpreter.adapt(
             original: zipGen,
             samples: 100,
-            predicate
+            predicate,
         )
 
         let valueIterator = ValueInterpreter(result, maxRuns: 200)

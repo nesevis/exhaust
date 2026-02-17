@@ -11,7 +11,7 @@ public enum Gen {
     /// - Returns: A generator that executes the operation and validates the result type
     @inlinable
     static func liftF<Output>(
-        _ operation: ReflectiveOperation
+        _ operation: ReflectiveOperation,
     ) -> ReflectiveGenerator<Output> {
         .impure(operation: operation) { result in
             if let typedResult = result as? Output {
@@ -30,9 +30,9 @@ public enum Gen {
     // - Returns: A generator that operates on the extracted input
     #warning("Remove this in favour of `.mapped`")
     @inlinable
-    static func lens<Input, NewInput>(
-        extract path: some PartialPath<NewInput, Input>,
-        _ next: ReflectiveGenerator<Input>
+    static func lens<Input>(
+        extract path: some PartialPath<some Any, Input>,
+        _ next: ReflectiveGenerator<Input>,
     ) -> ReflectiveGenerator<Input> {
         comap(path.extract(from:), next)
     }
@@ -61,17 +61,17 @@ public enum Gen {
     ///   - generator: The generator to apply the transformation to
     /// - Returns: A generator that accepts the new input type
     @inlinable
-    static func contramap<NewInput, Input, Output>(
-        _ transform: @escaping (NewInput) throws -> Input,
-        _ generator: ReflectiveGenerator<Output>
+    static func contramap<NewInput, Output>(
+        _ transform: @escaping (NewInput) throws -> some Any,
+        _ generator: ReflectiveGenerator<Output>,
     ) -> ReflectiveGenerator<Output> {
-        return .impure(operation: ReflectiveOperation.contramap(
+        .impure(operation: ReflectiveOperation.contramap(
             // This is where the backwards pass happens
             transform: {
                 // Handle optional inputs
                 try transform($0 as! NewInput) as Any
             },
-            next: generator.erase()
+            next: generator.erase(),
         )) { result in
             if let typed = result as? Output {
                 // Backward pass - direct value
@@ -82,7 +82,7 @@ public enum Gen {
             }
             throw GeneratorError.typeMismatch(
                 expected: String(describing: Output.self),
-                actual: String(describing: type(of: result))
+                actual: String(describing: type(of: result)),
             )
         }
     }
@@ -98,9 +98,9 @@ public enum Gen {
     ///   - generator: The generator to apply the transformation to
     /// - Returns: A generator that prunes on transformation failure
     @inlinable
-    static func comap<NewInput, Input, Output>(
-        _ transform: @escaping (NewInput) throws -> Input?,
-        _ generator: ReflectiveGenerator<Output>
+    static func comap<NewInput, Output>(
+        _ transform: @escaping (NewInput) throws -> (some Any)?,
+        _ generator: ReflectiveGenerator<Output>,
     ) -> ReflectiveGenerator<Output> {
         contramap(transform, prune(generator))
     }

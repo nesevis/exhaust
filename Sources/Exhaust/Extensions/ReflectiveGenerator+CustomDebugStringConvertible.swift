@@ -68,7 +68,7 @@ extension ReflectiveGenerator: CustomDebugStringConvertible where Operation == R
                 let nestedDesc = choice.generator.treeDescription(
                     prefix: childPrefix + (isLast ? "    " : "│   "),
                     isLast: true,
-                    depth: depth + 1
+                    depth: depth + 1,
                 )
 
                 return childPrefix + (isLast ? "└── " : "├── ") + choiceHeader + "\n" + nestedDesc
@@ -119,7 +119,7 @@ extension ReflectiveGenerator: CustomDebugStringConvertible where Operation == R
 
         case let .classify(gen, fingerprint, classifiers):
             let fingerprintShort = String(format: "%08X", fingerprint & 0xFFFF_FFFF)
-            let classifierLabels = classifiers.map { $0.label }.joined(separator: ", ")
+            let classifierLabels = classifiers.map(\.label).joined(separator: ", ")
             let genDesc = gen.treeDescription(prefix: childPrefix, isLast: true, depth: depth + 1)
             return "classify(fingerprint: \(fingerprintShort), labels: [\(classifierLabels)])\n" + genDesc
         }
@@ -132,11 +132,11 @@ extension ReflectiveGenerator: CustomDebugStringConvertible where Operation == R
 
     private func formatJustValue(_ value: Any) -> String {
         if let stringValue = value as? String {
-            return "\"\(stringValue)\""
+            "\"\(stringValue)\""
         } else if let charValue = value as? Character {
-            return "\"\(charValue)\""
+            "\"\(charValue)\""
         } else {
-            return "\(value)"
+            "\(value)"
         }
     }
 }

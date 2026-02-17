@@ -20,7 +20,7 @@ extension ReducerStrategies {
         property: (Output) -> Bool,
         sequence: ChoiceSequence,
         valueSpans: [ChoiceSpan],
-        rejectCache: inout ReducerCache
+        rejectCache: inout ReducerCache,
     ) throws -> (ChoiceSequence, Output)? {
         var current = sequence
         var progress = false
@@ -52,7 +52,7 @@ extension ReducerStrategies {
             // Try target directly
             let targetChoice = ChoiceValue(
                 choiceTag.makeConvertible(bitPattern64: targetBP),
-                tag: choiceTag
+                tag: choiceTag,
             )
             let targetEntry = ChoiceSequenceValue.reduced(.init(choice: targetChoice, validRanges: validRanges))
             var candidate = current
@@ -88,7 +88,7 @@ extension ReducerStrategies {
                     let newBP = searchUpward ? currentBP + delta : currentBP - delta
                     let newChoice = ChoiceValue(
                         choiceTag.makeConvertible(bitPattern64: newBP),
-                        tag: choiceTag
+                        tag: choiceTag,
                     )
                     guard newChoice.fits(in: validRanges) else { return false }
                     let probeEntry = ChoiceSequenceValue.reduced(.init(choice: newChoice, validRanges: validRanges))
@@ -96,8 +96,7 @@ extension ReducerStrategies {
                         return false
                     }
                     probe[seqIdx] = probeEntry
-                    guard
-                        rejectCache.contains(probe) == false
+                    guard rejectCache.contains(probe) == false
                     else {
                         return false
                     }
@@ -118,7 +117,7 @@ extension ReducerStrategies {
                     return fails
                 },
                 low: UInt64(0),
-                high: distance
+                high: distance,
             )
 
             if bestDelta > 0 {
@@ -133,7 +132,7 @@ extension ReducerStrategies {
                 let newBP = searchUpward ? currentBP + bestDelta : currentBP - bestDelta
                 let newChoice = ChoiceValue(
                     choiceTag.makeConvertible(bitPattern64: newBP),
-                    tag: choiceTag
+                    tag: choiceTag,
                 )
                 let candidateEntry = ChoiceSequenceValue.reduced(.init(choice: newChoice, validRanges: validRanges))
                 var candidate = current
@@ -162,7 +161,7 @@ extension ReducerStrategies {
                     let testBP = searchUpward ? currentBP + offset : currentBP - offset
                     let boundaryChoice = ChoiceValue(
                         choiceTag.makeConvertible(bitPattern64: testBP),
-                        tag: choiceTag
+                        tag: choiceTag,
                     )
                     guard boundaryChoice.fits(in: validRanges) else { continue }
                     let boundaryEntry = ChoiceSequenceValue.value(.init(choice: boundaryChoice, validRanges: validRanges))

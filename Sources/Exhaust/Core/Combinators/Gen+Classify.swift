@@ -33,13 +33,13 @@ public extension Gen {
     @inlinable
     static func classify<Output>(
         _ generator: ReflectiveGenerator<Output>,
-        _ classifiers: (String, (Output) -> Bool)...
+        _ classifiers: (String, (Output) -> Bool)...,
     ) -> ReflectiveGenerator<Output> {
         .impure(operation:
             .classify(
                 gen: generator.erase(),
                 fingerprint: 0,
-                classifiers: classifiers.map { pair in (pair.0, { pair.1($0 as! Output) }) }
+                classifiers: classifiers.map { pair in (pair.0, { pair.1($0 as! Output) }) },
             )) { .pure($0 as! Output) }
     }
 }

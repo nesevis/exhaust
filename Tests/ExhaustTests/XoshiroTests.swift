@@ -5,8 +5,8 @@
 //  Created by Chris Kolbu on 27/7/2025.
 //
 
-@testable import Exhaust
 import Testing
+@testable import Exhaust
 
 @Test("Test Xoshiro against reference implementation")
 func xoshiroAgainstReference() {

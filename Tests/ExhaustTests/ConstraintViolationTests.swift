@@ -6,13 +6,13 @@
 //  that violate their specified constraints.
 //
 
-@testable import Exhaust
 import Testing
+@testable import Exhaust
 
 @Suite("Constraint Violation Prevention")
 struct ConstraintViolationTests {
     @Test("Range-constrained generators never exceed bounds")
-    func rangeBoundsNeverViolated() throws {
+    func rangeBoundsNeverViolated() {
         let gen = Gen.choose(in: 10 ... 50)
         var iterator = ValueInterpreter(gen)
 
@@ -25,7 +25,7 @@ struct ConstraintViolationTests {
     }
 
     @Test("Array size constraints never violated")
-    func arraySizeConstraintsNeverViolated() throws {
+    func arraySizeConstraintsNeverViolated() {
         let gen = Int.arbitrary.proliferate(with: 3 ... 7)
         var iterator = ValueInterpreter(gen)
 
@@ -38,7 +38,7 @@ struct ConstraintViolationTests {
     }
 
     @Test("Filtered generators never produce filtered values")
-    func filteredGeneratorsNeverViolate() throws {
+    func filteredGeneratorsNeverViolate() {
         // Generator for even numbers only
         let evenGen = Int.arbitrary.map { $0 &* 2 }
         var iterator = ValueInterpreter(evenGen)
@@ -51,7 +51,7 @@ struct ConstraintViolationTests {
     }
 
     @Test("Mapped generators preserve constraints")
-    func mappedGeneratorConstraints() throws {
+    func mappedGeneratorConstraints() {
         // Generator that produces only positive values after mapping
         let positiveGen = UInt32.arbitrary.map { Int($0) + 1 }
         var iterator = ValueInterpreter(positiveGen)
@@ -63,7 +63,7 @@ struct ConstraintViolationTests {
     }
 
     @Test("Bound generators respect all constraints")
-    func boundGeneratorConstraints() throws {
+    func boundGeneratorConstraints() {
         // Generator that produces pairs where second > first
         let orderedPairGen = Gen.choose(in: 1 ... 100).bind { first in
             Gen.choose(in: (first + 1) ... 200).map { second in
@@ -82,7 +82,7 @@ struct ConstraintViolationTests {
     }
 
     @Test("String length constraints never violated")
-    func stringLengthConstraints() throws {
+    func stringLengthConstraints() {
         // This test assumes you have a way to constrain string length
         // Adapt based on your actual string generation API
         let shortStringGen = Gen.chooseCharacter(in: 0 ... 30).map(String.init)
@@ -108,7 +108,7 @@ struct ConstraintViolationTests {
 //    }
 
     @Test("Zipped generators maintain individual constraints")
-    func zippedGeneratorConstraints() throws {
+    func zippedGeneratorConstraints() {
         let positiveGen = Gen.choose(in: 1 ... 100)
         let evenGen = Gen.choose(in: 0 ... 50).map { $0 * 2 }
         let shortArrayGen = String.arbitrary.proliferate(with: 1 ... 3)

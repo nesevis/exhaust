@@ -6,13 +6,13 @@
 //  single-value generators, and complex composition scenarios.
 //
 
-@testable import Exhaust
 import Testing
+@testable import Exhaust
 
 @Suite("Generator Composition Edge Cases")
 struct GeneratorCompositionEdgeCaseTests {
     @Test("Single value generator composition")
-    func singleValueGeneratorComposition() throws {
+    func singleValueGeneratorComposition() {
         let constantGen = Gen.just(42)
         let normalGen = String.arbitrary
 
@@ -28,13 +28,13 @@ struct GeneratorCompositionEdgeCaseTests {
     }
 
     @Test("Zipping many generators maintains correctness")
-    func largeZipComposition() throws {
+    func largeZipComposition() {
         let gen = Gen.zip(
             Int.arbitrary,
             String.arbitrary,
             UInt.arbitrary,
             Double.arbitrary,
-            Gen.choose(in: 1 ... 100)
+            Gen.choose(in: 1 ... 100),
         )
 
         // Verify all components are generated correctly
@@ -49,7 +49,7 @@ struct GeneratorCompositionEdgeCaseTests {
     }
 
     @Test("Nested composition with multiple levels")
-    func nestedCompositionLevels() throws {
+    func nestedCompositionLevels() {
         let innerGen = Gen.zip(Int.arbitrary, String.arbitrary)
         let middleGen = Gen.zip(innerGen, Bool.arbitrary)
         let outerGen = Gen.zip(middleGen, UInt.arbitrary)
@@ -63,7 +63,7 @@ struct GeneratorCompositionEdgeCaseTests {
     }
 
     @Test("Empty array generator in composition")
-    func emptyArrayGeneratorComposition() throws {
+    func emptyArrayGeneratorComposition() {
         let emptyArrayGen = Gen.just([Int]())
         let normalGen = String.arbitrary
 
@@ -77,7 +77,7 @@ struct GeneratorCompositionEdgeCaseTests {
     }
 
     @Test("Composition with bound generators")
-    func boundGeneratorComposition() throws {
+    func boundGeneratorComposition() {
         let dependentGen = Int.arbitrary.bind { first in
             Gen.choose(in: first ... (first + 10)).map { second in
                 (first, second)
@@ -100,7 +100,7 @@ struct GeneratorCompositionEdgeCaseTests {
         let gen = Gen.zip(
             Gen.choose(in: 1 ... 100),
             String.arbitrary,
-            Bool.arbitrary
+            Bool.arbitrary,
         )
 
         var iterator = ValueInterpreter(gen)
@@ -112,7 +112,7 @@ struct GeneratorCompositionEdgeCaseTests {
     }
 
     @Test("Composition with array proliferation")
-    func arrayProlifirationComposition() throws {
+    func arrayProlifirationComposition() {
         let arrayGen = Int.arbitrary.proliferate(with: 0 ... 5)
         let scalarGen = String.arbitrary
 
@@ -127,7 +127,7 @@ struct GeneratorCompositionEdgeCaseTests {
     }
 
     @Test("Deeply nested array composition")
-    func deeplyNestedArrayComposition() throws {
+    func deeplyNestedArrayComposition() {
         let nestedGen = Int.arbitrary
             .proliferate(with: 1 ... 3)
             .proliferate(with: 1 ... 2)

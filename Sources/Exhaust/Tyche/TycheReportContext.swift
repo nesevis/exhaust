@@ -8,10 +8,10 @@ public final class TycheReportContext {
 
     public static var current: TycheReportContext? {
         get {
-            return Thread.current.threadDictionary[contextKey] as? TycheReportContext
+            Thread.current.threadDictionary[contextKey] as? TycheReportContext
         }
         set {
-            if let newValue = newValue {
+            if let newValue {
                 Thread.current.threadDictionary[contextKey] = newValue
             } else {
                 Thread.current.threadDictionary.removeObject(forKey: contextKey)
@@ -42,7 +42,7 @@ public final class TycheReportContext {
     /// Execute a block of code with Tyche reporting enabled
     public static func withReporting<T>(
         reporters: [TycheReporter],
-        operation: () throws -> T
+        operation: () throws -> T,
     ) rethrows -> T {
         let context = TycheReportContext(reporters: reporters)
         let previousContext = current
@@ -59,7 +59,7 @@ public final class TycheReportContext {
     /// Execute a block of code with Tyche reporting enabled (async version)
     public static func withReporting<T>(
         reporters: [TycheReporter],
-        operation: () async throws -> T
+        operation: () async throws -> T,
     ) async rethrows -> T {
         let context = TycheReportContext(reporters: reporters)
         let previousContext = current
@@ -76,7 +76,7 @@ public final class TycheReportContext {
     // MARK: - Event Recording
 
     /// Record a value generation event
-    public func recordGeneration<T>(_ value: T, metadata: GenerationMetadata) {
+    public func recordGeneration(_ value: some Any, metadata: GenerationMetadata) {
         let event = GenerationEvent(value: value, metadata: metadata)
         queue.async(flags: .barrier) {
             self._generationEvents.append(event)
@@ -102,7 +102,7 @@ public final class TycheReportContext {
 
     /// Generate a comprehensive report from collected data
     public func generateReport() -> TycheReport {
-        return queue.sync {
+        queue.sync {
             let analyzer = TycheAnalyzer()
             let endTime = Date()
             let totalDuration = endTime.timeIntervalSince(_startTime)
@@ -115,7 +115,7 @@ public final class TycheReportContext {
                 generationReport: generationReport,
                 shrinkingReport: shrinkingReport,
                 testRunReport: testRunReport,
-                reportTimestamp: endTime
+                reportTimestamp: endTime,
             )
         }
     }
@@ -138,7 +138,7 @@ struct GenerationEvent {
     let value: Any
     let metadata: GenerationMetadata
 
-    init<T>(value: T, metadata: GenerationMetadata) {
+    init(value: some Any, metadata: GenerationMetadata) {
         self.value = value
         self.metadata = metadata
     }
@@ -155,17 +155,17 @@ struct ShrinkingEvent {
 public extension TycheReportContext {
     /// Quick setup for console reporting
     static func withConsoleReporting<T>(
-        operation: () throws -> T
+        operation: () throws -> T,
     ) rethrows -> T {
-        return try withReporting(reporters: [ConsoleReporter()], operation: operation)
+        try withReporting(reporters: [ConsoleReporter()], operation: operation)
     }
 
     /// Quick setup for JSON file reporting
     static func withJSONReporting<T>(
         to url: URL,
-        operation: () throws -> T
+        operation: () throws -> T,
     ) rethrows -> T {
-        return try withReporting(reporters: [JSONReporter(outputURL: url)], operation: operation)
+        try withReporting(reporters: [JSONReporter(outputURL: url)], operation: operation)
     }
 
     /// Quick setup for multiple reporters
@@ -173,7 +173,7 @@ public extension TycheReportContext {
         console: Bool = false,
         jsonURL: URL? = nil,
         csvURL: URL? = nil,
-        operation: () throws -> T
+        operation: () throws -> T,
     ) rethrows -> T {
         var reporters: [TycheReporter] = []
 
@@ -181,11 +181,11 @@ public extension TycheReportContext {
             reporters.append(ConsoleReporter())
         }
 
-        if let jsonURL = jsonURL {
+        if let jsonURL {
             reporters.append(JSONReporter(outputURL: jsonURL))
         }
 
-        if let csvURL = csvURL {
+        if let csvURL {
             reporters.append(CSVReporter(outputURL: csvURL))
         }
 
@@ -198,11 +198,11 @@ public extension TycheReportContext {
 public extension TycheReportContext {
     /// Check if reporting is currently enabled
     static var isReportingEnabled: Bool {
-        return current != nil
+        current != nil
     }
 
     /// Safely record generation event if reporting is enabled
-    static func safeRecordGeneration<T>(_ value: T, metadata: GenerationMetadata) {
+    static func safeRecordGeneration(_ value: some Any, metadata: GenerationMetadata) {
         current?.recordGeneration(value, metadata: metadata)
     }
 

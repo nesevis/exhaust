@@ -15,7 +15,7 @@ public extension Gen {
     /// - Precondition: At least one choice must be provided
     @inlinable
     static func pick<Output>(
-        choices: [(weight: UInt64, generator: ReflectiveGenerator<Output>)]
+        choices: [(weight: UInt64, generator: ReflectiveGenerator<Output>)],
     ) -> ReflectiveGenerator<Output> {
         precondition(choices.isEmpty == false, "At least one choice must be provided")
         // The nested generators must all have the same Output type.
@@ -29,7 +29,7 @@ public extension Gen {
             array.append((
                 weight: choice.weight,
                 label: UInt64(index) + 1,
-                generator: choice.generator.erase()
+                generator: choice.generator.erase(),
             ))
         }
         return liftF(.pick(choices: array))
@@ -49,7 +49,7 @@ public extension Gen {
     /// - Precondition: At least one choice must be provided
     @inlinable
     static func pick<Output>(
-        choices: [(weight: Int, generator: ReflectiveGenerator<Output>)]
+        choices: [(weight: Int, generator: ReflectiveGenerator<Output>)],
     ) -> ReflectiveGenerator<Output> {
         precondition(choices.map(\.weight).allSatisfy { $0 > 0 }, "Weights must be higher than zero")
 
@@ -71,7 +71,7 @@ public extension Gen {
         let operation = ReflectiveOperation.chooseBits(
             min: actualRange.lowerBound,
             max: actualRange.upperBound,
-            tag: .character
+            tag: .character,
         )
 
         return .impure(operation: operation) { result in
@@ -105,7 +105,7 @@ public extension Gen {
     @inlinable
     static func choose<Output: BitPatternConvertible>(
         in range: ClosedRange<Output>? = nil,
-        type _: Output.Type = Output.self
+        type _: Output.Type = Output.self,
     ) -> ReflectiveGenerator<Output> {
         let minBits = range?.lowerBound.bitPattern64 ?? Output.bitPatternRanges[0].lowerBound
         let maxBits = range?.upperBound.bitPattern64 ?? Output.bitPatternRanges[0].upperBound
@@ -123,7 +123,7 @@ public extension Gen {
                 guard let convertible = result as? any BitPatternConvertible else {
                     throw GeneratorError.typeMismatch(
                         expected: "any BitPatternConvertible",
-                        actual: String(describing: Swift.type(of: result))
+                        actual: String(describing: Swift.type(of: result)),
                     )
                 }
                 return .pure(Output(bitPattern64: convertible.bitPattern64))

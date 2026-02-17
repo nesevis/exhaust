@@ -18,7 +18,7 @@ extension ReducerStrategies {
         property: (Output) -> Bool,
         sequence: ChoiceSequence,
         spans: [ChoiceSpan],
-        rejectCache: inout ReducerCache
+        rejectCache: inout ReducerCache,
     ) throws -> (ChoiceSequence, Output)? {
         var current = sequence
 
@@ -52,7 +52,7 @@ extension ReducerStrategies {
 
                 var candidate = current
                 candidate.removeSubranges(rangeSet)
-                
+
                 guard rejectCache.contains(candidate) == false else {
                     return false
                 }

@@ -5,8 +5,8 @@
 //  Created by Chris Kolbu on 21/7/2025.
 //
 
-@testable import Exhaust
 import Testing
+@testable import Exhaust
 
 @Suite("ChoiceMetadata Functionality")
 struct ChoiceMetadataTests {

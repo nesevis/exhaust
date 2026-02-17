@@ -70,7 +70,7 @@ public extension ReflectiveGenerator where Operation == ReflectiveOperation {
     @inlinable
     func mapped<NewOutput>(
         forward: @escaping (Value) throws -> NewOutput,
-        backward: @escaping (NewOutput) throws -> Value
+        backward: @escaping (NewOutput) throws -> Value,
     ) rethrows -> ReflectiveGenerator<NewOutput> {
         try Gen.contramap(backward, map(forward))
     }
@@ -89,7 +89,7 @@ public extension ReflectiveGenerator where Operation == ReflectiveOperation {
     @inlinable
     func mapped<NewOutput>(
         forward: @escaping (Value) throws -> NewOutput,
-        backward: some PartialPath<NewOutput, Value>
+        backward: some PartialPath<NewOutput, Value>,
     ) rethrows -> ReflectiveGenerator<NewOutput> {
         let erasedBackward: (Any) throws -> Any = { newOutput in
             try backward.extract(from: newOutput)!
@@ -113,7 +113,7 @@ public extension ReflectiveGenerator where Operation == ReflectiveOperation {
     @inlinable
     func mapped<NewOutput>(
         forward: some PartialPath<Value, NewOutput>,
-        backward: some PartialPath<NewOutput, Value>
+        backward: some PartialPath<NewOutput, Value>,
     ) throws -> ReflectiveGenerator<NewOutput?> {
         let erasedBackward: (Any) throws -> Any = { newOutput in
             // FIXME: Should we be force unwrapping here? What if it's optional?
@@ -147,7 +147,7 @@ public extension ReflectiveGenerator where Operation == ReflectiveOperation {
                 }
                 return result as! Value
             },
-            next: erase()
+            next: erase(),
         )) { result in
             .pure(result as? Value)
         }
@@ -220,13 +220,13 @@ public extension ReflectiveGenerator where Operation == ReflectiveOperation {
             // This shouldn't happen? Should it be a no-op, or an error? Should we throw in the continuation?
             .impure(
                 operation: .filter(gen: erase(), fingerprint: prng.next(), predicate: { value in predicate(value as! Value) }),
-                continuation: { .pure($0 as! Value) }
+                continuation: { .pure($0 as! Value) },
             )
         case .impure:
             // How can we fingerprint the generator here. Generate a random value? UUID?
             .impure(
                 operation: .filter(gen: erase(), fingerprint: prng.next(), predicate: { value in predicate(value as! Value) }),
-                continuation: { .pure($0 as! Value) }
+                continuation: { .pure($0 as! Value) },
             )
         }
     }

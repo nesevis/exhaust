@@ -7,12 +7,12 @@
 
 import Foundation
 
-/// A speculative execution adaptation interpreter that forks at pick points
-/// to evaluate which choice leads to the highest success rate.
+// A speculative execution adaptation interpreter that forks at pick points
+// to evaluate which choice leads to the highest success rate.
 #warning("Largely outdated")
 enum SpeculativeAdaptationInterpreter {
-
     // MARK: - Speculative Execution Strategy
+
     /*
      SPECULATIVE EXECUTION APPROACH:
 
@@ -39,7 +39,7 @@ enum SpeculativeAdaptationInterpreter {
         original: ReflectiveGenerator<Output>,
         samples: UInt64 = 100,
         maxSize: UInt64 = 100,
-        _ validityPredicate: @escaping (Output) -> Bool
+        _ validityPredicate: @escaping (Output) -> Bool,
     ) throws -> ReflectiveGenerator<Output> {
         let context = SpeculativeContext(baseSampleCount: samples, maxSize: maxSize)
         return try adaptRecursive(
@@ -47,18 +47,18 @@ enum SpeculativeAdaptationInterpreter {
             input: (),
             context: context,
             insideSubdividedChooseBits: false,
-            validityPredicate: validityPredicate
+            validityPredicate: validityPredicate,
         )
     }
 
     // MARK: - Recursive Adaptation with Speculative Execution
 
-    private static func adaptRecursive<Input, Output>(
+    private static func adaptRecursive<Output>(
         gen: ReflectiveGenerator<Output>,
-        input: Input,
+        input: some Any,
         context: SpeculativeContext,
         insideSubdividedChooseBits: Bool,
-        validityPredicate: @escaping (Output) -> Bool
+        validityPredicate: @escaping (Output) -> Bool,
     ) throws -> ReflectiveGenerator<Output> {
         switch gen {
         case .pure:
@@ -83,7 +83,7 @@ enum SpeculativeAdaptationInterpreter {
                     input: input,
                     context: context,
                     insideSubdividedChooseBits: insideSubdividedChooseBits,
-                    validityPredicate: validityPredicate
+                    validityPredicate: validityPredicate,
                 )
 
             case let .prune(next):
@@ -102,7 +102,7 @@ enum SpeculativeAdaptationInterpreter {
                         input: input,
                         context: context,
                         insideSubdividedChooseBits: insideSubdividedChooseBits,
-                        validityPredicate: validityPredicate
+                        validityPredicate: validityPredicate,
                     )
                 } else {
                     // Already inside subdivided chooseBits, pass through without further subdivision
@@ -118,7 +118,7 @@ enum SpeculativeAdaptationInterpreter {
                     input: input,
                     context: context,
                     insideSubdividedChooseBits: insideSubdividedChooseBits,
-                    validityPredicate: validityPredicate
+                    validityPredicate: validityPredicate,
                 )
 
             case let .zip(gens):
@@ -130,7 +130,7 @@ enum SpeculativeAdaptationInterpreter {
                     input: input,
                     context: context,
                     insideSubdividedChooseBits: insideSubdividedChooseBits,
-                    validityPredicate: validityPredicate
+                    validityPredicate: validityPredicate,
                 )
 
             case .getSize:
@@ -145,14 +145,14 @@ enum SpeculativeAdaptationInterpreter {
                     input: input,
                     context: context,
                     insideSubdividedChooseBits: false,
-                    validityPredicate: validityPredicate
+                    validityPredicate: validityPredicate,
                 )
                 return try adaptRecursive(
                     gen: lengthGen,
                     input: (),
                     context: context,
                     insideSubdividedChooseBits: insideSubdividedChooseBits,
-                    validityPredicate: validityPredicate
+                    validityPredicate: validityPredicate,
                 )
 
             case .just:
@@ -176,15 +176,15 @@ enum SpeculativeAdaptationInterpreter {
     // MARK: - ChooseBits Adaptation
 
     /// Convert chooseBits to a pick of subranges for adaptation
-    private static func adaptChooseBitsToPickOfSubranges<Input, Output>(
+    private static func adaptChooseBitsToPickOfSubranges<Output>(
         min: UInt64,
         max: UInt64,
         tag: TypeTag,
         continuation: @escaping (Any) throws -> ReflectiveGenerator<Output>,
-        input: Input,
+        input: some Any,
         context: SpeculativeContext,
-        insideSubdividedChooseBits: Bool,
-        validityPredicate: @escaping (Output) -> Bool
+        insideSubdividedChooseBits _: Bool,
+        validityPredicate: @escaping (Output) -> Bool,
     ) throws -> ReflectiveGenerator<Output> {
         // Split the range into N subranges (use 4 to reduce complexity)
         let numberOfSubranges = Swift.min(4, max - min + 1) // Don't create more ranges than values
@@ -200,7 +200,7 @@ enum SpeculativeAdaptationInterpreter {
         var choices: ContiguousArray<ReflectiveOperation.PickTuple> = []
         var currentStart = min
 
-        for i in 0..<numberOfSubranges {
+        for i in 0 ..< numberOfSubranges {
             // Calculate subrange bounds
             let extraValue = i < remainder ? 1 : 0 // Distribute remainder across first few ranges
             let currentEnd = currentStart + rangeSize + UInt64(extraValue) - 1
@@ -208,7 +208,7 @@ enum SpeculativeAdaptationInterpreter {
 
             // Create generator for this subrange
             let subrangeGenerator = ReflectiveGenerator<Any>.impure(
-                operation: .chooseBits(min: currentStart, max: actualEnd, tag: tag)
+                operation: .chooseBits(min: currentStart, max: actualEnd, tag: tag),
             ) { value in
                 .pure(value)
             }
@@ -216,7 +216,7 @@ enum SpeculativeAdaptationInterpreter {
             choices.append((
                 weight: 1, // Start with equal weights
                 label: UInt64(i), // Use index as label
-                generator: subrangeGenerator
+                generator: subrangeGenerator,
             ))
 
             currentStart = actualEnd + 1
@@ -229,7 +229,7 @@ enum SpeculativeAdaptationInterpreter {
             continuation: continuation,
             input: input,
             context: context,
-            validityPredicate: validityPredicate
+            validityPredicate: validityPredicate,
         )
 
         // If subdivision doesn't provide significant benefit, revert to original chooseBits
@@ -245,21 +245,21 @@ enum SpeculativeAdaptationInterpreter {
             input: input,
             context: context,
             insideSubdividedChooseBits: true,
-            validityPredicate: validityPredicate
+            validityPredicate: validityPredicate,
         )
     }
 
     // MARK: - Sequence Length Adaptation
 
     /// Adapt sequence generation by potentially splitting the length generator
-    private static func adaptSequenceLengthGeneration<Input, Output>(
+    private static func adaptSequenceLengthGeneration<Output>(
         lengthGen: ReflectiveGenerator<UInt64>,
         elementGen: ReflectiveGenerator<Any>,
         continuation: @escaping (Any) throws -> ReflectiveGenerator<Output>,
-        input: Input,
+        input: some Any,
         context: SpeculativeContext,
         insideSubdividedChooseBits: Bool,
-        validityPredicate: @escaping (Output) -> Bool
+        validityPredicate: @escaping (Output) -> Bool,
     ) throws -> ReflectiveGenerator<Output> {
         // Check if the length generator contains chooseBits that we can split
         var foundChooseBits: (min: UInt64, max: UInt64, tag: TypeTag)?
@@ -277,7 +277,7 @@ enum SpeculativeAdaptationInterpreter {
                 input: input,
                 context: context,
                 insideSubdividedChooseBits: false,
-                validityPredicate: { _ in true }
+                validityPredicate: { _ in true },
             )
             return try adaptSequenceLengthGeneration(
                 lengthGen: lengthGenContinuation,
@@ -286,7 +286,7 @@ enum SpeculativeAdaptationInterpreter {
                 input: input,
                 context: context,
                 insideSubdividedChooseBits: insideSubdividedChooseBits,
-                validityPredicate: validityPredicate
+                validityPredicate: validityPredicate,
             )
         } else if case let .pure(val) = lengthGen {
             // Fixed length, no adaptation needed for length
@@ -302,7 +302,7 @@ enum SpeculativeAdaptationInterpreter {
                 continuation: continuation,
                 input: input,
                 context: context,
-                validityPredicate: validityPredicate
+                validityPredicate: validityPredicate,
             )
         } else {
             // Can't adapt the length generator, but we can still adapt the element generator
@@ -311,28 +311,28 @@ enum SpeculativeAdaptationInterpreter {
                 input: input,
                 context: context,
                 insideSubdividedChooseBits: insideSubdividedChooseBits,
-                validityPredicate: { _ in true } // Element generator can't be tested with Output predicate
+                validityPredicate: { _ in true }, // Element generator can't be tested with Output predicate
             )
             return .impure(operation: .sequence(length: lengthGen, gen: adaptedElementGen), continuation: continuation)
         }
     }
 
     /// Adapt sequence by splitting length ranges and testing which lengths lead to valid sequences
-    private static func adaptSequenceLengthRanges<Input, Output>(
+    private static func adaptSequenceLengthRanges<Output>(
         lengthMin: UInt64,
         lengthMax: UInt64,
         lengthTag: TypeTag,
         elementGen: ReflectiveGenerator<Any>,
         continuation: @escaping (Any) throws -> ReflectiveGenerator<Output>,
-        input: Input,
+        input: some Any,
         context: SpeculativeContext,
-        validityPredicate: @escaping (Output) -> Bool
+        validityPredicate: @escaping (Output) -> Bool,
     ) throws -> ReflectiveGenerator<Output> {
         // Calculate statistically sound number of subranges for sequence lengths
         let totalRange = lengthMax - lengthMin + 1
 
         // Trust the depth-based effort allocation - use most of the available samples
-        let sampleBudget = UInt64(context.currentSampleCount * 3 / 4)  // Use 75% of available samples
+        let sampleBudget = UInt64(context.currentSampleCount * 3 / 4) // Use 75% of available samples
 
         // Rule 1: Minimum 5 samples per subrange (reduced from 10 since depth system handles this)
         let maxSubrangesFromSamples = max(2, sampleBudget / 5)
@@ -347,7 +347,7 @@ enum SpeculativeAdaptationInterpreter {
             maxSubrangesFromSamples,
             maxSubrangesFromRange,
             maxReasonableSubranges,
-            totalRange  // Never more subranges than values
+            totalRange, // Never more subranges than values
         )
 
         guard numberOfSubranges > 1 else {
@@ -363,7 +363,7 @@ enum SpeculativeAdaptationInterpreter {
         var lengthRangeChoices: ContiguousArray<ReflectiveOperation.PickTuple> = []
         var currentStart = lengthMin
 
-        for i in 0..<numberOfSubranges {
+        for i in 0 ..< numberOfSubranges {
             // Calculate length subrange bounds
             let extraValue = i < remainder ? 1 : 0
             let currentEnd = currentStart + rangeSize + UInt64(extraValue) - 1
@@ -373,8 +373,8 @@ enum SpeculativeAdaptationInterpreter {
             let lengthRangeGenerator = ReflectiveGenerator<Any>.impure(
                 operation: .sequence(
                     length: .impure(operation: .chooseBits(min: currentStart, max: actualEnd, tag: lengthTag)) { .pure($0 as! UInt64) },
-                    gen: elementGen
-                )
+                    gen: elementGen,
+                ),
             ) { value in
                 .pure(value)
             }
@@ -382,7 +382,7 @@ enum SpeculativeAdaptationInterpreter {
             lengthRangeChoices.append((
                 weight: 1, // Start with equal weights
                 label: UInt64(i),
-                generator: lengthRangeGenerator
+                generator: lengthRangeGenerator,
             ))
 
             currentStart = actualEnd + 1
@@ -395,7 +395,7 @@ enum SpeculativeAdaptationInterpreter {
             continuation: continuation,
             input: input,
             context: context,
-            validityPredicate: validityPredicate
+            validityPredicate: validityPredicate,
         )
 
         // If subdivision doesn't provide significant benefit, revert to original sequence
@@ -410,17 +410,17 @@ enum SpeculativeAdaptationInterpreter {
             input: input,
             context: context,
             insideSubdividedChooseBits: true, // Prevent further subdivision
-            validityPredicate: validityPredicate
+            validityPredicate: validityPredicate,
         )
     }
 
     /// Evaluate whether sequence length subdivision provides statistically significant benefit
-    private static func evaluateSequenceLengthSubdivisionValue<Input, Output>(
+    private static func evaluateSequenceLengthSubdivisionValue<Output>(
         choices: ContiguousArray<ReflectiveOperation.PickTuple>,
         continuation: @escaping (Any) throws -> ReflectiveGenerator<Output>,
-        input: Input,
+        input: some Any,
         context: SpeculativeContext,
-        validityPredicate: @escaping (Output) -> Bool
+        validityPredicate: @escaping (Output) -> Bool,
     ) throws -> SubdivisionEvaluation {
         var successRates: [Double] = []
         let sampleSize = max(5, context.currentSampleCount / 6) // Use smaller sample for sequence evaluation
@@ -435,7 +435,7 @@ enum SpeculativeAdaptationInterpreter {
                 generator: completeGenerator,
                 input: input,
                 sampleCount: sampleSize,
-                validityPredicate: validityPredicate
+                validityPredicate: validityPredicate,
             )
 
             let successRate = totalAttempts > 0 ? Double(successCount) / Double(totalAttempts) : 0.0
@@ -445,20 +445,20 @@ enum SpeculativeAdaptationInterpreter {
         // Test for statistical significance (use slightly lower threshold for sequence lengths)
         let isSignificant = isSequenceLengthSubdivisionStatisticallySignificant(
             successRates: successRates,
-            sampleSize: sampleSize
+            sampleSize: sampleSize,
         )
 
         return SubdivisionEvaluation(
             isSignificant: isSignificant,
             successRates: successRates,
-            totalSamples: sampleSize * UInt64(choices.count)
+            totalSamples: sampleSize * UInt64(choices.count),
         )
     }
 
     /// Test if sequence length subdivision provides meaningful signal
     private static func isSequenceLengthSubdivisionStatisticallySignificant(
         successRates: [Double],
-        sampleSize: UInt64
+        sampleSize: UInt64,
     ) -> Bool {
         guard successRates.count >= 2 else { return false }
 
@@ -475,9 +475,7 @@ enum SpeculativeAdaptationInterpreter {
         // Adjust threshold based on sample size - smaller samples need smaller thresholds
         let baseThreshold = sampleSize >= 20 ? 0.15 : (sampleSize >= 10 ? 0.10 : 0.05)
         let significantThreshold = max(baseThreshold, 1.5 * standardDeviation)
-        let isSignificant = range > significantThreshold && sampleSize >= 3
-
-        return isSignificant
+        return range > significantThreshold && sampleSize >= 3
     }
 
     // MARK: - Statistical Significance Testing
@@ -490,12 +488,12 @@ enum SpeculativeAdaptationInterpreter {
     }
 
     /// Evaluate whether subdivision provides statistically significant benefit
-    private static func evaluateSubdivisionValue<Input, Output>(
+    private static func evaluateSubdivisionValue<Output>(
         choices: ContiguousArray<ReflectiveOperation.PickTuple>,
         continuation: @escaping (Any) throws -> ReflectiveGenerator<Output>,
-        input: Input,
+        input: some Any,
         context: SpeculativeContext,
-        validityPredicate: @escaping (Output) -> Bool
+        validityPredicate: @escaping (Output) -> Bool,
     ) throws -> SubdivisionEvaluation {
         var successRates: [Double] = []
         let sampleSize = max(10, context.currentSampleCount / 4) // Use smaller sample for quick evaluation
@@ -510,7 +508,7 @@ enum SpeculativeAdaptationInterpreter {
                 generator: completeGenerator,
                 input: input,
                 sampleCount: sampleSize,
-                validityPredicate: validityPredicate
+                validityPredicate: validityPredicate,
             )
 
             let successRate = totalAttempts > 0 ? Double(successCount) / Double(totalAttempts) : 0.0
@@ -520,20 +518,20 @@ enum SpeculativeAdaptationInterpreter {
         // Test for statistical significance using simple variance analysis
         let isSignificant = isSubdivisionStatisticallySignificant(
             successRates: successRates,
-            sampleSize: sampleSize
+            sampleSize: sampleSize,
         )
 
         return SubdivisionEvaluation(
             isSignificant: isSignificant,
             successRates: successRates,
-            totalSamples: sampleSize * UInt64(choices.count)
+            totalSamples: sampleSize * UInt64(choices.count),
         )
     }
 
     /// Test if the variance in success rates is statistically significant
     private static func isSubdivisionStatisticallySignificant(
         successRates: [Double],
-        sampleSize: UInt64
+        sampleSize: UInt64,
     ) -> Bool {
         guard successRates.count >= 2 else { return false }
 
@@ -549,21 +547,19 @@ enum SpeculativeAdaptationInterpreter {
         let range = maxRate - minRate
 
         let significantThreshold = max(0.2, 2 * standardDeviation) // At least 20% difference or 2 std devs
-        let isSignificant = range > significantThreshold && sampleSize >= 5
-
-        return isSignificant
+        return range > significantThreshold && sampleSize >= 5
     }
 
     // MARK: - Zip Adaptation
 
     /// Adapt zip by creating a pick where each choice focuses on adapting one component
-    private static func adaptZipToPickOfFocusedComponents<Input, Output>(
+    private static func adaptZipToPickOfFocusedComponents<Output>(
         gens: ContiguousArray<ReflectiveGenerator<Any>>,
         continuation: @escaping (Any) throws -> ReflectiveGenerator<Output>,
-        input: Input,
+        input: some Any,
         context: SpeculativeContext,
         insideSubdividedChooseBits: Bool,
-        validityPredicate: @escaping (Output) -> Bool
+        validityPredicate: @escaping (Output) -> Bool,
     ) throws -> ReflectiveGenerator<Output> {
         guard !gens.isEmpty else {
             // Empty zip, just return it as-is
@@ -600,7 +596,7 @@ enum SpeculativeAdaptationInterpreter {
                     } catch {
                         return false
                     }
-                }
+                },
             )
             return .impure(operation: .zip(ContiguousArray([adaptedGen])), continuation: continuation)
         }
@@ -608,7 +604,7 @@ enum SpeculativeAdaptationInterpreter {
         // Create a choice for each component, where that component gets focused adaptation
         var choices: ContiguousArray<ReflectiveOperation.PickTuple> = []
 
-        for focusIndex in 0..<gens.count {
+        for focusIndex in 0 ..< gens.count {
             // Adapt the focused component with a sampling-based predicate
             let adaptedFocusedGen = try adaptRecursive(
                 gen: gens[focusIndex],
@@ -621,7 +617,7 @@ enum SpeculativeAdaptationInterpreter {
                     let sampleCount = 3
                     var rng = Xoshiro256()
 
-                    for _ in 0..<sampleCount {
+                    for _ in 0 ..< sampleCount {
                         // Generate values for all components
                         var allValues: [Any] = []
                         var generationSucceeded = true
@@ -645,7 +641,7 @@ enum SpeculativeAdaptationInterpreter {
                                 let continuationResult = try continuation(allValues as Any)
                                 if let output = try ValueInterpreter<Output>.generate(continuationResult, maxRuns: 1, using: &rng) {
                                     if validityPredicate(output) {
-                                        return true  // Found at least one valid combination
+                                        return true // Found at least one valid combination
                                     }
                                 }
                             } catch {
@@ -654,8 +650,8 @@ enum SpeculativeAdaptationInterpreter {
                         }
                     }
 
-                    return false  // No valid combination found in samples
-                }
+                    return false // No valid combination found in samples
+                },
             )
 
             // Create a zip with the focused component adapted and others unadapted
@@ -663,7 +659,7 @@ enum SpeculativeAdaptationInterpreter {
             gensForThisChoice[focusIndex] = adaptedFocusedGen
 
             let zipGenerator = ReflectiveGenerator<Any>.impure(
-                operation: .zip(gensForThisChoice)
+                operation: .zip(gensForThisChoice),
             ) { value in
                 .pure(value)
             }
@@ -671,7 +667,7 @@ enum SpeculativeAdaptationInterpreter {
             choices.append((
                 weight: 1,
                 label: UInt64(focusIndex),
-                generator: zipGenerator
+                generator: zipGenerator,
             ))
         }
 
@@ -682,20 +678,20 @@ enum SpeculativeAdaptationInterpreter {
             input: input,
             context: context,
             insideSubdividedChooseBits: insideSubdividedChooseBits,
-            validityPredicate: validityPredicate
+            validityPredicate: validityPredicate,
         )
     }
 
     // MARK: - Speculative Pick Adaptation
 
     /// Fork execution at a pick point to evaluate which choice leads to highest success rate
-    private static func speculativelyAdaptPick<Input, Output>(
+    private static func speculativelyAdaptPick<Output>(
         choices: ContiguousArray<ReflectiveOperation.PickTuple>,
         continuation: @escaping (Any) throws -> ReflectiveGenerator<Output>,
-        input: Input,
+        input: some Any,
         context: SpeculativeContext,
         insideSubdividedChooseBits: Bool,
-        validityPredicate: @escaping (Output) -> Bool
+        validityPredicate: @escaping (Output) -> Bool,
     ) throws -> ReflectiveGenerator<Output> {
         guard !choices.isEmpty else {
             throw SpeculativeAdaptationError.emptyChoices
@@ -712,14 +708,13 @@ enum SpeculativeAdaptationInterpreter {
             let completeGenerator: ReflectiveGenerator<Output> = try choice.generator.bind { choiceResult in
                 let continuationResult = try continuation(choiceResult)
                 // Recursively adapt the continuation result and capture any adapted generators
-                let adaptedContinuationResult = try adaptRecursive(
+                return try adaptRecursive(
                     gen: continuationResult,
                     input: input,
                     context: context,
                     insideSubdividedChooseBits: insideSubdividedChooseBits,
-                    validityPredicate: validityPredicate
+                    validityPredicate: validityPredicate,
                 )
-                return adaptedContinuationResult
             }
 
             // The problem is I need to capture the adapted choice generator, not just the continuation result
@@ -741,7 +736,7 @@ enum SpeculativeAdaptationInterpreter {
                     } catch {
                         return false
                     }
-                }
+                },
             )
 
             // Now create complete generator with adapted choice
@@ -754,7 +749,7 @@ enum SpeculativeAdaptationInterpreter {
                 generator: completeGeneratorWithAdaptedChoice,
                 input: input,
                 sampleCount: context.currentSampleCount,
-                validityPredicate: validityPredicate
+                validityPredicate: validityPredicate,
             )
 
             choiceSuccessCounts.append((choiceIndex, successCount))
@@ -773,14 +768,13 @@ enum SpeculativeAdaptationInterpreter {
 
         // Safety check: if all choices have weight 0, fall back to equal weights
         let totalWeight = finalAdaptedChoices.reduce(0) { $0 + $1.weight }
-        let safeChoices: ContiguousArray<ReflectiveOperation.PickTuple>
-        if totalWeight == 0 {
+        let safeChoices: ContiguousArray<ReflectiveOperation.PickTuple> = if totalWeight == 0 {
             // All choices failed - fall back to equal weights to avoid total failure
-            safeChoices = ContiguousArray(adaptedChoices.map { choice in
+            ContiguousArray(adaptedChoices.map { choice in
                 (weight: 1, label: choice.label, generator: choice.generator)
             })
         } else {
-            safeChoices = ContiguousArray(finalAdaptedChoices)
+            ContiguousArray(finalAdaptedChoices)
         }
 
         // Return the pick with adapted weights
@@ -791,16 +785,16 @@ enum SpeculativeAdaptationInterpreter {
 
     /// Evaluate how often a complete generator produces valid outputs
     /// Returns (successCount, totalAttempts) instead of just success rate
-    private static func evaluateSuccessRate<Input, Output>(
+    private static func evaluateSuccessRate<Output>(
         generator: ReflectiveGenerator<Output>,
-        input: Input,
+        input _: some Any,
         sampleCount: UInt64,
-        validityPredicate: @escaping (Output) -> Bool
+        validityPredicate: @escaping (Output) -> Bool,
     ) throws -> (successes: UInt64, attempts: UInt64) {
         var successes: UInt64 = 0
         var attempts: UInt64 = 0
 
-        for _ in 0..<sampleCount {
+        for _ in 0 ..< sampleCount {
             attempts += 1
             do {
                 // Generate a value using the complete generator
@@ -848,11 +842,11 @@ enum SpeculativeAdaptationInterpreter {
         var errorDescription: String? {
             switch self {
             case .emptyChoices:
-                return "Cannot adapt empty choices array"
+                "Cannot adapt empty choices array"
             case .noValidChoice:
-                return "No valid choice found during speculative evaluation"
-            case .evaluationFailed(let reason):
-                return "Speculative evaluation failed: \(reason)"
+                "No valid choice found during speculative evaluation"
+            case let .evaluationFailed(reason):
+                "Speculative evaluation failed: \(reason)"
             }
         }
     }

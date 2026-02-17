@@ -5,16 +5,16 @@
 //  Created by Claude Code on 07/02/2026.
 //
 
-@testable import Exhaust
 import Foundation
 import Testing
+@testable import Exhaust
 
 @Suite("Interpreter RNG Parity")
 struct InterpreterRNGParityTests {
     // MARK: - Basic Types
 
     @Test("Int generation parity")
-    func intGenerationParity() throws {
+    func intGenerationParity() {
         let gen = Int.arbitrary
         let seed: UInt64 = 42
 
@@ -29,7 +29,7 @@ struct InterpreterRNGParityTests {
     }
 
     @Test("UInt64 generation parity")
-    func uInt64GenerationParity() throws {
+    func uInt64GenerationParity() {
         let gen = UInt64.arbitrary
         let seed: UInt64 = 12345
 
@@ -44,7 +44,7 @@ struct InterpreterRNGParityTests {
     }
 
     @Test("Bool generation parity")
-    func boolGenerationParity() throws {
+    func boolGenerationParity() {
         let gen = Bool.arbitrary
         let seed: UInt64 = 999
 
@@ -59,7 +59,7 @@ struct InterpreterRNGParityTests {
     }
 
     @Test("Float generation parity")
-    func floatGenerationParity() throws {
+    func floatGenerationParity() {
         let gen = Float.arbitrary
         let seed: UInt64 = 7777
 
@@ -74,7 +74,7 @@ struct InterpreterRNGParityTests {
     }
 
     @Test("Double generation parity")
-    func doubleGenerationParity() throws {
+    func doubleGenerationParity() {
         let gen = Double.arbitrary
         let seed: UInt64 = 8888
 
@@ -91,7 +91,7 @@ struct InterpreterRNGParityTests {
     // MARK: - Pick Operations
 
     @Test("Simple pick parity with equal weights")
-    func simplePickParity() throws {
+    func simplePickParity() {
         let gen = Gen.pick(choices: [
             (1, Gen.just(100)),
             (1, Gen.just(200)),
@@ -109,7 +109,7 @@ struct InterpreterRNGParityTests {
     }
 
     @Test("Pick parity with weighted choices")
-    func weightedPickParity() throws {
+    func weightedPickParity() {
         let gen = Gen.pick(choices: [
             (3, Gen.just("A")),
             (1, Gen.just("B")),
@@ -128,7 +128,7 @@ struct InterpreterRNGParityTests {
     }
 
     @Test("Pick parity with generated values")
-    func pickWithGeneratedValuesParity() throws {
+    func pickWithGeneratedValuesParity() {
         let gen = Gen.pick(choices: [
             (1, UInt64.arbitrary),
             (1, UInt64.arbitrary),
@@ -146,7 +146,7 @@ struct InterpreterRNGParityTests {
     }
 
     @Test("Nested pick parity")
-    func nestedPickParity() throws {
+    func nestedPickParity() {
         let innerPick = Gen.pick(choices: [
             (1, Gen.just(1)),
             (1, Gen.just(2)),
@@ -170,7 +170,7 @@ struct InterpreterRNGParityTests {
     // MARK: - Collections
 
     @Test("Array generation parity")
-    func arrayGenerationParity() throws {
+    func arrayGenerationParity() {
         let gen = Gen.arrayOf(UInt64.arbitrary, exactly: 5)
         let seed: UInt64 = 1111
 
@@ -185,7 +185,7 @@ struct InterpreterRNGParityTests {
     }
 
     @Test("Variable length array parity")
-    func variableLengthArrayParity() throws {
+    func variableLengthArrayParity() {
         let gen = Int.arbitrary.proliferate(with: 2 ... 5)
         let seed: UInt64 = 2222
 
@@ -202,7 +202,7 @@ struct InterpreterRNGParityTests {
     // MARK: - Zip Operations
 
     @Test("Zip two generators parity")
-    func zipTwoParity() throws {
+    func zipTwoParity() {
         let gen = Gen.zip(UInt64.arbitrary, Int.arbitrary)
         let seed: UInt64 = 3333
 
@@ -217,7 +217,7 @@ struct InterpreterRNGParityTests {
     }
 
     @Test("Zip three generators parity")
-    func zipThreeParity() throws {
+    func zipThreeParity() {
         let gen = Gen.zip(UInt64.arbitrary, Int.arbitrary, Bool.arbitrary)
         let seed: UInt64 = 4444
 
@@ -234,7 +234,7 @@ struct InterpreterRNGParityTests {
     // MARK: - Map and FlatMap
 
     @Test("Mapped generator parity")
-    func mappedGeneratorParity() throws {
+    func mappedGeneratorParity() {
         let gen = UInt64.arbitrary.map { $0 % 100 }
         let seed: UInt64 = 5555
 
@@ -249,7 +249,7 @@ struct InterpreterRNGParityTests {
     }
 
     @Test("FlatMapped generator parity")
-    func flatMappedGeneratorParity() throws {
+    func flatMappedGeneratorParity() {
         let gen = Gen.choose(in: 1 ... 10).bind { size in
             Gen.arrayOf(UInt64.arbitrary, exactly: UInt64(size))
         }
@@ -268,14 +268,14 @@ struct InterpreterRNGParityTests {
     // MARK: - Complex Compositions
 
     @Test("Complex composition parity")
-    func complexCompositionParity() throws {
+    func complexCompositionParity() {
         let gen = Gen.zip(
             Gen.pick(choices: [
                 (2, UInt64.arbitrary),
                 (1, Gen.just(999)),
             ]),
             Gen.arrayOf(Bool.arbitrary, exactly: 3),
-            Gen.choose(in: 0 ... 100)
+            Gen.choose(in: 0 ... 100),
         )
         let seed: UInt64 = 9999
 
@@ -292,7 +292,7 @@ struct InterpreterRNGParityTests {
     }
 
     @Test("Deeply nested composition parity")
-    func deeplyNestedCompositionParity() throws {
+    func deeplyNestedCompositionParity() {
         let innerGen = Gen.zip(UInt64.arbitrary, Bool.arbitrary)
         let middleGen = Gen.pick(choices: [
             (1, innerGen.map { ($0.0, $0.1, 1) }),
@@ -319,7 +319,7 @@ struct InterpreterRNGParityTests {
     // MARK: - Edge Cases
 
     @Test("Single element pick parity")
-    func singleElementPickParity() throws {
+    func singleElementPickParity() {
         let gen = Gen.pick(choices: [
             (1, Gen.just(42)),
         ])
@@ -336,7 +336,7 @@ struct InterpreterRNGParityTests {
     }
 
     @Test("Empty array generation parity")
-    func emptyArrayParity() throws {
+    func emptyArrayParity() {
         let gen = Gen.arrayOf(UInt64.arbitrary, exactly: 0)
         let seed: UInt64 = 54321
 
@@ -351,7 +351,7 @@ struct InterpreterRNGParityTests {
     }
 
     @Test("Many iterations parity stress test")
-    func manyIterationsParity() throws {
+    func manyIterationsParity() {
         let gen = Gen.zip(UInt64.arbitrary, Bool.arbitrary, Int.arbitrary)
         let seed: UInt64 = 99999
 
@@ -367,7 +367,7 @@ struct InterpreterRNGParityTests {
     }
 
     @Test("Multiple seeds produce different but consistent results")
-    func multipleSeedsParity() throws {
+    func multipleSeedsParity() {
         let gen = String.arbitrary
         let seeds: [UInt64] = [1, 42, 100, 999, 12345]
 

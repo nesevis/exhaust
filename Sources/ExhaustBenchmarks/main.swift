@@ -87,7 +87,7 @@ benchmark("Zipped person with ChoiceTree") {
     let generator = Gen.zip(
         String.arbitraryAscii,
         UInt8.arbitrary,
-        Double.arbitrary
+        Double.arbitrary,
     )
     .mapped(forward: { Person(name: $0.0, age: $0.1, height: $0.2) }, backward: { ($0.name, $0.age, $0.height) })
     var iterator = ValueAndChoiceTreeInterpreter(generator, materializePicks: true, seed: 1, maxRuns: 100)

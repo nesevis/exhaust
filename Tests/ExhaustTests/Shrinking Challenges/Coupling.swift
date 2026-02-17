@@ -5,9 +5,9 @@
 //  Created by Chris Kolbu on 11/2/2026.
 //
 
-@testable import Exhaust
 import Foundation
 import Testing
+@testable import Exhaust
 
 @MainActor
 @Suite("Shrinking Challenge: Coupling")

@@ -1,5 +1,5 @@
 //
-//  Reflector.swift
+//  Reflect.swift
 //  Exhaust
 //
 //  Created by Chris Kolbu on 16/7/2025.
@@ -13,16 +13,16 @@ public enum Interpreters {
     public static func reflect<Output>(
         _ gen: ReflectiveGenerator<Output>,
         with outputValue: Output,
-        /// Optional validation check
-        where check: (Output) -> Bool = { _ in true }
+        // Optional validation check
+        where check: (Output) -> Bool = { _ in true },
     ) throws -> ChoiceTree? {
         // The public API doesn't need to change. We start the process here.
         // We only care about the final output of the generator for the check.
         let allPossibleOutcomes = try reflectRecursive(gen, onFinalOutput: outputValue)
-        
+
         let matchingPaths = allPossibleOutcomes.compactMap { outputValue, path -> [ChoiceTree]? in
             return check(outputValue) ? path : nil
-        }.flatMap { $0 }
+        }.flatMap(\.self)
 
         switch matchingPaths.count {
         case 0:
@@ -40,7 +40,7 @@ public enum Interpreters {
     /// It now takes the *final output value* as a constant target throughout the recursion.
     private static func reflectRecursive<Output>(
         _ gen: ReflectiveGenerator<Output>,
-        onFinalOutput finalOutput: Any
+        onFinalOutput finalOutput: Any,
     ) throws -> [(value: Output, path: [ChoiceTree])] { // Still returns typed Output and path
         switch gen {
         case let .pure(value):
@@ -50,9 +50,9 @@ public enum Interpreters {
         case let .impure(operation, continuation):
             // 1. Interpret the operation against the final output value.
             let intermediateResults = try interpretOperationBackward(operation, onFinalOutput: finalOutput, outputType: Output.self)
-            
+
             // 2. For each successful intermediate result...
-            let results = try intermediateResults.flatMap { (intermediateValue: Any, partialPath: [ChoiceTree]) in
+            return try intermediateResults.flatMap { (intermediateValue: Any, partialPath: [ChoiceTree]) in
                 let nextGen = try continuation(intermediateValue)
                 // The `finalOutput` is passed down UNCHANGED. This is the crucial part.
                 let finalResults = try reflectRecursive(nextGen, onFinalOutput: finalOutput)
@@ -60,18 +60,17 @@ public enum Interpreters {
                     (finalValue, partialPath + restOfPath)
                 }
             }
-            return results
         }
     }
-    
+
     // MARK: - Backward Interpreter for Individual Operations
 
     /// This helper interprets a single operation. It receives the overall final output
     /// and determines what to do based on its own semantics.
-    private static func interpretOperationBackward<Output>(
+    private static func interpretOperationBackward(
         _ op: ReflectiveOperation,
         onFinalOutput finalOutput: Any,
-        outputType: Output.Type
+        outputType _: (some Any).Type,
     ) throws -> [(value: Any, path: [ChoiceTree])] {
         switch op {
         // If the `onFinalOutput` is nil here, it must be an optional. How do we handle that?
@@ -81,7 +80,7 @@ public enum Interpreters {
             }
             return try reflectRecursive(nextGen, onFinalOutput: subValue)
                 .map { ($0.value, $0.path) }
-            
+
         case let .prune(nextGen):
             do {
                 return try reflectRecursive(nextGen, onFinalOutput: finalOutput).map { ($0.value, $0.path) }
@@ -95,23 +94,21 @@ public enum Interpreters {
                 do {
                     let subPaths = try reflectRecursive(generator, onFinalOutput: finalOutput)
                     let value = subPaths.firstNonNil(\.value)
-                    
+
                     var isPicked = false
-                    if
-                        let equatableOutput = finalOutput as? any Equatable,
-                        let equatableValue = value as? any Equatable
+                    if let equatableOutput = finalOutput as? any Equatable,
+                       let equatableValue = value as? any Equatable
                     {
                         // Try to compare using Equatable
                         isPicked = equatableOutput.isEqual(equatableValue)
                     } else if let convertible = value as? any BitPatternConvertible {
                         isPicked = generator.associatedRange?.contains(convertible.bitPattern64) ?? false
                     }
-                    
-                    let labeledPaths = subPaths.map { value, pathTree in
+
+                    return subPaths.map { value, pathTree in
                         (value, weight, label, isPicked, pathTree.first)
                     }
-                    return labeledPaths
-                    
+
                 } catch ReflectionError.reflectedNil {
                     // Return the choice anyway; we want all branches materialised during reflection
                     return [(value: finalOutput, weight: weight, label: label, isPicked: false, path: nil)]
@@ -140,7 +137,7 @@ public enum Interpreters {
                 // Reflection is used primarily for shrinking, so we don't want to artifically constrain ourselves
                 // When materializing, the generator constraints come into play
                 let validRange = type(of: convertibleValue).bitPatternRanges
-                    .first(where: { $0.contains(convertibleValue.bitPattern64)})
+                    .first(where: { $0.contains(convertibleValue.bitPattern64) })
                 reflectedMin = validRange?.lowerBound ?? reflectedMin
                 reflectedMax = validRange?.upperBound ?? reflectedMax
             }
@@ -150,16 +147,16 @@ public enum Interpreters {
             // Success! The result for the continuation is the value itself.
             let metadata = ChoiceMetadata(
                 // We can't know the proper range here, and the min...max is _usually_ dependent on the getSize parameter
-                validRanges: [reflectedMin...reflectedMax]
+                validRanges: [reflectedMin ... reflectedMax],
             )
             return [(value: finalOutput, path: [.choice(.init(convertibleValue, tag: tag), metadata)])]
-        
+
         case let .just(value):
             // Avoid expensive string interpolation and prefix operations
             return [(value: value, path: [.just("\(value)")])]
-            
+
         case .getSize:
-            // FIXME We can't derive the getSize parameter when reflecting as the bind continuation that applies it is opaque to us. Ultimately it shouldn't matter for replay
+            // FIXME: We can't derive the getSize parameter when reflecting as the bind continuation that applies it is opaque to us. Ultimately it shouldn't matter for replay
             // But it does for reflection.
             //
             var derivedSize: UInt64 = 0
@@ -168,35 +165,34 @@ public enum Interpreters {
             }
             // For replay
             return [(value: derivedSize, path: [.getSize(0)])]
-            
+
         case let .resize(newSize, nextGen):
             // For resize, reflect on the nested generator with the new size context
             let nestedResults = try reflectRecursive(nextGen, onFinalOutput: finalOutput)
-            
+
             return nestedResults.map { result in
                 (value: result.value, path: [.resize(newSize: newSize, choices: result.path)])
             }
-            
+
         case let .sequence(lengthGen, elementGen):
             // 1. The target value for a sequence MUST be an array.
-            guard
-                let targetArray = finalOutput as? any Sequence
+            guard let targetArray = finalOutput as? any Sequence
             else {
                 throw ReflectionError.inputWasWrongForSequence("\(finalOutput)")
             }
-            
+
             var combinedPath: [ChoiceTree] = []
             var combinedResults: [Any] = []
-            
+
             // FIXME: Make less allocaty
             var validRanges = [ClosedRange<UInt64>]()
             if let lengthRange = lengthGen.associatedRange {
                 validRanges = [lengthRange]
             } else {
                 let lengthReflection = try reflectRecursive(lengthGen, onFinalOutput: finalOutput)
-                validRanges = [lengthReflection.firstNonNil({ $0.path.firstNonNil { $0.metadata.validRanges.first }}) ?? UInt64.bitPatternRanges[0]]
+                validRanges = [lengthReflection.firstNonNil { $0.path.firstNonNil { $0.metadata.validRanges.first }} ?? UInt64.bitPatternRanges[0]]
             }
-            
+
             // 3. Iterate over the elements of the target array.
             for elementTarget in targetArray {
                 // Reflect on the element generator with the corresponding element as the target.
@@ -218,13 +214,13 @@ public enum Interpreters {
                 // When replaying, the length should match the array count. Any number of transformations could lead to a change here??
                 length: UInt64(targetArray.underestimatedCount),
                 elements: combinedPath,
-                ChoiceMetadata(validRanges: validRanges)
+                ChoiceMetadata(validRanges: validRanges),
             )
             return [(value: combinedResults, path: [finalTree])]
+
         case let .zip(generators):
-            guard
-                let outputs = finalOutput as? [Any],
-                outputs.count == generators.count
+            guard let outputs = finalOutput as? [Any],
+                  outputs.count == generators.count
             else {
                 throw ReflectionError.zipWasWrongLengthOrType
             }
@@ -237,14 +233,15 @@ public enum Interpreters {
                 results.append(contentsOf: result.map(\.value))
             }
             return [(value: results, path: [.group(paths)])]
-        
+
         case let .filter(gen, _, _):
             return try reflectRecursive(gen, onFinalOutput: finalOutput).map { ($0.value, $0.path) }
+
         case let .classify(gen, _, _):
             return try reflectRecursive(gen, onFinalOutput: finalOutput).map { ($0.value, $0.path) }
         }
     }
-    
+
     public enum ReflectionError: LocalizedError {
         case reflectedNil(type: String, resultType: String)
         case contramapWasWrongType

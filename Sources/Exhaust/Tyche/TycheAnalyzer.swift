@@ -14,7 +14,7 @@ struct TycheAnalyzer {
             distributionMetrics: distributionMetrics,
             coverageMetrics: coverageMetrics,
             biasDetection: biasDetection,
-            performanceMetrics: performanceMetrics
+            performanceMetrics: performanceMetrics,
         )
     }
 
@@ -30,7 +30,7 @@ struct TycheAnalyzer {
             convergenceMetrics: convergenceMetrics,
             pathAnalysis: pathAnalysis,
             effectivenessMetrics: effectivenessMetrics,
-            candidateStatistics: candidateStatistics
+            candidateStatistics: candidateStatistics,
         )
     }
 
@@ -46,7 +46,7 @@ struct TycheAnalyzer {
             successFailureRates: successFailureRates,
             counterexamplePatterns: counterexamplePatterns,
             generatorCompositionMetrics: generatorCompositionMetrics,
-            statisticalQuality: statisticalQuality
+            statisticalQuality: statisticalQuality,
         )
     }
 
@@ -66,7 +66,7 @@ struct TycheAnalyzer {
             entropy: entropy,
             uniformityScore: uniformityScore,
             autocorrelationCoefficient: autocorrelationCoefficient,
-            coveragePercentage: coveragePercentage
+            coveragePercentage: coveragePercentage,
         )
     }
 
@@ -93,7 +93,7 @@ struct TycheAnalyzer {
 
     private func calculateUniformity(_ events: [GenerationEvent]) -> Double {
         // Kolmogorov-Smirnov test approximation for uniformity
-        let entropyEvents = events.compactMap { $0.metadata.entropy }
+        let entropyEvents = events.compactMap(\.metadata.entropy)
         guard !entropyEvents.isEmpty else { return 0.0 }
 
         // Simple uniformity score based on distribution of entropy values
@@ -111,7 +111,7 @@ struct TycheAnalyzer {
 
     private func calculateAutocorrelation(_ events: [GenerationEvent]) -> Double {
         // Simplified autocorrelation for sequence analysis
-        let entropySequence = events.compactMap { $0.metadata.entropy }
+        let entropySequence = events.compactMap(\.metadata.entropy)
         guard entropySequence.count > 1 else { return 0.0 }
 
         var correlation = 0.0
@@ -146,22 +146,22 @@ struct TycheAnalyzer {
             inputSpaceCoverage: inputSpaceCoverage,
             boundaryCoverage: boundaryCoverage,
             equivalenceClassCoverage: equivalenceClassCoverage,
-            temporalDistribution: temporalDistribution
+            temporalDistribution: temporalDistribution,
         )
     }
 
     private func calculateBoundaryCoverage(_ events: [GenerationEvent]) -> Double {
         // Approximate boundary coverage for numerical types
-        let entropyEvents = events.compactMap { $0.metadata.entropy }
+        let entropyEvents = events.compactMap(\.metadata.entropy)
         guard !entropyEvents.isEmpty else { return 0.0 }
 
         let minValue = entropyEvents.min()!
         let maxValue = entropyEvents.max()!
         let boundaries = [UInt64.min, UInt64.max, minValue, maxValue]
 
-        let boundaryHits = entropyEvents.filter { value in
+        let boundaryHits = entropyEvents.count(where: { value in
             boundaries.contains { value &- $0 < 1000 }
-        }.count
+        })
 
         return Double(boundaryHits) / Double(entropyEvents.count)
     }
@@ -210,7 +210,7 @@ struct TycheAnalyzer {
         return BiasAnalysis(
             branchSelectionBias: branchSelectionBias,
             valueClusteringScore: valueClusteringScore,
-            sizeParameterSensitivity: sizeParameterSensitivity
+            sizeParameterSensitivity: sizeParameterSensitivity,
         )
     }
 
@@ -239,7 +239,7 @@ struct TycheAnalyzer {
     }
 
     private func calculateValueClustering(_ events: [GenerationEvent]) -> Double {
-        let entropyEvents = events.compactMap { $0.metadata.entropy }
+        let entropyEvents = events.compactMap(\.metadata.entropy)
         guard entropyEvents.count > 1 else { return 0.0 }
 
         let sortedEntropy = entropyEvents.sorted()
@@ -272,14 +272,14 @@ struct TycheAnalyzer {
     // MARK: - Performance Analysis
 
     private func analyzePerformance(_ events: [GenerationEvent], totalDuration: TimeInterval) -> PerformanceAnalysis {
-        let averageGenerationLatency = events.isEmpty ? 0.0 : events.map { $0.metadata.duration }.reduce(0, +) / Double(events.count)
+        let averageGenerationLatency = events.isEmpty ? 0.0 : events.map(\.metadata.duration).reduce(0, +) / Double(events.count)
         let memoryUsagePattern = calculateMemoryUsage(events)
         let entropyConsumptionRate = calculateEntropyConsumption(events, totalDuration: totalDuration)
 
         return PerformanceAnalysis(
             averageGenerationLatency: averageGenerationLatency.isFinite ? averageGenerationLatency : 0.0,
             memoryUsagePattern: memoryUsagePattern,
-            entropyConsumptionRate: entropyConsumptionRate.isFinite ? entropyConsumptionRate : 0.0
+            entropyConsumptionRate: entropyConsumptionRate.isFinite ? entropyConsumptionRate : 0.0,
         )
     }
 
@@ -297,7 +297,7 @@ struct TycheAnalyzer {
     }
 
     private func calculateEntropyConsumption(_ events: [GenerationEvent], totalDuration: TimeInterval) -> Double {
-        let totalEntropy = events.compactMap { $0.metadata.entropy }.reduce(UInt64(0)) { total, value in
+        let totalEntropy = events.compactMap(\.metadata.entropy).reduce(UInt64(0)) { total, value in
             let added = total &+ value
             return max(added, total)
         }
@@ -308,22 +308,22 @@ struct TycheAnalyzer {
     // MARK: - Shrinking Analysis Implementations
 
     private func analyzeConvergence(_ events: [ShrinkingEvent], totalDuration _: TimeInterval) -> ConvergenceAnalysis {
-        let successfulEvents = events.filter { $0.metadata.wasSuccessful }
+        let successfulEvents = events.filter(\.metadata.wasSuccessful)
         let averageStepsToConvergence = Double(successfulEvents.count)
         let convergenceSuccessRate = events.isEmpty ? 0.0 : Double(successfulEvents.count) / Double(events.count)
 
         let greedyEvents = events.filter { $0.metadata.stepType == .greedyCandidate }
         let exhaustiveEvents = events.filter { $0.metadata.stepType == .exhaustiveCandidate }
 
-        let greedySuccessRate = greedyEvents.isEmpty ? 0.0 : Double(greedyEvents.filter { $0.metadata.wasSuccessful }.count) / Double(greedyEvents.count)
-        let exhaustiveSuccessRate = exhaustiveEvents.isEmpty ? 0.0 : Double(exhaustiveEvents.filter { $0.metadata.wasSuccessful }.count) / Double(exhaustiveEvents.count)
+        let greedySuccessRate = greedyEvents.isEmpty ? 0.0 : Double(greedyEvents.count(where: { $0.metadata.wasSuccessful })) / Double(greedyEvents.count)
+        let exhaustiveSuccessRate = exhaustiveEvents.isEmpty ? 0.0 : Double(exhaustiveEvents.count(where: { $0.metadata.wasSuccessful })) / Double(exhaustiveEvents.count)
 
         let greedyVsExhaustiveEffectiveness = exhaustiveSuccessRate > 0.01 ? greedySuccessRate / exhaustiveSuccessRate : 1.0
 
         return ConvergenceAnalysis(
             averageStepsToConvergence: averageStepsToConvergence.isFinite ? averageStepsToConvergence : 0.0,
             convergenceSuccessRate: convergenceSuccessRate.isFinite ? convergenceSuccessRate : 0.0,
-            greedyVsExhaustiveEffectiveness: greedyVsExhaustiveEffectiveness.isFinite ? greedyVsExhaustiveEffectiveness : 1.0
+            greedyVsExhaustiveEffectiveness: greedyVsExhaustiveEffectiveness.isFinite ? greedyVsExhaustiveEffectiveness : 1.0,
         )
     }
 
@@ -337,7 +337,7 @@ struct TycheAnalyzer {
         return ShrinkPathAnalysis(
             averagePathLength: averagePathLength,
             pathComplexityReduction: pathComplexityReduction,
-            branchingFactor: branchingFactor
+            branchingFactor: branchingFactor,
         )
     }
 
@@ -349,7 +349,7 @@ struct TycheAnalyzer {
     }
 
     private func analyzeEffectiveness(_ events: [ShrinkingEvent]) -> ShrinkEffectivenessAnalysis {
-        let successfulEvents = events.filter { $0.metadata.wasSuccessful }
+        let successfulEvents = events.filter(\.metadata.wasSuccessful)
         let complexityReductions = successfulEvents.map {
             Double($0.metadata.originalComplexity) - Double($0.metadata.targetComplexity)
         }
@@ -361,12 +361,12 @@ struct TycheAnalyzer {
         return ShrinkEffectivenessAnalysis(
             reductionRatio: reductionRatio,
             minimalCounterexampleQuality: minimalCounterexampleQuality,
-            replayConsistency: replayConsistency
+            replayConsistency: replayConsistency,
         )
     }
 
     private func calculateMinimalCounterexampleQuality(_ events: [ShrinkingEvent]) -> Double {
-        let finalComplexities = events.map { $0.metadata.targetComplexity }
+        let finalComplexities = events.map(\.metadata.targetComplexity)
         let minComplexity = finalComplexities.min() ?? 0
         let maxComplexity = finalComplexities.max() ?? 1
 
@@ -375,49 +375,49 @@ struct TycheAnalyzer {
 
     private func calculateReplayConsistency(_ events: [ShrinkingEvent]) -> Double {
         // Simplified consistency measure
-        let successfulReplays = events.filter { $0.metadata.wasSuccessful }.count
+        let successfulReplays = events.count(where: { $0.metadata.wasSuccessful })
         return Double(successfulReplays) / max(1.0, Double(events.count))
     }
 
     private func analyzeCandidates(_ events: [ShrinkingEvent]) -> CandidateStatistics {
         let totalCandidatesGenerated = events.count
-        let candidatesActuallyTested = events.filter { $0.metadata.wasSuccessful }.count
+        let candidatesActuallyTested = events.count(where: { $0.metadata.wasSuccessful })
         let testingEfficiency = Double(candidatesActuallyTested) / max(1.0, Double(totalCandidatesGenerated))
 
         return CandidateStatistics(
             totalCandidatesGenerated: totalCandidatesGenerated,
             candidatesActuallyTested: candidatesActuallyTested,
-            testingEfficiency: testingEfficiency
+            testingEfficiency: testingEfficiency,
         )
     }
 
     // MARK: - Test Run Analysis Implementations
 
     private func analyzeOutcomes(_ outcomes: [TestOutcome], totalDuration _: TimeInterval) -> TestOutcomeAnalysis {
-        let successfulTests = outcomes.filter { $0.wasSuccessful }
+        let successfulTests = outcomes.filter(\.wasSuccessful)
         let failedTests = outcomes.filter { !$0.wasSuccessful }
 
         let successRate = outcomes.isEmpty ? 0.0 : Double(successfulTests.count) / Double(outcomes.count)
         let failureRate = outcomes.isEmpty ? 0.0 : Double(failedTests.count) / Double(outcomes.count)
-        let averageTestDuration = outcomes.isEmpty ? 0.0 : outcomes.map { $0.totalDuration }.reduce(0, +) / Double(outcomes.count)
+        let averageTestDuration = outcomes.isEmpty ? 0.0 : outcomes.map(\.totalDuration).reduce(0, +) / Double(outcomes.count)
 
         return TestOutcomeAnalysis(
             successRate: successRate.isFinite ? successRate : 0.0,
             failureRate: failureRate.isFinite ? failureRate : 0.0,
-            averageTestDuration: averageTestDuration.isFinite ? averageTestDuration : 0.0
+            averageTestDuration: averageTestDuration.isFinite ? averageTestDuration : 0.0,
         )
     }
 
     private func analyzeCounterexamples(_ outcomes: [TestOutcome]) -> CounterexampleAnalysis {
-        let counterexamples = outcomes.compactMap { $0.counterexampleValue }
+        let counterexamples = outcomes.compactMap(\.counterexampleValue)
         let clusteringCoefficient = calculateCounterexampleClustering(counterexamples)
         let commonPatterns = extractCommonPatterns(counterexamples)
-        let averageShrinkingSteps = outcomes.isEmpty ? 0.0 : Double(outcomes.map { $0.shrinkingSteps }.reduce(0, +)) / Double(outcomes.count)
+        let averageShrinkingSteps = outcomes.isEmpty ? 0.0 : Double(outcomes.map(\.shrinkingSteps).reduce(0, +)) / Double(outcomes.count)
 
         return CounterexampleAnalysis(
             clusteringCoefficient: clusteringCoefficient.isFinite ? clusteringCoefficient : 0.0,
             commonPatterns: commonPatterns,
-            averageShrinkingSteps: averageShrinkingSteps.isFinite ? averageShrinkingSteps : 0.0
+            averageShrinkingSteps: averageShrinkingSteps.isFinite ? averageShrinkingSteps : 0.0,
         )
     }
 
@@ -445,7 +445,7 @@ struct TycheAnalyzer {
         return CompositionAnalysis(
             combinatorEffectiveness: combinatorEffectiveness,
             nestingDepthImpact: nestingDepthImpact,
-            compositionComplexity: compositionComplexity
+            compositionComplexity: compositionComplexity,
         )
     }
 
@@ -457,7 +457,7 @@ struct TycheAnalyzer {
         return QualityAnalysis(
             randomnessTestResults: randomnessTestResults,
             distributionFitness: distributionFitness,
-            overallQualityScore: overallQualityScore
+            overallQualityScore: overallQualityScore,
         )
     }
 }

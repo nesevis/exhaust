@@ -5,9 +5,9 @@
 //  Created by Chris Kolbu on 17/2/2026.
 //
 
-@testable import Exhaust
 import Foundation
 import Testing
+@testable import Exhaust
 
 @Suite("Experimental Challenge: String Anagram")
 struct StringAnagramChallenge {
@@ -55,7 +55,7 @@ struct StringAnagramChallenge {
         let sequence = ChoiceSequence.flatten(tree)
         print()
         let (_, output) = try #require(try Interpreters.reduce(
-            gen: gen, tree: tree, config: .slow, property: property
+            gen: gen, tree: tree, config: .slow, property: property,
         ))
 
         print("Shrunk to: \(output)")

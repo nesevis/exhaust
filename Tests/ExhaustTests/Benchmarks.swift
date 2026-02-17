@@ -5,13 +5,13 @@
 //  Created by Chris Kolbu on 14/8/2025.
 //
 
-@testable import Exhaust
 import OSLog
 import Testing
+@testable import Exhaust
 
 let signposter = OSSignposter(
     subsystem: "com.example.apple-samplecode.MyBinarySearch",
-    category: .pointsOfInterest
+    category: .pointsOfInterest,
 )
 @Test("Profile mem alloc")
 func profileMemAllocations() {

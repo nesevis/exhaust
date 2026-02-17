@@ -13,7 +13,7 @@ public enum Tyche {
     /// - Returns: The result of the operation
     public static func withConsoleReporting<T>(
         verbosity: ConsoleReporter.ConsoleVerbosity = .detailed,
-        operation: () throws -> T
+        operation: () throws -> T,
     ) rethrows -> T {
         let reporter = ConsoleReporter(verbosity: verbosity)
         return try TycheReportContext.withReporting(reporters: [reporter], operation: operation)
@@ -28,7 +28,7 @@ public enum Tyche {
     public static func withJSONReporting<T>(
         outputPath: String,
         prettyPrint: Bool = true,
-        operation: () throws -> T
+        operation: () throws -> T,
     ) rethrows -> T {
         let url = URL(fileURLWithPath: outputPath)
         let reporter = JSONReporter(outputURL: url, prettyPrint: prettyPrint)
@@ -42,7 +42,7 @@ public enum Tyche {
     /// - Returns: The result of the operation
     public static func withCSVReporting<T>(
         outputPath: String,
-        operation: () throws -> T
+        operation: () throws -> T,
     ) rethrows -> T {
         let url = URL(fileURLWithPath: outputPath)
         let reporter = CSVReporter(outputURL: url)
@@ -58,7 +58,7 @@ public enum Tyche {
     public static func withHTMLReporting<T>(
         outputPath: String,
         includeCharts: Bool = true,
-        operation: () throws -> T
+        operation: () throws -> T,
     ) rethrows -> T {
         let url = URL(fileURLWithPath: outputPath)
         let reporter = HTMLReporter(outputURL: url, includeCharts: includeCharts)
@@ -72,9 +72,9 @@ public enum Tyche {
     /// - Returns: The result of the operation
     public static func withReporting<T>(
         reporters: [TycheReporter],
-        operation: () throws -> T
+        operation: () throws -> T,
     ) rethrows -> T {
-        return try TycheReportContext.withReporting(reporters: reporters, operation: operation)
+        try TycheReportContext.withReporting(reporters: reporters, operation: operation)
     }
 
     /// Run a test with customizable reporting options
@@ -92,7 +92,7 @@ public enum Tyche {
         jsonPath: String? = nil,
         csvPath: String? = nil,
         htmlPath: String? = nil,
-        operation: () throws -> T
+        operation: () throws -> T,
     ) rethrows -> T {
         var reporters: [TycheReporter] = []
 
@@ -100,17 +100,17 @@ public enum Tyche {
             reporters.append(ConsoleReporter(verbosity: consoleVerbosity))
         }
 
-        if let jsonPath = jsonPath {
+        if let jsonPath {
             let url = URL(fileURLWithPath: jsonPath)
             reporters.append(JSONReporter(outputURL: url))
         }
 
-        if let csvPath = csvPath {
+        if let csvPath {
             let url = URL(fileURLWithPath: csvPath)
             reporters.append(CSVReporter(outputURL: url))
         }
 
-        if let htmlPath = htmlPath {
+        if let htmlPath {
             let url = URL(fileURLWithPath: htmlPath)
             reporters.append(HTMLReporter(outputURL: url))
         }
@@ -127,7 +127,7 @@ public enum Tyche {
     /// - Returns: The result of the operation
     public static func withConsoleReporting<T>(
         verbosity: ConsoleReporter.ConsoleVerbosity = .detailed,
-        operation: () async throws -> T
+        operation: () async throws -> T,
     ) async rethrows -> T {
         let reporter = ConsoleReporter(verbosity: verbosity)
         return try await TycheReportContext.withReporting(reporters: [reporter], operation: operation)
@@ -142,7 +142,7 @@ public enum Tyche {
     public static func withJSONReporting<T>(
         outputPath: String,
         prettyPrint: Bool = true,
-        operation: () async throws -> T
+        operation: () async throws -> T,
     ) async rethrows -> T {
         let url = URL(fileURLWithPath: outputPath)
         let reporter = JSONReporter(outputURL: url, prettyPrint: prettyPrint)
@@ -156,9 +156,9 @@ public enum Tyche {
     /// - Returns: The result of the operation
     public static func withReporting<T>(
         reporters: [TycheReporter],
-        operation: () async throws -> T
+        operation: () async throws -> T,
     ) async rethrows -> T {
-        return try await TycheReportContext.withReporting(reporters: reporters, operation: operation)
+        try await TycheReportContext.withReporting(reporters: reporters, operation: operation)
     }
 
     // MARK: - Property-Based Testing Integration
@@ -171,20 +171,20 @@ public enum Tyche {
     /// Check if Tyche reporting is currently enabled
     /// - Returns: True if reporting is active, false otherwise
     public static var isReportingEnabled: Bool {
-        return TycheReportContext.isReportingEnabled
+        TycheReportContext.isReportingEnabled
     }
 
     /// Manually generate a report from the current context
     /// - Returns: Current report or nil if no context is active
     public static func generateCurrentReport() -> TycheReport? {
-        return TycheReportContext.current?.generateReport()
+        TycheReportContext.current?.generateReport()
     }
 
     /// Record a custom generation event (for advanced users)
     /// - Parameters:
     ///   - value: The generated value
     ///   - metadata: Metadata about the generation
-    public static func recordGeneration<T>(_ value: T, metadata: GenerationMetadata) {
+    public static func recordGeneration(_ value: some Any, metadata: GenerationMetadata) {
         TycheReportContext.safeRecordGeneration(value, metadata: metadata)
     }
 
@@ -228,7 +228,7 @@ public struct PropertyTestResult<T> {
 
     /// Whether all tests passed
     public var allTestsPassed: Bool {
-        return failureCount == 0
+        failureCount == 0
     }
 
     /// Human-readable summary of the test results
@@ -250,9 +250,9 @@ public extension Tyche {
     ///   - operation: The operation to run with reporting
     /// - Returns: The result of the operation
     static func demonstrateReporting<T>(
-        operation: () -> T
+        operation: () -> T,
     ) -> T {
-        return TycheReportContext.withReporting(reporters: [ConsoleReporter(verbosity: .summary)]) {
+        TycheReportContext.withReporting(reporters: [ConsoleReporter(verbosity: .summary)]) {
             operation()
         }
     }

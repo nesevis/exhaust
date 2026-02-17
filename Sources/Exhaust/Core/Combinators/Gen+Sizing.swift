@@ -23,7 +23,7 @@ public extension Gen {
             }
             throw GeneratorError.typeMismatch(
                 expected: "\(UInt64.self)",
-                actual: String(describing: type(of: result))
+                actual: String(describing: type(of: result)),
             )
         }
     }
@@ -49,7 +49,7 @@ public extension Gen {
     @inlinable
     static func resize<Output>(
         _ newSize: UInt64,
-        _ generator: ReflectiveGenerator<Output>
+        _ generator: ReflectiveGenerator<Output>,
     ) -> ReflectiveGenerator<Output> {
         // TODO: We're not handling resize correctly anymore
         liftF(.resize(newSize: newSize, next: generator.erase()))

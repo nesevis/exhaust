@@ -7,8 +7,8 @@
 //
 
 import CasePaths
-@testable import Exhaust
 import Testing
+@testable import Exhaust
 
 // MARK: - Advanced Data Structures
 
@@ -111,7 +111,7 @@ struct AdvancedFeatureTests {
                 // Test the outer generator with each inner generator
                 let outerGen = Gen.lens(
                     extract: \Outer.inners,
-                    gen
+                    gen,
                 )
                 .bind { inners in
                     Gen.lens(extract: \Outer.id, Gen.choose(type: UInt.self)).map { id in
@@ -122,16 +122,16 @@ struct AdvancedFeatureTests {
                 var iterator = ValueInterpreter(outerGen)
                 let generated = iterator.next()
 
-                guard let generated = generated else {
+                guard let generated else {
                     continue
                 }
 
                 let recipe = try Interpreters.reflect(outerGen, with: generated)
 
-                if let recipe = recipe {
+                if let recipe {
                     let replayed = try Interpreters.replay(outerGen, using: recipe)
 
-                    if let replayed = replayed {
+                    if let replayed {
                         #expect(generated == replayed)
                     }
                 }

@@ -13,8 +13,8 @@
 //  - ClassifierGuidedPassRunnerTests.swift - Pass runner framework
 //  - RuleConditionTests.swift - Rule condition matching logic
 
-@testable import Exhaust
 import Testing
+@testable import Exhaust
 
 // @Suite("Structural Classification Overview")
 // struct StructuralClassificationTests {

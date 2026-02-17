@@ -7,8 +7,8 @@
 //  them, merging adjacent inner sequences (e.g. [[V][V][V]] → [[VVV]]).
 //
 
-@testable import Exhaust
 import Testing
+@testable import Exhaust
 
 // MARK: - Helpers
 
@@ -17,10 +17,10 @@ import Testing
 private func generate<Output>(
     _ gen: ReflectiveGenerator<Output>,
     seed: UInt64 = 42,
-    iteration: Int = 0
+    iteration: Int = 0,
 ) throws -> (value: Output, tree: ChoiceTree) {
     try #require(
-        Array(ValueAndChoiceTreeInterpreter(gen, seed: seed).prefix(iteration + 1)).last
+        Array(ValueAndChoiceTreeInterpreter(gen, seed: seed).prefix(iteration + 1)).last,
     )
 }
 
@@ -72,7 +72,7 @@ struct ReducerSequenceBoundaryTests {
         let property: ([[UInt64]]) -> Bool = { _ in false }
 
         let result = try #require(
-            try Interpreters.reduce(gen: gen, tree: tree, config: .fast, property: property)
+            try Interpreters.reduce(gen: gen, tree: tree, config: .fast, property: property),
         )
 
         let reducedSequence = result.0
@@ -106,7 +106,7 @@ struct ReducerSequenceBoundaryTests {
         let property: ([[UInt64]]) -> Bool = { _ in false }
 
         let result = try #require(
-            try Interpreters.reduce(gen: gen, tree: tree, config: .fast, property: property)
+            try Interpreters.reduce(gen: gen, tree: tree, config: .fast, property: property),
         )
 
         let reducedBoundaries = ChoiceSequence.extractSequenceBoundarySpans(from: result.0)
@@ -126,7 +126,7 @@ struct ReducerSequenceBoundaryTests {
         }
 
         let result = try #require(
-            try Interpreters.reduce(gen: gen, tree: tree, config: .fast, property: property)
+            try Interpreters.reduce(gen: gen, tree: tree, config: .fast, property: property),
         )
 
         // The reduced output must still fail the property
@@ -147,11 +147,11 @@ struct ReducerSequenceBoundaryTests {
 
         // Property: fails when there are more than 1 total element
         let property: ([[UInt64]]) -> Bool = { arrays in
-            arrays.flatMap { $0 }.count <= 1
+            arrays.flatMap(\.self).count <= 1
         }
 
         let result = try #require(
-            try Interpreters.reduce(gen: gen, tree: tree, config: .fast, property: property)
+            try Interpreters.reduce(gen: gen, tree: tree, config: .fast, property: property),
         )
 
         // Should be simpler than the original
@@ -184,7 +184,7 @@ struct ReducerSequenceBoundaryTests {
         let property: ([[UInt64]]) -> Bool = { _ in true }
 
         let result = try #require(
-            try Interpreters.reduce(gen: gen, tree: tree, config: .fast, property: property)
+            try Interpreters.reduce(gen: gen, tree: tree, config: .fast, property: property),
         )
 
         // Sequence should be unchanged (no improvement found)
@@ -203,7 +203,7 @@ struct ReducerSequenceBoundaryTests {
         let property: ([[UInt64]]) -> Bool = { _ in false }
 
         let result = try #require(
-            try Interpreters.reduce(gen: gen, tree: tree, config: .fast, property: property)
+            try Interpreters.reduce(gen: gen, tree: tree, config: .fast, property: property),
         )
 
         // The output should be materializable from the reduced sequence
@@ -221,11 +221,11 @@ struct ReducerSequenceBoundaryTests {
         let property: ([[UInt64]]) -> Bool = { _ in false }
 
         let result = try #require(
-            try Interpreters.reduce(gen: gen, tree: tree, config: .fast, property: property)
+            try Interpreters.reduce(gen: gen, tree: tree, config: .fast, property: property),
         )
 
         let rematerialized = try #require(
-            try Interpreters.materialize(gen, with: tree, using: result.0)
+            try Interpreters.materialize(gen, with: tree, using: result.0),
         )
 
         // The output stored in the result should match a fresh materialization
@@ -244,7 +244,7 @@ struct ReducerSequenceBoundaryTests {
         let property: ([[UInt64]]) -> Bool = { _ in false }
 
         let result = try #require(
-            try Interpreters.reduce(gen: gen, tree: tree, config: .fast, property: property)
+            try Interpreters.reduce(gen: gen, tree: tree, config: .fast, property: property),
         )
 
         #expect(ChoiceSequence.validate(result.0))
@@ -254,7 +254,7 @@ struct ReducerSequenceBoundaryTests {
 
     @Test(
         "Boundary collapsing works across different seeds",
-        arguments: [UInt64(1)]
+        arguments: [UInt64(1)],
     )
     func boundaryCollapsingMultipleSeeds(seed: UInt64) throws {
         let innerGen = Gen.arrayOf(Gen.choose(in: UInt64(0) ... 1_000_000_000), within: 10 ... 20)
@@ -274,7 +274,7 @@ struct ReducerSequenceBoundaryTests {
         }
 
         let result = try #require(
-            try Interpreters.reduce(gen: gen, tree: tree, config: .fast, property: property)
+            try Interpreters.reduce(gen: gen, tree: tree, config: .fast, property: property),
         )
         print()
 

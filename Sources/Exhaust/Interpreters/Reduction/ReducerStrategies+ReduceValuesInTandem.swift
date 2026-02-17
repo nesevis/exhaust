@@ -19,7 +19,7 @@ extension ReducerStrategies {
         property: (Output) -> Bool,
         sequence: ChoiceSequence,
         siblingGroups: [SiblingGroup],
-        rejectCache: inout ReducerCache
+        rejectCache: inout ReducerCache,
     ) throws -> (ChoiceSequence, Output)? {
         var current = sequence
         var progress = false
@@ -28,9 +28,8 @@ extension ReducerStrategies {
         for group in siblingGroups {
             // Since all values will be reduced in tandem, grab the distance from semantic zero
             // from the first of the values in this sibling span
-            guard
-                let firstValueIndex = group.valueRanges?.first?.lowerBound,
-                case let v = current[firstValueIndex].value, let v
+            guard let firstValueIndex = group.valueRanges?.first?.lowerBound,
+                  case let v = current[firstValueIndex].value, let v
             else {
                 continue
             }
@@ -70,7 +69,7 @@ extension ReducerStrategies {
                             : v.choice.bitPattern64 &- delta
                         let newChoice = ChoiceValue(
                             v.choice.tag.makeConvertible(bitPattern64: newValue),
-                            tag: v.choice.tag
+                            tag: v.choice.tag,
                         )
                         guard newChoice.fits(in: v.validRanges) else {
                             probe[idx] = originalEntry
@@ -89,8 +88,7 @@ extension ReducerStrategies {
                         return false
                     }
 
-                    guard
-                        rejectCache.contains(probe) == false
+                    guard rejectCache.contains(probe) == false
                     else {
                         return false
                     }
@@ -111,7 +109,7 @@ extension ReducerStrategies {
                     return success
                 },
                 low: UInt64(0),
-                high: distance
+                high: distance,
             )
 
             if bestDelta > 0,
@@ -139,7 +137,7 @@ extension ReducerStrategies {
                         : v.choice.bitPattern64 &- bestDelta
                     let newChoice = ChoiceValue(
                         v.choice.tag.makeConvertible(bitPattern64: newValue),
-                        tag: v.choice.tag
+                        tag: v.choice.tag,
                     )
                     guard newChoice.fits(in: v.validRanges) else { continue }
                     let idx = tandemCandidate.lowerBound

@@ -7,8 +7,8 @@
 //  are normalized (e.g. [3, 1, 2] → [1, 2, 3]).
 //
 
-@testable import Exhaust
 import Testing
+@testable import Exhaust
 
 // MARK: - Helpers
 
@@ -16,10 +16,10 @@ import Testing
 private func generate<Output>(
     _ gen: ReflectiveGenerator<Output>,
     seed: UInt64 = 42,
-    iteration: Int = 0
+    iteration: Int = 0,
 ) throws -> (value: Output, tree: ChoiceTree) {
     try #require(
-        Array(ValueAndChoiceTreeInterpreter(gen, seed: seed).prefix(iteration + 1)).last
+        Array(ValueAndChoiceTreeInterpreter(gen, seed: seed).prefix(iteration + 1)).last,
     )
 }
 
@@ -48,7 +48,7 @@ struct ReducerReorderTests {
         let property: ([UInt64]) -> Bool = { _ in false }
 
         let result = try #require(
-            try Interpreters.reduce(gen: gen, tree: tree, config: .fast, property: property)
+            try Interpreters.reduce(gen: gen, tree: tree, config: .fast, property: property),
         )
 
         // The output should be sorted (or at least simpler than the original)
@@ -76,7 +76,7 @@ struct ReducerReorderTests {
         }
 
         let result = try #require(
-            try Interpreters.reduce(gen: gen, tree: tree, config: .fast, property: property)
+            try Interpreters.reduce(gen: gen, tree: tree, config: .fast, property: property),
         )
 
         // Property must still fail
@@ -105,7 +105,7 @@ struct ReducerReorderTests {
         let property: ([UInt64]) -> Bool = { _ in false }
 
         let result = try #require(
-            try Interpreters.reduce(gen: gen, tree: tree, config: .fast, property: property)
+            try Interpreters.reduce(gen: gen, tree: tree, config: .fast, property: property),
         )
 
         // Values should still be sorted after reduction
@@ -133,7 +133,7 @@ struct ReducerReorderTests {
         }
 
         let result = try #require(
-            try Interpreters.reduce(gen: gen, tree: tree, config: .fast, property: property)
+            try Interpreters.reduce(gen: gen, tree: tree, config: .fast, property: property),
         )
 
         // The output must still fail the property
@@ -151,7 +151,7 @@ struct ReducerReorderTests {
         let property: ([UInt64]) -> Bool = { _ in false }
 
         let result = try #require(
-            try Interpreters.reduce(gen: gen, tree: tree, config: .fast, property: property)
+            try Interpreters.reduce(gen: gen, tree: tree, config: .fast, property: property),
         )
 
         #expect(ChoiceSequence.validate(result.0))
@@ -166,11 +166,11 @@ struct ReducerReorderTests {
         let property: ([UInt64]) -> Bool = { _ in false }
 
         let result = try #require(
-            try Interpreters.reduce(gen: gen, tree: tree, config: .fast, property: property)
+            try Interpreters.reduce(gen: gen, tree: tree, config: .fast, property: property),
         )
 
         let rematerialized = try #require(
-            try Interpreters.materialize(gen, with: tree, using: result.0)
+            try Interpreters.materialize(gen, with: tree, using: result.0),
         )
 
         #expect(result.1 == rematerialized)
@@ -200,7 +200,7 @@ struct ReducerReorderTests {
         }
 
         let result = try #require(
-            try Interpreters.reduce(gen: gen, tree: tree, config: .fast, property: property)
+            try Interpreters.reduce(gen: gen, tree: tree, config: .fast, property: property),
         )
 
         // Property must still fail

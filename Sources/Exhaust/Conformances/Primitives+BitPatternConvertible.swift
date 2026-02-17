@@ -149,7 +149,7 @@ extension Int8: BitPatternConvertible {
     }
 
     public var bitPattern64: UInt64 {
-        return UInt64(UInt8(bitPattern: self) ^ Self.signBitMask)
+        UInt64(UInt8(bitPattern: self) ^ Self.signBitMask)
     }
 }
 
@@ -171,7 +171,7 @@ extension Int16: BitPatternConvertible {
     }
 
     public var bitPattern64: UInt64 {
-        return UInt64(UInt16(bitPattern: self) ^ Self.signBitMask)
+        UInt64(UInt16(bitPattern: self) ^ Self.signBitMask)
     }
 }
 
@@ -193,7 +193,7 @@ extension Int32: BitPatternConvertible {
     }
 
     public var bitPattern64: UInt64 {
-        return UInt64(UInt32(bitPattern: self) ^ Self.signBitMask)
+        UInt64(UInt32(bitPattern: self) ^ Self.signBitMask)
     }
 }
 
@@ -215,7 +215,7 @@ extension Int64: BitPatternConvertible {
     }
 
     public var bitPattern64: UInt64 {
-        return UInt64(bitPattern: self) ^ Self.signBitMask
+        UInt64(bitPattern: self) ^ Self.signBitMask
     }
 }
 
@@ -240,7 +240,7 @@ extension Int: BitPatternConvertible {
     /// Maps Int to UInt64 using bit pattern conversion
     public var bitPattern64: UInt64 {
         // Use bit pattern conversion which handles the full Int range safely
-        return UInt64(bitPattern: Int64(self)) ^ Self.signBitMask
+        UInt64(bitPattern: Int64(self)) ^ Self.signBitMask
     }
 }
 

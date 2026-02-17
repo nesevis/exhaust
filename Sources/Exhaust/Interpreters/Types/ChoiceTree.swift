@@ -13,109 +13,110 @@ import Foundation
 public enum ChoiceTree: Hashable, Equatable, Sendable {
     /// A primitive choice, typically a number or a high-level semantic label.
     case choice(ChoiceValue, ChoiceMetadata)
-    
+
     /// A deterministic or constant value that can't be shrunk
     /// This is encoded into the generator, and doesn't need to be part of the ``ChoiceTree``
     /// The string value is a description of the value for debug purposes
     case just(String)
-    
+
     /// A node that represents the generation of a sequence. It explicitly
     /// captures the length and the choice trees for each of its elements.
     indirect case sequence(length: UInt64, elements: [ChoiceTree], ChoiceMetadata)
-    
+
     /// A node that represents a branching choice made via `pick`.
     indirect case branch(weight: UInt64, label: UInt64, choice: ChoiceTree)
-    
+
     /// Represents a nested group of choices that usually represent objects or tuples
     indirect case group([ChoiceTree])
-    
+
     /// Represents a size value retrieved from the generation context
     case getSize(UInt64)
-    
+
     /// Represents a resized generation context with nested choices
     indirect case resize(newSize: UInt64, choices: [ChoiceTree])
-    
+
     /// Used only for test case reduction. Represents a value that is known to have affected the property being tested against
     indirect case important(ChoiceTree)
-    
+
     /// Used only for replay. Represents the selected branch in a ``group`` of ``branch``es.
     indirect case selected(ChoiceTree)
 }
 
 extension ChoiceTree {
     static let emptyJust = Self.just("")
-    
+
     var isSizing: Bool {
         switch self {
         case .getSize, .resize:
-            return true
+            true
         default:
-            return false
+            false
         }
     }
+
     var isImportant: Bool {
         if case .important = self {
             return true
         }
         return false
     }
-    
+
     var isChoice: Bool {
         if case .choice = self {
             return true
         }
         return false
     }
-    
+
     var isCharacterChoice: Bool {
         if case .choice(.character, _) = self {
             return true
         }
         return false
     }
-    
+
     var isSelected: Bool {
         if case .selected = self {
             return true
         }
         return false
     }
-    
+
     var isBranch: Bool {
         if case .branch = self {
             return true
         }
         return false
     }
-    
+
     var isJust: Bool {
         if case .just = self {
             return true
         }
         return false
     }
-    
+
     var structuralComplexity: UInt64 {
         switch self {
         case .choice:
-            return 1
+            1
         case .just:
-            return 0
-        case .sequence(_, let elements, _):
-            return 2 + elements.map(\.structuralComplexity).reduce(0, +)
-        case .branch(_, _, let gen):
-            return 3 + gen.structuralComplexity
-        case .group(let array):
-            return 1 + array.map(\.structuralComplexity).reduce(0, +)
-        case .important(let choiceTree), .selected(let choiceTree):
-            return choiceTree.structuralComplexity
+            0
+        case let .sequence(_, elements, _):
+            2 + elements.map(\.structuralComplexity).reduce(0, +)
+        case let .branch(_, _, gen):
+            3 + gen.structuralComplexity
+        case let .group(array):
+            1 + array.map(\.structuralComplexity).reduce(0, +)
+        case let .important(choiceTree), let .selected(choiceTree):
+            choiceTree.structuralComplexity
         case .getSize:
-            return 1
-        case .resize(_, let choices):
-            return 2 + choices.map(\.structuralComplexity).reduce(0, +)
+            1
+        case let .resize(_, choices):
+            2 + choices.map(\.structuralComplexity).reduce(0, +)
         }
     }
-    
+
     var complexity: UInt64 {
         switch self {
         case let .choice(value, _):
@@ -137,9 +138,9 @@ extension ChoiceTree {
                 return UInt64.max
             }
             return includingLength
-        case .branch(_, _, let gen):
+        case let .branch(_, _, gen):
             return gen.complexity
-        case .group(var elements):
+        case var .group(elements):
             var complexity = UInt64(0)
             while elements.isEmpty == false {
                 let element = elements.removeLast()
@@ -154,7 +155,7 @@ extension ChoiceTree {
             return value.complexity
         case let .getSize(size):
             return size
-        case .resize(_, let choices):
+        case let .resize(_, choices):
             var complexity = UInt64(0)
             for choice in choices {
                 let choiceComplexity = choice.complexity
@@ -168,7 +169,7 @@ extension ChoiceTree {
     }
 }
 
-// Functor
+/// Functor
 extension ChoiceTree {
     /// Recursively transforms a `ChoiceTree` by applying a given closure to each node.
     ///
@@ -201,7 +202,7 @@ extension ChoiceTree {
             return try .resize(newSize: newSize, choices: choices.map { try $0.map(transform) })
         }
     }
-    
+
     func contains(_ predicate: (ChoiceTree) -> Bool) -> Bool {
         let selfResult = predicate(self)
         guard selfResult == false else {
@@ -223,97 +224,97 @@ extension ChoiceTree {
             return choices.contains { $0.contains(predicate) }
         }
     }
-    
+
     /// Recursively merges this tree with another, combining corresponding nodes using a provided closure.
-        ///
-        /// This function traverses both trees in parallel. When the node types match (e.g., both are `.sequence`),
-        /// it recursively merges their children. When the node types differ or they are non-recursive leaves,
-        /// it passes both nodes to the `combine` closure to determine the resulting node.
-        ///
-        /// The structure of `self` (the left-hand tree) is prioritized. For example, when merging two sequences,
-        /// the resulting sequence will have the `length` and `metadata` of `self`.
-        ///
-        /// - Parameters:
-        ///   - other: The tree to merge with (`ChoiceTree`).
-        ///   - combine: A closure that takes two nodes (the one from `self` and the one from `other`)
-        ///     and returns the desired resulting `ChoiceTree` for that position.
-        /// - Returns: A new, merged `ChoiceTree`.
-        func merge(with other: ChoiceTree, using combine: (ChoiceTree, ChoiceTree) -> ChoiceTree?) -> ChoiceTree {
-            switch (self, other) {
-            // --- Recursive Cases: Structures Match ---
-            // If both are sequences, merge their elements recursively.
-            case let (.sequence(lhsLength, lhsElements, metadata), .sequence(_, rhsElements, _)):
-                if let containerResult = combine(self, other) {
-                    return containerResult
-                }
-                // zip ensures we only iterate as long as both have elements.
-                // The new children are created by recursively calling merge.
-                let mergedElements = zip(lhsElements, rhsElements).map { lhsElement, rhsElement in
-                    lhsElement.merge(with: rhsElement, using: combine)
-                }
-                // A new sequence is created, preserving the left tree's metadata.
-                return .sequence(length: lhsLength, elements: mergedElements, metadata)
-
-            // If both are branches, merge their children recursively.
-            case let (.branch(weight, label, lhsChoice), .branch(_, _, rhsChoice)):
-                if let containerResult = combine(self, other) {
-                    return containerResult
-                }
-                let merged = lhsChoice.merge(with: rhsChoice, using: combine)
-                // The new branch preserves the left tree's weight and label.
-                return .branch(weight: weight, label: label, choice: merged)
-
-            // If both are groups, merge their children recursively.
-            case let (.group(lhsChildren), .group(rhsChildren)):
-                if let containerResult = combine(self, other) {
-                    return containerResult
-                }
-                let mergedChildren = zip(lhsChildren, rhsChildren).map { lhsChild, rhsChild in
-                    lhsChild.merge(with: rhsChild, using: combine)
-                }
-                return .group(mergedChildren)
-
-            // If both are locked, merge the inner child.
-            case let (.important(lhsChild), .important(rhsChild)):
-                if let containerResult = combine(self, other) {
-                    return containerResult
-                }
-                return .important(lhsChild.merge(with: rhsChild, using: combine))
-                
-            // If both are resize, merge their choices recursively.
-            case let (.resize(lhsSize, lhsChoices), .resize(_, rhsChoices)):
-                if let containerResult = combine(self, other) {
-                    return containerResult
-                }
-                let mergedChoices = zip(lhsChoices, rhsChoices).map { lhsChoice, rhsChoice in
-                    lhsChoice.merge(with: rhsChoice, using: combine)
-                }
-                return .resize(newSize: lhsSize, choices: mergedChoices)
-
-            // --- Base Case: Let the user's closure decide ---
-            // This handles:
-            //  - .choice vs .choice
-            //  - .just vs .just
-            //  - Any structural mismatch (e.g., .sequence vs .branch)
-            default:
-                // At any point of structural difference or at a leaf,
-                // we stop recursing and delegate the decision to the user.
-                return combine(self, other) ?? self
+    ///
+    /// This function traverses both trees in parallel. When the node types match (e.g., both are `.sequence`),
+    /// it recursively merges their children. When the node types differ or they are non-recursive leaves,
+    /// it passes both nodes to the `combine` closure to determine the resulting node.
+    ///
+    /// The structure of `self` (the left-hand tree) is prioritized. For example, when merging two sequences,
+    /// the resulting sequence will have the `length` and `metadata` of `self`.
+    ///
+    /// - Parameters:
+    ///   - other: The tree to merge with (`ChoiceTree`).
+    ///   - combine: A closure that takes two nodes (the one from `self` and the one from `other`)
+    ///     and returns the desired resulting `ChoiceTree` for that position.
+    /// - Returns: A new, merged `ChoiceTree`.
+    func merge(with other: ChoiceTree, using combine: (ChoiceTree, ChoiceTree) -> ChoiceTree?) -> ChoiceTree {
+        switch (self, other) {
+        // --- Recursive Cases: Structures Match ---
+        // If both are sequences, merge their elements recursively.
+        case let (.sequence(lhsLength, lhsElements, metadata), .sequence(_, rhsElements, _)):
+            if let containerResult = combine(self, other) {
+                return containerResult
             }
+            // zip ensures we only iterate as long as both have elements.
+            // The new children are created by recursively calling merge.
+            let mergedElements = zip(lhsElements, rhsElements).map { lhsElement, rhsElement in
+                lhsElement.merge(with: rhsElement, using: combine)
+            }
+            // A new sequence is created, preserving the left tree's metadata.
+            return .sequence(length: lhsLength, elements: mergedElements, metadata)
+
+        // If both are branches, merge their children recursively.
+        case let (.branch(weight, label, lhsChoice), .branch(_, _, rhsChoice)):
+            if let containerResult = combine(self, other) {
+                return containerResult
+            }
+            let merged = lhsChoice.merge(with: rhsChoice, using: combine)
+            // The new branch preserves the left tree's weight and label.
+            return .branch(weight: weight, label: label, choice: merged)
+
+        // If both are groups, merge their children recursively.
+        case let (.group(lhsChildren), .group(rhsChildren)):
+            if let containerResult = combine(self, other) {
+                return containerResult
+            }
+            let mergedChildren = zip(lhsChildren, rhsChildren).map { lhsChild, rhsChild in
+                lhsChild.merge(with: rhsChild, using: combine)
+            }
+            return .group(mergedChildren)
+
+        // If both are locked, merge the inner child.
+        case let (.important(lhsChild), .important(rhsChild)):
+            if let containerResult = combine(self, other) {
+                return containerResult
+            }
+            return .important(lhsChild.merge(with: rhsChild, using: combine))
+
+        // If both are resize, merge their choices recursively.
+        case let (.resize(lhsSize, lhsChoices), .resize(_, rhsChoices)):
+            if let containerResult = combine(self, other) {
+                return containerResult
+            }
+            let mergedChoices = zip(lhsChoices, rhsChoices).map { lhsChoice, rhsChoice in
+                lhsChoice.merge(with: rhsChoice, using: combine)
+            }
+            return .resize(newSize: lhsSize, choices: mergedChoices)
+
+        // --- Base Case: Let the user's closure decide ---
+        // This handles:
+        //  - .choice vs .choice
+        //  - .just vs .just
+        //  - Any structural mismatch (e.g., .sequence vs .branch)
+        default:
+            // At any point of structural difference or at a leaf,
+            // we stop recursing and delegate the decision to the user.
+            return combine(self, other) ?? self
         }
-    
+    }
+
     func mapWhereDifferent(to other: ChoiceTree, using transform: (ChoiceTree, ChoiceTree) -> ChoiceTree?) -> ChoiceTree {
-        self.merge(with: other) { lhs, rhs in
+        merge(with: other) { lhs, rhs in
             // Only disimilar types
             switch (lhs, rhs) {
-                // Unwrap important markers
+            // Unwrap important markers
             case let (.important(lhsValue), .important(rhsValue)) where lhsValue.typeId == rhsValue.typeId && lhsValue != rhsValue:
                 return transform(lhsValue, rhsValue).map { .important($0) }
             case let (.important(lhsValue), _) where lhsValue.typeId == rhs.typeId && lhsValue != rhs:
                 return transform(lhsValue, rhs).map { .important($0) }
             case let (_, .important(rhsValue)) where self.typeId == rhsValue.typeId && lhs != rhsValue:
                 return transform(lhs, rhsValue)
-                // Unwrap selected markers
+            // Unwrap selected markers
             case let (.selected(lhsValue), .selected(rhsValue)) where lhsValue.typeId == rhsValue.typeId && lhsValue != rhsValue:
                 return transform(lhsValue, rhsValue).map { .selected($0) }
             case let (.selected(lhsValue), _) where lhsValue.typeId == rhs.typeId && lhsValue != rhs:
@@ -329,15 +330,14 @@ extension ChoiceTree {
                 let newLhs = ChoiceTree.sequence(
                     length: lLength,
                     elements: transformedElements.isEmpty ? lElements : transformedElements,
-                    lMeta
+                    lMeta,
                 )
                 return transform(newLhs, rhs)
             case let (.group(lhs), .group(rhs)):
                 let transformedGroup = zip(lhs, rhs).map { lhs, rhs in
                     lhs.mapWhereDifferent(to: rhs, using: transform)
                 }
-                let newLhs = ChoiceTree.group(transformedGroup)
-                return newLhs
+                return ChoiceTree.group(transformedGroup)
             default:
                 return nil
             }
@@ -349,17 +349,17 @@ extension ChoiceTree: CustomDebugStringConvertible {
     var prettyPrint: NSString {
         NSString(string: debugDescription)
     }
-    
+
     public var debugDescription: String {
         treeDescription(prefix: "", isLast: true)
     }
-    
+
     private func treeDescription(prefix: String, isLast: Bool, isLocked: Bool = false, isSelected: Bool = false) -> String {
         let connector = isLast ? "└── " : "├── "
         let childPrefix = prefix + (isLast ? "    " : "│   ")
         let locked = isLocked ? "✨" : ""
         let selected = isSelected ? "✅" : ""
-        
+
         switch self {
         case let .choice(value, meta):
             let displayRange = value.displayRange(meta.validRanges[0])
@@ -373,28 +373,26 @@ extension ChoiceTree: CustomDebugStringConvertible {
             case let .floating(float, _, _):
                 return prefix + connector + "\(locked)choice(float: \(float))\(locked) \(displayRange)"
             }
-            
-        case .just(let type):
+
+        case let .just(type):
             return prefix + connector + "just(\(type))"
-            
+
         case let .sequence(length, elements, meta):
             var result = prefix + connector + "\(locked)sequence(length: \(length))\(locked) \(meta.validRanges[0])"
-            if
-                case let .group(array) = elements.first,
-                // Dropping the first one as it is a getSize
-                case let .group(branches) = array.dropFirst().first,
-                case let .branch(_, _, gen) = branches.first(where: { $0.isSelected == false }),
-                case .choice = gen
+            if case let .group(array) = elements.first,
+               // Dropping the first one as it is a getSize
+               case let .group(branches) = array.dropFirst().first,
+               case let .branch(_, _, gen) = branches.first(where: { $0.isSelected == false }),
+               case .choice = gen
             {
                 // A special case displaying all the characters in a string inline
                 let characters = elements.dropFirst().compactMap { element in
-                    if
-                        case let .group(array) = element,
-                        case let .group(branches) = array.dropFirst().first,
-                        // Why are we getting a nonselected branch?
-                        // FIXME: The assumption that the character value of all branches is identical no longer holds with the Value|ChoiceTree generator, and this special case is broken because reflected generators come back as all being selected now :|
-                        case let .branch(_, _, gen) = branches.first(where: { $0.isSelected == false }),
-                        case let .choice(.character(char), _) = gen
+                    if case let .group(array) = element,
+                       case let .group(branches) = array.dropFirst().first,
+                       // Why are we getting a nonselected branch?
+                       // FIXME: The assumption that the character value of all branches is identical no longer holds with the Value|ChoiceTree generator, and this special case is broken because reflected generators come back as all being selected now :|
+                       case let .branch(_, _, gen) = branches.first(where: { $0.isSelected == false }),
+                       case let .choice(.character(char), _) = gen
                     {
                         return char
                     }
@@ -408,12 +406,12 @@ extension ChoiceTree: CustomDebugStringConvertible {
                 }
             }
             return result
-            
+
         case let .branch(weight, label, gen):
             var result = prefix + connector + "\(selected)\(locked)branch(label: \(label), weight: \(weight))\(locked)"
             result += "\n" + gen.treeDescription(prefix: childPrefix, isLast: true)
             return result
-            
+
         case let .group(children):
             var result = prefix + connector + "\(locked)group\(locked)"
             for (index, child) in children.enumerated() {
@@ -421,12 +419,16 @@ extension ChoiceTree: CustomDebugStringConvertible {
                 result += "\n" + child.treeDescription(prefix: childPrefix, isLast: isLastChild)
             }
             return result
+
         case let .important(value):
             return value.treeDescription(prefix: prefix, isLast: isLast, isLocked: true)
+
         case let .selected(value):
             return value.treeDescription(prefix: prefix, isLast: isLast, isSelected: true)
+
         case .getSize:
             return prefix + connector + "getSize(?)"
+
         case let .resize(newSize, choices):
             var result = prefix + connector + "resize(\(newSize))"
             for (index, choice) in choices.enumerated() {
@@ -436,32 +438,32 @@ extension ChoiceTree: CustomDebugStringConvertible {
             return result
         }
     }
-    
+
     var elementDescription: String {
         switch self {
-        case .choice(let choiceValue, _):
+        case let .choice(choiceValue, _):
             switch choiceValue {
-            case .unsigned(let uInt64, _):
+            case let .unsigned(uInt64, _):
                 return uInt64.description
-            case .signed(let int, _, _):
+            case let .signed(int, _, _):
                 return int.description
-            case .floating(let float, _, _):
+            case let .floating(float, _, _):
                 return float.description
-            case .character(let character):
+            case let .character(character):
                 return character.description
             }
-        case .just(let type):
+        case let .just(type):
             return "just(\(type))"
-        case .sequence(_, let elements, _):
+        case let .sequence(_, elements, _):
             if case .choice(.character, _) = elements.first {
                 return "\"\(elements.map(\.elementDescription).joined())\""
             }
             return "[" + elements.map(\.elementDescription).joined(separator: ", ") + "]"
         case let .branch(weight, label, gen):
             return "\(weight),\(label): \(gen.elementDescription)"
-        case .group(let array):
+        case let .group(array):
             return "{" + array.map(\.elementDescription).joined() + "}"
-        case .important(let choiceTree), .selected(let choiceTree):
+        case let .important(choiceTree), let .selected(choiceTree):
             return choiceTree.elementDescription
         case let .getSize(size):
             return "getSize(\(size))"
@@ -469,31 +471,32 @@ extension ChoiceTree: CustomDebugStringConvertible {
             return "resize(\(newSize): [\(choices.map(\.elementDescription).joined(separator: ", "))])"
         }
     }
-    
+
     /// Recursively unwraps wrapper nodes (selected, important) to get to the core content
     var unwrapped: ChoiceTree {
         switch self {
-        case .selected(let inner), .important(let inner):
-            return inner.unwrapped
+        case let .selected(inner), let .important(inner):
+            inner.unwrapped
         default:
-            return self
+            self
         }
     }
-    
+
     var isPickOfJusts: Bool {
         guard case let .group(array) = self else {
             return false
         }
-        
+
         // Unwrap all children and check if they're branches containing just values
         let unwrappedChildren = array.map(\.unwrapped)
-        
+
         // Check if we have at least one branch and all unwrapped children are branches
-        guard unwrappedChildren.contains(where: { $0.isBranch }),
-              unwrappedChildren.allSatisfy({ $0.isBranch || $0.isSizing }) else {
+        guard unwrappedChildren.contains(where: \.isBranch),
+              unwrappedChildren.allSatisfy({ $0.isBranch || $0.isSizing })
+        else {
             return false
         }
-        
+
         // Additional restriction: we should have only one selected branch at a time
         // This distinguishes genuine pick-of-justs from string character selections
         let selectedCount = array.count { element in
@@ -503,19 +506,19 @@ extension ChoiceTree: CustomDebugStringConvertible {
         guard selectedCount <= 1 else {
             return false
         }
-        
+
         // Additional restriction: the just values should be meaningful discrete choices,
         // not character codes. We'll check if all just values are non-numeric strings
         // that could represent semantic choices (like "true"/"false", not character codes)
         for child in unwrappedChildren {
-            if case .branch(_, _, let gen) = child {
+            if case let .branch(_, _, gen) = child {
                 // All branch children should be just values with meaningful content
                 guard gen.isJust else {
                     return false
                 }
-                
+
                 // Check if the just values look like semantic choices rather than character data
-                if case .just(let value) = gen {
+                if case let .just(value) = gen {
                     // If the value is a single character or looks like character data,
                     // this is likely a string, not a semantic choice
                     if value.count == 1 || value.allSatisfy(\.isWhitespace) || value == "<value>" {
@@ -524,7 +527,7 @@ extension ChoiceTree: CustomDebugStringConvertible {
                 }
             }
         }
-        
+
         return true
     }
 }

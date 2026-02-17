@@ -117,9 +117,9 @@ extension Interpreters {
         private var count: Int {
             switch storage {
             case .one:
-                return 1
+                1
             case let .many(choices):
-                return choices.count
+                choices.count
             }
         }
 
@@ -135,6 +135,7 @@ extension Interpreters {
             }
         }
     }
+
     // ... `generate` and `reflect` and their helpers ...
 
     // MARK: - Public-Facing Materialize Function
@@ -149,7 +150,7 @@ extension Interpreters {
     public static func materialize<Output>(
         _ gen: ReflectiveGenerator<Output>,
         with tree: ChoiceTree,
-        using values: ChoiceSequence
+        using values: ChoiceSequence,
     ) throws -> Output? {
         // Start the recursive process. The helper returns the value and any *unconsumed*
         // parts of the tree. A successful top-level replay should consume the entire tree.
@@ -167,7 +168,7 @@ extension Interpreters {
     private static func materializeRecursive<Output>(
         _ gen: ReflectiveGenerator<Output>,
         with tree: ChoiceTree,
-        context: inout Context
+        context: inout Context,
     ) throws -> Output? {
         // Handle group scripts by distributing choices to the generator
         // Groups containing branches represent `picks` and are handled together
@@ -236,15 +237,15 @@ extension Interpreters {
                 guard let firstChoice = subChoices.first else {
                     return nil
                 }
-                
+
                 try context.consumeGroup(true)
-                
-                guard let subResult = try self.materializeRecursive(resizedGen, with: firstChoice, context: &context) else {
+
+                guard let subResult = try materializeRecursive(resizedGen, with: firstChoice, context: &context) else {
                     return nil
                 }
-                
+
                 try context.consumeGroup(false)
-                
+
                 let nextGen = try continuation(subResult)
                 return try materializeRecursive(nextGen, with: tree, context: &context)
 
@@ -277,7 +278,7 @@ extension Interpreters {
                     elementScript: elements.first,
                     context: &context,
                     requireElements: false,
-                    validLengthRanges: lengthMeta.validRanges
+                    validLengthRanges: lengthMeta.validRanges,
                 ) else {
                     return nil
                 }
@@ -291,31 +292,31 @@ extension Interpreters {
 //                fatalError("Should not be encountered")
                 // A lens/contramap is a wrapper. It doesn't consume a node from the script itself.
                 // The choices are consumed by its sub-generator. We pass the same script down.
-                guard let subResult = try self.materializeRecursive(subGenerator, with: tree, context: &context) else {
+                guard let subResult = try materializeRecursive(subGenerator, with: tree, context: &context) else {
                     return nil
                 }
 
                 let nextGen = try continuation(subResult)
-                return try self.materializeRecursive(nextGen, with: tree, context: &context)
+                return try materializeRecursive(nextGen, with: tree, context: &context)
 
             case .prune:
                 fatalError("Should not be encountered")
+
 //                guard let result = try self.materializeRecursive(subGenerator, with: tree, context: &context) else {
 //                    return nil
 //                }
 //                return result as? Output
             case let .filter(gen, _, predicate):
-                let result = try self.materializeRecursive(gen, with: tree, context: &context) as? Output
-                guard
-                    let result,
-                    predicate(result)
+                let result = try materializeRecursive(gen, with: tree, context: &context) as? Output
+                guard let result,
+                      predicate(result)
                 else {
                     return nil
                 }
                 return result
+
             case let .classify(gen, _, _):
-                guard
-                    let result = try self.materializeRecursive(gen, with: tree, context: &context)
+                guard let result = try materializeRecursive(gen, with: tree, context: &context)
                 else {
                     return nil
                 }
@@ -337,23 +338,22 @@ extension Interpreters {
         elementScript: ChoiceTree?,
         context: inout Context,
         requireElements: Bool,
-        validLengthRanges: [ClosedRange<UInt64>] = []
+        validLengthRanges: [ClosedRange<UInt64>] = [],
     ) throws -> [Any]? {
         try context.consumeSequence(true)
 
         var accumulatedValues: [Any] = []
-        if
-            validLengthRanges.count == 1,
-            let firstRange = validLengthRanges.first,
-            firstRange.lowerBound == firstRange.upperBound,
-            firstRange.lowerBound <= UInt64(Int.max)
+        if validLengthRanges.count == 1,
+           let firstRange = validLengthRanges.first,
+           firstRange.lowerBound == firstRange.upperBound,
+           firstRange.lowerBound <= UInt64(Int.max)
         {
             accumulatedValues.reserveCapacity(Int(firstRange.lowerBound))
         }
 
         if let elementScript {
             while context.peek != .sequence(false) {
-                let elementValue = try self.materializeRecursive(elementGenerator, with: elementScript, context: &context)
+                let elementValue = try materializeRecursive(elementGenerator, with: elementScript, context: &context)
                 if let elementValue {
                     accumulatedValues.append(elementValue)
                 } else if requireElements {
@@ -379,7 +379,7 @@ extension Interpreters {
     private static func materializeWithChoices<Output>(
         _ gen: ReflectiveGenerator<Output>,
         with choices: [ChoiceTree],
-        context: inout Context
+        context: inout Context,
     ) throws -> Output? {
         var cursor = ChoiceCursor(choices: choices)
         return try materializeWithChoicesHelper(gen, with: &cursor, context: &context)
@@ -388,7 +388,7 @@ extension Interpreters {
     private static func materializeWithChoice<Output>(
         _ gen: ReflectiveGenerator<Output>,
         with choice: ChoiceTree,
-        context: inout Context
+        context: inout Context,
     ) throws -> Output? {
         var cursor = ChoiceCursor(choice: choice)
         return try materializeWithChoicesHelper(gen, with: &cursor, context: &context)
@@ -397,7 +397,7 @@ extension Interpreters {
     private static func materializeWithChoicesHelper<Output>(
         _ gen: ReflectiveGenerator<Output>,
         with choices: inout ChoiceCursor,
-        context: inout Context
+        context: inout Context,
     ) throws -> Output? {
         switch gen {
         case let .pure(value):
@@ -407,7 +407,6 @@ extension Interpreters {
         case let .impure(operation, continuation):
             // Handle each operation by consuming appropriate choices
             switch operation {
-
             case .chooseBits:
                 // Consume the next choice
                 guard !choices.isEmpty else {
@@ -419,7 +418,7 @@ extension Interpreters {
                 }
 
                 let nextGen = try continuation(value.choice.convertible)
-                return try self.materializeWithChoicesHelper(nextGen, with: &choices, context: &context)
+                return try materializeWithChoicesHelper(nextGen, with: &choices, context: &context)
 
             case let .pick(pickChoices):
                 // Consume the next choice which should be a branch
@@ -445,14 +444,14 @@ extension Interpreters {
                         branches[branchMarkerIndex],
                         generatorsByLabel: generatorsByLabel,
                         continuation: continuation,
-                        context: &context
+                        context: &context,
                     )
                 } else if branchMarkerIndex == nil, let selectedBranch = firstSelectedBranch(in: branches) {
                     nextGen = try materializePickBranch(
                         selectedBranch,
                         generatorsByLabel: generatorsByLabel,
                         continuation: continuation,
-                        context: &context
+                        context: &context,
                     )
                 } else {
                     for branch in branches {
@@ -460,7 +459,7 @@ extension Interpreters {
                             branch,
                             generatorsByLabel: generatorsByLabel,
                             continuation: continuation,
-                            context: &context
+                            context: &context,
                         )
                         if nextGen != nil {
                             break
@@ -474,7 +473,7 @@ extension Interpreters {
 
                 try context.consumeGroup(false)
 
-                return try self.materializeWithChoicesHelper(nextGen, with: &choices, context: &context)
+                return try materializeWithChoicesHelper(nextGen, with: &choices, context: &context)
 
             case let .sequence(_, elementGenerator):
                 // Consume the next choice which should be a sequence
@@ -494,13 +493,13 @@ extension Interpreters {
                     elementScript: elements.first,
                     context: &context,
                     requireElements: true,
-                    validLengthRanges: lengthMeta.validRanges
+                    validLengthRanges: lengthMeta.validRanges,
                 ) else {
                     return nil
                 }
 
                 let nextGen = try continuation(result)
-                return try self.materializeWithChoicesHelper(nextGen, with: &choices, context: &context)
+                return try materializeWithChoicesHelper(nextGen, with: &choices, context: &context)
 
             case let .zip(generators):
                 guard generators.count == choices.remainingCount else {
@@ -509,23 +508,24 @@ extension Interpreters {
                 var subResults = [Any]()
                 subResults.reserveCapacity(generators.count)
                 for (offset, generator) in generators.enumerated() {
-                    guard
-                        let choiceTree = choices.element(atOffset: offset),
-                        let subResult = try self.materializeRecursive(generator, with: choiceTree, context: &context)
+                    guard let choiceTree = choices.element(atOffset: offset),
+                          let subResult = try materializeRecursive(generator, with: choiceTree, context: &context)
                     else {
                         return nil
                     }
                     subResults.append(subResult)
                 }
                 let nextGen = try continuation(subResults)
-                return try self.materializeWithChoicesHelper(nextGen, with: &choices, context: &context)
+                return try materializeWithChoicesHelper(nextGen, with: &choices, context: &context)
+
             case let .contramap(_, subGenerator), let .prune(subGenerator):
                 // A left map or prune doesn't consume choices, just passes them to the sub-generator
-                guard let subResult = try self.materializeWithChoicesHelper(subGenerator, with: &choices, context: &context) else {
+                guard let subResult = try materializeWithChoicesHelper(subGenerator, with: &choices, context: &context) else {
                     return nil
                 }
                 let nextGen = try continuation(subResult)
-                return try self.materializeWithChoicesHelper(nextGen, with: &choices, context: &context)
+                return try materializeWithChoicesHelper(nextGen, with: &choices, context: &context)
+
             case let .just(value):
                 // Consume the next choice which should be a just
                 guard !choices.isEmpty else { return nil }
@@ -537,7 +537,7 @@ extension Interpreters {
                 }
 
                 let nextGen = try continuation(value)
-                return try self.materializeWithChoicesHelper(nextGen, with: &choices, context: &context)
+                return try materializeWithChoicesHelper(nextGen, with: &choices, context: &context)
 
             case .getSize:
                 // getSize doesn't consume choices, just returns the current size
@@ -550,7 +550,7 @@ extension Interpreters {
                 }
 
                 let nextGen = try continuation(size)
-                return try self.materializeWithChoicesHelper(nextGen, with: &choices, context: &context)
+                return try materializeWithChoicesHelper(nextGen, with: &choices, context: &context)
 
             case let .resize(_, subGenerator):
                 // resize consumes a resize choice and replays the sub-generator
@@ -565,24 +565,23 @@ extension Interpreters {
                 }
 
                 var subChoicesCursor = ChoiceCursor(choices: subChoices)
-                guard let subResult = try self.materializeWithChoicesHelper(subGenerator, with: &subChoicesCursor, context: &context) else {
+                guard let subResult = try materializeWithChoicesHelper(subGenerator, with: &subChoicesCursor, context: &context) else {
                     return nil
                 }
                 let nextGen = try continuation(subResult)
-                return try self.materializeWithChoicesHelper(nextGen, with: &choices, context: &context)
+                return try materializeWithChoicesHelper(nextGen, with: &choices, context: &context)
 
             case let .filter(gen, _, predicate):
-                let result = try self.materializeWithChoicesHelper(gen, with: &choices, context: &context) as? Output
-                guard
-                    let result,
-                    predicate(result)
+                let result = try materializeWithChoicesHelper(gen, with: &choices, context: &context) as? Output
+                guard let result,
+                      predicate(result)
                 else {
                     return nil
                 }
                 return result
-                
+
             case let .classify(gen, _, _):
-                return try self.materializeWithChoicesHelper(gen, with: &choices, context: &context) as? Output
+                return try materializeWithChoicesHelper(gen, with: &choices, context: &context) as? Output
             }
         }
     }
@@ -616,12 +615,11 @@ extension Interpreters {
         _ branch: ChoiceTree,
         generatorsByLabel: [UInt64: ReflectiveGenerator<Any>],
         continuation: (Any) throws -> ReflectiveGenerator<Output>,
-        context: inout Context
+        context: inout Context,
     ) throws -> ReflectiveGenerator<Output>? {
         let unpacked = try unpackPickBranch(branch)
-        guard
-            let chosenGen = generatorsByLabel[unpacked.label],
-            let result = try materializeWithChoice(chosenGen, with: unpacked.choice, context: &context)
+        guard let chosenGen = generatorsByLabel[unpacked.label],
+              let result = try materializeWithChoice(chosenGen, with: unpacked.choice, context: &context)
         else {
             return nil
         }

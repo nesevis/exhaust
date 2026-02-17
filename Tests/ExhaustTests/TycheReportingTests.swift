@@ -6,9 +6,9 @@
 //  file output, event recording, and error handling.
 //
 
-@testable import Exhaust
 import Foundation
 import Testing
+@testable import Exhaust
 
 @Suite("Tyche Reporting Framework")
 struct TycheReportingTests {
@@ -68,14 +68,14 @@ struct TycheReportingTests {
                     operationType: "test",
                     generatorType: "Int",
                     size: 10,
-                    duration: 0.001
+                    duration: 0.001,
                 )
                 TycheReportContext.safeRecordGeneration(42, metadata: metadata)
 
                 // Record a test outcome
                 let outcome = TestOutcome(
                     wasSuccessful: true,
-                    totalDuration: 0.01
+                    totalDuration: 0.01,
                 )
                 TycheReportContext.safeRecordTestOutcome(outcome)
 
@@ -95,7 +95,7 @@ struct TycheReportingTests {
                     operationType: "test",
                     generatorType: "Int",
                     size: 10,
-                    duration: 0.001
+                    duration: 0.001,
                 )
                 TycheReportContext.safeRecordGeneration(42, metadata: metadata)
 

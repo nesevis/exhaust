@@ -5,8 +5,8 @@
 //  Example tests demonstrating basic generation patterns and edge cases.
 //
 
-@testable import Exhaust
 import Testing
+@testable import Exhaust
 
 @Suite("Generation Examples")
 struct GenerationExamplesTests {
@@ -29,7 +29,7 @@ struct GenerationExamplesTests {
             let generator = Gen.classify(
                 UInt.arbitrary.filter { $0.isMultiple(of: 3) },
                 ("even", { n in n % 2 == 0 }),
-                ("odd", { n in n % 2 != 0 })
+                ("odd", { n in n % 2 != 0 }),
             )
             var iterator = ValueAndChoiceTreeInterpreter(generator, seed: 1, maxRuns: 100)
             while let (value, _) = iterator.next() {
@@ -68,10 +68,8 @@ struct GenerationExamplesTests {
 
         @Test("ValueAndChoiceTreeGeneratorDoesntSwallowMaps")
         func vACTGdoesntswallomaps() {
-            let gen = UInt.arbitrary.map {
-                return $0
-            }.map { second in
-                return second.description
+            let gen = UInt.arbitrary.map(\.self).map { second in
+                second.description
             }
 //            let filtered = Gen.filter(gen, { $0.contains("@") })
             var iterator = ValueAndChoiceTreeInterpreter(gen, maxRuns: 2)
@@ -119,7 +117,7 @@ struct GenerationExamplesTests {
             let choices = try Interpreters.reflect(zipped, with: result)
             if let choices {
                 let replayed = try Interpreters.replay(zipped, using: choices)
-                if let replayed = replayed {
+                if let replayed {
                     #expect(replayed == result)
                 } else {
                     #expect(false, "Replay failed in example3")

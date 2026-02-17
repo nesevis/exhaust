@@ -33,28 +33,28 @@ enum CGSAdaptationInterpreter {
         samples: UInt64 = 100,
         maxSize: UInt64 = 100,
         seed: UInt64? = nil,
-        _ validityPredicate: @escaping (Output) -> Bool
+        _ validityPredicate: @escaping (Output) -> Bool,
     ) throws -> ReflectiveGenerator<Output> {
         let context = SpeculativeContext(
             baseSampleCount: samples,
             maxSize: maxSize,
-            rng: seed.map(Xoshiro256.init(seed:)) ?? .init()
+            rng: seed.map(Xoshiro256.init(seed:)) ?? .init(),
         )
         return try adaptRecursive(
             gen: original,
             input: (),
             context: context,
             insideSubdividedChooseBits: false,
-            validityPredicate: validityPredicate
+            validityPredicate: validityPredicate,
         )
     }
 
-    private static func adaptRecursive<Input, Output>(
+    private static func adaptRecursive<Output>(
         gen: ReflectiveGenerator<Output>,
-        input: Input,
+        input: some Any,
         context: SpeculativeContext,
         insideSubdividedChooseBits: Bool,
-        validityPredicate: @escaping (Output) -> Bool
+        validityPredicate: @escaping (Output) -> Bool,
     ) throws -> ReflectiveGenerator<Output> {
         switch gen {
         case .pure:
@@ -72,12 +72,12 @@ enum CGSAdaptationInterpreter {
                         let valueInterpreter = try ValueInterpreter(
                             tuple.generator.bind(continuation),
                             seed: context.rng.next(),
-                            maxRuns: context.currentSampleCount
+                            maxRuns: context.currentSampleCount,
                         )
                         return (
                             weight: UInt64(Array(valueInterpreter).count(where: validityPredicate)),
                             label: tuple.label,
-                            tuple.generator.erase()
+                            tuple.generator.erase(),
                         )
                     }
                     .filter { $0.weight > 0 } // Remove pruned branches
@@ -88,7 +88,7 @@ enum CGSAdaptationInterpreter {
 
                 return ReflectiveGenerator.impure(
                     operation: ReflectiveOperation.pick(choices: ContiguousArray(results)),
-                    continuation: continuation
+                    continuation: continuation,
                 )
 
             case let .chooseBits(lower, upper, _):
@@ -110,19 +110,19 @@ enum CGSAdaptationInterpreter {
                                 input: input,
                                 context: context,
                                 insideSubdividedChooseBits: true,
-                                validityPredicate: validityPredicate
+                                validityPredicate: validityPredicate,
                             )
                             return (
                                 weight: UInt64(1),
                                 label: UInt64(offset + 1),
-                                recursedGen.erase()
+                                recursedGen.erase(),
                             )
                         }
 
                     // Convert chooseBits into a pick of subranges for adaptation
                     let pick = ReflectiveGenerator.impure(
                         operation: ReflectiveOperation.pick(choices: ContiguousArray(results)),
-                        continuation: { .pure($0 as! Output) }
+                        continuation: { .pure($0 as! Output) },
                     )
 
                     // Recurse and perform evaluation in pick case
@@ -131,7 +131,7 @@ enum CGSAdaptationInterpreter {
                         input: input,
                         context: context,
                         insideSubdividedChooseBits: false,
-                        validityPredicate: validityPredicate
+                        validityPredicate: validityPredicate,
                     )
 
                 } else {
@@ -178,7 +178,7 @@ enum CGSAdaptationInterpreter {
                     var thisValueInterpreter = ValueInterpreter(
                         current,
                         seed: context.rng.next(),
-                        maxRuns: context.currentSampleCount
+                        maxRuns: context.currentSampleCount,
                     )
                     var gens = gens
 
@@ -198,12 +198,12 @@ enum CGSAdaptationInterpreter {
                             let tupleInterpreter = ValueInterpreter(
                                 .impure(operation: .zip(gens), continuation: continuation),
                                 seed: context.rng.next(),
-                                maxRuns: context.currentSampleCount
+                                maxRuns: context.currentSampleCount,
                             )
 
                             wins += Array(tupleInterpreter).count(where: validityPredicate)
                             return true
-                        }
+                        },
                     )
 
                     recursedGens.append((index, gen, wins))
@@ -215,14 +215,14 @@ enum CGSAdaptationInterpreter {
                         input: input,
                         context: context,
                         insideSubdividedChooseBits: false,
-                        validityPredicate: validityPredicate
+                        validityPredicate: validityPredicate,
                     )
                     return try adaptRecursive(
                         gen: recursedGen,
                         input: input,
                         context: context,
                         insideSubdividedChooseBits: false,
-                        validityPredicate: validityPredicate
+                        validityPredicate: validityPredicate,
                     ).erase()
                 }
                 // We have to pass the continuation in to each generator so recurse them.
@@ -244,18 +244,18 @@ enum CGSAdaptationInterpreter {
                             input: input,
                             context: context,
                             insideSubdividedChooseBits: false,
-                            validityPredicate: validityPredicate
+                            validityPredicate: validityPredicate,
                         )
                         return (
                             weight: UInt64(1),
                             label: UInt64(offset + 1),
-                            recursedGen.erase()
+                            recursedGen.erase(),
                         )
                     }
 
                 let pick = ReflectiveGenerator.impure(
                     operation: ReflectiveOperation.pick(choices: ContiguousArray(results)),
-                    continuation: { .pure($0 as! Output) }
+                    continuation: { .pure($0 as! Output) },
                 )
                 // Perform evaluation in pick case
                 return try adaptRecursive(
@@ -263,7 +263,7 @@ enum CGSAdaptationInterpreter {
                     input: input,
                     context: context,
                     insideSubdividedChooseBits: false,
-                    validityPredicate: validityPredicate
+                    validityPredicate: validityPredicate,
                 )
 
             case .just:
@@ -290,7 +290,7 @@ enum CGSAdaptationInterpreter {
                     input: input,
                     context: context,
                     insideSubdividedChooseBits: insideSubdividedChooseBits,
-                    validityPredicate: validityPredicate
+                    validityPredicate: validityPredicate,
                 )
 
             case let .prune(next):

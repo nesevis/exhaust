@@ -5,8 +5,8 @@
 //  Created by Chris Kolbu on 29/7/2025.
 //
 
-@testable import Exhaust
 import Testing
+@testable import Exhaust
 
 // @Suite("Test Case Reducer tests")
 // struct TestCaseReducerTests {

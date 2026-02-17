@@ -6,8 +6,8 @@
 //  then test the flatten method on those reflected trees.
 //
 
-@testable import Exhaust
 import Testing
+@testable import Exhaust
 
 @Suite("Reflect and Flatten Integration Tests")
 struct ReflectAndFlattenTests {
@@ -84,7 +84,7 @@ struct ReflectAndFlattenTests {
     func reflectAndFlattenTuple() throws {
         let gen = Gen.zip(
             Gen.choose(in: UInt64(0) ... 100),
-            Gen.choose(in: UInt64(0) ... 100)
+            Gen.choose(in: UInt64(0) ... 100),
         )
         let value: (UInt64, UInt64) = (42, 99)
 
@@ -123,7 +123,7 @@ struct ReflectAndFlattenTests {
     func reflectAndFlattenTupleOfArrays() throws {
         let gen = Gen.zip(
             Gen.choose(in: UInt64(0) ... 100).proliferate(with: 1 ... 10),
-            Gen.choose(in: UInt64(0) ... 100).proliferate(with: 1 ... 20)
+            Gen.choose(in: UInt64(0) ... 100).proliferate(with: 1 ... 20),
         )
         let value: ([UInt64], [UInt64]) = ([42], [99, 100, 101])
 
@@ -171,14 +171,14 @@ struct ReflectAndFlattenTests {
         }
 
         // Should have balanced group markers
-        #expect(groupMarkers.filter { $0 }.count == groupMarkers.filter { !$0 }.count)
+        #expect(groupMarkers.count(where: { $0 }) == groupMarkers.count(where: { !$0 }))
     }
 
     @Test("Reflect and flatten nested structure")
     func reflectAndFlattenNestedStructure() throws {
         let gen = Gen.zip(
             Gen.choose(in: UInt64(1) ... 10),
-            Gen.arrayOf(Gen.choose(in: UInt64(0) ... 100), exactly: 2)
+            Gen.arrayOf(Gen.choose(in: UInt64(0) ... 100), exactly: 2),
         )
 
         let value: (UInt64, [UInt64]) = (5, [20, 80])
@@ -219,7 +219,7 @@ struct ReflectAndFlattenTests {
     func reflectAndFlattenWithMapped() throws {
         let gen = Gen.choose(in: UInt64(0) ... 100).mapped(
             forward: { $0 * 2 },
-            backward: { $0 / 2 }
+            backward: { $0 / 2 },
         )
         let value: UInt64 = 84 // 42 * 2
 
@@ -404,7 +404,7 @@ struct ReflectAndFlattenTests {
         let gen = Gen.zip(
             Gen.choose(in: UInt64(0) ... 100),
             Gen.choose(in: Int64(-50) ... 50),
-            Gen.choose(in: 0.0 ... 1.0)
+            Gen.choose(in: 0.0 ... 1.0),
         )
 
         let value: (UInt64, Int64, Double) = (42, -10, 0.5)
@@ -465,15 +465,15 @@ struct ReflectAndFlattenTests {
         let flattened = ChoiceSequence.flatten(tree)
 
         // Extract value choices and group markers
-        let valueCount = flattened.filter { element in
+        let valueCount = flattened.count(where: { element in
             if case .value = element { return true }
             return false
-        }.count
+        })
 
-        let groupCount = flattened.filter { element in
+        let groupCount = flattened.count(where: { element in
             if case .group = element { return true }
             return false
-        }.count
+        })
 
         // Should have at least 5 values for the array elements
         #expect(valueCount >= 5)
@@ -544,7 +544,7 @@ struct ReflectAndFlattenTests {
         let gen = Gen.zip(ageGen, nameGen)
             .mapped(
                 forward: { Person(age: $0.0, name: $0.1) },
-                backward: { ($0.age, $0.name) }
+                backward: { ($0.age, $0.name) },
             )
 
         // Reflect the generator with the value
@@ -581,7 +581,7 @@ struct ReflectAndFlattenTests {
         let gen = Gen.zip(ageGen, nameGen)
             .mapped(
                 forward: { Person(age: $0.0, name: $0.1) },
-                backward: { ($0.age, $0.name) }
+                backward: { ($0.age, $0.name) },
             )
 
         // Reflect the generator with the value

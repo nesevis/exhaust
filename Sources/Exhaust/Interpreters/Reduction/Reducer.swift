@@ -7,9 +7,8 @@
 
 import Foundation
 
-extension Interpreters {
-
-    public enum ShrinkConfiguration {
+public extension Interpreters {
+    enum ShrinkConfiguration {
         case fast
         case slow
 
@@ -36,18 +35,18 @@ extension Interpreters {
         case normaliseSiblingOrder
 
         static func < (lhs: Interpreters.ShrinkPass, rhs: Interpreters.ShrinkPass) -> Bool {
-            (Self.allCases.firstIndex(of: lhs) ?? 0) < (Self.allCases.firstIndex(of: rhs) ?? 0)
+            (allCases.firstIndex(of: lhs) ?? 0) < (allCases.firstIndex(of: rhs) ?? 0)
         }
     }
 
-    public static func reduce<Output>(
+    static func reduce<Output>(
         gen: ReflectiveGenerator<Output>,
         tree: ChoiceTree,
         config: ShrinkConfiguration,
-        property: (Output) -> Bool
+        property: (Output) -> Bool,
     ) throws -> (ChoiceSequence, Output)? {
         // Mutable variables
-        let isInstrumented: Bool = false
+        let isInstrumented = false
         var currentSequence = ChoiceSequence.flatten(tree)
         // I don't think we need to reflect to regenerate this?
         // There is then a hard dependency on having to have reflectable generators, which is a pain
@@ -133,7 +132,8 @@ extension Interpreters {
                 case .redistributeNumericPairs:
                     let valueCount = currentSequence.count(where: { $0.value != nil })
                     if valueCount >= 2, valueCount <= 16,
-                       let (newSequence, output) = try ReducerStrategies.redistributeNumericPairs(gen, tree: currentTree, property: oracle, sequence: currentSequence, rejectCache: &rejectCache) {
+                       let (newSequence, output) = try ReducerStrategies.redistributeNumericPairs(gen, tree: currentTree, property: oracle, sequence: currentSequence, rejectCache: &rejectCache)
+                    {
                         currentSequence = newSequence
                         currentOutput = output
                         passImproved = true
@@ -143,7 +143,8 @@ extension Interpreters {
                     let containerSpans = ChoiceSequence.extractContainerSpans(from: currentSequence)
                     let deletableSpans = freeValueSpans + containerSpans
                     if !deletableSpans.isEmpty,
-                       let (newSequence, output) = try ReducerStrategies.speculativeDeleteAndRepair(gen, tree: currentTree, property: oracle, sequence: currentSequence, spans: deletableSpans, rejectCache: &rejectCache) {
+                       let (newSequence, output) = try ReducerStrategies.speculativeDeleteAndRepair(gen, tree: currentTree, property: oracle, sequence: currentSequence, spans: deletableSpans, rejectCache: &rejectCache)
+                    {
                         currentSequence = newSequence
                         currentOutput = output
                         passImproved = true
@@ -159,7 +160,8 @@ extension Interpreters {
                 case .normaliseSiblingOrder:
                     let siblingGroups = ChoiceSequence.extractSiblingGroups(from: currentSequence)
                     if siblingGroups.isEmpty == false,
-                       let (newSequence, output) = try ReducerStrategies.reorderSiblings(gen, tree: currentTree, property: oracle, sequence: currentSequence, siblingGroups: siblingGroups, rejectCache: &rejectCache) {
+                       let (newSequence, output) = try ReducerStrategies.reorderSiblings(gen, tree: currentTree, property: oracle, sequence: currentSequence, siblingGroups: siblingGroups, rejectCache: &rejectCache)
+                    {
                         currentSequence = newSequence
                         currentOutput = output
                         passImproved = true

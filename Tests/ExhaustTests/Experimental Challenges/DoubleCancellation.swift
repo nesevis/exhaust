@@ -5,9 +5,9 @@
 //  Created by Chris Kolbu on 17/2/2026.
 //
 
-@testable import Exhaust
 import Foundation
 import Testing
+@testable import Exhaust
 
 @Suite("Experimental Challenge: Double Cancellation")
 struct DoubleCancellationChallenge {
@@ -37,7 +37,7 @@ struct DoubleCancellationChallenge {
     func doubleCancellation() throws {
         let gen = Gen.zip(
             Gen.choose(in: 1.0 ... 1e18),
-            Gen.choose(in: 1.0 ... 1e18)
+            Gen.choose(in: 1.0 ... 1e18),
         )
 
         let property: (Double, Double) -> Bool = { a, b in
@@ -49,7 +49,7 @@ struct DoubleCancellationChallenge {
 
         let tree = try #require(try Interpreters.reflect(gen, with: value))
         let (_, output) = try #require(try Interpreters.reduce(
-            gen: gen, tree: tree, config: .slow, property: property
+            gen: gen, tree: tree, config: .slow, property: property,
         ))
 
         print("Shrunk to: (\(output.0), \(output.1))")

@@ -6,8 +6,8 @@
 //  array generation, and complex structure composition.
 //
 
-@testable import Exhaust
 import Testing
+@testable import Exhaust
 
 // MARK: - Test Structures
 
@@ -90,7 +90,7 @@ struct CompositionTests {
     @Suite("Array Generation")
     struct ArrayTests {
         @Test("Gen.arrayOf creates arrays of specified size")
-        func genArrayOf() throws {
+        func genArrayOf() {
             let elementGen = Gen.choose(in: 1 ... 100)
             let lengthGen = Gen.just(UInt64(5))
             let arrayGen = Gen.arrayOf(elementGen, lengthGen)
@@ -106,7 +106,7 @@ struct CompositionTests {
         }
 
         @Test("Arbitrary.proliferate creates arrays")
-        func arbitraryProliferate() throws {
+        func arbitraryProliferate() {
             let gen = Int.arbitrary.proliferate(with: 3 ... 7)
 
             for _ in 0 ..< 20 {
@@ -117,7 +117,7 @@ struct CompositionTests {
         }
 
         @Test("Nested proliferate creates nested arrays")
-        func nestedProliferate() throws {
+        func nestedProliferate() {
             let gen = String.arbitrary
                 .proliferate(with: 2 ... 4) // Inner arrays of 2-4 strings
                 .proliferate(with: 2 ... 3) // Outer array of 2-3 inner arrays
@@ -189,7 +189,7 @@ struct CompositionTests {
     @Suite("Choice Generation")
     struct ChoiceTests {
         @Test("Gen.pick chooses between alternatives")
-        func genPick() throws {
+        func genPick() {
             let intGen = Gen.choose(in: 1 ... 10)
             let stringGen = String.arbitrary
 
@@ -218,7 +218,7 @@ struct CompositionTests {
         }
 
         @Test("Gen.pick with weighted choices")
-        func genPickWeighted() throws {
+        func genPickWeighted() {
             let gen = Gen.pick(choices: [
                 (weight: UInt64(9), generator: Gen.just("common")),
                 (weight: UInt64(1), generator: Gen.just("rare")),
@@ -325,7 +325,7 @@ struct CompositionTests {
             let gen = Gen.zip(Int.arbitrary, String.arbitrary, Bool.arbitrary)
                 .mapped(
                     forward: { Thing(a: $0.0, b: $0.1, c: $0.2) },
-                    backward: { ($0.a, $0.b, $0.c) }
+                    backward: { ($0.a, $0.b, $0.c) },
                 )
             let (recipe, instance) = try validateGenerator(gen)
             print()
@@ -335,7 +335,7 @@ struct CompositionTests {
         func bimapIsReplayable() throws {
             let gen = Int.arbitrary.mapped(
                 forward: { $0.bitPattern64 },
-                backward: { Int(bitPattern64: $0) }
+                backward: { Int(bitPattern64: $0) },
             )
 
             var iterator = ValueInterpreter(gen)

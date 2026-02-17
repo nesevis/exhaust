@@ -7,18 +7,18 @@
 //  the minimum failing value when Pass 3's all-or-nothing simplification fails.
 //
 
-@testable import Exhaust
 import Testing
+@testable import Exhaust
 
 // MARK: - Helpers
 
 /// Generate a value and its choice tree from a generator with a given seed.
 private func generate<Output>(
     _ gen: ReflectiveGenerator<Output>,
-    seed: UInt64 = 42
+    seed: UInt64 = 42,
 ) throws -> (value: Output, tree: ChoiceTree) {
     try #require(
-        Array(ValueAndChoiceTreeInterpreter(gen, seed: seed).prefix(1)).first
+        Array(ValueAndChoiceTreeInterpreter(gen, seed: seed).prefix(1)).first,
     )
 }
 
@@ -84,7 +84,7 @@ struct ReducerReduceValuesTests {
         let property: (UInt64) -> Bool = { $0 < 5 }
 
         let result = try #require(
-            try Interpreters.reduce(gen: gen, tree: tree, config: .fast, property: property)
+            try Interpreters.reduce(gen: gen, tree: tree, config: .fast, property: property),
         )
 
         #expect(result.1 == 5)
@@ -101,7 +101,7 @@ struct ReducerReduceValuesTests {
         let property: (UInt64) -> Bool = { $0 < 50 }
 
         let result = try #require(
-            try Interpreters.reduce(gen: gen, tree: tree, config: .fast, property: property)
+            try Interpreters.reduce(gen: gen, tree: tree, config: .fast, property: property),
         )
 
         #expect(result.1 == 50)
@@ -118,7 +118,7 @@ struct ReducerReduceValuesTests {
         let property: (Int64) -> Bool = { $0 > -5 }
 
         let result = try #require(
-            try Interpreters.reduce(gen: gen, tree: tree, config: .fast, property: property)
+            try Interpreters.reduce(gen: gen, tree: tree, config: .fast, property: property),
         )
 
         #expect(result.1 == -5)
@@ -135,7 +135,7 @@ struct ReducerReduceValuesTests {
         let property: (UInt64) -> Bool = { _ in true }
 
         let result = try #require(
-            try Interpreters.reduce(gen: gen, tree: tree, config: .fast, property: property)
+            try Interpreters.reduce(gen: gen, tree: tree, config: .fast, property: property),
         )
 
         #expect(result.0 == originalSequence)
@@ -152,7 +152,7 @@ struct ReducerReduceValuesTests {
         let property: (UInt64) -> Bool = { $0 < 10 }
 
         let result = try #require(
-            try Interpreters.reduce(gen: gen, tree: tree, config: .fast, property: property)
+            try Interpreters.reduce(gen: gen, tree: tree, config: .fast, property: property),
         )
 
         #expect(property(result.1) == false)
@@ -178,7 +178,7 @@ struct ReducerReduceValuesTests {
         let property: (Character) -> Bool = { $0 <= "e" }
 
         let result = try #require(
-            try Interpreters.reduce(gen: gen, tree: tree, config: .fast, property: property)
+            try Interpreters.reduce(gen: gen, tree: tree, config: .fast, property: property),
         )
 
         #expect(result.1 == "f")
@@ -203,7 +203,7 @@ struct ReducerReduceValuesTests {
         let property: (Double) -> Bool = { _ in false }
 
         let result = try #require(
-            try Interpreters.reduce(gen: gen, tree: tree, config: .fast, property: property)
+            try Interpreters.reduce(gen: gen, tree: tree, config: .fast, property: property),
         )
 
         // Value should be reduced toward 0 (Pass 3 sets it to 0.0 directly since property always fails)
@@ -224,7 +224,7 @@ struct ReducerReduceValuesTests {
         }
 
         let result = try #require(
-            try Interpreters.reduce(gen: gen, tree: tree, config: .fast, property: property)
+            try Interpreters.reduce(gen: gen, tree: tree, config: .fast, property: property),
         )
 
         #expect(result.1.count == 3)

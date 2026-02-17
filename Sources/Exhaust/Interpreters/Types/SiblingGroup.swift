@@ -16,11 +16,11 @@ struct SiblingGroup: Equatable {
     var valueRanges: [ClosedRange<Int>]? {
         switch kind {
         case .bareValue:
-            return ranges
+            ranges
         case .sequence:
-            return nil
+            nil
         case .group:
-            return nil
+            nil
         }
     }
 }

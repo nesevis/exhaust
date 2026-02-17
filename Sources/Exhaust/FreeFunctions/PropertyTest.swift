@@ -10,7 +10,7 @@ enum PropertyTest {
         _ gen: ReflectiveGenerator<Output>,
         maxIterations: UInt64 = 100,
         seed: UInt64? = nil,
-        property: @escaping (Output) -> Bool
+        property: @escaping (Output) -> Bool,
     ) throws {
         var iterations = 0
         var generator = ValueInterpreter(gen, seed: seed, maxRuns: maxIterations)

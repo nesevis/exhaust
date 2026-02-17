@@ -20,7 +20,7 @@ extension ReducerStrategies {
         tree: ChoiceTree,
         property: (Output) -> Bool,
         sequence: ChoiceSequence,
-        rejectCache: inout ReducerCache
+        rejectCache: inout ReducerCache,
     ) throws -> (ChoiceSequence, Output)? {
         // Collect all numeric value/reduced entries with their sequence indices and container IDs.
         // Container ID increments each time we cross a container boundary (group/sequence close),
@@ -114,11 +114,11 @@ extension ReducerStrategies {
 
                         let newChoice1 = ChoiceValue(
                             fresh1.choice.tag.makeConvertible(bitPattern64: newBP1),
-                            tag: fresh1.choice.tag
+                            tag: fresh1.choice.tag,
                         )
                         let newChoice2 = ChoiceValue(
                             fresh2.choice.tag.makeConvertible(bitPattern64: newBP2),
-                            tag: fresh2.choice.tag
+                            tag: fresh2.choice.tag,
                         )
 
                         guard newChoice1.fits(in: fresh1.validRanges),
@@ -129,7 +129,7 @@ extension ReducerStrategies {
                         probe[idx2] = .value(.init(choice: newChoice2, validRanges: fresh2.validRanges))
 
                         guard probe.shortLexPrecedes(current) else { return false }
-                        
+
                         guard rejectCache.contains(probe) == false else {
                             return false
                         }
