@@ -79,23 +79,6 @@ extension ReducerStrategies {
             var bestProbeOutput: Output?
             var bestProbeDelta: UInt64 = 0
 
-            // Compute a guess: midpoint of the containing valid range, converted to delta space
-            let guess: UInt64? = {
-                guard let containingRange else {
-                    return nil
-                }
-                let rangeMid = containingRange.lowerBound / 2 + containingRange.upperBound / 2
-                let guessDelta: UInt64
-                if searchUpward {
-                    guessDelta = rangeMid > currentBP ? rangeMid - currentBP : 0
-                } else {
-                    guessDelta = currentBP > rangeMid ? currentBP - rangeMid : 0
-                }
-                // Clamp to valid delta range [0, distance)
-                guard guessDelta > 0, guessDelta < distance else { return nil }
-                return guessDelta
-            }()
-
             let bestDelta = AdaptiveProbe.binarySearchWithGuess(
                 { (delta: UInt64) -> Bool in
                     guard delta > 0 else { return true } // predicate(0) assumed true
@@ -135,8 +118,7 @@ extension ReducerStrategies {
                     return fails
                 },
                 low: UInt64(0),
-                high: distance,
-                guess: guess
+                high: distance
             )
 
             if bestDelta > 0 {
