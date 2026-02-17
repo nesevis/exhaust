@@ -20,7 +20,7 @@ extension ReducerStrategies {
         property: (Output) -> Bool,
         sequence: ChoiceSequence,
         valueSpans: [ChoiceSpan],
-        bloomFilter: inout BloomFilter
+        rejectCache: inout ReducerCache
     ) throws -> (ChoiceSequence, Output)? {
         var current = sequence
         var progress = false
@@ -47,7 +47,7 @@ extension ReducerStrategies {
             )
             var candidate = current
             candidate[seqIdx] = .reduced(.init(choice: targetChoice, validRanges: v.validRanges))
-            if candidate.shortLexPrecedes(current), bloomFilter.contains(candidate) == false {
+            if candidate.shortLexPrecedes(current), rejectCache.contains(candidate) == false {
                 if let output = try? Interpreters.materialize(gen, with: tree, using: candidate),
                    property(output) == false
                 {
@@ -56,7 +56,7 @@ extension ReducerStrategies {
                     progress = true
                     continue
                 } else {
-                    bloomFilter.insert(candidate)
+                    rejectCache.insert(candidate)
                 }
             }
 
@@ -94,16 +94,16 @@ extension ReducerStrategies {
                     probe[seqIdx] = .reduced(.init(choice: newChoice, validRanges: v.validRanges))
                     guard
                         probe.shortLexPrecedes(current),
-                        bloomFilter.contains(probe) == false
+                        rejectCache.contains(probe) == false
                     else {
                         return false
                     }
                     guard let output = try? Interpreters.materialize(gen, with: tree, using: probe) else {
-                        bloomFilter.insert(probe)
+                        rejectCache.insert(probe)
                         return false
                     }
                     let fails = property(output) == false
-                    if !fails { bloomFilter.insert(probe) }
+                    if !fails { rejectCache.insert(probe) }
                     return fails
                 },
                 low: UInt64(0),
@@ -142,7 +142,7 @@ extension ReducerStrategies {
 
                     guard boundary.shortLexPrecedes(current) else { continue }
 
-                    if bloomFilter.contains(boundary) == false {
+                    if rejectCache.contains(boundary) == false {
                         if let output = try? Interpreters.materialize(gen, with: tree, using: boundary),
                            property(output) == false
                         {
@@ -151,7 +151,7 @@ extension ReducerStrategies {
                             progress = true
                             break
                         } else {
-                            bloomFilter.insert(boundary)
+                            rejectCache.insert(boundary)
                         }
                     }
                 }

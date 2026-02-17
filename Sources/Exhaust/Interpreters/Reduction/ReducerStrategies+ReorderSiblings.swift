@@ -20,7 +20,7 @@ extension ReducerStrategies {
         property: (Output) -> Bool,
         sequence: ChoiceSequence,
         siblingGroups: [SiblingGroup],
-        bloomFilter: inout BloomFilter
+        rejectCache: inout ReducerCache
     ) throws -> (ChoiceSequence, Output)? {
         var current = sequence
         var progress = false
@@ -52,7 +52,7 @@ extension ReducerStrategies {
             // Build a candidate with siblings in sorted order
             if let (newSeq, output) = try applySiblingPermutation(
                 gen, tree: tree, property: property,
-                sequence: current, ranges: ranges, permutation: sortedIndices, bloomFilter: &bloomFilter
+                sequence: current, ranges: ranges, permutation: sortedIndices, bloomFilter: &rejectCache
             ) {
                 current = newSeq
                 latestOutput = output
@@ -83,7 +83,7 @@ extension ReducerStrategies {
 
                     if let (newSeq, output) = try applySiblingPermutation(
                         gen, tree: tree, property: property,
-                        sequence: current, ranges: liveRanges, permutation: swapPerm, bloomFilter: &bloomFilter
+                        sequence: current, ranges: liveRanges, permutation: swapPerm, bloomFilter: &rejectCache
                     ) {
                         current = newSeq
                         latestOutput = output
@@ -117,7 +117,7 @@ extension ReducerStrategies {
         sequence: ChoiceSequence,
         ranges: [ClosedRange<Int>],
         permutation: [Int],
-        bloomFilter: inout BloomFilter
+        bloomFilter: inout ReducerCache
     ) throws -> (ChoiceSequence, Output)? {
         // Extract the slices in original order
         let slices = ranges.map { Array(sequence[$0]) }

@@ -19,7 +19,7 @@ extension ReducerStrategies {
         property: (Output) -> Bool,
         sequence: ChoiceSequence,
         siblingGroups: [SiblingGroup],
-        bloomFilter: inout BloomFilter
+        rejectCache: inout ReducerCache
     ) throws -> (ChoiceSequence, Output)? {
         var current = sequence
         var progress = false
@@ -70,12 +70,12 @@ extension ReducerStrategies {
 
                     guard
                         probe.shortLexPrecedes(current),
-                        bloomFilter.contains(probe) == false
+                        rejectCache.contains(probe) == false
                     else {
                         return false
                     }
                     guard let output = try? Interpreters.materialize(gen, with: tree, using: probe) else {
-                        bloomFilter.insert(probe)
+                        rejectCache.insert(probe)
                         return false
                     }
                     let success = property(output) == false
@@ -83,7 +83,7 @@ extension ReducerStrategies {
                         lastProbeOutput = output
                         lastProbe = probe
                     } else {
-                        bloomFilter.insert(probe)
+                        rejectCache.insert(probe)
                     }
                     return success
                 },

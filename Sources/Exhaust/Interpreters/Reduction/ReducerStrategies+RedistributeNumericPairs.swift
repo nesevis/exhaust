@@ -20,7 +20,7 @@ extension ReducerStrategies {
         tree: ChoiceTree,
         property: (Output) -> Bool,
         sequence: ChoiceSequence,
-        bloomFilter: inout BloomFilter
+        rejectCache: inout ReducerCache
     ) throws -> (ChoiceSequence, Output)? {
         // Collect all numeric value/reduced entries with their sequence indices and container IDs.
         // Container ID increments each time we cross a container boundary (group/sequence close),
@@ -130,11 +130,11 @@ extension ReducerStrategies {
 
                         guard probe.shortLexPrecedes(current) else { return false }
                         
-                        guard bloomFilter.contains(probe) == false else {
+                        guard rejectCache.contains(probe) == false else {
                             return false
                         }
                         guard let output = try? Interpreters.materialize(gen, with: tree, using: probe) else {
-                            bloomFilter.insert(probe)
+                            rejectCache.insert(probe)
                             return false
                         }
                         let success = property(output) == false
@@ -142,7 +142,7 @@ extension ReducerStrategies {
                             lastProbe = probe
                             lastProbeOutput = output
                         } else {
-                            bloomFilter.insert(probe)
+                            rejectCache.insert(probe)
                         }
                         return success
                     }

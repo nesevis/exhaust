@@ -1,13 +1,11 @@
 //
-//  BloomFilter.swift
+//  ReducerCache.swift
 //  Exhaust
 //
 //  Created by Chris Kolbu on 17/2/2026.
 //
 
-/// A Bloom filter with k=3 hash functions, used by the reducer to minimise oracle and materialize calls.
-/// Uses double hashing: index_i = (h1 + i * h2) % size, for i in 0..<3.
-struct Cache {
+struct ReducerCache {
     private var set = Set<ChoiceSequence>(minimumCapacity: 1000)
 
     func contains(_ value: ChoiceSequence) -> Bool {

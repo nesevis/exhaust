@@ -16,7 +16,7 @@ extension ReducerStrategies {
         property: (Output) -> Bool,
         sequence: ChoiceSequence,
         valueSpans: [ChoiceSpan],
-        bloomFilter: inout BloomFilter
+        rejectCache: inout ReducerCache
     ) throws -> (ChoiceSequence, Output)? {
         var updatedSequence = sequence
         for span in valueSpans {
@@ -28,11 +28,11 @@ extension ReducerStrategies {
         }
         guard
             updatedSequence != sequence,
-            bloomFilter.contains(updatedSequence) == false
+            rejectCache.contains(updatedSequence) == false
         else {
             return nil
         }
-        bloomFilter.insert(updatedSequence) 
+        rejectCache.insert(updatedSequence) 
         if let output = try? Interpreters.materialize(gen, with: tree, using: updatedSequence), property(output) == false {
             return (updatedSequence, output)
         }

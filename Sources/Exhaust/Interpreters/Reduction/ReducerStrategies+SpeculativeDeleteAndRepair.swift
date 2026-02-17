@@ -26,9 +26,9 @@ extension ReducerStrategies {
         property: (Output) -> Bool,
         sequence: ChoiceSequence,
         spans: [ChoiceSpan],
-        bloomFilter: inout BloomFilter
+        rejectCache: inout ReducerCache
     ) throws -> (ChoiceSequence, Output)? {
-        guard bloomFilter.contains(sequence) == false else {
+        guard rejectCache.contains(sequence) == false else {
             return nil
         }
         // Group spans by depth to process each level independently
@@ -43,7 +43,7 @@ extension ReducerStrategies {
 
             if let result = try divideAndConquerDeleteRepair(
                 gen, tree: tree, property: property,
-                sequence: sequence, spans: depthSpans[...], bloomFilter: &bloomFilter
+                sequence: sequence, spans: depthSpans[...], rejectCache: &rejectCache
             ) {
                 return result
             }
@@ -59,14 +59,14 @@ extension ReducerStrategies {
         property: (Output) -> Bool,
         sequence: ChoiceSequence,
         spans: ArraySlice<ChoiceSpan>,
-        bloomFilter: inout BloomFilter
+        rejectCache: inout ReducerCache
     ) throws -> (ChoiceSequence, Output)? {
         guard !spans.isEmpty else { return nil }
 
         var shortened = sequence
         shortened.removeSubranges(spans.map(\.range))
         
-        guard bloomFilter.contains(shortened) == false else {
+        guard rejectCache.contains(shortened) == false else {
             return nil
         }
         // Not adding to the bloom filter here, as it will be retried in repairAfterDeletion
@@ -79,7 +79,7 @@ extension ReducerStrategies {
         if pureDeletion == nil {
             if let result = try repairAfterDeletion(
                 gen, tree: tree, property: property,
-                original: sequence, shortened: shortened, bloomFilter: &bloomFilter
+                original: sequence, shortened: shortened, rejectCache: &rejectCache
             ) {
                 return result
             }
@@ -92,13 +92,13 @@ extension ReducerStrategies {
         let mid = spans.startIndex + spans.count / 2
         if let result = try divideAndConquerDeleteRepair(
             gen, tree: tree, property: property,
-            sequence: sequence, spans: spans[spans.startIndex..<mid], bloomFilter: &bloomFilter
+            sequence: sequence, spans: spans[spans.startIndex..<mid], rejectCache: &rejectCache
         ) {
             return result
         }
         return try divideAndConquerDeleteRepair(
             gen, tree: tree, property: property,
-            sequence: sequence, spans: spans[mid..<spans.endIndex], bloomFilter: &bloomFilter
+            sequence: sequence, spans: spans[mid..<spans.endIndex], rejectCache: &rejectCache
         )
     }
 
@@ -115,7 +115,7 @@ extension ReducerStrategies {
         property: (Output) -> Bool,
         original: ChoiceSequence,
         shortened: ChoiceSequence,
-        bloomFilter: inout BloomFilter
+        rejectCache: inout ReducerCache
     ) throws -> (ChoiceSequence, Output)? {
         typealias ValueInfo = (index: Int, bp: UInt64, target: UInt64, distance: UInt64, upward: Bool, value: ChoiceSequenceValue.Value)
         var values = [ValueInfo]()
@@ -140,7 +140,7 @@ extension ReducerStrategies {
         var k = maxDist
         while k >= 1 {
             let probe = applyUniformRepair(shortened, values: values, k: k)
-            if bloomFilter.contains(probe) == false {
+            if rejectCache.contains(probe) == false {
                 if let output = try? Interpreters.materialize(gen, with: tree, using: probe),
                    property(output) == false,
                    probe.shortLexPrecedes(original)
@@ -149,7 +149,7 @@ extension ReducerStrategies {
                     bestOutput = output
                     break
                 } else {
-                    bloomFilter.insert(probe)
+                    rejectCache.insert(probe)
                 }
             }
             if k <= sweepStride { break }
@@ -159,7 +159,7 @@ extension ReducerStrategies {
         // If coarse sweep didn't find k but stride > 1, try k=1 as well
         if bestK == 0 && sweepStride > 1 {
             let probe = applyUniformRepair(shortened, values: values, k: 1)
-            if bloomFilter.contains(probe) == false {
+            if rejectCache.contains(probe) == false {
                 if let output = try? Interpreters.materialize(gen, with: tree, using: probe),
                    property(output) == false,
                    probe.shortLexPrecedes(original)
@@ -167,7 +167,7 @@ extension ReducerStrategies {
                     bestK = 1
                     bestOutput = output
                 } else {
-                    bloomFilter.insert(probe)
+                    rejectCache.insert(probe)
                 }
             }
         }
@@ -184,7 +184,7 @@ extension ReducerStrategies {
             while lo < hi {
                 let mid = lo + (hi - lo) / 2
                 let probe = applyUniformRepair(shortened, values: values, k: mid)
-                if bloomFilter.contains(probe) == false {
+                if rejectCache.contains(probe) == false {
                     if let output = try? Interpreters.materialize(gen, with: tree, using: probe),
                        property(output) == false,
                        probe.shortLexPrecedes(original)
@@ -193,7 +193,7 @@ extension ReducerStrategies {
                         refinedOutput = output
                         hi = mid
                     } else {
-                        bloomFilter.insert(probe)
+                        rejectCache.insert(probe)
                         lo = mid + 1
                     }
                 } else {

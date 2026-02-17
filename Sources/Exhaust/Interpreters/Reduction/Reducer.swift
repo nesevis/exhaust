@@ -62,7 +62,7 @@ extension Interpreters {
         var didNaivelyMinimise = false
         var loops = 0
         var passes = ShrinkPass.allCases
-        var bloomFilter = BloomFilter()
+        var rejectCache = ReducerCache()
         var seen = Set<ChoiceSequence>()
         while stallBudget > 0 {
             loops += 1
@@ -87,7 +87,7 @@ extension Interpreters {
                         continue
                     }
                     let valueSpans = ChoiceSequence.extractAllValueSpans(from: currentSequence)
-                    if valueSpans.isEmpty == false, let (newSequence, output) = try ReducerStrategies.naiveSimplifyValues(gen, tree: currentTree, property: oracle, sequence: currentSequence, valueSpans: valueSpans, bloomFilter: &bloomFilter) {
+                    if valueSpans.isEmpty == false, let (newSequence, output) = try ReducerStrategies.naiveSimplifyValues(gen, tree: currentTree, property: oracle, sequence: currentSequence, valueSpans: valueSpans, rejectCache: &rejectCache) {
                         previousSequence = currentSequence
                         currentSequence = newSequence
                         currentOutput = output
@@ -97,7 +97,7 @@ extension Interpreters {
                 case .deleteContainerSpans:
                     // Adaptive container span deletion, ie the […] and (…) spans in [(V)(V)]
                     let containerSpans = ChoiceSequence.extractContainerSpans(from: currentSequence)
-                    if containerSpans.isEmpty == false, let (newSequence, output) = try ReducerStrategies.adaptiveDeleteSpans(gen, tree: currentTree, property: oracle, sequence: currentSequence, spans: containerSpans, bloomFilter: &bloomFilter) {
+                    if containerSpans.isEmpty == false, let (newSequence, output) = try ReducerStrategies.adaptiveDeleteSpans(gen, tree: currentTree, property: oracle, sequence: currentSequence, spans: containerSpans, rejectCache: &rejectCache) {
                         previousSequence = currentSequence
                         currentSequence = newSequence
                         currentOutput = output
@@ -106,7 +106,7 @@ extension Interpreters {
                 case .deleteSequenceBoundaries:
                     // Pass 2a: Collapse sequence boundaries, i.e [[V][V][V]] -> [[VVV]]
                     let boundarySpans = ChoiceSequence.extractSequenceBoundarySpans(from: currentSequence)
-                    if boundarySpans.isEmpty == false, let (newSequence, output) = try ReducerStrategies.adaptiveDeleteSpans(gen, tree: currentTree, property: oracle, sequence: currentSequence, spans: boundarySpans, bloomFilter: &bloomFilter) {
+                    if boundarySpans.isEmpty == false, let (newSequence, output) = try ReducerStrategies.adaptiveDeleteSpans(gen, tree: currentTree, property: oracle, sequence: currentSequence, spans: boundarySpans, rejectCache: &rejectCache) {
                         previousSequence = currentSequence
                         currentSequence = newSequence
                         currentOutput = output
@@ -115,7 +115,7 @@ extension Interpreters {
                 case .deleteFreeStandingValues:
                     // Pass 2b: Sequence element deletion, i.e the individual Vs in [VVVVV]
                     let freeStandingValueSpans = ChoiceSequence.extractFreeStandingValueSpans(from: currentSequence)
-                    if freeStandingValueSpans.isEmpty == false, let (newSequence, output) = try ReducerStrategies.adaptiveDeleteSpans(gen, tree: currentTree, property: oracle, sequence: currentSequence, spans: freeStandingValueSpans, bloomFilter: &bloomFilter) {
+                    if freeStandingValueSpans.isEmpty == false, let (newSequence, output) = try ReducerStrategies.adaptiveDeleteSpans(gen, tree: currentTree, property: oracle, sequence: currentSequence, spans: freeStandingValueSpans, rejectCache: &rejectCache) {
                         previousSequence = currentSequence
                         currentSequence = newSequence
                         currentOutput = output
@@ -123,7 +123,7 @@ extension Interpreters {
                     }
                 case .simplifyValuesToSemanticSimplest:
                     let valueSpans = ChoiceSequence.extractAllValueSpans(from: currentSequence)
-                    if valueSpans.isEmpty == false, let (newSequence, output) = try ReducerStrategies.simplifyValues(gen, tree: currentTree, property: oracle, sequence: currentSequence, valueSpans: valueSpans, bloomFilter: &bloomFilter) {
+                    if valueSpans.isEmpty == false, let (newSequence, output) = try ReducerStrategies.simplifyValues(gen, tree: currentTree, property: oracle, sequence: currentSequence, valueSpans: valueSpans, rejectCache: &rejectCache) {
                         previousSequence = currentSequence
                         currentSequence = newSequence
                         currentOutput = output
@@ -131,7 +131,7 @@ extension Interpreters {
                     }
                 case .reduceValues:
                     let valueSpans = ChoiceSequence.extractAllValueSpans(from: currentSequence)
-                    if valueSpans.isEmpty == false, let (newSequence, output) = try ReducerStrategies.reduceValues(gen, tree: currentTree, property: oracle, sequence: currentSequence, valueSpans: valueSpans, bloomFilter: &bloomFilter) {
+                    if valueSpans.isEmpty == false, let (newSequence, output) = try ReducerStrategies.reduceValues(gen, tree: currentTree, property: oracle, sequence: currentSequence, valueSpans: valueSpans, rejectCache: &rejectCache) {
                         previousSequence = currentSequence
                         currentSequence = newSequence
                         currentOutput = output
@@ -140,7 +140,7 @@ extension Interpreters {
                 case .redistributeNumericPairs:
                     let valueCount = currentSequence.count(where: { $0.value != nil })
                     if valueCount >= 2, valueCount <= 16,
-                       let (newSequence, output) = try ReducerStrategies.redistributeNumericPairs(gen, tree: currentTree, property: oracle, sequence: currentSequence, bloomFilter: &bloomFilter) {
+                       let (newSequence, output) = try ReducerStrategies.redistributeNumericPairs(gen, tree: currentTree, property: oracle, sequence: currentSequence, rejectCache: &rejectCache) {
                         previousSequence = currentSequence
                         currentSequence = newSequence
                         currentOutput = output
@@ -151,7 +151,7 @@ extension Interpreters {
                     let containerSpans = ChoiceSequence.extractContainerSpans(from: currentSequence)
                     let deletableSpans = freeValueSpans + containerSpans
                     if !deletableSpans.isEmpty,
-                       let (newSequence, output) = try ReducerStrategies.speculativeDeleteAndRepair(gen, tree: currentTree, property: oracle, sequence: currentSequence, spans: deletableSpans, bloomFilter: &bloomFilter) {
+                       let (newSequence, output) = try ReducerStrategies.speculativeDeleteAndRepair(gen, tree: currentTree, property: oracle, sequence: currentSequence, spans: deletableSpans, rejectCache: &rejectCache) {
                         previousSequence = currentSequence
                         currentSequence = newSequence
                         currentOutput = output
@@ -160,7 +160,7 @@ extension Interpreters {
                 case .reduceValuesInTandem:
                     // Reduce individual values in tandem by equal amounts, via binary search
                     let siblingGroups = ChoiceSequence.extractSiblingGroups(from: currentSequence)
-                    if siblingGroups.isEmpty == false, let (newSequence, output) = try ReducerStrategies.reduceValuesInTandem(gen, tree: currentTree, property: oracle, sequence: currentSequence, siblingGroups: siblingGroups, bloomFilter: &bloomFilter) {
+                    if siblingGroups.isEmpty == false, let (newSequence, output) = try ReducerStrategies.reduceValuesInTandem(gen, tree: currentTree, property: oracle, sequence: currentSequence, siblingGroups: siblingGroups, rejectCache: &rejectCache) {
                         previousSequence = currentSequence
                         currentSequence = newSequence
                         currentOutput = output
@@ -169,7 +169,7 @@ extension Interpreters {
                 case .normaliseSiblingOrder:
                     let siblingGroups = ChoiceSequence.extractSiblingGroups(from: currentSequence)
                     if siblingGroups.isEmpty == false,
-                       let (newSequence, output) = try ReducerStrategies.reorderSiblings(gen, tree: currentTree, property: oracle, sequence: currentSequence, siblingGroups: siblingGroups, bloomFilter: &bloomFilter) {
+                       let (newSequence, output) = try ReducerStrategies.reorderSiblings(gen, tree: currentTree, property: oracle, sequence: currentSequence, siblingGroups: siblingGroups, rejectCache: &rejectCache) {
                         previousSequence = currentSequence
                         currentSequence = newSequence
                         currentOutput = output
