@@ -48,7 +48,7 @@ extension ReducerStrategies {
 
             var lastProbe: ChoiceSequence?
             var lastProbeOutput: Output?
-            // Why is this never used?
+            var lastProbeDelta: UInt64 = 0
             let bestDelta = AdaptiveProbe.binarySearchWithGuess(
                 { (delta: UInt64) -> Bool in
                     guard delta > 0 else { return true } // predicate(0) assumed true
@@ -80,8 +80,11 @@ extension ReducerStrategies {
                     }
                     let success = property(output) == false
                     if success {
-                        lastProbeOutput = output
-                        lastProbe = probe
+                        if delta >= lastProbeDelta {
+                            lastProbeDelta = delta
+                            lastProbeOutput = output
+                            lastProbe = probe
+                        }
                     } else {
                         rejectCache.insert(probe)
                     }
@@ -91,10 +94,43 @@ extension ReducerStrategies {
                 high: distance
             )
 
-            if let lastProbeOutput, let lastProbe, lastProbe.shortLexPrecedes(current) {
+            if bestDelta > 0,
+               lastProbeDelta == bestDelta,
+               let lastProbeOutput,
+               let lastProbe,
+               lastProbe.shortLexPrecedes(current)
+            {
                 latestOutput = lastProbeOutput
                 current = lastProbe
                 progress = true
+                continue
+            }
+
+            if bestDelta > 0 {
+                // Fallback: reconstruct accepted candidate if probe bookkeeping missed it.
+                var probe = current
+                for tandemCandidate in group.valueRanges ?? [] {
+                    guard let v = current[tandemCandidate.lowerBound].value else { continue }
+                    let newValue = searchUpward
+                        ? v.choice.bitPattern64 &+ bestDelta
+                        : v.choice.bitPattern64 &- bestDelta
+                    let newChoice = ChoiceValue(
+                        v.choice.tag.makeConvertible(bitPattern64: newValue),
+                        tag: v.choice.tag
+                    )
+                    guard newChoice.fits(in: v.validRanges) else { continue }
+                    probe[tandemCandidate.lowerBound] = .value(.init(choice: newChoice, validRanges: v.validRanges))
+                }
+                if probe.shortLexPrecedes(current),
+                   let output = try? Interpreters.materialize(gen, with: tree, using: probe),
+                   property(output) == false
+                {
+                    latestOutput = output
+                    current = probe
+                    progress = true
+                } else {
+                    rejectCache.insert(probe)
+                }
             }
         }
 

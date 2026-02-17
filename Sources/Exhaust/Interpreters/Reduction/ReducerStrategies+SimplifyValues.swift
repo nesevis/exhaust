@@ -38,7 +38,11 @@ extension ReducerStrategies {
 
         var i = 0
         while i < valueIndices.count {
+            var bestCandidate: ChoiceSequence?
+            var bestOutput: Output?
+            var bestSize = 0
             let k = AdaptiveProbe.findInteger { (size: Int) in
+                guard size > 0 else { return true }
                 var candidate = current
                 for j in 0 ..< size {
                     let idx = i + j
@@ -59,20 +63,40 @@ extension ReducerStrategies {
                     return false
                 }
                 let fails = property(output) == false
-                if !fails { rejectCache.insert(candidate) }
+                if fails {
+                    if size >= bestSize {
+                        bestSize = size
+                        bestCandidate = candidate
+                        bestOutput = output
+                    }
+                } else {
+                    rejectCache.insert(candidate)
+                }
                 return fails
             }
 
             if k > 0 {
-                for j in 0 ..< k {
-                    let seqIdx = valueIndices[i + j]
-                    guard case let .value(v) = current[seqIdx] else { continue }
-                    let simplified = v.choice.semanticSimplest
-                    current[seqIdx] = .value(.init(choice: simplified, validRanges: v.validRanges))
-                }
-                if let output = try? Interpreters.materialize(gen, with: tree, using: current) {
-                    latestOutput = output
+                if bestSize == k, let bestCandidate, let bestOutput {
+                    current = bestCandidate
+                    latestOutput = bestOutput
                     progress = true
+                } else {
+                    // Fallback: reconstruct accepted candidate if probe bookkeeping missed it.
+                    var candidate = current
+                    for j in 0 ..< k {
+                        let seqIdx = valueIndices[i + j]
+                        guard case let .value(v) = candidate[seqIdx] else { continue }
+                        let simplified = v.choice.semanticSimplest
+                        candidate[seqIdx] = .value(.init(choice: simplified, validRanges: v.validRanges))
+                    }
+                    if candidate.shortLexPrecedes(current),
+                       let output = try? Interpreters.materialize(gen, with: tree, using: candidate),
+                       property(output) == false
+                    {
+                        current = candidate
+                        latestOutput = output
+                        progress = true
+                    }
                 }
                 i += k
             } else {

@@ -28,31 +28,30 @@ extension ReducerStrategies {
         var i = 0
         while i < sortedSpans.count {
             let span = sortedSpans[i]
+            var maxBatch = 0
+            while i + maxBatch < sortedSpans.count, sortedSpans[i + maxBatch].depth == span.depth {
+                maxBatch += 1
+            }
+            var bestCandidate: ChoiceSequence?
+            var bestOutput: Output?
+            var bestSize = 0
 
             // Use the adaptive probe `findInteger` to find the largest batch we can delete
             let k = AdaptiveProbe.findInteger { (size: Int) in
-                // Holy shit this entire closure is so expensive!
-                var rangesToDelete = [ClosedRange<Int>]()
-                var ii = 0
-                while ii < size {
-                    let index = i + ii
-
-                    guard index < sortedSpans.count else {
-                        return false
-                    }
-
-                    // Only batch spans at the same depth
-                    guard sortedSpans[index].depth == span.depth else {
-                        return false
-                    }
-                    rangesToDelete.append(sortedSpans[index].range)
-
-                    ii += 1
+                guard size > 0 else {
+                    return true
+                }
+                guard size <= maxBatch else {
+                    return false
                 }
 
-                // Apply deletion
+                var rangeSet = RangeSet<Int>()
+                for ii in 0 ..< size {
+                    rangeSet.insert(contentsOf: sortedSpans[i + ii].range.asRange)
+                }
+
                 var candidate = current
-                candidate.removeSubranges(rangesToDelete)
+                candidate.removeSubranges(rangeSet)
                 
                 guard rejectCache.contains(candidate) == false else {
                     return false
@@ -62,25 +61,37 @@ extension ReducerStrategies {
                     return false
                 }
                 let fails = property(output) == false
-                if !fails { rejectCache.insert(candidate) }
+                if fails {
+                    if size >= bestSize {
+                        bestSize = size
+                        bestCandidate = candidate
+                        bestOutput = output
+                    }
+                } else {
+                    rejectCache.insert(candidate)
+                }
                 return fails
             }
 
             if k > 0 {
-                // Apply the deletion
+                if bestSize == k, let bestCandidate, let bestOutput {
+                    current = bestCandidate
+                    // Don't advance - try deleting more from the same position
+                    // But we need to rebuild spans now that the subranges have been removed
+                    return (current, bestOutput)
+                }
+
+                // Fallback: reconstruct accepted candidate if probe bookkeeping missed it.
                 var rangeSet = RangeSet<Int>()
                 for j in 0 ..< k {
                     rangeSet.insert(contentsOf: sortedSpans[i + j].range.asRange)
                 }
-
                 var candidate = current
                 candidate.removeSubranges(rangeSet)
-
-                // Get the output for the accepted candidate
-                if let output = try? Interpreters.materialize(gen, with: tree, using: candidate) {
+                if let output = try? Interpreters.materialize(gen, with: tree, using: candidate),
+                   property(output) == false
+                {
                     current = candidate
-                    // Don't advance - try deleting more from the same position
-                    // But we need to rebuild spans now that the subranges have been removed
                     return (current, output)
                 }
             }

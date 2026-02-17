@@ -135,6 +135,7 @@ extension ReducerStrategies {
         // Coarse sweep: ~16 probes from maxDist down to 1
         let sweepStride = max(1, maxDist / 16)
         var bestK: UInt64 = 0
+        var bestProbe: ChoiceSequence?
         var bestOutput: Output?
 
         var k = maxDist
@@ -146,6 +147,7 @@ extension ReducerStrategies {
                    probe.shortLexPrecedes(original)
                 {
                     bestK = k
+                    bestProbe = probe
                     bestOutput = output
                     break
                 } else {
@@ -165,6 +167,7 @@ extension ReducerStrategies {
                    probe.shortLexPrecedes(original)
                 {
                     bestK = 1
+                    bestProbe = probe
                     bestOutput = output
                 } else {
                     rejectCache.insert(probe)
@@ -172,7 +175,7 @@ extension ReducerStrategies {
             }
         }
 
-        guard bestK > 0, let foundOutput = bestOutput else { return nil }
+        guard bestK > 0, let foundOutput = bestOutput, let foundProbe = bestProbe else { return nil }
 
         // Refine: binary search between bestK and bestK-sweepStride
         let lowerBound = bestK > sweepStride ? bestK - sweepStride : 1
@@ -180,6 +183,7 @@ extension ReducerStrategies {
             var lo = lowerBound
             var hi = bestK
             var refinedK = bestK
+            var refinedProbe = foundProbe
             var refinedOutput = foundOutput
             while lo < hi {
                 let mid = lo + (hi - lo) / 2
@@ -190,6 +194,7 @@ extension ReducerStrategies {
                        probe.shortLexPrecedes(original)
                     {
                         refinedK = mid
+                        refinedProbe = probe
                         refinedOutput = output
                         hi = mid
                     } else {
@@ -200,10 +205,11 @@ extension ReducerStrategies {
                     lo = mid + 1
                 }
             }
-            return (applyUniformRepair(shortened, values: values, k: refinedK), refinedOutput)
+            _ = refinedK
+            return (refinedProbe, refinedOutput)
         }
 
-        return (applyUniformRepair(shortened, values: values, k: bestK), foundOutput)
+        return (foundProbe, foundOutput)
     }
 
     /// Applies uniform repair: moves each value min(distance_i, k) toward its reduction target.

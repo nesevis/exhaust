@@ -63,6 +63,9 @@ extension ReducerStrategies {
             // Binary search: predicate(delta) means "can we move delta steps toward the target and still fail?"
             // predicate(0) = true (no change), predicate(distance) = false (target was just rejected)
             guard distance > 1 else { continue }
+            var bestProbe: ChoiceSequence?
+            var bestProbeOutput: Output?
+            var bestProbeDelta: UInt64 = 0
 
             // Compute a guess: midpoint of the containing valid range, converted to delta space
             let guess: UInt64? = {
@@ -103,7 +106,15 @@ extension ReducerStrategies {
                         return false
                     }
                     let fails = property(output) == false
-                    if !fails { rejectCache.insert(probe) }
+                    if fails {
+                        if delta >= bestProbeDelta {
+                            bestProbeDelta = delta
+                            bestProbe = probe
+                            bestProbeOutput = output
+                        }
+                    } else {
+                        rejectCache.insert(probe)
+                    }
                     return fails
                 },
                 low: UInt64(0),
@@ -112,17 +123,33 @@ extension ReducerStrategies {
             )
 
             if bestDelta > 0 {
+                if bestProbeDelta == bestDelta, let bestProbe, let bestProbeOutput {
+                    current = bestProbe
+                    latestOutput = bestProbeOutput
+                    progress = true
+                    continue
+                }
+
+                // Fallback: reconstruct accepted candidate if probe bookkeeping missed it.
                 let newBP = searchUpward ? currentBP + bestDelta : currentBP - bestDelta
                 let newChoice = ChoiceValue(
                     v.choice.tag.makeConvertible(bitPattern64: newBP),
                     tag: v.choice.tag
                 )
-                current[seqIdx] = .reduced(.init(choice: newChoice, validRanges: v.validRanges))
-                if let output = try? Interpreters.materialize(gen, with: tree, using: current) {
+                var candidate = current
+                candidate[seqIdx] = .reduced(.init(choice: newChoice, validRanges: v.validRanges))
+                if candidate.shortLexPrecedes(current),
+                   let output = try? Interpreters.materialize(gen, with: tree, using: candidate),
+                   property(output) == false
+                {
+                    current = candidate
                     latestOutput = output
                     progress = true
+                    continue
                 }
-            } else {
+            }
+
+            if bestDelta == 0 {
                 // No reduction was possible here. Let's try
                 // **Local boundary search**: Are there better shrinks just beyond the horizon?
                 let offsets = [bestDelta + 1, bestDelta + 2, bestDelta + 4, bestDelta + 8, bestDelta + 16]
