@@ -1,7 +1,6 @@
 import Foundation
 
 public protocol Arbitrary {
-    
     /// The default, canonical `ReflectiveGenerator` for this type.
     ///
     /// This generator should aim to produce a wide and useful distribution of values.

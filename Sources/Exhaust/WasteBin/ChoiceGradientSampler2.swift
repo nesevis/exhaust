@@ -8,42 +8,42 @@
 
 import Foundation
 
-/// Choice Gradient Sampling implementation that closely follows the reference algorithm from
-/// Harrison Goldstein's dissertation "Property-Based Testing for the People", Figure 3.3.
-///
-/// This implementation prioritizes algorithmic fidelity over performance optimizations.
-//public struct ChoiceGradientSampler2 {
-//    
+// Choice Gradient Sampling implementation that closely follows the reference algorithm from
+// Harrison Goldstein's dissertation "Property-Based Testing for the People", Figure 3.3.
+//
+// This implementation prioritizes algorithmic fidelity over performance optimizations.
+// public struct ChoiceGradientSampler2 {
+//
 //    // MARK: - Core Types
-//    
+//
 //    /// Result of CGS optimization containing valid values and metrics
 //    public struct CGSResult<Output> {
 //        /// All valid values discovered during optimization
 //        public let validValues: Set<Output>
-//        
+//
 //        /// The optimized generator
 //        public let optimizedGenerator: ReflectiveGenerator<Output>
-//        
+//
 //        /// Original validity rate before optimization
 //        public let originalValidRate: Double
-//        
+//
 //        /// Final validity rate after optimization
 //        public let finalValidRate: Double
-//        
+//
 //        /// Improvement factor
 //        public var improvementFactor: Double {
 //            guard originalValidRate > 0 else { return finalValidRate > 0 ? Double.infinity : 1.0 }
 //            return finalValidRate / originalValidRate
 //        }
 //    }
-//    
+//
 //    // MARK: - Main Algorithm
-//    
+//
 //    /// Implements the exact CGS algorithm from Figure 3.3
-//    /// 
+//    ///
 //    /// Algorithm steps:
 //    /// 1: g ← G
-//    /// 2: V ← ∅  
+//    /// 2: V ← ∅
 //    /// 3: while true do
 //    /// 4:   if νg ≠ ∅ then return νg ∪ V
 //    /// 5:   if isVoid g then g ← G
@@ -66,30 +66,30 @@ import Foundation
 //        samples: Int = 50,
 //        maxIterations: Int = 100
 //    ) async -> CGSResult<Output> {
-//        
+//
 //        // Line 1: g ← G
 //        var g = generator
-//        
+//
 //        // Line 2: V ← ∅
 //        var V: Set<Output> = []
-//        
+//
 //        let originalValidRate = await measureValidityRate(generator, property: property, samples: samples)
 //        var iterationCount = 0
-//        
+//
 //        // Line 3: while true do
 //        while iterationCount < maxIterations {
 //            iterationCount += 1
-//            
+//
 //            // Line 4: if νg ≠ ∅ then return νg ∪ V
 //            // (We'll implement a simple termination condition instead of the thesis's νg check)
-//            
+//
 //            // Line 5: if isVoid g then g ← G
 //            // (Skip void check for now - assume generator is always valid)
-//            
+//
 //            // Line 6: C ← choices g
 //            let choices = extractChoices(from: g)
 //            guard !choices.isEmpty else { break }
-//            
+//
 //            // Line 7: ∇g ← ⟨δcg | c ∈ C⟩ ⊳ ∇g is the gradient of g
 //            var gradients: [(choice: Choice, derivative: ReflectiveGenerator<Output>)] = []
 //            for choice in choices {
@@ -97,29 +97,29 @@ import Foundation
 //                    gradients.append((choice: choice, derivative: derivative))
 //                }
 //            }
-//            
+//
 //            var choiceFitnesses: [Choice: Int] = [:]
-//            
+//
 //            // Line 8: for δcg ∈ ∇g do
 //            for (choice, derivative) in gradients {
-//                
+//
 //                // Line 9-10: if isVoid δcg then v ← ∅
 //                // (Skip void check - assume derivatives are valid)
-//                
+//
 //                // Line 11-12: x₁,..,xₙ ← G⟦δcg⟧ ⊳ Sample G⟦δcg⟧
 //                let samples = sampleFromGenerator(derivative, count: samples)
-//                
+//
 //                // Line 13: v ← {xⱼ | φ(xⱼ)}
 //                let validSamples = Set(samples.filter(property))
-//                
+//
 //                // Line 14: fc ← |v| ⊳ fc is the fitness of c
 //                let fc = validSamples.count  // Raw count as per thesis
 //                choiceFitnesses[choice] = fc
-//                
+//
 //                // Line 15: V ← V ∪ v
 //                V = V.union(validSamples)
 //            }
-//            
+//
 //            // Line 16: if max c∈C fc = 0 then
 //            let maxFitness = choiceFitnesses.values.max() ?? 0
 //            if maxFitness == 0 {
@@ -128,18 +128,18 @@ import Foundation
 //                    choiceFitnesses[choice] = Int(choice.originalWeight)
 //                }
 //            }
-//            
+//
 //            // Line 18: g ← frequency[(fc, δcg) | c ∈ C]
 //            g = createFrequencyGenerator(from: gradients, withFitnesses: choiceFitnesses)
-//            
+//
 //            // Simple termination condition: if we've found enough valid values
 //            if V.count > samples * 2 {
 //                break
 //            }
 //        }
-//        
+//
 //        let finalValidRate = await measureValidityRate(g, property: property, samples: samples)
-//        
+//
 //        return CGSResult(
 //            validValues: V,
 //            optimizedGenerator: g,
@@ -147,54 +147,54 @@ import Foundation
 //            finalValidRate: finalValidRate
 //        )
 //    }
-//    
+//
 //    // MARK: - Helper Functions
-//    
+//
 //    /// Extracts choices from a generator (simplified implementation)
 //    private static func extractChoices<Output>(from generator: ReflectiveGenerator<Output>) -> [Choice] {
 //        // Generate a sample to extract choice structure
 //        var choiceGenerator = ValueAndChoiceTreeInterpreter(generator, maxRuns: 1)
 //        guard let (_, tree) = choiceGenerator.next() else { return [] }
-//        
+//
 //        return extractChoicesFromTree(tree)
 //    }
-//    
+//
 //    /// Recursively extracts choices from a choice tree
 //    private static func extractChoicesFromTree(_ tree: ChoiceTree) -> [Choice] {
 //        switch tree {
 //        case .choice(let signed, let range):
 //            // Create a choice representing this decision point
 //            return [Choice(label: UInt64(signed), originalWeight: UInt64(range.count))]
-//            
+//
 //        case .branch(let label, let children):
 //            var choices: [Choice] = []
 //            for child in children {
 //                choices.append(contentsOf: extractChoicesFromTree(child))
 //            }
 //            return choices
-//            
+//
 //        case .group(let children):
 //            var choices: [Choice] = []
 //            for child in children {
 //                choices.append(contentsOf: extractChoicesFromTree(child))
 //            }
 //            return choices
-//            
+//
 //        case .sequence(_, let elements, _):
 //            var choices: [Choice] = []
 //            for element in elements {
 //                choices.append(contentsOf: extractChoicesFromTree(element))
 //            }
 //            return choices
-//            
+//
 //        case .selected(let child):
 //            return extractChoicesFromTree(child)
-//            
+//
 //        default:
 //            return []
 //        }
 //    }
-//    
+//
 //    /// Computes the derivative of a generator with respect to a choice (simplified)
 //    /*
 //     δc(g) (read as "delta c of g") represents the derivative of generator g with respect to choice c. This is a key concept from the thesis's mathematical framework.
@@ -248,7 +248,7 @@ import Foundation
 //            guard case .pick(let choices) = op else {
 //                return op
 //            }
-//            
+//
 //            // Find the choice with the matching label
 //            if let targetChoice = choices.first(where: { $0.label == choice.label }) {
 //                // Return a pick with only this choice (δc operation)
@@ -259,7 +259,7 @@ import Foundation
 //            }
 //        }
 //    }
-//    
+//
 //    /// Samples values from a generator
 //    private static func sampleFromGenerator<Output>(
 //        _ generator: ReflectiveGenerator<Output>,
@@ -267,38 +267,38 @@ import Foundation
 //    ) -> [Output] {
 //        var values: [Output] = []
 //        var valueGen = ValueInterpreter(generator, maxRuns: UInt64(count))
-//        
+//
 //        for value in valueGen {
 //            values.append(value)
 //        }
-//        
+//
 //        return values
 //    }
-//    
+//
 //    /// Creates a new generator using frequency weighting as per thesis line 18
 //    private static func createFrequencyGenerator<Output>(
 //        from gradients: [(choice: Choice, derivative: ReflectiveGenerator<Output>)],
 //        withFitnesses fitnesses: [Choice: Int]
 //    ) -> ReflectiveGenerator<Output> {
-//        
+//
 //        // Build frequency-weighted choices
 //        var weightedChoices: [(weight: UInt64, label: UInt64, generator: ReflectiveGenerator<Output>)] = []
-//        
+//
 //        for (choice, derivative) in gradients {
 //            let fitness = fitnesses[choice] ?? 1
 //            let weight = UInt64(max(1, fitness))  // Ensure non-zero weight
 //            weightedChoices.append((weight: weight, label: choice.label, generator: derivative))
 //        }
-//        
+//
 //        // If no choices, return the first derivative or a simple generator
 //        guard !weightedChoices.isEmpty else {
 //            return gradients.first?.derivative ?? Gen.just(nil as Output?).compactMap { $0 }
 //        }
-//        
+//
 //        // Create a pick generator with frequency-weighted choices
 //        return Gen.pick(choices: ContiguousArray(weightedChoices))
 //    }
-//    
+//
 //    /// Measures validity rate of a generator
 //    private static func measureValidityRate<Output>(
 //        _ generator: ReflectiveGenerator<Output>,
@@ -307,7 +307,7 @@ import Foundation
 //    ) async -> Double {
 //        var validCount = 0
 //        var totalCount = 0
-//        
+//
 //        var valueGen = ValueInterpreter(generator, maxRuns: UInt64(samples))
 //        for value in valueGen {
 //            if property(value) {
@@ -315,15 +315,15 @@ import Foundation
 //            }
 //            totalCount += 1
 //        }
-//        
+//
 //        return totalCount > 0 ? Double(validCount) / Double(totalCount) : 0.0
 //    }
-//}
+// }
 //
 //// MARK: - Supporting Types
 //
 ///// Represents a choice point in the generator
-//private struct Choice: Hashable {
+// private struct Choice: Hashable {
 //    let label: UInt64
 //    let originalWeight: UInt64
-//}
+// }

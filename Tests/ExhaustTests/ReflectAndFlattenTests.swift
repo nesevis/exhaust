@@ -6,15 +6,14 @@
 //  then test the flatten method on those reflected trees.
 //
 
-import Testing
 @testable import Exhaust
+import Testing
 
 @Suite("Reflect and Flatten Integration Tests")
 struct ReflectAndFlattenTests {
-
     @Test("Reflect and flatten simple integer")
     func reflectAndFlattenSimpleInteger() throws {
-        let gen = Gen.choose(in: UInt64(0)...100)
+        let gen = Gen.choose(in: UInt64(0) ... 100)
         let value: UInt64 = 42
 
         // Reflect the generator with the value
@@ -44,7 +43,7 @@ struct ReflectAndFlattenTests {
 
     @Test("Reflect and flatten array")
     func reflectAndFlattenArray() throws {
-        let gen = Gen.arrayOf(Gen.choose(in: UInt64(0)...10), exactly: 3)
+        let gen = Gen.arrayOf(Gen.choose(in: UInt64(0) ... 10), exactly: 3)
         let value: [UInt64] = [1, 5, 9]
 
         // Reflect the generator with the value
@@ -84,8 +83,8 @@ struct ReflectAndFlattenTests {
     @Test("Reflect and flatten tuple")
     func reflectAndFlattenTuple() throws {
         let gen = Gen.zip(
-            Gen.choose(in: UInt64(0)...100),
-            Gen.choose(in: UInt64(0)...100)
+            Gen.choose(in: UInt64(0) ... 100),
+            Gen.choose(in: UInt64(0) ... 100)
         )
         let value: (UInt64, UInt64) = (42, 99)
 
@@ -119,12 +118,12 @@ struct ReflectAndFlattenTests {
         #expect(unsignedValues.contains(42))
         #expect(unsignedValues.contains(99))
     }
-    
+
     @Test("Reflect and flatten tuple of arrays")
     func reflectAndFlattenTupleOfArrays() throws {
         let gen = Gen.zip(
-            Gen.choose(in: UInt64(0)...100).proliferate(with: 1...10),
-            Gen.choose(in: UInt64(0)...100).proliferate(with: 1...20)
+            Gen.choose(in: UInt64(0) ... 100).proliferate(with: 1 ... 10),
+            Gen.choose(in: UInt64(0) ... 100).proliferate(with: 1 ... 20)
         )
         let value: ([UInt64], [UInt64]) = ([42], [99, 100, 101])
 
@@ -136,7 +135,7 @@ struct ReflectAndFlattenTests {
 
         // Flatten the reflected tree
         let flattened = ChoiceSequence.flatten(tree)
-        
+
         let materialised = try Interpreters.materialize(gen, with: tree, using: flattened)
 
         #expect(value.0 == materialised?.0)
@@ -148,7 +147,7 @@ struct ReflectAndFlattenTests {
         let gen = Gen.pick(choices: [
             (1, Gen.just("first")),
             (1, Gen.just("second")),
-            (1, Gen.just("third"))
+            (1, Gen.just("third")),
         ])
 
         let value = "second"
@@ -178,8 +177,8 @@ struct ReflectAndFlattenTests {
     @Test("Reflect and flatten nested structure")
     func reflectAndFlattenNestedStructure() throws {
         let gen = Gen.zip(
-            Gen.choose(in: UInt64(1)...10),
-            Gen.arrayOf(Gen.choose(in: UInt64(0)...100), exactly: 2)
+            Gen.choose(in: UInt64(1) ... 10),
+            Gen.arrayOf(Gen.choose(in: UInt64(0) ... 100), exactly: 2)
         )
 
         let value: (UInt64, [UInt64]) = (5, [20, 80])
@@ -218,7 +217,7 @@ struct ReflectAndFlattenTests {
 
     @Test("Reflect and flatten with mapped")
     func reflectAndFlattenWithMapped() throws {
-        let gen = Gen.choose(in: UInt64(0)...100).mapped(
+        let gen = Gen.choose(in: UInt64(0) ... 100).mapped(
             forward: { $0 * 2 },
             backward: { $0 / 2 }
         )
@@ -311,7 +310,7 @@ struct ReflectAndFlattenTests {
 
     @Test("Reflect and flatten preserves metadata")
     func reflectAndFlattenPreservesMetadata() throws {
-        let gen = Gen.choose(in: UInt64(10)...50)
+        let gen = Gen.choose(in: UInt64(10) ... 50)
         let value: UInt64 = 25
 
         // Reflect the generator with the value
@@ -346,7 +345,7 @@ struct ReflectAndFlattenTests {
 
     @Test("Reflect and flatten empty array")
     func reflectAndFlattenEmptyArray() throws {
-        let gen = Gen.arrayOf(Gen.choose(in: UInt64(0)...10), exactly:0)
+        let gen = Gen.arrayOf(Gen.choose(in: UInt64(0) ... 10), exactly: 0)
         let value: [UInt64] = []
 
         // Reflect the generator with the value
@@ -367,7 +366,7 @@ struct ReflectAndFlattenTests {
         let gen = Gen.pick(choices: [
             (1, Gen.zip(Gen.just(1), Gen.just("a"))),
             (1, Gen.zip(Gen.just(2), Gen.just("b"))),
-            (1, Gen.zip(Gen.just(3), Gen.just("c")))
+            (1, Gen.zip(Gen.just(3), Gen.just("c"))),
         ])
 
         let value = (2, "b")
@@ -403,9 +402,9 @@ struct ReflectAndFlattenTests {
     @Test("Reflect and flatten with different types")
     func reflectAndFlattenMixedTypes() throws {
         let gen = Gen.zip(
-            Gen.choose(in: UInt64(0)...100),
-            Gen.choose(in: Int64(-50)...50),
-            Gen.choose(in: 0.0...1.0)
+            Gen.choose(in: UInt64(0) ... 100),
+            Gen.choose(in: Int64(-50) ... 50),
+            Gen.choose(in: 0.0 ... 1.0)
         )
 
         let value: (UInt64, Int64, Double) = (42, -10, 0.5)
@@ -453,7 +452,7 @@ struct ReflectAndFlattenTests {
 
     @Test("Flatten count matches reflection complexity")
     func flattenCountMatchesReflection() throws {
-        let gen = Gen.arrayOf(Gen.choose(in: UInt64(0)...10), exactly:5)
+        let gen = Gen.arrayOf(Gen.choose(in: UInt64(0) ... 10), exactly: 5)
         let value: [UInt64] = [1, 2, 3, 4, 5]
 
         // Reflect the generator with the value
@@ -482,11 +481,11 @@ struct ReflectAndFlattenTests {
         // Group markers should be balanced (even count)
         #expect(groupCount % 2 == 0)
     }
-    
+
     @Test("Materialising works for sequences")
-    func testMaterializationWithSequence() throws {
+    func materializationWithSequence() throws {
         // Use a variable-length generator so element deletion is valid
-        let gen = Gen.arrayOf(Gen.choose(in: UInt64(0)...10), within: 0...10)
+        let gen = Gen.arrayOf(Gen.choose(in: UInt64(0) ... 10), within: 0 ... 10)
         let value: [UInt64] = [1, 2, 3, 4, 5]
 
         // Reflect the generator with the value
@@ -504,42 +503,42 @@ struct ReflectAndFlattenTests {
 
         let materialized = try Interpreters.materialize(gen, with: tree, using: flattened)
 
-        #expect(materialized == [1,4,5])
+        #expect(materialized == [1, 4, 5])
     }
-    
+
     @Test("Materialising works for picks")
-    func testMaterializationWithPick() throws {
+    func materializationWithPick() throws {
         let gen = Gen.pick(choices: [
-            (1, Gen.choose(in: 0...10, type: UInt64.self)),
-            (1, Gen.choose(in: 11...12, type: UInt64.self))
+            (1, Gen.choose(in: 0 ... 10, type: UInt64.self)),
+            (1, Gen.choose(in: 11 ... 12, type: UInt64.self)),
         ])
 
         // Reflect the generator with the value
         // For now it does not work with `materializePicks`
         // 1. If it is enabled, the flattened sequence contains N values
         // 2. The materializer will only use the `.selected` branch and leave the other values unconsumed.
-        let (value, tree) = Array(ValueAndChoiceTreeInterpreter(gen, materializePicks: false, seed: 1337).prefix(1)).first!
+        let (value, tree) = try #require(Array(ValueAndChoiceTreeInterpreter(gen, materializePicks: false, seed: 1337).prefix(1)).first)
 
         // Flatten the reflected tree
         var flattened = ChoiceSequence.flatten(tree)
-        
+
         // Mess with it
         flattened[2] = .value(.init(choice: .character("@"), validRanges: []))
 
         let materialized = try Interpreters.materialize(gen, with: tree, using: flattened)
-        
+
         #expect(materialized == Character("@").bitPattern64)
     }
-    
+
     @Test("Materialising works for complex generators")
-    func testMaterializationWithComplexGenerator() throws {
+    func materializationWithComplexGenerator() throws {
         struct Person: Equatable {
             let age: UInt64
             let name: String
         }
         let ageGen = Gen.pick(choices: [
-            (1, Gen.choose(in: 0...10, type: UInt64.self)),
-            (1, Gen.choose(in: 11...84, type: UInt64.self))
+            (1, Gen.choose(in: 0 ... 10, type: UInt64.self)),
+            (1, Gen.choose(in: 11 ... 84, type: UInt64.self)),
         ])
         let nameGen = String.arbitrary
         let gen = Gen.zip(ageGen, nameGen)
@@ -552,31 +551,31 @@ struct ReflectAndFlattenTests {
         // For now it does not work with `materializePicks`
         // 1. If it is enabled, the flattened sequence contains N values
         // 2. The materializer will only use the `.selected` branch and leave the other values unconsumed.
-        let (value, tree) = Array(ValueAndChoiceTreeInterpreter(gen, materializePicks: false, seed: 1337).prefix(2)).last!
+        let (value, tree) = try #require(Array(ValueAndChoiceTreeInterpreter(gen, materializePicks: false, seed: 1337).prefix(2)).last)
 
         // Flatten the reflected tree
         var flattened = ChoiceSequence.flatten(tree)
-        
+
         // Mess with it by setting the age to 123 and
         // removing the equivalent of the two leading characters in the name
         flattened[3] = .value(.init(choice: .unsigned(123, UInt64.self), validRanges: []))
-        flattened.removeSubrange(6...15)
+        flattened.removeSubrange(6 ... 15)
 
         let materialized = try Interpreters.materialize(gen, with: tree, using: flattened)
-        
+
         #expect(materialized?.age == 123)
         #expect(materialized?.name == String(value.name.dropFirst(2)))
     }
-    
+
     @Test("Shrinking by setting all values of type to something works")
-    func testSequenceShrinkingWorks() throws {
+    func sequenceShrinkingWorks() throws {
         struct Person: Equatable {
             let age: UInt64
             let name: String
         }
         let ageGen = Gen.pick(choices: [
-            (1, Gen.choose(in: 0...10, type: UInt64.self)),
-            (1, Gen.choose(in: 11...84, type: UInt64.self))
+            (1, Gen.choose(in: 0 ... 10, type: UInt64.self)),
+            (1, Gen.choose(in: 11 ... 84, type: UInt64.self)),
         ])
         let nameGen = String.arbitrary
         let gen = Gen.zip(ageGen, nameGen)
@@ -589,7 +588,7 @@ struct ReflectAndFlattenTests {
         // For now it does not work with `materializePicks`
         // 1. If it is enabled, the flattened sequence contains N values
         // 2. The materializer will only use the `.selected` branch and leave the other values unconsumed.
-        let (value, tree) = Array(ValueAndChoiceTreeInterpreter(gen, materializePicks: false, seed: 1337).prefix(2)).last!
+        let (value, tree) = try #require(Array(ValueAndChoiceTreeInterpreter(gen, materializePicks: false, seed: 1337).prefix(2)).last)
 
         // Flatten the reflected tree
         // and reduce the values to their most semantically simple form
@@ -614,43 +613,43 @@ struct ReflectAndFlattenTests {
         #expect(materialized.age == 0)
         #expect(materialized.name == Array(repeating: "A", count: value.name.count).joined())
     }
-    
+
     @Test("Test cross-boundary shrinking")
-    func testCrossBoundaryShrinkingWorks() throws {
-        let arrayGen = Gen.arrayOf(Int.arbitrary, within: 1...10)
-        let gen = Gen.arrayOf(arrayGen, within: 1...10)
+    func crossBoundaryShrinkingWorks() throws {
+        let arrayGen = Gen.arrayOf(Int.arbitrary, within: 1 ... 10)
+        let gen = Gen.arrayOf(arrayGen, within: 1 ... 10)
 
         // Reflect the generator with the value
         // For now it does not work with `materializePicks`
         // 1. If it is enabled, the flattened sequence contains N values
         // 2. The materializer will only use the `.selected` branch and leave the other values unconsumed.
-        let (value, tree) = Array(ValueAndChoiceTreeInterpreter(gen, materializePicks: false, seed: 1337).prefix(2)).last!
+        let (value, tree) = try #require(Array(ValueAndChoiceTreeInterpreter(gen, materializePicks: false, seed: 1337).prefix(2)).last)
 
         // Flatten the reflected tree
         // and reduce the values to their most semantically simple form
         // the sequence is a representation that lends itself to direct mutation in ways shrinking via a ChoiceTree cannot
         var sequence = ChoiceSequence.flatten(tree)
         let spans = ChoiceSequence.extractContainerSpans(from: sequence)
-        
+
         let sequenceStarts = sequence
             .enumerated()
             .filter { $0.element == .sequence(true) }
             .map(\.offset)
             .dropFirst()
-        
+
         // Remove a sequence close and open to remove the barrier between two arrays, collapsing them
         let candidate = sequenceStarts[3]
-        sequence.removeSubrange((candidate - 1)...candidate)
+        sequence.removeSubrange((candidate - 1) ... candidate)
 
         try #require(ChoiceSequence.validate(sequence))
-            
+
         let materialized = try #require(try Interpreters.materialize(gen, with: tree, using: sequence))
 //        print("Materialized array count: \(materialized.count)")
 //        print("Materialized child array counts: \(materialized.map(\.count))")
-        
+
         let valueFlat = value.flatMap(\.self)
         let materializedFlat = materialized.flatMap(\.self)
-        
+
         // There are now 9 arrays
         #expect(materialized.count == 9)
         // Elements are the same, even if the exact division isn't
@@ -660,6 +659,6 @@ struct ReflectAndFlattenTests {
 
 extension RangeSet where Bound == Int {
     mutating func insert(contentsOf closedRange: ClosedRange<Bound>) {
-        self.insert(contentsOf: closedRange.lowerBound..<(closedRange.upperBound + 1))
+        insert(contentsOf: closedRange.lowerBound ..< (closedRange.upperBound + 1))
     }
 }

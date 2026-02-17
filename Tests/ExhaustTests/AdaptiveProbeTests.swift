@@ -20,7 +20,7 @@ struct FindIntegerTests {
 
     @Test("Finds small thresholds within the linear scan range")
     func smallThresholds() {
-        for threshold in 1...3 {
+        for threshold in 1 ... 3 {
             let result: Int = AdaptiveProbe.findInteger { $0 <= threshold }
             #expect(result == threshold)
         }
@@ -39,7 +39,7 @@ struct FindIntegerTests {
         #expect(result == 100)
     }
 
-    @Test("Finds large thresholds", arguments: [1_000, 10_000, 100_000])
+    @Test("Finds large thresholds", arguments: [1000, 10000, 100_000])
     func largeThresholds(threshold: Int) {
         let result: Int = AdaptiveProbe.findInteger { $0 <= threshold }
         #expect(result == threshold)
@@ -61,7 +61,7 @@ struct FindIntegerTests {
 
     @Test("Evaluates predicate a logarithmic number of times")
     func logarithmicCost() {
-        let threshold = 1_000
+        let threshold = 1000
         var callCount = 0
         let result: Int = AdaptiveProbe.findInteger { k in
             callCount += 1

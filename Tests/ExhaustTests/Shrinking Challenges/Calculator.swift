@@ -11,7 +11,7 @@ import Testing
 
 @Suite("Shrinking Challenge: Calculator")
 struct CalculatorShrinkingChallenge {
-    /*
+    /**
      https://github.com/jlink/shrinking-challenge/blob/main/challenges/calculator.md
      The challenge involves a simple calculator language representing expressions consisting of integers, their additions and divisions only, like 1 + (2 / 3).
 

@@ -13,44 +13,44 @@ public protocol TycheReporter {
 public struct ConsoleReporter: TycheReporter {
     private let useColors: Bool
     private let verbosity: ConsoleVerbosity
-    
+
     public enum ConsoleVerbosity {
         case summary
         case detailed
         case verbose
     }
-    
+
     public init(useColors: Bool = true, verbosity: ConsoleVerbosity = .detailed) {
         self.useColors = useColors
         self.verbosity = verbosity
     }
-    
+
     public func report(_ report: TycheReport) {
         let formatter = DateFormatter()
         formatter.dateStyle = .medium
         formatter.timeStyle = .medium
-        
+
         print(colorize("🎲 Tyche Property-Based Testing Report", color: .blue, bold: true))
         print(colorize("Generated: \(formatter.string(from: report.reportTimestamp))", color: .gray))
         print()
-        
+
         printGenerationSection(report.generationReport)
         printShrinkingSection(report.shrinkingReport)
         printTestRunSection(report.testRunReport)
-        
+
         print(colorize("📊 Report complete", color: .green, bold: true))
     }
-    
+
     private func printGenerationSection(_ report: GenerationReport) {
         print(colorize("📈 Generation Analysis", color: .cyan, bold: true))
-        
+
         // Distribution Metrics
         print("  📊 Distribution Quality:")
         print("    • Entropy: \(format(report.distributionMetrics.entropy))")
         print("    • Uniformity: \(format(report.distributionMetrics.uniformityScore))")
         print("    • Autocorrelation: \(format(report.distributionMetrics.autocorrelationCoefficient))")
         print("    • Coverage: \(formatPercentage(report.distributionMetrics.coveragePercentage))")
-        
+
         // Coverage Metrics
         if verbosity != .summary {
             print("  🎯 Coverage Analysis:")
@@ -58,7 +58,7 @@ public struct ConsoleReporter: TycheReporter {
             print("    • Boundary Coverage: \(formatPercentage(report.coverageMetrics.boundaryCoverage))")
             print("    • Equivalence Classes: \(formatPercentage(report.coverageMetrics.equivalenceClassCoverage))")
         }
-        
+
         // Bias Detection
         if verbosity == .verbose {
             print("  ⚖️ Bias Detection:")
@@ -71,24 +71,24 @@ public struct ConsoleReporter: TycheReporter {
                 }
             }
         }
-        
+
         // Performance
         print("  ⚡ Performance:")
         print("    • Avg Generation Time: \(formatDuration(report.performanceMetrics.averageGenerationLatency))")
         print("    • Entropy Consumption: \(format(report.performanceMetrics.entropyConsumptionRate)) bits/sec")
-        
+
         print()
     }
-    
+
     private func printShrinkingSection(_ report: ShrinkingReport) {
         print(colorize("🔍 Shrinking Analysis", color: .yellow, bold: true))
-        
+
         // Convergence
         print("  🎯 Convergence:")
         print("    • Average Steps: \(format(report.convergenceMetrics.averageStepsToConvergence))")
         print("    • Success Rate: \(formatPercentage(report.convergenceMetrics.convergenceSuccessRate))")
         print("    • Greedy vs Exhaustive: \(format(report.convergenceMetrics.greedyVsExhaustiveEffectiveness))")
-        
+
         // Effectiveness
         if verbosity != .summary {
             print("  📉 Effectiveness:")
@@ -96,7 +96,7 @@ public struct ConsoleReporter: TycheReporter {
             print("    • Minimal Quality: \(format(report.effectivenessMetrics.minimalCounterexampleQuality))")
             print("    • Replay Consistency: \(formatPercentage(report.effectivenessMetrics.replayConsistency))")
         }
-        
+
         // Candidate Statistics
         if verbosity == .verbose {
             print("  📊 Candidates:")
@@ -104,19 +104,19 @@ public struct ConsoleReporter: TycheReporter {
             print("    • Actually Tested: \(report.candidateStatistics.candidatesActuallyTested)")
             print("    • Testing Efficiency: \(formatPercentage(report.candidateStatistics.testingEfficiency))")
         }
-        
+
         print()
     }
-    
+
     private func printTestRunSection(_ report: TestRunReport) {
         print(colorize("🧪 Test Run Analysis", color: .magenta, bold: true))
-        
+
         // Success/Failure Rates
         print("  📈 Test Outcomes:")
         print("    • Success Rate: \(formatPercentage(report.successFailureRates.successRate))")
         print("    • Failure Rate: \(formatPercentage(report.successFailureRates.failureRate))")
         print("    • Average Duration: \(formatDuration(report.successFailureRates.averageTestDuration))")
-        
+
         // Counterexample Patterns
         if verbosity != .summary {
             print("  🔍 Counterexamples:")
@@ -126,7 +126,7 @@ public struct ConsoleReporter: TycheReporter {
                 print("    • Common Patterns: \(report.counterexamplePatterns.commonPatterns.prefix(3).joined(separator: ", "))")
             }
         }
-        
+
         // Quality Assessment
         if verbosity == .verbose {
             print("  🎯 Statistical Quality:")
@@ -136,43 +136,43 @@ public struct ConsoleReporter: TycheReporter {
                 print("    • \(test.capitalized): \(format(score))")
             }
         }
-        
+
         print()
     }
-    
+
     // MARK: - Formatting Helpers
-    
+
     private func colorize(_ text: String, color: ConsoleColor, bold: Bool = false) -> String {
         guard useColors else { return text }
-        
+
         var result = color.ansiCode + text + ConsoleColor.reset.ansiCode
         if bold {
             result = ConsoleColor.bold.ansiCode + result
         }
         return result
     }
-    
+
     private func format(_ value: Double) -> String {
         return String(format: "%.3f", value)
     }
-    
+
     private func formatPercentage(_ value: Double) -> String {
         return String(format: "%.1f%%", value * 100)
     }
-    
+
     private func formatDuration(_ duration: TimeInterval) -> String {
         if duration < 0.001 {
             return String(format: "%.2fμs", duration * 1_000_000)
         } else if duration < 1.0 {
-            return String(format: "%.2fms", duration * 1_000)
+            return String(format: "%.2fms", duration * 1000)
         } else {
             return String(format: "%.2fs", duration)
         }
     }
-    
+
     private enum ConsoleColor {
         case red, green, yellow, blue, magenta, cyan, gray, bold, reset
-        
+
         var ansiCode: String {
             switch self {
             case .red: return "\u{001B}[31m"
@@ -195,12 +195,12 @@ public struct ConsoleReporter: TycheReporter {
 public struct JSONReporter: TycheReporter {
     private let outputURL: URL
     private let prettyPrint: Bool
-    
+
     public init(outputURL: URL, prettyPrint: Bool = true) {
         self.outputURL = outputURL
         self.prettyPrint = prettyPrint
     }
-    
+
     public func report(_ report: TycheReport) {
         do {
             let encoder = JSONEncoder()
@@ -208,10 +208,10 @@ public struct JSONReporter: TycheReporter {
             if prettyPrint {
                 encoder.outputFormatting = .prettyPrinted
             }
-            
+
             let jsonData = try encoder.encode(TycheReportJSON(report: report))
             try jsonData.write(to: outputURL)
-            
+
             print("📄 Tyche JSON report written to: \(outputURL.path)")
         } catch {
             print("❌ Failed to write JSON report: \(error)")
@@ -224,64 +224,64 @@ public struct JSONReporter: TycheReporter {
 /// Reports Tyche analysis as CSV for statistical analysis
 public struct CSVReporter: TycheReporter {
     private let outputURL: URL
-    
+
     public init(outputURL: URL) {
         self.outputURL = outputURL
     }
-    
+
     public func report(_ report: TycheReport) {
         do {
             let csvContent = generateCSVContent(report)
             try csvContent.write(to: outputURL, atomically: true, encoding: .utf8)
-            
+
             print("📊 Tyche CSV report written to: \(outputURL.path)")
         } catch {
             print("❌ Failed to write CSV report: \(error)")
         }
     }
-    
+
     private func generateCSVContent(_ report: TycheReport) -> String {
         var lines: [String] = []
-        
+
         // Header
         lines.append("metric,category,value")
-        
+
         // Generation metrics
         lines.append("entropy,distribution,\(report.generationReport.distributionMetrics.entropy)")
         lines.append("uniformity,distribution,\(report.generationReport.distributionMetrics.uniformityScore)")
         lines.append("autocorrelation,distribution,\(report.generationReport.distributionMetrics.autocorrelationCoefficient)")
         lines.append("coverage,distribution,\(report.generationReport.distributionMetrics.coveragePercentage)")
-        
+
         lines.append("input_space_coverage,coverage,\(report.generationReport.coverageMetrics.inputSpaceCoverage)")
         lines.append("boundary_coverage,coverage,\(report.generationReport.coverageMetrics.boundaryCoverage)")
         lines.append("equivalence_class_coverage,coverage,\(report.generationReport.coverageMetrics.equivalenceClassCoverage)")
-        
+
         lines.append("value_clustering,bias,\(report.generationReport.biasDetection.valueClusteringScore)")
         lines.append("size_sensitivity,bias,\(report.generationReport.biasDetection.sizeParameterSensitivity)")
-        
+
         lines.append("avg_generation_latency,performance,\(report.generationReport.performanceMetrics.averageGenerationLatency)")
         lines.append("entropy_consumption_rate,performance,\(report.generationReport.performanceMetrics.entropyConsumptionRate)")
-        
+
         // Shrinking metrics
         lines.append("avg_steps_to_convergence,shrinking,\(report.shrinkingReport.convergenceMetrics.averageStepsToConvergence)")
         lines.append("convergence_success_rate,shrinking,\(report.shrinkingReport.convergenceMetrics.convergenceSuccessRate)")
         lines.append("greedy_vs_exhaustive,shrinking,\(report.shrinkingReport.convergenceMetrics.greedyVsExhaustiveEffectiveness)")
-        
+
         lines.append("reduction_ratio,effectiveness,\(report.shrinkingReport.effectivenessMetrics.reductionRatio)")
         lines.append("minimal_quality,effectiveness,\(report.shrinkingReport.effectivenessMetrics.minimalCounterexampleQuality)")
         lines.append("replay_consistency,effectiveness,\(report.shrinkingReport.effectivenessMetrics.replayConsistency)")
-        
+
         // Test run metrics
         lines.append("success_rate,outcomes,\(report.testRunReport.successFailureRates.successRate)")
         lines.append("failure_rate,outcomes,\(report.testRunReport.successFailureRates.failureRate)")
         lines.append("avg_test_duration,outcomes,\(report.testRunReport.successFailureRates.averageTestDuration)")
-        
+
         lines.append("counterexample_clustering,counterexamples,\(report.testRunReport.counterexamplePatterns.clusteringCoefficient)")
         lines.append("avg_shrinking_steps,counterexamples,\(report.testRunReport.counterexamplePatterns.averageShrinkingSteps)")
-        
+
         lines.append("overall_quality_score,quality,\(report.testRunReport.statisticalQuality.overallQualityScore)")
         lines.append("distribution_fitness,quality,\(report.testRunReport.statisticalQuality.distributionFitness)")
-        
+
         return lines.joined(separator: "\n")
     }
 }
@@ -292,28 +292,28 @@ public struct CSVReporter: TycheReporter {
 public struct HTMLReporter: TycheReporter {
     private let outputURL: URL
     private let includeCharts: Bool
-    
+
     public init(outputURL: URL, includeCharts: Bool = true) {
         self.outputURL = outputURL
         self.includeCharts = includeCharts
     }
-    
+
     public func report(_ report: TycheReport) {
         do {
             let htmlContent = generateHTMLContent(report)
             try htmlContent.write(to: outputURL, atomically: true, encoding: .utf8)
-            
+
             print("🌐 Tyche HTML report written to: \(outputURL.path)")
         } catch {
             print("❌ Failed to write HTML report: \(error)")
         }
     }
-    
+
     private func generateHTMLContent(_ report: TycheReport) -> String {
         let formatter = DateFormatter()
         formatter.dateStyle = .full
         formatter.timeStyle = .medium
-        
+
         return """
         <!DOCTYPE html>
         <html lang="en">
@@ -403,17 +403,17 @@ public struct HTMLReporter: TycheReporter {
         </html>
         """
     }
-    
+
     private func formatDuration(_ duration: TimeInterval) -> String {
         if duration < 0.001 {
             return String(format: "%.2fμs", duration * 1_000_000)
         } else if duration < 1.0 {
-            return String(format: "%.2fms", duration * 1_000)
+            return String(format: "%.2fms", duration * 1000)
         } else {
             return String(format: "%.2fs", duration)
         }
     }
-    
+
     private func getScoreClass(_ score: Double) -> String {
         if score >= 0.8 {
             return "good"
@@ -432,12 +432,12 @@ private struct TycheReportJSON: Codable {
     let shrinkingReport: ShrinkingReportJSON
     let testRunReport: TestRunReportJSON
     let reportTimestamp: Date
-    
+
     init(report: TycheReport) {
-        self.generationReport = GenerationReportJSON(report: report.generationReport)
-        self.shrinkingReport = ShrinkingReportJSON(report: report.shrinkingReport)
-        self.testRunReport = TestRunReportJSON(report: report.testRunReport)
-        self.reportTimestamp = report.reportTimestamp
+        generationReport = GenerationReportJSON(report: report.generationReport)
+        shrinkingReport = ShrinkingReportJSON(report: report.shrinkingReport)
+        testRunReport = TestRunReportJSON(report: report.testRunReport)
+        reportTimestamp = report.reportTimestamp
     }
 }
 
@@ -446,12 +446,12 @@ private struct GenerationReportJSON: Codable {
     let coverageMetrics: CoverageAnalysisJSON
     let biasDetection: BiasAnalysisJSON
     let performanceMetrics: PerformanceAnalysisJSON
-    
+
     init(report: GenerationReport) {
-        self.distributionMetrics = DistributionAnalysisJSON(analysis: report.distributionMetrics)
-        self.coverageMetrics = CoverageAnalysisJSON(analysis: report.coverageMetrics)
-        self.biasDetection = BiasAnalysisJSON(analysis: report.biasDetection)
-        self.performanceMetrics = PerformanceAnalysisJSON(analysis: report.performanceMetrics)
+        distributionMetrics = DistributionAnalysisJSON(analysis: report.distributionMetrics)
+        coverageMetrics = CoverageAnalysisJSON(analysis: report.coverageMetrics)
+        biasDetection = BiasAnalysisJSON(analysis: report.biasDetection)
+        performanceMetrics = PerformanceAnalysisJSON(analysis: report.performanceMetrics)
     }
 }
 
@@ -460,12 +460,12 @@ private struct DistributionAnalysisJSON: Codable {
     let uniformityScore: Double
     let autocorrelationCoefficient: Double
     let coveragePercentage: Double
-    
+
     init(analysis: DistributionAnalysis) {
-        self.entropy = analysis.entropy
-        self.uniformityScore = analysis.uniformityScore
-        self.autocorrelationCoefficient = analysis.autocorrelationCoefficient
-        self.coveragePercentage = analysis.coveragePercentage
+        entropy = analysis.entropy
+        uniformityScore = analysis.uniformityScore
+        autocorrelationCoefficient = analysis.autocorrelationCoefficient
+        coveragePercentage = analysis.coveragePercentage
     }
 }
 
@@ -474,12 +474,12 @@ private struct CoverageAnalysisJSON: Codable {
     let boundaryCoverage: Double
     let equivalenceClassCoverage: Double
     let temporalDistribution: [String: Int]
-    
+
     init(analysis: CoverageAnalysis) {
-        self.inputSpaceCoverage = analysis.inputSpaceCoverage
-        self.boundaryCoverage = analysis.boundaryCoverage
-        self.equivalenceClassCoverage = analysis.equivalenceClassCoverage
-        self.temporalDistribution = analysis.temporalDistribution
+        inputSpaceCoverage = analysis.inputSpaceCoverage
+        boundaryCoverage = analysis.boundaryCoverage
+        equivalenceClassCoverage = analysis.equivalenceClassCoverage
+        temporalDistribution = analysis.temporalDistribution
     }
 }
 
@@ -487,11 +487,11 @@ private struct BiasAnalysisJSON: Codable {
     let branchSelectionBias: [String: Double]
     let valueClusteringScore: Double
     let sizeParameterSensitivity: Double
-    
+
     init(analysis: BiasAnalysis) {
-        self.branchSelectionBias = analysis.branchSelectionBias
-        self.valueClusteringScore = analysis.valueClusteringScore
-        self.sizeParameterSensitivity = analysis.sizeParameterSensitivity
+        branchSelectionBias = analysis.branchSelectionBias
+        valueClusteringScore = analysis.valueClusteringScore
+        sizeParameterSensitivity = analysis.sizeParameterSensitivity
     }
 }
 
@@ -499,11 +499,11 @@ private struct PerformanceAnalysisJSON: Codable {
     let averageGenerationLatency: TimeInterval
     let memoryUsagePattern: [String: Double]
     let entropyConsumptionRate: Double
-    
+
     init(analysis: PerformanceAnalysis) {
-        self.averageGenerationLatency = analysis.averageGenerationLatency
-        self.memoryUsagePattern = analysis.memoryUsagePattern
-        self.entropyConsumptionRate = analysis.entropyConsumptionRate
+        averageGenerationLatency = analysis.averageGenerationLatency
+        memoryUsagePattern = analysis.memoryUsagePattern
+        entropyConsumptionRate = analysis.entropyConsumptionRate
     }
 }
 
@@ -512,12 +512,12 @@ private struct ShrinkingReportJSON: Codable {
     let pathAnalysis: ShrinkPathAnalysisJSON
     let effectivenessMetrics: ShrinkEffectivenessAnalysisJSON
     let candidateStatistics: CandidateStatisticsJSON
-    
+
     init(report: ShrinkingReport) {
-        self.convergenceMetrics = ConvergenceAnalysisJSON(analysis: report.convergenceMetrics)
-        self.pathAnalysis = ShrinkPathAnalysisJSON(analysis: report.pathAnalysis)
-        self.effectivenessMetrics = ShrinkEffectivenessAnalysisJSON(analysis: report.effectivenessMetrics)
-        self.candidateStatistics = CandidateStatisticsJSON(statistics: report.candidateStatistics)
+        convergenceMetrics = ConvergenceAnalysisJSON(analysis: report.convergenceMetrics)
+        pathAnalysis = ShrinkPathAnalysisJSON(analysis: report.pathAnalysis)
+        effectivenessMetrics = ShrinkEffectivenessAnalysisJSON(analysis: report.effectivenessMetrics)
+        candidateStatistics = CandidateStatisticsJSON(statistics: report.candidateStatistics)
     }
 }
 
@@ -525,11 +525,11 @@ private struct ConvergenceAnalysisJSON: Codable {
     let averageStepsToConvergence: Double
     let convergenceSuccessRate: Double
     let greedyVsExhaustiveEffectiveness: Double
-    
+
     init(analysis: ConvergenceAnalysis) {
-        self.averageStepsToConvergence = analysis.averageStepsToConvergence
-        self.convergenceSuccessRate = analysis.convergenceSuccessRate
-        self.greedyVsExhaustiveEffectiveness = analysis.greedyVsExhaustiveEffectiveness
+        averageStepsToConvergence = analysis.averageStepsToConvergence
+        convergenceSuccessRate = analysis.convergenceSuccessRate
+        greedyVsExhaustiveEffectiveness = analysis.greedyVsExhaustiveEffectiveness
     }
 }
 
@@ -537,11 +537,11 @@ private struct ShrinkPathAnalysisJSON: Codable {
     let averagePathLength: Double
     let pathComplexityReduction: Double
     let branchingFactor: Double
-    
+
     init(analysis: ShrinkPathAnalysis) {
-        self.averagePathLength = analysis.averagePathLength
-        self.pathComplexityReduction = analysis.pathComplexityReduction
-        self.branchingFactor = analysis.branchingFactor
+        averagePathLength = analysis.averagePathLength
+        pathComplexityReduction = analysis.pathComplexityReduction
+        branchingFactor = analysis.branchingFactor
     }
 }
 
@@ -549,11 +549,11 @@ private struct ShrinkEffectivenessAnalysisJSON: Codable {
     let reductionRatio: Double
     let minimalCounterexampleQuality: Double
     let replayConsistency: Double
-    
+
     init(analysis: ShrinkEffectivenessAnalysis) {
-        self.reductionRatio = analysis.reductionRatio
-        self.minimalCounterexampleQuality = analysis.minimalCounterexampleQuality
-        self.replayConsistency = analysis.replayConsistency
+        reductionRatio = analysis.reductionRatio
+        minimalCounterexampleQuality = analysis.minimalCounterexampleQuality
+        replayConsistency = analysis.replayConsistency
     }
 }
 
@@ -561,11 +561,11 @@ private struct CandidateStatisticsJSON: Codable {
     let totalCandidatesGenerated: Int
     let candidatesActuallyTested: Int
     let testingEfficiency: Double
-    
+
     init(statistics: CandidateStatistics) {
-        self.totalCandidatesGenerated = statistics.totalCandidatesGenerated
-        self.candidatesActuallyTested = statistics.candidatesActuallyTested
-        self.testingEfficiency = statistics.testingEfficiency
+        totalCandidatesGenerated = statistics.totalCandidatesGenerated
+        candidatesActuallyTested = statistics.candidatesActuallyTested
+        testingEfficiency = statistics.testingEfficiency
     }
 }
 
@@ -574,12 +574,12 @@ private struct TestRunReportJSON: Codable {
     let counterexamplePatterns: CounterexampleAnalysisJSON
     let generatorCompositionMetrics: CompositionAnalysisJSON
     let statisticalQuality: QualityAnalysisJSON
-    
+
     init(report: TestRunReport) {
-        self.successFailureRates = TestOutcomeAnalysisJSON(analysis: report.successFailureRates)
-        self.counterexamplePatterns = CounterexampleAnalysisJSON(analysis: report.counterexamplePatterns)
-        self.generatorCompositionMetrics = CompositionAnalysisJSON(analysis: report.generatorCompositionMetrics)
-        self.statisticalQuality = QualityAnalysisJSON(analysis: report.statisticalQuality)
+        successFailureRates = TestOutcomeAnalysisJSON(analysis: report.successFailureRates)
+        counterexamplePatterns = CounterexampleAnalysisJSON(analysis: report.counterexamplePatterns)
+        generatorCompositionMetrics = CompositionAnalysisJSON(analysis: report.generatorCompositionMetrics)
+        statisticalQuality = QualityAnalysisJSON(analysis: report.statisticalQuality)
     }
 }
 
@@ -587,11 +587,11 @@ private struct TestOutcomeAnalysisJSON: Codable {
     let successRate: Double
     let failureRate: Double
     let averageTestDuration: TimeInterval
-    
+
     init(analysis: TestOutcomeAnalysis) {
-        self.successRate = analysis.successRate
-        self.failureRate = analysis.failureRate
-        self.averageTestDuration = analysis.averageTestDuration
+        successRate = analysis.successRate
+        failureRate = analysis.failureRate
+        averageTestDuration = analysis.averageTestDuration
     }
 }
 
@@ -599,11 +599,11 @@ private struct CounterexampleAnalysisJSON: Codable {
     let clusteringCoefficient: Double
     let commonPatterns: [String]
     let averageShrinkingSteps: Double
-    
+
     init(analysis: CounterexampleAnalysis) {
-        self.clusteringCoefficient = analysis.clusteringCoefficient
-        self.commonPatterns = analysis.commonPatterns
-        self.averageShrinkingSteps = analysis.averageShrinkingSteps
+        clusteringCoefficient = analysis.clusteringCoefficient
+        commonPatterns = analysis.commonPatterns
+        averageShrinkingSteps = analysis.averageShrinkingSteps
     }
 }
 
@@ -611,11 +611,11 @@ private struct CompositionAnalysisJSON: Codable {
     let combinatorEffectiveness: [String: Double]
     let nestingDepthImpact: Double
     let compositionComplexity: Double
-    
+
     init(analysis: CompositionAnalysis) {
-        self.combinatorEffectiveness = analysis.combinatorEffectiveness
-        self.nestingDepthImpact = analysis.nestingDepthImpact
-        self.compositionComplexity = analysis.compositionComplexity
+        combinatorEffectiveness = analysis.combinatorEffectiveness
+        nestingDepthImpact = analysis.nestingDepthImpact
+        compositionComplexity = analysis.compositionComplexity
     }
 }
 
@@ -623,10 +623,10 @@ private struct QualityAnalysisJSON: Codable {
     let randomnessTestResults: [String: Double]
     let distributionFitness: Double
     let overallQualityScore: Double
-    
+
     init(analysis: QualityAnalysis) {
-        self.randomnessTestResults = analysis.randomnessTestResults
-        self.distributionFitness = analysis.distributionFitness
-        self.overallQualityScore = analysis.overallQualityScore
+        randomnessTestResults = analysis.randomnessTestResults
+        distributionFitness = analysis.distributionFitness
+        overallQualityScore = analysis.overallQualityScore
     }
 }

@@ -36,8 +36,8 @@ struct DoubleCancellationChallenge {
     @Test("Double cancellation", .disabled("Float shrinking isn't implemented correctly"))
     func doubleCancellation() throws {
         let gen = Gen.zip(
-            Gen.choose(in: 1.0...1e18),
-            Gen.choose(in: 1.0...1e18)
+            Gen.choose(in: 1.0 ... 1e18),
+            Gen.choose(in: 1.0 ... 1e18)
         )
 
         let property: (Double, Double) -> Bool = { a, b in
@@ -58,6 +58,6 @@ struct DoubleCancellationChallenge {
         // b should shrink to the range minimum
         #expect(output.1 == 1.0)
         // a should converge to the cancellation boundary: 2^53
-        #expect(output.0 == 9007199254740992.0)
+        #expect(output.0 == 9_007_199_254_740_992.0)
     }
 }

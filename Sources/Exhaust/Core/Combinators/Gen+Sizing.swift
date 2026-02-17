@@ -10,7 +10,7 @@ public extension Gen {
     ///
     /// Common uses:
     /// - Controlling array/collection lengths
-    /// - Setting bounds for numeric ranges  
+    /// - Setting bounds for numeric ranges
     /// - Determining recursion depth in tree structures
     /// - Scaling the complexity of generated data structures
     ///
@@ -27,7 +27,7 @@ public extension Gen {
             )
         }
     }
-    
+
     /// Creates a generator with a temporarily modified size parameter.
     ///
     /// This combinator allows you to override the current size parameter for a specific
@@ -40,7 +40,7 @@ public extension Gen {
     /// The size modification only affects the provided generator and any generators
     /// it calls internally. Once the resized generator completes, the original size
     /// parameter is restored.
-    /// 
+    ///
     /// - Parameters:
     ///   - newSize: The size parameter to use for the nested generator
     ///   - generator: The generator to run with the modified size

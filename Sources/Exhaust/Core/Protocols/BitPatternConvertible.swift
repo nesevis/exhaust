@@ -7,7 +7,7 @@ public protocol BitPatternConvertible: Equatable, Sendable {
     /// of `UInt64` bit patterns. This is used by `choose()` as the default range
     /// if a more specific one is not provided.
     static var bitPatternRanges: [ClosedRange<UInt64>] { get }
-    
+
     static var tag: TypeTag { get }
 
     /// Creates an instance of this type from a raw `UInt64` bit pattern.
@@ -16,5 +16,5 @@ public protocol BitPatternConvertible: Equatable, Sendable {
 
     /// Provides the raw `UInt64` bit pattern for this specific instance.
     /// This is the core encoding step used by the `reflect` interpreter.
-    var bitPattern64: UInt64 { get }    
+    var bitPattern64: UInt64 { get }
 }

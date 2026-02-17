@@ -18,43 +18,41 @@ struct CouplingShrinkingChallenge {
 
      The expected smallest falsified sample is [1, 0].
      */
-    
-    static let gen: ReflectiveGenerator<[Int]> = {
-//        Gen.arrayOf(Gen.choose(in: Int(0)...19), within: 2...20)
+
+    static let gen: ReflectiveGenerator<[Int]> = //        Gen.arrayOf(Gen.choose(in: Int(0)...19), within: 2...20)
 //            .filter { arr in arr.allSatisfy { arr.indices.contains($0) } }
-        Gen.choose(in: Int(0)...100)
-            .bind { n in
-                Gen.arrayOf(Gen.choose(in: 0...n), within: 2...max(2, (UInt64(n)+1)))
-            }
-            .filter { arr in arr.allSatisfy { arr.indices.contains($0) } }
-    }()
-    
-    // The array cannot contain any 2-cycles, ie where arr[arr[n]] == n
+        Gen.choose(in: Int(0) ... 100)
+        .bind { n in
+            Gen.arrayOf(Gen.choose(in: 0 ... n), within: 2 ... max(2, UInt64(n) + 1))
+        }
+        .filter { arr in arr.allSatisfy { arr.indices.contains($0) } }
+
+    /// The array cannot contain any 2-cycles, ie where arr[arr[n]] == n
     static let property: ([Int]) -> Bool = { arr in
         arr.indices.allSatisfy { i in
             let j = arr[i]
-            if j != i && arr[j] == i {
+            if j != i, arr[j] == i {
                 return false
             }
             return true
         }
     }
-    
+
+    /// We had this, but Minimax destroyed it
     @Test("Coupling, Single")
-    // We had this, but Minimax destroyed it
     func couplingFull() throws {
         let iterator = ValueAndChoiceTreeInterpreter(Self.gen, seed: 1337)
-        let (value, tree) = Array(iterator.prefix(4)).last!
+        let (value, tree) = try #require(Array(iterator.prefix(4)).last)
         let (seq, output) = try #require(try Interpreters.reduce(gen: Self.gen, tree: tree, config: .fast, property: Self.property))
-        
+
         // We expect this array to be shortened to only include the two values that cause a cycle
         // And for those two values to be reduced to [0,1] rather than [15, 4]
         #expect(output.count == 2)
         #expect(output == [1, 0])
     }
-    
+
+    /// We had this, but Minimax destroyed it
     @Test("Coupling, 50")
-    // We had this, but Minimax destroyed it
     func couplingBatch() throws {
         let iterator = ValueAndChoiceTreeInterpreter(Self.gen, seed: 1337, maxRuns: 50)
         var outputs = [(b: [Int], a: [Int])]()
@@ -62,14 +60,14 @@ struct CouplingShrinkingChallenge {
             let (_, output) = try #require(try Interpreters.reduce(gen: Self.gen, tree: tree, config: .fast, property: Self.property))
             outputs.append((value, output))
         }
-        
+
         for (index, output) in outputs.enumerated() {
             print("\(index + 1) input: \(output.b) — reduced: \(output.a)")
 //            #expect(output.a.count == 2)
 //            #expect(output.a == [1, 0])
         }
     }
-    
+
     /*
      We're not doing too well here. Original values in parenthesis
      1 [0, 0] ([0, 0])

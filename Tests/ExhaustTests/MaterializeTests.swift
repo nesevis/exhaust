@@ -5,12 +5,11 @@
 //  Created by Chris Kolbu on 12/2/2026.
 //
 
-import Testing
 @testable import Exhaust
+import Testing
 
 @Suite("Materialize")
 struct MaterializeTests {
-
     // MARK: - Helpers
 
     /// Generate a value, get its tree, flatten to a sequence, then materialize.
@@ -45,7 +44,7 @@ struct MaterializeTests {
 
     @Test("Materialize UInt64 via chooseBits")
     func materializeUInt64() throws {
-        let gen = Gen.choose(in: UInt64(0)...1000)
+        let gen = Gen.choose(in: UInt64(0) ... 1000)
         let (original, materialized) = try roundTrip(gen)
         #expect(original == materialized)
     }
@@ -95,7 +94,7 @@ struct MaterializeTests {
         let gen = Gen.pick(choices: [
             (1, Gen.just("alpha")),
             (1, Gen.just("beta")),
-            (1, Gen.just("gamma"))
+            (1, Gen.just("gamma")),
         ])
         let (original, materialized) = try roundTrip(gen)
         #expect(original == materialized)
@@ -104,8 +103,8 @@ struct MaterializeTests {
     @Test("Materialize pick with generated sub-values")
     func materializePickWithGenerators() throws {
         let gen = Gen.pick(choices: [
-            (1, Gen.choose(in: UInt64(0)...10)),
-            (1, Gen.choose(in: UInt64(100)...200))
+            (1, Gen.choose(in: UInt64(0) ... 10)),
+            (1, Gen.choose(in: UInt64(100) ... 200)),
         ])
         let (original, materialized) = try roundTrip(gen)
         #expect(original == materialized)
@@ -115,11 +114,11 @@ struct MaterializeTests {
     func materializeNestedPick() throws {
         let inner = Gen.pick(choices: [
             (1, Gen.just("inner1")),
-            (1, Gen.just("inner2"))
+            (1, Gen.just("inner2")),
         ])
         let gen = Gen.pick(choices: [
             (1, inner),
-            (1, Gen.just("outer"))
+            (1, Gen.just("outer")),
         ])
         let (original, materialized) = try roundTrip(gen)
         #expect(original == materialized)
@@ -130,7 +129,7 @@ struct MaterializeTests {
         let gen = Gen.pick(choices: [
             (1, Gen.just("A")),
             (1, Gen.just("B")),
-            (1, Gen.just("C"))
+            (1, Gen.just("C")),
         ])
         for seed in [UInt64(1), 42, 100, 999, 12345] {
             let (original, materialized) = try roundTrip(gen, seed: seed)
@@ -142,14 +141,14 @@ struct MaterializeTests {
 
     @Test("Materialize fixed-length array")
     func materializeFixedArray() throws {
-        let gen = Gen.arrayOf(Gen.choose(in: UInt64(0)...100), exactly: 5)
+        let gen = Gen.arrayOf(Gen.choose(in: UInt64(0) ... 100), exactly: 5)
         let (original, materialized) = try roundTrip(gen)
         #expect(original == materialized)
     }
 
     @Test("Materialize variable-length array")
     func materializeVariableArray() throws {
-        let gen = UInt64.arbitrary.proliferate(with: 2...8)
+        let gen = UInt64.arbitrary.proliferate(with: 2 ... 8)
         let (original, materialized) = try roundTrip(gen)
         #expect(original == materialized)
     }
@@ -157,7 +156,7 @@ struct MaterializeTests {
     @Test("Materialize empty array via sequence removal")
     func materializeEmptySequence() throws {
         // Use a variable-length generator so element deletion is valid
-        let gen = Gen.arrayOf(Gen.choose(in: UInt64(0)...10), within: 0...10)
+        let gen = Gen.arrayOf(Gen.choose(in: UInt64(0) ... 10), within: 0 ... 10)
         let (_, tree) = try #require(
             Array(ValueAndChoiceTreeInterpreter(gen, materializePicks: false, seed: 42).prefix(1)).first
         )
@@ -185,7 +184,7 @@ struct MaterializeTests {
 
     @Test("Materialize nested arrays")
     func materializeNestedArrays() throws {
-        let innerGen = Gen.arrayOf(Gen.choose(in: UInt64(0)...10), exactly: 3)
+        let innerGen = Gen.arrayOf(Gen.choose(in: UInt64(0) ... 10), exactly: 3)
         let gen = Gen.arrayOf(innerGen, exactly: 2)
         let (original, materialized) = try roundTrip(gen)
         #expect(original == materialized)
@@ -194,7 +193,7 @@ struct MaterializeTests {
     @Test("Materialize sequence with shrunk elements")
     func materializeSequenceShrunk() throws {
         // Use a variable-length generator so element deletion is valid
-        let gen = Gen.arrayOf(Gen.choose(in: UInt64(0)...10), within: 0...10)
+        let gen = Gen.arrayOf(Gen.choose(in: UInt64(0) ... 10), within: 0 ... 10)
         let (_, tree) = try #require(
             Array(ValueAndChoiceTreeInterpreter(gen, materializePicks: false, seed: 42).prefix(2)).last
         )
@@ -228,8 +227,8 @@ struct MaterializeTests {
     @Test("Materialize zip containing arrays")
     func materializeZipWithArrays() throws {
         let gen = Gen.zip(
-            Gen.choose(in: UInt64(0)...100).proliferate(with: 1...5),
-            Gen.choose(in: UInt64(0)...100).proliferate(with: 1...5)
+            Gen.choose(in: UInt64(0) ... 100).proliferate(with: 1 ... 5),
+            Gen.choose(in: UInt64(0) ... 100).proliferate(with: 1 ... 5)
         )
         let (original, materialized) = try roundTripUntyped(gen)
         #expect(original.0 == materialized.0)
@@ -256,8 +255,8 @@ struct MaterializeTests {
             let y: UInt64
         }
         let gen = Gen.zip(
-            Gen.choose(in: UInt64(0)...100),
-            Gen.choose(in: UInt64(0)...100)
+            Gen.choose(in: UInt64(0) ... 100),
+            Gen.choose(in: UInt64(0) ... 100)
         ).mapped(
             forward: { Point(x: $0.0, y: $0.1) },
             backward: { ($0.x, $0.y) }
@@ -270,7 +269,7 @@ struct MaterializeTests {
 
     @Test("Materialize filtered generator")
     func materializeFiltered() throws {
-        let gen = Gen.choose(in: UInt64(0)...100).filter { $0 % 2 == 0 }
+        let gen = Gen.choose(in: UInt64(0) ... 100).filter { $0 % 2 == 0 }
         let (original, materialized) = try roundTrip(gen)
         #expect(original == materialized)
         #expect(materialized % 2 == 0)
@@ -281,7 +280,7 @@ struct MaterializeTests {
     @Test("Materialize classified generator")
     func materializeClassified() throws {
         let gen = Gen.classify(
-            Gen.choose(in: UInt64(0)...100),
+            Gen.choose(in: UInt64(0) ... 100),
             ("small", { $0 < 50 }),
             ("large", { $0 >= 50 })
         )
@@ -305,7 +304,7 @@ struct MaterializeTests {
         // resize is used internally by sized generators (e.g. proliferate)
         // Test it via a variable-length array which uses resize internally
         // This does not work very well. There is a bug here. The array length is affected yes, but so are the ranges of the UInt64s, clamped to 0...1 (limit of taking the prefix?)
-        let gen = Gen.resize(50, Gen.arrayOf(Gen.choose(in: Int(1000)...10_000)))
+        let gen = Gen.resize(50, Gen.arrayOf(Gen.choose(in: Int(1000) ... 10000)))
         let (original, materialized) = try roundTrip(gen)
         print()
         #expect(original == materialized)
@@ -316,8 +315,8 @@ struct MaterializeTests {
     @Test("Materialize with pruned mapped generator")
     func materializePrune() throws {
         let gen = Gen.pick(choices: [
-            (1, Gen.choose(in: UInt64(0)...50)),
-            (1, Gen.choose(in: UInt64(51)...100))
+            (1, Gen.choose(in: UInt64(0) ... 50)),
+            (1, Gen.choose(in: UInt64(51) ... 100)),
         ])
         let (original, materialized) = try roundTrip(gen)
         #expect(original == materialized)
@@ -335,8 +334,8 @@ struct MaterializeTests {
     @Test("Materialize pick of arrays")
     func materializePickOfArrays() throws {
         let gen = Gen.pick(choices: [
-            (1, Gen.arrayOf(Gen.choose(in: UInt64(0)...10), exactly: 3)),
-            (1, Gen.arrayOf(Gen.choose(in: UInt64(100)...200), exactly: 2))
+            (1, Gen.arrayOf(Gen.choose(in: UInt64(0) ... 10), exactly: 3)),
+            (1, Gen.arrayOf(Gen.choose(in: UInt64(100) ... 200), exactly: 2)),
         ])
         let (original, materialized) = try roundTrip(gen)
         #expect(original == materialized)
@@ -345,7 +344,7 @@ struct MaterializeTests {
     @Test("Materialize deeply nested composition")
     func materializeDeeplyNested() throws {
         let mid = Gen.arrayOf(UInt64.arbitrary, exactly: 3)
-        let gen = Gen.zip(mid, Gen.choose(in: UInt64(0)...100))
+        let gen = Gen.zip(mid, Gen.choose(in: UInt64(0) ... 100))
         let (original, materialized) = try roundTripUntyped(gen)
         #expect(original.0 == materialized.0)
         #expect(original.1 == materialized.1)
@@ -354,8 +353,8 @@ struct MaterializeTests {
     @Test("Materialize zip containing picks and arrays")
     func materializeZipPicksArrays() throws {
         let pickGen = Gen.pick(choices: [
-            (1, Gen.choose(in: UInt64(0)...10)),
-            (1, Gen.choose(in: UInt64(11)...20))
+            (1, Gen.choose(in: UInt64(0) ... 10)),
+            (1, Gen.choose(in: UInt64(11) ... 20)),
         ])
         let arrayGen = Gen.arrayOf(UInt64.arbitrary, exactly: 3)
         let gen = Gen.zip(pickGen, arrayGen)
@@ -371,8 +370,8 @@ struct MaterializeTests {
             let name: String
         }
         let ageGen = Gen.pick(choices: [
-            (1, Gen.choose(in: UInt64(0)...10)),
-            (1, Gen.choose(in: UInt64(11)...84))
+            (1, Gen.choose(in: UInt64(0) ... 10)),
+            (1, Gen.choose(in: UInt64(11) ... 84)),
         ])
         let gen = Gen.zip(ageGen, String.arbitrary)
             .mapped(
@@ -391,7 +390,7 @@ struct MaterializeTests {
             UInt64.arbitrary,
             Gen.pick(choices: [
                 (1, Gen.just("a")),
-                (1, Gen.just("b"))
+                (1, Gen.just("b")),
             ]),
             Bool.arbitrary
         )
@@ -405,11 +404,11 @@ struct MaterializeTests {
 
     @Test("Materialize with modified values reproduces modified output")
     func materializeModifiedValues() throws {
-        let gen = Gen.choose(in: UInt64(0)...1000)
+        let gen = Gen.choose(in: UInt64(0) ... 1000)
         let (_, tree) = try #require(
             Array(ValueAndChoiceTreeInterpreter(gen, materializePicks: false, seed: 42).prefix(1)).first
         )
-        let replacement = ChoiceSequenceValue.Value(choice: .unsigned(777, UInt64.self), validRanges: [0...1000])
+        let replacement = ChoiceSequenceValue.Value(choice: .unsigned(777, UInt64.self), validRanges: [0 ... 1000])
         let modified: ChoiceSequence = [.value(replacement)]
         let materialized = try Interpreters.materialize(gen, with: tree, using: modified)
         #expect(materialized == 777)
@@ -417,7 +416,7 @@ struct MaterializeTests {
 
     @Test("Materialize array with values set to minimum")
     func materializeArrayMinimized() throws {
-        let gen = Gen.arrayOf(Gen.choose(in: UInt64(0)...100), exactly: 5)
+        let gen = Gen.arrayOf(Gen.choose(in: UInt64(0) ... 100), exactly: 5)
         let (_, tree) = try #require(
             Array(ValueAndChoiceTreeInterpreter(gen, materializePicks: false, seed: 42).prefix(1)).first
         )
@@ -435,9 +434,9 @@ struct MaterializeTests {
     @Test("Materialize chooseBits through group path")
     func materializeChooseBitsThroughGroup() throws {
         let gen = Gen.zip(
-            Gen.choose(in: UInt64(0)...100),
-            Gen.choose(in: UInt64(0)...100),
-            Gen.choose(in: UInt64(0)...100)
+            Gen.choose(in: UInt64(0) ... 100),
+            Gen.choose(in: UInt64(0) ... 100),
+            Gen.choose(in: UInt64(0) ... 100)
         )
         let (original, materialized) = try roundTripUntyped(gen)
         #expect(original.0 == materialized.0)
@@ -455,7 +454,7 @@ struct MaterializeTests {
 
     @Test("Materialize getSize through group path")
     func materializeGetSizeThroughGroup() throws {
-        let gen = Gen.zip(Gen.getSize(), Gen.choose(in: UInt64(0)...10))
+        let gen = Gen.zip(Gen.getSize(), Gen.choose(in: UInt64(0) ... 10))
         let (original, materialized) = try roundTripUntyped(gen)
         #expect(original.0 == materialized.0)
         #expect(original.1 == materialized.1)
@@ -465,8 +464,8 @@ struct MaterializeTests {
     func materializeResizeThroughGroup() throws {
         // resize is exercised via proliferate (variable-length array)
         let gen = Gen.zip(
-            UInt64.arbitrary.proliferate(with: 2...4),
-            Gen.choose(in: UInt64(0)...100)
+            UInt64.arbitrary.proliferate(with: 2 ... 4),
+            Gen.choose(in: UInt64(0) ... 100)
         )
         let (original, materialized) = try roundTripUntyped(gen)
         #expect(original.0 == materialized.0)
@@ -476,8 +475,8 @@ struct MaterializeTests {
     @Test("Materialize sequence through group path")
     func materializeSequenceThroughGroup() throws {
         let gen = Gen.zip(
-            Gen.arrayOf(Gen.choose(in: UInt64(0)...10), exactly: 3),
-            Gen.choose(in: UInt64(0)...100)
+            Gen.arrayOf(Gen.choose(in: UInt64(0) ... 10), exactly: 3),
+            Gen.choose(in: UInt64(0) ... 100)
         )
         let (original, materialized) = try roundTripUntyped(gen)
         #expect(original.0 == materialized.0)
@@ -487,7 +486,7 @@ struct MaterializeTests {
     @Test("Materialize contramap/prune through group path")
     func materializeContramapThroughGroup() throws {
         let gen = Gen.zip(
-            Gen.choose(in: UInt64(100)...1000)
+            Gen.choose(in: UInt64(100) ... 1000)
                 .mapped(
                     forward: { Int($0) },
                     backward: { UInt64($0) }
@@ -502,7 +501,7 @@ struct MaterializeTests {
     @Test("Materialize filter through group path")
     func materializeFilterThroughGroup() throws {
         let gen = Gen.zip(
-            Gen.choose(in: UInt64(0)...100).filter { $0 % 2 == 0 },
+            Gen.choose(in: UInt64(0) ... 100).filter { $0 % 2 == 0 },
             UInt64.arbitrary
         )
         let (original, materialized) = try roundTripUntyped(gen)
@@ -513,7 +512,7 @@ struct MaterializeTests {
     @Test("Materialize classify through group path")
     func materializeClassifyThroughGroup() throws {
         let gen = Gen.zip(
-            Gen.classify(Gen.choose(in: UInt64(0)...100), ("low", { $0 < 50 })),
+            Gen.classify(Gen.choose(in: UInt64(0) ... 100), ("low", { $0 < 50 })),
             UInt64.arbitrary
         )
         let (original, materialized) = try roundTripUntyped(gen)
@@ -525,10 +524,10 @@ struct MaterializeTests {
     func materializePickThroughGroup() throws {
         let gen = Gen.zip(
             Gen.pick(choices: [
-                (1, Gen.choose(in: UInt64(0)...10)),
-                (1, Gen.choose(in: UInt64(11)...20))
+                (1, Gen.choose(in: UInt64(0) ... 10)),
+                (1, Gen.choose(in: UInt64(11) ... 20)),
             ]),
-            Gen.choose(in: UInt64(0)...100)
+            Gen.choose(in: UInt64(0) ... 100)
         )
         let (original, materialized) = try roundTripUntyped(gen)
         #expect(original.0 == materialized.0)
@@ -541,8 +540,8 @@ struct MaterializeTests {
     func materializePickWithoutMaterializePicks() throws {
         // materializePicks: false is the standard mode for materialize round-trips with picks
         let gen = Gen.pick(choices: [
-            (1, Gen.choose(in: UInt64(0)...10)),
-            (1, Gen.choose(in: UInt64(11)...20))
+            (1, Gen.choose(in: UInt64(0) ... 10)),
+            (1, Gen.choose(in: UInt64(11) ... 20)),
         ])
         let (original, materialized) = try roundTrip(gen, materializePicks: false)
         #expect(original == materialized)
@@ -553,7 +552,7 @@ struct MaterializeTests {
         let gen = Gen.zip(
             Gen.pick(choices: [
                 (1, Gen.just("first")),
-                (1, Gen.just("second"))
+                (1, Gen.just("second")),
             ]),
             Gen.arrayOf(UInt64.arbitrary, exactly: 3)
         )
@@ -568,8 +567,8 @@ struct MaterializeTests {
     func materializeIdempotent() throws {
         let gen = Gen.zip(
             Gen.pick(choices: [
-                (1, Gen.choose(in: UInt64(0)...10)),
-                (1, Gen.choose(in: UInt64(11)...20))
+                (1, Gen.choose(in: UInt64(0) ... 10)),
+                (1, Gen.choose(in: UInt64(11) ... 20)),
             ]),
             Gen.arrayOf(UInt64.arbitrary, exactly: 3)
         )

@@ -6,7 +6,7 @@
 /// ## 1. Generation (Forward Pass)
 /// Produces random values using entropy, just like traditional generators.
 ///
-/// ## 2. Reflection (Backward Pass)  
+/// ## 2. Reflection (Backward Pass)
 /// **Key innovation**: Analyzes any value to discover which random choices could have produced it.
 ///
 /// ## 3. Replay (Deterministic Forward)
@@ -18,7 +18,7 @@
 /// ReflectiveGenerator **reconstructs that connection**, enabling:
 ///
 /// - **Shrinking without traces**: Shrink any value, even from crash reports or external sources
-/// - **Mutation testing**: Modify values while preserving validity constraints  
+/// - **Mutation testing**: Modify values while preserving validity constraints
 /// - **Example-based generation**: Generate similar values to provided examples
 /// - **Validation**: Check if values could have been produced by a generator
 ///
@@ -34,7 +34,6 @@
 public typealias ReflectiveGenerator<Output> = FreerMonad<ReflectiveOperation, Output>
 
 public extension ReflectiveGenerator where Operation == ReflectiveOperation {
-
     /// The bit pattern range associated with this generator's immediate choice operation.
     ///
     /// For generators wrapping a `chooseBits` operation, returns the min/max range that
@@ -48,10 +47,10 @@ public extension ReflectiveGenerator where Operation == ReflectiveOperation {
         case .pure:
             return nil
         case let .impure(op, _):
-            guard case .chooseBits(let min, let max, _) = op else {
+            guard case let .chooseBits(min, max, _) = op else {
                 return nil
             }
-            return min...max
+            return min ... max
         }
     }
 
@@ -73,9 +72,9 @@ public extension ReflectiveGenerator where Operation == ReflectiveOperation {
         forward: @escaping (Value) throws -> NewOutput,
         backward: @escaping (NewOutput) throws -> Value
     ) rethrows -> ReflectiveGenerator<NewOutput> {
-        try Gen.contramap(backward, self.map(forward))
+        try Gen.contramap(backward, map(forward))
     }
-    
+
     /// Creates a bidirectional transformation using a forward function and a partial path for backward.
     ///
     /// This overload uses a `PartialPath` for the backward transformation, which can fail gracefully
@@ -95,12 +94,11 @@ public extension ReflectiveGenerator where Operation == ReflectiveOperation {
         let erasedBackward: (Any) throws -> Any = { newOutput in
             try backward.extract(from: newOutput)!
         }
-        let erasedGen = try self
-            .map(forward)
+        let erasedGen = try map(forward)
 
         return Gen.contramap(erasedBackward, erasedGen)
     }
-    
+
     /// Creates a bidirectional transformation using partial paths in both directions.
     ///
     /// This overload uses partial paths for both transformations, making both directions
@@ -121,12 +119,11 @@ public extension ReflectiveGenerator where Operation == ReflectiveOperation {
             // FIXME: Should we be force unwrapping here? What if it's optional?
             try backward.extract(from: newOutput)!
         }
-        let erasedGen = try self
-            .map { try forward.extract(from: $0) }
-        
+        let erasedGen = try map { try forward.extract(from: $0) }
+
         return Gen.contramap(erasedBackward, erasedGen)
     }
-    
+
     /// Converts this generator to produce optional values, enabling nil/non-nil choice patterns.
     ///
     /// This transformation is essential for generators that need to handle optional types
@@ -145,17 +142,17 @@ public extension ReflectiveGenerator where Operation == ReflectiveOperation {
             transform: { result in
                 // Backward pass. The calling function is expecting a non-optional, so we throw the `reflectedNil` error to indicate to the consumer — which should only be a `pick` exploring the nil and non-nil options — that they are trying to parse the `.some` branch using the `.none` value during reflection
                 // TODO: Can we verify that this closure is executed from a `pick`?
-                if let optional = result as? Optional<Value>, optional == nil {
+                if let optional = result as? Value?, optional == nil {
                     throw Interpreters.ReflectionError.reflectedNil(type: description, resultType: String(describing: type(of: result)))
                 }
                 return result as! Value
             },
-            next: self.erase()
+            next: erase()
         )) { result in
-                .pure(result as? Value)
-            }
+            .pure(result as? Value)
+        }
     }
-    
+
     /// Creates an array generator with length constrained to the specified range.
     ///
     /// This is a convenience method that transforms a single-value generator into an array generator
@@ -163,7 +160,7 @@ public extension ReflectiveGenerator where Operation == ReflectiveOperation {
     /// for generating collections without manually composing `Gen.arrayOf` calls.
     ///
     /// **Forward pass**: Generates a random length within range, then generates that many elements
-    /// **Backward pass**: Decomposes target array and reflects on both length and individual elements  
+    /// **Backward pass**: Decomposes target array and reflects on both length and individual elements
     /// **Replay pass**: Uses recorded length and element choices to recreate the exact array
     ///
     /// The method name "proliferate" suggests the multiplication of a single generator into many
@@ -176,7 +173,7 @@ public extension ReflectiveGenerator where Operation == ReflectiveOperation {
     func proliferate(with range: ClosedRange<UInt64>) -> ReflectiveGenerator<[Value]> {
         Gen.arrayOf(self, Gen.choose(in: range))
     }
-    
+
     /// Creates a filtered generator that only produces values satisfying a validity condition.
     ///
     /// This combinator wraps the current generator with a validity predicate, enabling automatic
@@ -222,56 +219,56 @@ public extension ReflectiveGenerator where Operation == ReflectiveOperation {
         case .pure:
             // This shouldn't happen? Should it be a no-op, or an error? Should we throw in the continuation?
             .impure(
-                operation: .filter(gen: self.erase(), fingerprint: prng.next(), predicate: { value in predicate(value as! Value) }),
+                operation: .filter(gen: erase(), fingerprint: prng.next(), predicate: { value in predicate(value as! Value) }),
                 continuation: { .pure($0 as! Value) }
             )
         case .impure:
             // How can we fingerprint the generator here. Generate a random value? UUID?
             .impure(
-                operation: .filter(gen: self.erase(), fingerprint: prng.next(), predicate: { value in predicate(value as! Value) }),
+                operation: .filter(gen: erase(), fingerprint: prng.next(), predicate: { value in predicate(value as! Value) }),
                 continuation: { .pure($0 as! Value) }
             )
         }
     }
-    
+
     @inlinable
     func compose<OtherValue>(with other: ReflectiveGenerator<OtherValue>) -> ReflectiveGenerator<(Value, OtherValue)> {
         Gen.zip(self, other)
     }
-    
-    /// Transforms the operation type of this generator while preserving the value type.
-    ///
-    /// **Warning**: This operation has significant performance overhead as it must traverse
-    /// and rebuild the entire generator structure. Use sparingly and prefer type-safe alternatives.
-    ///
-    /// This is an internal utility for advanced generator transformations that need to change
-    /// the underlying operation type (e.g., wrapping `ReflectiveOperation` in a larger operation type).
-    ///
-    /// The transformation is applied recursively to all operations in the generator tree,
-    /// requiring a complete structural traversal.
-    ///
-    /// - Parameter transform: Function to convert operations to the new operation type
-    /// - Returns: An equivalent generator with transformed operation type
-    /// - Note: Marked private due to performance concerns and specialized use cases
+
+    // Transforms the operation type of this generator while preserving the value type.
+    //
+    // **Warning**: This operation has significant performance overhead as it must traverse
+    // and rebuild the entire generator structure. Use sparingly and prefer type-safe alternatives.
+    //
+    // This is an internal utility for advanced generator transformations that need to change
+    // the underlying operation type (e.g., wrapping `ReflectiveOperation` in a larger operation type).
+    //
+    // The transformation is applied recursively to all operations in the generator tree,
+    // requiring a complete structural traversal.
+    //
+    // - Parameter transform: Function to convert operations to the new operation type
+    // - Returns: An equivalent generator with transformed operation type
+    // - Note: Marked private due to performance concerns and specialized use cases
     #warning("This has performance overhead, use with caution")
     func mapOperation<NewOperation>(_ transform: @escaping (Operation) -> NewOperation) -> FreerMonad<NewOperation, Value> {
         switch self {
         case let .pure(value):
             // If we're at a pure value, there's no operation to transform. Return as is.
             return .pure(value)
-            
+
         case let .impure(operation, continuation):
             // If we have a suspended operation:
             // 1. Transform the current operation.
             let newOperation = transform(operation)
-            
+
             // 2. Create a new continuation. This new continuation must return a monad
             //    with the NewOperation type. We do this by recursively calling
             //    `mapOperation` on the result of the original continuation.
             let newContinuation = { (val: Any) -> FreerMonad<NewOperation, Value> in
                 try continuation(val).mapOperation(transform)
             }
-            
+
             // 3. Return a new impure case with the transformed operation and continuation.
             return .impure(operation: newOperation, continuation: newContinuation)
         }

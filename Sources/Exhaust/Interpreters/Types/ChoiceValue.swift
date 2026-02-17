@@ -11,7 +11,7 @@ public enum ChoiceValue: Comparable, Hashable, Equatable, Sendable {
     case signed(Int64, UInt64, any BitPatternConvertible.Type)
     case floating(Double, UInt64, any BitPatternConvertible.Type)
     case character(Character)
-    
+
     init(_ value: any BitPatternConvertible, tag: TypeTag) {
         switch tag {
         case .uint:
@@ -55,7 +55,7 @@ public enum ChoiceValue: Comparable, Hashable, Equatable, Sendable {
     var semanticSimplest: ChoiceValue {
         switch self {
         case let .unsigned(_, type):
-            return .init(type.init(bitPattern64: 0), tag: self.tag)
+            return .init(type.init(bitPattern64: 0), tag: tag)
         case let .signed(_, _, type):
             let zeroBitPattern: UInt64
             if type is Int8.Type { zeroBitPattern = Int8(0).bitPattern64 }
@@ -89,7 +89,7 @@ public enum ChoiceValue: Comparable, Hashable, Equatable, Sendable {
             return .character
         }
     }
-    
+
     var convertibleType: any BitPatternConvertible.Type {
         switch self {
         case let .unsigned(_, type):
@@ -123,7 +123,7 @@ public enum ChoiceValue: Comparable, Hashable, Equatable, Sendable {
             return character.bitPattern64 + 100 // Encourages removing '\0' bits
         }
     }
-    
+
     func fits(in ranges: [ClosedRange<UInt64>]) -> Bool {
         for range in ranges {
             if range.contains(bitPattern64) {
@@ -132,16 +132,16 @@ public enum ChoiceValue: Comparable, Hashable, Equatable, Sendable {
         }
         return false
     }
-    
+
     func displayRange(_ range: ClosedRange<UInt64>) -> String {
         switch self {
         case .unsigned:
             return range.description
-        case .signed(_, _, let underlyingType):
+        case let .signed(_, _, underlyingType):
             let lower = underlyingType.init(bitPattern64: range.lowerBound)
             let upper = underlyingType.init(bitPattern64: range.upperBound)
             return "\(lower)...\(upper)"
-        case .floating(_, _, let underlyingType):
+        case let .floating(_, _, underlyingType):
             let lower = underlyingType.init(bitPattern64: range.lowerBound)
             let upper = underlyingType.init(bitPattern64: range.upperBound)
             return "\(lower)...\(upper)"
@@ -149,7 +149,7 @@ public enum ChoiceValue: Comparable, Hashable, Equatable, Sendable {
             return "'\(Character(bitPattern64: range.lowerBound))'...'\(Character(bitPattern64: range.upperBound).description)'"
         }
     }
-    
+
     var doubleValue: Double {
         switch self {
         case .unsigned:
@@ -165,7 +165,7 @@ public enum ChoiceValue: Comparable, Hashable, Equatable, Sendable {
                 fatalError()
             }
             return Double(this)
-        case .character(let character):
+        case let .character(character):
             return Double(character.bitPattern64)
         }
     }
@@ -176,8 +176,8 @@ public enum ChoiceValue: Comparable, Hashable, Equatable, Sendable {
         }
         return convertibleType.init(bitPattern64: bitPattern64)
     }
-    
-    // The case here is that `self` failed the property and `other` passed, so they represent both the range and the direction between them
+
+    /// The case here is that `self` failed the property and `other` passed, so they represent both the range and the direction between them
     func shrinkingDirection(given other: Self) -> ShrinkingDirection {
         switch (self, other) {
         case let (.unsigned(lhs, _), .unsigned(rhs, _)):
@@ -192,24 +192,24 @@ public enum ChoiceValue: Comparable, Hashable, Equatable, Sendable {
             fatalError("\(#function) should not compare different types!")
         }
     }
-    
+
     public func hash(into hasher: inout Hasher) {
         switch self {
-        case .unsigned(let uInt64, _):
+        case let .unsigned(uInt64, _):
             hasher.combine(uInt64)
-        case .signed(_, let uInt64, _):
+        case let .signed(_, uInt64, _):
             hasher.combine(uInt64)
-        case .floating(_, let uInt64, _):
+        case let .floating(_, uInt64, _):
             hasher.combine(uInt64)
-        case .character(let character):
+        case let .character(character):
             hasher.combine(character)
         }
     }
-    
+
     public static func == (lhs: Self, rhs: Self) -> Bool {
         lhs.hashValue == rhs.hashValue
     }
-    
+
     public static func < (lhs: Self, rhs: Self) -> Bool {
         switch (lhs, rhs) {
         case (.unsigned, .unsigned):

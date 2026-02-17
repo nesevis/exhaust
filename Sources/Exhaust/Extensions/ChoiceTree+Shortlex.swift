@@ -5,35 +5,34 @@
 ////  Created by Chris Kolbu on 29/7/2025.
 ////
 
-
 extension ChoiceTree {
     #warning("Deprecated — remove")
     var typeOrder: Int {
         switch self {
-        case .important: return -2     // Highest priority - guides shrinking
-        case .selected: return -1      // High priority - replay markers
-        case .just: return 0           // Constants - no complexity
-        case .getSize: return 0        // Size markers - no complexity
-        case .resize: return 0         // Context modifiers
-        case .choice: return 1         // Single shrinkable values
-        case .group: return 3          // Simple containers
-        case .branch: return 4         // Choice points with alternatives
-        case .sequence: return 5       // Variable-length structures
+        case .important: return -2 // Highest priority - guides shrinking
+        case .selected: return -1 // High priority - replay markers
+        case .just: return 0 // Constants - no complexity
+        case .getSize: return 0 // Size markers - no complexity
+        case .resize: return 0 // Context modifiers
+        case .choice: return 1 // Single shrinkable values
+        case .group: return 3 // Simple containers
+        case .branch: return 4 // Choice points with alternatives
+        case .sequence: return 5 // Variable-length structures
         }
     }
-    
+
     #warning("Deprecated — remove")
     var typeId: Int {
         switch self {
-        case .important: return 0     // Highest priority - guides shrinking
-        case .selected: return 1      // High priority - replay markers
-        case .just: return 2           // Constants - no complexity
-        case .getSize: return 3        // Size markers - no complexity
-        case .resize: return 4         // Context modifiers
-        case .choice: return 5         // Single shrinkable values
-        case .group: return 6          // Simple containers
-        case .branch: return 7         // Choice points with alternatives
-        case .sequence: return 8       // Variable-length structures
+        case .important: return 0 // Highest priority - guides shrinking
+        case .selected: return 1 // High priority - replay markers
+        case .just: return 2 // Constants - no complexity
+        case .getSize: return 3 // Size markers - no complexity
+        case .resize: return 4 // Context modifiers
+        case .choice: return 5 // Single shrinkable values
+        case .group: return 6 // Simple containers
+        case .branch: return 7 // Choice points with alternatives
+        case .sequence: return 8 // Variable-length structures
         }
     }
 }

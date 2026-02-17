@@ -27,7 +27,7 @@ public enum AdaptiveProbe {
     public static func findInteger<T: BinaryInteger>(_ predicate: (T) -> Bool) -> T {
         var low: T = 0
         var high: T = 5
-        
+
         // Step 1: Linear scan of neighbouring values
         while low < high {
             low += 1
@@ -41,7 +41,7 @@ public enum AdaptiveProbe {
             low = high
             high *= 2
         }
-        
+
         // Step 3: Binary search between low...high
         while low + 1 < high {
             let midpoint = low + (high - low) / 2
@@ -51,10 +51,10 @@ public enum AdaptiveProbe {
                 high = midpoint
             }
         }
-        
+
         return low
     }
-    
+
     /// Binary search where you supply a **guess** of the answer.
     ///
     /// Finds `n` such that `lo <= n < hi` and `predicate(n) != predicate(n + 1)`.
@@ -78,7 +78,7 @@ public enum AdaptiveProbe {
         let guess = guess ?? low
         precondition(low <= guess && guess < high)
         let good = predicate(low)
-        
+
         if predicate(guess) == good {
             // Our guess was equivalent to low, so we want to find some point after it.
             return guess + findInteger { n in guess + n < high && predicate(guess + n) == good }

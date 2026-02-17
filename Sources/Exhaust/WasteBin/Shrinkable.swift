@@ -10,4 +10,3 @@
 protocol Shrinkable: Comparable, Hashable, Equatable {
     var shrinkingStrategies: ShrinkingStrategies { get }
 }
-

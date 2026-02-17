@@ -6,7 +6,6 @@
 //
 
 extension ReducerStrategies {
-
     /// Pass 3: Try setting values to their semantically simplest form (0 for numbers, "a" for characters).
     /// Uses `find_integer` to batch consecutive simplifications.
     ///
@@ -40,7 +39,7 @@ extension ReducerStrategies {
         while i < valueIndices.count {
             let k = AdaptiveProbe.findInteger { (size: Int) in
                 var candidate = current
-                for j in 0..<size {
+                for j in 0 ..< size {
                     let idx = i + j
                     guard idx < valueIndices.count else { return false }
                     let seqIdx = valueIndices[idx]
@@ -62,7 +61,7 @@ extension ReducerStrategies {
             }
 
             if k > 0 {
-                for j in 0..<k {
+                for j in 0 ..< k {
                     let seqIdx = valueIndices[i + j]
                     guard case let .value(v) = current[seqIdx] else { continue }
                     let simplified = v.choice.semanticSimplest

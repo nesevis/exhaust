@@ -6,7 +6,6 @@
 //
 
 extension ReducerStrategies {
-
     /// Adaptive span deletion: for each position, finds the largest contiguous batch of same-depth
     /// spans that can be deleted while preserving the property failure.
     ///
@@ -62,7 +61,7 @@ extension ReducerStrategies {
             if k > 0 {
                 // Apply the deletion
                 var rangeSet = RangeSet<Int>()
-                for j in 0..<k {
+                for j in 0 ..< k {
                     rangeSet.insert(contentsOf: sortedSpans[i + j].range.asRange)
                 }
 

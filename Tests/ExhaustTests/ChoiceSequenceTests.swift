@@ -5,17 +5,16 @@
 //  Tests for ChoiceSequence.flatten method
 //
 
-import Testing
 @testable import Exhaust
+import Testing
 
 @Suite("Choice Sequence Tests")
 struct ChoiceSequenceTests {
-
     @Test("Flatten simple choice")
-    func flattenSimpleChoice() throws {
+    func flattenSimpleChoice() {
         let tree = ChoiceTree.choice(
             .unsigned(42, UInt64.self),
-            ChoiceMetadata(validRanges: [0...100])
+            ChoiceMetadata(validRanges: [0 ... 100])
         )
 
         let flattened = ChoiceSequence.flatten(tree)
@@ -26,11 +25,11 @@ struct ChoiceSequenceTests {
             return
         }
         #expect(value.choice == .unsigned(42, UInt64.self))
-        #expect(value.validRanges == [0...100])
+        #expect(value.validRanges == [0 ... 100])
     }
 
     @Test("Flatten just returns empty")
-    func flattenJust() throws {
+    func flattenJust() {
         let tree = ChoiceTree.just("constant")
 
         let flattened = ChoiceSequence.flatten(tree)
@@ -39,7 +38,7 @@ struct ChoiceSequenceTests {
     }
 
     @Test("Flatten getSize returns empty")
-    func flattenGetSize() throws {
+    func flattenGetSize() {
         let tree = ChoiceTree.getSize(100)
 
         let flattened = ChoiceSequence.flatten(tree)
@@ -48,14 +47,14 @@ struct ChoiceSequenceTests {
     }
 
     @Test("Flatten sequence with group markers")
-    func flattenSequence() throws {
+    func flattenSequence() {
         let tree = ChoiceTree.sequence(
             length: 2,
             elements: [
-                .choice(.unsigned(5, UInt64.self), ChoiceMetadata(validRanges: [0...10])),
-                .choice(.unsigned(8, UInt64.self), ChoiceMetadata(validRanges: [0...10]))
+                .choice(.unsigned(5, UInt64.self), ChoiceMetadata(validRanges: [0 ... 10])),
+                .choice(.unsigned(8, UInt64.self), ChoiceMetadata(validRanges: [0 ... 10])),
             ],
-            ChoiceMetadata(validRanges: [0...10])
+            ChoiceMetadata(validRanges: [0 ... 10])
         )
 
         let flattened = ChoiceSequence.flatten(tree)
@@ -64,7 +63,7 @@ struct ChoiceSequenceTests {
     }
 
     @Test("Flatten nested sequence")
-    func flattenNestedSequence() throws {
+    func flattenNestedSequence() {
         // Create: [[5, 8], [3]]
         let tree = ChoiceTree.sequence(
             length: 2,
@@ -72,20 +71,20 @@ struct ChoiceSequenceTests {
                 .sequence(
                     length: 2,
                     elements: [
-                        .choice(.unsigned(5, UInt64.self), ChoiceMetadata(validRanges: [0...10])),
-                        .choice(.unsigned(8, UInt64.self), ChoiceMetadata(validRanges: [0...10]))
+                        .choice(.unsigned(5, UInt64.self), ChoiceMetadata(validRanges: [0 ... 10])),
+                        .choice(.unsigned(8, UInt64.self), ChoiceMetadata(validRanges: [0 ... 10])),
                     ],
-                    ChoiceMetadata(validRanges: [0...10])
+                    ChoiceMetadata(validRanges: [0 ... 10])
                 ),
                 .sequence(
                     length: 1,
                     elements: [
-                        .choice(.unsigned(3, UInt64.self), ChoiceMetadata(validRanges: [0...10]))
+                        .choice(.unsigned(3, UInt64.self), ChoiceMetadata(validRanges: [0 ... 10])),
                     ],
-                    ChoiceMetadata(validRanges: [0...10])
-                )
+                    ChoiceMetadata(validRanges: [0 ... 10])
+                ),
             ],
-            ChoiceMetadata(validRanges: [0...10])
+            ChoiceMetadata(validRanges: [0 ... 10])
         )
 
         let flattened = ChoiceSequence.flatten(tree)
@@ -94,11 +93,11 @@ struct ChoiceSequenceTests {
     }
 
     @Test("Flatten group")
-    func flattenGroup() throws {
+    func flattenGroup() {
         let tree = ChoiceTree.group([
-            .choice(.unsigned(1, UInt64.self), ChoiceMetadata(validRanges: [0...10])),
-            .choice(.unsigned(2, UInt64.self), ChoiceMetadata(validRanges: [0...10])),
-            .choice(.unsigned(3, UInt64.self), ChoiceMetadata(validRanges: [0...10]))
+            .choice(.unsigned(1, UInt64.self), ChoiceMetadata(validRanges: [0 ... 10])),
+            .choice(.unsigned(2, UInt64.self), ChoiceMetadata(validRanges: [0 ... 10])),
+            .choice(.unsigned(3, UInt64.self), ChoiceMetadata(validRanges: [0 ... 10])),
         ])
 
         let flattened = ChoiceSequence.flatten(tree)
@@ -111,7 +110,7 @@ struct ChoiceSequenceTests {
             return
         }
 
-        for i in 1...3 {
+        for i in 1 ... 3 {
             guard case let .value(value) = flattened[i] else {
                 Issue.record("Expected value at index \(i)")
                 return
@@ -126,11 +125,11 @@ struct ChoiceSequenceTests {
     }
 
     @Test("Flatten resize")
-    func flattenResize() throws {
+    func flattenResize() {
         let tree = ChoiceTree.resize(
             newSize: 100,
             choices: [
-                .choice(.unsigned(42, UInt64.self), ChoiceMetadata(validRanges: [0...100]))
+                .choice(.unsigned(42, UInt64.self), ChoiceMetadata(validRanges: [0 ... 100])),
             ]
         )
 
@@ -157,9 +156,9 @@ struct ChoiceSequenceTests {
     }
 
     @Test("Flatten important marker is transparent")
-    func flattenImportant() throws {
+    func flattenImportant() {
         let tree = ChoiceTree.important(
-            .choice(.unsigned(42, UInt64.self), ChoiceMetadata(validRanges: [0...100]))
+            .choice(.unsigned(42, UInt64.self), ChoiceMetadata(validRanges: [0 ... 100]))
         )
 
         let flattened = ChoiceSequence.flatten(tree)
@@ -174,9 +173,9 @@ struct ChoiceSequenceTests {
     }
 
     @Test("Flatten selected marker is transparent")
-    func flattenSelected() throws {
+    func flattenSelected() {
         let tree = ChoiceTree.selected(
-            .choice(.unsigned(42, UInt64.self), ChoiceMetadata(validRanges: [0...100]))
+            .choice(.unsigned(42, UInt64.self), ChoiceMetadata(validRanges: [0 ... 100]))
         )
 
         let flattened = ChoiceSequence.flatten(tree)
@@ -191,12 +190,12 @@ struct ChoiceSequenceTests {
     }
 
     @Test("Flatten mixed tree with non-choices")
-    func flattenMixedTree() throws {
+    func flattenMixedTree() {
         let tree = ChoiceTree.group([
             .just("constant"),
             .getSize(100),
-            .choice(.unsigned(42, UInt64.self), ChoiceMetadata(validRanges: [0...100])),
-            .just("another constant")
+            .choice(.unsigned(42, UInt64.self), ChoiceMetadata(validRanges: [0 ... 100])),
+            .just("another constant"),
         ])
 
         let flattened = ChoiceSequence.flatten(tree)
@@ -223,11 +222,11 @@ struct ChoiceSequenceTests {
     }
 
     @Test("Flatten empty sequence")
-    func flattenEmptySequence() throws {
+    func flattenEmptySequence() {
         let tree = ChoiceTree.sequence(
             length: 0,
             elements: [],
-            ChoiceMetadata(validRanges: [0...10])
+            ChoiceMetadata(validRanges: [0 ... 10])
         )
 
         let flattened = ChoiceSequence.flatten(tree)
@@ -237,8 +236,8 @@ struct ChoiceSequenceTests {
     }
 
     @Test("Flatten preserves valid ranges")
-    func flattenPreservesValidRanges() throws {
-        let customRanges: [ClosedRange<UInt64>] = [0...50, 100...200]
+    func flattenPreservesValidRanges() {
+        let customRanges: [ClosedRange<UInt64>] = [0 ... 50, 100 ... 200]
         let tree = ChoiceTree.choice(
             .unsigned(42, UInt64.self),
             ChoiceMetadata(validRanges: customRanges)
@@ -255,12 +254,12 @@ struct ChoiceSequenceTests {
     }
 
     @Test("Flatten with different choice value types")
-    func flattenDifferentTypes() throws {
+    func flattenDifferentTypes() {
         let tree = ChoiceTree.group([
-            .choice(.unsigned(42, UInt64.self), ChoiceMetadata(validRanges: [0...100])),
-            .choice(.signed(-10, Int64(-10).bitPattern64, Int64.self), ChoiceMetadata(validRanges: [0...100])),
-            .choice(.floating(3.14, Double(3.14).bitPattern64, Double.self), ChoiceMetadata(validRanges: [0...100])),
-            .choice(.character("A"), ChoiceMetadata(validRanges: [0...100]))
+            .choice(.unsigned(42, UInt64.self), ChoiceMetadata(validRanges: [0 ... 100])),
+            .choice(.signed(-10, Int64(-10).bitPattern64, Int64.self), ChoiceMetadata(validRanges: [0 ... 100])),
+            .choice(.floating(3.14, Double(3.14).bitPattern64, Double.self), ChoiceMetadata(validRanges: [0 ... 100])),
+            .choice(.character("A"), ChoiceMetadata(validRanges: [0 ... 100])),
         ])
 
         let flattened = ChoiceSequence.flatten(tree)
@@ -274,25 +273,29 @@ struct ChoiceSequenceTests {
         }
 
         guard case let .value(value1) = flattened[1],
-              case .unsigned(42, _) = value1.choice else {
+              case .unsigned(42, _) = value1.choice
+        else {
             Issue.record("Expected unsigned value")
             return
         }
 
         guard case let .value(value2) = flattened[2],
-              case .signed(-10, _, _) = value2.choice else {
+              case .signed(-10, _, _) = value2.choice
+        else {
             Issue.record("Expected signed value")
             return
         }
 
         guard case let .value(value3) = flattened[3],
-              case .floating(3.14, _, _) = value3.choice else {
+              case .floating(3.14, _, _) = value3.choice
+        else {
             Issue.record("Expected floating value")
             return
         }
 
         guard case let .value(value4) = flattened[4],
-              case .character("A") = value4.choice else {
+              case .character("A") = value4.choice
+        else {
             Issue.record("Expected character value")
             return
         }
@@ -304,15 +307,15 @@ struct ChoiceSequenceTests {
     }
 
     @Test("Verify group markers are balanced")
-    func verifyGroupMarkersBalanced() throws {
+    func verifyGroupMarkersBalanced() {
         let tree = ChoiceTree.sequence(
             length: 1,
             elements: [
                 .group([
-                    .choice(.unsigned(1, UInt64.self), ChoiceMetadata(validRanges: [0...10]))
-                ])
+                    .choice(.unsigned(1, UInt64.self), ChoiceMetadata(validRanges: [0 ... 10])),
+                ]),
             ],
-            ChoiceMetadata(validRanges: [0...10])
+            ChoiceMetadata(validRanges: [0 ... 10])
         )
 
         let flattened = ChoiceSequence.flatten(tree)

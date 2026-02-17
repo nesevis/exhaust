@@ -6,16 +6,19 @@
 //
 
 extension Float: BitPatternConvertible {
-    public static var tag: TypeTag { .float }
-    private static let signBitMask: UInt32 = 0x80000000
-    
+    public static var tag: TypeTag {
+        .float
+    }
+
+    private static let signBitMask: UInt32 = 0x8000_0000
+
     /// A `Float` can use the entire `UInt32` space for its bit pattern.
     public static var bitPatternRanges: [ClosedRange<UInt64>] {
         [
-            UInt64(UInt32.min)...UInt64(UInt32.max)
+            UInt64(UInt32.min) ... UInt64(UInt32.max),
         ]
     }
-    
+
     /// Creates a `Float` from a `UInt64` with ordering-preserving encoding.
     public init(bitPattern64: UInt64) {
         let bitPattern32 = UInt32(bitPattern64)
@@ -31,12 +34,12 @@ extension Float: BitPatternConvertible {
         }
         self = Float(bitPattern: rawBitPattern)
     }
-    
+
     /// The underlying IEEE 754 bits with ordering-preserving encoding, promoted to a `UInt64`.
     /// Positive numbers have sign bit flipped, negative numbers have all bits flipped.
     /// This ensures that the natural UInt64 ordering matches the Float ordering.
     public var bitPattern64: UInt64 {
-        let rawBitPattern = self.bitPattern
+        let rawBitPattern = bitPattern
         if rawBitPattern & Self.signBitMask == 0 {
             // Positive numbers: flip sign bit
             return UInt64(rawBitPattern ^ Self.signBitMask)
@@ -48,16 +51,19 @@ extension Float: BitPatternConvertible {
 }
 
 extension Double: BitPatternConvertible {
-    public static var tag: TypeTag { .double }
-    private static let signBitMask: UInt64 = 0x8000000000000000
-    
+    public static var tag: TypeTag {
+        .double
+    }
+
+    private static let signBitMask: UInt64 = 0x8000_0000_0000_0000
+
     /// A `Double` uses the full `UInt64` space for its bit pattern.
     public static var bitPatternRanges: [ClosedRange<UInt64>] {
         [
-            UInt64.min...UInt64.max
+            UInt64.min ... UInt64.max,
         ]
     }
-    
+
     /// Creates a `Double` from a `UInt64` with ordering-preserving encoding.
     public init(bitPattern64: UInt64) {
         let rawBitPattern: UInt64
@@ -72,12 +78,12 @@ extension Double: BitPatternConvertible {
         }
         self = Double(bitPattern: rawBitPattern)
     }
-    
+
     /// The underlying IEEE 754 bits with ordering-preserving encoding.
     /// Positive numbers have sign bit flipped, negative numbers have all bits flipped.
     /// This ensures that the natural UInt64 ordering matches the Double ordering.
     public var bitPattern64: UInt64 {
-        let rawBitPattern = self.bitPattern
+        let rawBitPattern = bitPattern
         if rawBitPattern & Self.signBitMask == 0 {
             // Positive numbers: flip sign bit
             return rawBitPattern ^ Self.signBitMask

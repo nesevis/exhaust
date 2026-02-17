@@ -6,7 +6,6 @@
 //
 
 extension ReducerStrategies {
-
     /// Pass 5: Binary search each individual value toward its reduction target.
     /// For each `.value` entry, computes the ideal target (semantic simplest clamped to valid ranges),
     /// then binary searches between the current bit pattern and the target to find the minimum failing value.
@@ -49,7 +48,8 @@ extension ReducerStrategies {
             candidate[seqIdx] = .reduced(.init(choice: targetChoice, validRanges: v.validRanges))
             if candidate.shortLexPrecedes(current),
                let output = try? Interpreters.materialize(gen, with: tree, using: candidate),
-               property(output) == false {
+               property(output) == false
+            {
                 current = candidate
                 latestOutput = output
                 progress = true
@@ -73,7 +73,7 @@ extension ReducerStrategies {
                     guessDelta = currentBP > rangeMid ? currentBP - rangeMid : 0
                 }
                 // Clamp to valid delta range [0, distance)
-                guard guessDelta > 0 && guessDelta < distance else { return nil }
+                guard guessDelta > 0, guessDelta < distance else { return nil }
                 return guessDelta
             }()
 
@@ -115,7 +115,7 @@ extension ReducerStrategies {
                 var boundary = current
                 for offset in offsets {
                     // Let's make sure we don't under or overflow
-                    guard (searchUpward ? UInt64.max - offset >= currentBP : currentBP >= offset) else {
+                    guard searchUpward ? UInt64.max - offset >= currentBP : currentBP >= offset else {
                         continue
                     }
                     let testBP = searchUpward ? currentBP + offset : currentBP - offset

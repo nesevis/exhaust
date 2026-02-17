@@ -5,12 +5,12 @@
 ///
 /// ## Forward Pass (Generation)
 /// Operations consume randomness to produce values:
-/// - `chooseBits`: Generates random UInt64 within range  
+/// - `chooseBits`: Generates random UInt64 within range
 /// - `pick`: Selects one choice based on weights
 /// - `sequence`: Builds arrays by repeated element generation
 /// - `contramap`/`prune`: Transform or filter the input context
 ///
-/// ## Backward Pass (Reflection) 
+/// ## Backward Pass (Reflection)
 /// Operations analyze values to discover which random choices could have produced them:
 /// - `chooseBits`: Checks if value's bit pattern falls within range
 /// - `pick`: Tries all choices against the target value
@@ -20,7 +20,7 @@
 /// ## Replay Pass (Deterministic Recreation)
 /// Operations consume pre-recorded choices to recreate exact values:
 /// - `chooseBits`: Uses recorded bit pattern from choice tree
-/// - `pick`: Follows recorded branch selection  
+/// - `pick`: Follows recorded branch selection
 /// - `sequence`: Replays each element using recorded sub-trees
 /// - `contramap`/`prune`: Passes through recorded decisions
 ///
@@ -59,7 +59,7 @@ public enum ReflectiveOperation {
     ///   - transform: Function that extracts focus area, returning nil to prune branches
     ///   - next: Generator to apply to the extracted input
     case contramap(transform: (Any) throws -> Any?, next: ReflectiveGenerator<Any>)
-    
+
     /// Weighted random choice between multiple generation strategies.
     ///
     /// This operation enables probabilistic generation where different outcomes have different
@@ -74,7 +74,7 @@ public enum ReflectiveOperation {
     ///
     /// - Parameter choices: Array of weighted generator options with replay labels
     case pick(choices: ContiguousArray<PickTuple>)
-    
+
     /// Conditional generation that prunes invalid branches during reflection.
     ///
     /// This operation works with `contramap` to handle cases where the input transformation
@@ -90,7 +90,7 @@ public enum ReflectiveOperation {
     ///
     /// - Parameter next: Generator to apply if the input is valid (non-nil)
     case prune(next: ReflectiveGenerator<Any>)
-    
+
     /// Primitive random bit pattern generation within a bounded range.
     ///
     /// This is the fundamental randomness operation that underlies all bounded value generation.
@@ -103,7 +103,7 @@ public enum ReflectiveOperation {
     ///
     /// **Type handling**: The `TypeTag` enables type-specific interpretation:
     /// - `Int`: Bit pattern represents signed integer
-    /// - `Float`: Bit pattern represents IEEE 754 floating point  
+    /// - `Float`: Bit pattern represents IEEE 754 floating point
     /// - `Character`: Bit pattern represents Unicode scalar value
     /// - `Bool`: Bit pattern 0 = false, 1 = true
     ///
@@ -112,17 +112,17 @@ public enum ReflectiveOperation {
     ///
     /// - Parameters:
     ///   - min: Minimum bit pattern value (inclusive)
-    ///   - max: Maximum bit pattern value (inclusive)  
+    ///   - max: Maximum bit pattern value (inclusive)
     ///   - tag: Type tag for proper interpretation of bit patterns
     case chooseBits(min: UInt64, max: UInt64, tag: TypeTag)
-    
+
     /// Stack-safe sequence generation for creating arrays and collections.
     ///
     /// This operation enables the generation of variable-length collections without
     /// recursive bind chains that could cause stack overflow. It's the foundation
     /// for `Gen.arrayOf` and similar collection generators.
     ///
-    /// **Forward pass**: 
+    /// **Forward pass**:
     /// 1. Generate length using the length generator
     /// 2. Apply element generator `length` times iteratively
     /// 3. Collect results into an array
@@ -132,7 +132,7 @@ public enum ReflectiveOperation {
     /// 2. For each element, reflect using the element generator
     /// 3. Combine all element reflection paths with length paths
     ///
-    /// **Replay pass**: 
+    /// **Replay pass**:
     /// 1. Replay length from choice tree
     /// 2. Replay each element using corresponding sub-trees
     /// 3. Reconstruct the exact original array
@@ -145,7 +145,7 @@ public enum ReflectiveOperation {
     ///   - length: Generator that determines the sequence length
     ///   - gen: Generator applied to each element position
     case sequence(length: ReflectiveGenerator<UInt64>, gen: ReflectiveGenerator<Any>)
-    
+
     /// Parallel composition of multiple generators into a tuple result.
     ///
     /// This operation enables clean composition of multiple generators without deeply
@@ -153,7 +153,7 @@ public enum ReflectiveOperation {
     /// generators that combine several independent random choices.
     ///
     /// **Forward pass**: Generates values from all generators and combines into tuple
-    /// **Backward pass**: Decomposes target tuple and reflects each component independently  
+    /// **Backward pass**: Decomposes target tuple and reflects each component independently
     /// **Replay pass**: Replays all generators using corresponding choice sub-trees
     ///
     /// **Performance**: ContiguousArray provides better cache locality than Array
@@ -165,7 +165,7 @@ public enum ReflectiveOperation {
     ///
     /// - Parameter generators: Array of generators to compose in parallel
     case zip(ContiguousArray<ReflectiveGenerator<Any>>)
-    
+
     /// Produces a constant value without consuming any randomness.
     ///
     /// This is the simplest operation - it always produces the same predetermined value.
@@ -186,7 +186,7 @@ public enum ReflectiveOperation {
     ///
     /// - Parameter value: The constant value to always produce
     case just(Any)
-    
+
     /// Accesses the current size parameter for complexity-scaled generation.
     ///
     /// The size parameter is fundamental to property-based testing - it controls how
@@ -209,7 +209,7 @@ public enum ReflectiveOperation {
     ///
     /// - Returns: Current size parameter as UInt64
     case getSize
-    
+
     /// Temporarily overrides the size parameter for a nested generator scope.
     ///
     /// This operation enables fine-grained control over generation complexity by
@@ -217,7 +217,7 @@ public enum ReflectiveOperation {
     /// is scoped - it only affects the nested generator and its descendants.
     ///
     /// **Forward pass**: Sets new size, runs nested generator, then restores original size
-    /// **Backward pass**: Runs nested generator with the specified size context  
+    /// **Backward pass**: Runs nested generator with the specified size context
     /// **Replay pass**: Maintains size override during replay of nested generator
     ///
     /// **Common use cases**:
@@ -232,7 +232,7 @@ public enum ReflectiveOperation {
     ///   - newSize: Temporary size parameter for the nested scope
     ///   - next: Generator to run with the modified size
     case resize(newSize: UInt64, next: ReflectiveGenerator<Any>)
-    
+
     /// Identifies generators with validity conditions that can be optimized.
     ///
     /// This operation marks generators that have specific validity requirements or preconditions
@@ -268,7 +268,7 @@ public enum ReflectiveOperation {
     ///   - fingerprint: Unique identifier for this filter condition (for optimization caching)
     ///   - predicate: Validity condition that generated values must satisfy
     case filter(gen: ReflectiveGenerator<Any>, fingerprint: UInt64, predicate: (Any) -> Bool)
-    
+
     /// Categorizes generated values for statistical analysis and test coverage reporting.
     ///
     /// This operation enables developers to understand the distribution of generated test data

@@ -35,14 +35,14 @@ public extension Gen {
         // Use contramap with a transform that validates the target value during reflection.
         // The transform returns nil for mismatches, causing reflection to fail.
         let baseGenerator = just(value as Any)
-        
+
         let transform: (Any) -> Any? = { inputValue in
             guard let typedInput = inputValue as? Value, typedInput == value else {
-                return nil  // Reflection fails for non-matching values
+                return nil // Reflection fails for non-matching values
             }
             return typedInput
         }
-        
+
         return liftF(.contramap(transform: transform, next: baseGenerator))
     }
 }

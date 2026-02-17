@@ -8,8 +8,8 @@
 @testable import Exhaust
 import Testing
 
-//@Suite("Test Case Reducer tests")
-//struct TestCaseReducerTests {
+// @Suite("Test Case Reducer tests")
+// struct TestCaseReducerTests {
 //    @Test("TestSimpleReduction")
 //    func testSimpleIntReduction() throws {
 //        let gen = Int64.arbitrary
@@ -21,7 +21,7 @@ import Testing
 //        let shrunk = try TestCaseReducer.shrink(failing, using: gen, where: property)
 //        print()
 //    }
-//    
+//
 //    @Test("Test Simple Number Reduction")
 //    func testSimpleNumberReduction() throws {
 //        let gen = UInt64.arbitrary // Gen.choose(in: Int(-10_000)...10_000, input: Any.self)
@@ -38,7 +38,7 @@ import Testing
 //             └── choice(unsigned:9600) 19...1125899906842624
 //         Here we start with 9600 but end up with a lower bound of 19 which passes the test. In this case this means 19 is the lowest passing test. Does it follow that going below that will cause the test to refail?
 //         */
-//        
+//
 //        // The binary reducer starts dividing the value into ever smaller fractions of <0.0001 instead of going negative.
 //        let recipe = try Interpreters.reflect(gen, with: failing)
 ////        let shrunk = try TestCaseReducer.shrink(failing, using: gen, where: property)
@@ -65,7 +65,7 @@ import Testing
 //         */
 //        print()
 //    }
-//    
+//
 //    @Test("TestSimpleCharReduction")
 //    func testSimpleCharReduction() throws {
 //        let gen = Character.arbitrary
@@ -79,7 +79,7 @@ import Testing
 ////        let shrunk = try TestCaseReducer.shrink(failing, recipe: normalized, using: gen, where: property)
 //        print()
 //    }
-//    
+//
 //    @Test("TestComplexObjectNormalization")
 //    func testComplexObjectNormalization() throws {
 //        struct Person: Equatable {
@@ -104,7 +104,7 @@ import Testing
 ////        let replayed = try Interpreters.replay(gen, using: normalized30)
 //        print()
 //    }
-//    
+//
 //    @Test("Sum of two numbers must be less than 100")
 //    func testWithSumOfTwoNumbers() throws {
 //        let gen = Gen.choose(in: UInt(1)...1_000_000)
@@ -133,7 +133,7 @@ import Testing
 //        print(shrunken)
 //        #expect(shrunken == (1, 99))
 //    }
-//    
+//
 //    @Test("TestSimpleStringReduction")
 //    func testSimpleStringReduction() throws {
 //        let gen = String.arbitrary
@@ -146,4 +146,4 @@ import Testing
 //        let shrunk = try TestCaseReducer.shrink(failing, using: gen, where: property)
 //        print()
 //    }
-//}
+// }

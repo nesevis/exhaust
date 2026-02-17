@@ -6,148 +6,147 @@
 //  single-value generators, and complex composition scenarios.
 //
 
-import Testing
 @testable import Exhaust
+import Testing
 
 @Suite("Generator Composition Edge Cases")
 struct GeneratorCompositionEdgeCaseTests {
-    
     @Test("Single value generator composition")
-    func testSingleValueGeneratorComposition() throws {
+    func singleValueGeneratorComposition() throws {
         let constantGen = Gen.just(42)
         let normalGen = String.arbitrary
-        
+
         let composed = Gen.zip(constantGen, normalGen)
-        
+
         // Generate multiple values
-        for _ in 0..<10 {
+        for _ in 0 ..< 10 {
             var iterator = ValueInterpreter(composed)
-            let (constant, string) = iterator.next()!
+            let (constant, string) = try #require(iterator.next())
             #expect(constant == 42) // Constant should always be the same
             // String can be anything
         }
     }
-    
+
     @Test("Zipping many generators maintains correctness")
-    func testLargeZipComposition() throws {
+    func largeZipComposition() throws {
         let gen = Gen.zip(
             Int.arbitrary,
             String.arbitrary,
             UInt.arbitrary,
             Double.arbitrary,
-            Gen.choose(in: 1...100)
+            Gen.choose(in: 1 ... 100)
         )
-        
+
         // Verify all components are generated correctly
-        for _ in 0..<20 {
+        for _ in 0 ..< 20 {
             var iterator = ValueInterpreter(gen)
-            let (int, string, uint, double, ranged) = iterator.next()!
-            
+            let (int, string, uint, double, ranged) = try #require(iterator.next())
+
             // Type checking ensures correctness, but verify range constraint
             #expect(ranged >= 1)
             #expect(ranged <= 100)
         }
     }
-    
+
     @Test("Nested composition with multiple levels")
-    func testNestedCompositionLevels() throws {
+    func nestedCompositionLevels() throws {
         let innerGen = Gen.zip(Int.arbitrary, String.arbitrary)
         let middleGen = Gen.zip(innerGen, Bool.arbitrary)
         let outerGen = Gen.zip(middleGen, UInt.arbitrary)
-        
+
         var iterator = ValueInterpreter(outerGen)
-        let nestedTuple = iterator.next()!
+        let nestedTuple = try #require(iterator.next())
         // TOOD: write #expects
-        
+
         // All values should be generated successfully
         // Type system ensures correctness
     }
-    
+
     @Test("Empty array generator in composition")
-    func testEmptyArrayGeneratorComposition() throws {
+    func emptyArrayGeneratorComposition() throws {
         let emptyArrayGen = Gen.just([Int]())
         let normalGen = String.arbitrary
-        
+
         let composed = Gen.zip(emptyArrayGen, normalGen)
-        
-        for _ in 0..<10 {
+
+        for _ in 0 ..< 10 {
             var iterator = ValueInterpreter(composed)
-            let (emptyArray, _) = iterator.next()!
+            let (emptyArray, _) = try #require(iterator.next())
             #expect(emptyArray.isEmpty)
         }
     }
-    
+
     @Test("Composition with bound generators")
-    func testBoundGeneratorComposition() throws {
+    func boundGeneratorComposition() throws {
         let dependentGen = Int.arbitrary.bind { first in
-            Gen.choose(in: first...(first + 10)).map { second in
+            Gen.choose(in: first ... (first + 10)).map { second in
                 (first, second)
             }
         }
-        
+
         let independentGen = String.arbitrary
         let composed = Gen.zip(dependentGen, independentGen)
-        
-        for _ in 0..<20 {
+
+        for _ in 0 ..< 20 {
             var iterator = ValueInterpreter(composed)
-            let ((first, second), _) = iterator.next()!
+            let ((first, second), _) = try #require(iterator.next())
             #expect(second >= first)
             #expect(second <= first + 10)
         }
     }
-    
+
     @Test("Composition preserves replay behavior")
-    func testCompositionReplayBehavior() throws {
+    func compositionReplayBehavior() throws {
         let gen = Gen.zip(
-            Gen.choose(in: 1...100),
+            Gen.choose(in: 1 ... 100),
             String.arbitrary,
             Bool.arbitrary
         )
-        
+
         var iterator = ValueInterpreter(gen)
-        let generated = iterator.next()!
+        let generated = try #require(iterator.next())
         let recipe = try #require(try Interpreters.reflect(gen, with: generated))
         let replayed = try #require(try Interpreters.replay(gen, using: recipe))
-        
+
         #expect(generated == replayed)
     }
-    
+
     @Test("Composition with array proliferation")
-    func testArrayProlifirationComposition() throws {
-        let arrayGen = Int.arbitrary.proliferate(with: 0...5)
+    func arrayProlifirationComposition() throws {
+        let arrayGen = Int.arbitrary.proliferate(with: 0 ... 5)
         let scalarGen = String.arbitrary
-        
+
         let composed = Gen.zip(arrayGen, scalarGen)
-        
-        for _ in 0..<20 {
+
+        for _ in 0 ..< 20 {
             var iterator = ValueInterpreter(composed)
-            let (array, string) = iterator.next()!
+            let (array, string) = try #require(iterator.next())
             #expect(array.count >= 0)
             #expect(array.count <= 5)
         }
     }
-    
+
     @Test("Deeply nested array composition")
-    func testDeeplyNestedArrayComposition() throws {
+    func deeplyNestedArrayComposition() throws {
         let nestedGen = Int.arbitrary
-            .proliferate(with: 1...3)
-            .proliferate(with: 1...2)
-            .proliferate(with: 1...2)
-        
+            .proliferate(with: 1 ... 3)
+            .proliferate(with: 1 ... 2)
+            .proliferate(with: 1 ... 2)
+
         let composed = Gen.zip(nestedGen, String.arbitrary)
-        
-        for _ in 0..<10 {
+
+        for _ in 0 ..< 10 {
             var iterator = ValueInterpreter(composed)
-            let (nested, string) = iterator.next()!
-            
+            let (nested, string) = try #require(iterator.next())
+
             // Verify structure depth
             #expect(nested.count >= 1)
             #expect(nested.count <= 2)
-            
+
             for level2 in nested {
                 #expect(level2.count >= 1)
                 #expect(level2.count <= 2)
-                
+
                 for level3 in level2 {
                     #expect(level3.count >= 1)
                     #expect(level3.count <= 3)

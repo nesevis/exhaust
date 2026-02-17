@@ -7,8 +7,8 @@
 //  the minimum failing value when Pass 3's all-or-nothing simplification fails.
 //
 
-import Testing
 @testable import Exhaust
+import Testing
 
 // MARK: - Helpers
 
@@ -26,18 +26,17 @@ private func generate<Output>(
 
 @Suite("ChoiceValue.reductionTarget")
 struct ReductionTargetTests {
-
     @Test("Unsigned target is 0 when 0 is in range")
     func unsignedTargetIsZero() {
         let value = ChoiceValue.unsigned(247, UInt64.self)
-        let target = value.reductionTarget(in: [0...1000])
+        let target = value.reductionTarget(in: [0 ... 1000])
         #expect(target == 0)
     }
 
     @Test("Unsigned target is range lower bound when 0 is not in range")
     func unsignedTargetIsLowerBound() {
         let value = ChoiceValue.unsigned(500, UInt64.self)
-        let target = value.reductionTarget(in: [10...1000])
+        let target = value.reductionTarget(in: [10 ... 1000])
         #expect(target == 10)
     }
 
@@ -45,7 +44,7 @@ struct ReductionTargetTests {
     func signedTargetIsZero() {
         let value = ChoiceValue(Int64(-50), tag: .int64)
         let zeroBP = Int64(0).bitPattern64
-        let range = Int64(-100).bitPattern64...Int64(100).bitPattern64
+        let range = Int64(-100).bitPattern64 ... Int64(100).bitPattern64
         let target = value.reductionTarget(in: [range])
         #expect(target == zeroBP)
     }
@@ -53,7 +52,7 @@ struct ReductionTargetTests {
     @Test("Signed target is closest bound when 0 is not in range")
     func signedTargetIsClosestBound() {
         let value = ChoiceValue(Int64(-50), tag: .int64)
-        let range = Int64(-100).bitPattern64...Int64(-10).bitPattern64
+        let range = Int64(-100).bitPattern64 ... Int64(-10).bitPattern64
         let zeroBP = Int64(0).bitPattern64
         let target = value.reductionTarget(in: [range])
         // -10 is closest to 0
@@ -65,7 +64,7 @@ struct ReductionTargetTests {
     @Test("Character target is 'a' when in range")
     func characterTargetIsA() {
         let value = ChoiceValue.character("z")
-        let target = value.reductionTarget(in: [Character("a").bitPattern64...Character("z").bitPattern64])
+        let target = value.reductionTarget(in: [Character("a").bitPattern64 ... Character("z").bitPattern64])
         #expect(target == Character("a").bitPattern64)
     }
 }
@@ -74,10 +73,9 @@ struct ReductionTargetTests {
 
 @Suite("Reducer Pass 5: reduce values")
 struct ReducerReduceValuesTests {
-
     @Test("Unsigned value reduced to minimum failing value")
     func unsignedReducedToMinimum() throws {
-        let gen = Gen.choose(in: UInt64(0)...1000)
+        let gen = Gen.choose(in: UInt64(0) ... 1000)
 
         let (value, tree) = try generate(gen)
         try #require(value > 5)
@@ -94,7 +92,7 @@ struct ReducerReduceValuesTests {
 
     @Test("Unsigned value in range not containing 0")
     func unsignedInRestrictedRange() throws {
-        let gen = Gen.choose(in: UInt64(10)...1000)
+        let gen = Gen.choose(in: UInt64(10) ... 1000)
 
         let (value, tree) = try generate(gen)
         try #require(value >= 50)
@@ -111,7 +109,7 @@ struct ReducerReduceValuesTests {
 
     @Test("Signed value reduced toward 0")
     func signedReducedTowardZero() throws {
-        let gen = Gen.choose(in: Int64(-1000)...(-1))
+        let gen = Gen.choose(in: Int64(-1000) ... -1)
 
         let (value, tree) = try generate(gen)
         try #require(value < -5)
@@ -128,7 +126,7 @@ struct ReducerReduceValuesTests {
 
     @Test("Value already at target is unchanged")
     func alreadyAtTarget() throws {
-        let gen = Gen.choose(in: UInt64(0)...100)
+        let gen = Gen.choose(in: UInt64(0) ... 100)
 
         let (_, tree) = try generate(gen)
         let originalSequence = ChoiceSequence.flatten(tree)
@@ -145,7 +143,7 @@ struct ReducerReduceValuesTests {
 
     @Test("Reduction preserves property failure")
     func reductionPreservesFailure() throws {
-        let gen = Gen.choose(in: UInt64(0)...1000)
+        let gen = Gen.choose(in: UInt64(0) ... 1000)
 
         let (value, tree) = try generate(gen)
         try #require(value > 10)
@@ -163,11 +161,11 @@ struct ReducerReduceValuesTests {
 
     @Test("Character value reduced within its range")
     func characterReduced() throws {
-        let gen = Gen.choose(in: Character("a")...Character("z"))
+        let gen = Gen.choose(in: Character("a") ... Character("z"))
 
         // Try multiple seeds to find one that generates a character > "e"
         var foundTree: ChoiceTree?
-        for seed: UInt64 in 0...100 {
+        for seed: UInt64 in 0 ... 100 {
             let (value, tree) = try generate(gen, seed: seed)
             if value > "e" {
                 foundTree = tree
@@ -188,11 +186,11 @@ struct ReducerReduceValuesTests {
 
     @Test("Float value reduced naively via bit pattern search")
     func floatReducedNaively() throws {
-        let gen = Gen.choose(in: Double(0)...1000.0)
+        let gen = Gen.choose(in: Double(0) ... 1000.0)
 
         // Try multiple seeds to find one that generates a value > 1.0
         var foundTree: ChoiceTree?
-        for seed: UInt64 in 0...100 {
+        for seed: UInt64 in 0 ... 100 {
             let (value, tree) = try generate(gen, seed: seed)
             if value > 1.0 {
                 foundTree = tree
@@ -214,7 +212,7 @@ struct ReducerReduceValuesTests {
 
     @Test("Pass 3 + Pass 5 work together")
     func passThreeAndFiveIntegration() throws {
-        let gen = Gen.arrayOf(Gen.choose(in: UInt64(0)...1000), exactly: 3)
+        let gen = Gen.arrayOf(Gen.choose(in: UInt64(0) ... 1000), exactly: 3)
 
         let (_, tree) = try generate(gen)
 

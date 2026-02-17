@@ -40,7 +40,6 @@ public extension Gen {
                 gen: generator.erase(),
                 fingerprint: 0,
                 classifiers: classifiers.map { pair in (pair.0, { pair.1($0 as! Output) }) }
-            )
-        ) { .pure($0 as! Output) }
+            )) { .pure($0 as! Output) }
     }
 }

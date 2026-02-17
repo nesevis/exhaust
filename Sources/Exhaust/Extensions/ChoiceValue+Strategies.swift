@@ -36,7 +36,7 @@ extension ChoiceValue {
             char.bitPattern64
         }
     }
-    
+
     /// The bit pattern of the ideal shrink target for this value type.
     /// - Unsigned/Character: lowest valid bit pattern (smallest value)
     /// - Signed/Float: 0's bit pattern if in range, else the range bound closest to 0's bit pattern
@@ -94,7 +94,7 @@ extension ChoiceValue {
                 .map { ChoiceValue.character($0) }
         }
     }
-    
+
     var boundaries: [ChoiceValue] {
         switch self {
         case .unsigned:
@@ -106,10 +106,10 @@ extension ChoiceValue {
         case .floating:
             // We'll lose the magical values here?
             return [
-                Double.greatestFiniteMagnitude / 100000000,
-                Double.greatestFiniteMagnitude / 10000000,
-                Double.greatestFiniteMagnitude / 1000000,
-                Double.greatestFiniteMagnitude / 100000,
+                Double.greatestFiniteMagnitude / 100_000_000,
+                Double.greatestFiniteMagnitude / 10_000_000,
+                Double.greatestFiniteMagnitude / 1_000_000,
+                Double.greatestFiniteMagnitude / 100_000,
                 Double.greatestFiniteMagnitude / 10000,
                 Double.greatestFiniteMagnitude / 1000,
                 Double.greatestFiniteMagnitude / 100,
@@ -118,21 +118,21 @@ extension ChoiceValue {
                 -Double.greatestFiniteMagnitude / 100,
                 -Double.greatestFiniteMagnitude / 1000,
                 -Double.greatestFiniteMagnitude / 10000,
-                -Double.greatestFiniteMagnitude / 100000,
-                -Double.greatestFiniteMagnitude / 1000000,
-                -Double.greatestFiniteMagnitude / 10000000,
-                -Double.greatestFiniteMagnitude / 100000000,
+                -Double.greatestFiniteMagnitude / 100_000,
+                -Double.greatestFiniteMagnitude / 1_000_000,
+                -Double.greatestFiniteMagnitude / 10_000_000,
+                -Double.greatestFiniteMagnitude / 100_000_000,
 //                Double.nan,
 //                Double.infinity
             ]
-                .map { ChoiceValue($0, tag: .double) }
+            .map { ChoiceValue($0, tag: .double) }
         case .character:
             // TODO: unicode band, invisible characters, etc (in a second tier?)
             return []
                 .map { ChoiceValue.character($0) }
         }
     }
-    
+
     func binary(for ranges: [ClosedRange<UInt64>], direction: ShrinkingDirection) -> [ChoiceValue] {
         switch self {
         case let .unsigned(value, _):
@@ -188,7 +188,7 @@ extension ChoiceValue {
                     candidate /= 2
                 }
             case .towardsHigherBound:
-                let value = value == 0 ? 1 :value
+                let value = value == 0 ? 1 : value
                 var candidate = value * 2
                 let bound = Double(bitPattern64: ranges[0].upperBound)
                 while candidate < bound {
@@ -209,8 +209,8 @@ extension ChoiceValue {
             }
         }
     }
-    
-    // Decreases or increases number by 10%
+
+    /// Decreases or increases number by 10%
     func saturation(for ranges: [ClosedRange<UInt64>], direction: ShrinkingDirection) -> [ChoiceValue] {
         switch self {
         case let .unsigned(value, _):
@@ -298,7 +298,7 @@ extension ChoiceValue {
             }
         }
     }
-    
+
     func ultraSaturation(for ranges: [ClosedRange<UInt64>], direction: ShrinkingDirection) -> [ChoiceValue] {
         switch self {
         case let .unsigned(value, _):

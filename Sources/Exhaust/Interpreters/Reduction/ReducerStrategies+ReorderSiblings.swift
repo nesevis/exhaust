@@ -6,7 +6,6 @@
 //
 
 extension ReducerStrategies {
-
     /// Pass 6: Reorder sibling elements within containers to produce normalized output.
     /// For each sibling group, tries sorting all siblings by their comparison keys.
     /// Falls back to adjacent swaps (bubble-sort style) if the full sort is rejected.
@@ -71,14 +70,14 @@ extension ReducerStrategies {
                     .first(where: { $0.depth == group.depth && $0.ranges.count == ranges.count })?.ranges
                 guard let liveRanges = freshRanges else { break }
 
-                for j in 0..<(liveRanges.count - 1) {
+                for j in 0 ..< (liveRanges.count - 1) {
                     let keyA = ChoiceSequence.siblingComparisonKey(from: current, range: liveRanges[j])
                     let keyB = ChoiceSequence.siblingComparisonKey(from: current, range: liveRanges[j + 1])
 
-                    guard !lexicographicallyPrecedes(keyA, keyB) && keyA != keyB else { continue }
+                    guard !lexicographicallyPrecedes(keyA, keyB), keyA != keyB else { continue }
 
                     // Swap j and j+1
-                    var swapPerm = Array(0..<liveRanges.count)
+                    var swapPerm = Array(0 ..< liveRanges.count)
                     swapPerm.swapAt(j, j + 1)
 
                     if let (newSeq, output) = try applySiblingPermutation(
@@ -135,7 +134,7 @@ extension ReducerStrategies {
                 let gapStart = ranges[i - 1].upperBound + 1
                 let gapEnd = ranges[i].lowerBound
                 if gapStart < gapEnd {
-                    candidate.append(contentsOf: sequence[gapStart..<gapEnd])
+                    candidate.append(contentsOf: sequence[gapStart ..< gapEnd])
                 }
             }
             candidate.append(contentsOf: slices[permutation[i]])
@@ -144,8 +143,7 @@ extension ReducerStrategies {
             candidate.append(contentsOf: sequence[(spanEnd + 1)...])
         }
 
-
-        // FIXME This is using shortlex, which is where the inconsistency comes in
+        // FIXME: This is using shortlex, which is where the inconsistency comes in
 //        guard candidate.shortLexPrecedes(sequence) else { return nil }
         guard let output = try? Interpreters.materialize(gen, with: tree, using: candidate) else { return nil }
         guard property(output) == false else { return nil }
@@ -157,8 +155,7 @@ extension ReducerStrategies {
     ///
     /// - Complexity: O(min(*a*, *b*)), where *a* and *b* are the lengths of the two arrays.
     static func lexicographicallyPrecedes(_ lhs: [ChoiceValue], _ rhs: [ChoiceValue]) -> Bool {
-        if lhs.count == rhs.count {
-        }
+        if lhs.count == rhs.count {}
         for (a, b) in zip(lhs, rhs) {
             if a < b { return true }
             if b < a { return false }

@@ -20,14 +20,14 @@ public enum Gen {
             throw Interpreters.ReflectionError.reflectedNil(type: String(describing: Output.self), resultType: String(describing: result.self))
         }
     }
-    
-    /// Legacy function for extracting values using partial paths.
-    /// 
-    /// - Warning: This function is marked for removal in favor of `.mapped`
-    /// - Parameters:
-    ///   - path: A partial path describing how to extract the input from a larger structure
-    ///   - next: The generator to apply to the extracted input
-    /// - Returns: A generator that operates on the extracted input
+
+    // Legacy function for extracting values using partial paths.
+    //
+    // - Warning: This function is marked for removal in favor of `.mapped`
+    // - Parameters:
+    //   - path: A partial path describing how to extract the input from a larger structure
+    //   - next: The generator to apply to the extracted input
+    // - Returns: A generator that operates on the extracted input
     #warning("Remove this in favour of `.mapped`")
     @inlinable
     static func lens<Input, NewInput>(
@@ -36,7 +36,7 @@ public enum Gen {
     ) -> ReflectiveGenerator<Input> {
         comap(path.extract(from:), next)
     }
-    
+
     /// Applies a pruning operation to a generator.
     ///
     /// Pruning is used during shrinking to eliminate branches that don't contribute
@@ -49,7 +49,7 @@ public enum Gen {
     static func prune<Output>(_ generator: ReflectiveGenerator<Output>) -> ReflectiveGenerator<Output> {
         liftF(.prune(next: generator.erase()))
     }
-    
+
     /// Applies a contravariant transformation to a generator's input during reflection.
     ///
     /// This is the fundamental operation for transforming inputs in the backward direction
@@ -62,10 +62,9 @@ public enum Gen {
     /// - Returns: A generator that accepts the new input type
     @inlinable
     static func contramap<NewInput, Input, Output>(
-        _ transform: @escaping (NewInput) throws -> Input, 
+        _ transform: @escaping (NewInput) throws -> Input,
         _ generator: ReflectiveGenerator<Output>
     ) -> ReflectiveGenerator<Output> {
-        
         return .impure(operation: ReflectiveOperation.contramap(
             // This is where the backwards pass happens
             transform: {
@@ -78,7 +77,7 @@ public enum Gen {
                 // Backward pass - direct value
                 return .pure(typed)
             }
-            if let optional = result as? Optional<Output>, optional == nil {
+            if let optional = result as? Output?, optional == nil {
                 throw Interpreters.ReflectionError.reflectedNil(type: String(describing: Output.self), resultType: String(describing: type(of: result)))
             }
             throw GeneratorError.typeMismatch(
@@ -87,7 +86,7 @@ public enum Gen {
             )
         }
     }
-    
+
     /// Applies a contravariant transformation with optional failure handling.
     ///
     /// This is a specialized version of `contramap` that combines transformation with pruning.

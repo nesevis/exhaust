@@ -15,7 +15,7 @@ enum PropertyTest {
         var iterations = 0
         var generator = ValueInterpreter(gen, seed: seed, maxRuns: maxIterations)
         var passFails = Dictionary([(true, [ChoiceTree?]()), (false, [ChoiceTree?]())], uniquingKeysWith: { $1 })
-        
+
         while let next = generator.next() {
             iterations += 1
             let passed = property(next)

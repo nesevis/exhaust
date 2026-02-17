@@ -7,8 +7,8 @@
 //  them, merging adjacent inner sequences (e.g. [[V][V][V]] → [[VVV]]).
 //
 
-import Testing
 @testable import Exhaust
+import Testing
 
 // MARK: - Helpers
 
@@ -28,13 +28,12 @@ private func generate<Output>(
 
 @Suite("Reducer Pass 2a: collapse sequence boundaries")
 struct ReducerSequenceBoundaryTests {
-
     // MARK: - Boundary detection in generated sequences
 
     @Test("Nested array-of-arrays produces sequence boundaries in flattened form")
     func nestedArrayProducesBoundaries() throws {
         // [[UInt64]] with 3 inner arrays of 2 elements each
-        let innerGen = Gen.arrayOf(Gen.choose(in: UInt64(0)...100), exactly: 2)
+        let innerGen = Gen.arrayOf(Gen.choose(in: UInt64(0) ... 100), exactly: 2)
         let gen = Gen.arrayOf(innerGen, exactly: 3)
 
         let (_, tree) = try generate(gen)
@@ -49,7 +48,7 @@ struct ReducerSequenceBoundaryTests {
 
     @Test("Single flat array has no sequence boundaries")
     func flatArrayNoBoundaries() throws {
-        let gen = Gen.arrayOf(Gen.choose(in: UInt64(0)...100), exactly: 5)
+        let gen = Gen.arrayOf(Gen.choose(in: UInt64(0) ... 100), exactly: 5)
 
         let (_, tree) = try generate(gen)
         let sequence = ChoiceSequence.flatten(tree)
@@ -63,7 +62,7 @@ struct ReducerSequenceBoundaryTests {
     func reduceCollapsesBoundaries() throws {
         // A nested array [[UInt64]] where the property fails when total element count > 0.
         // After collapsing boundaries, the structure should simplify.
-        let innerGen = Gen.arrayOf(Gen.choose(in: UInt64(0)...100), exactly: 2)
+        let innerGen = Gen.arrayOf(Gen.choose(in: UInt64(0) ... 100), exactly: 2)
         let gen = Gen.arrayOf(innerGen, exactly: 3)
 
         let (_, tree) = try generate(gen)
@@ -84,13 +83,13 @@ struct ReducerSequenceBoundaryTests {
 
     @Test("Reduced sequence has fewer boundaries than original")
     func reducedSequenceHasFewerBoundaries() throws {
-        let innerGen = Gen.arrayOf(Gen.choose(in: UInt64(0)...100), within: 1...5)
-        let gen = Gen.arrayOf(innerGen, within: 2...5)
+        let innerGen = Gen.arrayOf(Gen.choose(in: UInt64(0) ... 100), within: 1 ... 5)
+        let gen = Gen.arrayOf(innerGen, within: 2 ... 5)
 
         // Find a seed that produces multiple inner sequences (i.e. boundaries exist)
         // Use iteration 10 so the size parameter is large enough for variable-length arrays
         var foundTree: ChoiceTree?
-        for seed: UInt64 in 0...100 {
+        for seed: UInt64 in 0 ... 100 {
             let (_, tree) = try generate(gen, seed: seed, iteration: 10)
             let seq = ChoiceSequence.flatten(tree)
             if ChoiceSequence.extractSequenceBoundarySpans(from: seq).isEmpty == false {
@@ -116,7 +115,7 @@ struct ReducerSequenceBoundaryTests {
 
     @Test("Reduce preserves property failure after collapsing boundaries")
     func reducePreservesPropertyFailure() throws {
-        let innerGen = Gen.arrayOf(Gen.choose(in: UInt64(0)...100), exactly: 2)
+        let innerGen = Gen.arrayOf(Gen.choose(in: UInt64(0) ... 100), exactly: 2)
         let gen = Gen.arrayOf(innerGen, exactly: 3)
 
         let (_, tree) = try generate(gen)
@@ -140,7 +139,7 @@ struct ReducerSequenceBoundaryTests {
     func pass2aFiresIndependently() throws {
         // Use a property that requires at least some elements to exist,
         // so pass 1 (container deletion) cannot delete everything.
-        let innerGen = Gen.arrayOf(Gen.choose(in: UInt64(0)...100), exactly: 1)
+        let innerGen = Gen.arrayOf(Gen.choose(in: UInt64(0) ... 100), exactly: 1)
         let gen = Gen.arrayOf(innerGen, exactly: 4)
 
         let (_, tree) = try generate(gen)
@@ -164,7 +163,7 @@ struct ReducerSequenceBoundaryTests {
     @Test("Reduce with single inner sequence produces no boundaries to collapse")
     func singleInnerSequenceNoBoundaries() throws {
         // Only one inner array → no `][` pattern exists
-        let innerGen = Gen.arrayOf(Gen.choose(in: UInt64(0)...100), exactly: 3)
+        let innerGen = Gen.arrayOf(Gen.choose(in: UInt64(0) ... 100), exactly: 3)
         let gen = Gen.arrayOf(innerGen, exactly: 1)
 
         let (_, tree) = try generate(gen)
@@ -175,7 +174,7 @@ struct ReducerSequenceBoundaryTests {
 
     @Test("Reduce with property that always passes returns original without changes")
     func propertyAlwaysPassesNoReduction() throws {
-        let innerGen = Gen.arrayOf(Gen.choose(in: UInt64(0)...100), exactly: 2)
+        let innerGen = Gen.arrayOf(Gen.choose(in: UInt64(0) ... 100), exactly: 2)
         let gen = Gen.arrayOf(innerGen, exactly: 3)
 
         let (_, tree) = try generate(gen)
@@ -196,7 +195,7 @@ struct ReducerSequenceBoundaryTests {
 
     @Test("Materialized output from reduced sequence is valid")
     func materializedOutputIsValid() throws {
-        let innerGen = Gen.arrayOf(Gen.choose(in: UInt64(0)...100), exactly: 2)
+        let innerGen = Gen.arrayOf(Gen.choose(in: UInt64(0) ... 100), exactly: 2)
         let gen = Gen.arrayOf(innerGen, exactly: 3)
 
         let (_, tree) = try generate(gen)
@@ -214,7 +213,7 @@ struct ReducerSequenceBoundaryTests {
 
     @Test("Reduced output matches rematerialization from reduced sequence")
     func reducedOutputMatchesRematerialization() throws {
-        let innerGen = Gen.arrayOf(Gen.choose(in: UInt64(0)...100), exactly: 2)
+        let innerGen = Gen.arrayOf(Gen.choose(in: UInt64(0) ... 100), exactly: 2)
         let gen = Gen.arrayOf(innerGen, exactly: 3)
 
         let (_, tree) = try generate(gen)
@@ -237,7 +236,7 @@ struct ReducerSequenceBoundaryTests {
 
     @Test("Reduced sequence has balanced brackets")
     func reducedSequenceHasBalancedBrackets() throws {
-        let innerGen = Gen.arrayOf(Gen.choose(in: UInt64(0)...100), exactly: 2)
+        let innerGen = Gen.arrayOf(Gen.choose(in: UInt64(0) ... 100), exactly: 2)
         let gen = Gen.arrayOf(innerGen, exactly: 3)
 
         let (_, tree) = try generate(gen)
@@ -258,7 +257,7 @@ struct ReducerSequenceBoundaryTests {
         arguments: [UInt64(1)]
     )
     func boundaryCollapsingMultipleSeeds(seed: UInt64) throws {
-        let innerGen = Gen.arrayOf(Gen.choose(in: UInt64(0)...1_000_000_000), within: 10...20)
+        let innerGen = Gen.arrayOf(Gen.choose(in: UInt64(0) ... 1_000_000_000), within: 10 ... 20)
         let gen = Gen.arrayOf(innerGen, exactly: 3)
 
         let (value, tree) = try generate(gen, seed: seed)

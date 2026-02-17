@@ -22,7 +22,7 @@ public extension Gen {
         // Use `bind` to get the result of the length generator.
         let sequenceOperation = ReflectiveOperation.sequence(
             length: length ?? Gen.getSize().bind {
-                Gen.choose(in: ($0 / 10)...$0)
+                Gen.choose(in: ($0 / 10) ... $0)
             },
             gen: elementGenerator.erase()
         )
@@ -37,7 +37,7 @@ public extension Gen {
             return .pure(array)
         }
     }
-    
+
     /// Creates a generator for an array with length constrained to a specific range.
     ///
     /// This variant allows precise control over array length by specifying exact bounds.
@@ -57,7 +57,7 @@ public extension Gen {
         let sequenceOperation = ReflectiveOperation.sequence(
             length: Gen.getSize().bind { size in
                 let upper = min(size, range.upperBound)
-                let clamped = range.lowerBound...max(range.lowerBound, upper)
+                let clamped = range.lowerBound ... max(range.lowerBound, upper)
                 return Gen.choose(in: clamped)
             },
             gen: elementGenerator.erase()
@@ -68,7 +68,7 @@ public extension Gen {
             return .pure(array)
         }
     }
-    
+
     /// Creates a generator for an array with exactly the specified length.
     ///
     /// This is a convenience method that generates arrays of a fixed size,
@@ -83,9 +83,9 @@ public extension Gen {
         _ elementGenerator: ReflectiveGenerator<Output>,
         exactly: UInt64
     ) -> ReflectiveGenerator<[Output]> {
-        arrayOf(elementGenerator, Gen.choose(in: exactly...exactly))
+        arrayOf(elementGenerator, Gen.choose(in: exactly ... exactly))
     }
-    
+
     /// Creates a generator for dictionaries with random key-value pairs.
     ///
     /// This combinator generates dictionaries by creating parallel arrays of keys and values,
@@ -119,7 +119,7 @@ public extension Gen {
             backward: { (Array($0.keys), Array($0.values)) }
         )
     }
-    
+
     /// Creates an array generator whose length is controlled by the current size parameter.
     ///
     /// This is a convenience method that combines `getSize` with `arrayOf` to create
@@ -136,10 +136,10 @@ public extension Gen {
         lengthRange: ClosedRange<UInt64>? = nil
     ) -> ReflectiveGenerator<[Output]> {
         getSize().bind { size in
-            let actualRange = lengthRange ?? (0...size)
+            let actualRange = lengthRange ?? (0 ... size)
             let clampedMin = max(actualRange.lowerBound, 0)
             let clampedMax = min(actualRange.upperBound, size)
-            let finalRange = clampedMin...clampedMax
+            let finalRange = clampedMin ... clampedMax
 
             return arrayOf(elementGenerator, choose(in: finalRange))
         }
@@ -153,17 +153,17 @@ public extension Gen {
             let count = collection.count
             // Max length with size as percentage of total space/count
             let maxLength = min(((count * Int(size)) / 100) + 2, count)
-            
+
             // Convert collection to array of indices for easier manipulation
             // Surely there's a better way? 😬
             let indices = ContiguousArray(collection.indices)
             guard !indices.isEmpty else {
-                return .pure(collection[collection.startIndex..<collection.startIndex])
+                return .pure(collection[collection.startIndex ..< collection.startIndex])
             }
 
             return Gen.zip(
-                Gen.choose(in: 1...maxLength), // subset length
-                Gen.choose(in: 0...(count - 1)) // start position index
+                Gen.choose(in: 1 ... maxLength), // subset length
+                Gen.choose(in: 0 ... (count - 1)) // start position index
             )
             .filter { length, startIndexPos in
                 startIndexPos + length <= count
@@ -173,7 +173,7 @@ public extension Gen {
                     let startIndex = indices[startIndexPos]
                     let endIndexPos = min(startIndexPos + length, indices.count)
                     let endIndex = endIndexPos < indices.count ? indices[endIndexPos] : collection.endIndex
-                    return collection[startIndex..<endIndex]
+                    return collection[startIndex ..< endIndex]
                 },
                 backward: { subset in
                     // Find the position of start index in the indices array
@@ -183,7 +183,7 @@ public extension Gen {
             )
         }
     }
-    
+
     /// Creates a generator that picks a random element from a collection.
     ///
     /// This combinator generates individual elements by selecting random indices
@@ -199,8 +199,8 @@ public extension Gen {
         let count = collection.count
         let dict = Dictionary(grouping: collection.enumerated(), by: \.offset)
             .mapValues { $0[0].element }
-        
-        return Gen.choose(in: 0...(count - 1))
+
+        return Gen.choose(in: 0 ... (count - 1))
             .mapped(
                 forward: { dict[$0]! },
                 backward: { element in
@@ -215,7 +215,7 @@ public extension Gen {
                 }
             )
     }
-    
+
     /// Creates a generator that picks a random element from a collection.
     ///
     /// This combinator generates individual elements by selecting random indices
@@ -233,8 +233,8 @@ public extension Gen {
             .mapValues { $0[0].offset }
         let intDict = Dictionary(grouping: enumerated, by: \.offset)
             .mapValues { $0[0].element }
-        
-        return Gen.choose(in: 0...(collection.count - 1))
+
+        return Gen.choose(in: 0 ... (collection.count - 1))
             .mapped(
                 forward: { intDict[$0]! },
                 backward: { elementDict[$0]! }

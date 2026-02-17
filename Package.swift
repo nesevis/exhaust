@@ -21,7 +21,8 @@ let package = Package(
     dependencies: [
         .package(url: "https://github.com/pointfreeco/swift-case-paths", from: "1.5.0"),
         .package(url: "https://github.com/apple/swift-algorithms", from: "1.2.0"),
-        .package(url: "https://github.com/google/swift-benchmark", from: "0.1.2")
+        .package(url: "https://github.com/google/swift-benchmark", from: "0.1.2"),
+        .package(url: "https://github.com/nicklockwood/SwiftFormat", from: "0.59.1")
     ],
     targets: [
         // Targets are the basic building blocks of a package, defining a module or a test suite.

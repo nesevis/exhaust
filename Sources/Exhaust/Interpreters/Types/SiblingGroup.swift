@@ -12,7 +12,7 @@ struct SiblingGroup: Equatable {
     let ranges: [ClosedRange<Int>]
     let depth: Int
     let kind: SiblingChildKind
-    
+
     var valueRanges: [ClosedRange<Int>]? {
         switch kind {
         case .bareValue:
@@ -24,7 +24,7 @@ struct SiblingGroup: Equatable {
             guard ranges.allSatisfy({ $0.count == 3 }) else {
                 fatalError("Too hard basket?")
             }
-            return ranges.map { ($0.lowerBound + 1)...($0.upperBound - 1) }
+            return ranges.map { ($0.lowerBound + 1) ... ($0.upperBound - 1) }
         }
     }
 }

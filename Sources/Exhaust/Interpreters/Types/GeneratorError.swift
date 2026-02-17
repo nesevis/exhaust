@@ -13,20 +13,19 @@ public enum GeneratorError: LocalizedError {
     case liftFTypeMismatch(expected: String, actual: String)
     case typeMismatch(expected: String, actual: String)
     case sparseValidityCondition
-    
+
     var errorDescription: String {
         switch self {
         case .couldNotGenerateConcomitantChoiceTree:
             "Could not generate concomitant choice tree"
-        case .mappedBackwardError(let expected, let actual):
+        case let .mappedBackwardError(expected, actual):
             "Mapped backward error: expected \(expected), got \(actual)"
-        case .liftFTypeMismatch(let expected, let actual):
+        case let .liftFTypeMismatch(expected, actual):
             "LiftF type mismatch: expected \(expected), got \(actual)"
-        case .typeMismatch(let expected, let actual):
+        case let .typeMismatch(expected, actual):
             "Type mismatch: expected \(expected), got \(actual)"
         case .sparseValidityCondition:
             "Sparse validity condition"
         }
-        
     }
 }

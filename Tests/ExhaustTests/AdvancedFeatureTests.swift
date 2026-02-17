@@ -6,9 +6,9 @@
 //  and complex scenarios.
 //
 
-import Testing
 import CasePaths
 @testable import Exhaust
+import Testing
 
 // MARK: - Advanced Data Structures
 
@@ -35,23 +35,21 @@ struct TestEdge: Equatable {
 
 @Suite("Advanced Features")
 struct AdvancedFeatureTests {
-    
     @Suite("Recursive Structures")
     struct RecursiveTests {
-        
         @Test("Recursive tree generation with depth control")
-        func testRecursiveTreeGeneration() throws {
+        func recursiveTreeGeneration() throws {
             func treeGen(depth: Int) -> ReflectiveGenerator<TestTree<Int>> {
                 if depth <= 0 {
                     // Leaf node
-                    return Gen.lens(extract: \TestTree<Int>.value, Gen.choose(in: 1...100))
+                    return Gen.lens(extract: \TestTree<Int>.value, Gen.choose(in: 1 ... 100))
                         .map { value in TestTree(value: value, children: []) }
                 } else {
                     // Internal node with children
-                    let valueGen = Gen.lens(extract: \TestTree<Int>.value, Gen.choose(in: 1...100))
-                    let childrenGen = Gen.lens(extract: \TestTree<Int>.children, 
-                                             treeGen(depth: depth - 1).proliferate(with: 0...3))
-                    
+                    let valueGen = Gen.lens(extract: \TestTree<Int>.value, Gen.choose(in: 1 ... 100))
+                    let childrenGen = Gen.lens(extract: \TestTree<Int>.children,
+                                               treeGen(depth: depth - 1).proliferate(with: 0 ... 3))
+
                     return valueGen.bind { value in
                         childrenGen.map { children in
                             TestTree(value: value, children: children)
@@ -59,21 +57,21 @@ struct AdvancedFeatureTests {
                     }
                 }
             }
-            
+
             let gen = treeGen(depth: 3)
-            
-            for _ in 0..<10 {
+
+            for _ in 0 ..< 10 {
                 var iterator = ValueInterpreter(gen)
-                let tree = iterator.next()!
-                
-                // Validate tree structure
+                let tree = try #require(iterator.next())
+
+                /// Validate tree structure
                 func validateDepth(_ tree: TestTree<Int>, maxDepth: Int) -> Bool {
                     if maxDepth <= 0 { return tree.children.isEmpty }
                     return tree.children.allSatisfy { validateDepth($0, maxDepth: maxDepth - 1) }
                 }
-                
+
                 #expect(validateDepth(tree, maxDepth: 3))
-                
+
                 // Test round-trip
                 if let recipe = try Interpreters.reflect(gen, with: tree) {
                     if let replayed = try Interpreters.replay(gen, using: recipe) {
@@ -86,9 +84,9 @@ struct AdvancedFeatureTests {
                 }
             }
         }
-        
+
         @Test("Nested lensed properties")
-        func testNestedLensedProperties() throws {
+        func nestedLensedProperties() throws {
             struct Outer: Equatable {
                 let inners: [Inner]
                 let id: UInt
@@ -96,18 +94,18 @@ struct AdvancedFeatureTests {
             struct Inner: Equatable {
                 let id: UInt
             }
-            
+
             // This works
             let innerGen = Gen.lens(extract: \Inner.id, Gen.choose(type: UInt.self))
-                .proliferate(with: 1...1)
+                .proliferate(with: 1 ... 1)
                 // Casting to the type needs to be the last thing in the chain
                 .map { ints in ints.map { Inner(id: $0) }}
-            
+
             // This crashes
             let innerGen2 = Gen.lens(extract: \Inner.id, Gen.choose(type: UInt.self))
                 .map { Inner(id: $0) }
-                .proliferate(with: 1...1)
-            
+                .proliferate(with: 1 ... 1)
+
             // Test the two type-safe approaches
             for (index, gen) in [innerGen, innerGen2].enumerated() {
                 // Test the outer generator with each inner generator
@@ -115,24 +113,24 @@ struct AdvancedFeatureTests {
                     extract: \Outer.inners,
                     gen
                 )
-                    .bind { inners in
-                        Gen.lens(extract: \Outer.id, Gen.choose(type: UInt.self)).map { id in
-                            Outer(inners: inners, id: id)
-                        }
+                .bind { inners in
+                    Gen.lens(extract: \Outer.id, Gen.choose(type: UInt.self)).map { id in
+                        Outer(inners: inners, id: id)
                     }
-                
+                }
+
                 var iterator = ValueInterpreter(outerGen)
                 let generated = iterator.next()
-                
+
                 guard let generated = generated else {
                     continue
                 }
-                
+
                 let recipe = try Interpreters.reflect(outerGen, with: generated)
-                
+
                 if let recipe = recipe {
                     let replayed = try Interpreters.replay(outerGen, using: recipe)
-                    
+
                     if let replayed = replayed {
                         #expect(generated == replayed)
                     }
@@ -140,33 +138,32 @@ struct AdvancedFeatureTests {
             }
         }
     }
-    
+
     @Suite("Graph Generation")
     struct GraphTests {
-        
         @Test("Connected graph generation with constraints")
-        func testConnectedGraphGeneration() throws {
-            let nodeGen = Gen.lens(extract: \TestNode.id, Gen.choose(in: 0...9))
+        func connectedGraphGeneration() throws {
+            let nodeGen = Gen.lens(extract: \TestNode.id, Gen.choose(in: 0 ... 9))
                 .bind { id in
                     Gen.lens(extract: \TestNode.label, String.arbitrary).map { label in
                         TestNode(id: id, label: label)
                     }
                 }
-            
+
             // Use a fixed range that matches the node generation range
-            let edgeGen = Gen.lens(extract: \TestEdge.from, Gen.choose(in: 0...9))
+            let edgeGen = Gen.lens(extract: \TestEdge.from, Gen.choose(in: 0 ... 9))
                 .bind { from in
-                    Gen.lens(extract: \TestEdge.to, Gen.choose(in: 0...9))
+                    Gen.lens(extract: \TestEdge.to, Gen.choose(in: 0 ... 9))
                         .bind { to in
-                            Gen.lens(extract: \TestEdge.weight, Gen.choose(in: 0.1...10.0)).map { weight in
+                            Gen.lens(extract: \TestEdge.weight, Gen.choose(in: 0.1 ... 10.0)).map { weight in
                                 TestEdge(from: from, to: to, weight: weight)
                             }
                         }
                 }
-            
-            let graphGen = Gen.lens(extract: \TestGraph.nodes, nodeGen.proliferate(with: 5...10))
+
+            let graphGen = Gen.lens(extract: \TestGraph.nodes, nodeGen.proliferate(with: 5 ... 10))
                 .bind { nodes in
-                    Gen.lens(extract: \TestGraph.edges, edgeGen.proliferate(with: 3...15)).map { edges in
+                    Gen.lens(extract: \TestGraph.edges, edgeGen.proliferate(with: 3 ... 15)).map { edges in
                         // Filter edges to only include those referencing existing nodes
                         let nodeIds = Set(nodes.map(\.id))
                         let validEdges = edges.filter { edge in
@@ -175,21 +172,21 @@ struct AdvancedFeatureTests {
                         return TestGraph(nodes: nodes, edges: validEdges)
                     }
                 }
-            
-            for _ in 0..<10 {
+
+            for _ in 0 ..< 10 {
                 var iterator = ValueInterpreter(graphGen)
-                let graph = iterator.next()!
-                
+                let graph = try #require(iterator.next())
+
                 // Validate graph constraints
-                #expect(5...10 ~= graph.nodes.count)
+                #expect(5 ... 10 ~= graph.nodes.count)
                 #expect(graph.edges.count >= 0) // Edges may be filtered, so just check it's non-negative
-                
+
                 // Check edge references are valid (within node ID range)
                 let nodeIds = Set(graph.nodes.map(\.id))
                 for edge in graph.edges {
                     #expect(nodeIds.contains(edge.from) && nodeIds.contains(edge.to))
                 }
-                
+
                 // Test round-trip
                 if let recipe = try Interpreters.reflect(graphGen, with: graph) {
                     if let replayed = try Interpreters.replay(graphGen, using: recipe) {
@@ -203,24 +200,23 @@ struct AdvancedFeatureTests {
             }
         }
     }
-    
+
     @Suite("Extreme Value Handling")
     struct ExtremeValueTests {
-        
         @Test("Generator robustness with extreme values")
-        func testExtremeValueHandling() throws {
+        func extremeValueHandling() throws {
             let extremeGenerators: [ReflectiveGenerator<Int>] = [
-                Gen.choose(in: Int.min...Int.min),  // Minimum value
-                Gen.choose(in: Int.max...Int.max),  // Maximum value
-                Gen.choose(in: -1...1),             // Small range around zero
-                Gen.choose(in: 0...0)               // Single value
+                Gen.choose(in: Int.min ... Int.min), // Minimum value
+                Gen.choose(in: Int.max ... Int.max), // Maximum value
+                Gen.choose(in: -1 ... 1), // Small range around zero
+                Gen.choose(in: 0 ... 0), // Single value
             ]
-            
+
             for (index, gen) in extremeGenerators.enumerated() {
-                for _ in 0..<10 {
+                for _ in 0 ..< 10 {
                     var iterator = ValueInterpreter(gen)
-                    let value = iterator.next()!
-                    
+                    let value = try #require(iterator.next())
+
                     // Test round-trip even with extreme values
                     if let recipe = try Interpreters.reflect(gen, with: value) {
                         if let replayed = try Interpreters.replay(gen, using: recipe) {
@@ -234,18 +230,18 @@ struct AdvancedFeatureTests {
                 }
             }
         }
-        
+
         @Test("Large nested structure generation and memory efficiency")
-        func testLargeNestedStructures() throws {
+        func largeNestedStructures() throws {
             // Generate structures with significant nesting but reasonable memory usage
             let largeNestedGen = Int.arbitrary
-                .proliferate(with: 50...50)     // 50 elements
-                .proliferate(with: 10...10)     // 10 inner arrays  
-                .proliferate(with: 2...2)       // 2 outer arrays
-            
+                .proliferate(with: 50 ... 50) // 50 elements
+                .proliferate(with: 10 ... 10) // 10 inner arrays
+                .proliferate(with: 2 ... 2) // 2 outer arrays
+
             var iterator = ValueInterpreter(largeNestedGen)
-            let large = iterator.next()!
-            
+            let large = try #require(iterator.next())
+
             // Validate structure
             #expect(large.count == 2)
             for level1 in large {
@@ -254,7 +250,7 @@ struct AdvancedFeatureTests {
                     #expect(level2.count == 50)
                 }
             }
-            
+
             // Test round-trip (this tests memory efficiency of reflection/replay)
             if let recipe = try Interpreters.reflect(largeNestedGen, with: large) {
                 if let replayed = try Interpreters.replay(largeNestedGen, using: recipe) {

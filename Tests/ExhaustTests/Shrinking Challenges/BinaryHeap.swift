@@ -11,7 +11,7 @@ import Testing
 
 @Suite("Shrinking Challenge: Binary Heap")
 struct BinaryHeapShrinkingChallenge {
-    /*
+    /**
      https://github.com/jlink/shrinking-challenge/blob/main/challenges/binheap.md
      This is based on an example from QuickCheck's test suite (via the SmartCheck paper). It generates binary heaps, and then uses a wrong implementation of a function that converts the binary heap to a sorted list and asserts that the result is sorted.
 

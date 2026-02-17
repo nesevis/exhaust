@@ -6,7 +6,6 @@
 //
 
 extension ReducerStrategies {
-
     /// Pass 7: Binary search multiple values toward their reduction target.
     /// For each sibling group of values will test how much it can reduce all siblings by the same amount.
     ///
@@ -30,8 +29,8 @@ extension ReducerStrategies {
             // from the first of the values in this sibling span
             guard
                 let firstValueIndex = group.valueRanges?.first?.lowerBound,
-                case let v = current[firstValueIndex].value, let v else
-            {
+                case let v = current[firstValueIndex].value, let v
+            else {
                 continue
             }
             let currentBP = v.choice.bitPattern64

@@ -31,7 +31,7 @@ struct StrictlyIncreasingRunChallenge {
 
     @Test("Strictly increasing run")
     func strictlyIncreasingRun() throws {
-        let gen = Gen.arrayOf(Gen.choose(in: UInt64(0)...10_000), within: 1...50)
+        let gen = Gen.arrayOf(Gen.choose(in: UInt64(0) ... 10000), within: 1 ... 50)
 
         let property: ([UInt64]) -> Bool = { arr in
             guard arr.count >= 3 else { return true }
@@ -44,10 +44,10 @@ struct StrictlyIncreasingRunChallenge {
                     acc.valid = acc.count < 3
                 }.valid
         }
-    
-        let counterExample: [UInt64] = [0,1,2]
+
+        let counterExample: [UInt64] = [0, 1, 2]
         #expect(property(counterExample) == false)
-        
+
         let startingValue: [UInt64] = [6000, 344, 3750]
         let tree = try #require(try Interpreters.reflect(gen, with: startingValue))
         let initialSeq = ChoiceSequence.flatten(tree)

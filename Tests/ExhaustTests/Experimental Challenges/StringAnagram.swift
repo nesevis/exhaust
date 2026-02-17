@@ -48,7 +48,7 @@ struct StringAnagramChallenge {
         }
 
         // "dcba" and "abcd" as byte arrays — a known anagram pair
-        let value: (String, String) = ("dcba", "abcd")
+        let value = ("dcba", "abcd")
         #expect(property(value.0, value.1) == false)
 
         let tree = try #require(try Interpreters.reflect(gen, with: value))

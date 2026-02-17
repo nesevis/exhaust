@@ -6,7 +6,6 @@
 //
 
 extension ReducerStrategies {
-
     /// Pass 5b: Cross-container value redistribution.
     /// For each pair of numeric values with the same tag, tries to decrease the earlier value
     /// (toward its reduction target) while increasing the later value by the same amount k.
@@ -52,8 +51,8 @@ extension ReducerStrategies {
         for (_, candidates) in candidatesByTag {
             guard candidates.count >= 2 else { continue }
 
-            for ci in 0..<candidates.count {
-                for cj in (ci + 1)..<candidates.count {
+            for ci in 0 ..< candidates.count {
+                for cj in (ci + 1) ..< candidates.count {
                     // Only pair values in different containers
                     guard candidates[ci].containerID != candidates[cj].containerID else { continue }
 

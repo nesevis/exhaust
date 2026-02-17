@@ -5,9 +5,9 @@
 //  Created by Chris Kolbu on 21/7/2025.
 //
 
-extension Gen {
+public extension Gen {
     @inlinable
-    public static func zip<A, B>(
+    static func zip<A, B>(
         _ a: ReflectiveGenerator<A>,
         _ b: ReflectiveGenerator<B>
     ) -> ReflectiveGenerator<(A, B)> {
@@ -22,9 +22,9 @@ extension Gen {
             backward: { [$0.0, $0.1] }
         )
     }
-    
+
     @inlinable
-    public static func zip<A, B, C>(
+    static func zip<A, B, C>(
         _ a: ReflectiveGenerator<A>,
         _ b: ReflectiveGenerator<B>,
         _ c: ReflectiveGenerator<C>
@@ -39,9 +39,9 @@ extension Gen {
             backward: { [$0.0, $0.1, $0.2] }
         )
     }
-    
+
     @inlinable
-    public static func zip<A, B, C, D>(
+    static func zip<A, B, C, D>(
         _ a: ReflectiveGenerator<A>,
         _ b: ReflectiveGenerator<B>,
         _ c: ReflectiveGenerator<C>,
@@ -57,9 +57,9 @@ extension Gen {
             backward: { [$0.0, $0.1, $0.2, $0.3] }
         )
     }
-    
+
     @inlinable
-    public static func zip<A, B, C, D, E>(
+    static func zip<A, B, C, D, E>(
         _ a: ReflectiveGenerator<A>,
         _ b: ReflectiveGenerator<B>,
         _ c: ReflectiveGenerator<C>,
@@ -76,9 +76,9 @@ extension Gen {
             backward: { [$0.0, $0.1, $0.2, $0.3, $0.4] }
         )
     }
-    
+
     @inlinable
-    public static func zip<A, B, C, D, E, F>(
+    static func zip<A, B, C, D, E, F>(
         _ a: ReflectiveGenerator<A>,
         _ b: ReflectiveGenerator<B>,
         _ c: ReflectiveGenerator<C>,
@@ -96,9 +96,9 @@ extension Gen {
             backward: { [$0.0, $0.1, $0.2, $0.3, $0.4, $0.5] }
         )
     }
-    
+
     @inlinable
-    public static func zip<A, B, C, D, E, F, G>(
+    static func zip<A, B, C, D, E, F, G>(
         _ a: ReflectiveGenerator<A>,
         _ b: ReflectiveGenerator<B>,
         _ c: ReflectiveGenerator<C>,
@@ -117,9 +117,9 @@ extension Gen {
             backward: { [$0.0, $0.1, $0.2, $0.3, $0.4, $0.5, $0.6] }
         )
     }
-    
+
     @inlinable
-    public static func zip<A, B, C, D, E, F, G, H>(
+    static func zip<A, B, C, D, E, F, G, H>(
         _ a: ReflectiveGenerator<A>,
         _ b: ReflectiveGenerator<B>,
         _ c: ReflectiveGenerator<C>,
@@ -139,9 +139,9 @@ extension Gen {
             backward: { [$0.0, $0.1, $0.2, $0.3, $0.4, $0.5, $0.6, $0.7] }
         )
     }
-    
+
     @inlinable
-    public static func zip<A, B, C, D, E, F, G, H, I>(
+    static func zip<A, B, C, D, E, F, G, H, I>(
         _ a: ReflectiveGenerator<A>,
         _ b: ReflectiveGenerator<B>,
         _ c: ReflectiveGenerator<C>,
@@ -162,9 +162,9 @@ extension Gen {
             backward: { [$0.0, $0.1, $0.2, $0.3, $0.4, $0.5, $0.6, $0.7, $0.8] }
         )
     }
-    
+
     @inlinable
-    public static func zip<A, B, C, D, E, F, G, H, I, J>(
+    static func zip<A, B, C, D, E, F, G, H, I, J>(
         _ a: ReflectiveGenerator<A>,
         _ b: ReflectiveGenerator<B>,
         _ c: ReflectiveGenerator<C>,

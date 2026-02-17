@@ -11,7 +11,7 @@ import Testing
 
 @Suite("Shrinking Challenge: Nested Lists")
 struct NestedListsShrinkingChallenge {
-    /*
+    /**
      https://github.com/jlink/shrinking-challenge/blob/main/challenges/nestedlists.md
      This tests the performance of shrinking a list of lists, testing the false property that the sum of lengths of the element lists is at most 10.
 
@@ -20,9 +20,9 @@ struct NestedListsShrinkingChallenge {
      Some libraries, e.g. Hypothesis and jqwik, can shrink this reliably to a single list of 11 elements: [[0, 0, 0, 0, 0, 0, 0, 0, 0, 0]].
      */
     @Test("Nested Lists")
-    func nestedListsFull() async throws {
+    func nestedListsFull() throws {
         let gen = Gen.arrayOf(Gen.arrayOf(UInt.arbitrary))
-        
+
         var count = 0
         let property: ([[UInt]]) -> Bool = { arr in
             count += 1
@@ -30,7 +30,7 @@ struct NestedListsShrinkingChallenge {
         }
         let iterator = ValueAndChoiceTreeInterpreter(gen, seed: 1337)
         // Outputs an array of 14 arrays containing 2–20 values each
-        let (_, tree) = Array(iterator.prefix(2)).last!
+        let (_, tree) = try #require(Array(iterator.prefix(2)).last)
         let (_, output) = try #require(try Interpreters.reduce(gen: gen, tree: tree, config: .fast, property: property))
         // How many times the `property` is called
         #expect(count == 48)

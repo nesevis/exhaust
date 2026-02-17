@@ -6,7 +6,6 @@
 //
 
 extension ReducerStrategies {
-
     /// Pass 0: Try setting values to their semantically simplest form.
     ///
     /// - Complexity: O(*n* + *M*), where *n* is the number of value spans and *M* is the cost

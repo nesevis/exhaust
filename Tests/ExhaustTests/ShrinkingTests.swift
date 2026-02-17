@@ -6,15 +6,15 @@
 ////  structure shrinking scenarios.
 ////
 //
-//import Testing
-//@testable import Exhaust
+// import Testing
+// @testable import Exhaust
 //
-//@Suite("Shrinking Functionality")
-//struct ShrinkingTests {
-//    
+// @Suite("Shrinking Functionality")
+// struct ShrinkingTests {
+//
 //    @Suite("Choice base type shrinks")
 //    struct ChoiceBaseTypeShrinks {
-//        
+//
 //        @Test("UInt shrinks from max to 6")
 //        func testBasicUintShrink() throws {
 //            typealias Shrink = UInt
@@ -24,11 +24,11 @@
 //            let property: (Shrink) -> Bool = { value in
 //                value < target
 //            }
-//            
+//
 //            let shrunken = try Interpreters.shrink(failing, using: gen, where: property)
 //            #expect(shrunken == target)
 //        }
-//        
+//
 //        @Test("Int shrinks from max to 6")
 //        func testBasicIntShrink() throws {
 //            typealias Shrink = Int
@@ -38,12 +38,12 @@
 //            let property: (Shrink) -> Bool = { value in
 //                value < target
 //            }
-//            
+//
 //            // Goes to -1 as part of fundamentals, can't shrink up from there
 //            let shrunken = try Interpreters.shrink(failing, using: gen, where: property)
 //            #expect(shrunken == target)
 //        }
-//        
+//
 //        // FIXME: This is my biggest worry. This has to do with setting proper ranges in the Reflect function
 //        // Idea: Once shrink is called we know that the failing example represents an upper bound. We can set this immediately.
 //        // However, the `Value` in the shrinker is the composite element created by the generator. We can only work
@@ -65,7 +65,7 @@
 //            print()
 //            #expect(shrunken <= target + 0.1)
 //        }
-//        
+//
 //        @Test("Character shrinks from max to \0")
 //        func testBasicCharacterShrink() throws {
 //            typealias Shrink = Character
@@ -80,40 +80,40 @@
 //            #expect(shrunken == target)
 //        }
 //    }
-//    
+//
 //    @Suite("Basic Shrinking")
 //    struct BasicShrinkingTests {
-//        
+//
 //        @Test("Shrinker with simple generators")
 //        func testShrinkingSimpleGenerator() throws {
 //            // Note to self: restricting the generator to values in 1...1000 fails the test.
 //            // Presumably one of the strategies finds it does not have any viable options due to filtering
 //            let gen = Int.arbitrary
-//            
+//
 //            let failingValue = 500
 //            let property: (Int) -> Bool = { $0 <= 100 }
-//            
+//
 //            // This acts weird because of ints
 //            let shrunken = try Interpreters.shrink(failingValue, using: gen, where: property)
-//            
+//
 //            // Should shrink towards the boundary
 //            #expect(shrunken == 101)
 //        }
-//        
+//
 //        @Test("Shrinker with array generators")
 //        func testShrinkingArrayGenerator() throws {
 //            let gen = UInt.arbitrary.proliferate(with: 1...20)
-//            
+//
 //            let largeArray = Array(1...15).map(UInt.init)
 //            let property: ([UInt]) -> Bool = { $0.count <= 5 }
-//            
+//
 //            // Christ on a stick this is ripe for some optimisation
 //            // Returning counterexample after 1011 steps, 1001 cache hits and 35 complexity. There were 11 unique attempts and 1 valid shrinks. Recipe:
 //            let shrunken = try Interpreters.shrink(largeArray, using: gen, where: property)
-//            
+//
 //            #expect(shrunken.count > 5)
 //        }
-//        
+//
 //        @Test("Sequence with steps")
 //        func testSequenceWithSteps() throws {
 //            // This map makes the shrinker feel like it's dealing with the unmultiplied values
@@ -122,14 +122,14 @@
 ////                print("Shrinking: \(thing)")
 //                return thing < 100
 //            }
-//            
+//
 //            // Returning counterexample after 41 steps, 28 cache hits and 10 complexity. There were 14 unique attempts and 8 valid shrinks. Recipe:
 //            // After refactor:
 //            // Returning counterexample after 26 steps, 0 cache hits and 10 complexity. There were 27 unique attempts and 16 valid shrinks
 //            let shrunken = try Interpreters.shrink(1330, using: gen, where: property)
 //            #expect(shrunken == 100)
 //        }
-//        
+//
 //        @Test("Shrink to a small even number")
 //        func testWithASmallShrunkenNumber() throws {
 //            let gen = Int.arbitrary.map { $0 }
@@ -144,7 +144,7 @@
 //            let shrunken = try Interpreters.shrink(counterExample, using: gen, where: property)
 //            #expect(shrunken == 1)
 //        }
-//        
+//
 //        @Test("Sum of two numbers must be less than 100")
 //        func testWithSumOfTwoNumbers() throws {
 //            let gen = Gen.choose(in: UInt(1)...1_000_000, input: Any.self)
@@ -162,23 +162,23 @@
 //            #expect(shrunken == (1, 99))
 //        }
 //    }
-//    
+//
 //    @Suite("Complex Structure Shrinking")
 //    struct ComplexShrinkingTests {
-//        
+//
 //        struct TestPerson: Equatable {
 //            let name: String
 //            let age: UInt
 //            let height: Double
 //        }
-//        
+//
 //        @Test("Shrinker finds minimal failing Person")
 //        func testPersonShrinking() throws {
 //            struct Person: Equatable {
 //                let age: Int
 //                let canDrink: Bool
 //            }
-//            
+//
 //            let lensedAge = Gen.lens(extract: \Person.age, Gen.choose(in: 0...150))
 //            let lensedBool = Gen.lens(extract: \Person.canDrink, Bool.arbitrary)
 //            let personGen = lensedAge.bind { age in
@@ -186,18 +186,18 @@
 //                    Person(age: age, canDrink: canDrink)
 //                }
 //            }
-//            
+//
 //            // The test property: fails if the age is over 50 AND the height is under 150.
 //            let property: (Person) -> Bool = { person in
 //                person.canDrink && person.age >= 18
 //            }
-//            
+//
 //            // An initial, large failing value.
 //            let initialFailingValue = Person(age: 19, canDrink: false)
-//            
+//
 //            // Pre-condition: make sure our initial value actually fails.
 //            #expect(property(initialFailingValue) == false)
-//            
+//
 //            // This fails. The shrinker can't work it
 //            /*
 //             Returning counterexample after 4 steps, 1 cache hits and 165 complexity. There were 4 unique attempts and 3 valid shrinks. Recipe:
@@ -210,7 +210,7 @@
 //            let shrunk = try Interpreters.shrink(initialFailingValue, using: personGen, where: property)
 //            #expect(expectedMinimalValue == shrunk)
 //        }
-//        
+//
 //        @Test("Shrinker with complex structures")
 //        func testShrinkingComplexStructure() throws {
 //            struct Thing: Equatable {
@@ -233,10 +233,10 @@
 //                person.name.contains("aa") == false
 //            }
 //            #expect(property(failingPerson) == false)
-//            
+//
 //            let shrunken = try Interpreters.shrink(failingPerson, using: personGen, where: property)
 //            print()
-//            
+//
 //            // Shrinks well, but pulls out the character.
 //            // Good for finding where to break
 //            /*
@@ -249,7 +249,7 @@
 //             */
 //            #expect(shrunken.name == "aa")
 //        }
-//        
+//
 //        @Test("Test shrinking with six inputs")
 //        func testShrinkingWithSixInputs() throws {
 //            // Swift synthesises Equatable conformance for tuples up to 6
@@ -262,7 +262,7 @@
 //                Gen.choose(in: 0.0...1.0),
 //                Gen.choose(in: -50...50),
 //            ).map { $0 as Tuple }
-//            
+//
 //            var iterator = GeneratorIterator(gen)
 //            let generated = iterator.next()!
 //            let recipe = try #require(try Interpreters.reflect(gen, with: generated))
@@ -280,7 +280,7 @@
 //            #expect(shrunk.1 >= 100_000)
 //            /*
 //             For some reason it finds the strings more interesting. Perhaps due to the new shortlex complexity measure?
-//             
+//
 //             Returning counterexample after 59 steps, 17 cache hits and 112374 complexity. There were 43 unique attempts and 30 valid shrinks. Recipe:
 //              └── group
 //                 ├── choice(signed: 0)
@@ -294,10 +294,10 @@
 //             */
 //        }
 //    }
-//    
+//
 //    @Suite("String Shrinking")
 //    struct StringShrinkingTests {
-//        
+//
 //        @Test("Shrinking something with strings!")
 //        func testStringObjectShrinking() throws {
 //            // Arrange
@@ -306,40 +306,40 @@
 //            }
 //            let gen = Gen.lens(extract: \Thing.name, String.arbitrary)
 //                .map { Thing(name: $0) }
-//            
+//
 //            let failingExample = Thing(name: "blabla here we go again what is this even, come on")
 //            let recipe = try #require(try Interpreters.reflect(gen, with: failingExample))
 //            let replayed = try #require(try Interpreters.replay(gen, using: recipe))
 //            #expect(replayed.name == failingExample.name)
-//            
+//
 //            let property: (Thing) -> Bool = { thing in
 //                thing.name.isEmpty == false && thing.name.first!.isUppercase
 //            }
 //            #expect(property(failingExample) == false)
-//            
-//            
+//
+//
 //            let expectedMinimumCounterExample = Thing(name: "")
-//            
+//
 //            // Act
 //            let shrunken = try Interpreters.shrink(failingExample, using: gen, where: property)
-//            
+//
 //            // Assert
 //            print()
 //            #expect(expectedMinimumCounterExample == shrunken)
 //        }
 //    }
-//    
+//
 //    @Suite("Advanced Shrinking Scenarios")
 //    struct AdvancedShrinkingTests {
-//        
+//
 //        struct Receipt: Equatable {
 //            let items: [String]
 //            let cost: UInt64
 //        }
-//        
+//
 //        @Test("Sequence with picks")
 //        func testSequenceWithPicks() throws {
-//            
+//
 //            let stringArrGen = String.arbitrary.proliferate(with: 5...10)
 //            let gen = Gen.lens(
 //                extract: \Receipt.items,
@@ -365,7 +365,7 @@
 //                cost: 4
 //            )
 //            #expect(property(counterExample) == false)
-//            
+//
 //            let shrunken = try Interpreters.shrink(counterExample, using: gen, where: property)
 //            // Looks like shrinking runs aground with getSize
 //            let minimalCounterExample = Receipt(items: ["b"], cost: 1)
@@ -377,7 +377,7 @@
 //                 ├── ✨sequence(length: 1)✨
 //                 │   └── sequence(length: 0)
 //                 └── choice(unsigned: 1)
-//             
+//
 //             Now returns
 //             Cache hit limit reached; breaking
 //             Returning counterexample after 1012 steps, 1001 cache hits and 401 complexity. There were 12 unique attempts and 3 valid shrinks. Recipe:
@@ -389,7 +389,7 @@
 //                 │       └── choice([char]: "b")
 //                 └── ✨choice(unsigned:2)✨
 //             */
-//            
+//
 //        }
 //    }
-//}
+// }

@@ -5,27 +5,27 @@
 //  Tests for ChoiceSequence.extractContainerSpans and ChoiceSequence.extractValueSpans
 //
 
-import Testing
 @testable import Exhaust
+import Testing
 
 // MARK: - Helpers
 
 /// Shorthand for building test sequences without the noise of full ChoiceSequenceValue construction
 private func val(_ n: UInt64) -> ChoiceSequenceValue {
-    .value(.init(choice: .unsigned(n, UInt64.self), validRanges: [0...100]))
+    .value(.init(choice: .unsigned(n, UInt64.self), validRanges: [0 ... 100]))
 }
 
 private func reduced(_ n: UInt64) -> ChoiceSequenceValue {
-    .reduced(.init(choice: .unsigned(n, UInt64.self), validRanges: [0...100]))
+    .reduced(.init(choice: .unsigned(n, UInt64.self), validRanges: [0 ... 100]))
 }
 
 private func branch(_ n: Int) -> ChoiceSequenceValue {
-    .branch(.init(choice: .unsigned(UInt64(n), UInt64.self), validRanges: [0...10]))
+    .branch(.init(choice: .unsigned(UInt64(n), UInt64.self), validRanges: [0 ... 10]))
 }
 
-private let seqOpen  = ChoiceSequenceValue.sequence(true)
+private let seqOpen = ChoiceSequenceValue.sequence(true)
 private let seqClose = ChoiceSequenceValue.sequence(false)
-private let grpOpen  = ChoiceSequenceValue.group(true)
+private let grpOpen = ChoiceSequenceValue.group(true)
 private let grpClose = ChoiceSequenceValue.group(false)
 
 private typealias Span = ChoiceSpan
@@ -34,7 +34,6 @@ private typealias Span = ChoiceSpan
 
 @Suite("Container span extraction tests", .disabled("Api changed, skipping"))
 struct ExtractContainerSpansTests {
-
     @Test("Empty sequence returns no spans")
     func emptySequence() {
         let spans = ChoiceSequence.extractContainerSpans(from: [])
@@ -55,7 +54,7 @@ struct ExtractContainerSpansTests {
         let spans = ChoiceSequence.extractContainerSpans(from: seq)
 
         #expect(spans.count == 1)
-        #expect(spans[0].range == 0...3)
+        #expect(spans[0].range == 0 ... 3)
         #expect(spans[0].depth == 0)
         #expect(spans[0].kind == .sequence(true))
     }
@@ -67,7 +66,7 @@ struct ExtractContainerSpansTests {
         let spans = ChoiceSequence.extractContainerSpans(from: seq)
 
         #expect(spans.count == 1)
-        #expect(spans[0].range == 0...3)
+        #expect(spans[0].range == 0 ... 3)
         #expect(spans[0].depth == 0)
         #expect(spans[0].kind == .group(true))
     }
@@ -79,7 +78,7 @@ struct ExtractContainerSpansTests {
         let spans = ChoiceSequence.extractContainerSpans(from: seq)
 
         #expect(spans.count == 1)
-        #expect(spans[0].range == 0...1)
+        #expect(spans[0].range == 0 ... 1)
         #expect(spans[0].depth == 0)
     }
 
@@ -90,7 +89,7 @@ struct ExtractContainerSpansTests {
         let spans = ChoiceSequence.extractContainerSpans(from: seq)
 
         #expect(spans.count == 1)
-        #expect(spans[0].range == 0...1)
+        #expect(spans[0].range == 0 ... 1)
         #expect(spans[0].depth == 0)
     }
 
@@ -102,9 +101,9 @@ struct ExtractContainerSpansTests {
 
         #expect(spans.count == 2)
         // Reversed order means first span in array is the first in the sequence
-        #expect(spans[0].range == 3...5)
+        #expect(spans[0].range == 3 ... 5)
         #expect(spans[0].depth == 0)
-        #expect(spans[1].range == 0...2)
+        #expect(spans[1].range == 0 ... 2)
         #expect(spans[1].depth == 0)
     }
 
@@ -116,11 +115,11 @@ struct ExtractContainerSpansTests {
 
         #expect(spans.count == 2)
         // Reversed: outer first, inner second
-        #expect(spans[0].range == 0...5)
+        #expect(spans[0].range == 0 ... 5)
         #expect(spans[0].depth == 0)
         #expect(spans[0].kind == .group(true))
 
-        #expect(spans[1].range == 1...4)
+        #expect(spans[1].range == 1 ... 4)
         #expect(spans[1].depth == 1)
         #expect(spans[1].kind == .sequence(true))
     }
@@ -132,11 +131,11 @@ struct ExtractContainerSpansTests {
         let spans = ChoiceSequence.extractContainerSpans(from: seq)
 
         #expect(spans.count == 2)
-        #expect(spans[0].range == 0...4)
+        #expect(spans[0].range == 0 ... 4)
         #expect(spans[0].depth == 0)
         #expect(spans[0].kind == .sequence(true))
 
-        #expect(spans[1].range == 1...3)
+        #expect(spans[1].range == 1 ... 3)
         #expect(spans[1].depth == 1)
         #expect(spans[1].kind == .group(true))
     }
@@ -145,18 +144,18 @@ struct ExtractContainerSpansTests {
     func tripleNesting() {
         // [([V])]
         let seq: ChoiceSequence = [
-            seqOpen, grpOpen, seqOpen, val(1), seqClose, grpClose, seqClose
+            seqOpen, grpOpen, seqOpen, val(1), seqClose, grpClose, seqClose,
         ]
         let spans = ChoiceSequence.extractContainerSpans(from: seq)
 
         #expect(spans.count == 3)
-        #expect(spans[0].range == 0...6)
+        #expect(spans[0].range == 0 ... 6)
         #expect(spans[0].depth == 0)
 
-        #expect(spans[1].range == 1...5)
+        #expect(spans[1].range == 1 ... 5)
         #expect(spans[1].depth == 1)
 
-        #expect(spans[2].range == 2...4)
+        #expect(spans[2].range == 2 ... 4)
         #expect(spans[2].depth == 2)
     }
 
@@ -165,26 +164,26 @@ struct ExtractContainerSpansTests {
         // ([V] [V])
         let seq: ChoiceSequence = [
             grpOpen,
-                seqOpen, val(1), seqClose,
-                seqOpen, val(2), seqClose,
-            grpClose
+            seqOpen, val(1), seqClose,
+            seqOpen, val(2), seqClose,
+            grpClose,
         ]
         let spans = ChoiceSequence.extractContainerSpans(from: seq)
 
         #expect(spans.count == 3)
 
         // Outer group
-        #expect(spans[0].range == 0...7)
+        #expect(spans[0].range == 0 ... 7)
         #expect(spans[0].depth == 0)
         #expect(spans[0].kind == .group(true))
 
         // Second inner sequence (reversed, so later one comes first among siblings)
-        #expect(spans[1].range == 4...6)
+        #expect(spans[1].range == 4 ... 6)
         #expect(spans[1].depth == 1)
         #expect(spans[1].kind == .sequence(true))
 
         // First inner sequence
-        #expect(spans[2].range == 1...3)
+        #expect(spans[2].range == 1 ... 3)
         #expect(spans[2].depth == 1)
         #expect(spans[2].kind == .sequence(true))
     }
@@ -195,19 +194,19 @@ struct ExtractContainerSpansTests {
         let seq: ChoiceSequence = [
             val(0),
             seqOpen, val(1), grpOpen, val(2), grpClose, val(3), seqClose,
-            val(4)
+            val(4),
         ]
         let spans = ChoiceSequence.extractContainerSpans(from: seq)
 
         #expect(spans.count == 2)
 
         // Outer sequence
-        #expect(spans[0].range == 1...7)
+        #expect(spans[0].range == 1 ... 7)
         #expect(spans[0].depth == 0)
         #expect(spans[0].kind == .sequence(true))
 
         // Inner group
-        #expect(spans[1].range == 3...5)
+        #expect(spans[1].range == 3 ... 5)
         #expect(spans[1].depth == 1)
         #expect(spans[1].kind == .group(true))
     }
@@ -219,7 +218,7 @@ struct ExtractContainerSpansTests {
         let spans = ChoiceSequence.extractContainerSpans(from: seq)
 
         #expect(spans.count == 1)
-        #expect(spans[0].range == 0...3)
+        #expect(spans[0].range == 0 ... 3)
         #expect(spans[0].kind == .group(true))
     }
 
@@ -246,7 +245,7 @@ struct ExtractContainerSpansTests {
         #expect(spans[1].depth == 1)
         #expect(spans[2].depth == 2)
         #expect(spans[3].depth == 3)
-        #expect(spans[3].range == 3...5)
+        #expect(spans[3].range == 3 ... 5)
         #expect(spans[3].kind == .sequence(true))
     }
 
@@ -263,16 +262,16 @@ struct ExtractContainerSpansTests {
     func complexNesting() {
         // [V [V] V]
         let seq: ChoiceSequence = [
-            seqOpen, val(1), seqOpen, val(2), seqClose, val(3), seqClose
+            seqOpen, val(1), seqOpen, val(2), seqClose, val(3), seqClose,
         ]
         let spans = ChoiceSequence.extractContainerSpans(from: seq)
 
         #expect(spans.count == 2)
 
-        #expect(spans[0].range == 0...6)
+        #expect(spans[0].range == 0 ... 6)
         #expect(spans[0].depth == 0)
 
-        #expect(spans[1].range == 2...4)
+        #expect(spans[1].range == 2 ... 4)
         #expect(spans[1].depth == 1)
     }
 }
@@ -281,7 +280,6 @@ struct ExtractContainerSpansTests {
 
 @Suite("Value span extraction tests")
 struct ExtractValueSpansTests {
-
     @Test("Empty sequence returns no spans")
     func emptySequence() {
         let spans = ChoiceSequence.extractFreeStandingValueSpans(from: [])
@@ -294,7 +292,7 @@ struct ExtractValueSpansTests {
         let spans = ChoiceSequence.extractFreeStandingValueSpans(from: seq)
 
         #expect(spans.count == 1)
-        #expect(spans[0].range == 0...0)
+        #expect(spans[0].range == 0 ... 0)
         #expect(spans[0].depth == 0)
     }
 
@@ -305,9 +303,9 @@ struct ExtractValueSpansTests {
 
         #expect(spans.count == 3)
         // Reversed, so last value is first in result
-        #expect(spans[0].range == 2...2)
-        #expect(spans[1].range == 1...1)
-        #expect(spans[2].range == 0...0)
+        #expect(spans[0].range == 2 ... 2)
+        #expect(spans[1].range == 1 ... 1)
+        #expect(spans[2].range == 0 ... 0)
         // All at depth 0
         #expect(spans.allSatisfy { $0.depth == 0 })
     }
@@ -321,8 +319,8 @@ struct ExtractValueSpansTests {
         // Case (.sequence(true), .value) adds span without incrementing depth
         // Case (.value, .value) adds span
         #expect(spans.count == 2)
-        #expect(spans[0].range == 2...2)
-        #expect(spans[1].range == 1...1)
+        #expect(spans[0].range == 2 ... 2)
+        #expect(spans[1].range == 1 ... 1)
     }
 
     @Test("Value after group opening increments depth but does not create span")
@@ -344,7 +342,7 @@ struct ExtractValueSpansTests {
         // First value: (.group(true), .value) → depth++ (to 1), no span
         // Second value: (.value, .value) → span at depth 1
         #expect(spans.count == 1)
-        #expect(spans[0].range == 2...2)
+        #expect(spans[0].range == 2 ... 2)
         #expect(spans[0].depth == 1)
     }
 
@@ -354,8 +352,8 @@ struct ExtractValueSpansTests {
         let spans = ChoiceSequence.extractFreeStandingValueSpans(from: seq)
 
         #expect(spans.count == 2)
-        #expect(spans[0].range == 1...1)
-        #expect(spans[1].range == 0...0)
+        #expect(spans[0].range == 1 ... 1)
+        #expect(spans[1].range == 0 ... 0)
     }
 
     @Test("Only containers, no values")
@@ -374,7 +372,7 @@ struct ExtractValueSpansTests {
         // i=1: (.sequence(true), .value) → span at depth 0
         // i=3: (.sequence(false), .value) → case 5: depth -= 1, no span
         #expect(spans.count == 1)
-        #expect(spans[0].range == 1...1)
+        #expect(spans[0].range == 1 ... 1)
     }
 
     @Test("Value after group close does not create span")
@@ -387,7 +385,7 @@ struct ExtractValueSpansTests {
         // i=2: (.value, .value) → span at depth 1
         // i=4: (.group(false), .value) → depth-- (to 0), no span
         #expect(spans.count == 1)
-        #expect(spans[0].range == 2...2)
+        #expect(spans[0].range == 2 ... 2)
         #expect(spans[0].depth == 1)
     }
 
@@ -417,7 +415,7 @@ struct ExtractValueSpansTests {
         // i=1: (.branch, .value) → default
         // i=2: (.value, .value) → span at depth 0
         #expect(spans.count == 1)
-        #expect(spans[0].range == 2...2)
+        #expect(spans[0].range == 2 ... 2)
     }
 
     @Test("Sequence with branch and values inside group")
@@ -430,7 +428,7 @@ struct ExtractValueSpansTests {
         // i=2: (.branch, .value) → default
         // i=3: (.value, .value) → span at depth 1
         #expect(spans.count == 1)
-        #expect(spans[0].range == 3...3)
+        #expect(spans[0].range == 3 ... 3)
         #expect(spans[0].depth == 1)
     }
 
@@ -444,9 +442,9 @@ struct ExtractValueSpansTests {
         // i=2: (.sequence(true), .value) → span at depth 1
         // i=3: (.value, .value) → span at depth 1
         #expect(spans.count == 2)
-        #expect(spans[0].range == 3...3)
+        #expect(spans[0].range == 3 ... 3)
         #expect(spans[0].depth == 2)
-        #expect(spans[1].range == 2...2)
+        #expect(spans[1].range == 2 ... 2)
         #expect(spans[1].depth == 2)
     }
 
@@ -500,7 +498,7 @@ struct ExtractValueSpansTests {
         let seq: ChoiceSequence = [val(1)]
         let spans = ChoiceSequence.extractFreeStandingValueSpans(from: seq)
         #expect(spans.count == 1)
-        #expect(spans[0].range == 0...0)
+        #expect(spans[0].range == 0 ... 0)
     }
 
     @Test("Container at index zero followed by value")
@@ -516,7 +514,7 @@ struct ExtractValueSpansTests {
         let spansS = ChoiceSequence.extractFreeStandingValueSpans(from: seqS)
         // (.sequence(true), .value) → span at depth 0
         #expect(spansS.count == 1)
-        #expect(spansS[0].range == 1...1)
+        #expect(spansS[0].range == 1 ... 1)
     }
 
     @Test("Depth correctly increments for nested groups")
@@ -529,7 +527,7 @@ struct ExtractValueSpansTests {
         // i=2: (.group(true), .value) → depth++ (to 2), no span
         // i=3: (.value, .value) → span at depth 2
         #expect(spans.count == 1)
-        #expect(spans[0].range == 3...3)
+        #expect(spans[0].range == 3 ... 3)
         #expect(spans[0].depth == 2)
     }
 
@@ -550,9 +548,9 @@ struct ExtractValueSpansTests {
         // i=6: (.group(false), .value) → depth-- (to 0), no span
         // i=7: (.value, .value) → span at depth 0
         #expect(spans.count == 2)
-        #expect(spans[0].range == 7...7)
+        #expect(spans[0].range == 7 ... 7)
         #expect(spans[0].depth == 0)
-        #expect(spans[1].range == 3...3)
+        #expect(spans[1].range == 3 ... 3)
         #expect(spans[1].depth == 2)
     }
 
@@ -563,9 +561,9 @@ struct ExtractValueSpansTests {
 
         // Original collection order is index 0, 1, 2
         // Reversed means index 2 first
-        #expect(spans[0].range == 2...2)
-        #expect(spans[1].range == 1...1)
-        #expect(spans[2].range == 0...0)
+        #expect(spans[0].range == 2 ... 2)
+        #expect(spans[1].range == 1 ... 1)
+        #expect(spans[2].range == 0 ... 0)
     }
 }
 
@@ -573,7 +571,6 @@ struct ExtractValueSpansTests {
 
 @Suite("Sequence boundary span extraction tests")
 struct ExtractSequenceBoundarySpansTests {
-
     @Test("Empty sequence returns no spans")
     func emptySequence() {
         let spans = ChoiceSequence.extractSequenceBoundarySpans(from: [])
@@ -601,15 +598,15 @@ struct ExtractSequenceBoundarySpansTests {
         // [[V][V]]
         let seq: ChoiceSequence = [
             seqOpen,
-                seqOpen, val(1), seqClose,
-                seqOpen, val(2), seqClose,
+            seqOpen, val(1), seqClose,
+            seqOpen, val(2), seqClose,
             seqClose,
         ]
         let spans = ChoiceSequence.extractSequenceBoundarySpans(from: seq)
 
         #expect(spans.count == 1)
         // The ][ boundary is at indices 3...4
-        #expect(spans[0].range == 3...4)
+        #expect(spans[0].range == 3 ... 4)
         #expect(spans[0].depth == 2)
     }
 
@@ -617,34 +614,34 @@ struct ExtractSequenceBoundarySpansTests {
     func threeInnerSequences() {
         // [[V][V][V]]
         let seq: ChoiceSequence = [
-            seqOpen,                          // 0
-                seqOpen, val(1), seqClose,    // 1, 2, 3
-                seqOpen, val(2), seqClose,    // 4, 5, 6
-                seqOpen, val(3), seqClose,    // 7, 8, 9
-            seqClose,                         // 10
+            seqOpen, // 0
+            seqOpen, val(1), seqClose, // 1, 2, 3
+            seqOpen, val(2), seqClose, // 4, 5, 6
+            seqOpen, val(3), seqClose, // 7, 8, 9
+            seqClose, // 10
         ]
         let spans = ChoiceSequence.extractSequenceBoundarySpans(from: seq)
 
         #expect(spans.count == 2)
-        #expect(spans[0].range == 3...4)
-        #expect(spans[1].range == 6...7)
+        #expect(spans[0].range == 3 ... 4)
+        #expect(spans[1].range == 6 ... 7)
     }
 
     @Test("Boundary depth reflects sequence nesting depth")
     func boundaryDepthIsCorrect() {
         // [[[V][V]]]
         let seq: ChoiceSequence = [
-            seqOpen,                                      // 0, depth 1
-                seqOpen,                                  // 1, depth 2
-                    seqOpen, val(1), seqClose,            // 2, 3, 4
-                    seqOpen, val(2), seqClose,            // 5, 6, 7
-                seqClose,                                 // 8
-            seqClose,                                     // 9
+            seqOpen, // 0, depth 1
+            seqOpen, // 1, depth 2
+            seqOpen, val(1), seqClose, // 2, 3, 4
+            seqOpen, val(2), seqClose, // 5, 6, 7
+            seqClose, // 8
+            seqClose, // 9
         ]
         let spans = ChoiceSequence.extractSequenceBoundarySpans(from: seq)
 
         #expect(spans.count == 1)
-        #expect(spans[0].range == 4...5)
+        #expect(spans[0].range == 4 ... 5)
         // At the point of the ][, sequence depth is 3 (outer + middle + inner closing at 3)
         #expect(spans[0].depth == 3)
     }
@@ -654,8 +651,8 @@ struct ExtractSequenceBoundarySpansTests {
         // [(V)(V)] — groups, not sequences, so no ][ boundary
         let seq: ChoiceSequence = [
             seqOpen,
-                grpOpen, val(1), grpClose,
-                grpOpen, val(2), grpClose,
+            grpOpen, val(1), grpClose,
+            grpOpen, val(2), grpClose,
             seqClose,
         ]
         let spans = ChoiceSequence.extractSequenceBoundarySpans(from: seq)
@@ -668,8 +665,8 @@ struct ExtractSequenceBoundarySpansTests {
         // sequence depth is only 1 at the ][ boundary
         let seq: ChoiceSequence = [
             grpOpen,
-                seqOpen, val(1), seqClose,
-                seqOpen, val(2), seqClose,
+            seqOpen, val(1), seqClose,
+            seqOpen, val(2), seqClose,
             grpClose,
         ]
         let spans = ChoiceSequence.extractSequenceBoundarySpans(from: seq)
@@ -680,11 +677,11 @@ struct ExtractSequenceBoundarySpansTests {
     func nonAdjacentBoundary() {
         // [[V] V [V]] — value between ] and [
         let seq: ChoiceSequence = [
-            seqOpen,                          // 0
-                seqOpen, val(1), seqClose,    // 1, 2, 3
-                val(99),                      // 4
-                seqOpen, val(2), seqClose,    // 5, 6, 7
-            seqClose,                         // 8
+            seqOpen, // 0
+            seqOpen, val(1), seqClose, // 1, 2, 3
+            val(99), // 4
+            seqOpen, val(2), seqClose, // 5, 6, 7
+            seqClose, // 8
         ]
         let spans = ChoiceSequence.extractSequenceBoundarySpans(from: seq)
         #expect(spans.isEmpty)
@@ -694,26 +691,26 @@ struct ExtractSequenceBoundarySpansTests {
     func multipleLevels() {
         // [[[V][V]][[V][V]]]
         let seq: ChoiceSequence = [
-            seqOpen,                                          // 0
-                seqOpen,                                      // 1
-                    seqOpen, val(1), seqClose,                // 2, 3, 4
-                    seqOpen, val(2), seqClose,                // 5, 6, 7
-                seqClose,                                     // 8
-                seqOpen,                                      // 9
-                    seqOpen, val(3), seqClose,                // 10, 11, 12
-                    seqOpen, val(4), seqClose,                // 13, 14, 15
-                seqClose,                                     // 16
-            seqClose,                                         // 17
+            seqOpen, // 0
+            seqOpen, // 1
+            seqOpen, val(1), seqClose, // 2, 3, 4
+            seqOpen, val(2), seqClose, // 5, 6, 7
+            seqClose, // 8
+            seqOpen, // 9
+            seqOpen, val(3), seqClose, // 10, 11, 12
+            seqOpen, val(4), seqClose, // 13, 14, 15
+            seqClose, // 16
+            seqClose, // 17
         ]
         let spans = ChoiceSequence.extractSequenceBoundarySpans(from: seq)
 
         // Boundaries: 4...5 (depth 3), 8...9 (depth 2), 12...13 (depth 3)
         #expect(spans.count == 3)
-        #expect(spans[0].range == 4...5)
+        #expect(spans[0].range == 4 ... 5)
         #expect(spans[0].depth == 3)
-        #expect(spans[1].range == 8...9)
+        #expect(spans[1].range == 8 ... 9)
         #expect(spans[1].depth == 2)
-        #expect(spans[2].range == 12...13)
+        #expect(spans[2].range == 12 ... 13)
         #expect(spans[2].depth == 3)
     }
 
@@ -729,9 +726,9 @@ struct ExtractSequenceBoundarySpansTests {
         // [[V][V][V]]
         let seq: ChoiceSequence = [
             seqOpen,
-                seqOpen, val(1), seqClose,
-                seqOpen, val(2), seqClose,
-                seqOpen, val(3), seqClose,
+            seqOpen, val(1), seqClose,
+            seqOpen, val(2), seqClose,
+            seqOpen, val(3), seqClose,
             seqClose,
         ]
         let spans = ChoiceSequence.extractSequenceBoundarySpans(from: seq)
@@ -746,14 +743,14 @@ struct ExtractSequenceBoundarySpansTests {
         // [[][]]
         let seq: ChoiceSequence = [
             seqOpen,
-                seqOpen, seqClose,
-                seqOpen, seqClose,
+            seqOpen, seqClose,
+            seqOpen, seqClose,
             seqClose,
         ]
         let spans = ChoiceSequence.extractSequenceBoundarySpans(from: seq)
 
         #expect(spans.count == 1)
-        #expect(spans[0].range == 2...3)
+        #expect(spans[0].range == 2 ... 3)
     }
 }
 
@@ -804,7 +801,7 @@ struct ExtractSiblingGroupsTests {
             reduced(3),
             grpClose,
             seqClose,
-            seqClose
+            seqClose,
         ]
         #expect(seq.shortString == "[[(V)(V)(V)(V)][(V)(_)(_)(_)(_)(_)(_)]] ")
         let groups = ChoiceSequence.extractSiblingGroups(from: seq)
@@ -816,7 +813,7 @@ struct ExtractSiblingGroupsTests {
         print()
 
         #expect(groups.count == 1)
-        #expect(groups[0].ranges == [1...1, 2...2, 3...3])
+        #expect(groups[0].ranges == [1 ... 1, 2 ... 2, 3 ... 3])
         #expect(groups[0].depth == 0)
     }
 
@@ -827,7 +824,7 @@ struct ExtractSiblingGroupsTests {
         let groups = ChoiceSequence.extractSiblingGroups(from: seq)
 
         #expect(groups.count == 1)
-        #expect(groups[0].ranges == [1...1, 2...2, 3...3])
+        #expect(groups[0].ranges == [1 ... 1, 2 ... 2, 3 ... 3])
         #expect(groups[0].depth == 0)
     }
 
@@ -836,8 +833,8 @@ struct ExtractSiblingGroupsTests {
         // [[VV][VV]]
         let seq: ChoiceSequence = [
             seqOpen,
-                seqOpen, val(1), val(2), seqClose,
-                seqOpen, val(3), val(4), seqClose,
+            seqOpen, val(1), val(2), seqClose,
+            seqOpen, val(3), val(4), seqClose,
             seqClose,
         ]
         let groups = ChoiceSequence.extractSiblingGroups(from: seq)
@@ -847,7 +844,7 @@ struct ExtractSiblingGroupsTests {
         // Each inner: group of 2 bare value siblings
         let outerGroups = groups.filter { $0.depth == 0 }
         #expect(outerGroups.count == 1)
-        #expect(outerGroups[0].ranges == [1...4, 5...8])
+        #expect(outerGroups[0].ranges == [1 ... 4, 5 ... 8])
 
         let innerGroups = groups.filter { $0.depth == 1 }
         #expect(innerGroups.count == 2)
@@ -858,9 +855,9 @@ struct ExtractSiblingGroupsTests {
         // [(V)(V)(V)]
         let seq: ChoiceSequence = [
             seqOpen,
-                grpOpen, val(1), grpClose,
-                grpOpen, val(2), grpClose,
-                grpOpen, val(3), grpClose,
+            grpOpen, val(1), grpClose,
+            grpOpen, val(2), grpClose,
+            grpOpen, val(3), grpClose,
             seqClose,
         ]
         let groups = ChoiceSequence.extractSiblingGroups(from: seq)
@@ -868,7 +865,7 @@ struct ExtractSiblingGroupsTests {
         let outerGroups = groups.filter { $0.depth == 0 }
         #expect(outerGroups.count == 1)
         #expect(outerGroups[0].ranges.count == 3)
-        #expect(outerGroups[0].ranges == [1...3, 4...6, 7...9])
+        #expect(outerGroups[0].ranges == [1 ... 3, 4 ... 6, 7 ... 9])
     }
 
     @Test("Single child produces no group")
@@ -887,7 +884,7 @@ struct ExtractSiblingGroupsTests {
 
         // Groups still have children — 2 bare values in a group
         #expect(groups.count == 1)
-        #expect(groups[0].ranges == [1...1, 2...2])
+        #expect(groups[0].ranges == [1 ... 1, 2 ... 2])
         #expect(groups[0].depth == 0)
     }
 
@@ -896,8 +893,8 @@ struct ExtractSiblingGroupsTests {
         // [V [VV]] — one bare value and one sequence container
         let seq: ChoiceSequence = [
             seqOpen,
-                val(1),
-                seqOpen, val(2), val(3), seqClose,
+            val(1),
+            seqOpen, val(2), val(3), seqClose,
             seqClose,
         ]
         let groups = ChoiceSequence.extractSiblingGroups(from: seq)
@@ -934,7 +931,7 @@ struct ExtractSiblingGroupsTests {
         let groups = ChoiceSequence.extractSiblingGroups(from: seq)
 
         #expect(groups.count == 1)
-        #expect(groups[0].ranges == [2...2, 3...3])
+        #expect(groups[0].ranges == [2 ... 2, 3 ... 3])
     }
 
     @Test("Nested groups each produce their own sibling group")
@@ -942,8 +939,8 @@ struct ExtractSiblingGroupsTests {
         // [[(V)(V)][(V)(V)]]
         let seq: ChoiceSequence = [
             seqOpen,
-                seqOpen, grpOpen, val(1), grpClose, grpOpen, val(2), grpClose, seqClose,
-                seqOpen, grpOpen, val(3), grpClose, grpOpen, val(4), grpClose, seqClose,
+            seqOpen, grpOpen, val(1), grpClose, grpOpen, val(2), grpClose, seqClose,
+            seqOpen, grpOpen, val(3), grpClose, grpOpen, val(4), grpClose, seqClose,
             seqClose,
         ]
         let groups = ChoiceSequence.extractSiblingGroups(from: seq)
