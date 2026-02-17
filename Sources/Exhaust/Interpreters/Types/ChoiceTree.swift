@@ -1,4 +1,4 @@
-    //
+//
 //  ChoiceTree.swift
 //  Exhaust
 //
@@ -6,8 +6,8 @@
 //
 
 import Algorithms
-import Foundation
 import CasePaths
+import Foundation
 
 @CasePathable
 public enum ChoiceTree: Hashable, Equatable, Sendable {
@@ -248,7 +248,7 @@ extension ChoiceTree {
                 }
                 // zip ensures we only iterate as long as both have elements.
                 // The new children are created by recursively calling merge.
-                let mergedElements = zip(lhsElements, rhsElements).map { (lhsElement, rhsElement) in
+                let mergedElements = zip(lhsElements, rhsElements).map { lhsElement, rhsElement in
                     lhsElement.merge(with: rhsElement, using: combine)
                 }
                 // A new sequence is created, preserving the left tree's metadata.
@@ -268,7 +268,7 @@ extension ChoiceTree {
                 if let containerResult = combine(self, other) {
                     return containerResult
                 }
-                let mergedChildren = zip(lhsChildren, rhsChildren).map { (lhsChild, rhsChild) in
+                let mergedChildren = zip(lhsChildren, rhsChildren).map { lhsChild, rhsChild in
                     lhsChild.merge(with: rhsChild, using: combine)
                 }
                 return .group(mergedChildren)
@@ -285,7 +285,7 @@ extension ChoiceTree {
                 if let containerResult = combine(self, other) {
                     return containerResult
                 }
-                let mergedChoices = zip(lhsChoices, rhsChoices).map { (lhsChoice, rhsChoice) in
+                let mergedChoices = zip(lhsChoices, rhsChoices).map { lhsChoice, rhsChoice in
                     lhsChoice.merge(with: rhsChoice, using: combine)
                 }
                 return .resize(newSize: lhsSize, choices: mergedChoices)
@@ -353,7 +353,7 @@ extension ChoiceTree {
                 return Self.diffAndLockChanges(in: lhsValue, from: rhsValue, keepStrategies: keepStrategies, markImportant: true)
             case (.important, _):
                 return lhs
-            case let (.choice(lhsValue, _), .choice(rhsValue, rhsMeta)):
+            case let (.choice(lhsValue, _), .choice(rhsValue, _)):
                 guard lhsValue != rhsValue else {
                     return lhs
                 }
@@ -377,7 +377,7 @@ extension ChoiceTree {
                 }
                 
                 return newLhs
-            case let (.sequence(lhsLength, lhsElements, lhsMeta), .sequence(rhsLength, rhsElements, rhsMeta)):
+            case let (.sequence(lhsLength, lhsElements, lhsMeta), .sequence(rhsLength, rhsElements, _)):
                 // The sequence itself is important
                 if lhsLength != rhsLength {
                     // TODO: Decorate with whether we need to go down or up
@@ -447,7 +447,7 @@ extension ChoiceTree: CustomDebugStringConvertible {
                 // Dropping the first one as it is a getSize
                 case let .group(branches) = array.dropFirst().first,
                 case let .branch(_, _, gen) = branches.first(where: { $0.isSelected == false }),
-                case .choice(.character(_), _) = gen
+                case .choice = gen
             {
                 // A special case displaying all the characters in a string inline
                 let characters = elements.dropFirst().compactMap { element in
@@ -644,38 +644,6 @@ extension ChoiceTree: CustomDebugStringConvertible {
         return true
     }
 }
-
-//extension ChoiceTree: Comparable {
-//    static func < (lhs: ChoiceTree, rhs: ChoiceTree) -> Bool {
-//        switch lhs {
-////        case .choice(let choiceValue, let choiceMetadata):
-////            <#code#>
-////        case .just(let string):
-////            <#code#>
-////        case .sequence(let length, let elements, let choiceMetadata):
-////            <#code#>
-////        case .branch(let label, let children):
-////            <#code#>
-////        case .group(let array):
-////            <#code#>
-////        case .getSize(let uInt64):
-////            <#code#>
-////        case .resize(let newSize, let choices):
-////            <#code#>
-////        case .important(let choiceTree):
-////            <#code#>
-////        case .selected(let choiceTree):
-////            <#code#>
-////        }
-//        switch (lhs, rhs) {
-//        case let (.choice(lhsV, _), .choice(rhsV, _)):
-//            return lhsV < rhsV
-//        
-//        }
-//    }
-//    
-//    
-//}
 
 extension ClosedRange where Bound == UInt64 {
     var midPoint: UInt64 {

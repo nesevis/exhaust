@@ -350,13 +350,11 @@ enum SpeculativeAdaptationInterpreter {
             totalRange  // Never more subranges than values
         )
 
-
         guard numberOfSubranges > 1 else {
             print("DEBUG: Not subdividing - numberOfSubranges=\(numberOfSubranges)")
             // Range too small, fall back to original sequence
             return .impure(operation: .sequence(length: .impure(operation: .chooseBits(min: lengthMin, max: lengthMax, tag: lengthTag)) { .pure($0 as! UInt64) }, gen: elementGen), continuation: continuation)
         }
-
 
         let rangeSize = (lengthMax - lengthMin + 1) / numberOfSubranges
         let remainder = (lengthMax - lengthMin + 1) % numberOfSubranges
@@ -404,7 +402,6 @@ enum SpeculativeAdaptationInterpreter {
 //        if !subdivisionResult.isSignificant {
 //            return .impure(operation: .sequence(length: .impure(operation: .chooseBits(min: lengthMin, max: lengthMax, tag: lengthTag)) { .pure($0 as! UInt64) }, gen: elementGen), continuation: continuation)
 //        }
-
 
         // Subdivision is beneficial, use speculative adaptation on these length ranges
         return try speculativelyAdaptPick(
@@ -479,7 +476,6 @@ enum SpeculativeAdaptationInterpreter {
         let baseThreshold = sampleSize >= 20 ? 0.15 : (sampleSize >= 10 ? 0.10 : 0.05)
         let significantThreshold = max(baseThreshold, 1.5 * standardDeviation)
         let isSignificant = range > significantThreshold && sampleSize >= 3
-
 
         return isSignificant
     }
@@ -768,7 +764,7 @@ enum SpeculativeAdaptationInterpreter {
         }
 
         // Create new choices array with weights reflecting actual success counts using the adapted generators
-        let finalAdaptedChoices = choiceSuccessCounts.map { (index, successCount) in
+        let finalAdaptedChoices = choiceSuccessCounts.map { index, successCount in
             let choice = adaptedChoices[index]
             // Use the actual success count as the weight (0 means never select this choice)
             let newWeight = successCount

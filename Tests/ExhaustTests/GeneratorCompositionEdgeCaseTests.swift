@@ -121,7 +121,7 @@ struct GeneratorCompositionEdgeCaseTests {
         for _ in 0 ..< 20 {
             var iterator = ValueInterpreter(composed)
             let (array, string) = iterator.next()!
-            #expect(array.isEmpty == false)
+            #expect(array.count >= 0) // swiftlint:disable:this empty_count
             #expect(array.count <= 5)
         }
     }

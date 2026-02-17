@@ -58,18 +58,29 @@ public enum ChoiceValue: Comparable, Hashable, Equatable, Sendable {
             return .init(type.init(bitPattern64: 0), tag: tag)
         case let .signed(_, _, type):
             let zeroBitPattern: UInt64
-            if type is Int8.Type { zeroBitPattern = Int8(0).bitPattern64 }
-            else if type is Int16.Type { zeroBitPattern = Int16(0).bitPattern64 }
-            else if type is Int32.Type { zeroBitPattern = Int32(0).bitPattern64 }
-            else if type is Int64.Type { zeroBitPattern = Int64(0).bitPattern64 }
-            else if type is Int.Type { zeroBitPattern = Int(0).bitPattern64 }
-            else { return self }
+            if type is Int8.Type {
+                zeroBitPattern = Int8(0).bitPattern64
+            } else if type is Int16.Type {
+                zeroBitPattern = Int16(0).bitPattern64
+            } else if type is Int32.Type {
+                zeroBitPattern = Int32(0).bitPattern64
+            } else if type is Int64.Type {
+                zeroBitPattern = Int64(0).bitPattern64
+            } else if type is Int.Type {
+                zeroBitPattern = Int(0).bitPattern64
+            } else {
+                return self
+            }
             return .signed(0, zeroBitPattern, type)
         case let .floating(_, _, type):
             let zeroBitPattern: UInt64
-            if type is Float.Type { zeroBitPattern = Float(0).bitPattern64 }
-            else if type is Double.Type { zeroBitPattern = Double(0).bitPattern64 }
-            else { return self }
+            if type is Float.Type {
+                zeroBitPattern = Float(0).bitPattern64
+            } else if type is Double.Type {
+                zeroBitPattern = Double(0).bitPattern64
+            } else {
+                return self
+            }
             return .floating(0.0, zeroBitPattern, type)
         case .character:
             // Space is ascii 32
@@ -125,10 +136,8 @@ public enum ChoiceValue: Comparable, Hashable, Equatable, Sendable {
     }
 
     func fits(in ranges: [ClosedRange<UInt64>]) -> Bool {
-        for range in ranges {
-            if range.contains(bitPattern64) {
-                return true
-            }
+        for range in ranges where range.contains(bitPattern64) {
+            return true
         }
         return false
     }

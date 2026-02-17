@@ -77,6 +77,7 @@ extension Interpreters {
     }
 
     private struct ChoiceCursor {
+        // swiftlint:disable:next nesting
         private enum Storage {
             case one(ChoiceTree)
             case many([ChoiceTree])
@@ -136,7 +137,7 @@ extension Interpreters {
     }
     // ... `generate` and `reflect` and their helpers ...
 
-    /// MARK: - Public-Facing Materialize Function
+    // MARK: - Public-Facing Materialize Function
 
     /// Deterministically reproduces a value by executing a generator with a structured `ChoiceSequence.Sequence`.
     ///
@@ -215,7 +216,7 @@ extension Interpreters {
             case .getSize:
                 // This operation expects a `.getSize` node from the script.
                 switch tree {
-                case let .choice(.unsigned(value), _):
+                case let .choice(.unsigned(value, _), _):
                     let nextGen = try continuation(value)
                     return try materializeRecursive(nextGen, with: tree, context: &context)
                 case let .getSize(value):
@@ -247,7 +248,7 @@ extension Interpreters {
                 let nextGen = try continuation(subResult)
                 return try materializeRecursive(nextGen, with: tree, context: &context)
 
-            case let .pick(choices):
+            case .pick:
                 fatalError("No 'naked' picks should be materialized. They will all be wrapped in a group")
 //                // This operation expects a `.branch` node from the script.
 //                guard case .branch(_, let label, let choice) = tree else {
@@ -297,12 +298,12 @@ extension Interpreters {
                 let nextGen = try continuation(subResult)
                 return try self.materializeRecursive(nextGen, with: tree, context: &context)
 
-            case let .prune(subGenerator):
+            case .prune:
                 fatalError("Should not be encountered")
-                guard let result = try self.materializeRecursive(subGenerator, with: tree, context: &context) else {
-                    return nil
-                }
-                return result as? Output
+//                guard let result = try self.materializeRecursive(subGenerator, with: tree, context: &context) else {
+//                    return nil
+//                }
+//                return result as? Output
             case let .filter(gen, _, predicate):
                 let result = try self.materializeRecursive(gen, with: tree, context: &context) as? Output
                 guard
@@ -589,10 +590,8 @@ extension Interpreters {
     private static func pickChoicesByLabel(_ choices: ContiguousArray<ReflectiveOperation.PickTuple>) -> [UInt64: ReflectiveGenerator<Any>] {
         var byLabel: [UInt64: ReflectiveGenerator<Any>] = [:]
         byLabel.reserveCapacity(choices.count)
-        for choice in choices {
-            if byLabel[choice.label] == nil {
-                byLabel[choice.label] = choice.generator
-            }
+        for choice in choices where byLabel[choice.label] == nil {
+            byLabel[choice.label] = choice.generator
         }
         return byLabel
     }

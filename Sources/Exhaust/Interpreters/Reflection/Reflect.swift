@@ -20,7 +20,7 @@ public enum Interpreters {
         // We only care about the final output of the generator for the check.
         let allPossibleOutcomes = try reflectRecursive(gen, onFinalOutput: outputValue)
         
-        let matchingPaths = allPossibleOutcomes.compactMap { (outputValue, path) -> [ChoiceTree]? in
+        let matchingPaths = allPossibleOutcomes.compactMap { outputValue, path -> [ChoiceTree]? in
             return check(outputValue) ? path : nil
         }.flatMap { $0 }
 
@@ -56,7 +56,7 @@ public enum Interpreters {
                 let nextGen = try continuation(intermediateValue)
                 // The `finalOutput` is passed down UNCHANGED. This is the crucial part.
                 let finalResults = try reflectRecursive(nextGen, onFinalOutput: finalOutput)
-                return finalResults.map { (finalValue, restOfPath) in
+                return finalResults.map { finalValue, restOfPath in
                     (finalValue, partialPath + restOfPath)
                 }
             }
@@ -91,7 +91,7 @@ public enum Interpreters {
 
         case let .pick(choices):
             // PICK's JOB: Try all branches against the same final output value.
-            let results = try choices.flatMap { (weight, label, generator) -> [(value: Any, weight: UInt64, label: UInt64,  isPicked: Bool, path: ChoiceTree?)] in
+            let results = try choices.flatMap { weight, label, generator -> [(value: Any, weight: UInt64, label: UInt64, isPicked: Bool, path: ChoiceTree?)] in
                 do {
                     let subPaths = try reflectRecursive(generator, onFinalOutput: finalOutput)
                     let value = subPaths.firstNonNil(\.value)
@@ -107,7 +107,7 @@ public enum Interpreters {
                         isPicked = generator.associatedRange?.contains(convertible.bitPattern64) ?? false
                     }
                     
-                    let labeledPaths = subPaths.map { (value, pathTree) in
+                    let labeledPaths = subPaths.map { value, pathTree in
                         (value, weight, label, isPicked, pathTree.first)
                     }
                     return labeledPaths

@@ -21,6 +21,8 @@ disabled_rules:
   - identifier_name
   - large_tuple
   - force_cast
+  - force_unwrapping
+  - opening_brace
 
 opt_in_rules:
   - empty_count

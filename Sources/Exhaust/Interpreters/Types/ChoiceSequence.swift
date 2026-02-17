@@ -45,7 +45,6 @@ extension ChoiceSequence {
     }
 
     /// Flattens the tree structure of ``ChoiceTree`` to a flat list for mutation/shrinking purposes
-//    @inlinable
     static func flatten(_ tree: ChoiceTree) -> ChoiceSequence {
         switch tree {
         case let .choice(value, meta):
@@ -208,7 +207,7 @@ extension ChoiceSequence {
         
         for (i, entry) in sequence.enumerated() {
             switch entry {
-            case let .value(value), let .reduced(value):
+            case .value, .reduced:
                 spans.append(ChoiceSpan(kind: entry, range: i...i, depth: depth))
             case .group(true), .sequence(true):
                 depth += 1
@@ -262,8 +261,6 @@ extension ChoiceSequence {
     }
     
     // MARK: - Sibling groups
-
-
 
     /// Extracts groups of sibling elements within containers. A sibling group contains
     /// the immediate children of a sequence or group container, where all children are

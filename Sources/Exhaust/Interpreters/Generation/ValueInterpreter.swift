@@ -93,7 +93,7 @@ public struct ValueInterpreter<Element>: IteratorProtocol, Sequence {
                 return try runContinuation(result)
 
             case let .prune(nextGen):
-                guard let optional = .some(inputValue as Optional<Any>), let wrappedValue = optional else {
+                guard let optional = .some(inputValue as Any?), let wrappedValue = optional else {
                     return nil // Pruned!
                 }
                 guard let result = try self.generateRecursive(nextGen, with: wrappedValue, context: context) else { return nil }
@@ -193,7 +193,7 @@ public struct ValueInterpreter<Element>: IteratorProtocol, Sequence {
     
     // MARK: - Quickcheck logarithmic scaling of test cases
     
-    private static func logarithmicallyScaledSize(_ maxSize : UInt64, _ successfulTests : UInt64) -> UInt64 {
+    private static func logarithmicallyScaledSize(_ maxSize: UInt64, _ successfulTests: UInt64) -> UInt64 {
         let n = Double(successfulTests)
         
         return UInt64((log(n + 1)) * Double(maxSize) / log(100))
@@ -211,7 +211,7 @@ public struct ValueInterpreter<Element>: IteratorProtocol, Sequence {
         let maxRuns: UInt64
         var isFixed: Bool
         var size: UInt64
-        var sizeOverride: UInt64? = nil
+        var sizeOverride: UInt64?
         var prng: Xoshiro256
         
         internal init(

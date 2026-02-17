@@ -123,7 +123,7 @@ public struct ValueAndChoiceTreeInterpreter<FinalOutput>: IteratorProtocol, Sequ
                 
             // MARK: - Prune
             case let .prune(nextGen):
-                guard let optional = .some(inputValue as Optional<Any>), let wrappedValue = optional else {
+                guard let optional = .some(inputValue as Any?), let wrappedValue = optional else {
                     return nil // Pruned!
                 }
                 guard let result = try Self.generateRecursive(nextGen, with: wrappedValue, context: context) else { return nil }
@@ -135,7 +135,7 @@ public struct ValueAndChoiceTreeInterpreter<FinalOutput>: IteratorProtocol, Sequ
                 // This determines which of the branches will be selected
                 var randomRoll = UInt64.random(in: 1...totalWeight, using: &context.prng)
                 // This may or may not be used, but we always have to consume it
-                var jumpSeed = context.prng.next()
+                let jumpSeed = context.prng.next()
                 var selectedChoice: (weight: UInt64, label: UInt64, generator: ReflectiveGenerator<Any>)?
                 for choice in choices {
                     if randomRoll <= choice.weight {
@@ -298,7 +298,7 @@ public struct ValueAndChoiceTreeInterpreter<FinalOutput>: IteratorProtocol, Sequ
     
     // MARK: - Quickcheck logarithmic scaling of test cases
     
-    private static func logarithmicallyScaledSize(_ maxSize : UInt64, _ successfulTests : UInt64) -> UInt64 {
+    private static func logarithmicallyScaledSize(_ maxSize: UInt64, _ successfulTests: UInt64) -> UInt64 {
         let n = Double(successfulTests)
         return UInt64((log(n + 1)) * Double(maxSize) / log(100))
     }
@@ -311,7 +311,7 @@ public struct ValueAndChoiceTreeInterpreter<FinalOutput>: IteratorProtocol, Sequ
         var isFixed: Bool
         var size: UInt64
         var runs: UInt64
-        var sizeOverride: UInt64? = nil
+        var sizeOverride: UInt64?
         let maxFilterRuns: UInt64 = 500
         // A nested dictionary containing the results of classifying the results by provided predicates and labels
         var classifications: [UInt64: [String: Set<UInt64>]] = [:]
@@ -324,7 +324,7 @@ public struct ValueAndChoiceTreeInterpreter<FinalOutput>: IteratorProtocol, Sequ
             size: UInt64,
             runs: UInt64,
             sizeOverride: UInt64? = nil,
-            classifications: [UInt64 : [String : Set<UInt64>]] = [:],
+            classifications: [UInt64: [String: Set<UInt64>]] = [:],
             prng: Xoshiro256
         ) {
             self.maxRuns = maxRuns

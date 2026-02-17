@@ -21,10 +21,6 @@ struct SiblingGroup: Equatable {
             return nil
         case .group:
             return nil
-            guard ranges.allSatisfy({ $0.count == 3 }) else {
-                fatalError("Too hard basket?")
-            }
-            return ranges.map { ($0.lowerBound + 1) ... ($0.upperBound - 1) }
         }
     }
 }
