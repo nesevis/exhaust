@@ -70,7 +70,7 @@ struct Bound5ShrinkingChallenge {
 
         for (offset, values) in list {
             let (before, after) = values
-            print("\(offset + 1): \(after) original: \(before)")
+//            print("\(offset + 1): \(after) original: \(before)")
         }
     }
 }

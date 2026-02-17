@@ -51,7 +51,6 @@ struct GenerationExamplesTests {
                 // This is a continuous subset, not a sampling
                 #expect(collection.contains(value))
             }
-            print("max: \(max)")
         }
 
         @Test("Test Gen element")
@@ -70,10 +69,8 @@ struct GenerationExamplesTests {
         @Test("ValueAndChoiceTreeGeneratorDoesntSwallowMaps")
         func vACTGdoesntswallomaps() {
             let gen = UInt.arbitrary.map {
-                print("First map called with \($0)")
                 return $0
             }.map { second in
-                print("Second map called with \(second)")
                 return second.description
             }
 //            let filtered = Gen.filter(gen, { $0.contains("@") })

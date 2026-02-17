@@ -200,15 +200,12 @@ struct CoreGeneratorTests {
 
             let vi1 = vi.next()!
             let (vact1, _) = vact.next()!
-            print("First: VI=\(vi1), VACT=\(vact1), match=\(vi1 == vact1)")
 
             let vi2 = vi.next()!
             let (vact2, _) = vact.next()!
-            print("Second: VI=\(vi2), VACT=\(vact2), match=\(vi2 == vact2)")
 
             let vi3 = vi.next()!
             let (vact3, _) = vact.next()!
-            print("Third: VI=\(vi3), VACT=\(vact3), match=\(vi3 == vact3)")
 
             #expect(vi1 == vact1, "First: \(vi1) vs \(vact1)")
             #expect(vi2 == vact2, "Second: \(vi2) vs \(vact2)")

@@ -70,7 +70,6 @@ struct LargeUnionListShrinkingChallenge {
         }
 
         for (index, output) in outputs.enumerated() {
-            print("\(index + 1): \(output)")
             // Expect there to be one nested array
             #expect(output.count == 1)
             // Expect there to be five entries in this array
