@@ -177,22 +177,6 @@ public enum ChoiceValue: Comparable, Hashable, Equatable, Sendable {
         return convertibleType.init(bitPattern64: bitPattern64)
     }
 
-    /// The case here is that `self` failed the property and `other` passed, so they represent both the range and the direction between them
-    func shrinkingDirection(given other: Self) -> ShrinkingDirection {
-        switch (self, other) {
-        case let (.unsigned(lhs, _), .unsigned(rhs, _)):
-            return lhs <= rhs ? .towardsHigherBound : .towardsLowerBound
-        case let (.signed(lhs, _, _), .signed(rhs, _, _)):
-            return lhs <= rhs ? .towardsHigherBound : .towardsLowerBound
-        case let (.floating(lhs, _, _), .floating(rhs, _, _)):
-            return lhs <= rhs ? .towardsHigherBound : .towardsLowerBound
-        case let (.character(lhs), .character(rhs)):
-            return lhs <= rhs ? .towardsHigherBound : .towardsLowerBound
-        default:
-            fatalError("\(#function) should not compare different types!")
-        }
-    }
-
     public func hash(into hasher: inout Hasher) {
         switch self {
         case let .unsigned(uInt64, _):
