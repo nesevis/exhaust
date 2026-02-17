@@ -44,9 +44,7 @@ extension AnyCasePath: PartialPath {
         // Unwrap if wrapped in Optional
         let actualRoot: Any
         let mirror = Mirror(reflecting: root)
-        if mirror.displayStyle == .optional,
-           let child = mirror.children.first
-        {
+        if mirror.displayStyle == .optional, let child = mirror.children.first {
             if child.label == "some" {
                 actualRoot = child.value
             } else {

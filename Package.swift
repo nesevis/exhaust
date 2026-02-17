@@ -22,7 +22,8 @@ let package = Package(
         .package(url: "https://github.com/pointfreeco/swift-case-paths", from: "1.5.0"),
         .package(url: "https://github.com/apple/swift-algorithms", from: "1.2.0"),
         .package(url: "https://github.com/google/swift-benchmark", from: "0.1.2"),
-        .package(url: "https://github.com/nicklockwood/SwiftFormat", from: "0.59.1")
+        .package(url: "https://github.com/nicklockwood/SwiftFormat", from: "0.59.1"),
+        .package(url: "https://github.com/SimplyDanny/SwiftLintPlugins", from: "0.57.1")
     ],
     targets: [
         // Targets are the basic building blocks of a package, defining a module or a test suite.
@@ -35,11 +36,18 @@ let package = Package(
             ],
             swiftSettings: [
                 .unsafeFlags(["-whole-module-optimization"], .when(configuration: .release))
+            ],
+            plugins: [
+                .plugin(name: "SwiftLintBuildToolPlugin", package: "SwiftLintPlugins")
             ]
+            
         ),
         .testTarget(
             name: "ExhaustTests",
-            dependencies: ["Exhaust"]
+            dependencies: ["Exhaust"],
+            plugins: [
+                .plugin(name: "SwiftLintBuildToolPlugin", package: "SwiftLintPlugins")
+            ]
         ),
         .executableTarget(
             name: "ExhaustBenchmarks",
@@ -49,7 +57,10 @@ let package = Package(
             ],
             swiftSettings: [
                 .unsafeFlags(["-whole-module-optimization"], .when(configuration: .release)),
-            ]
+            ],
+            plugins: [
+                .plugin(name: "SwiftLintBuildToolPlugin", package: "SwiftLintPlugins")
+            ],
         ),
     ]
 )

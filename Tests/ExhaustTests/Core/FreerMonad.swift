@@ -161,7 +161,7 @@ struct PartialMonadicProfunctorLawTests {
         // Arrange
         let generator = Gen.just("hello")
 
-        let f: (String) -> Int? = { str in str.count > 0 ? str.count : nil }
+        let f: (String) -> Int? = { str in str.isEmpty ? nil : str.count }
         let g: (Int) -> String? = { num in num > 0 ? "length-\(num)" : nil }
 
         let composed: (String) -> String? = { str in
@@ -194,7 +194,7 @@ struct PartialMonadicProfunctorLawTests {
     func pmpLaw3_contramapPruneOverPure() {
         // Arrange
         let pureValue = "test"
-        let transform: (String) -> Int? = { $0.count > 0 ? $0.count : nil }
+        let transform: (String) -> Int? = { $0.isEmpty == false ? $0.count : nil }
 
         // Act
         let lhs = Gen.contramap(transform, Gen.prune(ReflectiveGenerator.pure(pureValue)))

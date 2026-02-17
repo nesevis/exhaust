@@ -268,7 +268,7 @@ struct ReflectAndFlattenTests {
         let flattened = ChoiceSequence.flatten(tree)
 
         // Bool.arbitrary uses pick, so we should have branch/group structure
-        #expect(flattened.count > 0)
+        #expect(flattened.isEmpty == false)
     }
 
     @Test("Reflect and flatten String")
@@ -358,7 +358,7 @@ struct ReflectAndFlattenTests {
         let flattened = ChoiceSequence.flatten(tree)
 
         // Should have at least group markers, possibly a length choice
-        #expect(flattened.count >= 0)
+        #expect(flattened.isEmpty == false)
     }
 
     @Test("Reflect and flatten complex nested pick")
@@ -381,7 +381,7 @@ struct ReflectAndFlattenTests {
         let flattened = ChoiceSequence.flatten(tree)
 
         // Should have group markers and nested structure
-        #expect(flattened.count > 0)
+        #expect(flattened.isEmpty == false)
 
         // Verify balanced group markers
         var openCount = 0

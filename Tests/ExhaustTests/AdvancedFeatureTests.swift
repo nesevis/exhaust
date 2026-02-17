@@ -179,7 +179,7 @@ struct AdvancedFeatureTests {
 
                 // Validate graph constraints
                 #expect(5 ... 10 ~= graph.nodes.count)
-                #expect(graph.edges.count >= 0) // Edges may be filtered, so just check it's non-negative
+                #expect(graph.edges.isEmpty == false) // Edges may be filtered, so just check it's non-negative
 
                 // Check edge references are valid (within node ID range)
                 let nodeIds = Set(graph.nodes.map(\.id))

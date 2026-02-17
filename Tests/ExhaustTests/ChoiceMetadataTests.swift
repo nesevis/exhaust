@@ -14,7 +14,7 @@ struct ChoiceMetadataTests {
     struct SemanticComplexityTests {
         @Test("Float complexity")
         func floatComplexity() {
-            let metadata = ChoiceMetadata(validRanges: [], strategies: [])
+            let metadata = ChoiceMetadata(validRanges: [])
 
             // Test positive float
             let positiveFloat: Float = 42.5
@@ -49,7 +49,7 @@ struct ChoiceMetadataTests {
 
         @Test("Double complexity")
         func doubleComplexity() {
-            let metadata = ChoiceMetadata(validRanges: [], strategies: [])
+            let metadata = ChoiceMetadata(validRanges: [])
 
             // Test positive double
             let positiveDouble = 123.456
@@ -84,7 +84,7 @@ struct ChoiceMetadataTests {
 
         @Test("Signed 32-bit integer complexity")
         func signedInt32Complexity() {
-            let metadata = ChoiceMetadata(validRanges: [], strategies: [])
+            let metadata = ChoiceMetadata(validRanges: [])
 
             // Test positive int32
             let positiveInt: Int32 = 42
@@ -109,7 +109,7 @@ struct ChoiceMetadataTests {
 
         @Test("Unsigned 32-bit integer complexity")
         func unsignedInt32Complexity() {
-            let metadata = ChoiceMetadata(validRanges: [], strategies: [])
+            let metadata = ChoiceMetadata(validRanges: [])
 
             // Test regular uint32
             let value: UInt32 = 42
@@ -129,7 +129,7 @@ struct ChoiceMetadataTests {
 
         @Test("Signed 64-bit integer complexity")
         func signedInt64Complexity() {
-            let metadata = ChoiceMetadata(validRanges: [], strategies: [])
+            let metadata = ChoiceMetadata(validRanges: [])
 
             // Test positive int64
             let positiveInt: Int64 = 1000
@@ -149,7 +149,7 @@ struct ChoiceMetadataTests {
 
         @Test("Unsigned 64-bit integer complexity")
         func unsignedInt64Complexity() {
-            let metadata = ChoiceMetadata(validRanges: [], strategies: [])
+            let metadata = ChoiceMetadata(validRanges: [])
 
             // Test regular uint64
             let value: UInt64 = 1000
@@ -164,7 +164,7 @@ struct ChoiceMetadataTests {
 
         @Test("Arbitrary bit width complexity")
         func arbitraryBitWidthComplexity() {
-            let metadata = ChoiceMetadata(validRanges: [], strategies: [])
+            let metadata = ChoiceMetadata(validRanges: [])
 
             // Test 8-bit signed
             let positiveInt8: Int8 = 42

@@ -1,0 +1,32 @@
+included:
+  - Sources
+  - Tests
+
+excluded:
+  - .build
+  - .swiftpm
+  - docs
+
+reporter: "xcode"
+
+disabled_rules:
+  - todo
+  - trailing_whitespace
+  - trailing_comma
+  - line_length
+  - file_length
+  - type_body_length
+  - function_body_length
+  - cyclomatic_complexity
+  - identifier_name
+  - large_tuple
+  - force_cast
+
+opt_in_rules:
+  - empty_count
+  - explicit_init
+  - first_where
+  - force_unwrapping
+  - redundant_nil_coalescing
+  - sorted_imports
+  - unneeded_parentheses_in_closure_argument

@@ -5,6 +5,7 @@
 //  Created by Chris Kolbu on 21/7/2025.
 //
 
+// swiftlint:disable function_parameter_count
 public extension Gen {
     @inlinable
     static func zip<A, B>(
@@ -187,3 +188,4 @@ public extension Gen {
         )
     }
 }
+// swiftlint:enable function_parameter_count
