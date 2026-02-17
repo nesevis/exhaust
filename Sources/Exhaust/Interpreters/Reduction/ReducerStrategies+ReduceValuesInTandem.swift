@@ -52,7 +52,10 @@ extension ReducerStrategies {
             let bestDelta = AdaptiveProbe.binarySearchWithGuess(
                 { (delta: UInt64) -> Bool in
                     guard delta > 0 else { return true } // predicate(0) assumed true
-                    var probe = current
+                    var firstDifferenceOrder: ShortlexOrder = .eq
+                    var hasDifference = false
+                    var updates = [(Int, ChoiceSequenceValue)]()
+                    updates.reserveCapacity(group.valueRanges?.count ?? 0)
                     for tandemCandidate in group.valueRanges ?? [] {
                         guard let v = current[tandemCandidate.lowerBound].value else {
                             return true
@@ -65,11 +68,26 @@ extension ReducerStrategies {
                             tag: v.choice.tag
                         )
                         guard newChoice.fits(in: v.validRanges) else { continue }
-                        probe[tandemCandidate.lowerBound] = .value(.init(choice: newChoice, validRanges: v.validRanges))
+                        let idx = tandemCandidate.lowerBound
+                        let newEntry = ChoiceSequenceValue.value(.init(choice: newChoice, validRanges: v.validRanges))
+                        let order = newEntry.shortLexCompare(current[idx])
+                        guard order != .eq else { continue }
+                        if hasDifference == false {
+                            hasDifference = true
+                            firstDifferenceOrder = order
+                        }
+                        updates.append((idx, newEntry))
                     }
 
+                    guard hasDifference, firstDifferenceOrder == .lt else {
+                        return false
+                    }
+
+                    var probe = current
+                    for (idx, entry) in updates {
+                        probe[idx] = entry
+                    }
                     guard
-                        probe.shortLexPrecedes(current),
                         rejectCache.contains(probe) == false
                     else {
                         return false
@@ -97,8 +115,7 @@ extension ReducerStrategies {
             if bestDelta > 0,
                lastProbeDelta == bestDelta,
                let lastProbeOutput,
-               let lastProbe,
-               lastProbe.shortLexPrecedes(current)
+               let lastProbe
             {
                 latestOutput = lastProbeOutput
                 current = lastProbe
@@ -109,6 +126,8 @@ extension ReducerStrategies {
             if bestDelta > 0 {
                 // Fallback: reconstruct accepted candidate if probe bookkeeping missed it.
                 var probe = current
+                var firstDifferenceOrder: ShortlexOrder = .eq
+                var hasDifference = false
                 for tandemCandidate in group.valueRanges ?? [] {
                     guard let v = current[tandemCandidate.lowerBound].value else { continue }
                     let newValue = searchUpward
@@ -119,9 +138,17 @@ extension ReducerStrategies {
                         tag: v.choice.tag
                     )
                     guard newChoice.fits(in: v.validRanges) else { continue }
-                    probe[tandemCandidate.lowerBound] = .value(.init(choice: newChoice, validRanges: v.validRanges))
+                    let idx = tandemCandidate.lowerBound
+                    let newEntry = ChoiceSequenceValue.value(.init(choice: newChoice, validRanges: v.validRanges))
+                    let order = newEntry.shortLexCompare(current[idx])
+                    guard order != .eq else { continue }
+                    if hasDifference == false {
+                        hasDifference = true
+                        firstDifferenceOrder = order
+                    }
+                    probe[idx] = newEntry
                 }
-                if probe.shortLexPrecedes(current),
+                if hasDifference, firstDifferenceOrder == .lt,
                    let output = try? Interpreters.materialize(gen, with: tree, using: probe),
                    property(output) == false
                 {

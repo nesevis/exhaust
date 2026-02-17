@@ -30,8 +30,10 @@ extension ReducerStrategies {
             let seqIdx = span.range.lowerBound
             guard let v = current[seqIdx].value else { continue }
 
+            let validRanges = v.validRanges
+            let choiceTag = v.choice.tag
             let currentBP = v.choice.bitPattern64
-            let targetBP = v.choice.reductionTarget(in: v.validRanges)
+            let targetBP = v.choice.reductionTarget(in: validRanges)
 
             guard currentBP != targetBP else { continue }
 
@@ -39,15 +41,23 @@ extension ReducerStrategies {
             let distance = searchUpward
                 ? targetBP - currentBP
                 : currentBP - targetBP
+            let containingRange = validRanges.first(where: { $0.contains(currentBP) })
+            let fastMaxDelta: UInt64? = {
+                guard validRanges.count == 1, let containingRange else { return nil }
+                return searchUpward
+                    ? (containingRange.upperBound - currentBP)
+                    : (currentBP - containingRange.lowerBound)
+            }()
 
             // Try target directly
             let targetChoice = ChoiceValue(
-                v.choice.tag.makeConvertible(bitPattern64: targetBP),
-                tag: v.choice.tag
+                choiceTag.makeConvertible(bitPattern64: targetBP),
+                tag: choiceTag
             )
+            let targetEntry = ChoiceSequenceValue.reduced(.init(choice: targetChoice, validRanges: validRanges))
             var candidate = current
-            candidate[seqIdx] = .reduced(.init(choice: targetChoice, validRanges: v.validRanges))
-            if candidate.shortLexPrecedes(current), rejectCache.contains(candidate) == false {
+            candidate[seqIdx] = targetEntry
+            if targetEntry.shortLexCompare(current[seqIdx]) == .lt, rejectCache.contains(candidate) == false {
                 if let output = try? Interpreters.materialize(gen, with: tree, using: candidate),
                    property(output) == false
                 {
@@ -69,7 +79,7 @@ extension ReducerStrategies {
 
             // Compute a guess: midpoint of the containing valid range, converted to delta space
             let guess: UInt64? = {
-                guard let containingRange = v.validRanges.first(where: { $0.contains(currentBP) }) else {
+                guard let containingRange else {
                     return nil
                 }
                 let rangeMid = containingRange.lowerBound / 2 + containingRange.upperBound / 2
@@ -87,16 +97,22 @@ extension ReducerStrategies {
             let bestDelta = AdaptiveProbe.binarySearchWithGuess(
                 { (delta: UInt64) -> Bool in
                     guard delta > 0 else { return true } // predicate(0) assumed true
+                    if let fastMaxDelta, delta > fastMaxDelta {
+                        return false
+                    }
                     let newBP = searchUpward ? currentBP + delta : currentBP - delta
                     let newChoice = ChoiceValue(
-                        v.choice.tag.makeConvertible(bitPattern64: newBP),
-                        tag: v.choice.tag
+                        choiceTag.makeConvertible(bitPattern64: newBP),
+                        tag: choiceTag
                     )
-                    guard newChoice.fits(in: v.validRanges) else { return false }
+                    guard newChoice.fits(in: validRanges) else { return false }
+                    let probeEntry = ChoiceSequenceValue.reduced(.init(choice: newChoice, validRanges: validRanges))
+                    guard probeEntry.shortLexCompare(current[seqIdx]) == .lt else {
+                        return false
+                    }
                     var probe = current
-                    probe[seqIdx] = .reduced(.init(choice: newChoice, validRanges: v.validRanges))
+                    probe[seqIdx] = probeEntry
                     guard
-                        probe.shortLexPrecedes(current),
                         rejectCache.contains(probe) == false
                     else {
                         return false
@@ -133,12 +149,13 @@ extension ReducerStrategies {
                 // Fallback: reconstruct accepted candidate if probe bookkeeping missed it.
                 let newBP = searchUpward ? currentBP + bestDelta : currentBP - bestDelta
                 let newChoice = ChoiceValue(
-                    v.choice.tag.makeConvertible(bitPattern64: newBP),
-                    tag: v.choice.tag
+                    choiceTag.makeConvertible(bitPattern64: newBP),
+                    tag: choiceTag
                 )
+                let candidateEntry = ChoiceSequenceValue.reduced(.init(choice: newChoice, validRanges: validRanges))
                 var candidate = current
-                candidate[seqIdx] = .reduced(.init(choice: newChoice, validRanges: v.validRanges))
-                if candidate.shortLexPrecedes(current),
+                candidate[seqIdx] = candidateEntry
+                if candidateEntry.shortLexCompare(current[seqIdx]) == .lt,
                    let output = try? Interpreters.materialize(gen, with: tree, using: candidate),
                    property(output) == false
                 {
@@ -161,13 +178,13 @@ extension ReducerStrategies {
                     }
                     let testBP = searchUpward ? currentBP + offset : currentBP - offset
                     let boundaryChoice = ChoiceValue(
-                        v.choice.tag.makeConvertible(bitPattern64: testBP),
-                        tag: v.choice.tag
+                        choiceTag.makeConvertible(bitPattern64: testBP),
+                        tag: choiceTag
                     )
-                    guard boundaryChoice.fits(in: v.validRanges) else { continue }
-                    boundary[seqIdx] = .value(.init(choice: boundaryChoice, validRanges: v.validRanges))
-
-                    guard boundary.shortLexPrecedes(current) else { continue }
+                    guard boundaryChoice.fits(in: validRanges) else { continue }
+                    let boundaryEntry = ChoiceSequenceValue.value(.init(choice: boundaryChoice, validRanges: validRanges))
+                    guard boundaryEntry.shortLexCompare(current[seqIdx]) == .lt else { continue }
+                    boundary[seqIdx] = boundaryEntry
 
                     if rejectCache.contains(boundary) == false {
                         if let output = try? Interpreters.materialize(gen, with: tree, using: boundary),
