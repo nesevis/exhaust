@@ -24,17 +24,20 @@ public enum AdaptiveProbe {
     /// - Parameter predicate: A monotonic predicate where `predicate(0)` is assumed true.
     /// - Returns: The largest `k >= 0` for which `predicate(k)` holds.
     @inlinable
+    @inline(__always)
     public static func findInteger<T: BinaryInteger>(_ predicate: (T) -> Bool) -> T {
-        var low: T = 0
-        var high: T = 5
-
-        // Step 1: Linear scan of neighbouring values
-        while low < high {
-            low += 1
-            if predicate(low) == false {
-                return low - 1
+        // Step 1: Linear scan for small answers.
+        // Keep this bounded and avoid probing the same value again in step 2.
+        var probe: T = 1
+        while probe <= 4 {
+            if predicate(probe) == false {
+                return probe - 1
             }
+            probe += 1
         }
+
+        var low: T = 4
+        var high: T = 8
 
         // Step 2: Exponential upward probe
         while predicate(high) {
@@ -74,17 +77,35 @@ public enum AdaptiveProbe {
     ///   - predicate: A monotonic predicate that transitions from true to false.
     /// - Returns: The largest value in `low...high` for which `predicate` holds.
     @inlinable
+    @inline(__always)
     public static func binarySearchWithGuess<T: BinaryInteger>(_ predicate: (T) -> Bool, low: T, high: T, guess: T? = nil) -> T {
         let guess = guess ?? low
         precondition(low <= guess && guess < high)
         let good = predicate(low)
 
+        // Fast path: avoid probing `low` twice when `guess` defaults to `low`.
+        if guess == low {
+            let upLimit = high - low
+            return low + findInteger { n in
+                guard n < upLimit else { return false }
+                return predicate(low + n) == good
+            }
+        }
+
         if predicate(guess) == good {
             // Our guess was equivalent to low, so we want to find some point after it.
-            return guess + findInteger { n in guess + n < high && predicate(guess + n) == good }
+            let upLimit = high - guess
+            return guess + findInteger { n in
+                guard n < upLimit else { return false }
+                return predicate(guess + n) == good
+            }
         } else {
             // Our guess was equivalent to high, so we want to find some point before it.
-            return guess - findInteger { n in n <= guess && guess - n >= low && predicate(guess - n) != good } - 1
+            let downLimit = guess - low
+            return guess - findInteger { n in
+                guard n <= downLimit else { return false }
+                return predicate(guess - n) != good
+            } - 1
         }
     }
 }
