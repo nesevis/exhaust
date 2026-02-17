@@ -46,7 +46,14 @@ extension ReducerStrategies {
 
             guard distance > 1 else { continue }
 
-            var lastProbe: ChoiceSequence?
+            let groupRanges = group.valueRanges ?? []
+            guard groupRanges.isEmpty == false else { continue }
+            let originalEntries: [(index: Int, entry: ChoiceSequenceValue)] = groupRanges.map {
+                let idx = $0.lowerBound
+                return (idx, current[idx])
+            }
+            var probe = current
+            var lastProbeEntries: [(index: Int, entry: ChoiceSequenceValue)]?
             var lastProbeOutput: Output?
             var lastProbeDelta: UInt64 = 0
             let bestDelta = AdaptiveProbe.binarySearchWithGuess(
@@ -54,10 +61,8 @@ extension ReducerStrategies {
                     guard delta > 0 else { return true } // predicate(0) assumed true
                     var firstDifferenceOrder: ShortlexOrder = .eq
                     var hasDifference = false
-                    var updates = [(Int, ChoiceSequenceValue)]()
-                    updates.reserveCapacity(group.valueRanges?.count ?? 0)
-                    for tandemCandidate in group.valueRanges ?? [] {
-                        guard let v = current[tandemCandidate.lowerBound].value else {
+                    for (idx, originalEntry) in originalEntries {
+                        guard let v = current[idx].value else {
                             return true
                         }
                         let newValue = searchUpward
@@ -67,26 +72,23 @@ extension ReducerStrategies {
                             v.choice.tag.makeConvertible(bitPattern64: newValue),
                             tag: v.choice.tag
                         )
-                        guard newChoice.fits(in: v.validRanges) else { continue }
-                        let idx = tandemCandidate.lowerBound
+                        guard newChoice.fits(in: v.validRanges) else {
+                            probe[idx] = originalEntry
+                            continue
+                        }
                         let newEntry = ChoiceSequenceValue.value(.init(choice: newChoice, validRanges: v.validRanges))
-                        let order = newEntry.shortLexCompare(current[idx])
-                        guard order != .eq else { continue }
-                        if hasDifference == false {
+                        let order = newEntry.shortLexCompare(originalEntry)
+                        if order != .eq, hasDifference == false {
                             hasDifference = true
                             firstDifferenceOrder = order
                         }
-                        updates.append((idx, newEntry))
+                        probe[idx] = newEntry
                     }
 
                     guard hasDifference, firstDifferenceOrder == .lt else {
                         return false
                     }
 
-                    var probe = current
-                    for (idx, entry) in updates {
-                        probe[idx] = entry
-                    }
                     guard
                         rejectCache.contains(probe) == false
                     else {
@@ -101,7 +103,7 @@ extension ReducerStrategies {
                         if delta >= lastProbeDelta {
                             lastProbeDelta = delta
                             lastProbeOutput = output
-                            lastProbe = probe
+                            lastProbeEntries = originalEntries.map { ($0.index, probe[$0.index]) }
                         }
                     } else {
                         rejectCache.insert(probe)
@@ -115,10 +117,12 @@ extension ReducerStrategies {
             if bestDelta > 0,
                lastProbeDelta == bestDelta,
                let lastProbeOutput,
-               let lastProbe
+               let lastProbeEntries
             {
+                for (idx, entry) in lastProbeEntries {
+                    current[idx] = entry
+                }
                 latestOutput = lastProbeOutput
-                current = lastProbe
                 progress = true
                 continue
             }

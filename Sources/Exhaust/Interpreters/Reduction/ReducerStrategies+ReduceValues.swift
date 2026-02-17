@@ -73,7 +73,9 @@ extension ReducerStrategies {
             // Binary search: predicate(delta) means "can we move delta steps toward the target and still fail?"
             // predicate(0) = true (no change), predicate(distance) = false (target was just rejected)
             guard distance > 1 else { continue }
-            var bestProbe: ChoiceSequence?
+            let originalEntry = current[seqIdx]
+            var probe = current
+            var bestProbeEntry: ChoiceSequenceValue?
             var bestProbeOutput: Output?
             var bestProbeDelta: UInt64 = 0
 
@@ -107,10 +109,9 @@ extension ReducerStrategies {
                     )
                     guard newChoice.fits(in: validRanges) else { return false }
                     let probeEntry = ChoiceSequenceValue.reduced(.init(choice: newChoice, validRanges: validRanges))
-                    guard probeEntry.shortLexCompare(current[seqIdx]) == .lt else {
+                    guard probeEntry.shortLexCompare(originalEntry) == .lt else {
                         return false
                     }
-                    var probe = current
                     probe[seqIdx] = probeEntry
                     guard
                         rejectCache.contains(probe) == false
@@ -125,7 +126,7 @@ extension ReducerStrategies {
                     if fails {
                         if delta >= bestProbeDelta {
                             bestProbeDelta = delta
-                            bestProbe = probe
+                            bestProbeEntry = probeEntry
                             bestProbeOutput = output
                         }
                     } else {
@@ -139,8 +140,8 @@ extension ReducerStrategies {
             )
 
             if bestDelta > 0 {
-                if bestProbeDelta == bestDelta, let bestProbe, let bestProbeOutput {
-                    current = bestProbe
+                if bestProbeDelta == bestDelta, let bestProbeEntry, let bestProbeOutput {
+                    current[seqIdx] = bestProbeEntry
                     latestOutput = bestProbeOutput
                     progress = true
                     continue
