@@ -123,7 +123,7 @@ public enum Interpreters {
             }
             return [(finalOutput, [ChoiceTree.group(returnData.map(\.1))])]
 
-        case let .chooseBits(min, max, tag):
+        case let .chooseBits(_, _, tag):
             var convertibleValue: (any BitPatternConvertible)?
             // In the reverse pass of a [[Char]] we'll be passed the array here and it will represent the length of the list. How can we know that?
             if let convertible = finalOutput as? any BitPatternConvertible {
@@ -150,9 +150,7 @@ public enum Interpreters {
             // Success! The result for the continuation is the value itself.
             let metadata = ChoiceMetadata(
                 // We can't know the proper range here, and the min...max is _usually_ dependent on the getSize parameter
-                validRanges: [reflectedMin...reflectedMax],
-                // FIXME: We can clamp this here as well using the range
-                strategies: []
+                validRanges: [reflectedMin...reflectedMax]
             )
             return [(value: finalOutput, path: [.choice(.init(convertibleValue, tag: tag), metadata)])]
         
@@ -215,17 +213,12 @@ public enum Interpreters {
                     combinedPath.append(.group(path))
                 }
             }
-            
-            let metadata = ChoiceMetadata(
-                validRanges: validRanges,
-                strategies: ShrinkingStrategy.sequenceStrategies
-            )
+
             let finalTree = ChoiceTree.sequence(
                 // When replaying, the length should match the array count. Any number of transformations could lead to a change here??
                 length: UInt64(targetArray.underestimatedCount),
-//                length: lengthResult.first?.value ?? 0,
                 elements: combinedPath,
-                metadata
+                ChoiceMetadata(validRanges: validRanges)
             )
             return [(value: combinedResults, path: [finalTree])]
         case let .zip(generators):

@@ -65,10 +65,8 @@ extension ChoiceValue {
     }
 
     private func fits(in ranges: [ClosedRange<UInt64>], bitPattern: UInt64) -> Bool {
-        for range in ranges {
-            if range.contains(bitPattern) {
-                return true
-            }
+        for range in ranges where range.contains(bitPattern) {
+            return true
         }
         return false
     }

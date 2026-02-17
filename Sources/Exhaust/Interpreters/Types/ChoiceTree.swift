@@ -303,9 +303,7 @@ extension ChoiceTree {
         }
     
     func mapWhereDifferent(to other: ChoiceTree, using transform: (ChoiceTree, ChoiceTree) -> ChoiceTree?) -> ChoiceTree {
-        self.merge(with: other) {
-            lhs,
-            rhs in
+        self.merge(with: other) { lhs, rhs in
             // Only disimilar types
             switch (lhs, rhs) {
                 // Unwrap important markers
@@ -369,7 +367,7 @@ extension ChoiceTree {
                     let rhsRange = rhsValue.convertible.bitPattern64
                     // This won't work for doubles...
                     let convertibleRange = min(lhsRange, rhsRange)...max(lhsRange, rhsRange)
-                    let meta = ChoiceMetadata(validRanges: [convertibleRange], strategies: [])
+                    let meta = ChoiceMetadata(validRanges: [convertibleRange])
                     newLhs = markImportant
                         ? ChoiceTree.important(.choice(lhsValue, meta))
                         : .choice(lhsValue, meta)
@@ -378,7 +376,7 @@ extension ChoiceTree {
                     newLhs = lhs
                 }
                 
-                return newLhs.with(strategies: rhsMeta.strategies)
+                return newLhs
             case let (.sequence(lhsLength, lhsElements, lhsMeta), .sequence(rhsLength, rhsElements, rhsMeta)):
                 // The sequence itself is important
                 if lhsLength != rhsLength {
@@ -388,12 +386,12 @@ extension ChoiceTree {
                     if markImportant {
                         let newRange = min(lhsLength, rhsLength)...max(lhsLength, rhsLength)
                         // We know that the range has to be between what what's allowable and what failed
-                        let meta = ChoiceMetadata(validRanges: [newRange], strategies: [])
+                        let meta = ChoiceMetadata(validRanges: [newRange])
                         newLhs = ChoiceTree.important(.sequence(length: lhsLength, elements: lhsElements, meta))
                     } else {
                         newLhs = lhs
                     }
-                    return newLhs.with(strategies: rhsMeta.strategies)
+                    return newLhs
                 }
                 // The sequence content is important
                 if lhsElements.elementsEqual(rhsElements) == false {

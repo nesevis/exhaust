@@ -314,10 +314,7 @@ extension Interpreters {
                     return nil
                 }
                 
-                let lengthMetadata = ChoiceMetadata(
-                    validRanges: [lengthGen.associatedRange ?? length...length],
-                    strategies: ShrinkingStrategy.sequenceStrategies
-                )
+                let lengthMetadata = ChoiceMetadata(validRanges: [lengthGen.associatedRange ?? length...length])
                 guard  let _ = try self.replayRecursive(lengthGen, with: .choice(.unsigned(length, UInt64.self), lengthMetadata)) else {
                     return nil
                 }
