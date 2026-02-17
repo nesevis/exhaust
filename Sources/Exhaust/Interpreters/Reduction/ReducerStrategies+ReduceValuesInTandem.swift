@@ -18,7 +18,8 @@ extension ReducerStrategies {
         tree: ChoiceTree,
         property: (Output) -> Bool,
         sequence: ChoiceSequence,
-        siblingGroups: [SiblingGroup]
+        siblingGroups: [SiblingGroup],
+        bloomFilter: inout BloomFilter
     ) throws -> (ChoiceSequence, Output)? {
         var current = sequence
         var progress = false
@@ -69,14 +70,20 @@ extension ReducerStrategies {
 
                     guard
                         probe.shortLexPrecedes(current),
-                        let output = try? Interpreters.materialize(gen, with: tree, using: probe)
+                        bloomFilter.contains(probe) == false
                     else {
+                        return false
+                    }
+                    guard let output = try? Interpreters.materialize(gen, with: tree, using: probe) else {
+                        bloomFilter.insert(probe)
                         return false
                     }
                     let success = property(output) == false
                     if success {
                         lastProbeOutput = output
                         lastProbe = probe
+                    } else {
+                        bloomFilter.insert(probe)
                     }
                     return success
                 },

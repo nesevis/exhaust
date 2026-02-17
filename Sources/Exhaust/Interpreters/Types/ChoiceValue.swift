@@ -204,6 +204,7 @@ public enum ChoiceValue: Comparable, Hashable, Equatable, Sendable {
         case let .character(character):
             hasher.combine(character)
         }
+        hasher.combine(self.tag)
     }
 
     public static func == (lhs: Self, rhs: Self) -> Bool {

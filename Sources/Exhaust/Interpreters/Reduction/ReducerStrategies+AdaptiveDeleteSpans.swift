@@ -17,7 +17,8 @@ extension ReducerStrategies {
         tree: ChoiceTree,
         property: (Output) -> Bool,
         sequence: ChoiceSequence,
-        spans: [ChoiceSpan]
+        spans: [ChoiceSpan],
+        bloomFilter: inout BloomFilter
     ) throws -> (ChoiceSequence, Output)? {
         var current = sequence
 
@@ -52,10 +53,17 @@ extension ReducerStrategies {
                 // Apply deletion
                 var candidate = current
                 candidate.removeSubranges(rangesToDelete)
-                guard let output = try? Interpreters.materialize(gen, with: tree, using: candidate) else {
+                
+                guard bloomFilter.contains(candidate) == false else {
                     return false
                 }
-                return property(output) == false
+                guard let output = try? Interpreters.materialize(gen, with: tree, using: candidate) else {
+                    bloomFilter.insert(candidate)
+                    return false
+                }
+                let fails = property(output) == false
+                if !fails { bloomFilter.insert(candidate) }
+                return fails
             }
 
             if k > 0 {

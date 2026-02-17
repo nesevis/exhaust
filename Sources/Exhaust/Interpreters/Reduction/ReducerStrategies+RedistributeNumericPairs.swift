@@ -19,7 +19,8 @@ extension ReducerStrategies {
         _ gen: ReflectiveGenerator<Output>,
         tree: ChoiceTree,
         property: (Output) -> Bool,
-        sequence: ChoiceSequence
+        sequence: ChoiceSequence,
+        bloomFilter: inout BloomFilter
     ) throws -> (ChoiceSequence, Output)? {
         // Collect all numeric value/reduced entries with their sequence indices and container IDs.
         // Container ID increments each time we cross a container boundary (group/sequence close),
@@ -128,11 +129,20 @@ extension ReducerStrategies {
                         probe[idx2] = .value(.init(choice: newChoice2, validRanges: fresh2.validRanges))
 
                         guard probe.shortLexPrecedes(current) else { return false }
-                        guard let output = try? Interpreters.materialize(gen, with: tree, using: probe) else { return false }
+                        
+                        guard bloomFilter.contains(probe) == false else {
+                            return false
+                        }
+                        guard let output = try? Interpreters.materialize(gen, with: tree, using: probe) else {
+                            bloomFilter.insert(probe)
+                            return false
+                        }
                         let success = property(output) == false
                         if success {
                             lastProbe = probe
                             lastProbeOutput = output
+                        } else {
+                            bloomFilter.insert(probe)
                         }
                         return success
                     }

@@ -47,7 +47,7 @@ extension Interpreters {
         property: (Output) -> Bool
     ) throws -> (ChoiceSequence, Output)? {
         // Mutable variables
-        let isInstrumented: Bool = true
+        let isInstrumented: Bool = false
         var currentSequence = ChoiceSequence.flatten(tree)
         // I don't think we need to reflect to regenerate this?
         // There is then a hard dependency on having to have reflectable generators, which is a pain
@@ -62,7 +62,8 @@ extension Interpreters {
         var didNaivelyMinimise = false
         var loops = 0
         var passes = ShrinkPass.allCases
-        var seen = [ChoiceSequence: Int]()
+        var bloomFilter = BloomFilter()
+        var seen = Set<ChoiceSequence>()
         while stallBudget > 0 {
             loops += 1
             var didImprove = false
@@ -82,8 +83,11 @@ extension Interpreters {
                     }
                 switch pass {
                 case .naiveSimplifyValuesToSemanticSimplest:
+                    guard didNaivelyMinimise == false else {
+                        continue
+                    }
                     let valueSpans = ChoiceSequence.extractAllValueSpans(from: currentSequence)
-                    if didNaivelyMinimise == false, valueSpans.isEmpty == false, let (newSequence, output) = try ReducerStrategies.naiveSimplifyValues(gen, tree: currentTree, property: oracle, sequence: currentSequence, valueSpans: valueSpans) {
+                    if valueSpans.isEmpty == false, let (newSequence, output) = try ReducerStrategies.naiveSimplifyValues(gen, tree: currentTree, property: oracle, sequence: currentSequence, valueSpans: valueSpans, bloomFilter: &bloomFilter) {
                         previousSequence = currentSequence
                         currentSequence = newSequence
                         currentOutput = output
@@ -93,7 +97,7 @@ extension Interpreters {
                 case .deleteContainerSpans:
                     // Adaptive container span deletion, ie the […] and (…) spans in [(V)(V)]
                     let containerSpans = ChoiceSequence.extractContainerSpans(from: currentSequence)
-                    if containerSpans.isEmpty == false, let (newSequence, output) = try ReducerStrategies.adaptiveDeleteSpans(gen, tree: currentTree, property: oracle, sequence: currentSequence, spans: containerSpans) {
+                    if containerSpans.isEmpty == false, let (newSequence, output) = try ReducerStrategies.adaptiveDeleteSpans(gen, tree: currentTree, property: oracle, sequence: currentSequence, spans: containerSpans, bloomFilter: &bloomFilter) {
                         previousSequence = currentSequence
                         currentSequence = newSequence
                         currentOutput = output
@@ -102,7 +106,7 @@ extension Interpreters {
                 case .deleteSequenceBoundaries:
                     // Pass 2a: Collapse sequence boundaries, i.e [[V][V][V]] -> [[VVV]]
                     let boundarySpans = ChoiceSequence.extractSequenceBoundarySpans(from: currentSequence)
-                    if boundarySpans.isEmpty == false, let (newSequence, output) = try ReducerStrategies.adaptiveDeleteSpans(gen, tree: currentTree, property: oracle, sequence: currentSequence, spans: boundarySpans) {
+                    if boundarySpans.isEmpty == false, let (newSequence, output) = try ReducerStrategies.adaptiveDeleteSpans(gen, tree: currentTree, property: oracle, sequence: currentSequence, spans: boundarySpans, bloomFilter: &bloomFilter) {
                         previousSequence = currentSequence
                         currentSequence = newSequence
                         currentOutput = output
@@ -111,7 +115,7 @@ extension Interpreters {
                 case .deleteFreeStandingValues:
                     // Pass 2b: Sequence element deletion, i.e the individual Vs in [VVVVV]
                     let freeStandingValueSpans = ChoiceSequence.extractFreeStandingValueSpans(from: currentSequence)
-                    if freeStandingValueSpans.isEmpty == false, let (newSequence, output) = try ReducerStrategies.adaptiveDeleteSpans(gen, tree: currentTree, property: oracle, sequence: currentSequence, spans: freeStandingValueSpans) {
+                    if freeStandingValueSpans.isEmpty == false, let (newSequence, output) = try ReducerStrategies.adaptiveDeleteSpans(gen, tree: currentTree, property: oracle, sequence: currentSequence, spans: freeStandingValueSpans, bloomFilter: &bloomFilter) {
                         previousSequence = currentSequence
                         currentSequence = newSequence
                         currentOutput = output
@@ -119,7 +123,7 @@ extension Interpreters {
                     }
                 case .simplifyValuesToSemanticSimplest:
                     let valueSpans = ChoiceSequence.extractAllValueSpans(from: currentSequence)
-                    if valueSpans.isEmpty == false, let (newSequence, output) = try ReducerStrategies.simplifyValues(gen, tree: currentTree, property: oracle, sequence: currentSequence, valueSpans: valueSpans) {
+                    if valueSpans.isEmpty == false, let (newSequence, output) = try ReducerStrategies.simplifyValues(gen, tree: currentTree, property: oracle, sequence: currentSequence, valueSpans: valueSpans, bloomFilter: &bloomFilter) {
                         previousSequence = currentSequence
                         currentSequence = newSequence
                         currentOutput = output
@@ -127,7 +131,7 @@ extension Interpreters {
                     }
                 case .reduceValues:
                     let valueSpans = ChoiceSequence.extractAllValueSpans(from: currentSequence)
-                    if valueSpans.isEmpty == false, let (newSequence, output) = try ReducerStrategies.reduceValues(gen, tree: currentTree, property: oracle, sequence: currentSequence, valueSpans: valueSpans) {
+                    if valueSpans.isEmpty == false, let (newSequence, output) = try ReducerStrategies.reduceValues(gen, tree: currentTree, property: oracle, sequence: currentSequence, valueSpans: valueSpans, bloomFilter: &bloomFilter) {
                         previousSequence = currentSequence
                         currentSequence = newSequence
                         currentOutput = output
@@ -136,7 +140,7 @@ extension Interpreters {
                 case .redistributeNumericPairs:
                     let valueCount = currentSequence.count(where: { $0.value != nil })
                     if valueCount >= 2, valueCount <= 16,
-                       let (newSequence, output) = try ReducerStrategies.redistributeNumericPairs(gen, tree: currentTree, property: oracle, sequence: currentSequence) {
+                       let (newSequence, output) = try ReducerStrategies.redistributeNumericPairs(gen, tree: currentTree, property: oracle, sequence: currentSequence, bloomFilter: &bloomFilter) {
                         previousSequence = currentSequence
                         currentSequence = newSequence
                         currentOutput = output
@@ -147,7 +151,7 @@ extension Interpreters {
                     let containerSpans = ChoiceSequence.extractContainerSpans(from: currentSequence)
                     let deletableSpans = freeValueSpans + containerSpans
                     if !deletableSpans.isEmpty,
-                       let (newSequence, output) = try ReducerStrategies.speculativeDeleteAndRepair(gen, tree: currentTree, property: oracle, sequence: currentSequence, spans: deletableSpans) {
+                       let (newSequence, output) = try ReducerStrategies.speculativeDeleteAndRepair(gen, tree: currentTree, property: oracle, sequence: currentSequence, spans: deletableSpans, bloomFilter: &bloomFilter) {
                         previousSequence = currentSequence
                         currentSequence = newSequence
                         currentOutput = output
@@ -156,7 +160,7 @@ extension Interpreters {
                 case .reduceValuesInTandem:
                     // Reduce individual values in tandem by equal amounts, via binary search
                     let siblingGroups = ChoiceSequence.extractSiblingGroups(from: currentSequence)
-                    if siblingGroups.isEmpty == false, let (newSequence, output) = try ReducerStrategies.reduceValuesInTandem(gen, tree: currentTree, property: oracle, sequence: currentSequence, siblingGroups: siblingGroups) {
+                    if siblingGroups.isEmpty == false, let (newSequence, output) = try ReducerStrategies.reduceValuesInTandem(gen, tree: currentTree, property: oracle, sequence: currentSequence, siblingGroups: siblingGroups, bloomFilter: &bloomFilter) {
                         previousSequence = currentSequence
                         currentSequence = newSequence
                         currentOutput = output
@@ -165,7 +169,7 @@ extension Interpreters {
                 case .normaliseSiblingOrder:
                     let siblingGroups = ChoiceSequence.extractSiblingGroups(from: currentSequence)
                     if siblingGroups.isEmpty == false,
-                       let (newSequence, output) = try ReducerStrategies.reorderSiblings(gen, tree: currentTree, property: oracle, sequence: currentSequence, siblingGroups: siblingGroups) {
+                       let (newSequence, output) = try ReducerStrategies.reorderSiblings(gen, tree: currentTree, property: oracle, sequence: currentSequence, siblingGroups: siblingGroups, bloomFilter: &bloomFilter) {
                         previousSequence = currentSequence
                         currentSequence = newSequence
                         currentOutput = output
@@ -186,8 +190,8 @@ extension Interpreters {
                 }
             }
             passes = nextPasses
-            if didImprove, seen[currentSequence, default: 0] < 1 {
-                seen[currentSequence, default: 0] += 1
+            if didImprove, seen.contains(currentSequence) == false {
+                seen.insert(currentSequence)
 //                print("! improved! \(currentOutput)")
                 numberOfImprovements += 1
                 stallBudget = config.maxStalls;
@@ -200,7 +204,7 @@ extension Interpreters {
         }
 
         if isInstrumented {
-            print("Shrinker stalled after \(loops) loops")
+            print("Shrinker stalled after \(loops) loops.")
             oracleCalls
                 .map { ($0.key, $0.value) }
                 .sorted(by: { $0.0 < $1.0 })

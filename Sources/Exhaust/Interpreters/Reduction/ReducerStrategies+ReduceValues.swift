@@ -19,7 +19,8 @@ extension ReducerStrategies {
         tree: ChoiceTree,
         property: (Output) -> Bool,
         sequence: ChoiceSequence,
-        valueSpans: [ChoiceSpan]
+        valueSpans: [ChoiceSpan],
+        bloomFilter: inout BloomFilter
     ) throws -> (ChoiceSequence, Output)? {
         var current = sequence
         var progress = false
@@ -46,14 +47,17 @@ extension ReducerStrategies {
             )
             var candidate = current
             candidate[seqIdx] = .reduced(.init(choice: targetChoice, validRanges: v.validRanges))
-            if candidate.shortLexPrecedes(current),
-               let output = try? Interpreters.materialize(gen, with: tree, using: candidate),
-               property(output) == false
-            {
-                current = candidate
-                latestOutput = output
-                progress = true
-                continue
+            if candidate.shortLexPrecedes(current), bloomFilter.contains(candidate) == false {
+                if let output = try? Interpreters.materialize(gen, with: tree, using: candidate),
+                   property(output) == false
+                {
+                    current = candidate
+                    latestOutput = output
+                    progress = true
+                    continue
+                } else {
+                    bloomFilter.insert(candidate)
+                }
             }
 
             // Binary search: predicate(delta) means "can we move delta steps toward the target and still fail?"
@@ -88,9 +92,19 @@ extension ReducerStrategies {
                     guard newChoice.fits(in: v.validRanges) else { return false }
                     var probe = current
                     probe[seqIdx] = .reduced(.init(choice: newChoice, validRanges: v.validRanges))
-                    guard probe.shortLexPrecedes(current) else { return false }
-                    guard let output = try? Interpreters.materialize(gen, with: tree, using: probe) else { return false }
-                    return property(output) == false
+                    guard
+                        probe.shortLexPrecedes(current),
+                        bloomFilter.contains(probe) == false
+                    else {
+                        return false
+                    }
+                    guard let output = try? Interpreters.materialize(gen, with: tree, using: probe) else {
+                        bloomFilter.insert(probe)
+                        return false
+                    }
+                    let fails = property(output) == false
+                    if !fails { bloomFilter.insert(probe) }
+                    return fails
                 },
                 low: UInt64(0),
                 high: distance,
@@ -128,11 +142,17 @@ extension ReducerStrategies {
 
                     guard boundary.shortLexPrecedes(current) else { continue }
 
-                    if let output = try? Interpreters.materialize(gen, with: tree, using: boundary), property(output) == false {
-                        latestOutput = output
-                        current = boundary
-                        progress = true
-                        break
+                    if bloomFilter.contains(boundary) == false {
+                        if let output = try? Interpreters.materialize(gen, with: tree, using: boundary),
+                           property(output) == false
+                        {
+                            latestOutput = output
+                            current = boundary
+                            progress = true
+                            break
+                        } else {
+                            bloomFilter.insert(boundary)
+                        }
                     }
                 }
             }

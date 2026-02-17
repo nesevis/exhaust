@@ -17,7 +17,8 @@ extension ReducerStrategies {
         tree: ChoiceTree,
         property: (Output) -> Bool,
         sequence: ChoiceSequence,
-        valueSpans: [ChoiceSpan]
+        valueSpans: [ChoiceSpan],
+        bloomFilter: inout BloomFilter
     ) throws -> (ChoiceSequence, Output)? {
         // Filter to spans whose values can actually be simplified
         var valueIndices: [Int] = []
@@ -50,14 +51,16 @@ extension ReducerStrategies {
                 guard candidate.shortLexPrecedes(current) else {
                     return false
                 }
-                do {
-                    guard let output = try? Interpreters.materialize(gen, with: tree, using: candidate) else {
-                        return false
-                    }
-                    return property(output) == false
-                } catch {
+                guard bloomFilter.contains(candidate) == false else {
                     return false
                 }
+                guard let output = try? Interpreters.materialize(gen, with: tree, using: candidate) else {
+                    bloomFilter.insert(candidate)
+                    return false
+                }
+                let fails = property(output) == false
+                if !fails { bloomFilter.insert(candidate) }
+                return fails
             }
 
             if k > 0 {

@@ -19,7 +19,8 @@ extension ReducerStrategies {
         tree: ChoiceTree,
         property: (Output) -> Bool,
         sequence: ChoiceSequence,
-        siblingGroups: [SiblingGroup]
+        siblingGroups: [SiblingGroup],
+        bloomFilter: inout BloomFilter
     ) throws -> (ChoiceSequence, Output)? {
         var current = sequence
         var progress = false
@@ -51,7 +52,7 @@ extension ReducerStrategies {
             // Build a candidate with siblings in sorted order
             if let (newSeq, output) = try applySiblingPermutation(
                 gen, tree: tree, property: property,
-                sequence: current, ranges: ranges, permutation: sortedIndices
+                sequence: current, ranges: ranges, permutation: sortedIndices, bloomFilter: &bloomFilter
             ) {
                 current = newSeq
                 latestOutput = output
@@ -82,7 +83,7 @@ extension ReducerStrategies {
 
                     if let (newSeq, output) = try applySiblingPermutation(
                         gen, tree: tree, property: property,
-                        sequence: current, ranges: liveRanges, permutation: swapPerm
+                        sequence: current, ranges: liveRanges, permutation: swapPerm, bloomFilter: &bloomFilter
                     ) {
                         current = newSeq
                         latestOutput = output
@@ -115,7 +116,8 @@ extension ReducerStrategies {
         property: (Output) -> Bool,
         sequence: ChoiceSequence,
         ranges: [ClosedRange<Int>],
-        permutation: [Int]
+        permutation: [Int],
+        bloomFilter: inout BloomFilter
     ) throws -> (ChoiceSequence, Output)? {
         // Extract the slices in original order
         let slices = ranges.map { Array(sequence[$0]) }
@@ -145,8 +147,15 @@ extension ReducerStrategies {
 
         // FIXME: This is using shortlex, which is where the inconsistency comes in
 //        guard candidate.shortLexPrecedes(sequence) else { return nil }
-        guard let output = try? Interpreters.materialize(gen, with: tree, using: candidate) else { return nil }
-        guard property(output) == false else { return nil }
+        guard bloomFilter.contains(candidate) == false else { return nil }
+        guard let output = try? Interpreters.materialize(gen, with: tree, using: candidate) else {
+            bloomFilter.insert(candidate)
+            return nil
+        }
+        guard property(output) == false else {
+            bloomFilter.insert(candidate)
+            return nil
+        }
 
         return (candidate, output)
     }

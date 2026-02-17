@@ -26,6 +26,19 @@ public typealias ChoiceSequence = [ChoiceSequenceValue]
 // MARK: - Helper functions
 
 extension ChoiceSequence {
+    /// Returns two independent hash values for use in a k-hash bloom filter.
+    /// Uses the double-hashing scheme: index_i = (h1 + i * h2) % size.
+    var bloomHashes: (Int, Int) {
+        var h1 = Hasher()
+        var h2 = Hasher()
+        h2.combine(0) // discriminator for independence
+        for element in self {
+            h1.combine(element)
+            h2.combine(element)
+        }
+        return (h1.finalize(), h2.finalize())
+    }
+    
     /// Creates a projection of a `ChoiceTree` to a flat list
     init (_ tree: ChoiceTree) {
         self = Self.flatten(tree)
