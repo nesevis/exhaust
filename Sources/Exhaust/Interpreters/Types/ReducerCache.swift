@@ -15,8 +15,4 @@ struct ReducerCache {
     mutating func insert(_ value: ChoiceSequence) {
         set.insert(value)
     }
-
-    mutating func clear() {
-        set.removeAll(keepingCapacity: true)
-    }
 }

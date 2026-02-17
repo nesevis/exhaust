@@ -25,7 +25,7 @@ enum PropertyTest {
                 print("Failed after \(iterations)/\(maxIterations).")
                 print("Result: \(next)")
                 print("Blueprint:\n\(reflection!.debugDescription)")
-                // Add seed and size
+                // TODO: Add seed and size
                 return
             }
         }

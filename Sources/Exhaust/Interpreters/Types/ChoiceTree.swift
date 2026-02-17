@@ -343,69 +343,6 @@ extension ChoiceTree {
             }
         }
     }
-    
-    /// Locks in values of `new` where there is a difference from `old`
-    static func diffAndLockChanges(in new: ChoiceTree, from valid: ChoiceTree, keepStrategies: Bool, markImportant: Bool) -> ChoiceTree {
-        new.merge(with: valid) { lhs, rhs in
-            switch (lhs, rhs) {
-            case let (.important(lhsValue), .important(rhsValue)):
-                // Stop here
-                return Self.diffAndLockChanges(in: lhsValue, from: rhsValue, keepStrategies: keepStrategies, markImportant: true)
-            case (.important, _):
-                return lhs
-            case let (.choice(lhsValue, _), .choice(rhsValue, _)):
-                guard lhsValue != rhsValue else {
-                    return lhs
-                }
-                // TODO: Decorate with whether we need to go down or up
-                // 45_000 vs 0, so 0 triggered that this is important
-                // We need to build a range from rhs...lhs
-                let newLhs: ChoiceTree
-                // This is being compared with a value that succeeded
-                if markImportant {
-                    let lhsRange = lhsValue.convertible.bitPattern64
-                    let rhsRange = rhsValue.convertible.bitPattern64
-                    // This won't work for doubles...
-                    let convertibleRange = min(lhsRange, rhsRange)...max(lhsRange, rhsRange)
-                    let meta = ChoiceMetadata(validRanges: [convertibleRange])
-                    newLhs = markImportant
-                        ? ChoiceTree.important(.choice(lhsValue, meta))
-                        : .choice(lhsValue, meta)
-                } else {
-                    // We're not updating the range when the shrink was successful?
-                    newLhs = lhs
-                }
-                
-                return newLhs
-            case let (.sequence(lhsLength, lhsElements, lhsMeta), .sequence(rhsLength, rhsElements, _)):
-                // The sequence itself is important
-                if lhsLength != rhsLength {
-                    // TODO: Decorate with whether we need to go down or up
-                    // We can now create a valid subrange for the length of this sequence
-                    let newLhs: ChoiceTree
-                    if markImportant {
-                        let newRange = min(lhsLength, rhsLength)...max(lhsLength, rhsLength)
-                        // We know that the range has to be between what what's allowable and what failed
-                        let meta = ChoiceMetadata(validRanges: [newRange])
-                        newLhs = ChoiceTree.important(.sequence(length: lhsLength, elements: lhsElements, meta))
-                    } else {
-                        newLhs = lhs
-                    }
-                    return newLhs
-                }
-                // The sequence content is important
-                if lhsElements.elementsEqual(rhsElements) == false {
-                    let importantElements = zip(lhsElements, rhsElements).map { lhs, rhs in
-                        ChoiceTree.diffAndLockChanges(in: lhs, from: rhs, keepStrategies: keepStrategies, markImportant: markImportant)
-                    }
-                    return .sequence(length: lhsLength, elements: importantElements, lhsMeta)
-                }
-                return nil
-            default:
-                return nil
-            }
-        }
-    }
 }
 
 extension ChoiceTree: CustomDebugStringConvertible {
@@ -530,59 +467,6 @@ extension ChoiceTree: CustomDebugStringConvertible {
             return "getSize(\(size))"
         case let .resize(newSize, choices):
             return "resize(\(newSize): [\(choices.map(\.elementDescription).joined(separator: ", "))])"
-        }
-    }
-    
-    // Defined as distance from zero for ranges that contain zero, or distance from the midpoint of the range?
-    var valueComplexity: Double {
-        switch self {
-        case .choice(let choiceValue, let meta):
-            switch choiceValue {
-            case .unsigned(let uInt64, _):
-                let range = meta.validRanges[0]
-                if range.contains(0) {
-                    return Double(uInt64)
-                } else {
-                    return Double(range.midPoint)
-                }
-            case .signed(let int64, _, _):
-                let range = meta.validRanges[0]
-                let zero = Int64(0).bitPattern64
-                if range.contains(zero) {
-                    return Double(abs(int64))
-                }
-                return Double(Int64(bitPattern64: range.midPoint))
-            case .floating(let double, _, _):
-                let range = meta.validRanges[0]
-                let zero = Double(0).bitPattern64
-                if range.contains(zero) {
-                    return abs(double)
-                }
-                return Double(bitPattern64: range.midPoint)
-            case .character(let character):
-                let range = meta.validRanges[0]
-                if range.contains(0) {
-                    return Double(character.bitPattern64)
-                } else {
-                    return Double(range.midPoint)
-                }
-            }
-        case .just:
-            return 0
-        case .sequence(_, let elements, _):
-            return elements.reduce(into: Double(0)) { $0 += $1.valueComplexity }
-        case let .branch(_, _, gen):
-            return gen.valueComplexity
-        case .group(let array):
-            return array.reduce(into: Double(0)) { $0 += $1.valueComplexity }
-        case .getSize:
-            return 0
-        case .resize(_, let choices):
-            return choices.reduce(into: Double(0)) { $0 += $1.valueComplexity }
-        case .important(let choiceTree):
-            return choiceTree.valueComplexity
-        case .selected(let choiceTree):
-            return choiceTree.valueComplexity
         }
     }
     

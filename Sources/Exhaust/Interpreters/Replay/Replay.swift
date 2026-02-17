@@ -10,7 +10,7 @@ import Foundation
 extension Interpreters {
     // ... `generate` and `reflect` and their helpers ...
 
-    /// MARK: - Public-Facing Replay Function
+    // MARK: - Public-Facing Replay Function
     
     /// Deterministically reproduces a value by executing a generator with a structured `ChoiceTree`.
     ///

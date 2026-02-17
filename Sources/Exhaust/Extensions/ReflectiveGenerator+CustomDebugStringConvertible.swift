@@ -128,50 +128,6 @@ extension ReflectiveGenerator: CustomDebugStringConvertible where Operation == R
     private func formatBitRange(min: UInt64, max: UInt64, tag: TypeTag) -> String {
         let value = ChoiceValue(0, tag: tag)
         return value.displayRange(min ... max)
-//        switch tag {
-//        case .int:
-//        case .uint:
-//            return "\(min)...\(max)"
-//        case .uint64:
-//            return "\(min)...\(max)"
-//        case .float:
-//            let minFloat = Float(bitPattern: UInt32(min))
-//            let maxFloat = Float(bitPattern: UInt32(max))
-//            return "\(minFloat)...\(maxFloat)"
-//        case .double:
-//            let minDouble = Double(bitPattern: min)
-//            let maxDouble = Double(bitPattern: max)
-//            return "\(minDouble)...\(maxDouble)"
-//        case .character:
-//            if min == max {
-//                if let scalar = UnicodeScalar(UInt32(min)) {
-//                    return "\"\(Character(scalar))\""
-//                }
-//            }
-//            return "\\u{\(String(min, radix: 16))}...\\u{\(String(max, radix: 16))}"
-//        case .uint8:
-//            return "\(UInt8(min))...\(UInt8(max))"
-//        case .uint16:
-//            return "\(UInt16(min))...\(UInt16(max))"
-//        case .uint32:
-//            return "\(UInt32(min))...\(UInt32(max))"
-//        case .int8:
-//            let minInt8 = Int8(bitPattern: UInt8(min))
-//            let maxInt8 = Int8(bitPattern: UInt8(max))
-//            return "\(minInt8)...\(maxInt8)"
-//        case .int16:
-//            let minInt16 = Int16(bitPattern: UInt16(min))
-//            let maxInt16 = Int16(bitPattern: UInt16(max))
-//            return "\(minInt16)...\(maxInt16)"
-//        case .int32:
-//            let minInt32 = Int32(bitPattern: UInt32(min))
-//            let maxInt32 = Int32(bitPattern: UInt32(max))
-//            return "\(minInt32)...\(maxInt32)"
-//        case .int64:
-//            let minInt64 = Int64(bitPattern: min)
-//            let maxInt64 = Int64(bitPattern: max)
-//            return "\(minInt64)...\(maxInt64)"
-//        }
     }
 
     private func formatJustValue(_ value: Any) -> String {
