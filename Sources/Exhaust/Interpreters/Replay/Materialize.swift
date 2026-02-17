@@ -502,9 +502,9 @@ extension Interpreters {
                 return try materializeWithChoicesHelper(nextGen, with: &choices, context: &context)
 
             case let .zip(generators):
-                guard generators.count == choices.remainingCount else {
-                    throw MaterializeError.mismatchInChoicesAndGenerators
-                }
+//                guard generators.count == choices.remainingCount else {
+//                    throw MaterializeError.mismatchInChoicesAndGenerators
+//                }
                 var subResults = [Any]()
                 subResults.reserveCapacity(generators.count)
                 for (offset, generator) in generators.enumerated() {
@@ -619,7 +619,7 @@ extension Interpreters {
     ) throws -> ReflectiveGenerator<Output>? {
         let unpacked = try unpackPickBranch(branch)
         guard let chosenGen = generatorsByLabel[unpacked.label],
-              let result = try materializeWithChoice(chosenGen, with: unpacked.choice, context: &context)
+              let result = try materializeRecursive(chosenGen, with: unpacked.choice, context: &context)
         else {
             return nil
         }

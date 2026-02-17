@@ -46,7 +46,7 @@ public extension Interpreters {
         property: (Output) -> Bool,
     ) throws -> (ChoiceSequence, Output)? {
         // Mutable variables
-        let isInstrumented = false
+        let isInstrumented = true
         var currentSequence = ChoiceSequence.flatten(tree)
         // I don't think we need to reflect to regenerate this?
         // There is then a hard dependency on having to have reflectable generators, which is a pain
