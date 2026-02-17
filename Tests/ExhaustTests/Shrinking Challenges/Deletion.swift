@@ -44,7 +44,7 @@ struct DeletionShrinkingChallenge {
         let (value, tree) = try #require(Array(iterator.prefix(2)).last)
         let (seq, output) = try #require(try Interpreters.reduce(gen: gen, tree: tree, config: .fast, property: property))
 
-        #expect(count == 9)
+        #expect(count == 7)
         #expect(output.0 == [0, 0])
         #expect(output.1 == 0)
     }

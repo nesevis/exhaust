@@ -7,7 +7,6 @@
 
 #warning("Work in progress, but promising")
 enum CGSAdaptationInterpreter {
-    
     /// Context for execution with depth tracking
     final class SpeculativeContext {
         let baseSampleCount: UInt64
@@ -28,7 +27,7 @@ enum CGSAdaptationInterpreter {
             return max(0, baseSampleCount / (2 << min(depth - 1, 10)))
         }
     }
-    
+
     static func adapt<Output>(
         original: ReflectiveGenerator<Output>,
         samples: UInt64 = 100,
@@ -49,7 +48,7 @@ enum CGSAdaptationInterpreter {
             validityPredicate: validityPredicate
         )
     }
-    
+
     private static func adaptRecursive<Input, Output>(
         gen: ReflectiveGenerator<Output>,
         input: Input,
@@ -67,11 +66,11 @@ enum CGSAdaptationInterpreter {
                 // Increment depth for nested pick operations
                 context.depth += 1
                 defer { context.depth -= 1 }
-                
+
                 let results = try choices
                     .map { tuple in
-                        let valueInterpreter = ValueInterpreter(
-                            try tuple.generator.bind(continuation),
+                        let valueInterpreter = try ValueInterpreter(
+                            tuple.generator.bind(continuation),
                             seed: context.rng.next(),
                             maxRuns: context.currentSampleCount
                         )
@@ -82,16 +81,15 @@ enum CGSAdaptationInterpreter {
                         )
                     }
                     .filter { $0.weight > 0 } // Remove pruned branches
-                
+
                 if results.isEmpty {
                     return gen
                 }
-                
-                let pick = ReflectiveGenerator.impure(
+
+                return ReflectiveGenerator.impure(
                     operation: ReflectiveOperation.pick(choices: ContiguousArray(results)),
                     continuation: continuation
                 )
-                return pick
 
             case let .chooseBits(lower, upper, _):
                 // Only subdivide chooseBits if we're not already inside a subdivided range
@@ -102,7 +100,7 @@ enum CGSAdaptationInterpreter {
                     // TODO: respect `resize` override
                     // TODO: Use tags here so the range is appropriate for all number types
                     // TODO: Range heuristic!
-                    let ranges = (lower...upper).split(into: max(4, 20 - Int(context.depth)))
+                    let ranges = (lower ... upper).split(into: max(4, 20 - Int(context.depth)))
                     let results = try ranges
                         .map { Gen.choose(in: $0) }
                         .enumerated()
@@ -120,13 +118,13 @@ enum CGSAdaptationInterpreter {
                                 recursedGen.erase()
                             )
                         }
-                    
+
                     // Convert chooseBits into a pick of subranges for adaptation
                     let pick = ReflectiveGenerator.impure(
                         operation: ReflectiveOperation.pick(choices: ContiguousArray(results)),
                         continuation: { .pure($0 as! Output) }
                     )
-                    
+
                     // Recurse and perform evaluation in pick case
                     return try adaptRecursive(
                         gen: pick,
@@ -135,7 +133,7 @@ enum CGSAdaptationInterpreter {
                         insideSubdividedChooseBits: false,
                         validityPredicate: validityPredicate
                     )
-                    
+
                 } else {
                     // Already inside subdivided chooseBits, pass through without further subdivision
                     return gen
@@ -162,7 +160,7 @@ enum CGSAdaptationInterpreter {
                 // The continuation expects to be fed the zip operation, so to get any meaningful signal here
                 // we need to modify _one_ generator per zip, at a time, and create a pick of zips?
                 // Order matters here, so we should do an in-order mutation?
-                
+
                 // Create a dictionary of ValueInterpreters per position in the zip tuple
 //                var standardValueInterpreters = Dictionary(grouping: gens.enumerated(), by: \.offset)
 //                    .mapValues {
@@ -174,7 +172,7 @@ enum CGSAdaptationInterpreter {
 //                    }
                 // Create somewhere to store tested generators
                 var recursedGens = [(offset: Int, gen: ReflectiveGenerator<Output>, success: Int)]()
-                
+
                 for (index, current) in gens.enumerated() {
                     // Run a full set of evaluations of all of these changing only the value at the index
                     var thisValueInterpreter = ValueInterpreter(
@@ -183,9 +181,9 @@ enum CGSAdaptationInterpreter {
                         maxRuns: context.currentSampleCount
                     )
                     var gens = gens
-                    
+
                     var wins = 0
-                    
+
                     let recursedGen = try adaptRecursive(
                         gen: current,
                         input: (),
@@ -196,21 +194,21 @@ enum CGSAdaptationInterpreter {
                             defer { context.depth -= 1 }
                             // Override output of generator for this check
                             gens[index] = current.map { _ in output }
-                            
+
                             let tupleInterpreter = ValueInterpreter(
                                 .impure(operation: .zip(gens), continuation: continuation),
                                 seed: context.rng.next(),
                                 maxRuns: context.currentSampleCount
                             )
-                            
+
                             wins += Array(tupleInterpreter).count(where: validityPredicate)
                             return true
                         }
                     )
-                    
+
                     recursedGens.append((index, gen, wins))
                 }
-                
+
                 let results = try gens.map { gen in
                     let recursedGen = try adaptRecursive(
                         gen: gen.bind(continuation),
@@ -236,7 +234,7 @@ enum CGSAdaptationInterpreter {
                 defer { context.depth -= 1 }
                 // Replace getSize with a pick over subranges
                 // TODO: respect `resize` override
-                let ranges = (0...context.maxSize).split(into: max(4, 10 - Int(context.depth)))
+                let ranges = (0 ... context.maxSize).split(into: max(4, 10 - Int(context.depth)))
                 let results = try ranges
                     .map { Gen.choose(in: $0) }
                     .enumerated()
@@ -254,7 +252,7 @@ enum CGSAdaptationInterpreter {
                             recursedGen.erase()
                         )
                     }
-                
+
                 let pick = ReflectiveGenerator.impure(
                     operation: ReflectiveOperation.pick(choices: ContiguousArray(results)),
                     continuation: { .pure($0 as! Output) }
@@ -284,23 +282,22 @@ enum CGSAdaptationInterpreter {
                 // For classify, the inner generator is type-erased, so we can't adapt it
                 // We'll have to reproduce the logic here as we recurse through and optimise?
                 break
-                
+
             case let .contramap(transform, next):
 //                let transformed = try transform(input)
-                let adapted = try adaptRecursive(
-                    gen: next.bind { try continuation(transform($0))},
+                return try adaptRecursive(
+                    gen: next.bind { try continuation(transform($0)) },
                     input: input,
                     context: context,
                     insideSubdividedChooseBits: insideSubdividedChooseBits,
                     validityPredicate: validityPredicate
                 )
-                return adapted
 
             case let .prune(next):
                 // Check if inputValue is nil. If it is, return gen, otherwise recurse
                 return gen
             }
-            
+
             return gen
         }
     }

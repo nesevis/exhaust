@@ -103,7 +103,7 @@ benchmark("Bound5, 50 iterations") {
     let arrGen = Gen.arrayOf(Int16.arbitrary, within: 0 ... 10)
         .filter { $0.isEmpty || $0.dropFirst().reduce($0[0], &+) < 256 }
     let gen = Gen.zip(arrGen, arrGen, arrGen, arrGen, arrGen)
-    
+
     let property: (Bound5) -> Bool = { arg in
         let (a, b, c, d, e) = arg
         let arr = a + b + c + d + e
@@ -112,7 +112,7 @@ benchmark("Bound5, 50 iterations") {
         }
         return arr.dropFirst().reduce(arr[0], &+) < 5 * 256
     }
-    
+
     let iterator = ValueAndChoiceTreeInterpreter(gen, seed: 1337, maxRuns: 50)
 
     do {
@@ -123,7 +123,6 @@ benchmark("Bound5, 50 iterations") {
         print(error)
     }
 }
-
 
 Benchmark.main()
 

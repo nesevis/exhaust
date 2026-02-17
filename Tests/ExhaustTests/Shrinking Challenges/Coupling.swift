@@ -54,7 +54,7 @@ struct CouplingShrinkingChallenge {
         #expect(output.count == 2)
         #expect(output == [1, 0])
     }
-    
+
     @Test("Coupling, Pathological", .disabled("Value is not reflectable due to `bind`"))
     func couplingPathological() throws {
         let value = [3, 0, 11, 2, 15, 11, 6, 9, 17, 9, 1, 16, 4, 10, 15, 5, 11, 2]
