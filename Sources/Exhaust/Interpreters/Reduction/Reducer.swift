@@ -24,6 +24,7 @@ public extension Interpreters {
 
     private enum ShrinkPass: String, CaseIterable, Hashable, Equatable, Comparable {
         case naiveSimplifyValuesToSemanticSimplest
+        case reduceBranches
         case deleteContainerSpans
         case deleteSequenceBoundaries
         case deleteFreeStandingValues
@@ -50,7 +51,7 @@ public extension Interpreters {
         var currentSequence = ChoiceSequence.flatten(tree)
         // I don't think we need to reflect to regenerate this?
         // There is then a hard dependency on having to have reflectable generators, which is a pain
-        let currentTree = tree
+        var currentTree = tree
         guard var currentOutput = try materialize(gen, with: tree, using: currentSequence) else {
             return nil
         }
@@ -91,6 +92,19 @@ public extension Interpreters {
                     }
                     // We only run this once
                     didNaivelyMinimise = true
+                case .reduceBranches:
+                    if let (newTree, newSequence, output) = try ReducerStrategies.reduceBranches(
+                        gen,
+                        tree: currentTree,
+                        property: oracle,
+                        sequence: currentSequence,
+                        rejectCache: &rejectCache,
+                    ) {
+                        currentTree = newTree
+                        currentSequence = newSequence
+                        currentOutput = output
+                        passImproved = true
+                    }
                 case .deleteContainerSpans:
                     // Adaptive container span deletion, ie the […] and (…) spans in [(V)(V)]
                     let containerSpans = ChoiceSequence.extractContainerSpans(from: currentSequence)
