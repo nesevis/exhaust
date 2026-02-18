@@ -9,14 +9,26 @@ import Foundation
 
 extension Interpreters {
     private struct Context {
+        static let isInstrumented = false
         let values: ChoiceSequence
-        private(set) var index: Int = 0
+        private(set) var index: Int = 0 {
+            willSet {
+                if Context.isInstrumented {
+                    print("Context being consumed: \(values[index...].map(\.shortString).joined()) -> \(values[newValue...].map(\.shortString).joined())")
+                }
+            }
+        }
 
         var peek: ChoiceSequenceValue? {
             guard index < values.count else {
                 return nil
             }
             return values[index]
+        }
+        
+        
+        var shortString: String {
+            values[index...].map(\.shortString).joined()
         }
 
         var isAtEnd: Bool {
@@ -32,6 +44,9 @@ extension Interpreters {
         @discardableResult
         mutating func consumeGroup(_ isOpen: Bool) throws -> ChoiceSequenceValue {
             guard case .group(isOpen) = peek else {
+                if Self.isInstrumented {
+                    print("Throwing group consume error \(isOpen) - \(shortString)")
+                }
                 throw isOpen ? MaterializeError.groupNotOpen : .groupNotClosed
             }
             defer { index += 1 }
@@ -41,6 +56,9 @@ extension Interpreters {
         @discardableResult
         mutating func consumeSequence(_ isOpen: Bool) throws -> ChoiceSequenceValue {
             guard case .sequence(isOpen) = peek else {
+                if Self.isInstrumented {
+                    print("Throwing sequence consume error \(isOpen) - \(shortString)")
+                }
                 throw isOpen ? MaterializeError.sequenceNotOpen : .sequenceNotClosed
             }
             defer { index += 1 }
@@ -67,13 +85,32 @@ extension Interpreters {
             }
         }
 
-        mutating func consumeBranchIfPresent() -> ChoiceSequenceValue.Value? {
+        mutating func consumeBranchIfPresent() -> ChoiceSequenceValue.Branch? {
             guard case let .branch(v) = peek else {
                 return nil
             }
             index += 1
             return v
         }
+        
+        mutating func skipToMatchingGroupClose() {
+                    var depth = 0
+                    while !isAtEnd {
+                        switch peek {
+                        case .group(true):
+                            depth += 1
+                            index += 1
+                        case .group(false):
+                            if depth == 0 {
+                                return
+                            }
+                            depth -= 1
+                            index += 1
+                        default:
+                            index += 1
+                        }
+                    }
+                }
     }
 
     private struct ChoiceCursor {
@@ -152,6 +189,9 @@ extension Interpreters {
         with tree: ChoiceTree,
         using values: ChoiceSequence,
     ) throws -> Output? {
+        if Context.isInstrumented {
+            print("Starting materialize for \(values.shortString)")
+        }
         // Start the recursive process. The helper returns the value and any *unconsumed*
         // parts of the tree. A successful top-level replay should consume the entire tree.
         var context = Context(values: values)
@@ -159,7 +199,7 @@ extension Interpreters {
 
         // We can add a check here to ensure no parts of the tree were left over,
         // but the recursive logic should handle this correctly.
-        if context.isAtEnd == false {
+        if Context.isInstrumented, context.isAtEnd == false {
             print("Unexpected result: the `ChoiceSequence` should have been fully consumed")
         }
         return result
@@ -176,9 +216,10 @@ extension Interpreters {
             var result: Output?
 
             if choices.allSatisfy({ $0.isBranch || $0.isSelected }) == false {
-                try context.consumeGroup(true)
+                try? context.consumeGroup(true)
                 result = try materializeWithChoices(gen, with: choices, context: &context)
-                try context.consumeGroup(false)
+                // If we have consumed fewer values than expected, this will fail
+                try? context.consumeGroup(false)
             } else {
                 // Handle all the pick branches together
                 result = try materializeWithChoice(gen, with: tree, context: &context)
@@ -196,7 +237,9 @@ extension Interpreters {
             // This is the core structural match. We switch on the operation.
             switch operation {
             case .zip:
-                fatalError("When being materialized this should be a group")
+                // Zips are normally wrapped in groups and handled by materializeWithChoicesHelper.
+                // Return nil so that fallback probing in materializePickBranch can recover.
+                return nil
 
             case .chooseBits:
                 // This operation expects a primitive `.choice` node from the script.
@@ -250,7 +293,9 @@ extension Interpreters {
                 return try materializeRecursive(nextGen, with: tree, context: &context)
 
             case .pick:
-                fatalError("No 'naked' picks should be materialized. They will all be wrapped in a group")
+                // Picks are normally wrapped in groups and handled by materializeWithChoicesHelper.
+                // Return nil so that fallback probing in materializePickBranch can recover.
+                return nil
 //                // This operation expects a `.branch` node from the script.
 //                guard case .branch(_, let label, let choice) = tree else {
 //                    return nil
@@ -435,21 +480,21 @@ extension Interpreters {
 
                 try context.consumeGroup(true)
 
-                let generatorsByLabel = pickChoicesByLabel(pickChoices)
-                let branchMarkerIndex = context.consumeBranchIfPresent().flatMap { $0.choice.convertible as? Int }
+                let generators = pickChoices.map(\.generator)
+                let branchMarker = context.consumeBranchIfPresent()
                 var nextGen: ReflectiveGenerator<Output>?
 
-                if let branchMarkerIndex, branches.indices.contains(branchMarkerIndex) {
+                if let branchMarker, let branch = branches.first(where: { $0.branchId == branchMarker.id }) {
                     nextGen = try materializePickBranch(
-                        branches[branchMarkerIndex],
-                        generatorsByLabel: generatorsByLabel,
+                        branch,
+                        generators: generators,
                         continuation: continuation,
                         context: &context,
                     )
-                } else if branchMarkerIndex == nil, let selectedBranch = firstSelectedBranch(in: branches) {
+                } else if branchMarker == nil, let selectedBranch = firstSelectedBranch(in: branches) {
                     nextGen = try materializePickBranch(
                         selectedBranch,
-                        generatorsByLabel: generatorsByLabel,
+                        generators: generators,
                         continuation: continuation,
                         context: &context,
                     )
@@ -457,7 +502,7 @@ extension Interpreters {
                     for branch in branches {
                         nextGen = try materializePickBranch(
                             branch,
-                            generatorsByLabel: generatorsByLabel,
+                            generators: generators,
                             continuation: continuation,
                             context: &context,
                         )
@@ -589,8 +634,8 @@ extension Interpreters {
     private static func pickChoicesByLabel(_ choices: ContiguousArray<ReflectiveOperation.PickTuple>) -> [UInt64: ReflectiveGenerator<Any>] {
         var byLabel: [UInt64: ReflectiveGenerator<Any>] = [:]
         byLabel.reserveCapacity(choices.count)
-        for choice in choices where byLabel[choice.label] == nil {
-            byLabel[choice.label] = choice.generator
+        for choice in choices where byLabel[choice.id] == nil {
+            byLabel[choice.id] = choice.generator
         }
         return byLabel
     }
@@ -604,8 +649,8 @@ extension Interpreters {
 
     private static func unpackPickBranch(_ branch: ChoiceTree) throws -> (label: UInt64, choice: ChoiceTree) {
         switch branch {
-        case let .branch(_, label, choice), let .selected(.branch(_, label, choice)):
-            return (label: label, choice: choice)
+        case let .branch(_, id, _, choice), let .selected(.branch(_, id, _, choice)):
+            return (label: id, choice: choice)
         default:
             throw MaterializeError.wrongInputChoice
         }
@@ -613,17 +658,51 @@ extension Interpreters {
 
     private static func materializePickBranch<Output>(
         _ branch: ChoiceTree,
-        generatorsByLabel: [UInt64: ReflectiveGenerator<Any>],
+        generators: [ReflectiveGenerator<Any>],
         continuation: (Any) throws -> ReflectiveGenerator<Output>,
         context: inout Context,
     ) throws -> ReflectiveGenerator<Output>? {
         let unpacked = try unpackPickBranch(branch)
-        guard let chosenGen = generatorsByLabel[unpacked.label],
-              let result = try materializeRecursive(chosenGen, with: unpacked.choice, context: &context)
-        else {
-            return nil
+
+        // Fast path: exact ID match
+        let index = Int(exactly: branch.unwrapped.branchId!)!
+        let chosenGen = generators[index]
+        var attemptContext = context
+        if let result = try? materializeRecursive(chosenGen, with: unpacked.choice, context: &attemptContext)
+        {
+            context = attemptContext
+            let result = try? continuation(result)
+            if Context.isInstrumented {
+                print("Successful FP: \(result)")
+            }
+            return result
         }
-        return try continuation(result)
+
+        // Fallback: branch ID not recognized (structurally edited tree).
+        // Try each generator against the branch's choice content.
+        if Context.isInstrumented {
+            print("FB attempting all generators except the matching")
+        }
+        var generators = generators
+        generators.remove(at: index)
+        for generator in generators {
+            var attemptContext = context
+            if let result = try? materializeRecursive(generator, with: unpacked.choice, context: &attemptContext) {
+                if Context.isInstrumented {
+                    print("Successful FB: \(result)")
+                }
+                context = attemptContext
+                // We're in a mismatched group. Consume as much leftover data as you can
+                context.skipToMatchingGroupClose()
+                return try continuation(result)
+            }
+        }
+        // We're in a mismatched group. Consume as much leftover data as you can
+        if Context.isInstrumented {
+            print("FB unsuccessful, skipping to group close")
+        }
+        context.skipToMatchingGroupClose()
+        return nil
     }
 
     enum MaterializeError: LocalizedError {

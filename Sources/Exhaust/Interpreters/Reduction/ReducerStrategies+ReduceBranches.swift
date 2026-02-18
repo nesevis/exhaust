@@ -15,6 +15,11 @@ extension ReducerStrategies {
         sequence: ChoiceSequence,
         rejectCache: inout ReducerCache,
     ) throws -> (ChoiceTree, ChoiceSequence, Output)? {
+        guard tree.contains(\.unwrapped.isBranch) else {
+            return nil
+        }
+        // TODO: Flip selected branch? Does not require jiggery-pokery with gen–choiceTree mismatches
+        
         let branches = extractBranchNodes(from: tree)
         guard branches.count >= 2 else {
             return nil
@@ -22,7 +27,7 @@ extension ReducerStrategies {
 
         // Sort branches by shortlex complexity of their flattened sequences (simplest first)
         let sorted = branches
-            .map { branch in (branch: branch, sequence: ChoiceSequence.flatten(branch.tree)) }
+            .map { branch in (branch: branch, sequence: ChoiceSequence.flatten(branch.node)) }
             .sorted { lhs, rhs in lhs.sequence.shortLexPrecedes(rhs.sequence) }
 
         // Try replacing complex branches with simpler ones.
@@ -33,11 +38,16 @@ extension ReducerStrategies {
             // Try each simpler branch as a replacement (simplest first)
             for sourceIdx in 0 ..< targetIdx {
                 let source = sorted[sourceIdx]
-                let candidateTree = replaceBranch(
-                    id: target.branch.id,
-                    in: tree,
-                    with: source.branch.tree,
-                )
+
+                // Skip if source is nested inside target — replacing the parent
+                // with a descendant's content changes tree depth and breaks materialization.
+                let targetFP = target.branch.fingerprint
+                let sourceFP = source.branch.fingerprint
+
+                var candidateTree = tree
+                // Use .unwrapped to strip any .selected/.important wrapper from the source;
+                // the parent structure at the target fingerprint is preserved by the subscript setter.
+                candidateTree[targetFP] = source.branch.node.unwrapped
                 let candidateSequence = ChoiceSequence.flatten(candidateTree)
 
                 guard candidateSequence.shortLexPrecedes(sequence) else {
@@ -47,7 +57,7 @@ extension ReducerStrategies {
                     continue
                 }
 
-                guard let output = try? Interpreters.materialize(
+                guard let output = try Interpreters.materialize(
                     gen,
                     with: candidateTree,
                     using: candidateSequence,
@@ -65,39 +75,20 @@ extension ReducerStrategies {
         return nil
     }
 
-    /// Extracts all branch nodes from the tree as `(id, branchNode)` tuples.
+    /// Extracts all branch nodes from the tree as `(fingerprint, node)` pairs.
+    /// Fingerprints point to the `.branch` node itself (inside any `.selected` wrapper).
     private static func extractBranchNodes(
         from tree: ChoiceTree,
-    ) -> [(id: UInt64, tree: ChoiceTree)] {
-        var results: [(id: UInt64, tree: ChoiceTree)] = []
-        _ = tree.map { subTree in
-            if case let .branch(_, id, _, _) = subTree {
-                results.append((id, subTree))
+    ) -> [(fingerprint: Fingerprint, node: ChoiceTree)] {
+        var results: [(fingerprint: Fingerprint, node: ChoiceTree)] = []
+        for element in tree.walk() {
+            if
+                case let .group(array) = element.node,
+                array.allSatisfy({ $0.unwrapped.isBranch })
+            {
+                results.append((element.fingerprint, element.node))
             }
-            return subTree
         }
         return results
-    }
-
-    /// Replaces a branch node (identified by `id`) in its parent group with `replacement`.
-    /// Preserves the `selected` wrapper when the target branch was selected.
-    private static func replaceBranch(
-        id: UInt64,
-        in tree: ChoiceTree,
-        with replacement: ChoiceTree,
-    ) -> ChoiceTree {
-        tree.map { subTree in
-            if case let .group(children) = subTree,
-               children.contains(where: { $0.branchId == id })
-            {
-                let replaced = children.map { child in
-                    child.branchId == id
-                        ? (child.isSelected ? .selected(replacement.unwrapped) : replacement)
-                        : child
-                }
-                return .group(replaced)
-            }
-            return subTree
-        }
     }
 }

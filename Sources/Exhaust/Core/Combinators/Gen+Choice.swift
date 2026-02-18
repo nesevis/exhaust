@@ -23,12 +23,11 @@ public extension Gen {
         // ensures the final monad has the correct `Output` type.
         var array = ContiguousArray<ReflectiveOperation.PickTuple>()
         array.reserveCapacity(choices.count)
-        var idSource = Xoshiro256()
 
         for index in choices.indices {
             let choice = choices[index]
             array.append(.init(
-                id: idSource.next(),
+                id: UInt64(index),
                 weight: choice.weight,
                 generator: choice.generator.erase(),
             ))
