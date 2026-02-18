@@ -16,7 +16,15 @@ struct CalculatorShrinkingChallenge {
         case value(Int)
         case add(Expr, Expr)
         case div(Expr, Expr)
+
+        var value: Int? {
+            guard case let .value(value) = self else {
+                return nil
+            }
+            return value
+        }
     }
+    
 
     enum EvalError: Error {
         case divisionByZero
@@ -52,24 +60,48 @@ struct CalculatorShrinkingChallenge {
     }
 
     static func expression(depth: UInt64) -> ReflectiveGenerator<Expr> {
-        let literal = Gen.choose(in: Int(-10) ... 10).map(Expr.value)
-
+        let leaf = Gen.choose(in: Int(-10) ... 10)
+            .mapped(forward: { Expr.value($0) }, backward: { $0.value ?? 0 })
+        
         guard depth > 0 else {
-            return literal
+            return leaf
         }
-
+        
         let child = expression(depth: depth - 1)
-        let add = Gen.zip(child, child).map(Expr.add)
-        let divide = Gen.zip(child, child).map(Expr.div)
+        
+        let add = Gen.zip(child, leaf)
+            .mapped(
+                forward: { lhs, rhs in Expr.add(lhs, rhs) },
+                backward: { value in
+                    switch value {
+                    case let .add(lhs, rhs): return (lhs, rhs)
+                    case let .div(lhs, rhs): return (lhs, rhs)
+                    case .value:
+                        return (value, value)
+                    }
+                }
+            )
+        let div = Gen.zip(leaf, child)
+            .mapped(
+                forward: { lhs, rhs in Expr.div(lhs, rhs) },
+                backward: { value in
+                    switch value {
+                    case let .add(lhs, rhs): return (lhs, rhs)
+                    case let .div(lhs, rhs): return (lhs, rhs)
+                    case .value:
+                        return (value, value)
+                    }
+                }
+            )
 
         return Gen.pick(choices: [
-            (2, literal),
+            (3, leaf),
             (3, add),
-            (3, divide),
+            (3, div),
         ])
     }
 
-    static let gen: ReflectiveGenerator<Expr> = expression(depth: 4)
+    static let gen: ReflectiveGenerator<Expr> = expression(depth: 2)
 
     static let property: (Expr) -> Bool = { expr in
         guard containsLiteralDivisionByZero(expr) == false else {
@@ -102,14 +134,93 @@ struct CalculatorShrinkingChallenge {
         let iterator = ValueAndChoiceTreeInterpreter(Self.gen, seed: 1337, maxRuns: 2_000)
         let (value, tree) = try #require(iterator.first(where: { Self.property($0.0) == false }))
         let originalSeq = ChoiceSequence.flatten(tree)
+//        print(value)
+//        print(originalSeq.shortString)
 
+        // It fails the materialisation step here. No changes have happened
         let (seq, output) = try #require(try Interpreters.reduce(gen: Self.gen, tree: tree, config: .fast, property: Self.property))
 
         #expect(Self.containsLiteralDivisionByZero(output) == false)
         #expect(Self.property(output) == false)
-        print("before: \(originalSeq.shortString)")
-        print("after:  \(seq.shortString)")
-        print()
-//        #expect(output == .div(.value(0), .add(.value(0), .value(0))))
+//        print("before: \(originalSeq.shortString)")
+//        print("after: \(seq.shortString)")
+//        print()
+        #expect(output == .div(.value(0), .div(.value(0), .value(-1))))
+    }
+    
+    @Test("Test branch reflection and materialization")
+    func testBranchReflectionAndMaterialisation() throws {
+        let simple = Expr.value(1)
+        let add = Expr.add(simple, simple)
+        let div = Expr.div(simple, simple)
+        
+        for expr in [simple, add, div] {
+            let reflected = try #require(try Interpreters.reflect(Self.gen, with: expr))
+            let sequence = ChoiceSequence.flatten(reflected)
+//            print(reflected.debugDescription)
+//            print(sequence.shortString)
+            let materialized = try Interpreters.materialize(Self.gen, with: reflected, using: sequence)
+            #expect(materialized == expr)
+        }
+    }
+    
+    @Test("Test branch replacement")
+    func testBranchReplacement() throws {
+        let exprs = Array(ValueAndChoiceTreeInterpreter(Self.gen, seed: 1337, maxRuns: 10)).dropFirst(5)
+        for (value, tree) in exprs {
+            let branches = Self.extractBranches(in: tree)
+//            print(ChoiceSequence.flatten(tree).shortString)
+            for branch in branches.dropFirst(1) {
+                let replaced = Self.replaceBranch(at: branches[0].fingerprint, tree: tree, with: branch.node)
+                let replacedSequence = ChoiceSequence.flatten(replaced)
+//                print(tree.debugDescription)
+//                print(ChoiceSequence.flatten(replaced).shortString)
+                do {
+                    let materialized = try #require(try Interpreters.materialize(Self.gen, with: replaced, using: replacedSequence))
+//                    print("materialized successfully:")
+//                    print("before: \(value)")
+//                    print("after: \(materialized)")
+                } catch {
+//                    print("materialization failed: \(error)")
+                }
+            }
+//            print()
+        }
+    }
+
+    private static func extractBranches(in tree: ChoiceTree) -> [(fingerprint: Fingerprint, node: ChoiceTree)] {
+        var results: [(fingerprint: Fingerprint, node: ChoiceTree)] = []
+        for element in tree.walk() {
+            if case .branch = element.node {
+                results.append((element.fingerprint, element.node))
+            }
+        }
+        return results
+    }
+
+    private static func replaceBranch(at fingerprint: Fingerprint, tree: ChoiceTree, with replacement: ChoiceTree) -> ChoiceTree {
+        var result = tree
+        let existing = result[fingerprint]
+        result[fingerprint] = existing.isSelected
+            ? .selected(replacement.unwrapped)
+            : replacement
+        return result
+    }
+}
+
+extension CalculatorShrinkingChallenge.Expr: CustomDebugStringConvertible, CustomStringConvertible {
+    var debugDescription: String {
+        switch self {
+        case let .value(value):
+            "value(\(value))"
+        case let .add(lhs, rhs):
+            "add(\(lhs.debugDescription), \(rhs.debugDescription))"
+        case let .div(lhs, rhs):
+            "div(\(lhs.debugDescription), \(rhs.debugDescription))"
+        }
+    }
+
+    var description: String {
+        debugDescription
     }
 }

@@ -50,6 +50,20 @@ struct Bound5ShrinkingChallenge {
         #expect(arr.count == 2)
         #expect(arr == [-32768, -1])
     }
+    
+    @Test("Bound5, Pathological")
+    func bound5Pathological() throws {
+        let value: Bound5 = ([-10709], [29251, 31661], [-18678], [-2824, 15387, -15932, -23458, -6124, 3327, -21001, 16059, -21211, -27710], [16775, -32275, 813, 11044])
+        let tree = try #require(try Interpreters.reflect(Self.gen, with: value))
+        let sequence = ChoiceSequence.flatten(tree)
+        
+        let smokeTest = try #require(try Interpreters.materialize(Self.gen, with: tree, using: sequence))
+        let (_, output) = try #require(try Interpreters.reduce(gen: Self.gen, tree: tree, config: .fast, property: Self.property))
+
+        let arr = (output.0 + output.1 + output.2 + output.3 + output.4).sorted()
+        #expect(arr.count == 2)
+        #expect(arr == [-32768, -1])
+    }
 
     @Test("Bound5, 50")
     func bound5Many() throws {
