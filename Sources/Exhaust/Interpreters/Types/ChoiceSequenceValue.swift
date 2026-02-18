@@ -14,9 +14,9 @@ public enum ChoiceSequenceValue: Hashable, Equatable, Sendable {
     /// The elements within the `true`---`false` range are elements of the sequence
     case sequence(Bool)
     /// A marker for a branching choice.
-    /// The `Value` contains the chosen index in the array
-    /// This marker has no explicit closing marker
-    case branch(Value)
+    /// Stores selected branch id and the valid branch ids for the pick site.
+    /// This marker has no explicit closing marker.
+    case branch(Branch)
     /// Individual values
     case value(Value)
     /// A value that has been set to its semantically simplest form that should not be individually shrunk further
@@ -45,7 +45,9 @@ public enum ChoiceSequenceValue: Hashable, Equatable, Sendable {
             return .lt
         case (.group(true), .group(false)), (.sequence(true), .sequence(false)):
             return .gt
-        case let (.branch(a), .branch(b)), let (.value(a), .value(b)), let (.reduced(a), .reduced(b)), let (.value(a), .reduced(b)), let (.reduced(a), .value(b)):
+        case let (.branch(a), .branch(b)):
+            return a.shortLexCompare(b)
+        case let (.value(a), .value(b)), let (.reduced(a), .reduced(b)), let (.value(a), .reduced(b)), let (.reduced(a), .value(b)):
             return a.shortLexCompare(b)
         default:
             if kindOrder < other.kindOrder { return .lt }
@@ -68,23 +70,48 @@ public enum ChoiceSequenceValue: Hashable, Equatable, Sendable {
     var shortString: String {
         switch self {
         case .group(true):
-            "("
+            return "("
         case .group(false):
-            ")"
+            return ")"
         case .sequence(true):
-            "["
+            return "["
         case .sequence(false):
-            "]"
+            return "]"
         case .value:
-            "V"
+            return "V"
         case .reduced:
-            "_"
+            return "_"
         case let .branch(value):
-            "B\(value.choice.convertible):"
+            let index = value.validIDs.firstIndex(of: value.id) ?? 0
+            return "B\(index):"
         }
     }
 
     // MARK: - Inner type
+
+    public struct Branch: Hashable, Equatable, Sendable {
+        let id: UInt64
+        let validIDs: [UInt64]
+
+        public init(id: UInt64, validIDs: [UInt64]) {
+            self.id = id
+            self.validIDs = validIDs
+        }
+
+        func shortLexCompare(_ other: Branch) -> ShortlexOrder {
+            if validIDs == other.validIDs,
+               let lhsIndex = validIDs.firstIndex(of: id),
+               let rhsIndex = other.validIDs.firstIndex(of: other.id)
+            {
+                if lhsIndex < rhsIndex { return .lt }
+                if lhsIndex > rhsIndex { return .gt }
+                return .eq
+            }
+            if id < other.id { return .lt }
+            if id > other.id { return .gt }
+            return .eq
+        }
+    }
 
     public struct Value: Hashable, Equatable, Sendable {
         let choice: ChoiceValue

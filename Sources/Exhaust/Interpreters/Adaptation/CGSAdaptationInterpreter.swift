@@ -74,10 +74,10 @@ enum CGSAdaptationInterpreter {
                             seed: context.rng.next(),
                             maxRuns: context.currentSampleCount,
                         )
-                        return (
+                        return ReflectiveOperation.PickTuple(
+                            id: tuple.id,
                             weight: UInt64(Array(valueInterpreter).count(where: validityPredicate)),
-                            label: tuple.label,
-                            tuple.generator.erase(),
+                            generator: tuple.generator.erase(),
                         )
                     }
                     .filter { $0.weight > 0 } // Remove pruned branches
@@ -103,8 +103,7 @@ enum CGSAdaptationInterpreter {
                     let ranges = (lower ... upper).split(into: max(4, 20 - Int(context.depth)))
                     let results = try ranges
                         .map { Gen.choose(in: $0) }
-                        .enumerated()
-                        .map { offset, gen in
+                        .map { gen in
                             let recursedGen = try adaptRecursive(
                                 gen: gen.bind(continuation),
                                 input: input,
@@ -112,10 +111,10 @@ enum CGSAdaptationInterpreter {
                                 insideSubdividedChooseBits: true,
                                 validityPredicate: validityPredicate,
                             )
-                            return (
+                            return ReflectiveOperation.PickTuple(
+                                id: context.rng.next(),
                                 weight: UInt64(1),
-                                label: UInt64(offset + 1),
-                                recursedGen.erase(),
+                                generator: recursedGen.erase(),
                             )
                         }
 
@@ -237,8 +236,7 @@ enum CGSAdaptationInterpreter {
                 let ranges = (0 ... context.maxSize).split(into: max(4, 10 - Int(context.depth)))
                 let results = try ranges
                     .map { Gen.choose(in: $0) }
-                    .enumerated()
-                    .map { offset, gen in
+                    .map { gen in
                         let recursedGen = try adaptRecursive(
                             gen: gen.bind(continuation),
                             input: input,
@@ -246,10 +244,10 @@ enum CGSAdaptationInterpreter {
                             insideSubdividedChooseBits: false,
                             validityPredicate: validityPredicate,
                         )
-                        return (
+                        return ReflectiveOperation.PickTuple(
+                            id: context.rng.next(),
                             weight: UInt64(1),
-                            label: UInt64(offset + 1),
-                            recursedGen.erase(),
+                            generator: recursedGen.erase(),
                         )
                     }
 

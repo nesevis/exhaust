@@ -56,17 +56,16 @@ extension ChoiceSequence {
                 + elements.flatMap(flatten)
                 + CollectionOfOne(.sequence(false))
         // Do we only do the selected branch?
-        case let .branch(_, _, gen):
+        case let .branch(_, _, _, gen):
             return flatten(gen)
         case let .group(array):
             if array.allSatisfy({ $0.isBranch || $0.isSelected }),
-               case let .selected(.branch(_, label, choice)) = array.first(where: \.isSelected),
+               case let .selected(.branch(_, id, branchIDs, choice)) = array.first(where: \.isSelected),
                choice.isCharacterChoice == false // Do not add this marker for characters
             {
                 let value = ChoiceSequenceValue.branch(.init(
-                    // The label is one-indexed, take away one to make it correspond to the group array index
-                    choice: .init(Int(label - 1), tag: .int),
-                    validRanges: [UInt64(0) ... UInt64(array.count - 1)],
+                    id: id,
+                    validIDs: branchIDs,
                 ))
                 return [.group(true), value]
                     + array.flatMap(flatten)
@@ -165,6 +164,54 @@ extension ChoiceSequence {
             }
             return lhs.depth < rhs.depth
         })
+    }
+
+    /// Returns balanced group spans strictly contained within `range`, sorted longest-first.
+    @inlinable
+    public static func extractDescendantGroupSpans(
+        from sequence: ChoiceSequence,
+        in range: ClosedRange<Int>,
+    ) -> [ChoiceSpan] {
+        guard !sequence.isEmpty else { return [] }
+        guard range.lowerBound >= 0, range.upperBound < sequence.count else { return [] }
+
+        var spans: [ChoiceSpan] = []
+        var stack: [(start: Int, depth: Int)] = []
+        var depth = 0
+
+        for idx in range {
+            switch sequence[idx] {
+            case .group(true):
+                stack.append((start: idx, depth: depth))
+                depth += 1
+            case .group(false):
+                depth -= 1
+                guard let frame = stack.popLast() else { continue }
+                let spanRange = frame.start ... idx
+                if spanRange.lowerBound > range.lowerBound,
+                   spanRange.upperBound < range.upperBound
+                {
+                    spans.append(ChoiceSpan(
+                        kind: .group(true),
+                        range: spanRange,
+                        depth: frame.depth,
+                    ))
+                }
+            case .sequence(true):
+                depth += 1
+            case .sequence(false):
+                depth -= 1
+            case .value, .reduced, .branch:
+                continue
+            }
+        }
+
+        return spans.sorted { lhs, rhs in
+            if lhs.range.count != rhs.range.count {
+                return lhs.range.count > rhs.range.count
+            }
+            return lhs.range.lowerBound < rhs.range.lowerBound
+        }
     }
 
     /// Returns spans representing `][` boundaries (`.sequence(false)` followed by `.sequence(true)`)

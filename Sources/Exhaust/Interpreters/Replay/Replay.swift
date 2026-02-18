@@ -97,9 +97,9 @@ extension Interpreters {
                 let nextGen = try branches
                     .firstNonNil { branch -> ReflectiveGenerator<Output>? in
                         switch branch {
-                        case let .branch(_, label, choice), let .selected(.branch(_, label, choice)):
-                            guard // Find the sub-generator that matches the label
-                                let chosenGen = pickChoices.first(where: { $0.label == label })?.generator,
+                        case let .branch(_, id, _, choice), let .selected(.branch(_, id, _, choice)):
+                            guard // Find the sub-generator that matches the branch id
+                                let chosenGen = pickChoices.first(where: { $0.id == id })?.generator,
                                 // Process the chosen sub-generator with its children
                                 let result = try replayWithChoices(chosenGen, choices: [choice])
                             else {
@@ -290,12 +290,12 @@ extension Interpreters {
 
             case let .pick(choices):
                 // This operation expects a `.branch` node from the script.
-                guard case let .branch(_, label, choice) = script else {
+                guard case let .branch(_, id, _, choice) = script else {
                     return nil
                 }
 
-                // Find the sub-generator that matches the label from the script.
-                guard let chosenGen = choices.first(where: { $0.label == label })?.generator else {
+                // Find the sub-generator that matches the branch id from the script.
+                guard let chosenGen = choices.first(where: { $0.id == id })?.generator else {
                     return nil
                 }
 

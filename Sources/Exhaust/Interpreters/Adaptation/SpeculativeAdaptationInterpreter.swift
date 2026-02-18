@@ -198,6 +198,7 @@ enum SpeculativeAdaptationInterpreter {
 
         // Create subrange generators
         var choices: ContiguousArray<ReflectiveOperation.PickTuple> = []
+        var branchIDRNG = Xoshiro256()
         var currentStart = min
 
         for i in 0 ..< numberOfSubranges {
@@ -213,9 +214,9 @@ enum SpeculativeAdaptationInterpreter {
                 .pure(value)
             }
 
-            choices.append((
+            choices.append(.init(
+                id: branchIDRNG.next(),
                 weight: 1, // Start with equal weights
-                label: UInt64(i), // Use index as label
                 generator: subrangeGenerator,
             ))
 
@@ -361,6 +362,7 @@ enum SpeculativeAdaptationInterpreter {
 
         // Create length range generators
         var lengthRangeChoices: ContiguousArray<ReflectiveOperation.PickTuple> = []
+        var branchIDRNG = Xoshiro256()
         var currentStart = lengthMin
 
         for i in 0 ..< numberOfSubranges {
@@ -379,9 +381,9 @@ enum SpeculativeAdaptationInterpreter {
                 .pure(value)
             }
 
-            lengthRangeChoices.append((
+            lengthRangeChoices.append(.init(
+                id: branchIDRNG.next(),
                 weight: 1, // Start with equal weights
-                label: UInt64(i),
                 generator: lengthRangeGenerator,
             ))
 
@@ -603,6 +605,7 @@ enum SpeculativeAdaptationInterpreter {
 
         // Create a choice for each component, where that component gets focused adaptation
         var choices: ContiguousArray<ReflectiveOperation.PickTuple> = []
+        var branchIDRNG = Xoshiro256()
 
         for focusIndex in 0 ..< gens.count {
             // Adapt the focused component with a sampling-based predicate
@@ -664,9 +667,9 @@ enum SpeculativeAdaptationInterpreter {
                 .pure(value)
             }
 
-            choices.append((
+            choices.append(.init(
+                id: branchIDRNG.next(),
                 weight: 1,
-                label: UInt64(focusIndex),
                 generator: zipGenerator,
             ))
         }
@@ -699,7 +702,7 @@ enum SpeculativeAdaptationInterpreter {
 
         // For each choice, create a complete generator and collect both success count AND adapted generator
         var choiceSuccessCounts: [(Int, UInt64)] = []
-        var adaptedChoices: [(weight: UInt64, label: UInt64, generator: ReflectiveGenerator<Any>)] = []
+        var adaptedChoices: [ReflectiveOperation.PickTuple] = []
 
         for (choiceIndex, choice) in choices.enumerated() {
             var capturedAdaptedGenerator: ReflectiveGenerator<Any>? = nil
@@ -755,7 +758,11 @@ enum SpeculativeAdaptationInterpreter {
             choiceSuccessCounts.append((choiceIndex, successCount))
 
             // Store the adapted choice generator
-            adaptedChoices.append((weight: choice.weight, label: choice.label, generator: adaptedChoiceGenerator))
+            adaptedChoices.append(.init(
+                id: choice.id,
+                weight: choice.weight,
+                generator: adaptedChoiceGenerator,
+            ))
         }
 
         // Create new choices array with weights reflecting actual success counts using the adapted generators
@@ -763,7 +770,11 @@ enum SpeculativeAdaptationInterpreter {
             let choice = adaptedChoices[index]
             // Use the actual success count as the weight (0 means never select this choice)
             let newWeight = successCount
-            return (weight: newWeight, label: choice.label, generator: choice.generator)
+            return ReflectiveOperation.PickTuple(
+                id: choice.id,
+                weight: newWeight,
+                generator: choice.generator,
+            )
         }
 
         // Safety check: if all choices have weight 0, fall back to equal weights
@@ -771,7 +782,11 @@ enum SpeculativeAdaptationInterpreter {
         let safeChoices: ContiguousArray<ReflectiveOperation.PickTuple> = if totalWeight == 0 {
             // All choices failed - fall back to equal weights to avoid total failure
             ContiguousArray(adaptedChoices.map { choice in
-                (weight: 1, label: choice.label, generator: choice.generator)
+                ReflectiveOperation.PickTuple(
+                    id: choice.id,
+                    weight: 1,
+                    generator: choice.generator,
+                )
             })
         } else {
             ContiguousArray(finalAdaptedChoices)

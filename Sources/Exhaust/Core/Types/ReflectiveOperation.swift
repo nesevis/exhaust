@@ -37,11 +37,25 @@
 public enum ReflectiveOperation {
     /// A weighted choice option for the `pick` operation.
     ///
-    /// Each choice combines three elements that enable different aspects of bidirectional generation:
+    /// Each choice combines the elements needed for bidirectional generation:
+    /// - **id**: Stable branch identifier used for deterministic replay/materialization
     /// - **weight**: Probability mass for random selection during generation
-    /// - **label**: Unique identifier for deterministic replay from choice trees
     /// - **generator**: The sub-generator to execute if this choice is selected
-    public typealias PickTuple = (weight: UInt64, label: UInt64, generator: ReflectiveGenerator<Any>)
+    public struct PickTuple {
+        public let id: UInt64
+        public let weight: UInt64
+        public let generator: ReflectiveGenerator<Any>
+
+        public init(
+            id: UInt64,
+            weight: UInt64,
+            generator: ReflectiveGenerator<Any>,
+        ) {
+            self.id = id
+            self.weight = weight
+            self.generator = generator
+        }
+    }
     /// Contravariant transformation that focuses on part of the input during reflection.
     ///
     /// This is the key operation that enables generators to work with different input types
@@ -67,7 +81,7 @@ public enum ReflectiveOperation {
     ///
     /// **Forward pass**: Randomly selects one choice based on relative weights
     /// **Backward pass**: **Key insight** - tries ALL choices against target value to find matches
-    /// **Replay pass**: Uses recorded choice label to deterministically select the same branch
+    /// **Replay pass**: Uses recorded branch id to deterministically select the same branch
     ///
     /// **Performance note**: ContiguousArray provides better cache locality than Array for
     /// frequent iteration during reflection.

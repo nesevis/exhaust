@@ -90,9 +90,10 @@ public enum Interpreters {
 
         case let .pick(choices):
             // PICK's JOB: Try all branches against the same final output value.
-            let results = try choices.flatMap { weight, label, generator -> [(value: Any, weight: UInt64, label: UInt64, isPicked: Bool, path: ChoiceTree?)] in
+            let branchIDs = choices.map(\.id)
+            let results = try choices.flatMap { choice -> [(value: Any, weight: UInt64, id: UInt64, isPicked: Bool, path: ChoiceTree?)] in
                 do {
-                    let subPaths = try reflectRecursive(generator, onFinalOutput: finalOutput)
+                    let subPaths = try reflectRecursive(choice.generator, onFinalOutput: finalOutput)
                     let value = subPaths.firstNonNil(\.value)
 
                     var isPicked = false
@@ -102,20 +103,28 @@ public enum Interpreters {
                         // Try to compare using Equatable
                         isPicked = equatableOutput.isEqual(equatableValue)
                     } else if let convertible = value as? any BitPatternConvertible {
-                        isPicked = generator.associatedRange?.contains(convertible.bitPattern64) ?? false
+                        isPicked = choice.generator.associatedRange?.contains(convertible.bitPattern64) ?? false
                     }
 
-                    return subPaths.map { value, pathTree in
-                        (value, weight, label, isPicked, pathTree.first)
-                    }
+                    return subPaths
+                        .map { value, pathTree in
+                            (value, choice.weight, choice.id, isPicked, pathTree.first)
+                        }
+                        // Testing
+                        .filter { $0.isPicked }
 
                 } catch ReflectionError.reflectedNil {
                     // Return the choice anyway; we want all branches materialised during reflection
-                    return [(value: finalOutput, weight: weight, label: label, isPicked: false, path: nil)]
+                    return [(value: finalOutput, weight: choice.weight, id: choice.id, isPicked: false, path: nil)]
                 }
             }
             let returnData = results.map {
-                let branch = ChoiceTree.branch(weight: $0.weight, label: $0.label, choice: $0.path!)
+                let branch = ChoiceTree.branch(
+                    weight: $0.weight,
+                    id: $0.id,
+                    branchIDs: branchIDs,
+                    choice: $0.path!,
+                )
                 return (value: $0.value, path: $0.isPicked ? .selected(branch) : branch)
             }
             return [(finalOutput, [ChoiceTree.group(returnData.map(\.1))])]

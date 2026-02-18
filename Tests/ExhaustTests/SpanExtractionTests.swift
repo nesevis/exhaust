@@ -20,7 +20,10 @@ private func reduced(_ n: UInt64) -> ChoiceSequenceValue {
 }
 
 private func branch(_ n: Int) -> ChoiceSequenceValue {
-    .branch(.init(choice: .unsigned(UInt64(n), UInt64.self), validRanges: [0 ... 10]))
+    .branch(.init(
+        id: UInt64(n),
+        validIDs: Array(0 ... 9)
+    ))
 }
 
 private let seqOpen = ChoiceSequenceValue.sequence(true)

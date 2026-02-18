@@ -139,7 +139,7 @@ public struct ValueAndChoiceTreeInterpreter<FinalOutput>: IteratorProtocol, Sequ
                 var randomRoll = UInt64.random(in: 1 ... totalWeight, using: &context.prng)
                 // This may or may not be used, but we always have to consume it
                 let jumpSeed = context.prng.next()
-                var selectedChoice: (weight: UInt64, label: UInt64, generator: ReflectiveGenerator<Any>)?
+                var selectedChoice: ReflectiveOperation.PickTuple?
                 for choice in choices {
                     if randomRoll <= choice.weight {
                         selectedChoice = choice
@@ -151,9 +151,10 @@ public struct ValueAndChoiceTreeInterpreter<FinalOutput>: IteratorProtocol, Sequ
                 var branches = [ChoiceTree]()
                 branches.reserveCapacity(choices.count)
                 var finalValue: Output?
+                let branchIDs = choices.map(\.id)
 
                 for choice in choices {
-                    let isSelected = choice.label == selectedChoice?.label
+                    let isSelected = choice.id == selectedChoice?.id
                     var value: Output?
                     var branch: ChoiceTree?
 
@@ -162,7 +163,12 @@ public struct ValueAndChoiceTreeInterpreter<FinalOutput>: IteratorProtocol, Sequ
                            let final = try runContinuation(result.0, result.1)
                         {
                             value = final.0
-                            branch = ChoiceTree.branch(weight: choice.weight, label: choice.label, choice: final.1)
+                            branch = ChoiceTree.branch(
+                                weight: choice.weight,
+                                id: choice.id,
+                                branchIDs: branchIDs,
+                                choice: final.1,
+                            )
                         }
                     }
 
