@@ -20,6 +20,15 @@ public extension Interpreters {
                 8
             }
         }
+
+        var recentCycleWindow: Int {
+            switch self {
+            case .fast:
+                6
+            case .slow:
+                12
+            }
+        }
     }
 
     private enum ShrinkPass: String, CaseIterable, Hashable, Equatable, Comparable {
@@ -63,7 +72,8 @@ public extension Interpreters {
         var loops = 0
         var passes = ShrinkPass.allCases
         var rejectCache = ReducerCache()
-        var seen = Set<ChoiceSequence>()
+        // Tracks recent loop-end states to detect local oscillation.
+        var recentSequences = [currentSequence]
         while stallBudget > 0 {
             loops += 1
             var didImprove = false
@@ -209,8 +219,20 @@ public extension Interpreters {
                 }
             }
             passes = nextPasses
-            if didImprove, seen.contains(currentSequence) == false {
-                seen.insert(currentSequence)
+            if didImprove {
+                let recentWindow = recentSequences.suffix(config.recentCycleWindow)
+                if recentWindow.contains(currentSequence) {
+                    if isInstrumented {
+                        print("Shrinker detected a cycle in the last \(config.recentCycleWindow) sequences; stopping.")
+                    }
+                    break
+                }
+
+                recentSequences.append(currentSequence)
+                let maxHistory = max(config.recentCycleWindow * 2, config.recentCycleWindow + 1)
+                if recentSequences.count > maxHistory {
+                    recentSequences.removeFirst(recentSequences.count - maxHistory)
+                }
                 numberOfImprovements += 1
                 stallBudget = config.maxStalls
                 continue
