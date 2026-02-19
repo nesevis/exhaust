@@ -428,7 +428,7 @@ extension Interpreters {
         }
 
         if let elementScript {
-            while context.peek != .sequence(false) {
+            while context.peek != .sequence(false), !context.isAtEnd {
                 let elementValue = try materializeRecursive(elementGenerator, with: elementScript, context: &context)
                 if let elementValue {
                     accumulatedValues.append(elementValue)
@@ -506,6 +506,7 @@ extension Interpreters {
                 }
 
                 guard case let .group(branches) = choice else {
+                    if context.strictness == .relaxed { return nil }
                     throw MaterializeError.wrongInputChoice
                 }
 
@@ -544,6 +545,7 @@ extension Interpreters {
                 }
 
                 guard let nextGen else {
+                    if context.strictness == .relaxed { return nil }
                     throw MaterializeError.noSuccessfulBranch
                 }
 
@@ -561,6 +563,7 @@ extension Interpreters {
                 }
 
                 guard case let .sequence(_, elements, lengthMeta) = choice else {
+                    if context.strictness == .relaxed { return nil }
                     throw MaterializeError.wrongInputChoice
                 }
 
