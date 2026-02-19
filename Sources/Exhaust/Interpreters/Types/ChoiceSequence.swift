@@ -408,6 +408,72 @@ extension ChoiceSequence {
         return result.reversed()
     }
 
+    /// Extracts immediate children of a single container range.
+    /// Children are returned in-order and include bare values and immediate nested containers.
+    static func extractImmediateChildren(
+        from sequence: ChoiceSequence,
+        in containerRange: ClosedRange<Int>,
+    ) -> [(range: ClosedRange<Int>, kind: SiblingChildKind)] {
+        guard !sequence.isEmpty else { return [] }
+        guard containerRange.lowerBound >= 0, containerRange.upperBound < sequence.count else { return [] }
+
+        let open = sequence[containerRange.lowerBound]
+        let close = sequence[containerRange.upperBound]
+        let isGroupContainer = open == .group(true) && close == .group(false)
+        let isSequenceContainer = open == .sequence(true) && close == .sequence(false)
+        guard isGroupContainer || isSequenceContainer else { return [] }
+
+        var children = [(range: ClosedRange<Int>, kind: SiblingChildKind)]()
+        var index = containerRange.lowerBound + 1
+
+        while index < containerRange.upperBound {
+            switch sequence[index] {
+            case .value, .reduced:
+                children.append((range: index ... index, kind: .bareValue))
+                index += 1
+
+            case .group(true), .sequence(true):
+                let isGroupChild = sequence[index] == .group(true)
+                let openEntry = sequence[index]
+                let start = index
+                var depth = 1
+                index += 1
+
+                while index <= containerRange.upperBound, depth > 0 {
+                    switch sequence[index] {
+                    case .group(true) where openEntry == .group(true):
+                        depth += 1
+                    case .group(false) where openEntry == .group(true):
+                        depth -= 1
+                    case .sequence(true) where openEntry == .sequence(true):
+                        depth += 1
+                    case .sequence(false) where openEntry == .sequence(true):
+                        depth -= 1
+                    default:
+                        break
+                    }
+                    if depth > 0 {
+                        index += 1
+                    }
+                }
+
+                guard depth == 0, index <= containerRange.upperBound else { return [] }
+                children.append((range: start ... index, kind: isGroupChild ? .group : .sequence))
+                index += 1
+
+            case .branch:
+                // Branch markers are structural and not standalone children.
+                index += 1
+
+            case .group(false), .sequence(false):
+                // Stray close marker inside the container; skip defensively.
+                index += 1
+            }
+        }
+
+        return children
+    }
+
     /// Returns the flattened `ChoiceValue`s within the given range, ignoring structural markers.
     /// Used as a lexicographic comparison key for sibling reordering.
     static func siblingComparisonKey(

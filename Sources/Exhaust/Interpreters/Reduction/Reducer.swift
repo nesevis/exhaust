@@ -38,6 +38,7 @@ public extension Interpreters {
         case deleteContainerSpans
         case deleteSequenceBoundaries
         case deleteFreeStandingValues
+        case deleteAlignedSiblingWindows
         case simplifyValuesToSemanticSimplest
         case reduceValuesInTandem
         case reduceValues
@@ -149,6 +150,22 @@ public extension Interpreters {
                     // Pass 2b: Sequence element deletion, i.e the individual Vs in [VVVVV]
                     let freeStandingValueSpans = ChoiceSequence.extractFreeStandingValueSpans(from: currentSequence)
                     if freeStandingValueSpans.isEmpty == false, let (newSequence, output) = try ReducerStrategies.adaptiveDeleteSpans(gen, tree: currentTree, property: oracle, sequence: currentSequence, spans: freeStandingValueSpans, rejectCache: &rejectCache) {
+                        currentSequence = newSequence
+                        currentOutput = output
+                        passImproved = true
+                    }
+                case .deleteAlignedSiblingWindows:
+                    let siblingGroups = ChoiceSequence.extractSiblingGroups(from: currentSequence)
+                    if siblingGroups.isEmpty == false,
+                       let (newSequence, output) = try ReducerStrategies.deleteAlignedSiblingWindows(
+                           gen,
+                           tree: currentTree,
+                           property: oracle,
+                           sequence: currentSequence,
+                           siblingGroups: siblingGroups,
+                           rejectCache: &rejectCache
+                       )
+                    {
                         currentSequence = newSequence
                         currentOutput = output
                         passImproved = true
