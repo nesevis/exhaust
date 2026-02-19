@@ -234,4 +234,37 @@ struct ReducerReduceValuesTests {
         let nonLoadBearing = result.1.filter { $0 != 100 }
         #expect(nonLoadBearing.allSatisfy { $0 == 0 })
     }
+
+    @Test("Dynamic child ranges from bind do not block value shrinking")
+    func dynamicRangesDoNotBlockValueShrinking() throws {
+        // Child values are constrained by the chosen parent value.
+        let gen = Gen.choose(in: UInt64(0) ... 100)
+            .bind { parent in
+                Gen.zip(
+                    Gen.just(parent),
+                    Gen.choose(in: parent ... 100),
+                    Gen.choose(in: parent ... 100),
+                )
+            }
+
+        // Fails when left child is strictly less than right child.
+        let property: ((UInt64, UInt64, UInt64)) -> Bool = { triple in
+            triple.1 >= triple.2
+        }
+
+        // Ensure we start from a non-trivial parent so stale validRanges would matter.
+        let iterator = ValueAndChoiceTreeInterpreter(gen, materializePicks: false, seed: 1337, maxRuns: 500)
+        let (_, tree) = try #require(iterator.first(where: {
+            let value = $0.0
+            return value.0 > 0 && property(value) == false
+        }))
+
+        let result = try #require(
+            try Interpreters.reduce(gen: gen, tree: tree, config: .fast, property: property),
+        )
+
+        // Minimal failing tuple under constraints:
+        // p <= left, p <= right, and left < right  ==>  (0, 0, 1)
+        #expect(result.1 == (0, 0, 1))
+    }
 }

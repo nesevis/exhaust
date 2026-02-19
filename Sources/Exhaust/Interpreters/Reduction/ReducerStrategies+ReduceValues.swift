@@ -7,7 +7,7 @@
 
 extension ReducerStrategies {
     /// Pass 5: Binary search each individual value toward its reduction target.
-    /// For each `.value` entry, computes the ideal target (semantic simplest clamped to valid ranges),
+    /// For each `.value` entry, computes the ideal target (semantic simplest),
     /// then binary searches between the current bit pattern and the target to find the minimum failing value.
     ///
     /// - Complexity: O(*n* · log *d* · *M*), where *n* is the number of value spans, *d* is the
@@ -33,7 +33,7 @@ extension ReducerStrategies {
             let validRanges = v.validRanges
             let choiceTag = v.choice.tag
             let currentBP = v.choice.bitPattern64
-            let targetBP = v.choice.reductionTarget(in: validRanges)
+            let targetBP = v.choice.semanticSimplest.bitPattern64
 
             guard currentBP != targetBP else { continue }
 
@@ -41,13 +41,7 @@ extension ReducerStrategies {
             let distance = searchUpward
                 ? targetBP - currentBP
                 : currentBP - targetBP
-            let containingRange = validRanges.first(where: { $0.contains(currentBP) })
-            let fastMaxDelta: UInt64? = {
-                guard validRanges.count == 1, let containingRange else { return nil }
-                return searchUpward
-                    ? (containingRange.upperBound - currentBP)
-                    : (currentBP - containingRange.lowerBound)
-            }()
+            let fastMaxDelta: UInt64? = nil
 
             // Try target directly
             let targetChoice = ChoiceValue(
@@ -85,12 +79,14 @@ extension ReducerStrategies {
                     if let fastMaxDelta, delta > fastMaxDelta {
                         return false
                     }
+                    guard searchUpward ? UInt64.max - delta >= currentBP : currentBP >= delta else {
+                        return false
+                    }
                     let newBP = searchUpward ? currentBP + delta : currentBP - delta
                     let newChoice = ChoiceValue(
                         choiceTag.makeConvertible(bitPattern64: newBP),
                         tag: choiceTag,
                     )
-                    guard newChoice.fits(in: validRanges) else { return false }
                     let probeEntry = ChoiceSequenceValue.reduced(.init(choice: newChoice, validRanges: validRanges))
                     guard probeEntry.shortLexCompare(originalEntry) == .lt else {
                         return false
@@ -163,7 +159,6 @@ extension ReducerStrategies {
                         choiceTag.makeConvertible(bitPattern64: testBP),
                         tag: choiceTag,
                     )
-                    guard boundaryChoice.fits(in: validRanges) else { continue }
                     let boundaryEntry = ChoiceSequenceValue.value(.init(choice: boundaryChoice, validRanges: validRanges))
                     guard boundaryEntry.shortLexCompare(current[seqIdx]) == .lt else { continue }
                     boundary[seqIdx] = boundaryEntry

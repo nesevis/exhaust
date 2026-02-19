@@ -235,6 +235,21 @@ struct MaterializeTests {
         #expect(original.1 == materialized.1)
     }
 
+    @Test("Materialize choose bound to zip")
+    func materializeChooseBoundToZip() throws {
+        let gen = Gen.choose(in: UInt64(0) ... 100)
+            .bind { minimum in
+                Gen.zip(
+                    Gen.choose(in: minimum ... minimum + 5),
+                    Gen.choose(in: minimum ... minimum + 5),
+                )
+            }
+
+        let (original, materialized) = try roundTripUntyped(gen)
+        #expect(original.0 == materialized.0)
+        #expect(original.1 == materialized.1)
+    }
+
     // MARK: - contramap / mapped (bidirectional transformation)
 
     @Test("Materialize mapped generator")

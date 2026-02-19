@@ -26,7 +26,7 @@ extension ReducerStrategies {
             let seqIdx = span.range.lowerBound
             guard case let .value(v) = sequence[seqIdx] else { continue }
             let simplified = v.choice.semanticSimplest
-            guard simplified != v.choice, simplified.fits(in: v.validRanges) else { continue }
+            guard simplified != v.choice else { continue }
             valueIndices.append(seqIdx)
         }
 
