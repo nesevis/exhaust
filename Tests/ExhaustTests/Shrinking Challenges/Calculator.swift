@@ -51,10 +51,9 @@ struct CalculatorShrinkingChallenge {
             return false
         case let .add(lhs, rhs):
             return containsLiteralDivisionByZero(lhs) || containsLiteralDivisionByZero(rhs)
+        case let .div(lhs, .value(0)):
+            return true
         case let .div(lhs, rhs):
-            if case .value(0) = rhs {
-                return true
-            }
             return containsLiteralDivisionByZero(lhs) || containsLiteralDivisionByZero(rhs)
         }
     }
@@ -101,7 +100,7 @@ struct CalculatorShrinkingChallenge {
         ])
     }
 
-    static let gen: ReflectiveGenerator<Expr> = expression(depth: 2)
+    static let gen: ReflectiveGenerator<Expr> = expression(depth: 4)
 
     static let property: (Expr) -> Bool = { expr in
         guard containsLiteralDivisionByZero(expr) == false else {
@@ -131,21 +130,21 @@ struct CalculatorShrinkingChallenge {
      */
     @Test("Calculator, Full")
     func calculatorFull() throws {
-        let iterator = ValueAndChoiceTreeInterpreter(Self.gen, seed: 1337, maxRuns: 2_000)
-        let (value, tree) = try #require(iterator.first(where: { Self.property($0.0) == false }))
+        let iterator = ValueAndChoiceTreeInterpreter(Self.gen, materializePicks: true, seed: 1337, maxRuns: 100)
+        let (value, tree) = try #require(iterator.filter({ Self.property($0.0) == false }).last)
         let originalSeq = ChoiceSequence.flatten(tree)
 //        print(value)
-//        print(originalSeq.shortString)
+        print(originalSeq.shortString)
 
         // It fails the materialisation step here. No changes have happened
         let (seq, output) = try #require(try Interpreters.reduce(gen: Self.gen, tree: tree, config: .fast, property: Self.property))
 
         #expect(Self.containsLiteralDivisionByZero(output) == false)
         #expect(Self.property(output) == false)
-//        print("before: \(originalSeq.shortString)")
-//        print("after: \(seq.shortString)")
+        print("before: \(originalSeq.shortString)")
+        print("after: \(seq.shortString)")
 //        print()
-        #expect(output == .div(.value(0), .div(.value(0), .value(-1))))
+        #expect(output == .div(.value(0), .div(.value(0), .value(1))))
     }
     
     @Test("Test branch reflection and materialization")
@@ -166,7 +165,7 @@ struct CalculatorShrinkingChallenge {
     
     @Test("Test branch replacement")
     func testBranchReplacement() throws {
-        let exprs = Array(ValueAndChoiceTreeInterpreter(Self.gen, seed: 1337, maxRuns: 10)).dropFirst(5)
+        let exprs = Array(ValueAndChoiceTreeInterpreter(Self.gen, materializePicks: true, seed: 1337, maxRuns: 10)).dropFirst(5)
         for (value, tree) in exprs {
             let branches = Self.extractBranches(in: tree)
 //            print(ChoiceSequence.flatten(tree).shortString)

@@ -24,7 +24,7 @@ struct ReverseShrinkingChallenge {
             count += 1
             return arr.elementsEqual(arr.reversed())
         }
-        let iterator = ValueAndChoiceTreeInterpreter(arrGen, seed: 1337)
+        let iterator = ValueAndChoiceTreeInterpreter(arrGen, materializePicks: true, seed: 1337)
         let (value, tree) = try #require(Array(iterator.prefix(3)).last) // 23 values
         let (_, output) = try #require(try Interpreters.reduce(gen: arrGen, tree: tree, config: .fast, property: property))
         #expect(count == 53) // Oracle/property calls

@@ -18,7 +18,7 @@ private func generate<Output>(
     seed: UInt64 = 42,
 ) throws -> (value: Output, tree: ChoiceTree) {
     try #require(
-        Array(ValueAndChoiceTreeInterpreter(gen, seed: seed).prefix(1)).first,
+        Array(ValueAndChoiceTreeInterpreter(gen, materializePicks: true, seed: seed).prefix(1)).first,
     )
 }
 

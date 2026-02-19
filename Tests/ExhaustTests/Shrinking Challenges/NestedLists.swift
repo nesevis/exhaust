@@ -28,7 +28,7 @@ struct NestedListsShrinkingChallenge {
             count += 1
             return arr.map(\.count).reduce(0, +) <= 10
         }
-        let iterator = ValueAndChoiceTreeInterpreter(gen, seed: 1337)
+        let iterator = ValueAndChoiceTreeInterpreter(gen, materializePicks: true, seed: 1337)
         // Outputs an array of 14 arrays containing 2–20 values each
         let (_, tree) = try #require(Array(iterator.prefix(2)).last)
         let (_, output) = try #require(try Interpreters.reduce(gen: gen, tree: tree, config: .fast, property: property))

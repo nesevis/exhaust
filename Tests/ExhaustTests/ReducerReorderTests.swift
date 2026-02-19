@@ -19,7 +19,7 @@ private func generate<Output>(
     iteration: Int = 0,
 ) throws -> (value: Output, tree: ChoiceTree) {
     try #require(
-        Array(ValueAndChoiceTreeInterpreter(gen, seed: seed).prefix(iteration + 1)).last,
+        Array(ValueAndChoiceTreeInterpreter(gen, materializePicks: true, seed: seed).prefix(iteration + 1)).last,
     )
 }
 

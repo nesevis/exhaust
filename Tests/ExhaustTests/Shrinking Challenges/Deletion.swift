@@ -40,7 +40,7 @@ struct DeletionShrinkingChallenge {
             return xs.contains(x) == false
         }
 
-        let iterator = ValueAndChoiceTreeInterpreter(gen, seed: 1337)
+        let iterator = ValueAndChoiceTreeInterpreter(gen, materializePicks: true, seed: 1337)
         let (value, tree) = try #require(Array(iterator.prefix(2)).last)
         let (seq, output) = try #require(try Interpreters.reduce(gen: gen, tree: tree, config: .fast, property: property))
 

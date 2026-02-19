@@ -30,7 +30,7 @@ struct LargeUnionListShrinkingChallenge {
 
     @Test("Large Union List, Single")
     func largeUnionListFull() throws {
-        let iterator = ValueAndChoiceTreeInterpreter(Self.gen, seed: 1337)
+        let iterator = ValueAndChoiceTreeInterpreter(Self.gen, materializePicks: true, seed: 1337)
         let (value, tree) = try #require(Array(iterator.prefix(4)).last) // 23 values
         let (sequence, output) = try #require(try Interpreters.reduce(gen: Self.gen, tree: tree, config: .fast, property: Self.property))
         #expect(output.flatMap(\.self) == [-3, -2, -1, 0, 1])
@@ -61,7 +61,7 @@ struct LargeUnionListShrinkingChallenge {
 
     @Test("Large Union List, 50")
     func largeUnionListBatch() throws {
-        let iterator = ValueAndChoiceTreeInterpreter(Self.gen, seed: 1337, maxRuns: 100)
+        let iterator = ValueAndChoiceTreeInterpreter(Self.gen, materializePicks: true, seed: 1337, maxRuns: 100)
 
         var outputs = [[[Int]]]()
         for (value, tree) in iterator where Self.property(value) == false && outputs.count <= 50 {

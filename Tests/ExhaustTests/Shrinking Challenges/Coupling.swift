@@ -45,7 +45,7 @@ struct CouplingShrinkingChallenge {
     /// We had this, but Minimax destroyed it
     @Test("Coupling, Single")
     func couplingFull() throws {
-        let iterator = ValueAndChoiceTreeInterpreter(Self.gen, seed: 1337)
+        let iterator = ValueAndChoiceTreeInterpreter(Self.gen, materializePicks: true, seed: 1337)
         let (value, tree) = try #require(Array(iterator.prefix(4)).last)
         let (seq, output) = try #require(try Interpreters.reduce(gen: Self.gen, tree: tree, config: .fast, property: Self.property))
 
@@ -72,7 +72,7 @@ struct CouplingShrinkingChallenge {
 
     @Test("Coupling, 50")
     func couplingBatch() throws {
-        let iterator = ValueAndChoiceTreeInterpreter(Self.gen, seed: 1337, maxRuns: 50)
+        let iterator = ValueAndChoiceTreeInterpreter(Self.gen, materializePicks: true, seed: 1337, maxRuns: 50)
         for (value, tree) in iterator where Self.property(value) == false {
             let (seq, output) = try #require(try Interpreters.reduce(gen: Self.gen, tree: tree, config: .fast, property: Self.property))
             #expect(output.count == 2)

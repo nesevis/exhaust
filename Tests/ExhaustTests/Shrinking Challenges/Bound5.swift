@@ -38,7 +38,7 @@ struct Bound5ShrinkingChallenge {
 
     @Test("Bound5, Single")
     func bound5Single() throws {
-        let iterator = ValueAndChoiceTreeInterpreter(Self.gen, seed: 1337)
+        let iterator = ValueAndChoiceTreeInterpreter(Self.gen, materializePicks: true, seed: 1337)
         let (value, tree) = try #require(Array(iterator.prefix(4)).last)
         let sequence = ChoiceSequence.flatten(tree)
         print()
@@ -67,7 +67,7 @@ struct Bound5ShrinkingChallenge {
 
     @Test("Bound5, 50")
     func bound5Many() throws {
-        let iterator = ValueAndChoiceTreeInterpreter(Self.gen, seed: 1337, maxRuns: 100)
+        let iterator = ValueAndChoiceTreeInterpreter(Self.gen, materializePicks: true, seed: 1337, maxRuns: 100)
 
         var values = [(before: Bound5, after: Bound5)]()
         for (value, tree) in iterator where Self.property(value) == false {

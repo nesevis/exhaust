@@ -68,7 +68,7 @@ extension ChoiceSequence {
                     validIDs: branchIDs,
                 ))
                 return [.group(true), value]
-                    + array.flatMap(flatten)
+                    + flatten(choice)
                     + [.group(false)]
             }
             return CollectionOfOne(.group(true))
@@ -85,6 +85,49 @@ extension ChoiceSequence {
             return flatten(tree)
         case let .selected(tree):
             return flatten(tree)
+        }
+    }
+
+    /// Flattens the tree like ``flatten(_:)`` but includes ALL branches in pick-site groups,
+    /// not just the selected branch. Used for complexity comparison in shrink passes.
+    static func flattenAll(_ tree: ChoiceTree) -> ChoiceSequence {
+        switch tree {
+        case let .choice(value, meta):
+            return [.value(.init(choice: value, validRanges: meta.validRanges))]
+        case .just:
+            return []
+        case let .sequence(_, elements, _):
+            return CollectionOfOne(.sequence(true))
+                + elements.flatMap(flattenAll)
+                + CollectionOfOne(.sequence(false))
+        case let .branch(_, _, _, gen):
+            return flattenAll(gen)
+        case let .group(array):
+            if array.allSatisfy({ $0.isBranch || $0.isSelected }),
+               case let .selected(.branch(_, id, branchIDs, choice)) = array.first(where: \.isSelected),
+               choice.isCharacterChoice == false
+            {
+                let value = ChoiceSequenceValue.branch(.init(
+                    id: id,
+                    validIDs: branchIDs,
+                ))
+                return [.group(true), value]
+                    + array.flatMap(flattenAll)
+                    + [.group(false)]
+            }
+            return CollectionOfOne(.group(true))
+                + array.flatMap(flattenAll)
+                + CollectionOfOne(.group(false))
+        case .getSize:
+            return []
+        case let .resize(_, choices):
+            return CollectionOfOne(.group(true))
+                + choices.flatMap(flattenAll)
+                + CollectionOfOne(.group(false))
+        case let .important(tree):
+            return flattenAll(tree)
+        case let .selected(tree):
+            return flattenAll(tree)
         }
     }
 

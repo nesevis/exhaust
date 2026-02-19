@@ -33,7 +33,7 @@ struct DistinctShrinkingChallenge {
             return Set(arr).count < 3
         }
 
-        let iterator = ValueAndChoiceTreeInterpreter(gen, seed: 1337)
+        let iterator = ValueAndChoiceTreeInterpreter(gen, materializePicks: true, seed: 1337)
         let (value, tree) = try #require(Array(iterator.prefix(40)).last) // 23 values
         let (seq, output) = try #require(try Interpreters.reduce(gen: gen, tree: tree, config: .fast, property: property))
         #expect(count == 208)
