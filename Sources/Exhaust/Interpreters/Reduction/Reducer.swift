@@ -24,7 +24,7 @@ public extension Interpreters {
 
     private enum ShrinkPass: String, CaseIterable, Hashable, Equatable, Comparable {
         case naiveSimplifyValuesToSemanticSimplest
-        case reduceBranches
+        case promoteBranches
         case deleteContainerSpans
         case deleteSequenceBoundaries
         case deleteFreeStandingValues
@@ -92,8 +92,8 @@ public extension Interpreters {
                     }
                     // We only run this once
                     didNaivelyMinimise = true
-                case .reduceBranches:
-                    if let (newTree, newSequence, output) = try ReducerStrategies.reduceBranches(
+                case .promoteBranches:
+                    if let (newTree, newSequence, output) = try ReducerStrategies.promoteBranches(
                         gen,
                         tree: currentTree,
                         property: oracle,

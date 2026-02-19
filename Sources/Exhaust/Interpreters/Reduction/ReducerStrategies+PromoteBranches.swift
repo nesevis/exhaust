@@ -1,5 +1,5 @@
 //
-//  ReducerStrategies+ReduceBranches.swift
+//  ReducerStrategies+PromoteBranches.swift
 //  Exhaust
 //
 //  Created by Chris Kolbu on 18/2/2026.
@@ -8,7 +8,7 @@
 extension ReducerStrategies {
     /// Pass: reduce pick-branch structure by replacing a complex branch's
     /// subtree with a simpler sub-branch, ordered by shortlex complexity.
-    static func reduceBranches<Output>(
+    static func promoteBranches<Output>(
         _ gen: ReflectiveGenerator<Output>,
         tree: ChoiceTree,
         property: (Output) -> Bool,
@@ -18,6 +18,17 @@ extension ReducerStrategies {
         guard tree.contains(\.unwrapped.isBranch) else {
             return nil
         }
+        
+        /*
+         ### Recommendation
+
+         If you are using **`promoteBranch`**, I would recommend **`reselectBranch`** or **`pivotBranch`**.
+
+         * `promoteBranch(offset)` handles vertical simplification (depth).
+         * `reselectBranch(offset, new_choice) | pivotBranch` handles horizontal simplification (breadth).
+
+         **Would you like to see how these two functions might interact in a `shrinkLoop` to ensure they don't conflict with each other's offsets?**
+         */
         // TODO: Flip selected branch? Does not require jiggery-pokery with gen–choiceTree mismatches
         
         let branches = extractBranchNodes(from: tree)
