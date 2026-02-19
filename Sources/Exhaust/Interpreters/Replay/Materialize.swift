@@ -383,8 +383,8 @@ extension Interpreters {
 //                }
 //                return result as? Output
             case let .filter(gen, _, predicate):
-                let result = try materializeRecursive(gen, with: tree, context: &context) as? Output
-                guard let result,
+                guard let subResult = try materializeRecursive(gen, with: tree, context: &context),
+                      let result = subResult as? Output,
                       predicate(result)
                 else {
                     return nil
@@ -392,11 +392,12 @@ extension Interpreters {
                 return result
 
             case let .classify(gen, _, _):
-                guard let result = try materializeRecursive(gen, with: tree, context: &context)
+                guard let subResult = try materializeRecursive(gen, with: tree, context: &context),
+                      let result = subResult as? Output
                 else {
                     return nil
                 }
-                return result as? Output
+                return result
             }
         }
     }
@@ -701,8 +702,8 @@ extension Interpreters {
                 return try materializeWithChoicesHelper(nextGen, with: &choices, context: &context)
 
             case let .filter(gen, _, predicate):
-                let result = try materializeWithChoicesHelper(gen, with: &choices, context: &context) as? Output
-                guard let result,
+                guard let subResult = try materializeWithChoicesHelper(gen, with: &choices, context: &context),
+                      let result = subResult as? Output,
                       predicate(result)
                 else {
                     return nil
@@ -710,7 +711,12 @@ extension Interpreters {
                 return result
 
             case let .classify(gen, _, _):
-                return try materializeWithChoicesHelper(gen, with: &choices, context: &context) as? Output
+                guard let subResult = try materializeWithChoicesHelper(gen, with: &choices, context: &context),
+                      let result = subResult as? Output
+                else {
+                    return nil
+                }
+                return result
             }
         }
     }
