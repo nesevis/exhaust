@@ -25,6 +25,7 @@ public extension Interpreters {
     private enum ShrinkPass: String, CaseIterable, Hashable, Equatable, Comparable {
         case naiveSimplifyValuesToSemanticSimplest
         case promoteBranches
+        case pivotBranches
         case deleteContainerSpans
         case deleteSequenceBoundaries
         case deleteFreeStandingValues
@@ -47,7 +48,7 @@ public extension Interpreters {
         property: (Output) -> Bool,
     ) throws -> (ChoiceSequence, Output)? {
         // Mutable variables
-        let isInstrumented = true
+        let isInstrumented = false
         var currentSequence = ChoiceSequence.flatten(tree)
         // I don't think we need to reflect to regenerate this?
         // There is then a hard dependency on having to have reflectable generators, which is a pain
@@ -94,6 +95,19 @@ public extension Interpreters {
                     didNaivelyMinimise = true
                 case .promoteBranches:
                     if let (newTree, newSequence, output) = try ReducerStrategies.promoteBranches(
+                        gen,
+                        tree: currentTree,
+                        property: oracle,
+                        sequence: currentSequence,
+                        rejectCache: &rejectCache,
+                    ) {
+                        currentTree = newTree
+                        currentSequence = newSequence
+                        currentOutput = output
+                        passImproved = true
+                    }
+                case .pivotBranches:
+                    if let (newTree, newSequence, output) = try ReducerStrategies.pivotBranches(
                         gen,
                         tree: currentTree,
                         property: oracle,
@@ -197,7 +211,6 @@ public extension Interpreters {
             passes = nextPasses
             if didImprove, seen.contains(currentSequence) == false {
                 seen.insert(currentSequence)
-//                print("! improved! \(currentOutput)")
                 numberOfImprovements += 1
                 stallBudget = config.maxStalls
                 continue

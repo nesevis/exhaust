@@ -26,15 +26,14 @@ extension ReducerStrategies {
             guard simplified != v.choice, simplified.fits(in: v.validRanges) else { continue }
             updatedSequence[seqIdx] = .value(.init(choice: simplified, validRanges: v.validRanges))
         }
-        guard updatedSequence != sequence,
-              rejectCache.contains(updatedSequence) == false
-        else {
+        guard updatedSequence != sequence, rejectCache.contains(updatedSequence) == false else {
             return nil
         }
-        rejectCache.insert(updatedSequence)
-        if let output = try? Interpreters.materialize(gen, with: tree, using: updatedSequence), property(output) == false {
+        let output = try? Interpreters.materialize(gen, with: tree, using: updatedSequence)
+        if let output, property(output) == false {
             return (updatedSequence, output)
         }
+        rejectCache.insert(updatedSequence)
         return nil
     }
 }

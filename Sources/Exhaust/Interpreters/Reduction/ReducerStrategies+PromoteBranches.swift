@@ -19,26 +19,16 @@ extension ReducerStrategies {
             return nil
         }
         
-        /*
-         ### Recommendation
-
-         If you are using **`promoteBranch`**, I would recommend **`reselectBranch`** or **`pivotBranch`**.
-
-         * `promoteBranch(offset)` handles vertical simplification (depth).
-         * `reselectBranch(offset, new_choice) | pivotBranch` handles horizontal simplification (breadth).
-
-         **Would you like to see how these two functions might interact in a `shrinkLoop` to ensure they don't conflict with each other's offsets?**
-         */
-        // TODO: Flip selected branch? Does not require jiggery-pokery with gen–choiceTree mismatches
-        
         let branches = extractBranchNodes(from: tree)
         guard branches.count >= 2 else {
             return nil
         }
 
         // Sort branches by shortlex complexity of their flattened sequences (simplest first)
+        // Use flattenAll so the complexity metric accounts for all branches,
+        // not just the selected one (which is all flatten includes).
         let sorted = branches
-            .map { branch in (branch: branch, sequence: ChoiceSequence.flatten(branch.node)) }
+            .map { branch in (branch: branch, sequence: ChoiceSequence.flattenAll(branch.node)) }
             .sorted { lhs, rhs in lhs.sequence.shortLexPrecedes(rhs.sequence) }
 
         // Try replacing complex branches with simpler ones.
@@ -50,10 +40,15 @@ extension ReducerStrategies {
             for sourceIdx in 0 ..< targetIdx {
                 let source = sorted[sourceIdx]
 
-                // Skip if source is nested inside target — replacing the parent
-                // with a descendant's content changes tree depth and breaks materialization.
                 let targetFP = target.branch.fingerprint
                 let sourceFP = source.branch.fingerprint
+
+                // Skip if source and target have the same selected branch ID —
+                // the replacement would only change values, not structure.
+                // Value reduction passes handle that more efficiently.
+                if selectedBranchID(of: source.branch.node) == selectedBranchID(of: target.branch.node) {
+                    continue
+                }
 
                 var candidateTree = tree
                 // Use .unwrapped to strip any .selected/.important wrapper from the source;
@@ -68,10 +63,11 @@ extension ReducerStrategies {
                     continue
                 }
 
-                guard let output = try Interpreters.materialize(
+                guard let output = try? Interpreters.materialize(
                     gen,
                     with: candidateTree,
                     using: candidateSequence,
+                    strictness: .relaxed
                 ) else {
                     rejectCache.insert(candidateSequence)
                     continue
@@ -101,5 +97,17 @@ extension ReducerStrategies {
             }
         }
         return results
+    }
+
+    /// Returns the branch ID of the `.selected` branch within a pick-site group,
+    /// or `nil` if no selected branch is found.
+    private static func selectedBranchID(of group: ChoiceTree) -> UInt64? {
+        guard case let .group(array) = group else { return nil }
+        for element in array {
+            if case let .selected(.branch(_, id, _, _)) = element {
+                return id
+            }
+        }
+        return nil
     }
 }
