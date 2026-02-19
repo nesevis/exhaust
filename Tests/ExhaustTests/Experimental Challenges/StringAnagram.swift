@@ -36,10 +36,10 @@ struct StringAnagramChallenge {
      Two arrays of the two smallest values in the range, in swapped order.
      */
 
-    @Test("String anagram", .disabled("Needs work"))
+    @Test("String anagram")
     func stringAnagram() throws {
         let charGen = String.arbitraryAscii
-            .filter { $0.count > 2 }
+            .filter { $0.count >= 2 }
         let gen = Gen.zip(charGen, charGen)
 
         let property: (String, String) -> Bool = { a, b in
