@@ -581,21 +581,71 @@ extension Interpreters {
                 return try materializeWithChoicesHelper(nextGen, with: &choices, context: &context)
 
             case let .zip(generators):
-//                guard generators.count == choices.remainingCount else {
-//                    throw MaterializeError.mismatchInChoicesAndGenerators
-//                }
-                var subResults = [Any]()
-                subResults.reserveCapacity(generators.count)
-                for (offset, generator) in generators.enumerated() {
-                    guard let choiceTree = choices.element(atOffset: offset),
-                          let subResult = try materializeRecursive(generator, with: choiceTree, context: &context)
-                    else {
-                        return nil
-                    }
-                    subResults.append(subResult)
+                guard generators.isEmpty == false else {
+                    let nextGen = try continuation([])
+                    return try materializeWithChoicesHelper(nextGen, with: &choices, context: &context)
                 }
-                let nextGen = try continuation(subResults)
-                return try materializeWithChoicesHelper(nextGen, with: &choices, context: &context)
+
+                typealias ZipAttempt = (scripts: [ChoiceTree], consumedChoices: Int, consumesContextGroup: Bool)
+                var attempts: [ZipAttempt] = []
+
+                // Representation A (nested): one choice containing a group of zip children.
+                if let firstChoice = choices.element(atOffset: 0),
+                   case let .group(children) = firstChoice,
+                   children.allSatisfy({ $0.isBranch || $0.isSelected }) == false
+                {
+                    attempts.append((scripts: children, consumedChoices: 1, consumesContextGroup: true))
+                }
+
+                // Representation B (flat): zip children are sibling choices in the current frame.
+                if choices.remainingCount >= generators.count {
+                    let flatChildren = (0 ..< generators.count).compactMap { choices.element(atOffset: $0) }
+                    attempts.append((scripts: flatChildren, consumedChoices: generators.count, consumesContextGroup: false))
+                }
+
+                for attempt in attempts where attempt.scripts.count == generators.count {
+                    var attemptContext = context
+                    if attempt.consumesContextGroup {
+                        do {
+                            try attemptContext.consumeGroup(true)
+                        } catch {
+                            continue
+                        }
+                    }
+                    var subResults = [Any]()
+                    subResults.reserveCapacity(generators.count)
+                    var didSucceed = true
+
+                    for (generator, script) in zip(generators, attempt.scripts) {
+                        guard let subResult = try materializeRecursive(generator, with: script, context: &attemptContext) else {
+                            didSucceed = false
+                            break
+                        }
+                        subResults.append(subResult)
+                    }
+
+                    guard didSucceed else {
+                        continue
+                    }
+
+                    if attempt.consumesContextGroup {
+                        do {
+                            try attemptContext.consumeGroup(false)
+                        } catch {
+                            continue
+                        }
+                    }
+
+                    context = attemptContext
+                    for _ in 0 ..< attempt.consumedChoices {
+                        _ = choices.removeFirst()
+                    }
+
+                    let nextGen = try continuation(subResults)
+                    return try materializeWithChoicesHelper(nextGen, with: &choices, context: &context)
+                }
+
+                return nil
 
             case let .contramap(_, subGenerator), let .prune(subGenerator):
                 // A left map or prune doesn't consume choices, just passes them to the sub-generator
