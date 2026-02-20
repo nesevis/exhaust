@@ -16,26 +16,16 @@ extension ReducerStrategies {
         let valueTag: TypeTag?
     }
 
-    private struct AlignedContainerSignature: Hashable {
-        let kindKeys: [UInt8]
-        let valueTags: [TypeTag?]
-    }
-
     private struct AlignedContainerDescriptor {
         let depth: Int
         let range: ClosedRange<Int>
-        let signature: AlignedContainerSignature
         let children: [AlignedContainerChild]
     }
 
-    private struct AlignedCohortKey: Hashable {
-        let depth: Int
-        let signature: AlignedContainerSignature
-    }
-
     /// Coordinated deletion across structurally aligned sibling containers.
-    /// Builds cohorts of siblings with matching immediate child signatures, then deletes aligned
-    /// child windows from all containers in a cohort in one candidate.
+    /// Builds cohorts of sibling container pairs and deletes aligned child windows.
+    /// Alignment is index-based over the shared prefix (`0..<min(childCountA, childCountB)`),
+    /// so containers do not need identical child counts.
     ///
     /// - Complexity: O(*g* · *c* · *n* · log *n* · *M*), where *g* is sibling group count, *c* is
     ///   cohorts per group, *n* is child count per cohort, and *M* is one oracle call.
@@ -44,10 +34,12 @@ extension ReducerStrategies {
         tree: ChoiceTree,
         property: (Output) -> Bool,
         sequence: ChoiceSequence,
-        siblingGroups _: [SiblingGroup],
+        siblingGroups: [SiblingGroup],
         rejectCache: inout ReducerCache,
     ) throws -> (ChoiceSequence, Output)? {
         let cohorts = alignedContainerCohorts(in: sequence)
+            + alignedSiblingGroupCohorts(from: siblingGroups)
+            + rootSequenceContainerCohorts(in: sequence)
         for slots in cohorts where !slots.isEmpty {
             var slotStart = 0
             while slotStart < slots.count {
@@ -112,7 +104,176 @@ extension ReducerStrategies {
                     }
                     rejectCache.insert(candidate)
                 }
+
+                if k == 0, maxBatch >= 2 {
+                    // Non-monotonic fallback: coupled failures may reject size=1 but accept size=2+.
+                    // Probe larger batches directly to avoid getting stuck on monotonic assumptions.
+                    var probeSizes = [2, 3, 4, maxBatch]
+                    probeSizes = Array(Set(probeSizes))
+                        .filter { $0 > 1 && $0 <= maxBatch }
+                        .sorted()
+
+                    var bestNonMonotoneCandidate: ChoiceSequence?
+                    var bestNonMonotoneOutput: Output?
+                    var bestNonMonotoneSize = 0
+
+                    for size in probeSizes {
+                        var rangeSet = RangeSet<Int>()
+                        for offset in 0 ..< size {
+                            for range in slots[slotStart + offset].ranges {
+                                rangeSet.insert(contentsOf: range.asRange)
+                            }
+                        }
+
+                        var candidate = sequence
+                        candidate.removeSubranges(rangeSet)
+                        guard candidate.shortLexPrecedes(sequence) else { continue }
+                        guard rejectCache.contains(candidate) == false else { continue }
+                        guard let output = try? Interpreters.materialize(gen, with: tree, using: candidate) else {
+                            rejectCache.insert(candidate)
+                            continue
+                        }
+                        if property(output) == false {
+                            if size >= bestNonMonotoneSize {
+                                bestNonMonotoneSize = size
+                                bestNonMonotoneCandidate = candidate
+                                bestNonMonotoneOutput = output
+                            }
+                        } else {
+                            rejectCache.insert(candidate)
+                        }
+                    }
+
+                    if let bestNonMonotoneCandidate, let bestNonMonotoneOutput {
+                        return (bestNonMonotoneCandidate, bestNonMonotoneOutput)
+                    }
+                }
                 slotStart += 1
+            }
+
+            // Bounded non-contiguous fallback for coupled cases where contiguous windows fail.
+            if let (candidate, output) = try bestSubsetDeletionCandidate(
+                gen,
+                tree: tree,
+                property: property,
+                sequence: sequence,
+                slots: slots,
+                rejectCache: &rejectCache,
+            ) {
+                return (candidate, output)
+            }
+        }
+
+        return nil
+    }
+
+    private static func alignedSiblingGroupCohorts(
+        from siblingGroups: [SiblingGroup],
+    ) -> [[AlignedDeletionSlot]] {
+        var cohorts = [[AlignedDeletionSlot]]()
+        for group in siblingGroups where group.ranges.count >= 2 {
+            // Focus this pass on coordinated container deletions to avoid overlapping
+            // behavior with single-value deletion passes.
+            guard group.kind != .bareValue else { continue }
+            cohorts.append(group.ranges.map { AlignedDeletionSlot(ranges: [$0]) })
+        }
+        return cohorts
+    }
+
+    private static func rootSequenceContainerCohorts(
+        in sequence: ChoiceSequence,
+    ) -> [[AlignedDeletionSlot]] {
+        let sequenceContainerSpans = ChoiceSequence.extractContainerSpans(from: sequence).filter { span in
+            guard span.kind == .sequence(true) else { return false }
+            guard span.range.lowerBound >= 0, span.range.upperBound < sequence.count else { return false }
+            return sequence[span.range.lowerBound] == .sequence(true)
+                && sequence[span.range.upperBound] == .sequence(false)
+        }
+        guard sequenceContainerSpans.count >= 2 else { return [] }
+        guard let minDepth = sequenceContainerSpans.map(\.depth).min() else { return [] }
+
+        let rootLevel = sequenceContainerSpans
+            .filter { $0.depth == minDepth }
+            .sorted { $0.range.lowerBound < $1.range.lowerBound }
+        guard rootLevel.count >= 2 else { return [] }
+
+        // For fixed-arity tuples/zips, deleting whole sequence containers can invalidate structure.
+        // Delete each list's content span instead, preserving the list container itself.
+        let contentSlots = rootLevel.compactMap { span -> AlignedDeletionSlot? in
+            let lower = span.range.lowerBound + 1
+            let upper = span.range.upperBound - 1
+            guard lower <= upper else { return nil } // already-empty list
+            return AlignedDeletionSlot(ranges: [lower ... upper])
+        }
+        guard contentSlots.count >= 2 else { return [] }
+
+        return [contentSlots]
+    }
+
+    private static func bestSubsetDeletionCandidate<Output>(
+        _ gen: ReflectiveGenerator<Output>,
+        tree: ChoiceTree,
+        property: (Output) -> Bool,
+        sequence: ChoiceSequence,
+        slots: [AlignedDeletionSlot],
+        rejectCache: inout ReducerCache,
+    ) throws -> (ChoiceSequence, Output)? {
+        // Keep combinatorics bounded.
+        guard slots.count >= 2, slots.count <= 10 else { return nil }
+
+        var bestCandidate: ChoiceSequence?
+        var bestOutput: Output?
+        var bestDeletionCount = 0
+
+        let totalMasks = 1 << slots.count
+        // Iterate larger subsets first to bias toward stronger deletions.
+        for deletionCount in stride(from: slots.count, through: 2, by: -1) {
+            for mask in 1 ..< totalMasks where mask.nonzeroBitCount == deletionCount {
+                var rangeSet = RangeSet<Int>()
+                for slotIndex in 0 ..< slots.count where (mask & (1 << slotIndex)) != 0 {
+                    for range in slots[slotIndex].ranges {
+                        rangeSet.insert(contentsOf: range.asRange)
+                    }
+                }
+
+                var candidate = sequence
+                candidate.removeSubranges(rangeSet)
+                guard candidate.shortLexPrecedes(sequence) else { continue }
+                guard rejectCache.contains(candidate) == false else { continue }
+                guard let output = try? Interpreters.materialize(gen, with: tree, using: candidate) else {
+                    rejectCache.insert(candidate)
+                    continue
+                }
+                guard property(output) == false else {
+                    rejectCache.insert(candidate)
+                    continue
+                }
+
+                if bestCandidate == nil {
+                    bestCandidate = candidate
+                    bestOutput = output
+                    bestDeletionCount = deletionCount
+                    continue
+                }
+
+                if deletionCount > bestDeletionCount {
+                    bestCandidate = candidate
+                    bestOutput = output
+                    bestDeletionCount = deletionCount
+                    continue
+                }
+
+                if deletionCount == bestDeletionCount,
+                   let currentBest = bestCandidate,
+                   candidate.shortLexPrecedes(currentBest)
+                {
+                    bestCandidate = candidate
+                    bestOutput = output
+                }
+            }
+
+            if bestCandidate != nil {
+                return (bestCandidate!, bestOutput!)
             }
         }
 
@@ -132,24 +293,27 @@ extension ReducerStrategies {
         }
 
         var cohorts = [[AlignedDeletionSlot]]()
-        var seenSignatures = Set<AlignedCohortKey>()
-        for descriptor in sortedDescriptors {
-            let key = AlignedCohortKey(depth: descriptor.depth, signature: descriptor.signature)
-            guard seenSignatures.insert(key).inserted else { continue }
+        for i in 0 ..< sortedDescriptors.count {
+            let lhs = sortedDescriptors[i]
+            for j in (i + 1) ..< sortedDescriptors.count {
+                let rhs = sortedDescriptors[j]
+                guard lhs.depth == rhs.depth else { continue }
 
-            let matches = sortedDescriptors.filter {
-                $0.depth == descriptor.depth && $0.signature == descriptor.signature
-            }
-            guard matches.count >= 2 else { continue }
-            guard let childCount = matches.first?.children.count, childCount > 0 else { continue }
+                var slots = [AlignedDeletionSlot]()
+                let sharedChildCount = min(lhs.children.count, rhs.children.count)
+                if sharedChildCount == 0 { continue }
 
-            var slots = [AlignedDeletionSlot]()
-            slots.reserveCapacity(childCount)
-            for childIndex in 0 ..< childCount {
-                let ranges = matches.map { $0.children[childIndex].range }
-                slots.append(.init(ranges: ranges))
+                for childIndex in 0 ..< sharedChildCount {
+                    let leftChild = lhs.children[childIndex]
+                    let rightChild = rhs.children[childIndex]
+                    guard alignedChildrenMatch(leftChild, rightChild) else { continue }
+                    slots.append(.init(ranges: [leftChild.range, rightChild.range]))
+                }
+
+                if slots.isEmpty == false {
+                    cohorts.append(slots)
+                }
             }
-            cohorts.append(slots)
         }
 
         return cohorts
@@ -178,11 +342,7 @@ extension ReducerStrategies {
             }
         }
 
-        let signature = AlignedContainerSignature(
-            kindKeys: typedChildren.map { siblingKindKey($0.kind) },
-            valueTags: typedChildren.map(\.valueTag),
-        )
-        return .init(depth: depth, range: range, signature: signature, children: typedChildren)
+        return .init(depth: depth, range: range, children: typedChildren)
     }
 
     private static func effectiveAlignedChildren(
@@ -210,14 +370,14 @@ extension ReducerStrategies {
         return []
     }
 
-    private static func siblingKindKey(_ kind: SiblingChildKind) -> UInt8 {
-        switch kind {
-        case .bareValue:
-            return 0
-        case .sequence:
-            return 1
-        case .group:
-            return 2
+    private static func alignedChildrenMatch(
+        _ lhs: AlignedContainerChild,
+        _ rhs: AlignedContainerChild,
+    ) -> Bool {
+        guard lhs.kind == rhs.kind else { return false }
+        if lhs.kind == .bareValue {
+            return lhs.valueTag == rhs.valueTag
         }
+        return true
     }
 }
