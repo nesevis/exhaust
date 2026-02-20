@@ -27,6 +27,38 @@ public extension Interpreters {
             )
         }
 
+        struct AlignedDeletionBeamSearchTuning {
+            let minBeamWidth: Int
+            let beamWidthScale: Int
+            let maxBeamWidth: Int
+            let minEvaluationsPerLayer: Int
+            let evaluationsPerLayerScale: Int
+
+            static let fast = Self(
+                minBeamWidth: 12,
+                beamWidthScale: 2,
+                maxBeamWidth: 48,
+                minEvaluationsPerLayer: 6,
+                evaluationsPerLayerScale: 1
+            )
+
+            static let slow = Self(
+                minBeamWidth: 18,
+                beamWidthScale: 3,
+                maxBeamWidth: 96,
+                minEvaluationsPerLayer: 10,
+                evaluationsPerLayerScale: 2
+            )
+
+            func beamWidth(for slotCount: Int) -> Int {
+                min(max(minBeamWidth, slotCount * beamWidthScale), maxBeamWidth)
+            }
+
+            func evaluationsPerLayer(for slotCount: Int, beamWidth: Int) -> Int {
+                min(max(minEvaluationsPerLayer, slotCount * evaluationsPerLayerScale), beamWidth)
+            }
+        }
+
         case fast
         case slow
 
@@ -49,6 +81,15 @@ public extension Interpreters {
         }
 
         var probeBudgets: ProbeBudgets {
+            switch self {
+            case .fast:
+                .fast
+            case .slow:
+                .slow
+            }
+        }
+
+        var alignedDeletionBeamSearchTuning: AlignedDeletionBeamSearchTuning {
             switch self {
             case .fast:
                 .fast
@@ -97,6 +138,7 @@ public extension Interpreters {
         var oracleCalls = [ShrinkPass: Int]()
         var stallBudget = config.maxStalls
         let probeBudgets = config.probeBudgets
+        let alignedDeletionBeamTuning = config.alignedDeletionBeamSearchTuning
         let budgetLogger: ((String) -> Void)? = isInstrumented ? { message in
             print("! \(message)")
         } : nil
@@ -196,6 +238,7 @@ public extension Interpreters {
                            siblingGroups: siblingGroups,
                            rejectCache: &rejectCache,
                            probeBudget: probeBudgets.deleteAlignedSiblingWindows,
+                           subsetBeamSearchTuning: alignedDeletionBeamTuning,
                            onBudgetExhausted: budgetLogger
                        )
                     {

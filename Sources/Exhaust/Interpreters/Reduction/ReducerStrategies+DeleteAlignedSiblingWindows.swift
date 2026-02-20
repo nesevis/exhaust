@@ -6,6 +6,8 @@
 //
 
 extension ReducerStrategies {
+    typealias AlignedDeletionBeamSearchTuning = Interpreters.ShrinkConfiguration.AlignedDeletionBeamSearchTuning
+
     private struct AlignedDeletionSlot {
         let ranges: [ClosedRange<Int>]
     }
@@ -105,6 +107,7 @@ extension ReducerStrategies {
         siblingGroups: [SiblingGroup],
         rejectCache: inout ReducerCache,
         probeBudget: Int,
+        subsetBeamSearchTuning: AlignedDeletionBeamSearchTuning,
         onBudgetExhausted: ((String) -> Void)? = nil,
     ) throws -> (ChoiceSequence, Output)? {
         let cohorts = alignedContainerCohorts(in: sequence)
@@ -241,6 +244,7 @@ extension ReducerStrategies {
                 sequence: sequence,
                 cohortRanges: cohortRanges,
                 property: property,
+                beamTuning: subsetBeamSearchTuning,
                 context: &context,
             )
             if let (candidate, output) = subsetResult {
@@ -301,6 +305,7 @@ extension ReducerStrategies {
         sequence: ChoiceSequence,
         cohortRanges: AlignedDeletionCohortRanges,
         property: (Output) -> Bool,
+        beamTuning: AlignedDeletionBeamSearchTuning,
         context: inout AlignedDeletionContext<Output>,
     ) -> (ChoiceSequence, Output)? {
         guard cohortRanges.slotCount >= 2 else { return nil }
@@ -311,8 +316,11 @@ extension ReducerStrategies {
         var bestOutput: Output?
         var bestDeletionCount = 0
 
-        let beamWidth = min(max(12, cohortRanges.slotCount * 2), 48)
-        let evaluationsPerLayer = min(max(6, cohortRanges.slotCount), beamWidth)
+        let beamWidth = beamTuning.beamWidth(for: cohortRanges.slotCount)
+        let evaluationsPerLayer = beamTuning.evaluationsPerLayer(
+            for: cohortRanges.slotCount,
+            beamWidth: beamWidth,
+        )
         var frontier = [AlignedDeletionBeamState(
             mask: 0,
             lastAddedSlot: -1,
