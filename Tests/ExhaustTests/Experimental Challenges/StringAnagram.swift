@@ -63,8 +63,6 @@ struct StringAnagramChallenge {
         // Both arrays should be length 2 (minimum for distinct anagrams)
         #expect(output.0.count == 2)
         #expect(output.1.count == 2)
-        // Should contain the two smallest values in the range, swapped
-//        #expect(Set(output.0) == Set([32, 33]))
         #expect(output.0 != output.1)
         #expect(output.0.sorted() == output.1.sorted())
     }
