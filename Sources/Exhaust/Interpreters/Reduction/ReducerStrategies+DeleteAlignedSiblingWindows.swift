@@ -69,6 +69,15 @@ extension ReducerStrategies {
         }
     }
 
+    private struct AlignedDeletionBeamState {
+        let mask: Int
+        let lastAddedSlot: Int
+        let deletionCount: Int
+        let slotIndexSum: Int
+        let heuristicScore: Int
+        let rangeSet: RangeSet<Int>
+    }
+
     private struct AlignedContainerChild {
         let range: ClosedRange<Int>
         let kind: SiblingChildKind
@@ -294,28 +303,72 @@ extension ReducerStrategies {
         property: (Output) -> Bool,
         context: inout AlignedDeletionContext<Output>,
     ) -> (ChoiceSequence, Output)? {
-        // Keep combinatorics bounded.
-        guard cohortRanges.slotCount >= 2, cohortRanges.slotCount <= 10 else { return nil }
+        guard cohortRanges.slotCount >= 2 else { return nil }
+        // We encode subsets as bitmasks.
+        guard cohortRanges.slotCount < Int.bitWidth else { return nil }
 
         var bestCandidate: ChoiceSequence?
         var bestOutput: Output?
         var bestDeletionCount = 0
 
-        let totalMasks = 1 << cohortRanges.slotCount
-        // Iterate larger subsets first to bias toward stronger deletions.
-        for deletionCount in stride(from: cohortRanges.slotCount, through: 2, by: -1) {
-            for mask in 1 ..< totalMasks where mask.nonzeroBitCount == deletionCount {
+        let beamWidth = min(max(12, cohortRanges.slotCount * 2), 48)
+        let evaluationsPerLayer = min(max(6, cohortRanges.slotCount), beamWidth)
+        var frontier = [AlignedDeletionBeamState(
+            mask: 0,
+            lastAddedSlot: -1,
+            deletionCount: 0,
+            slotIndexSum: 0,
+            heuristicScore: 0,
+            rangeSet: RangeSet<Int>(),
+        )]
+
+        for layer in 1 ... cohortRanges.slotCount {
+            if context.budgetExhausted {
+                break
+            }
+
+            var expanded = [AlignedDeletionBeamState]()
+            expanded.reserveCapacity(min(beamWidth * 2, beamWidth * max(1, cohortRanges.slotCount - layer + 1)))
+
+            for state in frontier {
+                let nextSlotStart = state.lastAddedSlot + 1
+                guard nextSlotStart < cohortRanges.slotCount else { continue }
+
+                for slotIndex in nextSlotStart ..< cohortRanges.slotCount {
+                    let mask = state.mask | (1 << slotIndex)
+                    let slotIndexSum = state.slotIndexSum + slotIndex
+                    var rangeSet = state.rangeSet
+                    rangeSet.formUnion(cohortRanges.slotRangeSets[slotIndex])
+                    expanded.append(.init(
+                        mask: mask,
+                        lastAddedSlot: slotIndex,
+                        deletionCount: layer,
+                        slotIndexSum: slotIndexSum,
+                        heuristicScore: beamHeuristicScore(
+                            deletionCount: layer,
+                            slotIndexSum: slotIndexSum,
+                        ),
+                        rangeSet: rangeSet,
+                    ))
+                }
+            }
+
+            guard expanded.isEmpty == false else { break }
+
+            expanded.sort(by: beamStatePrecedes)
+            if expanded.count > beamWidth {
+                expanded.removeSubrange(beamWidth...)
+            }
+            frontier = expanded
+
+            let evaluationCount = min(frontier.count, evaluationsPerLayer)
+            for state in frontier.prefix(evaluationCount) {
                 if context.budgetExhausted {
-                    if let bestCandidate, let bestOutput {
-                        return (bestCandidate, bestOutput)
-                    }
-                    return nil
+                    break
                 }
 
-                let rangeSet = cohortRanges.subsetRangeSet(mask: mask)
-
                 var candidate = sequence
-                candidate.removeSubranges(rangeSet)
+                candidate.removeSubranges(state.rangeSet)
                 guard candidate.shortLexPrecedes(sequence) else { continue }
                 guard let output = evaluateDeletionCandidate(
                     candidate: candidate,
@@ -328,18 +381,18 @@ extension ReducerStrategies {
                 if bestCandidate == nil {
                     bestCandidate = candidate
                     bestOutput = output
-                    bestDeletionCount = deletionCount
+                    bestDeletionCount = state.deletionCount
                     continue
                 }
 
-                if deletionCount > bestDeletionCount {
+                if state.deletionCount > bestDeletionCount {
                     bestCandidate = candidate
                     bestOutput = output
-                    bestDeletionCount = deletionCount
+                    bestDeletionCount = state.deletionCount
                     continue
                 }
 
-                if deletionCount == bestDeletionCount,
+                if state.deletionCount == bestDeletionCount,
                    let currentBest = bestCandidate,
                    candidate.shortLexPrecedes(currentBest)
                 {
@@ -347,13 +400,37 @@ extension ReducerStrategies {
                     bestOutput = output
                 }
             }
+        }
 
-            if bestCandidate != nil {
-                return (bestCandidate!, bestOutput!)
-            }
+        if let bestCandidate, let bestOutput {
+            return (bestCandidate, bestOutput)
         }
 
         return nil
+    }
+
+    private static func beamHeuristicScore(
+        deletionCount: Int,
+        slotIndexSum: Int,
+    ) -> Int {
+        // Strongly prefer larger subsets and, within a subset size, earlier slots.
+        (deletionCount * 1_024) - slotIndexSum
+    }
+
+    private static func beamStatePrecedes(
+        _ lhs: AlignedDeletionBeamState,
+        _ rhs: AlignedDeletionBeamState,
+    ) -> Bool {
+        if lhs.deletionCount != rhs.deletionCount {
+            return lhs.deletionCount > rhs.deletionCount
+        }
+        if lhs.heuristicScore != rhs.heuristicScore {
+            return lhs.heuristicScore > rhs.heuristicScore
+        }
+        if lhs.slotIndexSum != rhs.slotIndexSum {
+            return lhs.slotIndexSum < rhs.slotIndexSum
+        }
+        return lhs.mask < rhs.mask
     }
 
     private static func evaluateDeletionCandidate<Output>(
