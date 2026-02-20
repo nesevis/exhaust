@@ -10,6 +10,65 @@ extension ReducerStrategies {
         let ranges: [ClosedRange<Int>]
     }
 
+    private struct AlignedDeletionCohortRanges {
+        let slotRangeSets: [RangeSet<Int>]
+        let prefixUnions: [RangeSet<Int>]
+
+        init(slots: [AlignedDeletionSlot]) {
+            slotRangeSets = slots.map { slot in
+                var rangeSet = RangeSet<Int>()
+                for range in slot.ranges {
+                    rangeSet.insert(contentsOf: range.asRange)
+                }
+                return rangeSet
+            }
+
+            var prefix = [RangeSet<Int>()]
+            prefix.reserveCapacity(slotRangeSets.count + 1)
+            for slotRangeSet in slotRangeSets {
+                var next = prefix[prefix.count - 1]
+                next.formUnion(slotRangeSet)
+                prefix.append(next)
+            }
+            prefixUnions = prefix
+        }
+
+        var slotCount: Int {
+            slotRangeSets.count
+        }
+
+        func contiguousRangeSet(slotStart: Int, size: Int) -> RangeSet<Int> {
+            guard size > 0 else { return RangeSet<Int>() }
+            var rangeSet = prefixUnions[slotStart + size]
+            rangeSet.subtract(prefixUnions[slotStart])
+            return rangeSet
+        }
+
+        func subsetRangeSet(mask: Int) -> RangeSet<Int> {
+            var rangeSet = RangeSet<Int>()
+            for slotIndex in 0 ..< slotRangeSets.count where (mask & (1 << slotIndex)) != 0 {
+                rangeSet.formUnion(slotRangeSets[slotIndex])
+            }
+            return rangeSet
+        }
+    }
+
+    private struct AlignedDeletionContext<Output> {
+        let gen: ReflectiveGenerator<Output>
+        let tree: ChoiceTree
+        let onBudgetExhausted: ((String) -> Void)?
+        var rejectCache: ReducerCache
+        var budget: ProbeBudget
+        var didReportBudgetExhaustion = false
+        var budgetExhausted = false
+
+        mutating func reportBudgetExhaustionIfNeeded() {
+            guard budget.isExhausted, didReportBudgetExhaustion == false else { return }
+            didReportBudgetExhaustion = true
+            onBudgetExhausted?(budget.exhaustionReason)
+        }
+    }
+
     private struct AlignedContainerChild {
         let range: ClosedRange<Int>
         let kind: SiblingChildKind
@@ -36,11 +95,28 @@ extension ReducerStrategies {
         sequence: ChoiceSequence,
         siblingGroups: [SiblingGroup],
         rejectCache: inout ReducerCache,
+        probeBudget: Int,
+        onBudgetExhausted: ((String) -> Void)? = nil,
     ) throws -> (ChoiceSequence, Output)? {
         let cohorts = alignedContainerCohorts(in: sequence)
             + alignedSiblingGroupCohorts(from: siblingGroups)
             + rootSequenceContainerCohorts(in: sequence)
+        var context = AlignedDeletionContext(
+            gen: gen,
+            tree: tree,
+            onBudgetExhausted: onBudgetExhausted,
+            rejectCache: rejectCache,
+            budget: ProbeBudget(passName: "deleteAlignedSiblingWindows", limit: probeBudget),
+        )
+        defer { rejectCache = context.rejectCache }
+
+        guard context.budget.isExhausted == false else {
+            context.reportBudgetExhaustionIfNeeded()
+            return nil
+        }
+
         for slots in cohorts where !slots.isEmpty {
+            let cohortRanges = AlignedDeletionCohortRanges(slots: slots)
             var slotStart = 0
             while slotStart < slots.count {
                 let maxBatch = slots.count - slotStart
@@ -49,36 +125,37 @@ extension ReducerStrategies {
                 var bestSize = 0
 
                 let k = AdaptiveProbe.findInteger { (size: Int) -> Bool in
+                    if context.budgetExhausted {
+                        return false
+                    }
                     guard size > 0 else { return true }
                     guard size <= maxBatch else { return false }
-
-                    var rangeSet = RangeSet<Int>()
-                    for offset in 0 ..< size {
-                        for range in slots[slotStart + offset].ranges {
-                            rangeSet.insert(contentsOf: range.asRange)
-                        }
-                    }
+                    let rangeSet = cohortRanges.contiguousRangeSet(slotStart: slotStart, size: size)
 
                     var candidate = sequence
                     candidate.removeSubranges(rangeSet)
 
                     guard candidate.shortLexPrecedes(sequence) else { return false }
-                    guard rejectCache.contains(candidate) == false else { return false }
-                    guard let output = try? Interpreters.materialize(gen, with: tree, using: candidate) else {
-                        rejectCache.insert(candidate)
-                        return false
-                    }
-                    let fails = property(output) == false
-                    if fails {
+                    if let output = evaluateDeletionCandidate(
+                        candidate: candidate,
+                        property: property,
+                        context: &context,
+                    ) {
                         if size >= bestSize {
                             bestSize = size
                             bestCandidate = candidate
                             bestOutput = output
                         }
-                    } else {
-                        rejectCache.insert(candidate)
+                        return true
                     }
-                    return fails
+                    return false
+                }
+
+                if context.budgetExhausted {
+                    if let bestCandidate, let bestOutput {
+                        return (bestCandidate, bestOutput)
+                    }
+                    return nil
                 }
 
                 if k > 0 {
@@ -86,23 +163,23 @@ extension ReducerStrategies {
                         return (bestCandidate, bestOutput)
                     }
 
-                    var rangeSet = RangeSet<Int>()
-                    for offset in 0 ..< k {
-                        for range in slots[slotStart + offset].ranges {
-                            rangeSet.insert(contentsOf: range.asRange)
-                        }
-                    }
+                    let rangeSet = cohortRanges.contiguousRangeSet(slotStart: slotStart, size: k)
                     var candidate = sequence
                     candidate.removeSubranges(rangeSet)
+                    let evaluatedOutput: Output? = evaluateDeletionCandidate(
+                        candidate: candidate,
+                        property: property,
+                        context: &context,
+                    )
 
                     if candidate.shortLexPrecedes(sequence),
-                       rejectCache.contains(candidate) == false,
-                       let output = try? Interpreters.materialize(gen, with: tree, using: candidate),
-                       property(output) == false
+                       let output = evaluatedOutput
                     {
                         return (candidate, output)
                     }
-                    rejectCache.insert(candidate)
+                    if context.budgetExhausted {
+                        return nil
+                    }
                 }
 
                 if k == 0, maxBatch >= 2 {
@@ -118,49 +195,50 @@ extension ReducerStrategies {
                     var bestNonMonotoneSize = 0
 
                     for size in probeSizes {
-                        var rangeSet = RangeSet<Int>()
-                        for offset in 0 ..< size {
-                            for range in slots[slotStart + offset].ranges {
-                                rangeSet.insert(contentsOf: range.asRange)
-                            }
+                        if context.budgetExhausted {
+                            break
                         }
+                        let rangeSet = cohortRanges.contiguousRangeSet(slotStart: slotStart, size: size)
 
                         var candidate = sequence
                         candidate.removeSubranges(rangeSet)
                         guard candidate.shortLexPrecedes(sequence) else { continue }
-                        guard rejectCache.contains(candidate) == false else { continue }
-                        guard let output = try? Interpreters.materialize(gen, with: tree, using: candidate) else {
-                            rejectCache.insert(candidate)
-                            continue
-                        }
-                        if property(output) == false {
+                        let evaluatedOutput: Output? = evaluateDeletionCandidate(
+                            candidate: candidate,
+                            property: property,
+                            context: &context,
+                        )
+                        if let output = evaluatedOutput {
                             if size >= bestNonMonotoneSize {
                                 bestNonMonotoneSize = size
                                 bestNonMonotoneCandidate = candidate
                                 bestNonMonotoneOutput = output
                             }
-                        } else {
-                            rejectCache.insert(candidate)
                         }
                     }
 
                     if let bestNonMonotoneCandidate, let bestNonMonotoneOutput {
                         return (bestNonMonotoneCandidate, bestNonMonotoneOutput)
                     }
+                    if context.budgetExhausted {
+                        return nil
+                    }
                 }
                 slotStart += 1
             }
 
             // Bounded non-contiguous fallback for coupled cases where contiguous windows fail.
-            if let (candidate, output) = try bestSubsetDeletionCandidate(
-                gen,
-                tree: tree,
-                property: property,
+            let subsetResult: (ChoiceSequence, Output)? = bestSubsetDeletionCandidate(
                 sequence: sequence,
-                slots: slots,
-                rejectCache: &rejectCache,
-            ) {
+                cohortRanges: cohortRanges,
+                property: property,
+                context: &context,
+            )
+            if let (candidate, output) = subsetResult {
                 return (candidate, output)
+            }
+            if context.budgetExhausted {
+                return nil
             }
         }
 
@@ -211,41 +289,39 @@ extension ReducerStrategies {
     }
 
     private static func bestSubsetDeletionCandidate<Output>(
-        _ gen: ReflectiveGenerator<Output>,
-        tree: ChoiceTree,
-        property: (Output) -> Bool,
         sequence: ChoiceSequence,
-        slots: [AlignedDeletionSlot],
-        rejectCache: inout ReducerCache,
-    ) throws -> (ChoiceSequence, Output)? {
+        cohortRanges: AlignedDeletionCohortRanges,
+        property: (Output) -> Bool,
+        context: inout AlignedDeletionContext<Output>,
+    ) -> (ChoiceSequence, Output)? {
         // Keep combinatorics bounded.
-        guard slots.count >= 2, slots.count <= 10 else { return nil }
+        guard cohortRanges.slotCount >= 2, cohortRanges.slotCount <= 10 else { return nil }
 
         var bestCandidate: ChoiceSequence?
         var bestOutput: Output?
         var bestDeletionCount = 0
 
-        let totalMasks = 1 << slots.count
+        let totalMasks = 1 << cohortRanges.slotCount
         // Iterate larger subsets first to bias toward stronger deletions.
-        for deletionCount in stride(from: slots.count, through: 2, by: -1) {
+        for deletionCount in stride(from: cohortRanges.slotCount, through: 2, by: -1) {
             for mask in 1 ..< totalMasks where mask.nonzeroBitCount == deletionCount {
-                var rangeSet = RangeSet<Int>()
-                for slotIndex in 0 ..< slots.count where (mask & (1 << slotIndex)) != 0 {
-                    for range in slots[slotIndex].ranges {
-                        rangeSet.insert(contentsOf: range.asRange)
+                if context.budgetExhausted {
+                    if let bestCandidate, let bestOutput {
+                        return (bestCandidate, bestOutput)
                     }
+                    return nil
                 }
+
+                let rangeSet = cohortRanges.subsetRangeSet(mask: mask)
 
                 var candidate = sequence
                 candidate.removeSubranges(rangeSet)
                 guard candidate.shortLexPrecedes(sequence) else { continue }
-                guard rejectCache.contains(candidate) == false else { continue }
-                guard let output = try? Interpreters.materialize(gen, with: tree, using: candidate) else {
-                    rejectCache.insert(candidate)
-                    continue
-                }
-                guard property(output) == false else {
-                    rejectCache.insert(candidate)
+                guard let output = evaluateDeletionCandidate(
+                    candidate: candidate,
+                    property: property,
+                    context: &context,
+                ) else {
                     continue
                 }
 
@@ -278,6 +354,44 @@ extension ReducerStrategies {
         }
 
         return nil
+    }
+
+    private static func evaluateDeletionCandidate<Output>(
+        candidate: ChoiceSequence,
+        property: (Output) -> Bool,
+        context: inout AlignedDeletionContext<Output>,
+    ) -> Output? {
+        guard context.rejectCache.contains(candidate) == false else {
+            return nil
+        }
+        guard consumeBudget(context: &context) else {
+            return nil
+        }
+
+        guard let output = try? Interpreters.materialize(
+            context.gen,
+            with: context.tree,
+            using: candidate,
+        ) else {
+            context.rejectCache.insert(candidate)
+            return nil
+        }
+        guard property(output) == false else {
+            context.rejectCache.insert(candidate)
+            return nil
+        }
+        return output
+    }
+
+    private static func consumeBudget<Output>(
+        context: inout AlignedDeletionContext<Output>,
+    ) -> Bool {
+        guard context.budget.consume() else {
+            context.budgetExhausted = true
+            context.reportBudgetExhaustionIfNeeded()
+            return false
+        }
+        return true
     }
 
     private static func alignedContainerCohorts(

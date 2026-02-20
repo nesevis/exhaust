@@ -9,6 +9,24 @@ import Foundation
 
 public extension Interpreters {
     enum ShrinkConfiguration {
+        struct ProbeBudgets {
+            let deleteAlignedSiblingWindows: Int
+            let redistributeNumericPairs: Int
+            let reduceValuesInTandem: Int
+
+            static let fast = Self(
+                deleteAlignedSiblingWindows: 400,
+                redistributeNumericPairs: 600,
+                reduceValuesInTandem: 400
+            )
+
+            static let slow = Self(
+                deleteAlignedSiblingWindows: 2_000,
+                redistributeNumericPairs: 3_000,
+                reduceValuesInTandem: 2_000
+            )
+        }
+
         case fast
         case slow
 
@@ -27,6 +45,15 @@ public extension Interpreters {
                 6
             case .slow:
                 12
+            }
+        }
+
+        var probeBudgets: ProbeBudgets {
+            switch self {
+            case .fast:
+                .fast
+            case .slow:
+                .slow
             }
         }
     }
@@ -69,6 +96,10 @@ public extension Interpreters {
         var numberOfImprovements = 0
         var oracleCalls = [ShrinkPass: Int]()
         var stallBudget = config.maxStalls
+        let probeBudgets = config.probeBudgets
+        let budgetLogger: ((String) -> Void)? = isInstrumented ? { message in
+            print("! \(message)")
+        } : nil
         var didNaivelyMinimise = false
         var loops = 0
         var passes = ShrinkPass.allCases
@@ -163,7 +194,9 @@ public extension Interpreters {
                            property: oracle,
                            sequence: currentSequence,
                            siblingGroups: siblingGroups,
-                           rejectCache: &rejectCache
+                           rejectCache: &rejectCache,
+                           probeBudget: probeBudgets.deleteAlignedSiblingWindows,
+                           onBudgetExhausted: budgetLogger
                        )
                     {
                         currentSequence = newSequence
@@ -187,7 +220,15 @@ public extension Interpreters {
                 case .redistributeNumericPairs:
                     let valueCount = currentSequence.count(where: { $0.value != nil })
                     if valueCount >= 2, valueCount <= 16,
-                       let (newSequence, output) = try ReducerStrategies.redistributeNumericPairs(gen, tree: currentTree, property: oracle, sequence: currentSequence, rejectCache: &rejectCache)
+                       let (newSequence, output) = try ReducerStrategies.redistributeNumericPairs(
+                           gen,
+                           tree: currentTree,
+                           property: oracle,
+                           sequence: currentSequence,
+                           rejectCache: &rejectCache,
+                           probeBudget: probeBudgets.redistributeNumericPairs,
+                           onBudgetExhausted: budgetLogger
+                       )
                     {
                         currentSequence = newSequence
                         currentOutput = output
@@ -207,7 +248,18 @@ public extension Interpreters {
                 case .reduceValuesInTandem:
                     // Reduce individual values in tandem by equal amounts, via binary search
                     let siblingGroups = ChoiceSequence.extractSiblingGroups(from: currentSequence)
-                    if siblingGroups.isEmpty == false, let (newSequence, output) = try ReducerStrategies.reduceValuesInTandem(gen, tree: currentTree, property: oracle, sequence: currentSequence, siblingGroups: siblingGroups, rejectCache: &rejectCache) {
+                    if siblingGroups.isEmpty == false,
+                       let (newSequence, output) = try ReducerStrategies.reduceValuesInTandem(
+                           gen,
+                           tree: currentTree,
+                           property: oracle,
+                           sequence: currentSequence,
+                           siblingGroups: siblingGroups,
+                           rejectCache: &rejectCache,
+                           probeBudget: probeBudgets.reduceValuesInTandem,
+                           onBudgetExhausted: budgetLogger
+                       )
+                    {
                         currentSequence = newSequence
                         currentOutput = output
                         passImproved = true

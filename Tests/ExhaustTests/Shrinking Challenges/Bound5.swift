@@ -51,7 +51,6 @@ struct Bound5ShrinkingChallenge {
         #expect(arr == [-32768, -1])
     }
 
-    
     @Test("Bound5, Pathological 1")
     func bound5Pathological() throws {
         let value: Bound5 = ([-18914, -2906, 9816], [7672, 16087, 24512], [-11812, -5368, 8526, -24292, 21020, 14344, -1893, -22885], [25982, 8828, 5007, -6389], [12744, -11152, -18025, -29069, 30825])

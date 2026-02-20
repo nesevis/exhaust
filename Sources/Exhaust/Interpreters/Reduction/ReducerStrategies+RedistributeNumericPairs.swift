@@ -21,22 +21,31 @@ extension ReducerStrategies {
         property: (Output) -> Bool,
         sequence: ChoiceSequence,
         rejectCache: inout ReducerCache,
+        probeBudget: Int,
+        onBudgetExhausted: ((String) -> Void)? = nil,
     ) throws -> (ChoiceSequence, Output)? {
-        // Collect all numeric value/reduced entries with their sequence indices and container IDs.
-        // Container ID increments each time we cross a container boundary (group/sequence close),
-        // so values in different containers get different IDs.
-        typealias Candidate = (index: Int, value: ChoiceSequenceValue.Value, containerID: Int)
+        typealias Candidate = (index: Int, value: ChoiceSequenceValue.Value)
         var candidatesByTag = [TypeTag: [Candidate]]()
-        var containerID = 0
+        var budget = ProbeBudget(passName: "redistributeNumericPairs", limit: probeBudget)
+        var didReportBudgetExhaustion = false
+
+        func reportBudgetExhaustionIfNeeded() {
+            guard budget.isExhausted, didReportBudgetExhaustion == false else { return }
+            didReportBudgetExhaustion = true
+            onBudgetExhausted?(budget.exhaustionReason)
+        }
+
+        guard budget.isExhausted == false else {
+            reportBudgetExhaustionIfNeeded()
+            return nil
+        }
 
         for (i, entry) in sequence.enumerated() {
             switch entry {
-            case .group(false), .sequence(false):
-                containerID += 1
             case let .value(v), let .reduced(v):
                 switch v.choice {
                 case .unsigned, .signed, .floating:
-                    candidatesByTag[v.choice.tag, default: []].append((i, v, containerID))
+                    candidatesByTag[v.choice.tag, default: []].append((i, v))
                 case .character:
                     break
                 }
@@ -48,17 +57,23 @@ extension ReducerStrategies {
         var current = sequence
         var progress = false
         var latestOutput: Output?
-        var currentNonSemanticCount = nonSemanticValueCount(in: current)
+        var semanticStats = SequenceSemanticStats(sequence: current)
+        var currentNonSemanticCount = semanticStats.nonSemanticCount
+        var budgetExhausted = false
 
-        for (_, candidates) in candidatesByTag {
+        candidateLoop: for (_, candidates) in candidatesByTag {
             guard candidates.count >= 2 else { continue }
 
             for ci in 0 ..< candidates.count {
                 for cj in (ci + 1) ..< candidates.count {
                     // Try both orientations so index ordering does not block useful redistributions.
                     for (lhs, rhs) in [(ci, cj), (cj, ci)] {
-                        let (idx1, _, _) = candidates[lhs]
-                        let (idx2, _, _) = candidates[rhs]
+                        if budgetExhausted {
+                            break candidateLoop
+                        }
+
+                        let (idx1, _) = candidates[lhs]
+                        let (idx2, _) = candidates[rhs]
 
                         // Use current values (may have been updated by prior iterations)
                         guard let fresh1 = current[idx1].value,
@@ -96,24 +111,25 @@ extension ReducerStrategies {
 
                         var lastProbe: ChoiceSequence?
                         var lastProbeOutput: Output?
+                        var lastProbeEntry1: ChoiceSequenceValue?
+                        var lastProbeEntry2: ChoiceSequenceValue?
+                        var lastProbeNonSemanticCount = Int.max
                         let beforePair = [fresh1.choice.shortlexKey, fresh2.choice.shortlexKey].sorted()
 
-                        let bestK = AdaptiveProbe.findInteger { (k: UInt64) -> Bool in
+                        _ = AdaptiveProbe.findInteger { (k: UInt64) -> Bool in
+                            if budgetExhausted {
+                                return false
+                            }
                             guard k > 0 else { return true }
                             guard k <= distance1 else { return false }
 
-                            // Move node1 toward its target by k
-                            let newBP1 = decrease1Upward ? bp1 + k : bp1 - k
-                            // Move node2 away from its target by k (opposite direction)
-                            let newBP2: UInt64
-                            if decrease1Upward {
-                                // node1 increases by k, so node2 must decrease by k
-                                guard bp2 >= k else { return false }
-                                newBP2 = bp2 - k
-                            } else {
-                                // node1 decreases by k, so node2 must increase by k
-                                guard UInt64.max - k >= bp2 else { return false }
-                                newBP2 = bp2 + k
+                            guard let (newBP1, newBP2) = redistributedPairBitPatterns(
+                                lhsBitPattern: bp1,
+                                rhsBitPattern: bp2,
+                                delta: k,
+                                lhsMovesUpward: decrease1Upward
+                            ) else {
+                                return false
                             }
 
                             let newChoice1 = ChoiceValue(
@@ -126,17 +142,40 @@ extension ReducerStrategies {
                             )
                             // Do not range-gate here: recorded valid ranges can be stale after prior
                             // structural/value edits. Let replay/materialization be the source of truth.
+                            let probeEntry1 = ChoiceSequenceValue.reduced(.init(
+                                choice: newChoice1,
+                                validRanges: fresh1.validRanges,
+                            ))
+                            let probeEntry2 = ChoiceSequenceValue.value(.init(
+                                choice: newChoice2,
+                                validRanges: fresh2.validRanges,
+                            ))
+                            let probeNonSemanticCount = semanticStats.nonSemanticCount(
+                                afterReplacing: (idx1, probeEntry1),
+                                and: (idx2, probeEntry2),
+                            )
 
                             var probe = current
-                            probe[idx1] = .reduced(.init(choice: newChoice1, validRanges: fresh1.validRanges))
-                            probe[idx2] = .value(.init(choice: newChoice2, validRanges: fresh2.validRanges))
+                            probe[idx1] = probeEntry1
+                            probe[idx2] = probeEntry2
 
-                            let probeNonSemanticCount = nonSemanticValueCount(in: probe)
+#if DEBUG
+                            assert(
+                                SequenceSemanticStats.fullNonSemanticCount(in: probe) == probeNonSemanticCount,
+                                "SequenceSemanticStats delta mismatch in redistributeNumericPairs",
+                            )
+#endif
+
                             let improvesStructure = probe.shortLexPrecedes(current)
                                 || probeNonSemanticCount < currentNonSemanticCount
                             guard improvesStructure else { return false }
 
                             guard rejectCache.contains(probe) == false else {
+                                return false
+                            }
+                            guard budget.consume() else {
+                                budgetExhausted = true
+                                reportBudgetExhaustionIfNeeded()
                                 return false
                             }
                             guard let output = try? Interpreters.materialize(gen, with: tree, using: probe) else {
@@ -152,11 +191,18 @@ extension ReducerStrategies {
                                 if afterPair != beforePair {
                                     lastProbe = probe
                                     lastProbeOutput = output
+                                    lastProbeEntry1 = probeEntry1
+                                    lastProbeEntry2 = probeEntry2
+                                    lastProbeNonSemanticCount = probeNonSemanticCount
                                 }
                             } else {
                                 rejectCache.insert(probe)
                             }
                             return success
+                        }
+
+                        if budgetExhausted {
+                            break candidateLoop
                         }
 
                         if lastProbe == nil {
@@ -179,16 +225,17 @@ extension ReducerStrategies {
 
                             var bestFallbackProbe: ChoiceSequence?
                             var bestFallbackOutput: Output?
+                            var bestFallbackEntry1: ChoiceSequenceValue?
+                            var bestFallbackEntry2: ChoiceSequenceValue?
                             var bestFallbackNonSemantic = Int.max
                             for k in uniqueFallbackKs {
-                                let newBP1 = decrease1Upward ? bp1 + k : bp1 - k
-                                let newBP2: UInt64
-                                if decrease1Upward {
-                                    guard bp2 >= k else { continue }
-                                    newBP2 = bp2 - k
-                                } else {
-                                    guard UInt64.max - k >= bp2 else { continue }
-                                    newBP2 = bp2 + k
+                                guard let (newBP1, newBP2) = redistributedPairBitPatterns(
+                                    lhsBitPattern: bp1,
+                                    rhsBitPattern: bp2,
+                                    delta: k,
+                                    lhsMovesUpward: decrease1Upward
+                                ) else {
+                                    continue
                                 }
 
                                 let newChoice1 = ChoiceValue(
@@ -199,12 +246,29 @@ extension ReducerStrategies {
                                     fresh2.choice.tag.makeConvertible(bitPattern64: newBP2),
                                     tag: fresh2.choice.tag,
                                 )
+                                let probeEntry1 = ChoiceSequenceValue.reduced(.init(
+                                    choice: newChoice1,
+                                    validRanges: fresh1.validRanges,
+                                ))
+                                let probeEntry2 = ChoiceSequenceValue.value(.init(
+                                    choice: newChoice2,
+                                    validRanges: fresh2.validRanges,
+                                ))
 
                                 var probe = current
-                                probe[idx1] = .reduced(.init(choice: newChoice1, validRanges: fresh1.validRanges))
-                                probe[idx2] = .value(.init(choice: newChoice2, validRanges: fresh2.validRanges))
+                                probe[idx1] = probeEntry1
+                                probe[idx2] = probeEntry2
 
-                                let probeNonSemanticCount = nonSemanticValueCount(in: probe)
+                                let probeNonSemanticCount = semanticStats.nonSemanticCount(
+                                    afterReplacing: (idx1, probeEntry1),
+                                    and: (idx2, probeEntry2),
+                                )
+#if DEBUG
+                                assert(
+                                    SequenceSemanticStats.fullNonSemanticCount(in: probe) == probeNonSemanticCount,
+                                    "SequenceSemanticStats delta mismatch in redistributeNumericPairs fallback",
+                                )
+#endif
                                 let improvesStructure = probe.shortLexPrecedes(current)
                                     || probeNonSemanticCount < currentNonSemanticCount
                                 guard improvesStructure else { continue }
@@ -212,6 +276,11 @@ extension ReducerStrategies {
                                 let afterPair = [newChoice1.shortlexKey, newChoice2.shortlexKey].sorted()
                                 guard afterPair != beforePair else { continue }
                                 guard rejectCache.contains(probe) == false else { continue }
+                                guard budget.consume() else {
+                                    budgetExhausted = true
+                                    reportBudgetExhaustionIfNeeded()
+                                    break
+                                }
                                 guard let output = try? Interpreters.materialize(gen, with: tree, using: probe) else {
                                     rejectCache.insert(probe)
                                     continue
@@ -228,29 +297,48 @@ extension ReducerStrategies {
                                 {
                                     bestFallbackProbe = probe
                                     bestFallbackOutput = output
+                                    bestFallbackEntry1 = probeEntry1
+                                    bestFallbackEntry2 = probeEntry2
                                     bestFallbackNonSemantic = probeNonSemanticCount
                                 }
+                            }
+                            if budgetExhausted {
+                                break candidateLoop
                             }
 
                             if let bestFallbackProbe, let bestFallbackOutput {
                                 lastProbe = bestFallbackProbe
                                 lastProbeOutput = bestFallbackOutput
+                                lastProbeEntry1 = bestFallbackEntry1
+                                lastProbeEntry2 = bestFallbackEntry2
+                                lastProbeNonSemanticCount = bestFallbackNonSemantic
                             }
                         }
 
                         if let probe = lastProbe,
                            let output = lastProbeOutput,
+                           let probeEntry1 = lastProbeEntry1,
+                           let probeEntry2 = lastProbeEntry2,
                            (probe.shortLexPrecedes(current)
-                               || nonSemanticValueCount(in: probe) < currentNonSemanticCount)
+                               || lastProbeNonSemanticCount < currentNonSemanticCount)
                         {
                             current = probe
                             latestOutput = output
                             progress = true
-                            currentNonSemanticCount = nonSemanticValueCount(in: current)
+                            semanticStats.applyReplacements(
+                                (idx1, probeEntry1),
+                                (idx2, probeEntry2),
+                            )
+                            currentNonSemanticCount = semanticStats.nonSemanticCount
                         }
+
                     }
                 }
             }
+        }
+
+        if budgetExhausted {
+            reportBudgetExhaustionIfNeeded()
         }
 
         if progress, let output = latestOutput {
@@ -261,15 +349,6 @@ extension ReducerStrategies {
 
     private static func absDiff(_ lhs: UInt64, _ rhs: UInt64) -> UInt64 {
         lhs >= rhs ? (lhs - rhs) : (rhs - lhs)
-    }
-
-    private static func nonSemanticValueCount(in sequence: ChoiceSequence) -> Int {
-        sequence.reduce(into: 0) { count, entry in
-            guard let value = entry.value else { return }
-            if value.choice.shortlexKey != value.choice.semanticSimplest.shortlexKey {
-                count += 1
-            }
-        }
     }
 
     private static func wrappingBoundaryDelta(for tag: TypeTag, bitPattern: UInt64) -> UInt64? {
@@ -287,5 +366,22 @@ extension ReducerStrategies {
         let remainder = bitPattern % modulus
         if remainder == 0 { return nil }
         return modulus - remainder
+    }
+
+    private static func redistributedPairBitPatterns(
+        lhsBitPattern: UInt64,
+        rhsBitPattern: UInt64,
+        delta: UInt64,
+        lhsMovesUpward: Bool,
+    ) -> (UInt64, UInt64)? {
+        if lhsMovesUpward {
+            guard UInt64.max - delta >= lhsBitPattern else { return nil }
+            guard rhsBitPattern >= delta else { return nil }
+            return (lhsBitPattern + delta, rhsBitPattern - delta)
+        }
+
+        guard lhsBitPattern >= delta else { return nil }
+        guard UInt64.max - delta >= rhsBitPattern else { return nil }
+        return (lhsBitPattern - delta, rhsBitPattern + delta)
     }
 }

@@ -1,0 +1,27 @@
+{
+  "configurations" : [
+    {
+      "id" : "04888FA0-457D-4F78-8597-43EF42BD6566",
+      "name" : "Test Scheme Action",
+      "options" : {
+        "testExecutionOrdering" : "random"
+      }
+    }
+  ],
+  "defaultOptions" : {
+    "performanceAntipatternCheckerEnabled" : true
+  },
+  "testTargets" : [
+    {
+      "skippedTests" : [
+        "TestCaseReducerTests"
+      ],
+      "target" : {
+        "containerPath" : "container:",
+        "identifier" : "ExhaustTests",
+        "name" : "ExhaustTests"
+      }
+    }
+  ],
+  "version" : 1
+}

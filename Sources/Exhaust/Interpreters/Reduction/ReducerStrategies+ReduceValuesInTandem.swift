@@ -6,6 +6,21 @@
 //
 
 extension ReducerStrategies {
+    private struct TandemWindowPlan {
+        let windowIndices: [Int]
+        let tag: TypeTag
+        let originalEntries: [(index: Int, entry: ChoiceSequenceValue)]
+        let originalSemanticDistances: [UInt64]
+        let disallowAwayMoves: Bool
+        let searchUpward: Bool
+        let distance: UInt64
+    }
+
+    private struct TandemWindowCandidate {
+        let sequence: ChoiceSequence
+        let changedEntries: [(index: Int, entry: ChoiceSequenceValue)]
+    }
+
     /// Pass 7: Binary search multiple values toward their reduction target.
     /// For each sibling group of values will test how much it can reduce all siblings by the same amount.
     ///
@@ -19,109 +34,68 @@ extension ReducerStrategies {
         sequence: ChoiceSequence,
         siblingGroups: [SiblingGroup],
         rejectCache: inout ReducerCache,
+        probeBudget: Int,
+        onBudgetExhausted: ((String) -> Void)? = nil,
     ) throws -> (ChoiceSequence, Output)? {
         var current = sequence
         var progress = false
         var latestOutput: Output?
+        var budget = ProbeBudget(passName: "reduceValuesInTandem", limit: probeBudget)
+        var didReportBudgetExhaustion = false
+        var budgetExhausted = false
 
-        for group in siblingGroups {
+        func reportBudgetExhaustionIfNeeded() {
+            guard budget.isExhausted, didReportBudgetExhaustion == false else { return }
+            didReportBudgetExhaustion = true
+            onBudgetExhausted?(budget.exhaustionReason)
+        }
+
+        guard budget.isExhausted == false else {
+            reportBudgetExhaustionIfNeeded()
+            return nil
+        }
+
+        groupLoop: for group in siblingGroups {
             let tandemIndexSets = tandemIndexSets(for: group, in: current)
             guard tandemIndexSets.isEmpty == false else { continue }
 
             // Try suffix offsets so a near-target leading sibling does not block the whole set.
             for indexSet in tandemIndexSets where indexSet.count >= 2 {
-                for offset in 0 ..< (indexSet.count - 1) {
-                    let windowIndices = Array(indexSet[offset...])
-                    guard let firstValueIndex = windowIndices.first,
-                          let firstValue = current[firstValueIndex].value
-                    else {
-                        continue
+                let windowPlans = tandemWindowPlans(
+                    for: indexSet,
+                    in: current,
+                    groupKind: group.kind,
+                )
+                for plan in windowPlans {
+                    if budgetExhausted {
+                        break groupLoop
                     }
 
-                    // Keep tandem adjustments type-homogeneous.
-                    let tag = firstValue.choice.tag
-                    guard supportsTandemTag(tag) else { continue }
-                    guard windowIndices.dropFirst().allSatisfy({ idx in
-                        guard let value = current[idx].value else { return false }
-                        return value.choice.tag == tag
-                    }) else {
-                        continue
-                    }
-
-                    let currentBP = firstValue.choice.bitPattern64
-                    let targetBP = firstValue.choice.reductionTarget(in: firstValue.validRanges)
-                    guard currentBP != targetBP else { continue }
-
-                    let searchUpward = targetBP > currentBP
-                    let distance = searchUpward
-                        ? targetBP - currentBP
-                        : currentBP - targetBP
-                    guard distance > 1 else { continue }
-
-                    let originalEntries: [(index: Int, entry: ChoiceSequenceValue)] = windowIndices.map { idx in
-                        (idx, current[idx])
-                    }
-                    let originalSemanticDistances: [Int: UInt64] = Dictionary(
-                        uniqueKeysWithValues: originalEntries.compactMap { pair in
-                            guard let value = pair.entry.value else { return nil }
-                            return (pair.index, semanticDistance(of: value.choice))
-                        },
-                    )
-                    // For high-arity bare-value windows, disallow "translation" moves that
-                    // make any sibling semantically farther away. This keeps tandem monotone.
-                    let disallowAwayMoves = group.kind == .bareValue && windowIndices.count > 2
-                    var probe = current
                     var lastProbeEntries: [(index: Int, entry: ChoiceSequenceValue)]?
                     var lastProbeOutput: Output?
                     var lastProbeDelta: UInt64 = 0
 
                     let bestDelta = AdaptiveProbe.binarySearchWithGuess(
                         { (delta: UInt64) -> Bool in
+                            if budgetExhausted {
+                                return false
+                            }
                             guard delta > 0 else { return true } // predicate(0) assumed true
-                            var firstDifferenceOrder: ShortlexOrder = .eq
-                            var hasDifference = false
-                            var hasAwayMove = false
-                            for (idx, originalEntry) in originalEntries {
-                                guard let v = current[idx].value else {
-                                    return true
-                                }
-                                let newValue = searchUpward
-                                    ? v.choice.bitPattern64 &+ delta
-                                    : v.choice.bitPattern64 &- delta
-                                let newChoice = ChoiceValue(
-                                    v.choice.tag.makeConvertible(bitPattern64: newValue),
-                                    tag: v.choice.tag,
-                                )
-                                guard newChoice.fits(in: v.validRanges) else {
-                                    probe[idx] = originalEntry
-                                    continue
-                                }
-                                let newEntry = ChoiceSequenceValue.value(.init(choice: newChoice, validRanges: v.validRanges))
-                                if disallowAwayMoves,
-                                   let beforeDistance = originalSemanticDistances[idx]
-                                {
-                                    let afterDistance = semanticDistance(of: newChoice)
-                                    if afterDistance > beforeDistance {
-                                        hasAwayMove = true
-                                        break
-                                    }
-                                }
-                                let order = newEntry.shortLexCompare(originalEntry)
-                                if order != .eq, hasDifference == false {
-                                    hasDifference = true
-                                    firstDifferenceOrder = order
-                                }
-                                probe[idx] = newEntry
-                            }
-
-                            if hasAwayMove {
-                                return false
-                            }
-                            guard hasDifference, firstDifferenceOrder == .lt else {
+                            guard let probeCandidate = tandemCandidate(
+                                plan: plan,
+                                current: current,
+                                delta: delta,
+                            ) else {
                                 return false
                             }
 
+                            let probe = probeCandidate.sequence
                             guard rejectCache.contains(probe) == false else {
+                                return false
+                            }
+                            guard budget.consume() else {
+                                budgetExhausted = true
+                                reportBudgetExhaustionIfNeeded()
                                 return false
                             }
                             guard let output = try? Interpreters.materialize(gen, with: tree, using: probe) else {
@@ -133,7 +107,7 @@ extension ReducerStrategies {
                                 if delta >= lastProbeDelta {
                                     lastProbeDelta = delta
                                     lastProbeOutput = output
-                                    lastProbeEntries = originalEntries.map { ($0.index, probe[$0.index]) }
+                                    lastProbeEntries = probeCandidate.changedEntries
                                 }
                             } else {
                                 rejectCache.insert(probe)
@@ -141,8 +115,12 @@ extension ReducerStrategies {
                             return success
                         },
                         low: UInt64(0),
-                        high: distance,
+                        high: plan.distance,
                     )
+
+                    if budgetExhausted {
+                        break groupLoop
+                    }
 
                     if bestDelta > 0,
                        lastProbeDelta == bestDelta,
@@ -157,60 +135,187 @@ extension ReducerStrategies {
                         continue
                     }
 
-                    if bestDelta > 0 {
-                        // Fallback: reconstruct accepted candidate if probe bookkeeping missed it.
-                        var candidate = current
-                        var firstDifferenceOrder: ShortlexOrder = .eq
-                        var hasDifference = false
-                        var hasAwayMove = false
-                        for idx in windowIndices {
-                            guard let v = current[idx].value else { continue }
-                            let newValue = searchUpward
-                                ? v.choice.bitPattern64 &+ bestDelta
-                                : v.choice.bitPattern64 &- bestDelta
-                            let newChoice = ChoiceValue(
-                                v.choice.tag.makeConvertible(bitPattern64: newValue),
-                                tag: v.choice.tag,
-                            )
-                            guard newChoice.fits(in: v.validRanges) else { continue }
-                            let newEntry = ChoiceSequenceValue.value(.init(choice: newChoice, validRanges: v.validRanges))
-                            if disallowAwayMoves,
-                               let beforeDistance = originalSemanticDistances[idx]
-                            {
-                                let afterDistance = semanticDistance(of: newChoice)
-                                if afterDistance > beforeDistance {
-                                    hasAwayMove = true
-                                    break
-                                }
-                            }
-                            let order = newEntry.shortLexCompare(current[idx])
-                            guard order != .eq else { continue }
-                            if hasDifference == false {
-                                hasDifference = true
-                                firstDifferenceOrder = order
-                            }
-                            candidate[idx] = newEntry
+                    if bestDelta > 0,
+                       let fallbackCandidate = tandemCandidate(
+                           plan: plan,
+                           current: current,
+                           delta: bestDelta,
+                       )
+                    {
+                        let candidate = fallbackCandidate.sequence
+                        guard rejectCache.contains(candidate) == false else {
+                            continue
                         }
-                        if hasAwayMove == false,
-                           hasDifference, firstDifferenceOrder == .lt,
-                           let output = try? Interpreters.materialize(gen, with: tree, using: candidate),
-                           property(output) == false
-                        {
-                            latestOutput = output
-                            current = candidate
-                            progress = true
-                        } else {
+                        guard budget.consume() else {
+                            budgetExhausted = true
+                            reportBudgetExhaustionIfNeeded()
+                            break groupLoop
+                        }
+                        guard let output = try? Interpreters.materialize(gen, with: tree, using: candidate),
+                              property(output) == false
+                        else {
                             rejectCache.insert(candidate)
+                            continue
                         }
+
+                        latestOutput = output
+                        for (idx, entry) in fallbackCandidate.changedEntries {
+                            current[idx] = entry
+                        }
+                        progress = true
                     }
                 }
             }
+        }
+
+        if budgetExhausted {
+            reportBudgetExhaustionIfNeeded()
         }
 
         if progress, let output = latestOutput {
             return (current, output)
         }
         return nil
+    }
+
+    private static func tandemWindowPlans(
+        for indexSet: [Int],
+        in sequence: ChoiceSequence,
+        groupKind: SiblingChildKind,
+    ) -> [TandemWindowPlan] {
+        guard indexSet.count >= 2 else { return [] }
+
+        var plans = [TandemWindowPlan]()
+        plans.reserveCapacity(indexSet.count - 1)
+
+        for offset in 0 ..< (indexSet.count - 1) {
+            let windowIndices = Array(indexSet[offset...])
+            guard let plan = makeTandemWindowPlan(
+                windowIndices: windowIndices,
+                in: sequence,
+                groupKind: groupKind,
+            ) else {
+                continue
+            }
+            plans.append(plan)
+        }
+
+        return plans
+    }
+
+    private static func makeTandemWindowPlan(
+        windowIndices: [Int],
+        in sequence: ChoiceSequence,
+        groupKind: SiblingChildKind,
+    ) -> TandemWindowPlan? {
+        guard let firstValueIndex = windowIndices.first,
+              let firstValue = sequence[firstValueIndex].value
+        else {
+            return nil
+        }
+
+        let tag = firstValue.choice.tag
+        guard supportsTandemTag(tag) else { return nil }
+        guard windowIndices.dropFirst().allSatisfy({ idx in
+            guard let value = sequence[idx].value else { return false }
+            return value.choice.tag == tag
+        }) else {
+            return nil
+        }
+
+        let currentBP = firstValue.choice.bitPattern64
+        let targetBP = firstValue.choice.reductionTarget(in: firstValue.validRanges)
+        guard currentBP != targetBP else { return nil }
+
+        let searchUpward = targetBP > currentBP
+        let distance = searchUpward
+            ? targetBP - currentBP
+            : currentBP - targetBP
+        guard distance > 1 else { return nil }
+
+        let originalEntries: [(index: Int, entry: ChoiceSequenceValue)] = windowIndices.map { idx in
+            (idx, sequence[idx])
+        }
+        let originalSemanticDistances: [UInt64] = originalEntries.compactMap { pair in
+            pair.entry.value.map { semanticDistance(of: $0.choice) }
+        }
+        guard originalSemanticDistances.count == originalEntries.count else {
+            return nil
+        }
+
+        return TandemWindowPlan(
+            windowIndices: windowIndices,
+            tag: tag,
+            originalEntries: originalEntries,
+            originalSemanticDistances: originalSemanticDistances,
+            disallowAwayMoves: groupKind == .bareValue && windowIndices.count > 2,
+            searchUpward: searchUpward,
+            distance: distance,
+        )
+    }
+
+    private static func tandemCandidate(
+        plan: TandemWindowPlan,
+        current: ChoiceSequence,
+        delta: UInt64,
+    ) -> TandemWindowCandidate? {
+        guard delta > 0 else { return nil }
+
+        var candidate = current
+        var changedEntries = [(index: Int, entry: ChoiceSequenceValue)]()
+        changedEntries.reserveCapacity(plan.windowIndices.count)
+
+        var firstDifferenceOrder: ShortlexOrder = .eq
+        var hasDifference = false
+        for (entryOffset, pair) in plan.originalEntries.enumerated() {
+            let idx = pair.index
+            let originalEntry = pair.entry
+            guard let value = originalEntry.value else { return nil }
+            guard plan.searchUpward
+                ? UInt64.max - delta >= value.choice.bitPattern64
+                : value.choice.bitPattern64 >= delta
+            else {
+                return nil
+            }
+
+            let newValue = plan.searchUpward
+                ? value.choice.bitPattern64 + delta
+                : value.choice.bitPattern64 - delta
+            let newChoice = ChoiceValue(
+                plan.tag.makeConvertible(bitPattern64: newValue),
+                tag: plan.tag,
+            )
+            guard newChoice.fits(in: value.validRanges) else {
+                continue
+            }
+            if plan.disallowAwayMoves {
+                let beforeDistance = plan.originalSemanticDistances[entryOffset]
+                let afterDistance = semanticDistance(of: newChoice)
+                if afterDistance > beforeDistance {
+                    return nil
+                }
+            }
+
+            let newEntry = ChoiceSequenceValue.value(.init(
+                choice: newChoice,
+                validRanges: value.validRanges,
+            ))
+            let order = newEntry.shortLexCompare(originalEntry)
+            guard order != .eq else { continue }
+
+            if hasDifference == false {
+                hasDifference = true
+                firstDifferenceOrder = order
+            }
+            candidate[idx] = newEntry
+            changedEntries.append((idx, newEntry))
+        }
+
+        guard hasDifference, firstDifferenceOrder == .lt else {
+            return nil
+        }
+
+        return TandemWindowCandidate(sequence: candidate, changedEntries: changedEntries)
     }
 
     private static func tandemIndexSets(
