@@ -128,7 +128,9 @@ public enum ReflectiveOperation {
     ///   - min: Minimum bit pattern value (inclusive)
     ///   - max: Maximum bit pattern value (inclusive)
     ///   - tag: Type tag for proper interpretation of bit patterns
-    case chooseBits(min: UInt64, max: UInt64, tag: TypeTag)
+    ///   - isRangeExplicit: Whether `min...max` came from an explicit, stable bound
+    ///     that reflection should preserve and validate.
+    case chooseBits(min: UInt64, max: UInt64, tag: TypeTag, isRangeExplicit: Bool)
 
     /// Stack-safe sequence generation for creating arrays and collections.
     ///

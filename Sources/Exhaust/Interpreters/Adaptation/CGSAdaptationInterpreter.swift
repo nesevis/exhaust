@@ -91,7 +91,7 @@ enum CGSAdaptationInterpreter {
                     continuation: continuation,
                 )
 
-            case let .chooseBits(lower, upper, _):
+            case let .chooseBits(lower, upper, _, isRangeExplicit):
                 // Only subdivide chooseBits if we're not already inside a subdivided range
                 if insideSubdividedChooseBits == false {
                     context.depth += 1
@@ -102,7 +102,11 @@ enum CGSAdaptationInterpreter {
                     // TODO: Range heuristic!
                     let ranges = (lower ... upper).split(into: max(4, 20 - Int(context.depth)))
                     let results = try ranges
-                        .map { Gen.choose(in: $0) }
+                        .map {
+                            isRangeExplicit
+                                ? Gen.choose(in: $0)
+                                : Gen.chooseDerived(in: $0)
+                        }
                         .map { gen in
                             let recursedGen = try adaptRecursive(
                                 gen: gen.bind(continuation),

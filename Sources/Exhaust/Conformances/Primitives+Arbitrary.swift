@@ -12,7 +12,7 @@ extension UInt: Arbitrary {
         Gen.getSize().bind { size in
             // This needs a bit more work to slow the scaling down a tad. Counteract logarithm?
             let expanded: UInt = size < 64 ? 1 << size : UInt.max
-            return Gen.choose(in: UInt.min ... expanded)
+            return Gen.chooseDerived(in: UInt.min ... expanded)
         }
     }
 }
@@ -22,7 +22,7 @@ extension UInt64: Arbitrary {
         Gen.getSize().bind { size in
             // This needs a bit more work to slow the scaling down a tad. Counteract logarithm?
             let expanded: UInt64 = size < 64 ? 1 << size : UInt64.max
-            return Gen.choose(in: UInt64.min ... expanded)
+            return Gen.chooseDerived(in: UInt64.min ... expanded)
         }
     }
 }
@@ -33,7 +33,7 @@ extension UInt8: Arbitrary {
     public static var arbitrary: ReflectiveGenerator<Self> {
         Gen.getSize().bind { size in
             let expanded: UInt64 = size < 7 ? 1 << size : UInt64(UInt8.max)
-            return Gen.choose(in: 0 ... UInt8(expanded))
+            return Gen.chooseDerived(in: 0 ... UInt8(expanded))
         }
     }
 }
@@ -42,7 +42,7 @@ extension UInt16: Arbitrary {
     public static var arbitrary: ReflectiveGenerator<Self> {
         Gen.getSize().bind { size in
             let expanded: UInt64 = size < 15 ? 1 << size : UInt64(UInt16.max)
-            return Gen.choose(in: 0 ... UInt16(expanded))
+            return Gen.chooseDerived(in: 0 ... UInt16(expanded))
         }
     }
 }
@@ -51,7 +51,7 @@ extension UInt32: Arbitrary {
     public static var arbitrary: ReflectiveGenerator<Self> {
         Gen.getSize().bind { size in
             let expanded: UInt64 = size < 31 ? 1 << size : UInt64(UInt32.max)
-            return Gen.choose(in: 0 ... UInt32(expanded))
+            return Gen.chooseDerived(in: 0 ... UInt32(expanded))
         }
     }
 }
@@ -61,9 +61,9 @@ extension Int: Arbitrary {
         Gen.getSize().bind { size in
             if size < 63 {
                 let expanded: UInt64 = 1 << size
-                return Gen.choose(in: -Int(expanded) ... Int(expanded))
+                return Gen.chooseDerived(in: -Int(expanded) ... Int(expanded))
             }
-            return Gen.choose(in: Int.min ... Int.max)
+            return Gen.chooseDerived(in: Int.min ... Int.max)
         }
     }
 }
@@ -73,9 +73,9 @@ extension Int8: Arbitrary {
         Gen.getSize().bind { size in
             if size < 7 {
                 let expanded: UInt64 = 1 << size
-                return Gen.choose(in: -Int8(expanded) ... Int8(expanded))
+                return Gen.chooseDerived(in: -Int8(expanded) ... Int8(expanded))
             }
-            return Gen.choose(in: Int8.min ... Int8.max)
+            return Gen.chooseDerived(in: Int8.min ... Int8.max)
         }
     }
 }
@@ -85,10 +85,10 @@ extension Int16: Arbitrary {
         Gen.getSize().bind { size in
             if size < 15 {
                 let expanded: UInt64 = 1 << size
-                return Gen.choose(in: -Int16(expanded) ... Int16(expanded))
+                return Gen.chooseDerived(in: -Int16(expanded) ... Int16(expanded))
             }
             // TODO: Fix this elsewhere
-            return Gen.choose(in: Int16.min ... Int16.max)
+            return Gen.chooseDerived(in: Int16.min ... Int16.max)
         }
     }
 }
@@ -98,9 +98,9 @@ extension Int32: Arbitrary {
         Gen.getSize().bind { size in
             if size < 31 {
                 let expanded: UInt64 = 1 << size
-                return Gen.choose(in: -Int32(expanded) ... Int32(expanded))
+                return Gen.chooseDerived(in: -Int32(expanded) ... Int32(expanded))
             }
-            return Gen.choose(in: Int32.min ... Int32.max)
+            return Gen.chooseDerived(in: Int32.min ... Int32.max)
         }
     }
 }
@@ -110,9 +110,9 @@ extension Int64: Arbitrary {
         Gen.getSize().bind { size in
             if size < 63 {
                 let expanded: UInt64 = 1 << size
-                return Gen.choose(in: -Int64(expanded) ... Int64(expanded))
+                return Gen.chooseDerived(in: -Int64(expanded) ... Int64(expanded))
             }
-            return Gen.choose(in: Int64.min ... Int64.max)
+            return Gen.chooseDerived(in: Int64.min ... Int64.max)
         }
     }
 }
@@ -124,7 +124,7 @@ extension Double: Arbitrary {
         Gen.getSize().bind { size in
             // TODO: use pow() to scale range
             let boundary = size == UInt64.max ? Double.greatestFiniteMagnitude : Double(size)
-            return Gen.choose(in: -boundary ... boundary)
+            return Gen.chooseDerived(in: -boundary ... boundary)
         }
     }
 }
@@ -134,7 +134,7 @@ extension Float: Arbitrary {
         Gen.getSize().bind { size in
             // TODO: use pow() to scale range
             let boundary = size == UInt64.max ? Float.greatestFiniteMagnitude : Float(size)
-            return Gen.choose(in: -boundary ... boundary)
+            return Gen.chooseDerived(in: -boundary ... boundary)
         }
     }
 }

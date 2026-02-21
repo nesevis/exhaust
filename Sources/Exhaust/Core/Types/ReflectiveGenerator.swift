@@ -47,7 +47,9 @@ public extension ReflectiveGenerator where Operation == ReflectiveOperation {
         case .pure:
             return nil
         case let .impure(op, _):
-            guard case let .chooseBits(min, max, _) = op else {
+            guard case let .chooseBits(min, max, _, isRangeExplicit) = op,
+                  isRangeExplicit
+            else {
                 return nil
             }
             return min ... max

@@ -49,9 +49,10 @@ extension ReflectiveGenerator: CustomDebugStringConvertible where Operation == R
 
     private func operationDescription(_ operation: ReflectiveOperation, childPrefix: String, depth: Int) -> String {
         switch operation {
-        case let .chooseBits(min, max, tag):
+        case let .chooseBits(min, max, tag, isRangeExplicit):
             let range = formatBitRange(min: min, max: max, tag: tag)
-            return "chooseBits(\(tag.description): \(range))"
+            let suffix = isRangeExplicit ? "" : " [derived]"
+            return "chooseBits(\(tag.description): \(range))\(suffix)"
 
         case let .pick(choices):
             let header = "pick(choices: \(choices.count))"

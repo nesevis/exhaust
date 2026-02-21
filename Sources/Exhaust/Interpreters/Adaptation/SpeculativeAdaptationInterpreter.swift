@@ -90,7 +90,7 @@ enum SpeculativeAdaptationInterpreter {
                 // For prune, the inner generator is type-erased, so we can't adapt it
                 return .impure(operation: .prune(next: next), continuation: continuation)
 
-            case let .chooseBits(min, max, tag):
+            case let .chooseBits(min, max, tag, isRangeExplicit):
                 // Only subdivide chooseBits if we're not already inside a subdivided range
                 if insideSubdividedChooseBits == false {
                     // Convert chooseBits into a pick of subranges for adaptation
@@ -98,10 +98,10 @@ enum SpeculativeAdaptationInterpreter {
                         min: min,
                         max: max,
                         tag: tag,
+                        isRangeExplicit: isRangeExplicit,
                         continuation: continuation,
                         input: input,
                         context: context,
-                        insideSubdividedChooseBits: insideSubdividedChooseBits,
                         validityPredicate: validityPredicate,
                     )
                 } else {
@@ -141,10 +141,10 @@ enum SpeculativeAdaptationInterpreter {
                     min: 0,
                     max: context.maxSize,
                     tag: .uint64,
+                    isRangeExplicit: false,
                     continuation: continuation,
                     input: input,
                     context: context,
-                    insideSubdividedChooseBits: false,
                     validityPredicate: validityPredicate,
                 )
                 return try adaptRecursive(
@@ -180,17 +180,17 @@ enum SpeculativeAdaptationInterpreter {
         min: UInt64,
         max: UInt64,
         tag: TypeTag,
+        isRangeExplicit: Bool,
         continuation: @escaping (Any) throws -> ReflectiveGenerator<Output>,
         input: some Any,
         context: SpeculativeContext,
-        insideSubdividedChooseBits _: Bool,
         validityPredicate: @escaping (Output) -> Bool,
     ) throws -> ReflectiveGenerator<Output> {
         // Split the range into N subranges (use 4 to reduce complexity)
         let numberOfSubranges = Swift.min(4, max - min + 1) // Don't create more ranges than values
         guard numberOfSubranges > 1 else {
             // If range is too small, fall back to original chooseBits
-            return .impure(operation: .chooseBits(min: min, max: max, tag: tag), continuation: continuation)
+            return .impure(operation: .chooseBits(min: min, max: max, tag: tag, isRangeExplicit: isRangeExplicit), continuation: continuation)
         }
 
         let rangeSize = (max - min + 1) / numberOfSubranges
@@ -209,7 +209,7 @@ enum SpeculativeAdaptationInterpreter {
 
             // Create generator for this subrange
             let subrangeGenerator = ReflectiveGenerator<Any>.impure(
-                operation: .chooseBits(min: currentStart, max: actualEnd, tag: tag),
+                operation: .chooseBits(min: currentStart, max: actualEnd, tag: tag, isRangeExplicit: isRangeExplicit),
             ) { value in
                 .pure(value)
             }
@@ -263,21 +263,21 @@ enum SpeculativeAdaptationInterpreter {
         validityPredicate: @escaping (Output) -> Bool,
     ) throws -> ReflectiveGenerator<Output> {
         // Check if the length generator contains chooseBits that we can split
-        var foundChooseBits: (min: UInt64, max: UInt64, tag: TypeTag)?
+        var foundChooseBits: (min: UInt64, max: UInt64, isRangeExplicit: Bool)?
 
         // Look for chooseBits in the length generator structure
-        if case let .impure(.chooseBits(min, max, tag), _) = lengthGen {
-            foundChooseBits = (min, max, tag)
+        if case let .impure(.chooseBits(min, max, _, isRangeExplicit), _) = lengthGen {
+            foundChooseBits = (min, max, isRangeExplicit)
         } else if case let .impure(.getSize, lengthContinuation) = lengthGen {
             // Try to resolve the getSize and recurse
             let lengthGenContinuation = try adaptChooseBitsToPickOfSubranges(
                 min: 0,
                 max: context.maxSize,
                 tag: .uint64,
+                isRangeExplicit: false,
                 continuation: lengthContinuation,
                 input: input,
                 context: context,
-                insideSubdividedChooseBits: false,
                 validityPredicate: { _ in true },
             )
             return try adaptSequenceLengthGeneration(
@@ -293,12 +293,12 @@ enum SpeculativeAdaptationInterpreter {
             // Fixed length, no adaptation needed for length
         }
 
-        if let (min, max, tag) = foundChooseBits, !insideSubdividedChooseBits {
+        if let (min, max, isRangeExplicit) = foundChooseBits, !insideSubdividedChooseBits {
             // Try to adapt the length generation by splitting into length ranges
             return try adaptSequenceLengthRanges(
                 lengthMin: min,
                 lengthMax: max,
-                lengthTag: tag,
+                isRangeExplicit: isRangeExplicit,
                 elementGen: elementGen,
                 continuation: continuation,
                 input: input,
@@ -322,13 +322,14 @@ enum SpeculativeAdaptationInterpreter {
     private static func adaptSequenceLengthRanges<Output>(
         lengthMin: UInt64,
         lengthMax: UInt64,
-        lengthTag: TypeTag,
+        isRangeExplicit: Bool,
         elementGen: ReflectiveGenerator<Any>,
         continuation: @escaping (Any) throws -> ReflectiveGenerator<Output>,
         input: some Any,
         context: SpeculativeContext,
         validityPredicate: @escaping (Output) -> Bool,
     ) throws -> ReflectiveGenerator<Output> {
+        let lengthTag: TypeTag = .uint64
         // Calculate statistically sound number of subranges for sequence lengths
         let totalRange = lengthMax - lengthMin + 1
 
@@ -354,7 +355,7 @@ enum SpeculativeAdaptationInterpreter {
         guard numberOfSubranges > 1 else {
             print("DEBUG: Not subdividing - numberOfSubranges=\(numberOfSubranges)")
             // Range too small, fall back to original sequence
-            return .impure(operation: .sequence(length: .impure(operation: .chooseBits(min: lengthMin, max: lengthMax, tag: lengthTag)) { .pure($0 as! UInt64) }, gen: elementGen), continuation: continuation)
+            return .impure(operation: .sequence(length: .impure(operation: .chooseBits(min: lengthMin, max: lengthMax, tag: lengthTag, isRangeExplicit: isRangeExplicit)) { .pure($0 as! UInt64) }, gen: elementGen), continuation: continuation)
         }
 
         let rangeSize = (lengthMax - lengthMin + 1) / numberOfSubranges
@@ -374,7 +375,7 @@ enum SpeculativeAdaptationInterpreter {
             // Create a generator that produces sequences with lengths in this range
             let lengthRangeGenerator = ReflectiveGenerator<Any>.impure(
                 operation: .sequence(
-                    length: .impure(operation: .chooseBits(min: currentStart, max: actualEnd, tag: lengthTag)) { .pure($0 as! UInt64) },
+                    length: .impure(operation: .chooseBits(min: currentStart, max: actualEnd, tag: lengthTag, isRangeExplicit: isRangeExplicit)) { .pure($0 as! UInt64) },
                     gen: elementGen,
                 ),
             ) { value in

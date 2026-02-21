@@ -194,7 +194,7 @@ public struct ValueAndChoiceTreeInterpreter<FinalOutput>: IteratorProtocol, Sequ
 
                     // MARK: - Choosebits
 
-            case let .chooseBits(min, max, tag):
+            case let .chooseBits(min, max, tag, _):
                 let randomBits = UInt64.random(in: min ... max, using: &context.prng)
                 let choiceTree = ChoiceTree.choice(ChoiceValue(randomBits, tag: tag), .init(validRanges: [min ... max]))
 

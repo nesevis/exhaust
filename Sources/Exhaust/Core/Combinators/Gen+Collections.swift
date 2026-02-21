@@ -22,7 +22,7 @@ public extension Gen {
         // Use `bind` to get the result of the length generator.
         let sequenceOperation = ReflectiveOperation.sequence(
             length: length ?? Gen.getSize().bind {
-                Gen.choose(in: ($0 / 10) ... $0)
+                Gen.chooseDerived(in: ($0 / 10) ... $0)
             },
             gen: elementGenerator.erase(),
         )
@@ -58,7 +58,7 @@ public extension Gen {
             length: Gen.getSize().bind { size in
                 let upper = min(size, range.upperBound)
                 let clamped = range.lowerBound ... max(range.lowerBound, upper)
-                return Gen.choose(in: clamped)
+                return Gen.chooseDerived(in: clamped)
             },
             gen: elementGenerator.erase(),
         )
@@ -141,7 +141,7 @@ public extension Gen {
             let clampedMax = min(actualRange.upperBound, size)
             let finalRange = clampedMin ... clampedMax
 
-            return arrayOf(elementGenerator, choose(in: finalRange))
+            return arrayOf(elementGenerator, chooseDerived(in: finalRange))
         }
     }
 
@@ -162,8 +162,8 @@ public extension Gen {
             }
 
             return Gen.zip(
-                Gen.choose(in: 1 ... maxLength), // subset length
-                Gen.choose(in: 0 ... (count - 1)), // start position index
+                Gen.chooseDerived(in: 1 ... maxLength), // subset length
+                Gen.chooseDerived(in: 0 ... (count - 1)), // start position index
             )
             .filter { length, startIndexPos in
                 startIndexPos + length <= count

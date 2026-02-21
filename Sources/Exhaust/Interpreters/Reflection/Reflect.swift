@@ -91,7 +91,7 @@ public enum Interpreters {
         case let .pick(choices):
             // PICK's JOB: Try all branches against the same final output value.
             let branchIDs = choices.map(\.id)
-            let results = try choices.flatMap { choice -> [(value: Any, weight: UInt64, id: UInt64, isPicked: Bool, path: ChoiceTree?)] in
+            let results = try choices.flatMap { choice -> [(value: Any, weight: UInt64, id: UInt64, isPicked: Bool, path: ChoiceTree)] in
                 do {
                     let subPaths = try reflectRecursive(choice.generator, onFinalOutput: finalOutput)
                     let value = subPaths.firstNonNil(\.value)
@@ -107,15 +107,23 @@ public enum Interpreters {
                     }
 
                     return subPaths
-                        .map { value, pathTree in
-                            (value, choice.weight, choice.id, isPicked, pathTree.first)
+                        .compactMap { value, pathTree in
+                            guard let path = pathTree.first else {
+                                return nil
+                            }
+                            return (value, choice.weight, choice.id, isPicked, path)
                         }
                         // Testing
                         .filter { $0.isPicked }
 
-                } catch ReflectionError.reflectedNil {
-                    // Return the choice anyway; we want all branches materialised during reflection
-                    return [(value: finalOutput, weight: choice.weight, id: choice.id, isPicked: false, path: nil)]
+                } catch let error as ReflectionError {
+                    switch error {
+                    case .reflectedNil, .inputWasOutOfGeneratorRange:
+                        // Prune failing branches while exploring pick alternatives.
+                        return []
+                    default:
+                        throw error
+                    }
                 }
             }
             let returnData = results.map {
@@ -123,41 +131,45 @@ public enum Interpreters {
                     weight: $0.weight,
                     id: $0.id,
                     branchIDs: branchIDs,
-                    choice: $0.path!,
+                    choice: $0.path,
                 )
                 return (value: $0.value, path: $0.isPicked ? .selected(branch) : branch)
             }
             return [(finalOutput, [ChoiceTree.group(returnData.map(\.1))])]
 
-        case let .chooseBits(_, _, tag):
+        case let .chooseBits(min, max, tag, isRangeExplicit):
             var convertibleValue: (any BitPatternConvertible)?
             // In the reverse pass of a [[Char]] we'll be passed the array here and it will represent the length of the list. How can we know that?
             if let convertible = finalOutput as? any BitPatternConvertible {
                 convertibleValue = convertible
             }
-            var reflectedMin = UInt64.min
-            var reflectedMax = UInt64.max
             // This is awful. What about triply nested arrays?
             if let convertible = finalOutput as? any Sequence {
                 // Due to the mapping on Ints, this number's bitPattern64 will be an outrageously high number.
                 convertibleValue = UInt64(convertible.underestimatedCount)
-            } else if let convertibleValue {
-                // There's no way to know the valid range of this type as specified by the generator when reflecting, so we set it to the supported range.
-                // Reflection is used primarily for shrinking, so we don't want to artifically constrain ourselves
-                // When materializing, the generator constraints come into play
-                let validRange = type(of: convertibleValue).bitPatternRanges
-                    .first(where: { $0.contains(convertibleValue.bitPattern64) })
-                reflectedMin = validRange?.lowerBound ?? reflectedMin
-                reflectedMax = validRange?.upperBound ?? reflectedMax
             }
             guard let convertibleValue else {
                 throw ReflectionError.chooseBitsCouldNotConvertValue("\(finalOutput)")
             }
+
+            let bitPattern = convertibleValue.bitPattern64
+            if isRangeExplicit, (min ... max).contains(bitPattern) == false {
+                throw ReflectionError.inputWasOutOfGeneratorRange(convertibleValue, min ... max)
+            }
+
+            let reflectedRanges: [ClosedRange<UInt64>]
+            if isRangeExplicit {
+                reflectedRanges = [min ... max]
+            } else {
+                // There's no way to know the proper range if this came from opaque runtime context (e.g. `getSize` in a bind),
+                // so we preserve the previous "best effort" behavior and avoid over-constraining reflection.
+                let fallbackRange = type(of: convertibleValue).bitPatternRanges
+                    .first(where: { $0.contains(bitPattern) }) ?? (UInt64.min ... UInt64.max)
+                reflectedRanges = [fallbackRange]
+            }
+
             // Success! The result for the continuation is the value itself.
-            let metadata = ChoiceMetadata(
-                // We can't know the proper range here, and the min...max is _usually_ dependent on the getSize parameter
-                validRanges: [reflectedMin ... reflectedMax],
-            )
+            let metadata = ChoiceMetadata(validRanges: reflectedRanges)
             return [(value: finalOutput, path: [.choice(.init(convertibleValue, tag: tag), metadata)])]
 
         case let .just(value):

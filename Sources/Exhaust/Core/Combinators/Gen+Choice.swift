@@ -72,6 +72,7 @@ public extension Gen {
             min: actualRange.lowerBound,
             max: actualRange.upperBound,
             tag: .character,
+            isRangeExplicit: true,
         )
 
         return .impure(operation: operation) { result in
@@ -107,11 +108,41 @@ public extension Gen {
         in range: ClosedRange<Output>? = nil,
         type _: Output.Type = Output.self,
     ) -> ReflectiveGenerator<Output> {
+        let isRangeExplicit = range != nil
+        return choose(
+            in: range,
+            type: Output.self,
+            isRangeExplicit: isRangeExplicit,
+        )
+    }
+
+    /// Internal helper for choose ranges derived from runtime context (e.g. `getSize`).
+    ///
+    /// These ranges should not be treated as strict during reflection because the
+    /// contextual value that produced them may be opaque from the reflected output.
+    @inlinable
+    internal static func chooseDerived<Output: BitPatternConvertible>(
+        in range: ClosedRange<Output>,
+        type _: Output.Type = Output.self,
+    ) -> ReflectiveGenerator<Output> {
+        choose(
+            in: range,
+            type: Output.self,
+            isRangeExplicit: false,
+        )
+    }
+
+    @usableFromInline
+    internal static func choose<Output: BitPatternConvertible>(
+        in range: ClosedRange<Output>? = nil,
+        type _: Output.Type = Output.self,
+        isRangeExplicit: Bool,
+    ) -> ReflectiveGenerator<Output> {
         let minBits = range?.lowerBound.bitPattern64 ?? Output.bitPatternRanges[0].lowerBound
         let maxBits = range?.upperBound.bitPattern64 ?? Output.bitPatternRanges[0].upperBound
         let tag = Output.tag
 
-        return .impure(operation: .chooseBits(min: minBits, max: maxBits, tag: tag)) { result in
+        return .impure(operation: .chooseBits(min: minBits, max: maxBits, tag: tag, isRangeExplicit: isRangeExplicit)) { result in
             switch tag {
             case .uint64:
                 // This catches [Character] and String
