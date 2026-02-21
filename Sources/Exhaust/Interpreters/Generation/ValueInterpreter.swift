@@ -67,9 +67,9 @@ public struct ValueInterpreter<Element>: IteratorProtocol, Sequence {
 
     // MARK: - Recursive Engine
 
-    private static func generateRecursive<Input, Output>(
+    private static func generateRecursive<Output>(
         _ gen: ReflectiveGenerator<Output>,
-        with inputValue: Input,
+        with inputValue: some Any,
         context: Context,
     ) throws -> Output? {
         // Size override only affects the first call, not all subsequent ones
@@ -170,9 +170,9 @@ public struct ValueInterpreter<Element>: IteratorProtocol, Sequence {
     }
 
     @inline(__always)
-    private static func handleContramap<Input, Output>(
+    private static func handleContramap<Output>(
         _ nextGen: ReflectiveGenerator<Any>,
-        inputValue: Input,
+        inputValue: some Any,
         context: Context,
         runContinuation: (Any) throws -> Output?,
     ) throws -> Output? {
@@ -183,9 +183,9 @@ public struct ValueInterpreter<Element>: IteratorProtocol, Sequence {
     }
 
     @inline(__always)
-    private static func handlePrune<Input, Output>(
+    private static func handlePrune<Output>(
         _ nextGen: ReflectiveGenerator<Any>,
-        inputValue: Input,
+        inputValue: some Any,
         context: Context,
         runContinuation: (Any) throws -> Output?,
     ) throws -> Output? {
@@ -199,9 +199,9 @@ public struct ValueInterpreter<Element>: IteratorProtocol, Sequence {
     }
 
     @inline(__always)
-    private static func handlePick<Input, Output>(
+    private static func handlePick<Output>(
         _ choices: ContiguousArray<ReflectiveOperation.PickTuple>,
-        inputValue: Input,
+        inputValue: some Any,
         context: Context,
         runContinuation: (Any) throws -> Output?,
     ) throws -> Output? {
@@ -253,9 +253,9 @@ public struct ValueInterpreter<Element>: IteratorProtocol, Sequence {
     }
 
     @inline(__always)
-    private static func handleZip<Input, Output>(
+    private static func handleZip<Output>(
         _ generators: ContiguousArray<ReflectiveGenerator<Any>>,
-        inputValue: Input,
+        inputValue: some Any,
         context: Context,
         runContinuation: (Any) throws -> Output?,
     ) throws -> Output? {
@@ -271,10 +271,10 @@ public struct ValueInterpreter<Element>: IteratorProtocol, Sequence {
     }
 
     @inline(__always)
-    private static func handleResize<Input, Output>(
+    private static func handleResize<Output>(
         newSize: UInt64,
         nextGen: ReflectiveGenerator<Any>,
-        inputValue: Input,
+        inputValue: some Any,
         context: Context,
         runContinuation: (Any) throws -> Output?,
     ) throws -> Output? {
@@ -286,9 +286,9 @@ public struct ValueInterpreter<Element>: IteratorProtocol, Sequence {
     }
 
     @inline(__always)
-    private static func handlePassthrough<Input, Output>(
+    private static func handlePassthrough<Output>(
         _ gen: ReflectiveGenerator<Any>,
-        inputValue: Input,
+        inputValue: some Any,
         context: Context,
         runContinuation: (Any) throws -> Output?,
     ) throws -> Output? {

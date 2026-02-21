@@ -126,7 +126,7 @@ extension ReducerStrategies {
                     property: property,
                     latestOutput: &latestOutput,
                     progress: &progress,
-                    rejectCache: &rejectCache
+                    rejectCache: &rejectCache,
                 ) {
                     continue
                 }
@@ -142,7 +142,7 @@ extension ReducerStrategies {
                     property: property,
                     latestOutput: &latestOutput,
                     progress: &progress,
-                    rejectCache: &rejectCache
+                    rejectCache: &rejectCache,
                 ) {
                     continue
                 }
@@ -158,7 +158,7 @@ extension ReducerStrategies {
                     property: property,
                     latestOutput: &latestOutput,
                     progress: &progress,
-                    rejectCache: &rejectCache
+                    rejectCache: &rejectCache,
                 ) {
                     continue
                 }
@@ -174,7 +174,7 @@ extension ReducerStrategies {
                     property: property,
                     latestOutput: &latestOutput,
                     progress: &progress,
-                    rejectCache: &rejectCache
+                    rejectCache: &rejectCache,
                 ) {
                     continue
                 }
@@ -476,7 +476,7 @@ extension ReducerStrategies {
                 property: property,
                 latestOutput: &latestOutput,
                 progress: &progress,
-                rejectCache: &rejectCache
+                rejectCache: &rejectCache,
             ) {
                 return true
             }
@@ -509,7 +509,7 @@ extension ReducerStrategies {
 
         var seenBitPatterns = Set<UInt64>()
 
-        for p in 0..<10 {
+        for p in 0 ..< 10 {
             let scale = Double(1 << p)
             let scaled = currentFloatingValue * scale
             guard scaled.isFinite else { continue }
@@ -540,7 +540,7 @@ extension ReducerStrategies {
                     property: property,
                     latestOutput: &latestOutput,
                     progress: &progress,
-                    rejectCache: &rejectCache
+                    rejectCache: &rejectCache,
                 ) {
                     return true
                 }

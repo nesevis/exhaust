@@ -203,7 +203,7 @@ extension ChoiceTree {
             return try .resize(newSize: newSize, choices: choices.map { try $0.map(transform) })
         }
     }
-    
+
 //    func mapWithParent(parent: ChoiceTree?, _ transform: (ChoiceTree?, ChoiceTree) throws -> ChoiceTree) rethrows -> ChoiceTree {
 //        let transformedNode = try transform(parent, self)
 //
@@ -231,7 +231,7 @@ extension ChoiceTree {
 //            return try .resize(newSize: newSize, choices: choices.map { try $0.map(transform) })
 //        }
 //    }
-    
+
     func first(_ predicate: (ChoiceTree) -> Bool) -> ChoiceTree? {
         let match = predicate(self)
         guard match == false else {
@@ -533,9 +533,9 @@ extension ChoiceTree: CustomDebugStringConvertible {
             self
         }
     }
-    
+
     var branchId: UInt64? {
-        if case let .branch(_, id, _, _) = self.unwrapped {
+        if case let .branch(_, id, _, _) = unwrapped {
             return id
         }
         return nil

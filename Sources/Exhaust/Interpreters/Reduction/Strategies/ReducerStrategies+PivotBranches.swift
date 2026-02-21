@@ -57,7 +57,7 @@ extension ReducerStrategies {
                     gen,
                     with: candidateTree,
                     using: candidateSequence,
-                    strictness: .relaxed
+                    strictness: .relaxed,
                 ) else {
                     rejectCache.insert(candidateSequence)
                     continue
@@ -78,7 +78,7 @@ extension ReducerStrategies {
         var results: [Fingerprint] = []
         for element in tree.walk() {
             if case let .group(array) = element.node,
-               array.allSatisfy({ $0.unwrapped.isBranch }),
+               array.allSatisfy(\.unwrapped.isBranch),
                array.contains(where: \.isSelected),
                array.count >= 2
             {

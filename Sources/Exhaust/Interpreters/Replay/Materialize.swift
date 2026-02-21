@@ -34,8 +34,7 @@ extension Interpreters {
             }
             return values[index]
         }
-        
-        
+
         var shortString: String {
             values[index...].map(\.shortString).joined()
         }
@@ -161,7 +160,7 @@ extension Interpreters {
             index += 1
             return v
         }
-        
+
         mutating func skipToMatchingGroupClose() {
             var depth = 0
             while !isAtEnd {
@@ -241,11 +240,11 @@ extension Interpreters {
             }
         }
     }
-    
+
     public enum Strictness: Equatable {
-        // For reduction passes that have not changed the ChoiceTree structure
+        /// For reduction passes that have not changed the ChoiceTree structure
         case normal
-        // For reduction passes that have changed the structure
+        /// For reduction passes that have changed the structure
         case relaxed
     }
 
@@ -264,7 +263,7 @@ extension Interpreters {
         _ gen: ReflectiveGenerator<Output>,
         with tree: ChoiceTree,
         using values: ChoiceSequence,
-        strictness: Strictness = .normal
+        strictness: Strictness = .normal,
     ) throws -> Output? {
         let isInstrumented = ExhaustLog.isEnabled(.debug, for: .materialize)
         if isInstrumented {
@@ -338,29 +337,29 @@ extension Interpreters {
     ) throws -> Output? {
         switch operation {
         case .zip, .pick:
-            return nil
+            nil
         case .chooseBits:
-            return try materializeRecursiveChooseBits(continuation: continuation, tree: tree, context: &context)
+            try materializeRecursiveChooseBits(continuation: continuation, tree: tree, context: &context)
         case let .just(value):
-            return try materializeRecursiveJust(value: value, continuation: continuation, tree: tree, context: &context)
+            try materializeRecursiveJust(value: value, continuation: continuation, tree: tree, context: &context)
         case .getSize:
-            return try materializeRecursiveGetSize(continuation: continuation, tree: tree, context: &context)
+            try materializeRecursiveGetSize(continuation: continuation, tree: tree, context: &context)
         case let .resize(_, resizedGen):
-            return try materializeRecursiveResize(
+            try materializeRecursiveResize(
                 resizedGen: resizedGen,
                 continuation: continuation,
                 tree: tree,
                 context: &context,
             )
         case let .sequence(_, elementGenerator):
-            return try materializeRecursiveSequence(
+            try materializeRecursiveSequence(
                 elementGenerator: elementGenerator,
                 continuation: continuation,
                 tree: tree,
                 context: &context,
             )
         case let .contramap(_, subGenerator):
-            return try materializeRecursiveWrapped(
+            try materializeRecursiveWrapped(
                 subGenerator: subGenerator,
                 continuation: continuation,
                 tree: tree,
@@ -369,14 +368,14 @@ extension Interpreters {
         case .prune:
             fatalError("Should not be encountered")
         case let .filter(gen, _, predicate):
-            return try materializeRecursiveFilter(
+            try materializeRecursiveFilter(
                 gen: gen,
                 predicate: predicate,
                 tree: tree,
                 context: &context,
             )
         case let .classify(gen, _, _):
-            return try materializeRecursiveClassify(gen: gen, tree: tree, context: &context)
+            try materializeRecursiveClassify(gen: gen, tree: tree, context: &context)
         }
     }
 
@@ -592,10 +591,10 @@ extension Interpreters {
         switch gen {
         case let .pure(value):
             // At this stage we have run the generator with the ChoiceSequence value and can return it
-            return value
+            value
 
         case let .impure(operation, continuation):
-            return try materializeWithChoicesOperation(
+            try materializeWithChoicesOperation(
                 operation,
                 continuation: continuation,
                 choices: &choices,
@@ -612,68 +611,68 @@ extension Interpreters {
     ) throws -> Output? {
         switch operation {
         case .chooseBits:
-            return try materializeWithChoicesChooseBits(
+            try materializeWithChoicesChooseBits(
                 continuation: continuation,
                 choices: &choices,
                 context: &context,
             )
         case let .pick(pickChoices):
-            return try materializeWithChoicesPick(
+            try materializeWithChoicesPick(
                 pickChoices: pickChoices,
                 continuation: continuation,
                 choices: &choices,
                 context: &context,
             )
         case let .sequence(_, elementGenerator):
-            return try materializeWithChoicesSequence(
+            try materializeWithChoicesSequence(
                 elementGenerator: elementGenerator,
                 continuation: continuation,
                 choices: &choices,
                 context: &context,
             )
         case let .zip(generators):
-            return try materializeWithChoicesZip(
+            try materializeWithChoicesZip(
                 generators: generators,
                 continuation: continuation,
                 choices: &choices,
                 context: &context,
             )
         case let .contramap(_, subGenerator), let .prune(subGenerator):
-            return try materializeWithChoicesWrapped(
+            try materializeWithChoicesWrapped(
                 subGenerator: subGenerator,
                 continuation: continuation,
                 choices: &choices,
                 context: &context,
             )
         case let .just(value):
-            return try materializeWithChoicesJust(
+            try materializeWithChoicesJust(
                 value: value,
                 continuation: continuation,
                 choices: &choices,
                 context: &context,
             )
         case .getSize:
-            return try materializeWithChoicesGetSize(
+            try materializeWithChoicesGetSize(
                 continuation: continuation,
                 choices: &choices,
                 context: &context,
             )
         case let .resize(_, subGenerator):
-            return try materializeWithChoicesResize(
+            try materializeWithChoicesResize(
                 subGenerator: subGenerator,
                 continuation: continuation,
                 choices: &choices,
                 context: &context,
             )
         case let .filter(gen, _, predicate):
-            return try materializeWithChoicesFilter(
+            try materializeWithChoicesFilter(
                 gen: gen,
                 predicate: predicate,
                 choices: &choices,
                 context: &context,
             )
         case let .classify(gen, _, _):
-            return try materializeWithChoicesClassify(
+            try materializeWithChoicesClassify(
                 gen: gen,
                 choices: &choices,
                 context: &context,
@@ -980,7 +979,7 @@ extension Interpreters {
         var attemptContext = context
         let result = switch context.strictness {
         case .normal:
-                try materializeRecursive(chosenGen, with: unpacked.choice, context: &attemptContext)
+            try materializeRecursive(chosenGen, with: unpacked.choice, context: &attemptContext)
         case .relaxed:
             try? materializeRecursive(chosenGen, with: unpacked.choice, context: &attemptContext)
         }
@@ -998,7 +997,7 @@ extension Interpreters {
             }
             return result
         }
-        
+
         guard context.strictness == .relaxed else {
             return nil
         }

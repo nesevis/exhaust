@@ -111,12 +111,12 @@ public struct ChoiceTreeWalker: IteratorProtocol, Sequence {
 
 // MARK: - Subscript
 
-extension ChoiceTree {
+public extension ChoiceTree {
     /// Access a node at the given fingerprint for reading or writing.
     ///
     /// The getter walks down the tree following the fingerprint's steps.
     /// The setter rebuilds the spine from root to target via ``replacingChild(at:with:)``.
-    public subscript(fingerprint: Fingerprint) -> ChoiceTree {
+    subscript(fingerprint: Fingerprint) -> ChoiceTree {
         get {
             var current = self
             for step in fingerprint.steps {
@@ -145,7 +145,7 @@ extension ChoiceTree {
     }
 
     /// Creates a ``ChoiceTreeWalker`` for depth-first traversal.
-    public func walk() -> ChoiceTreeWalker {
+    func walk() -> ChoiceTreeWalker {
         ChoiceTreeWalker(self)
     }
 }

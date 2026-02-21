@@ -184,7 +184,7 @@ public enum Interpreters {
                         }
                         return (value, choice.weight, choice.id, isPicked, path)
                     }
-                    .filter { $0.isPicked }
+                    .filter(\.isPicked)
 
             } catch let error as ReflectionError {
                 switch error {

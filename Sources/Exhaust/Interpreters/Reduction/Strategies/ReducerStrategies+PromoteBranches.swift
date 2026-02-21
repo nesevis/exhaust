@@ -18,7 +18,7 @@ extension ReducerStrategies {
         guard tree.contains(\.unwrapped.isBranch) else {
             return nil
         }
-        
+
         let branches = extractBranchNodes(from: tree)
         guard branches.count >= 2 else {
             return nil
@@ -67,7 +67,7 @@ extension ReducerStrategies {
                     gen,
                     with: candidateTree,
                     using: candidateSequence,
-                    strictness: .relaxed
+                    strictness: .relaxed,
                 ) else {
                     rejectCache.insert(candidateSequence)
                     continue
@@ -89,9 +89,8 @@ extension ReducerStrategies {
     ) -> [(fingerprint: Fingerprint, node: ChoiceTree)] {
         var results: [(fingerprint: Fingerprint, node: ChoiceTree)] = []
         for element in tree.walk() {
-            if
-                case let .group(array) = element.node,
-                array.allSatisfy({ $0.unwrapped.isBranch })
+            if case let .group(array) = element.node,
+               array.allSatisfy(\.unwrapped.isBranch)
             {
                 results.append((element.fingerprint, element.node))
             }

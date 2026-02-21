@@ -12,7 +12,7 @@ import Testing
 @MainActor
 @Suite("Shrinking Challenge: Binary Heap")
 struct BinaryHeapShrinkingChallenge {
-    /**
+    /* 
      https://github.com/jlink/shrinking-challenge/blob/main/challenges/binheap.md
      This is based on an example from QuickCheck's test suite (via the SmartCheck paper). It generates binary heaps, and then uses a wrong implementation of a function that converts the binary heap to a sorted list and asserts that the result is sorted.
 
@@ -54,9 +54,9 @@ struct BinaryHeapShrinkingChallenge {
     static func toSortedList<Element: Comparable>(_ heap: Heap<Element>) -> [Element] {
         switch heap {
         case .empty:
-            return []
+            []
         case let .node(x, h1, h2):
-            return [x] + toList(merge(h1, h2))
+            [x] + toList(merge(h1, h2))
         }
     }
 
@@ -64,34 +64,34 @@ struct BinaryHeapShrinkingChallenge {
     static func merge<Element: Comparable>(_ h1: Heap<Element>, _ h2: Heap<Element>) -> Heap<Element> {
         switch (h1, h2) {
         case (_, .empty):
-            return h1
+            h1
         case (.empty, _):
-            return h2
+            h2
         case let (.node(x, h11, h12), .node(y, h21, h22)):
             if x <= y {
-                return .node(x, merge(h12, h2), h11)
+                .node(x, merge(h12, h2), h11)
             } else {
-                return .node(y, merge(h22, h1), h21)
+                .node(y, merge(h22, h1), h21)
             }
         }
     }
 
     /// Checks the min-heap invariant: parent <= both children, recursively.
-    static func invariant<Element: Comparable>(_ heap: Heap<Element>) -> Bool {
+    static func invariant(_ heap: Heap<some Comparable>) -> Bool {
         switch heap {
         case .empty:
-            return true
+            true
         case let .node(x, h1, h2):
-            return lte(x, h1) && lte(x, h2) && invariant(h1) && invariant(h2)
+            lte(x, h1) && lte(x, h2) && invariant(h1) && invariant(h2)
         }
     }
 
     private static func lte<Element: Comparable>(_ x: Element, _ heap: Heap<Element>) -> Bool {
         switch heap {
         case .empty:
-            return true
+            true
         case let .node(y, _, _):
-            return x <= y
+            x <= y
         }
     }
 
@@ -113,16 +113,16 @@ struct BinaryHeapShrinkingChallenge {
             .bind { value in
                 Gen.zip(
                     heapGen(min: value, depth: depth / 2),
-                    heapGen(min: value, depth: depth / 2)
+                    heapGen(min: value, depth: depth / 2),
                 )
                 .mapped(
                     forward: { left, right in Heap.node(value, left, right) },
                     backward: { heap in
                         switch heap {
-                        case let .node(_, left, right): return (left, right)
-                        case .empty: return (.empty, .empty)
+                        case let .node(_, left, right): (left, right)
+                        case .empty: (.empty, .empty)
                         }
-                    }
+                    },
                 )
             }
 
@@ -165,9 +165,9 @@ extension BinaryHeapShrinkingChallenge.Heap: CustomDebugStringConvertible {
     var debugDescription: String {
         switch self {
         case .empty:
-            return "None"
+            "None"
         case let .node(value, left, right):
-            return "(\(value), \(left.debugDescription), \(right.debugDescription))"
+            "(\(value), \(left.debugDescription), \(right.debugDescription))"
         }
     }
 }

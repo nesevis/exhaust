@@ -20,7 +20,7 @@ public enum FloatShortlex {
     static let exponentBias: UInt64 = 1023
 
     @usableFromInline
-    static let nonSimpleTagMask: UInt64 = UInt64(1) << 63
+    static let nonSimpleTagMask: UInt64 = .init(1) << 63
 
     /// Maps a `Double` into a lexical key matching Hypothesis-style float ordering.
     ///
@@ -82,7 +82,7 @@ public enum FloatShortlex {
     static func reverseLowerBits(_ value: UInt64, count: Int) -> UInt64 {
         var x = value
         var reversed: UInt64 = 0
-        for _ in 0..<count {
+        for _ in 0 ..< count {
             reversed = (reversed << 1) | (x & 1)
             x >>= 1
         }

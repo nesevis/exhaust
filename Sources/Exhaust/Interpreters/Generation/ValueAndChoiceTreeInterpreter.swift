@@ -237,9 +237,9 @@ public struct ValueAndChoiceTreeInterpreter<FinalOutput>: IteratorProtocol, Sequ
     }
 
     @inline(__always)
-    private static func handleContramap<Input, Output>(
+    private static func handleContramap<Output>(
         _ nextGen: ReflectiveGenerator<Any>,
-        inputValue: Input,
+        inputValue: some Any,
         context: Context,
         runContinuation: RunContinuation<Output>,
     ) throws -> (Output, ChoiceTree)? {
@@ -250,9 +250,9 @@ public struct ValueAndChoiceTreeInterpreter<FinalOutput>: IteratorProtocol, Sequ
     }
 
     @inline(__always)
-    private static func handlePrune<Input, Output>(
+    private static func handlePrune<Output>(
         _ nextGen: ReflectiveGenerator<Any>,
-        inputValue: Input,
+        inputValue: some Any,
         context: Context,
         runContinuation: RunContinuation<Output>,
     ) throws -> (Output, ChoiceTree)? {
@@ -266,9 +266,9 @@ public struct ValueAndChoiceTreeInterpreter<FinalOutput>: IteratorProtocol, Sequ
     }
 
     @inline(__always)
-    private static func handlePick<Input, Output>(
+    private static func handlePick<Output>(
         _ choices: ContiguousArray<ReflectiveOperation.PickTuple>,
-        inputValue: Input,
+        inputValue: some Any,
         context: Context,
         runContinuation: RunContinuation<Output>,
     ) throws -> (Output, ChoiceTree)? {
@@ -294,7 +294,7 @@ public struct ValueAndChoiceTreeInterpreter<FinalOutput>: IteratorProtocol, Sequ
                     with: inputValue,
                     context: isSelected ? context : context.jump(seed: jumpSeed),
                 ),
-                   let final = try runContinuation(result.0, result.1)
+                    let final = try runContinuation(result.0, result.1)
                 {
                     value = final.0
                     branch = ChoiceTree.branch(
@@ -338,11 +338,11 @@ public struct ValueAndChoiceTreeInterpreter<FinalOutput>: IteratorProtocol, Sequ
     }
 
     @inline(__always)
-    private static func handleSequence<Input, Output>(
+    private static func handleSequence<Output>(
         lengthGen: ReflectiveGenerator<UInt64>,
         elementGen: ReflectiveGenerator<Any>,
         context: Context,
-        inputValue: Input,
+        inputValue: some Any,
         runContinuation: RunContinuation<Output>,
     ) throws -> (Output, ChoiceTree)? {
         guard let (length, lengthTrees) = try generateRecursive(
@@ -383,9 +383,9 @@ public struct ValueAndChoiceTreeInterpreter<FinalOutput>: IteratorProtocol, Sequ
     }
 
     @inline(__always)
-    private static func handleZip<Input, Output>(
+    private static func handleZip<Output>(
         _ generators: ContiguousArray<ReflectiveGenerator<Any>>,
-        inputValue: Input,
+        inputValue: some Any,
         context: Context,
         runContinuation: RunContinuation<Output>,
     ) throws -> (Output, ChoiceTree)? {
@@ -405,10 +405,10 @@ public struct ValueAndChoiceTreeInterpreter<FinalOutput>: IteratorProtocol, Sequ
     }
 
     @inline(__always)
-    private static func handleResize<Input, Output>(
+    private static func handleResize<Output>(
         newSize: UInt64,
         gen: ReflectiveGenerator<Any>,
-        inputValue: Input,
+        inputValue: some Any,
         context: Context,
         runContinuation: RunContinuation<Output>,
     ) throws -> (Output, ChoiceTree)? {
@@ -420,15 +420,15 @@ public struct ValueAndChoiceTreeInterpreter<FinalOutput>: IteratorProtocol, Sequ
     }
 
     @inline(__always)
-    private static func handleClassify<Input, Output>(
+    private static func handleClassify<Output>(
         _ gen: ReflectiveGenerator<Any>,
         fingerprint: UInt64,
         classifiers: [(label: String, predicate: (Any) -> Bool)],
-        inputValue: Input,
+        inputValue: some Any,
         context: Context,
         runContinuation: RunContinuation<Output>,
     ) throws -> (Output, ChoiceTree)? {
-        return try InterpreterWrapperHandlers.continueAfterSubgenerator(
+        try InterpreterWrapperHandlers.continueAfterSubgenerator(
             runSubgenerator: { try generateRecursive(gen, with: inputValue, context: context) },
             runContinuation: { result in
                 for (label, classifier) in classifiers where classifier(result.0) {

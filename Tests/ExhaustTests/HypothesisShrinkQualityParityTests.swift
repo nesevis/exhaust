@@ -19,7 +19,7 @@ struct HypothesisShrinkQualityParityTests {
     ) throws -> Output {
         let tree = try #require(try Interpreters.reflect(gen, with: value))
         let (_, output) = try #require(
-            try Interpreters.reduce(gen: gen, tree: tree, config: config, property: property)
+            try Interpreters.reduce(gen: gen, tree: tree, config: config, property: property),
         )
         return output
     }
@@ -40,54 +40,54 @@ struct HypothesisShrinkQualityParityTests {
     @Test("Hypothesis::test_sum_of_pair_mixed", .disabled("Known parity gap: mixed numeric pairs are not yet jointly minimized to Hypothesis target"))
     func sumOfPairMixed() throws {
         let floatIntGen = Gen.zip(
-            Gen.choose(in: 0.0 ... 1_000.0),
-            Gen.choose(in: Int(0) ... 1_000)
+            Gen.choose(in: 0.0 ... 1000.0),
+            Gen.choose(in: Int(0) ... 1000),
         )
         let floatIntProperty: ((Double, Int)) -> Bool = { pair in
-            guard pair.0 >= 0.0, pair.0 <= 1_000.0,
-                  pair.1 >= 0, pair.1 <= 1_000
+            guard pair.0 >= 0.0, pair.0 <= 1000.0,
+                  pair.1 >= 0, pair.1 <= 1000
             else {
                 return true
             }
-            return pair.0 + Double(pair.1) <= 1_000.0
+            return pair.0 + Double(pair.1) <= 1000.0
         }
         let floatIntOutput = try reduce(
             floatIntGen,
             startingAt: (700.75, 400),
-            property: floatIntProperty
+            property: floatIntProperty,
         )
         #expect(floatIntProperty(floatIntOutput) == false)
-        #expect(floatIntOutput == (1.0, 1_000))
+        #expect(floatIntOutput == (1.0, 1000))
 
         let intFloatGen = Gen.zip(
-            Gen.choose(in: Int(0) ... 1_000),
-            Gen.choose(in: 0.0 ... 1_000.0)
+            Gen.choose(in: Int(0) ... 1000),
+            Gen.choose(in: 0.0 ... 1000.0),
         )
         let intFloatProperty: ((Int, Double)) -> Bool = { pair in
-            guard pair.0 >= 0, pair.0 <= 1_000,
-                  pair.1 >= 0.0, pair.1 <= 1_000.0
+            guard pair.0 >= 0, pair.0 <= 1000,
+                  pair.1 >= 0.0, pair.1 <= 1000.0
             else {
                 return true
             }
-            return Double(pair.0) + pair.1 <= 1_000.0
+            return Double(pair.0) + pair.1 <= 1000.0
         }
         let intFloatOutput = try reduce(
             intFloatGen,
             startingAt: (400, 700.75),
-            property: intFloatProperty
+            property: intFloatProperty,
         )
         #expect(intFloatProperty(intFloatOutput) == false)
-        #expect(intFloatOutput == (1, 1_000.0))
+        #expect(intFloatOutput == (1, 1000.0))
     }
 
     @Test("Hypothesis::test_sum_of_pair_separated_int")
     func sumOfPairSeparatedInt() throws {
         let separatedIntGen = Gen.zip(
-            Gen.choose(in: Int(0) ... 1_000),
+            Gen.choose(in: Int(0) ... 1000),
             String.arbitraryAscii,
             Bool.arbitrary,
             Int.arbitrary,
-            Gen.choose(in: Int(0) ... 1_000)
+            Gen.choose(in: Int(0) ... 1000),
         )
         .mapped(
             forward: { tuple in
@@ -95,35 +95,35 @@ struct HypothesisShrinkQualityParityTests {
             },
             backward: { pair in
                 (pair.0, "seed", false, 123, pair.1)
-            }
+            },
         )
 
         let property: ((Int, Int)) -> Bool = { pair in
-            guard pair.0 >= 0, pair.0 <= 1_000,
-                  pair.1 >= 0, pair.1 <= 1_000
+            guard pair.0 >= 0, pair.0 <= 1000,
+                  pair.1 >= 0, pair.1 <= 1000
             else {
                 return true
             }
-            return pair.0 + pair.1 <= 1_000
+            return pair.0 + pair.1 <= 1000
         }
         let output = try reduce(
             separatedIntGen,
             startingAt: (800, 300),
-            property: property
+            property: property,
         )
 
         #expect(property(output) == false)
-        #expect(output == (1, 1_000))
+        #expect(output == (1, 1000))
     }
 
     @Test("Hypothesis::test_sum_of_pair_separated_float")
     func sumOfPairSeparatedFloat() throws {
         let separatedFloatGen = Gen.zip(
-            Gen.choose(in: 0.0 ... 1_000.0),
+            Gen.choose(in: 0.0 ... 1000.0),
             String.arbitraryAscii,
             Bool.arbitrary,
             Int.arbitrary,
-            Gen.choose(in: 0.0 ... 1_000.0)
+            Gen.choose(in: 0.0 ... 1000.0),
         )
         .mapped(
             forward: { tuple in
@@ -131,20 +131,20 @@ struct HypothesisShrinkQualityParityTests {
             },
             backward: { pair in
                 (pair.0, "seed", false, 123, pair.1)
-            }
+            },
         )
 
         let property: ((Double, Double)) -> Bool = { pair in
-            pair.0 + pair.1 <= 1_000.0
+            pair.0 + pair.1 <= 1000.0
         }
         let output = try reduce(
             separatedFloatGen,
             startingAt: (800.25, 300.5),
-            property: property
+            property: property,
         )
 
         #expect(property(output) == false)
-        #expect(output == (1.0, 1_000.0))
+        #expect(output == (1.0, 1000.0))
     }
 
     @Test("Hypothesis::test_perfectly_shrinks_integers")
@@ -180,7 +180,7 @@ struct HypothesisShrinkQualityParityTests {
     func loweringTogetherPositive() throws {
         let gen = Gen.zip(
             Gen.choose(in: Int(0) ... 20),
-            Gen.choose(in: Int(0) ... 20)
+            Gen.choose(in: Int(0) ... 20),
         )
         for gap in 0 ... 20 {
             let start = startPair(range: 0 ... 20, gap: gap)
@@ -197,7 +197,7 @@ struct HypothesisShrinkQualityParityTests {
     func loweringTogetherNegative() throws {
         let gen = Gen.zip(
             Gen.choose(in: Int(-20) ... 0),
-            Gen.choose(in: Int(-20) ... 0)
+            Gen.choose(in: Int(-20) ... 0),
         )
         for gap in -20 ... 0 {
             let start = startPair(range: -20 ... 0, gap: gap)
@@ -214,7 +214,7 @@ struct HypothesisShrinkQualityParityTests {
     func loweringTogetherMixed() throws {
         let gen = Gen.zip(
             Gen.choose(in: Int(-10) ... 10),
-            Gen.choose(in: Int(-10) ... 10)
+            Gen.choose(in: Int(-10) ... 10),
         )
         for gap in -10 ... 10 {
             let start = startPair(range: -10 ... 10, gap: gap)
@@ -232,8 +232,8 @@ struct HypothesisShrinkQualityParityTests {
         let gen = Gen.zip(
             Gen.choose(in: Int(-10) ... 10),
             String.arbitraryAscii,
-            Gen.choose(in: -1_000.0 ... 1_000.0),
-            Gen.choose(in: Int(-10) ... 10)
+            Gen.choose(in: -1000.0 ... 1000.0),
+            Gen.choose(in: Int(-10) ... 10),
         )
 
         for gap in -10 ... 10 {
@@ -244,7 +244,7 @@ struct HypothesisShrinkQualityParityTests {
             let output = try reduce(
                 gen,
                 startingAt: (lhs, "seed", 123.75, rhs),
-                property: property
+                property: property,
             )
 
             #expect(property(output) == false)

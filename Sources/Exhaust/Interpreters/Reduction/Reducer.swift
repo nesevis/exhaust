@@ -17,13 +17,13 @@ public extension Interpreters {
             static let fast = Self(
                 deleteAlignedSiblingWindows: 400,
                 redistributeNumericPairs: 600,
-                reduceValuesInTandem: 400
+                reduceValuesInTandem: 400,
             )
 
             static let slow = Self(
-                deleteAlignedSiblingWindows: 2_000,
-                redistributeNumericPairs: 3_000,
-                reduceValuesInTandem: 2_000
+                deleteAlignedSiblingWindows: 2000,
+                redistributeNumericPairs: 3000,
+                reduceValuesInTandem: 2000,
             )
         }
 
@@ -39,7 +39,7 @@ public extension Interpreters {
                 beamWidthScale: 2,
                 maxBeamWidth: 48,
                 minEvaluationsPerLayer: 6,
-                evaluationsPerLayerScale: 1
+                evaluationsPerLayerScale: 1,
             )
 
             static let slow = Self(
@@ -47,7 +47,7 @@ public extension Interpreters {
                 beamWidthScale: 3,
                 maxBeamWidth: 96,
                 minEvaluationsPerLayer: 10,
-                evaluationsPerLayerScale: 2
+                evaluationsPerLayerScale: 2,
             )
 
             func beamWidth(for slotCount: Int) -> Int {
@@ -250,7 +250,7 @@ public extension Interpreters {
                            rejectCache: &rejectCache,
                            probeBudget: probeBudgets.deleteAlignedSiblingWindows,
                            subsetBeamSearchTuning: alignedDeletionBeamTuning,
-                           onBudgetExhausted: budgetLogger
+                           onBudgetExhausted: budgetLogger,
                        )
                     {
                         currentSequence = newSequence
@@ -281,7 +281,7 @@ public extension Interpreters {
                            sequence: currentSequence,
                            rejectCache: &rejectCache,
                            probeBudget: probeBudgets.redistributeNumericPairs,
-                           onBudgetExhausted: budgetLogger
+                           onBudgetExhausted: budgetLogger,
                        )
                     {
                         currentSequence = newSequence
@@ -311,7 +311,7 @@ public extension Interpreters {
                            siblingGroups: siblingGroups,
                            rejectCache: &rejectCache,
                            probeBudget: probeBudgets.reduceValuesInTandem,
-                           onBudgetExhausted: budgetLogger
+                           onBudgetExhausted: budgetLogger,
                        )
                     {
                         currentSequence = newSequence

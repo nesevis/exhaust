@@ -47,14 +47,14 @@ private func makeTaggedGen() -> ReflectiveGenerator<Tagged> {
             backward: {
                 if case let .small(a) = $0 { return a }
                 return 0
-            }
+            },
         )),
         (1, Gen.zip(Gen.choose(in: Int(0) ... 100), Gen.choose(in: Int(0) ... 100)).mapped(
             forward: { Tagged.big($0, $1) },
             backward: {
                 if case let .big(a, b) = $0 { return (a, b) }
                 return (0, 0)
-            }
+            },
         )),
     ])
 }
@@ -69,7 +69,7 @@ private func makeThreeWayGen() -> ReflectiveGenerator<Int> {
         (1, Gen.choose(in: Int(1) ... 100)),
         (1, Gen.zip(Gen.choose(in: Int(1) ... 50), Gen.choose(in: Int(1) ... 50)).mapped(
             forward: { $0 + $1 },
-            backward: { ($0 / 2, $0 - $0 / 2) }
+            backward: { ($0 / 2, $0 - $0 / 2) },
         )),
     ])
 }
@@ -79,7 +79,6 @@ private func makeThreeWayGen() -> ReflectiveGenerator<Int> {
 @MainActor
 @Suite("promoteBranches")
 struct PromoteBranchesTests {
-
     fileprivate let taggedGen = makeTaggedGen()
 
     @Test("Returns nil when tree has no branches")
@@ -251,7 +250,6 @@ struct PromoteBranchesTests {
 @MainActor
 @Suite("pivotBranches")
 struct PivotBranchesTests {
-
     fileprivate let taggedGen = makeTaggedGen()
     let threeWayGen = makeThreeWayGen()
 

@@ -105,7 +105,7 @@ struct AdvancedCoupledScenariosTests {
     ) throws -> Output {
         let tree = try #require(try Interpreters.reflect(gen, with: value))
         let (_, output) = try #require(
-            try Interpreters.reduce(gen: gen, tree: tree, config: config, property: property)
+            try Interpreters.reduce(gen: gen, tree: tree, config: config, property: property),
         )
         return output
     }
@@ -114,34 +114,34 @@ struct AdvancedCoupledScenariosTests {
     func coupledIntegersFastCheckStyle() throws {
         let gen = Gen.zip(
             Gen.choose(in: Int(0) ... 1_000_000),
-            Gen.choose(in: Int(0) ... 1_000_000)
+            Gen.choose(in: Int(0) ... 1_000_000),
         )
 
         let property: ((Int, Int)) -> Bool = { pair in
             let a = pair.0
             let b = pair.1
-            if a < 1_000 { return true }
-            if b < 1_000 { return true }
+            if a < 1000 { return true }
+            if b < 1000 { return true }
             if b < a { return true }
             if abs(a - b) < 10 { return true }
-            return b - a >= 1_000
+            return b - a >= 1000
         }
 
         let output = try reduce(
             gen,
             startingAt: (500_000, 500_500),
-            property: property
+            property: property,
         )
 
         #expect(property(output) == false)
-        #expect(output == (1_000, 1_010))
+        #expect(output == (1000, 1010))
     }
 
     @Test("2.2 Stateful Stack Bug (jqwik)")
     func statefulStackBugJqwikStyle() throws {
         let actionGen: ReflectiveGenerator<AdvancedCoupledFixtures.StackAction> = Gen.zip(
             Gen.choose(in: Int(0) ... 1),
-            Gen.element(from: ["a", "b", "c"])
+            Gen.element(from: ["a", "b", "c"]),
         )
         .mapped(
             forward: { tag, value in
@@ -150,11 +150,11 @@ struct AdvancedCoupledScenariosTests {
             backward: { action in
                 switch action {
                 case .pop:
-                    return (0, "a")
+                    (0, "a")
                 case let .push(value):
-                    return (1, value)
+                    (1, value)
                 }
-            }
+            },
         )
 
         let gen = Gen.arrayOf(actionGen, within: 1 ... 40)
@@ -165,7 +165,7 @@ struct AdvancedCoupledScenariosTests {
         let output = try reduce(
             gen,
             startingAt: [.push("c"), .pop, .push("b")],
-            property: property
+            property: property,
         )
 
         #expect(property(output) == false)
@@ -176,11 +176,11 @@ struct AdvancedCoupledScenariosTests {
     func runLengthEncodingRegressionHypothesisStyle() throws {
         let binaryStringGen = Gen.arrayOf(
             Gen.element(from: Array("01")),
-            within: 0 ... 40
+            within: 0 ... 40,
         )
         .mapped(
             forward: { chars in String(chars) },
-            backward: { string in Array(string) }
+            backward: { string in Array(string) },
         )
 
         let property: (String) -> Bool = { s in
@@ -190,7 +190,7 @@ struct AdvancedCoupledScenariosTests {
         let output = try reduce(
             binaryStringGen,
             startingAt: "11001",
-            property: property
+            property: property,
         )
 
         #expect(property(output) == false)
@@ -200,22 +200,22 @@ struct AdvancedCoupledScenariosTests {
     @Test("2.4 Floating Point Summation (Hypothesis)")
     func floatingPointSummationHypothesisStyle() throws {
         let gen = Gen.zip(
-            Gen.choose(in: 0.0 ... 1_000.0),
-            Gen.choose(in: 0.0 ... 1_000.0)
+            Gen.choose(in: 0.0 ... 1000.0),
+            Gen.choose(in: 0.0 ... 1000.0),
         )
 
         let property: ((Double, Double)) -> Bool = { pair in
-            pair.0 + pair.1 <= 1_000.0
+            pair.0 + pair.1 <= 1000.0
         }
 
         let output = try reduce(
             gen,
             startingAt: (700.25, 450.75),
-            property: property
+            property: property,
         )
 
         #expect(property(output) == false)
-        #expect(output.1 == 1_000.0)
+        #expect(output.1 == 1000.0)
         #expect(output.0 == 1.0 || output.0 == Double.ulpOfOne)
     }
 
@@ -224,11 +224,11 @@ struct AdvancedCoupledScenariosTests {
         let marker = "𝕿𝖍𝖊"
         let unicodeStringGen = Gen.arrayOf(
             Gen.element(from: Array("xy The𝕿𝖍𝖊")),
-            within: 0 ... 40
+            within: 0 ... 40,
         )
         .mapped(
             forward: { chars in String(chars) },
-            backward: { string in Array(string) }
+            backward: { string in Array(string) },
         )
 
         let property: (String) -> Bool = { s in
@@ -238,7 +238,7 @@ struct AdvancedCoupledScenariosTests {
         let output = try reduce(
             unicodeStringGen,
             startingAt: "xx\(marker)yy",
-            property: property
+            property: property,
         )
 
         #expect(property(output) == false)
@@ -249,7 +249,7 @@ struct AdvancedCoupledScenariosTests {
     func differenceWithGapCsCheckStyle() throws {
         let gen = Gen.zip(
             Gen.choose(in: Int(0) ... 1_000_000),
-            Gen.choose(in: Int(0) ... 1_000_000)
+            Gen.choose(in: Int(0) ... 1_000_000),
         )
 
         let property: ((Int, Int)) -> Bool = { pair in
@@ -261,7 +261,7 @@ struct AdvancedCoupledScenariosTests {
         let output = try reduce(
             gen,
             startingAt: (700, 702),
-            property: property
+            property: property,
         )
 
         #expect(property(output) == false)

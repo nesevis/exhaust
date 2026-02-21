@@ -18,7 +18,7 @@ enum InterpreterWrapperHandlers {
     }
 
     @inline(__always)
-    static func unwrapPruneInput<Input>(_ inputValue: Input) -> Any? {
+    static func unwrapPruneInput(_ inputValue: some Any) -> Any? {
         guard let optional = .some(inputValue as Any?), let wrappedValue = optional else {
             return nil
         }

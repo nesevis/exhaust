@@ -59,10 +59,10 @@ extension Interpreters {
         switch gen {
         case let .pure(value):
             // Base case: return the value
-            return value
+            value
 
         case let .impure(operation, continuation):
-            return try replayWithChoicesOperation(
+            try replayWithChoicesOperation(
                 operation,
                 continuation: continuation,
                 choices: &choices,
@@ -77,43 +77,43 @@ extension Interpreters {
     ) throws -> Output? {
         switch operation {
         case .chooseBits:
-            return try replayWithChoicesChooseBits(continuation: continuation, choices: &choices)
+            try replayWithChoicesChooseBits(continuation: continuation, choices: &choices)
         case let .pick(pickChoices):
-            return try replayWithChoicesPick(
+            try replayWithChoicesPick(
                 pickChoices: pickChoices,
                 continuation: continuation,
                 choices: &choices,
             )
         case let .sequence(_, elementGenerator):
-            return try replayWithChoicesSequence(
+            try replayWithChoicesSequence(
                 elementGenerator: elementGenerator,
                 continuation: continuation,
                 choices: &choices,
             )
         case let .zip(generators):
-            return try replayWithChoicesZip(
+            try replayWithChoicesZip(
                 generators: generators,
                 continuation: continuation,
                 choices: &choices,
             )
         case let .contramap(_, subGenerator), let .prune(subGenerator):
-            return try replayWithChoicesWrapped(
+            try replayWithChoicesWrapped(
                 subGenerator: subGenerator,
                 continuation: continuation,
                 choices: &choices,
             )
         case let .just(value):
-            return try replayWithChoicesJust(value: value, continuation: continuation, choices: &choices)
+            try replayWithChoicesJust(value: value, continuation: continuation, choices: &choices)
         case .getSize:
-            return try replayWithChoicesGetSize(continuation: continuation, choices: &choices)
+            try replayWithChoicesGetSize(continuation: continuation, choices: &choices)
         case let .resize(_, subGenerator):
-            return try replayWithChoicesResize(
+            try replayWithChoicesResize(
                 subGenerator: subGenerator,
                 continuation: continuation,
                 choices: &choices,
             )
         case let .filter(gen, _, _), let .classify(gen, _, _):
-            return try replayWithChoicesHelper(gen, choices: &choices) as? Output
+            try replayWithChoicesHelper(gen, choices: &choices) as? Output
         }
     }
 
@@ -346,36 +346,36 @@ extension Interpreters {
         case .zip:
             fatalError("Unsupported")
         case .chooseBits:
-            return try replayRecursiveChooseBits(script: script, runContinuation: runContinuation)
+            try replayRecursiveChooseBits(script: script, runContinuation: runContinuation)
         case let .just(value):
-            return try replayRecursiveJust(value: value, script: script, runContinuation: runContinuation)
+            try replayRecursiveJust(value: value, script: script, runContinuation: runContinuation)
         case .getSize:
-            return try replayRecursiveGetSize(script: script, runContinuation: runContinuation)
+            try replayRecursiveGetSize(script: script, runContinuation: runContinuation)
         case let .resize(_, nextGen):
-            return try replayRecursiveResize(
+            try replayRecursiveResize(
                 nextGen: nextGen,
                 script: script,
                 runContinuation: runContinuation,
             )
         case let .pick(choices):
-            return try replayRecursivePick(choices: choices, script: script)
+            try replayRecursivePick(choices: choices, script: script)
         case let .sequence(lengthGen, elementGenerator):
-            return try replayRecursiveSequence(
+            try replayRecursiveSequence(
                 lengthGen: lengthGen,
                 elementGenerator: elementGenerator,
                 script: script,
                 runContinuation: runContinuation,
             )
         case let .contramap(_, subGenerator):
-            return try replayRecursiveContramap(
+            try replayRecursiveContramap(
                 subGenerator: subGenerator,
                 script: script,
                 continuation: continuation,
             )
         case let .prune(subGenerator):
-            return try replayRecursive(subGenerator, with: script) as? Output
+            try replayRecursive(subGenerator, with: script) as? Output
         case let .filter(gen, _, _), let .classify(gen, _, _):
-            return try replayRecursive(gen, with: script) as? Output
+            try replayRecursive(gen, with: script) as? Output
         }
     }
 
@@ -409,11 +409,11 @@ extension Interpreters {
     ) throws -> Output? {
         switch script {
         case let .choice(.unsigned(value, _), _):
-            return try runContinuation(value)
+            try runContinuation(value)
         case let .getSize(value):
-            return try runContinuation(value)
+            try runContinuation(value)
         default:
-            return nil
+            nil
         }
     }
 

@@ -178,13 +178,13 @@ extension ReducerStrategies {
     private static func choiceTagRank(_ tag: TypeTag) -> Int {
         switch tag {
         case .int, .int8, .int16, .int32, .int64:
-            return 0
+            0
         case .uint, .uint8, .uint16, .uint32, .uint64:
-            return 1
+            1
         case .float, .double:
-            return 2
+            2
         case .character:
-            return 3
+            3
         }
     }
 }

@@ -422,7 +422,7 @@ extension ReducerStrategies {
         slotIndexSum: Int,
     ) -> Int {
         // Strongly prefer larger subsets and, within a subset size, earlier slots.
-        (deletionCount * 1_024) - slotIndexSum
+        (deletionCount * 1024) - slotIndexSum
     }
 
     private static func beamStatePrecedes(
@@ -468,8 +468,8 @@ extension ReducerStrategies {
         return output
     }
 
-    private static func consumeBudget<Output>(
-        context: inout AlignedDeletionContext<Output>,
+    private static func consumeBudget(
+        context: inout AlignedDeletionContext<some Any>,
     ) -> Bool {
         guard context.budget.consume() else {
             context.budgetExhausted = true

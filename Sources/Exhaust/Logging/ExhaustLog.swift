@@ -25,15 +25,15 @@ public enum ExhaustLog {
         fileprivate var osLogType: OSLogType {
             switch self {
             case .trace, .debug:
-                return .debug
+                .debug
             case .info:
-                return .info
+                .info
             case .notice, .warning:
-                return .default
+                .default
             case .error:
-                return .error
+                .error
             case .critical:
-                return .fault
+                .fault
             }
         }
     }
@@ -305,23 +305,23 @@ public enum ExhaustLog {
     private static func logger(for category: Category) -> Logger {
         switch category {
         case .core:
-            return coreLogger
+            coreLogger
         case .extensions:
-            return extensionsLogger
+            extensionsLogger
         case .generation:
-            return generationLogger
+            generationLogger
         case .replay:
-            return replayLogger
+            replayLogger
         case .reflection:
-            return reflectionLogger
+            reflectionLogger
         case .materialize:
-            return materializeLogger
+            materializeLogger
         case .reducer:
-            return reducerLogger
+            reducerLogger
         case .adaptation:
-            return adaptationLogger
+            adaptationLogger
         case .propertyTest:
-            return propertyTestLogger
+            propertyTestLogger
         }
     }
 

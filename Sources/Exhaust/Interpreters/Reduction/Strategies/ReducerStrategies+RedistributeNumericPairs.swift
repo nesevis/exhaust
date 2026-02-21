@@ -92,7 +92,7 @@ extension ReducerStrategies {
                         let floatContext = makeFloatRedistributionContext(
                             lhs: fresh1.choice,
                             rhs: fresh2.choice,
-                            lhsTargetBitPattern: target1
+                            lhsTargetBitPattern: target1,
                         )
                         let decrease1Upward: Bool
                         let distance1: UInt64
@@ -145,13 +145,13 @@ extension ReducerStrategies {
                                 rhs: fresh2.choice,
                                 delta: k,
                                 lhsMovesUpward: decrease1Upward,
-                                floatContext: floatContext
+                                floatContext: floatContext,
                             ) else {
                                 return false
                             }
                             if floatContext != nil,
-                               (newChoice1.fits(in: fresh1.validRanges) == false
-                                   || newChoice2.fits(in: fresh2.validRanges) == false)
+                               newChoice1.fits(in: fresh1.validRanges) == false
+                               || newChoice2.fits(in: fresh2.validRanges) == false
                             {
                                 return false
                             }
@@ -175,12 +175,12 @@ extension ReducerStrategies {
                             probe[idx1] = probeEntry1
                             probe[idx2] = probeEntry2
 
-#if DEBUG
-                            assert(
-                                SequenceSemanticStats.fullNonSemanticCount(in: probe) == probeNonSemanticCount,
-                                "SequenceSemanticStats delta mismatch in redistributeNumericPairs",
-                            )
-#endif
+                            #if DEBUG
+                                assert(
+                                    SequenceSemanticStats.fullNonSemanticCount(in: probe) == probeNonSemanticCount,
+                                    "SequenceSemanticStats delta mismatch in redistributeNumericPairs",
+                                )
+                            #endif
 
                             let improvesStructure = probe.shortLexPrecedes(current)
                                 || probeNonSemanticCount < currentNonSemanticCount
@@ -251,13 +251,13 @@ extension ReducerStrategies {
                                     rhs: fresh2.choice,
                                     delta: k,
                                     lhsMovesUpward: decrease1Upward,
-                                    floatContext: floatContext
+                                    floatContext: floatContext,
                                 ) else {
                                     continue
                                 }
                                 if floatContext != nil,
-                                   (newChoice1.fits(in: fresh1.validRanges) == false
-                                       || newChoice2.fits(in: fresh2.validRanges) == false)
+                                   newChoice1.fits(in: fresh1.validRanges) == false
+                                   || newChoice2.fits(in: fresh2.validRanges) == false
                                 {
                                     continue
                                 }
@@ -279,12 +279,12 @@ extension ReducerStrategies {
                                     afterReplacing: (idx1, probeEntry1),
                                     and: (idx2, probeEntry2),
                                 )
-#if DEBUG
-                                assert(
-                                    SequenceSemanticStats.fullNonSemanticCount(in: probe) == probeNonSemanticCount,
-                                    "SequenceSemanticStats delta mismatch in redistributeNumericPairs fallback",
-                                )
-#endif
+                                #if DEBUG
+                                    assert(
+                                        SequenceSemanticStats.fullNonSemanticCount(in: probe) == probeNonSemanticCount,
+                                        "SequenceSemanticStats delta mismatch in redistributeNumericPairs fallback",
+                                    )
+                                #endif
                                 let improvesStructure = probe.shortLexPrecedes(current)
                                     || probeNonSemanticCount < currentNonSemanticCount
                                 guard improvesStructure else { continue }
@@ -335,8 +335,8 @@ extension ReducerStrategies {
                            let output = lastProbeOutput,
                            let probeEntry1 = lastProbeEntry1,
                            let probeEntry2 = lastProbeEntry2,
-                           (probe.shortLexPrecedes(current)
-                               || lastProbeNonSemanticCount < currentNonSemanticCount)
+                           probe.shortLexPrecedes(current)
+                           || lastProbeNonSemanticCount < currentNonSemanticCount
                         {
                             current = probe
                             latestOutput = output
@@ -347,7 +347,6 @@ extension ReducerStrategies {
                             )
                             currentNonSemanticCount = semanticStats.nonSemanticCount
                         }
-
                     }
                 }
             }
@@ -418,7 +417,7 @@ extension ReducerStrategies {
             rhsNumerator: rhsNumerator,
             denominator: denominator,
             lhsMovesUpward: lhsMovesUpward,
-            distance: rawDistance
+            distance: rawDistance,
         )
     }
 
@@ -570,7 +569,7 @@ extension ReducerStrategies {
             lhsBitPattern: lhs.bitPattern64,
             rhsBitPattern: rhs.bitPattern64,
             delta: delta,
-            lhsMovesUpward: lhsMovesUpward
+            lhsMovesUpward: lhsMovesUpward,
         ) else {
             return nil
         }

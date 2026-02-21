@@ -104,9 +104,9 @@ struct ChoiceTreeDescendantElevationTests {
         let elevated = original.map { node in
             switch node {
             case let .selected(.branch(weight, id, branchIDs, _)) where id == 22:
-                return .selected(.branch(weight: weight, id: id, branchIDs: branchIDs, choice: descendant))
+                .selected(.branch(weight: weight, id: id, branchIDs: branchIDs, choice: descendant))
             default:
-                return node
+                node
             }
         }
 
@@ -142,9 +142,9 @@ struct ChoiceTreeDescendantElevationTests {
         let elevated = original.map { node in
             switch node {
             case let .selected(.branch(weight, id, branchIDs, _)) where id == 22:
-                return .selected(.branch(weight: weight, id: id, branchIDs: branchIDs, choice: descendant))
+                .selected(.branch(weight: weight, id: id, branchIDs: branchIDs, choice: descendant))
             default:
-                return node
+                node
             }
         }
 
@@ -200,9 +200,9 @@ struct ChoiceTreeDescendantElevationTests {
         let elevated = original.map { node in
             switch node {
             case let .selected(.branch(weight, id, branchIDs, _)) where id == 202:
-                return .selected(.branch(weight: weight, id: id, branchIDs: branchIDs, choice: descendant))
+                .selected(.branch(weight: weight, id: id, branchIDs: branchIDs, choice: descendant))
             default:
-                return node
+                node
             }
         }
 
@@ -216,7 +216,7 @@ struct ChoiceTreeDescendantElevationTests {
             if case .branch = element { return true }
             return false
         }
-        
+
         print(originalSequence.shortString)
         print(elevatedSequence.shortString)
 

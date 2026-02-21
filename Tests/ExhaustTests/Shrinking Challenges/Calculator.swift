@@ -24,7 +24,6 @@ struct CalculatorShrinkingChallenge {
             return value
         }
     }
-    
 
     enum EvalError: Error {
         case divisionByZero
@@ -48,49 +47,49 @@ struct CalculatorShrinkingChallenge {
     static func containsLiteralDivisionByZero(_ expr: Expr) -> Bool {
         switch expr {
         case .value:
-            return false
+            false
         case let .add(lhs, rhs):
-            return containsLiteralDivisionByZero(lhs) || containsLiteralDivisionByZero(rhs)
+            containsLiteralDivisionByZero(lhs) || containsLiteralDivisionByZero(rhs)
         case let .div(lhs, .value(0)):
-            return true
+            true
         case let .div(lhs, rhs):
-            return containsLiteralDivisionByZero(lhs) || containsLiteralDivisionByZero(rhs)
+            containsLiteralDivisionByZero(lhs) || containsLiteralDivisionByZero(rhs)
         }
     }
 
     static func expression(depth: UInt64) -> ReflectiveGenerator<Expr> {
         let leaf = Gen.choose(in: Int(-10) ... 10)
             .mapped(forward: { Expr.value($0) }, backward: { $0.value ?? 0 })
-        
+
         guard depth > 0 else {
             return leaf
         }
-        
+
         let child = expression(depth: depth - 1)
-        
+
         let add = Gen.zip(child, leaf)
             .mapped(
                 forward: { lhs, rhs in Expr.add(lhs, rhs) },
                 backward: { value in
                     switch value {
-                    case let .add(lhs, rhs): return (lhs, rhs)
-                    case let .div(lhs, rhs): return (lhs, rhs)
+                    case let .add(lhs, rhs): (lhs, rhs)
+                    case let .div(lhs, rhs): (lhs, rhs)
                     case .value:
-                        return (value, value)
+                        (value, value)
                     }
-                }
+                },
             )
         let div = Gen.zip(leaf, child)
             .mapped(
                 forward: { lhs, rhs in Expr.div(lhs, rhs) },
                 backward: { value in
                     switch value {
-                    case let .add(lhs, rhs): return (lhs, rhs)
-                    case let .div(lhs, rhs): return (lhs, rhs)
+                    case let .add(lhs, rhs): (lhs, rhs)
+                    case let .div(lhs, rhs): (lhs, rhs)
                     case .value:
-                        return (value, value)
+                        (value, value)
                     }
-                }
+                },
             )
 
         return Gen.pick(choices: [
@@ -131,7 +130,7 @@ struct CalculatorShrinkingChallenge {
     @Test("Calculator, Full")
     func calculatorFull() throws {
         let iterator = ValueAndChoiceTreeInterpreter(Self.gen, materializePicks: true, seed: 1337, maxRuns: 100)
-        let (value, tree) = try #require(iterator.filter({ Self.property($0.0) == false }).last)
+        let (value, tree) = try #require(iterator.filter { Self.property($0.0) == false }.last)
         let originalSeq = ChoiceSequence.flatten(tree)
 //        print(value)
         print(originalSeq.shortString)
@@ -146,13 +145,13 @@ struct CalculatorShrinkingChallenge {
 //        print()
         #expect(output == .div(.value(0), .div(.value(0), .value(1))))
     }
-    
+
     @Test("Test branch reflection and materialization")
-    func testBranchReflectionAndMaterialisation() throws {
+    func branchReflectionAndMaterialisation() throws {
         let simple = Expr.value(1)
         let add = Expr.add(simple, simple)
         let div = Expr.div(simple, simple)
-        
+
         for expr in [simple, add, div] {
             let reflected = try #require(try Interpreters.reflect(Self.gen, with: expr))
             let sequence = ChoiceSequence.flatten(reflected)
@@ -162,9 +161,9 @@ struct CalculatorShrinkingChallenge {
             #expect(materialized == expr)
         }
     }
-    
+
     @Test("Test branch replacement")
-    func testBranchReplacement() throws {
+    func branchReplacement() throws {
         let exprs = Array(ValueAndChoiceTreeInterpreter(Self.gen, materializePicks: true, seed: 1337, maxRuns: 10)).dropFirst(5)
         for (value, tree) in exprs {
             let branches = Self.extractBranches(in: tree)

@@ -16,11 +16,11 @@ enum PickBranchResolution {
     static func unpack(_ branch: ChoiceTree) -> Branch? {
         switch branch {
         case let .branch(_, id, _, choice):
-            return Branch(id: id, choice: choice, isSelected: false)
+            Branch(id: id, choice: choice, isSelected: false)
         case let .selected(.branch(_, id, _, choice)):
-            return Branch(id: id, choice: choice, isSelected: true)
+            Branch(id: id, choice: choice, isSelected: true)
         default:
-            return nil
+            nil
         }
     }
 

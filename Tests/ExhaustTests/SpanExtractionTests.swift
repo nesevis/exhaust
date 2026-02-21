@@ -22,7 +22,7 @@ private func reduced(_ n: UInt64) -> ChoiceSequenceValue {
 private func branch(_ n: Int) -> ChoiceSequenceValue {
     .branch(.init(
         id: UInt64(n),
-        validIDs: Array(0 ... 9)
+        validIDs: Array(0 ... 9),
     ))
 }
 

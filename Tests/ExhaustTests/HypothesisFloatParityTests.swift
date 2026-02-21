@@ -124,7 +124,7 @@ struct HypothesisFloatShrinkingParityTests {
         // into a dedicated single-goal test using an explicit starting value.
         let output = try HypothesisFloatParityHelpers.minimalDouble(
             from: 3.14159,
-            where: { $0 > 1 }
+            where: { $0 > 1 },
         )
         #expect(output == 2.0)
     }
@@ -135,7 +135,7 @@ struct HypothesisFloatShrinkingParityTests {
         // into a dedicated single-goal test using an explicit starting value.
         let output = try HypothesisFloatParityHelpers.minimalDouble(
             from: 3.14159,
-            where: { $0 > 0 }
+            where: { $0 > 0 },
         )
         #expect(output == 1.0)
     }
@@ -158,7 +158,7 @@ struct HypothesisFloatShrinkingParityTests {
             }
 
             #expect(output.count == n)
-            #expect(output.filter { $0 == 0.0 }.count == n - 1)
+            #expect(output.count(where: { $0 == 0.0 }) == n - 1)
             #expect(output.contains(1.0))
         }
     }
@@ -172,8 +172,8 @@ struct HypothesisFloatShrinkingParityTests {
         for minValue in cases {
             let output = try HypothesisFloatParityHelpers.minimalDouble(
                 from: 100.125,
-                in: minValue ... 1_000.0,
-                where: { $0 >= minValue }
+                in: minValue ... 1000.0,
+                where: { $0 >= minValue },
             )
             #expect(output == ceil(minValue))
         }
@@ -207,7 +207,7 @@ struct HypothesisFloatShrinkingParityTests {
         // Direct port of `test_shrink_to_integer_upper_bound`.
         let output = try HypothesisFloatParityHelpers.minimalDouble(
             from: 1.1,
-            where: { 1 < $0 && $0 <= 2 }
+            where: { $0 > 1 && $0 <= 2 },
         )
         #expect(output == 2.0)
     }
@@ -217,7 +217,7 @@ struct HypothesisFloatShrinkingParityTests {
         // Direct port of `test_shrink_up_to_one`.
         let output = try HypothesisFloatParityHelpers.minimalDouble(
             from: 0.5,
-            where: { 0.5 <= $0 && $0 <= 1.5 }
+            where: { $0 >= 0.5 && $0 <= 1.5 },
         )
         #expect(output == 1.0)
     }
@@ -227,7 +227,7 @@ struct HypothesisFloatShrinkingParityTests {
         // Direct port of `test_shrink_down_to_half`.
         let output = try HypothesisFloatParityHelpers.minimalDouble(
             from: 0.75,
-            where: { 0 < $0 && $0 < 1 }
+            where: { $0 > 0 && $0 < 1 },
         )
         #expect(output == 0.5)
     }
@@ -237,7 +237,7 @@ struct HypothesisFloatShrinkingParityTests {
         // Direct port of `test_shrink_fractional_part`.
         let output = try HypothesisFloatParityHelpers.minimalDouble(
             from: 2.5,
-            where: { $0.truncatingRemainder(dividingBy: 1.0) == 0.5 }
+            where: { $0.truncatingRemainder(dividingBy: 1.0) == 0.5 },
         )
         #expect(output == 1.5)
     }
@@ -247,7 +247,7 @@ struct HypothesisFloatShrinkingParityTests {
         // Direct port of `test_does_not_shrink_across_one`.
         let output = try HypothesisFloatParityHelpers.minimalDouble(
             from: 1.1,
-            where: { $0 == 1.1 || (0 < $0 && $0 < 1) }
+            where: { $0 == 1.1 || ($0 > 0 && $0 < 1) },
         )
         #expect(output == 1.1)
     }
@@ -260,7 +260,7 @@ struct HypothesisFloatShrinkingParityTests {
         let output = try HypothesisFloatParityHelpers.minimalDouble(
             from: 103.1,
             in: 103.0 ... 200.0,
-            where: { $0 >= 103.0 }
+            where: { $0 >= 103.0 },
         )
         #expect(output == 103.0)
     }
@@ -272,7 +272,7 @@ struct HypothesisFloatEncodingParityTests {
     func integralFloatsOrderAsIntegers() {
         // Adjustment relative to `test_integral_floats_order_as_integers`:
         // deterministic representative samples in place of property-driven generation.
-        let values: [Double] = [0, 1, 2, 4, 8, 10, 16, 32, 64, 100, 128, 256, 500, 512, 1_000, 1_024]
+        let values: [Double] = [0, 1, 2, 4, 8, 10, 16, 32, 64, 100, 128, 256, 500, 512, 1000, 1024]
         for (lhs, rhs) in zip(values, values.dropFirst()) {
             #expect(FloatShortlex.shortlexKey(for: lhs) < FloatShortlex.shortlexKey(for: rhs))
         }
@@ -352,7 +352,7 @@ struct HypothesisFloatRangeAndSubnormalParityTests {
         // Direct parity with `test_very_narrow_interval`, expressed with Swift `nextDown`.
         let upperBound = -1.0
         var lowerBound = upperBound
-        for _ in 0..<10 {
+        for _ in 0 ..< 10 {
             lowerBound = lowerBound.nextDown
         }
         #expect(lowerBound < upperBound)

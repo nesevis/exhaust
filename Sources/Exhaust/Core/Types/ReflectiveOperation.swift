@@ -56,6 +56,7 @@ public enum ReflectiveOperation {
             self.generator = generator
         }
     }
+
     /// Contravariant transformation that focuses on part of the input during reflection.
     ///
     /// This is the key operation that enables generators to work with different input types

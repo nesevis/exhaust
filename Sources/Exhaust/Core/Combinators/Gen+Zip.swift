@@ -24,7 +24,7 @@ public extension Gen {
         return impure.mapped(
             forward: { values in
                 var index = 0
-                func next<U>(_ type: U.Type) -> U {
+                func next<U>(_: U.Type) -> U {
                     defer { index += 1 }
                     return values[index] as! U
                 }
