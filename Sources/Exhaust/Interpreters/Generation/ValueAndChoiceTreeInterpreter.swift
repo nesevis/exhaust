@@ -11,7 +11,6 @@ import Foundation
 public struct ValueAndChoiceTreeInterpreter<FinalOutput>: IteratorProtocol, Sequence {
     public typealias Element = (value: FinalOutput, tree: ChoiceTree)
     typealias RunContinuation<Output> = (Any, ChoiceTree) throws -> (Output, ChoiceTree)?
-    typealias RunGenerator<Output> = (ReflectiveGenerator<Any>) throws -> (Output, ChoiceTree)?
 
     let generator: ReflectiveGenerator<FinalOutput>
     private var context: Context
@@ -82,7 +81,6 @@ public struct ValueAndChoiceTreeInterpreter<FinalOutput>: IteratorProtocol, Sequ
             return (value, ChoiceTree.just(String(String(describing: value).prefix(50))))
 
         case let .impure(operation, continuation):
-            // TODO: Extract the larger case-handlers into separate functions
             // Prebake the continuation and other parameters here for ease of calling
             let runContinuation: RunContinuation = { result, calleeChoiceTree in
                 let nextGen = try continuation(result)
@@ -116,141 +114,64 @@ public struct ValueAndChoiceTreeInterpreter<FinalOutput>: IteratorProtocol, Sequ
                     // MARK: - Contramap
 
             case let .contramap(_, nextGen):
-                // The contramap transform is not used in the forward pass
-                // Run the nested generator and pass its result to the continuation
-                guard let result = try runGenerator(nextGen, context) else { return nil }
-                // At this stage we have the result.
-                return try runContinuation(result.0, result.1)
+                return try handleContramap(
+                    nextGen,
+                    inputValue: inputValue,
+                    context: context,
+                    runContinuation: runContinuation,
+                )
 
                     // MARK: - Prune
 
             case let .prune(nextGen):
-                guard let optional = .some(inputValue as Any?), let wrappedValue = optional else {
-                    return nil // Pruned!
-                }
-                guard let result = try Self.generateRecursive(nextGen, with: wrappedValue, context: context) else { return nil }
-                return try runContinuation(result.0, result.1)
+                return try handlePrune(
+                    nextGen,
+                    inputValue: inputValue,
+                    context: context,
+                    runContinuation: runContinuation,
+                )
 
                     // MARK: - Pick
 
             case let .pick(choices):
-                let totalWeight = choices.reduce(0) { $0 + $1.weight }
-                // This determines which of the branches will be selected
-                var randomRoll = UInt64.random(in: 1 ... totalWeight, using: &context.prng)
-                // This may or may not be used, but we always have to consume it
-                let jumpSeed = context.prng.next()
-                var selectedChoice: ReflectiveOperation.PickTuple?
-                for choice in choices {
-                    if randomRoll <= choice.weight {
-                        selectedChoice = choice
-                        break
-                    }
-                    randomRoll -= choice.weight
-                }
-
-                var branches = [ChoiceTree]()
-                branches.reserveCapacity(choices.count)
-                var finalValue: Output?
-                let branchIDs = choices.map(\.id)
-
-                for choice in choices {
-                    let isSelected = choice.id == selectedChoice?.id
-                    var value: Output?
-                    var branch: ChoiceTree?
-
-                    if isSelected || context.materializePicks {
-                        if let result = try runGenerator(choice.generator, isSelected ? context : context.jump(seed: jumpSeed)),
-                           let final = try runContinuation(result.0, result.1)
-                        {
-                            value = final.0
-                            branch = ChoiceTree.branch(
-                                weight: choice.weight,
-                                id: choice.id,
-                                branchIDs: branchIDs,
-                                choice: final.1,
-                            )
-                        }
-                    }
-
-                    if isSelected, let branch {
-                        // Wrap in selected
-                        finalValue = value
-                        branches.append(.selected(branch))
-                        if context.materializePicks == false {
-                            // Do not iterate more
-                            break
-                        }
-                    } else if let branch {
-                        branches.append(branch)
-                    }
-                }
-
-                guard let value = finalValue
-                else {
-                    throw GeneratorError.couldNotGenerateConcomitantChoiceTree
-                }
-
-                return (value, .group(branches))
+                return try handlePick(
+                    choices,
+                    inputValue: inputValue,
+                    context: context,
+                    runContinuation: runContinuation,
+                )
 
                     // MARK: - Choosebits
 
             case let .chooseBits(min, max, tag, _):
-                let randomBits = UInt64.random(in: min ... max, using: &context.prng)
-                let choiceTree = ChoiceTree.choice(ChoiceValue(randomBits, tag: tag), .init(validRanges: [min ... max]))
-
-                return try runContinuation(randomBits, choiceTree)
+                return try handleChooseBits(
+                    min: min,
+                    max: max,
+                    tag: tag,
+                    context: context,
+                    runContinuation: runContinuation,
+                )
 
                     // MARK: - Sequence
 
             case let .sequence(lengthGen, elementGen):
-                // An iterative loop, not a recursive one. This will never overflow the stack.
-                guard let (length, lengthTrees) = try generateRecursive(
-                    lengthGen,
-                    with: inputValue,
+                return try handleSequence(
+                    lengthGen: lengthGen,
+                    elementGen: elementGen,
                     context: context,
-                ) else {
-                    return nil
-                }
-
-                var results: [Any] = []
-                var elements: [ChoiceTree] = []
-                results.reserveCapacity(Int(length))
-                elements.reserveCapacity(Int(length))
-
-                for _ in 0 ..< length {
-                    guard let (result, element) = try runGenerator(elementGen, context) else { return nil }
-                    results.append(result)
-                    elements.append(element)
-                }
-
-                let choiceTree = ChoiceTree.sequence(
-                    length: length,
-                    elements: elements,
-                    lengthTrees.metadata, // FIXME: This will now be a group
+                    inputValue: inputValue,
+                    runContinuation: runContinuation,
                 )
-
-                // Ignore the result ChoiceTree here; it will be a `just` value
-                if let (result, _) = try runContinuation(results, choiceTree) {
-                    return (result, choiceTree)
-                }
-                return nil
 
                     // MARK: - Zip
 
             case let .zip(generators):
-                // This will reduce these generators into an array of results that the continuation will convert into a tuple
-                var results = [Any]()
-                results.reserveCapacity(generators.count)
-                var choiceTrees = [ChoiceTree]()
-                results.reserveCapacity(generators.count)
-                for gen in generators {
-                    guard let (result, tree) = try runGenerator(gen, context) else {
-                        throw GeneratorError.couldNotGenerateConcomitantChoiceTree
-                    }
-                    results.append(result)
-                    choiceTrees.append(tree)
-                }
-                return try runContinuation(results, .group(choiceTrees))
+                return try handleZip(
+                    generators,
+                    inputValue: inputValue,
+                    context: context,
+                    runContinuation: runContinuation,
+                )
 
                     // MARK: - Just
 
@@ -267,9 +188,13 @@ public struct ValueAndChoiceTreeInterpreter<FinalOutput>: IteratorProtocol, Sequ
                     // MARK: - Resize
 
             case let .resize(newSize, gen):
-                context.sizeOverride = newSize // TODO: Investigate whether this has unintended consequences
-                guard let result = try runGenerator(gen, context) else { return nil }
-                return try runContinuation(result.0, .resize(newSize: newSize, choices: [result.1]))
+                return try handleResize(
+                    newSize: newSize,
+                    gen: gen,
+                    inputValue: inputValue,
+                    context: context,
+                    runContinuation: runContinuation,
+                )
 
                     // MARK: - Filter
 
@@ -299,16 +224,219 @@ public struct ValueAndChoiceTreeInterpreter<FinalOutput>: IteratorProtocol, Sequ
                     // MARK: - Classify
 
             case let .classify(gen, fingerprint, classifiers):
-                guard let result = try runGenerator(gen, context) else { return nil }
-
-                for (label, classifier) in classifiers where classifier(result.0) {
-                    // Use the current run as the identifier for this value. We don't want to force `Equatable`
-                    context.classifications[fingerprint, default: [:]][label, default: []].insert(context.runs)
-                }
-
-                return try runContinuation(result.0, result.1)
+                return try handleClassify(
+                    gen,
+                    fingerprint: fingerprint,
+                    classifiers: classifiers,
+                    inputValue: inputValue,
+                    context: context,
+                    runContinuation: runContinuation,
+                )
             }
         }
+    }
+
+    @inline(__always)
+    private static func handleContramap<Input, Output>(
+        _ nextGen: ReflectiveGenerator<Any>,
+        inputValue: Input,
+        context: Context,
+        runContinuation: RunContinuation<Output>,
+    ) throws -> (Output, ChoiceTree)? {
+        try InterpreterWrapperHandlers.continueAfterSubgenerator(
+            runSubgenerator: { try generateRecursive(nextGen, with: inputValue, context: context) },
+            runContinuation: { try runContinuation($0.0, $0.1) },
+        )
+    }
+
+    @inline(__always)
+    private static func handlePrune<Input, Output>(
+        _ nextGen: ReflectiveGenerator<Any>,
+        inputValue: Input,
+        context: Context,
+        runContinuation: RunContinuation<Output>,
+    ) throws -> (Output, ChoiceTree)? {
+        guard let wrappedValue = InterpreterWrapperHandlers.unwrapPruneInput(inputValue) else {
+            return nil
+        }
+        return try InterpreterWrapperHandlers.continueAfterSubgenerator(
+            runSubgenerator: { try Self.generateRecursive(nextGen, with: wrappedValue, context: context) },
+            runContinuation: { try runContinuation($0.0, $0.1) },
+        )
+    }
+
+    @inline(__always)
+    private static func handlePick<Input, Output>(
+        _ choices: ContiguousArray<ReflectiveOperation.PickTuple>,
+        inputValue: Input,
+        context: Context,
+        runContinuation: RunContinuation<Output>,
+    ) throws -> (Output, ChoiceTree)? {
+        guard let selectedChoice = WeightedPickSelection.draw(from: choices, using: &context.prng) else {
+            return nil
+        }
+        // This may or may not be used, but we always have to consume it.
+        let jumpSeed = context.prng.next()
+
+        var branches = [ChoiceTree]()
+        branches.reserveCapacity(choices.count)
+        var finalValue: Output?
+        let branchIDs = choices.map(\.id)
+
+        for choice in choices {
+            let isSelected = choice.id == selectedChoice.id
+            var value: Output?
+            var branch: ChoiceTree?
+
+            if isSelected || context.materializePicks {
+                if let result = try generateRecursive(
+                    choice.generator,
+                    with: inputValue,
+                    context: isSelected ? context : context.jump(seed: jumpSeed),
+                ),
+                   let final = try runContinuation(result.0, result.1)
+                {
+                    value = final.0
+                    branch = ChoiceTree.branch(
+                        weight: choice.weight,
+                        id: choice.id,
+                        branchIDs: branchIDs,
+                        choice: final.1,
+                    )
+                }
+            }
+
+            if isSelected, let branch {
+                finalValue = value
+                branches.append(.selected(branch))
+                if context.materializePicks == false {
+                    break
+                }
+            } else if let branch {
+                branches.append(branch)
+            }
+        }
+
+        guard let value = finalValue else {
+            throw GeneratorError.couldNotGenerateConcomitantChoiceTree
+        }
+
+        return (value, .group(branches))
+    }
+
+    @inline(__always)
+    private static func handleChooseBits<Output>(
+        min: UInt64,
+        max: UInt64,
+        tag: TypeTag,
+        context: Context,
+        runContinuation: RunContinuation<Output>,
+    ) throws -> (Output, ChoiceTree)? {
+        let randomBits = UInt64.random(in: min ... max, using: &context.prng)
+        let choiceTree = ChoiceTree.choice(ChoiceValue(randomBits, tag: tag), .init(validRanges: [min ... max]))
+        return try runContinuation(randomBits, choiceTree)
+    }
+
+    @inline(__always)
+    private static func handleSequence<Input, Output>(
+        lengthGen: ReflectiveGenerator<UInt64>,
+        elementGen: ReflectiveGenerator<Any>,
+        context: Context,
+        inputValue: Input,
+        runContinuation: RunContinuation<Output>,
+    ) throws -> (Output, ChoiceTree)? {
+        guard let (length, lengthTrees) = try generateRecursive(
+            lengthGen,
+            with: inputValue,
+            context: context,
+        ) else {
+            return nil
+        }
+
+        var results: [Any] = []
+        var elements: [ChoiceTree] = []
+        results.reserveCapacity(Int(length))
+        elements.reserveCapacity(Int(length))
+
+        let didSucceed = try SequenceExecutionKernel.run(count: length) {
+            guard let (result, element) = try generateRecursive(elementGen, with: inputValue, context: context) else {
+                return false
+            }
+            results.append(result)
+            elements.append(element)
+            return true
+        }
+        guard didSucceed else {
+            return nil
+        }
+
+        let choiceTree = ChoiceTree.sequence(
+            length: length,
+            elements: elements,
+            lengthTrees.metadata,
+        )
+
+        if let (result, _) = try runContinuation(results, choiceTree) {
+            return (result, choiceTree)
+        }
+        return nil
+    }
+
+    @inline(__always)
+    private static func handleZip<Input, Output>(
+        _ generators: ContiguousArray<ReflectiveGenerator<Any>>,
+        inputValue: Input,
+        context: Context,
+        runContinuation: RunContinuation<Output>,
+    ) throws -> (Output, ChoiceTree)? {
+        var results = [Any]()
+        results.reserveCapacity(generators.count)
+        var choiceTrees = [ChoiceTree]()
+        choiceTrees.reserveCapacity(generators.count)
+
+        for gen in generators {
+            guard let (result, tree) = try generateRecursive(gen, with: inputValue, context: context) else {
+                throw GeneratorError.couldNotGenerateConcomitantChoiceTree
+            }
+            results.append(result)
+            choiceTrees.append(tree)
+        }
+        return try runContinuation(results, .group(choiceTrees))
+    }
+
+    @inline(__always)
+    private static func handleResize<Input, Output>(
+        newSize: UInt64,
+        gen: ReflectiveGenerator<Any>,
+        inputValue: Input,
+        context: Context,
+        runContinuation: RunContinuation<Output>,
+    ) throws -> (Output, ChoiceTree)? {
+        context.sizeOverride = newSize
+        guard let result = try generateRecursive(gen, with: inputValue, context: context) else {
+            return nil
+        }
+        return try runContinuation(result.0, .resize(newSize: newSize, choices: [result.1]))
+    }
+
+    @inline(__always)
+    private static func handleClassify<Input, Output>(
+        _ gen: ReflectiveGenerator<Any>,
+        fingerprint: UInt64,
+        classifiers: [(label: String, predicate: (Any) -> Bool)],
+        inputValue: Input,
+        context: Context,
+        runContinuation: RunContinuation<Output>,
+    ) throws -> (Output, ChoiceTree)? {
+        return try InterpreterWrapperHandlers.continueAfterSubgenerator(
+            runSubgenerator: { try generateRecursive(gen, with: inputValue, context: context) },
+            runContinuation: { result in
+                for (label, classifier) in classifiers where classifier(result.0) {
+                    context.classifications[fingerprint, default: [:]][label, default: []].insert(context.runs)
+                }
+                return try runContinuation(result.0, result.1)
+            },
+        )
     }
 
     // MARK: - Quickcheck logarithmic scaling of test cases
