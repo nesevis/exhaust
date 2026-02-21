@@ -145,7 +145,8 @@ extension ReducerStrategies {
             candidate.append(contentsOf: sequence[(spanEnd + 1)...])
         }
 
-        // FIXME: This is using shortlex, which is where the inconsistency comes in
+        // We are allowing this change to ignore shortlex in the hopes that it unlocks
+        // a partial reduction that unlocks further ones. See `LargeUnionList` and `Difference`
 //        guard candidate.shortLexPrecedes(sequence) else { return nil }
         guard bloomFilter.contains(candidate) == false else { return nil }
         guard let output = try? Interpreters.materialize(gen, with: tree, using: candidate) else {

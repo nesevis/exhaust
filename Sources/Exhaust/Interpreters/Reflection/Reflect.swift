@@ -177,9 +177,7 @@ public enum Interpreters {
             return [(value: value, path: [.just("\(value)")])]
 
         case .getSize:
-            // FIXME: We can't derive the getSize parameter when reflecting as the bind continuation that applies it is opaque to us. Ultimately it shouldn't matter for replay
-            // But it does for reflection.
-            //
+            // We can't derive the `getSize` parameter when reflecting as it is normally used within a `bind`. However, `isRangeExplicit` on `.chooseBits` helps us determine whether to use the `min` and `max` on that case, or default to the fitting range according to the value's `BitPatternConvertible` conformance.
             var derivedSize: UInt64 = 0
             if let sequence = finalOutput as? any Sequence {
                 derivedSize = UInt64(sequence.underestimatedCount)

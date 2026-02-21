@@ -51,7 +51,6 @@ public extension Gen {
         _ newSize: UInt64,
         _ generator: ReflectiveGenerator<Output>,
     ) -> ReflectiveGenerator<Output> {
-        // TODO: We're not handling resize correctly anymore
         liftF(.resize(newSize: newSize, next: generator.erase()))
     }
 }
