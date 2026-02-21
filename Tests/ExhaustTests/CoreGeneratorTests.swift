@@ -24,7 +24,37 @@ struct CoreGeneratorTests {
             }
         }
 
-        @Test("Flatzip", .disabled("FIXME"))
+        @Test("Reflection preserves explicit Gen.choose range metadata")
+        func reflectionPreservesExplicitChooseRangeMetadata() throws {
+            let gen = Gen.choose(in: UInt64(10) ... 20)
+            let tree = try #require(try Interpreters.reflect(gen, with: UInt64(15)))
+
+            guard case let .choice(_, metadata) = tree else {
+                #expect(Bool(false), "Expected reflected tree to be a single choice")
+                return
+            }
+
+            #expect(metadata.validRanges == [UInt64(10) ... 20])
+        }
+
+        @Test("Reflection rejects values outside explicit Gen.choose range")
+        func reflectionRejectsOutOfRangeExplicitChoose() {
+            let gen = Gen.choose(in: UInt64(10) ... 20)
+
+            do {
+                _ = try Interpreters.reflect(gen, with: UInt64(25))
+                #expect(Bool(false), "Expected reflection to fail for out-of-range value")
+            } catch let error as Interpreters.ReflectionError {
+                guard case .inputWasOutOfGeneratorRange(_, _) = error else {
+                    #expect(Bool(false), "Expected inputWasOutOfGeneratorRange, got \(error)")
+                    return
+                }
+            } catch {
+                #expect(Bool(false), "Expected ReflectionError, got \(error)")
+            }
+        }
+
+        @Test("Flatzip", .disabled("Won't work, known limitation"))
         func reflectionHashStability() throws {
             let gen = Gen.zip(Int.arbitrary, Double.arbitrary)
             var iterator = ValueAndChoiceTreeInterpreter(gen)

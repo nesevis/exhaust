@@ -166,18 +166,22 @@ struct ShortlexKeyTests {
         #expect(negZero.shortlexKey == 0)
     }
 
-    @Test("Float shortlexKey orders by distance from zero")
+    @Test("Float shortlexKey prefers simple integers before non-simple fractions")
     func floatDistanceFromZeroOrdering() {
-        let small = ChoiceValue(0.001, tag: .double)
-        let medium = ChoiceValue(1.0, tag: .double)
-        let large = ChoiceValue(1000.0, tag: .double)
-        #expect(small.shortlexKey < medium.shortlexKey)
-        #expect(medium.shortlexKey < large.shortlexKey)
+        let nonSimpleFraction = ChoiceValue(0.001, tag: .double)
+        let simpleSmallInteger = ChoiceValue(1.0, tag: .double)
+        let simpleLargeInteger = ChoiceValue(1000.0, tag: .double)
 
-        // Negative values ordered by magnitude too
-        let negSmall = ChoiceValue(-0.001, tag: .double)
-        let negLarge = ChoiceValue(-1000.0, tag: .double)
-        #expect(negSmall.shortlexKey < negLarge.shortlexKey)
+        // Simple non-negative integers preserve natural ordering.
+        #expect(simpleSmallInteger.shortlexKey < simpleLargeInteger.shortlexKey)
+
+        // Non-simple fractions are ranked after simple integers.
+        #expect(simpleSmallInteger.shortlexKey < nonSimpleFraction.shortlexKey)
+        #expect(simpleLargeInteger.shortlexKey < nonSimpleFraction.shortlexKey)
+
+        // Sign is ignored for equal magnitudes.
+        let negSimpleLarge = ChoiceValue(-1000.0, tag: .double)
+        #expect(negSimpleLarge.shortlexKey == simpleLargeInteger.shortlexKey)
     }
 
     @Test("Float shortlexKey: infinity has large key, NaN has largest")
