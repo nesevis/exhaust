@@ -28,10 +28,9 @@ extension ChoiceValue {
         case let .unsigned(uint, _):
             uint
         case let .signed(value, _, _):
-//            value == Int64.min ? UInt64(Int64.max) + 1 : UInt64(abs(value))
             UInt64(bitPattern: (value << 1) ^ (value >> 63))
         case let .floating(value, _, _):
-            abs(value).bitPattern
+            FloatShortlex.shortlexKey(for: value)
         case let .character(char):
             char.bitPattern64
         }
@@ -45,6 +44,13 @@ extension ChoiceValue {
         if fits(in: ranges, bitPattern: target) {
             return target
         }
+
+        if case let .floating(_, _, type) = self,
+           let floatingTarget = floatingReductionTarget(in: ranges, type: type)
+        {
+            return floatingTarget
+        }
+
         // Find the range bound closest to the target
         var bestBound = ranges[0].lowerBound
         var bestDistance = target > bestBound
@@ -62,6 +68,89 @@ extension ChoiceValue {
             }
         }
         return bestBound
+    }
+
+    private func floatingReductionTarget(
+        in ranges: [ClosedRange<UInt64>],
+        type: any BitPatternConvertible.Type,
+    ) -> UInt64? {
+        var best: (key: UInt64, bitPattern: UInt64)?
+        func consider(_ bitPattern: UInt64) {
+            guard let value = floatingValue(for: bitPattern, type: type) else {
+                return
+            }
+            let key = FloatShortlex.shortlexKey(for: value)
+            if let currentBest = best, currentBest.key <= key {
+                return
+            }
+            best = (key, bitPattern)
+        }
+
+        for range in ranges {
+            consider(range.lowerBound)
+            consider(range.upperBound)
+
+            guard let lower = floatingValue(for: range.lowerBound, type: type),
+                  let upper = floatingValue(for: range.upperBound, type: type),
+                  lower.isFinite,
+                  upper.isFinite
+            else {
+                continue
+            }
+
+            // Hypothesis-style ordering prefers simple non-negative integers when available.
+            let simpleUpper = FloatShortlex.simpleIntegerUpperBound
+
+            let positiveLower = max(0.0, lower)
+            let positiveUpper = min(simpleUpper, upper)
+            if positiveLower <= positiveUpper {
+                let integerCandidate = positiveLower.rounded(.up)
+                if integerCandidate <= positiveUpper,
+                   let bitPattern = floatingBitPattern(for: integerCandidate, type: type)
+                {
+                    consider(bitPattern)
+                }
+            }
+
+            let negativeLower = max(-simpleUpper, lower)
+            let negativeUpper = min(0.0, upper)
+            if negativeLower <= negativeUpper {
+                let integerCandidate = negativeUpper.rounded(.down)
+                if integerCandidate >= negativeLower,
+                   let bitPattern = floatingBitPattern(for: integerCandidate, type: type)
+                {
+                    consider(bitPattern)
+                }
+            }
+        }
+
+        return best?.bitPattern
+    }
+
+    private func floatingValue(
+        for bitPattern: UInt64,
+        type: any BitPatternConvertible.Type,
+    ) -> Double? {
+        if type is Double.Type {
+            return Double(Double(bitPattern64: bitPattern))
+        }
+        if type is Float.Type {
+            return Double(Float(bitPattern64: bitPattern))
+        }
+        return nil
+    }
+
+    private func floatingBitPattern(
+        for value: Double,
+        type: any BitPatternConvertible.Type,
+    ) -> UInt64? {
+        if type is Double.Type {
+            return Double(value).bitPattern64
+        }
+        if type is Float.Type {
+            return Float(value).bitPattern64
+        }
+        return nil
     }
 
     private func fits(in ranges: [ClosedRange<UInt64>], bitPattern: UInt64) -> Bool {
