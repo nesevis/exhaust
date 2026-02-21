@@ -165,11 +165,26 @@ extension ReducerStrategies {
     ///
     /// - Complexity: O(min(*a*, *b*)), where *a* and *b* are the lengths of the two arrays.
     static func lexicographicallyPrecedes(_ lhs: [ChoiceValue], _ rhs: [ChoiceValue]) -> Bool {
-        if lhs.count == rhs.count {}
         for (a, b) in zip(lhs, rhs) {
+            if a.tag != b.tag {
+                return choiceTagRank(a.tag) < choiceTagRank(b.tag)
+            }
             if a < b { return true }
             if b < a { return false }
         }
         return lhs.count < rhs.count
+    }
+
+    private static func choiceTagRank(_ tag: TypeTag) -> Int {
+        switch tag {
+        case .int, .int8, .int16, .int32, .int64:
+            return 0
+        case .uint, .uint8, .uint16, .uint32, .uint64:
+            return 1
+        case .float, .double:
+            return 2
+        case .character:
+            return 3
+        }
     }
 }

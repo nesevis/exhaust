@@ -363,7 +363,19 @@ extension ReducerStrategies {
         in sequence: ChoiceSequence,
     ) -> [[Int]] {
         if let valueRanges = group.valueRanges, valueRanges.count >= 2 {
-            return [valueRanges.map(\.lowerBound)]
+            let indices = valueRanges.map(\.lowerBound)
+            var byTag = [TypeTag: [Int]]()
+            for idx in indices {
+                guard let value = sequence[idx].value else { continue }
+                byTag[value.choice.tag, default: []].append(idx)
+            }
+            let grouped = byTag.values
+                .filter { $0.count >= 2 }
+                .sorted(by: { ($0.first ?? 0) < ($1.first ?? 0) })
+            if grouped.isEmpty == false {
+                return grouped
+            }
+            return [indices]
         }
 
         // For container sibling groups, align values by internal value offset across siblings.
