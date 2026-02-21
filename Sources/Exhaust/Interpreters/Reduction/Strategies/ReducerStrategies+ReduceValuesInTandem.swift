@@ -12,6 +12,7 @@ extension ReducerStrategies {
         let originalEntries: [(index: Int, entry: ChoiceSequenceValue)]
         let originalSemanticDistances: [UInt64]
         let disallowAwayMoves: Bool
+        let usesFloatingSteps: Bool
         let searchUpward: Bool
         let distance: UInt64
     }
@@ -227,11 +228,36 @@ extension ReducerStrategies {
         let targetBP = firstValue.choice.reductionTarget(in: firstValue.validRanges)
         guard currentBP != targetBP else { return nil }
 
-        let searchUpward = targetBP > currentBP
-        let distance = searchUpward
-            ? targetBP - currentBP
-            : currentBP - targetBP
-        guard distance > 1 else { return nil }
+        let usesFloatingSteps = tag == .double || tag == .float
+        let searchUpward: Bool
+        let distance: UInt64
+        if usesFloatingSteps {
+            guard case let .floating(currentFloatingValue, _, _) = firstValue.choice else {
+                return nil
+            }
+            let targetChoice = ChoiceValue(
+                tag.makeConvertible(bitPattern64: targetBP),
+                tag: tag,
+            )
+            guard case let .floating(targetFloatingValue, _, _) = targetChoice,
+                  currentFloatingValue.isFinite,
+                  targetFloatingValue.isFinite
+            else {
+                return nil
+            }
+            searchUpward = targetFloatingValue > currentFloatingValue
+            let rawDistance = abs(currentFloatingValue - targetFloatingValue).rounded(.down)
+            guard rawDistance >= 1 else {
+                return nil
+            }
+            distance = UInt64(rawDistance)
+        } else {
+            searchUpward = targetBP > currentBP
+            distance = searchUpward
+                ? targetBP - currentBP
+                : currentBP - targetBP
+            guard distance > 1 else { return nil }
+        }
 
         let originalEntries: [(index: Int, entry: ChoiceSequenceValue)] = windowIndices.map { idx in
             (idx, sequence[idx])
@@ -249,6 +275,7 @@ extension ReducerStrategies {
             originalEntries: originalEntries,
             originalSemanticDistances: originalSemanticDistances,
             disallowAwayMoves: groupKind == .bareValue && windowIndices.count > 2,
+            usesFloatingSteps: usesFloatingSteps,
             searchUpward: searchUpward,
             distance: distance,
         )
@@ -271,20 +298,33 @@ extension ReducerStrategies {
             let idx = pair.index
             let originalEntry = pair.entry
             guard let value = originalEntry.value else { return nil }
-            guard plan.searchUpward
-                ? UInt64.max - delta >= value.choice.bitPattern64
-                : value.choice.bitPattern64 >= delta
-            else {
-                return nil
-            }
+            let newChoice: ChoiceValue
+            if plan.usesFloatingSteps {
+                guard case let .floating(currentFloatingValue, _, _) = value.choice else {
+                    return nil
+                }
+                let signedDelta = plan.searchUpward ? Double(delta) : -Double(delta)
+                let candidateFloatingValue = currentFloatingValue + signedDelta
+                guard let floatingChoice = floatingChoice(from: candidateFloatingValue, tag: plan.tag) else {
+                    return nil
+                }
+                newChoice = floatingChoice
+            } else {
+                guard plan.searchUpward
+                    ? UInt64.max - delta >= value.choice.bitPattern64
+                    : value.choice.bitPattern64 >= delta
+                else {
+                    return nil
+                }
 
-            let newValue = plan.searchUpward
-                ? value.choice.bitPattern64 + delta
-                : value.choice.bitPattern64 - delta
-            let newChoice = ChoiceValue(
-                plan.tag.makeConvertible(bitPattern64: newValue),
-                tag: plan.tag,
-            )
+                let newValue = plan.searchUpward
+                    ? value.choice.bitPattern64 + delta
+                    : value.choice.bitPattern64 - delta
+                newChoice = ChoiceValue(
+                    plan.tag.makeConvertible(bitPattern64: newValue),
+                    tag: plan.tag,
+                )
+            }
             guard newChoice.fits(in: value.validRanges) else {
                 continue
             }
@@ -359,9 +399,9 @@ extension ReducerStrategies {
 
     private static func supportsTandemTag(_ tag: TypeTag) -> Bool {
         switch tag {
-        case .int, .int64, .int32, .int16, .int8, .uint, .uint64, .uint32, .uint16, .uint8:
+        case .int, .int64, .int32, .int16, .int8, .uint, .uint64, .uint32, .uint16, .uint8, .double, .float:
             true
-        case .double, .float, .character:
+        case .character:
             false
         }
     }
@@ -371,5 +411,19 @@ extension ReducerStrategies {
         let lhs = value.shortlexKey
         let rhs = simplest.shortlexKey
         return lhs >= rhs ? (lhs - rhs) : (rhs - lhs)
+    }
+
+    private static func floatingChoice(from value: Double, tag: TypeTag) -> ChoiceValue? {
+        switch tag {
+        case .double:
+            guard value.isFinite else { return nil }
+            return ChoiceValue(value, tag: .double)
+        case .float:
+            let narrowed = Float(value)
+            guard narrowed.isFinite else { return nil }
+            return ChoiceValue(narrowed, tag: .float)
+        default:
+            return nil
+        }
     }
 }

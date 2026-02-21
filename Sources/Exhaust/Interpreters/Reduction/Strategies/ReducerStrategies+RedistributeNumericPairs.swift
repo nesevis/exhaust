@@ -6,6 +6,14 @@
 //
 
 extension ReducerStrategies {
+    private struct FloatRedistributionContext {
+        let lhsNumerator: Int64
+        let rhsNumerator: Int64
+        let denominator: UInt64
+        let lhsMovesUpward: Bool
+        let distance: UInt64
+    }
+
     /// Pass 5b: Cross-container value redistribution.
     /// For each pair of numeric values with the same tag, tries to decrease the earlier value
     /// (toward its reduction target) while increasing the later value by the same amount k.
@@ -81,15 +89,24 @@ extension ReducerStrategies {
 
                         let bp1 = fresh1.choice.bitPattern64
                         let target1 = fresh1.choice.reductionTarget(in: fresh1.validRanges)
-                        guard bp1 != target1 else { continue }
-
-                        let bp2 = fresh2.choice.bitPattern64
-
-                        // Determine direction: move bp1 toward target1
-                        let decrease1Upward = target1 > bp1
-                        let distance1 = decrease1Upward
-                            ? target1 - bp1
-                            : bp1 - target1
+                        let floatContext = makeFloatRedistributionContext(
+                            lhs: fresh1.choice,
+                            rhs: fresh2.choice,
+                            lhsTargetBitPattern: target1
+                        )
+                        let decrease1Upward: Bool
+                        let distance1: UInt64
+                        if let floatContext {
+                            decrease1Upward = floatContext.lhsMovesUpward
+                            distance1 = floatContext.distance
+                        } else {
+                            guard bp1 != target1 else { continue }
+                            decrease1Upward = target1 > bp1
+                            distance1 = decrease1Upward
+                                ? target1 - bp1
+                                : bp1 - target1
+                        }
+                        guard distance1 > 0 else { continue }
 
                         // Use semantic shortlex distance for gating heuristics so signed values
                         // near zero (e.g. -1) are treated as near, not "far" by raw bit patterns.
@@ -123,23 +140,22 @@ extension ReducerStrategies {
                             guard k > 0 else { return true }
                             guard k <= distance1 else { return false }
 
-                            guard let (newBP1, newBP2) = redistributedPairBitPatterns(
-                                lhsBitPattern: bp1,
-                                rhsBitPattern: bp2,
+                            guard let (newChoice1, newChoice2) = redistributedPairChoices(
+                                lhs: fresh1.choice,
+                                rhs: fresh2.choice,
                                 delta: k,
-                                lhsMovesUpward: decrease1Upward
+                                lhsMovesUpward: decrease1Upward,
+                                floatContext: floatContext
                             ) else {
                                 return false
                             }
+                            if floatContext != nil,
+                               (newChoice1.fits(in: fresh1.validRanges) == false
+                                   || newChoice2.fits(in: fresh2.validRanges) == false)
+                            {
+                                return false
+                            }
 
-                            let newChoice1 = ChoiceValue(
-                                fresh1.choice.tag.makeConvertible(bitPattern64: newBP1),
-                                tag: fresh1.choice.tag,
-                            )
-                            let newChoice2 = ChoiceValue(
-                                fresh2.choice.tag.makeConvertible(bitPattern64: newBP2),
-                                tag: fresh2.choice.tag,
-                            )
                             // Do not range-gate here: recorded valid ranges can be stale after prior
                             // structural/value edits. Let replay/materialization be the source of truth.
                             let probeEntry1 = ChoiceSequenceValue.reduced(.init(
@@ -212,7 +228,8 @@ extension ReducerStrategies {
                             if distance1 > 1 { fallbackKs.append(distance1 - 1) }
                             fallbackKs.append(max(1, distance1 / 2))
                             fallbackKs.append(max(1, distance1 / 4))
-                            if let wrapK = wrappingBoundaryDelta(for: fresh2.choice.tag, bitPattern: bp2),
+                            if floatContext == nil,
+                               let wrapK = wrappingBoundaryDelta(for: fresh2.choice.tag, bitPattern: fresh2.choice.bitPattern64),
                                wrapK > 0,
                                wrapK <= distance1
                             {
@@ -229,23 +246,22 @@ extension ReducerStrategies {
                             var bestFallbackEntry2: ChoiceSequenceValue?
                             var bestFallbackNonSemantic = Int.max
                             for k in uniqueFallbackKs {
-                                guard let (newBP1, newBP2) = redistributedPairBitPatterns(
-                                    lhsBitPattern: bp1,
-                                    rhsBitPattern: bp2,
+                                guard let (newChoice1, newChoice2) = redistributedPairChoices(
+                                    lhs: fresh1.choice,
+                                    rhs: fresh2.choice,
                                     delta: k,
-                                    lhsMovesUpward: decrease1Upward
+                                    lhsMovesUpward: decrease1Upward,
+                                    floatContext: floatContext
                                 ) else {
                                     continue
                                 }
+                                if floatContext != nil,
+                                   (newChoice1.fits(in: fresh1.validRanges) == false
+                                       || newChoice2.fits(in: fresh2.validRanges) == false)
+                                {
+                                    continue
+                                }
 
-                                let newChoice1 = ChoiceValue(
-                                    fresh1.choice.tag.makeConvertible(bitPattern64: newBP1),
-                                    tag: fresh1.choice.tag,
-                                )
-                                let newChoice2 = ChoiceValue(
-                                    fresh2.choice.tag.makeConvertible(bitPattern64: newBP2),
-                                    tag: fresh2.choice.tag,
-                                )
                                 let probeEntry1 = ChoiceSequenceValue.reduced(.init(
                                     choice: newChoice1,
                                     validRanges: fresh1.validRanges,
@@ -347,8 +363,130 @@ extension ReducerStrategies {
         return nil
     }
 
+    private static func makeFloatRedistributionContext(
+        lhs: ChoiceValue,
+        rhs: ChoiceValue,
+        lhsTargetBitPattern: UInt64,
+    ) -> FloatRedistributionContext? {
+        let tag = lhs.tag
+        guard tag == rhs.tag, tag == .double || tag == .float else {
+            return nil
+        }
+        guard case let .floating(lhsValue, _, _) = lhs,
+              case let .floating(rhsValue, _, _) = rhs,
+              lhsValue.isFinite,
+              rhsValue.isFinite
+        else {
+            return nil
+        }
+
+        let targetChoice = ChoiceValue(
+            tag.makeConvertible(bitPattern64: lhsTargetBitPattern),
+            tag: tag,
+        )
+        guard case let .floating(targetValue, _, _) = targetChoice,
+              targetValue.isFinite
+        else {
+            return nil
+        }
+
+        guard let lhsRatio = FloatShrink.integerRatio(for: lhsValue, tag: tag),
+              let rhsRatio = FloatShrink.integerRatio(for: rhsValue, tag: tag),
+              let targetRatio = FloatShrink.integerRatio(for: targetValue, tag: tag),
+              let lhsAndRhsDenominator = leastCommonMultiple(lhsRatio.denominator, rhsRatio.denominator),
+              let denominator = leastCommonMultiple(lhsAndRhsDenominator, targetRatio.denominator),
+              denominator > 0
+        else {
+            return nil
+        }
+
+        guard let lhsNumerator = scaledNumerator(lhsRatio, to: denominator),
+              let rhsNumerator = scaledNumerator(rhsRatio, to: denominator),
+              let targetNumerator = scaledNumerator(targetRatio, to: denominator)
+        else {
+            return nil
+        }
+
+        let lhsMovesUpward = targetNumerator > lhsNumerator
+        let rawDistance = absDiff(lhsNumerator, targetNumerator)
+        guard rawDistance > 0 else {
+            return nil
+        }
+
+        return .init(
+            lhsNumerator: lhsNumerator,
+            rhsNumerator: rhsNumerator,
+            denominator: denominator,
+            lhsMovesUpward: lhsMovesUpward,
+            distance: rawDistance
+        )
+    }
+
+    private static func scaledNumerator(
+        _ ratio: (numerator: Int64, denominator: UInt64),
+        to denominator: UInt64,
+    ) -> Int64? {
+        guard denominator % ratio.denominator == 0 else {
+            return nil
+        }
+        let scale = denominator / ratio.denominator
+        guard scale <= UInt64(Int64.max) else {
+            return nil
+        }
+        let (scaled, overflow) = ratio.numerator.multipliedReportingOverflow(by: Int64(scale))
+        guard overflow == false else {
+            return nil
+        }
+        return scaled
+    }
+
+    private static func greatestCommonDivisor(_ lhs: UInt64, _ rhs: UInt64) -> UInt64 {
+        var a = lhs
+        var b = rhs
+        while b != 0 {
+            let remainder = a % b
+            a = b
+            b = remainder
+        }
+        return a
+    }
+
+    private static func leastCommonMultiple(_ lhs: UInt64, _ rhs: UInt64) -> UInt64? {
+        guard lhs > 0, rhs > 0 else {
+            return nil
+        }
+        let gcd = greatestCommonDivisor(lhs, rhs)
+        let reducedLHS = lhs / gcd
+        let (product, overflow) = reducedLHS.multipliedReportingOverflow(by: rhs)
+        guard overflow == false else {
+            return nil
+        }
+        return product
+    }
+
+    private static func floatingChoice(from value: Double, tag: TypeTag) -> ChoiceValue? {
+        switch tag {
+        case .double:
+            guard value.isFinite else { return nil }
+            return ChoiceValue(value, tag: .double)
+        case .float:
+            let narrowed = Float(value)
+            guard narrowed.isFinite else { return nil }
+            return ChoiceValue(narrowed, tag: .float)
+        default:
+            return nil
+        }
+    }
+
     private static func absDiff(_ lhs: UInt64, _ rhs: UInt64) -> UInt64 {
         lhs >= rhs ? (lhs - rhs) : (rhs - lhs)
+    }
+
+    private static func absDiff(_ lhs: Int64, _ rhs: Int64) -> UInt64 {
+        if lhs >= rhs {
+            return UInt64(lhs &- rhs)
+        }
+        return UInt64(rhs &- lhs)
     }
 
     private static func wrappingBoundaryDelta(for tag: TypeTag, bitPattern: UInt64) -> UInt64? {
@@ -383,5 +521,68 @@ extension ReducerStrategies {
         guard lhsBitPattern >= delta else { return nil }
         guard UInt64.max - delta >= rhsBitPattern else { return nil }
         return (lhsBitPattern - delta, rhsBitPattern + delta)
+    }
+
+    private static func redistributedPairChoices(
+        lhs: ChoiceValue,
+        rhs: ChoiceValue,
+        delta: UInt64,
+        lhsMovesUpward: Bool,
+        floatContext: FloatRedistributionContext?,
+    ) -> (ChoiceValue, ChoiceValue)? {
+        if let floatContext {
+            guard delta <= UInt64(Int64.max), delta <= floatContext.distance else {
+                return nil
+            }
+            let signedDelta = Int64(delta)
+            let lhsNumerator: Int64
+            let rhsNumerator: Int64
+            if lhsMovesUpward {
+                let (lhsCandidate, lhsOverflow) = floatContext.lhsNumerator.addingReportingOverflow(signedDelta)
+                let (rhsCandidate, rhsOverflow) = floatContext.rhsNumerator.subtractingReportingOverflow(signedDelta)
+                guard lhsOverflow == false, rhsOverflow == false else {
+                    return nil
+                }
+                lhsNumerator = lhsCandidate
+                rhsNumerator = rhsCandidate
+            } else {
+                let (lhsCandidate, lhsOverflow) = floatContext.lhsNumerator.subtractingReportingOverflow(signedDelta)
+                let (rhsCandidate, rhsOverflow) = floatContext.rhsNumerator.addingReportingOverflow(signedDelta)
+                guard lhsOverflow == false, rhsOverflow == false else {
+                    return nil
+                }
+                lhsNumerator = lhsCandidate
+                rhsNumerator = rhsCandidate
+            }
+
+            let denominator = Double(floatContext.denominator)
+            let lhsValue = Double(lhsNumerator) / denominator
+            let rhsValue = Double(rhsNumerator) / denominator
+            guard let newChoice1 = floatingChoice(from: lhsValue, tag: lhs.tag),
+                  let newChoice2 = floatingChoice(from: rhsValue, tag: rhs.tag)
+            else {
+                return nil
+            }
+            return (newChoice1, newChoice2)
+        }
+
+        guard let (newBP1, newBP2) = redistributedPairBitPatterns(
+            lhsBitPattern: lhs.bitPattern64,
+            rhsBitPattern: rhs.bitPattern64,
+            delta: delta,
+            lhsMovesUpward: lhsMovesUpward
+        ) else {
+            return nil
+        }
+
+        let newChoice1 = ChoiceValue(
+            lhs.tag.makeConvertible(bitPattern64: newBP1),
+            tag: lhs.tag,
+        )
+        let newChoice2 = ChoiceValue(
+            rhs.tag.makeConvertible(bitPattern64: newBP2),
+            tag: rhs.tag,
+        )
+        return (newChoice1, newChoice2)
     }
 }
