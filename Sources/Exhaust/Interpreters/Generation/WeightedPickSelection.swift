@@ -17,7 +17,7 @@ enum WeightedPickSelection {
         guard totalWeight > 0 else {
             return nil
         }
-        var roll = UInt64.random(in: 1 ... totalWeight, using: &prng)
+        var roll = prng.next(in: 1 ... totalWeight)
         for choice in choices {
             if roll <= choice.weight {
                 return choice

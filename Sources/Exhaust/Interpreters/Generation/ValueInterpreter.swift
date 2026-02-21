@@ -223,7 +223,7 @@ public struct ValueInterpreter<Element>: IteratorProtocol, Sequence {
         context: Context,
         runContinuation: (Any) throws -> Output?,
     ) throws -> Output? {
-        let randomBits = UInt64.random(in: min ... max, using: &context.prng)
+        let randomBits = context.prng.next(in: min ... max)
         return try runContinuation(randomBits)
     }
 

@@ -55,6 +55,22 @@ public struct Xoshiro256: RandomNumberGenerator {
         return result
     }
 
+    /// Returns a random integer in `[0, upperBound)`.
+    ///
+    /// Delegates to Swift's standard range sampling algorithm while using this
+    /// generator as the entropy source.
+    @inline(__always)
+    public mutating func next(upperBound: UInt64) -> UInt64 {
+        precondition(upperBound > 0, "upperBound must be > 0")
+        return UInt64.random(in: 0 ..< upperBound, using: &self)
+    }
+
+    /// Returns a random integer in `range`.
+    @inline(__always)
+    public mutating func next(in range: ClosedRange<UInt64>) -> UInt64 {
+        UInt64.random(in: range, using: &self)
+    }
+
     @inline(__always)
     private func rotateLeft(_ x: UInt64, _ k: Int) -> UInt64 {
         (x &<< k) | (x &>> (64 - k))

@@ -332,7 +332,7 @@ public struct ValueAndChoiceTreeInterpreter<FinalOutput>: IteratorProtocol, Sequ
         context: Context,
         runContinuation: RunContinuation<Output>,
     ) throws -> (Output, ChoiceTree)? {
-        let randomBits = UInt64.random(in: min ... max, using: &context.prng)
+        let randomBits = context.prng.next(in: min ... max)
         let choiceTree = ChoiceTree.choice(ChoiceValue(randomBits, tag: tag), .init(validRanges: [min ... max]))
         return try runContinuation(randomBits, choiceTree)
     }
