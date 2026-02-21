@@ -264,142 +264,198 @@ extension Interpreters {
             return value
 
         case let .impure(operation, continuation):
-            // This is the core structural match. We switch on the operation.
-            switch operation {
-            case .zip:
-                // Zips are normally wrapped in groups and handled by materializeWithChoicesHelper.
-                // Return nil so that fallback probing in materializePickBranch can recover.
-                return nil
-
-            case .chooseBits:
-                // This operation expects a primitive `.choice` node from the script.
-                // We are failing here
-                guard let value = context.consumeValueIfPresent() else {
-                    return nil
-                }
-                let nextGen = try continuation(value.choice.convertible)
-                return try materializeRecursive(nextGen, with: tree, context: &context)
-
-            case let .just(value):
-                // This operation expects a `.just` node from the script.
-                guard case .just = tree else {
-                    return nil
-                }
-                let nextGen = try continuation(value)
-                return try materializeRecursive(nextGen, with: tree, context: &context)
-
-            case .getSize:
-                // This operation expects a `.getSize` node from the script.
-                switch tree {
-                case let .choice(.unsigned(value, _), _):
-                    let nextGen = try continuation(value)
-                    return try materializeRecursive(nextGen, with: tree, context: &context)
-                case let .getSize(value):
-                    let nextGen = try continuation(value)
-                    return try materializeRecursive(nextGen, with: tree, context: &context)
-                default:
-                    return nil
-                }
-
-            case let .resize(_, resizedGen):
-                // This operation expects a `.resize` node from the script.
-                guard case let .resize(_, subChoices) = tree else {
-                    return nil
-                }
-                // For now, use the first choice tree from the array if available
-                // TODO: Is this correct behaviour?
-                guard let firstChoice = subChoices.first else {
-                    return nil
-                }
-
-                try context.consumeGroup(true)
-
-                guard let subResult = try materializeRecursive(resizedGen, with: firstChoice, context: &context) else {
-                    return nil
-                }
-
-                try context.consumeGroup(false)
-
-                let nextGen = try continuation(subResult)
-                return try materializeRecursive(nextGen, with: tree, context: &context)
-
-            case .pick:
-                // Picks are normally wrapped in groups and handled by materializeWithChoicesHelper.
-                // Return nil so that fallback probing in materializePickBranch can recover.
-                return nil
-//                // This operation expects a `.branch` node from the script.
-//                guard case .branch(_, let label, let choice) = tree else {
-//                    return nil
-//                }
-//
-//                // Find the sub-generator that matches the label from the script.
-//                guard let chosenGen = choices.first(where: { $0.label == label })?.generator else {
-//                    return nil
-//                }
-//
-//                // Recursively replay the chosen sub-generator with the children of this branch node.
-//                guard let result = try self.materializeRecursive(chosenGen, with: choice, context: context) else {
-//                    return nil
-//                }
-//                return result as? Output
-
-            case let .sequence(_, elementGenerator):
-                // This operation expects a `.sequence` node from the script.
-                guard case let .sequence(_, elements, lengthMeta) = tree else {
-                    return nil
-                }
-
-                guard let result = try materializeSequenceElements(
-                    using: elementGenerator,
-                    elementScript: elements.first,
-                    context: &context,
-                    requireElements: false,
-                    validLengthRanges: lengthMeta.validRanges,
-                ) else {
-                    return nil
-                }
-
-                let nextGen = try continuation(result)
-                return try materializeRecursive(nextGen, with: tree, context: &context)
-
-            // Forward-only ops don't consume choices. Their presence in a reflectable
-            // generator is an error.
-            case let .contramap(_, subGenerator):
-//                fatalError("Should not be encountered")
-                // A lens/contramap is a wrapper. It doesn't consume a node from the script itself.
-                // The choices are consumed by its sub-generator. We pass the same script down.
-                guard let subResult = try materializeRecursive(subGenerator, with: tree, context: &context) else {
-                    return nil
-                }
-
-                let nextGen = try continuation(subResult)
-                return try materializeRecursive(nextGen, with: tree, context: &context)
-
-            case .prune:
-                fatalError("Should not be encountered")
-
-//                guard let result = try self.materializeRecursive(subGenerator, with: tree, context: &context) else {
-//                    return nil
-//                }
-//                return result as? Output
-            case let .filter(gen, _, predicate):
-                guard let subResult = try materializeRecursive(gen, with: tree, context: &context),
-                      let result = subResult as? Output,
-                      predicate(result)
-                else {
-                    return nil
-                }
-                return result
-
-            case let .classify(gen, _, _):
-                guard let subResult = try materializeRecursive(gen, with: tree, context: &context),
-                      let result = subResult as? Output
-                else {
-                    return nil
-                }
-                return result
-            }
+            return try materializeRecursiveOperation(
+                operation,
+                continuation: continuation,
+                tree: tree,
+                context: &context,
+            )
         }
+    }
+
+    private static func materializeRecursiveOperation<Output>(
+        _ operation: ReflectiveOperation,
+        continuation: @escaping (Any) throws -> ReflectiveGenerator<Output>,
+        tree: ChoiceTree,
+        context: inout Context,
+    ) throws -> Output? {
+        switch operation {
+        case .zip, .pick:
+            return nil
+        case .chooseBits:
+            return try materializeRecursiveChooseBits(continuation: continuation, tree: tree, context: &context)
+        case let .just(value):
+            return try materializeRecursiveJust(value: value, continuation: continuation, tree: tree, context: &context)
+        case .getSize:
+            return try materializeRecursiveGetSize(continuation: continuation, tree: tree, context: &context)
+        case let .resize(_, resizedGen):
+            return try materializeRecursiveResize(
+                resizedGen: resizedGen,
+                continuation: continuation,
+                tree: tree,
+                context: &context,
+            )
+        case let .sequence(_, elementGenerator):
+            return try materializeRecursiveSequence(
+                elementGenerator: elementGenerator,
+                continuation: continuation,
+                tree: tree,
+                context: &context,
+            )
+        case let .contramap(_, subGenerator):
+            return try materializeRecursiveWrapped(
+                subGenerator: subGenerator,
+                continuation: continuation,
+                tree: tree,
+                context: &context,
+            )
+        case .prune:
+            fatalError("Should not be encountered")
+        case let .filter(gen, _, predicate):
+            return try materializeRecursiveFilter(
+                gen: gen,
+                predicate: predicate,
+                tree: tree,
+                context: &context,
+            )
+        case let .classify(gen, _, _):
+            return try materializeRecursiveClassify(gen: gen, tree: tree, context: &context)
+        }
+    }
+
+    @inline(__always)
+    private static func materializeRecursiveChooseBits<Output>(
+        continuation: @escaping (Any) throws -> ReflectiveGenerator<Output>,
+        tree: ChoiceTree,
+        context: inout Context,
+    ) throws -> Output? {
+        guard let value = context.consumeValueIfPresent() else {
+            return nil
+        }
+        let nextGen = try continuation(value.choice.convertible)
+        return try materializeRecursive(nextGen, with: tree, context: &context)
+    }
+
+    @inline(__always)
+    private static func materializeRecursiveJust<Output>(
+        value: Any,
+        continuation: @escaping (Any) throws -> ReflectiveGenerator<Output>,
+        tree: ChoiceTree,
+        context: inout Context,
+    ) throws -> Output? {
+        guard case .just = tree else {
+            return nil
+        }
+        let nextGen = try continuation(value)
+        return try materializeRecursive(nextGen, with: tree, context: &context)
+    }
+
+    @inline(__always)
+    private static func materializeRecursiveGetSize<Output>(
+        continuation: @escaping (Any) throws -> ReflectiveGenerator<Output>,
+        tree: ChoiceTree,
+        context: inout Context,
+    ) throws -> Output? {
+        switch tree {
+        case let .choice(.unsigned(value, _), _):
+            let nextGen = try continuation(value)
+            return try materializeRecursive(nextGen, with: tree, context: &context)
+        case let .getSize(value):
+            let nextGen = try continuation(value)
+            return try materializeRecursive(nextGen, with: tree, context: &context)
+        default:
+            return nil
+        }
+    }
+
+    private static func materializeRecursiveResize<Output>(
+        resizedGen: ReflectiveGenerator<Any>,
+        continuation: @escaping (Any) throws -> ReflectiveGenerator<Output>,
+        tree: ChoiceTree,
+        context: inout Context,
+    ) throws -> Output? {
+        guard case let .resize(_, subChoices) = tree, let firstChoice = subChoices.first else {
+            return nil
+        }
+
+        try context.consumeGroup(true)
+        guard let subResult = try materializeRecursive(resizedGen, with: firstChoice, context: &context) else {
+            return nil
+        }
+        try context.consumeGroup(false)
+
+        let nextGen = try continuation(subResult)
+        return try materializeRecursive(nextGen, with: tree, context: &context)
+    }
+
+    private static func materializeRecursiveSequence<Output>(
+        elementGenerator: ReflectiveGenerator<Any>,
+        continuation: @escaping (Any) throws -> ReflectiveGenerator<Output>,
+        tree: ChoiceTree,
+        context: inout Context,
+    ) throws -> Output? {
+        guard case let .sequence(_, elements, lengthMeta) = tree else {
+            return nil
+        }
+
+        guard let result = try materializeSequenceElements(
+            using: elementGenerator,
+            elementScript: elements.first,
+            context: &context,
+            requireElements: false,
+            validLengthRanges: lengthMeta.validRanges,
+        ) else {
+            return nil
+        }
+
+        let nextGen = try continuation(result)
+        return try materializeRecursive(nextGen, with: tree, context: &context)
+    }
+
+    @inline(__always)
+    private static func materializeRecursiveWrapped<Output>(
+        subGenerator: ReflectiveGenerator<Any>,
+        continuation: @escaping (Any) throws -> ReflectiveGenerator<Output>,
+        tree: ChoiceTree,
+        context: inout Context,
+    ) throws -> Output? {
+        try InterpreterWrapperHandlers.continueAfterSubgenerator(
+            runSubgenerator: { try materializeRecursive(subGenerator, with: tree, context: &context) },
+            runContinuation: { subResult in
+                let nextGen = try continuation(subResult)
+                return try materializeRecursive(nextGen, with: tree, context: &context)
+            },
+        )
+    }
+
+    @inline(__always)
+    private static func materializeRecursiveFilter<Output>(
+        gen: ReflectiveGenerator<Any>,
+        predicate: (Any) -> Bool,
+        tree: ChoiceTree,
+        context: inout Context,
+    ) throws -> Output? {
+        guard let subResult = try materializeRecursive(gen, with: tree, context: &context),
+              let result = subResult as? Output,
+              predicate(result)
+        else {
+            return nil
+        }
+        return result
+    }
+
+    @inline(__always)
+    private static func materializeRecursiveClassify<Output>(
+        gen: ReflectiveGenerator<Any>,
+        tree: ChoiceTree,
+        context: inout Context,
+    ) throws -> Output? {
+        guard let subResult = try materializeRecursive(gen, with: tree, context: &context),
+              let result = subResult as? Output
+        else {
+            return nil
+        }
+        return result
     }
 
     // MARK: - Shared Helpers
@@ -482,268 +538,373 @@ extension Interpreters {
             return value
 
         case let .impure(operation, continuation):
-            // Handle each operation by consuming appropriate choices
-            switch operation {
-            case .chooseBits:
-                // Consume the next choice
-                guard !choices.isEmpty else {
-                    return nil
-                }
-                _ = choices.removeFirst()
-                guard let value = context.consumeValueIfPresent() else {
-                    return nil
-                }
+            return try materializeWithChoicesOperation(
+                operation,
+                continuation: continuation,
+                choices: &choices,
+                context: &context,
+            )
+        }
+    }
 
-                let nextGen = try continuation(value.choice.convertible)
-                return try materializeWithChoicesHelper(nextGen, with: &choices, context: &context)
+    private static func materializeWithChoicesOperation<Output>(
+        _ operation: ReflectiveOperation,
+        continuation: @escaping (Any) throws -> ReflectiveGenerator<Output>,
+        choices: inout ChoiceCursor,
+        context: inout Context,
+    ) throws -> Output? {
+        switch operation {
+        case .chooseBits:
+            return try materializeWithChoicesChooseBits(
+                continuation: continuation,
+                choices: &choices,
+                context: &context,
+            )
+        case let .pick(pickChoices):
+            return try materializeWithChoicesPick(
+                pickChoices: pickChoices,
+                continuation: continuation,
+                choices: &choices,
+                context: &context,
+            )
+        case let .sequence(_, elementGenerator):
+            return try materializeWithChoicesSequence(
+                elementGenerator: elementGenerator,
+                continuation: continuation,
+                choices: &choices,
+                context: &context,
+            )
+        case let .zip(generators):
+            return try materializeWithChoicesZip(
+                generators: generators,
+                continuation: continuation,
+                choices: &choices,
+                context: &context,
+            )
+        case let .contramap(_, subGenerator), let .prune(subGenerator):
+            return try materializeWithChoicesWrapped(
+                subGenerator: subGenerator,
+                continuation: continuation,
+                choices: &choices,
+                context: &context,
+            )
+        case let .just(value):
+            return try materializeWithChoicesJust(
+                value: value,
+                continuation: continuation,
+                choices: &choices,
+                context: &context,
+            )
+        case .getSize:
+            return try materializeWithChoicesGetSize(
+                continuation: continuation,
+                choices: &choices,
+                context: &context,
+            )
+        case let .resize(_, subGenerator):
+            return try materializeWithChoicesResize(
+                subGenerator: subGenerator,
+                continuation: continuation,
+                choices: &choices,
+                context: &context,
+            )
+        case let .filter(gen, _, predicate):
+            return try materializeWithChoicesFilter(
+                gen: gen,
+                predicate: predicate,
+                choices: &choices,
+                context: &context,
+            )
+        case let .classify(gen, _, _):
+            return try materializeWithChoicesClassify(
+                gen: gen,
+                choices: &choices,
+                context: &context,
+            )
+        }
+    }
 
-            case let .pick(pickChoices):
-                // Consume the next choice which should be a branch
-                guard !choices.isEmpty else {
-                    return nil
-                }
-                guard let choice = choices.removeFirst() else {
-                    return nil
-                }
+    @inline(__always)
+    private static func materializeWithChoicesChooseBits<Output>(
+        continuation: @escaping (Any) throws -> ReflectiveGenerator<Output>,
+        choices: inout ChoiceCursor,
+        context: inout Context,
+    ) throws -> Output? {
+        guard choices.isEmpty == false else {
+            return nil
+        }
+        _ = choices.removeFirst()
+        guard let value = context.consumeValueIfPresent() else {
+            return nil
+        }
 
-                guard case let .group(branches) = choice else {
-                    if context.strictness == .relaxed { return nil }
-                    throw MaterializeError.wrongInputChoice
-                }
+        let nextGen = try continuation(value.choice.convertible)
+        return try materializeWithChoicesHelper(nextGen, with: &choices, context: &context)
+    }
 
-                try context.consumeGroup(true)
-
-                let generators = pickChoices.map(\.generator)
-                let branchMarker = context.consumeBranchIfPresent()
-                var nextGen: ReflectiveGenerator<Output>?
-
-                if let branchMarker, let branch = branches.first(where: { $0.branchId == branchMarker.id }) {
-                    nextGen = try materializePickBranch(
-                        branch,
-                        generators: generators,
-                        continuation: continuation,
-                        context: &context,
-                    )
-                } else if branchMarker == nil, let selectedBranch = firstSelectedBranch(in: branches) {
-                    nextGen = try materializePickBranch(
-                        selectedBranch,
-                        generators: generators,
-                        continuation: continuation,
-                        context: &context,
-                    )
-                } else {
-                    for branch in branches {
-                        nextGen = try materializePickBranch(
-                            branch,
-                            generators: generators,
-                            continuation: continuation,
-                            context: &context,
-                        )
-                        if nextGen != nil {
-                            break
-                        }
-                    }
-                }
-
-                guard let nextGen else {
-                    if context.strictness == .relaxed { return nil }
-                    throw MaterializeError.noSuccessfulBranch
-                }
-
-                try context.consumeGroup(false)
-
-                return try materializeWithChoicesHelper(nextGen, with: &choices, context: &context)
-
-            case let .sequence(_, elementGenerator):
-                // Consume the next choice which should be a sequence
-                guard !choices.isEmpty else {
-                    return nil
-                }
-                guard let choice = choices.removeFirst() else {
-                    return nil
-                }
-
-                guard case let .sequence(_, elements, lengthMeta) = choice else {
-                    if context.strictness == .relaxed { return nil }
-                    throw MaterializeError.wrongInputChoice
-                }
-
-                guard let result = try materializeSequenceElements(
-                    using: elementGenerator,
-                    elementScript: elements.first,
-                    context: &context,
-                    requireElements: true,
-                    validLengthRanges: lengthMeta.validRanges,
-                ) else {
-                    return nil
-                }
-
-                let nextGen = try continuation(result)
-                return try materializeWithChoicesHelper(nextGen, with: &choices, context: &context)
-
-            case let .zip(generators):
-                guard generators.isEmpty == false else {
-                    let nextGen = try continuation([])
-                    return try materializeWithChoicesHelper(nextGen, with: &choices, context: &context)
-                }
-
-                typealias ZipAttempt = (scripts: [ChoiceTree], consumedChoices: Int, consumesContextGroup: Bool)
-                var attempts: [ZipAttempt] = []
-
-                // Representation A (nested): one choice containing a group of zip children.
-                if let firstChoice = choices.element(atOffset: 0),
-                   case let .group(children) = firstChoice,
-                   children.allSatisfy({ $0.isBranch || $0.isSelected }) == false
-                {
-                    attempts.append((scripts: children, consumedChoices: 1, consumesContextGroup: true))
-                }
-
-                // Representation B (flat): zip children are sibling choices in the current frame.
-                if choices.remainingCount >= generators.count {
-                    let flatChildren = (0 ..< generators.count).compactMap { choices.element(atOffset: $0) }
-                    attempts.append((scripts: flatChildren, consumedChoices: generators.count, consumesContextGroup: false))
-                }
-
-                for attempt in attempts where attempt.scripts.count == generators.count {
-                    var attemptContext = context
-                    if attempt.consumesContextGroup {
-                        do {
-                            try attemptContext.consumeGroup(true)
-                        } catch {
-                            continue
-                        }
-                    }
-                    var subResults = [Any]()
-                    subResults.reserveCapacity(generators.count)
-                    var didSucceed = true
-
-                    for (generator, script) in zip(generators, attempt.scripts) {
-                        guard let subResult = try materializeRecursive(generator, with: script, context: &attemptContext) else {
-                            didSucceed = false
-                            break
-                        }
-                        subResults.append(subResult)
-                    }
-
-                    guard didSucceed else {
-                        continue
-                    }
-
-                    if attempt.consumesContextGroup {
-                        do {
-                            try attemptContext.consumeGroup(false)
-                        } catch {
-                            continue
-                        }
-                    }
-
-                    context = attemptContext
-                    for _ in 0 ..< attempt.consumedChoices {
-                        _ = choices.removeFirst()
-                    }
-
-                    let nextGen = try continuation(subResults)
-                    return try materializeWithChoicesHelper(nextGen, with: &choices, context: &context)
-                }
-
+    private static func materializeWithChoicesPick<Output>(
+        pickChoices: ContiguousArray<ReflectiveOperation.PickTuple>,
+        continuation: @escaping (Any) throws -> ReflectiveGenerator<Output>,
+        choices: inout ChoiceCursor,
+        context: inout Context,
+    ) throws -> Output? {
+        guard choices.isEmpty == false, let choice = choices.removeFirst() else {
+            return nil
+        }
+        guard case let .group(branches) = choice else {
+            if context.strictness == .relaxed {
                 return nil
+            }
+            throw MaterializeError.wrongInputChoice
+        }
 
-            case let .contramap(_, subGenerator), let .prune(subGenerator):
-                // A left map or prune doesn't consume choices, just passes them to the sub-generator
-                guard let subResult = try materializeWithChoicesHelper(subGenerator, with: &choices, context: &context) else {
-                    return nil
-                }
-                let nextGen = try continuation(subResult)
-                return try materializeWithChoicesHelper(nextGen, with: &choices, context: &context)
+        try context.consumeGroup(true)
 
-            case let .just(value):
-                // Consume the next choice which should be a just
-                guard !choices.isEmpty else { return nil }
-                guard let choice = choices.removeFirst() else {
-                    return nil
-                }
-                guard case .just = choice else {
-                    return nil
-                }
+        let generators = pickChoices.map(\.generator)
+        let branchMarker = context.consumeBranchIfPresent()
+        var nextGen: ReflectiveGenerator<Output>?
 
-                let nextGen = try continuation(value)
-                return try materializeWithChoicesHelper(nextGen, with: &choices, context: &context)
-
-            case .getSize:
-                // getSize doesn't consume choices, just returns the current size
-                guard !choices.isEmpty else { return nil }
-                guard let choice = choices.removeFirst() else {
-                    return nil
+        if let branchMarker, let branch = branches.first(where: { $0.branchId == branchMarker.id }) {
+            nextGen = try materializePickBranch(
+                branch,
+                generators: generators,
+                continuation: continuation,
+                context: &context,
+            )
+        } else if branchMarker == nil, let selectedBranch = PickBranchResolution.firstSelectedBranch(in: branches) {
+            nextGen = try materializePickBranch(
+                selectedBranch,
+                generators: generators,
+                continuation: continuation,
+                context: &context,
+            )
+        } else {
+            for branch in branches {
+                nextGen = try materializePickBranch(
+                    branch,
+                    generators: generators,
+                    continuation: continuation,
+                    context: &context,
+                )
+                if nextGen != nil {
+                    break
                 }
-                guard case let .getSize(size) = choice else {
-                    return nil
-                }
-
-                let nextGen = try continuation(size)
-                return try materializeWithChoicesHelper(nextGen, with: &choices, context: &context)
-
-            case let .resize(_, subGenerator):
-                // resize consumes a resize choice and replays the sub-generator
-                guard !choices.isEmpty else {
-                    return nil
-                }
-                guard let choice = choices.removeFirst() else {
-                    return nil
-                }
-                guard case let .resize(_, subChoices) = choice else {
-                    return nil
-                }
-
-                var subChoicesCursor = ChoiceCursor(choices: subChoices)
-                guard let subResult = try materializeWithChoicesHelper(subGenerator, with: &subChoicesCursor, context: &context) else {
-                    return nil
-                }
-                let nextGen = try continuation(subResult)
-                return try materializeWithChoicesHelper(nextGen, with: &choices, context: &context)
-
-            case let .filter(gen, _, predicate):
-                guard let subResult = try materializeWithChoicesHelper(gen, with: &choices, context: &context),
-                      let result = subResult as? Output,
-                      predicate(result)
-                else {
-                    return nil
-                }
-                return result
-
-            case let .classify(gen, _, _):
-                guard let subResult = try materializeWithChoicesHelper(gen, with: &choices, context: &context),
-                      let result = subResult as? Output
-                else {
-                    return nil
-                }
-                return result
             }
         }
+
+        guard let nextGen else {
+            if context.strictness == .relaxed {
+                return nil
+            }
+            throw MaterializeError.noSuccessfulBranch
+        }
+
+        try context.consumeGroup(false)
+        return try materializeWithChoicesHelper(nextGen, with: &choices, context: &context)
     }
 
-    private static func pickChoicesByLabel(_ choices: ContiguousArray<ReflectiveOperation.PickTuple>) -> [UInt64: ReflectiveGenerator<Any>] {
-        var byLabel: [UInt64: ReflectiveGenerator<Any>] = [:]
-        byLabel.reserveCapacity(choices.count)
-        for choice in choices where byLabel[choice.id] == nil {
-            byLabel[choice.id] = choice.generator
+    private static func materializeWithChoicesSequence<Output>(
+        elementGenerator: ReflectiveGenerator<Any>,
+        continuation: @escaping (Any) throws -> ReflectiveGenerator<Output>,
+        choices: inout ChoiceCursor,
+        context: inout Context,
+    ) throws -> Output? {
+        guard choices.isEmpty == false, let choice = choices.removeFirst() else {
+            return nil
         }
-        return byLabel
+        guard case let .sequence(_, elements, lengthMeta) = choice else {
+            if context.strictness == .relaxed {
+                return nil
+            }
+            throw MaterializeError.wrongInputChoice
+        }
+
+        guard let result = try materializeSequenceElements(
+            using: elementGenerator,
+            elementScript: elements.first,
+            context: &context,
+            requireElements: true,
+            validLengthRanges: lengthMeta.validRanges,
+        ) else {
+            return nil
+        }
+
+        let nextGen = try continuation(result)
+        return try materializeWithChoicesHelper(nextGen, with: &choices, context: &context)
     }
 
-    private static func firstSelectedBranch(in branches: [ChoiceTree]) -> ChoiceTree? {
-        for branch in branches where branch.isSelected {
-            return branch
+    private static func materializeWithChoicesZip<Output>(
+        generators: ContiguousArray<ReflectiveGenerator<Any>>,
+        continuation: @escaping (Any) throws -> ReflectiveGenerator<Output>,
+        choices: inout ChoiceCursor,
+        context: inout Context,
+    ) throws -> Output? {
+        guard generators.isEmpty == false else {
+            let nextGen = try continuation([])
+            return try materializeWithChoicesHelper(nextGen, with: &choices, context: &context)
         }
+
+        typealias ZipAttempt = (scripts: [ChoiceTree], consumedChoices: Int, consumesContextGroup: Bool)
+        var attempts: [ZipAttempt] = []
+
+        if let firstChoice = choices.element(atOffset: 0),
+           case let .group(children) = firstChoice,
+           children.allSatisfy({ $0.isBranch || $0.isSelected }) == false
+        {
+            attempts.append((scripts: children, consumedChoices: 1, consumesContextGroup: true))
+        }
+
+        if choices.remainingCount >= generators.count {
+            let flatChildren = (0 ..< generators.count).compactMap { choices.element(atOffset: $0) }
+            attempts.append((scripts: flatChildren, consumedChoices: generators.count, consumesContextGroup: false))
+        }
+
+        for attempt in attempts where attempt.scripts.count == generators.count {
+            var attemptContext = context
+            if attempt.consumesContextGroup {
+                do {
+                    try attemptContext.consumeGroup(true)
+                } catch {
+                    continue
+                }
+            }
+            var subResults = [Any]()
+            subResults.reserveCapacity(generators.count)
+            var didSucceed = true
+
+            for (generator, script) in zip(generators, attempt.scripts) {
+                guard let subResult = try materializeRecursive(generator, with: script, context: &attemptContext) else {
+                    didSucceed = false
+                    break
+                }
+                subResults.append(subResult)
+            }
+
+            guard didSucceed else {
+                continue
+            }
+
+            if attempt.consumesContextGroup {
+                do {
+                    try attemptContext.consumeGroup(false)
+                } catch {
+                    continue
+                }
+            }
+
+            context = attemptContext
+            for _ in 0 ..< attempt.consumedChoices {
+                _ = choices.removeFirst()
+            }
+
+            let nextGen = try continuation(subResults)
+            return try materializeWithChoicesHelper(nextGen, with: &choices, context: &context)
+        }
+
         return nil
     }
 
-    private static func unpackPickBranch(_ branch: ChoiceTree) throws -> (label: UInt64, choice: ChoiceTree) {
-        switch branch {
-        case let .branch(_, id, _, choice), let .selected(.branch(_, id, _, choice)):
-            return (label: id, choice: choice)
-        default:
-            throw MaterializeError.wrongInputChoice
+    @inline(__always)
+    private static func materializeWithChoicesWrapped<Output>(
+        subGenerator: ReflectiveGenerator<Any>,
+        continuation: @escaping (Any) throws -> ReflectiveGenerator<Output>,
+        choices: inout ChoiceCursor,
+        context: inout Context,
+    ) throws -> Output? {
+        try InterpreterWrapperHandlers.continueAfterSubgenerator(
+            runSubgenerator: { try materializeWithChoicesHelper(subGenerator, with: &choices, context: &context) },
+            runContinuation: { subResult in
+                let nextGen = try continuation(subResult)
+                return try materializeWithChoicesHelper(nextGen, with: &choices, context: &context)
+            },
+        )
+    }
+
+    @inline(__always)
+    private static func materializeWithChoicesJust<Output>(
+        value: Any,
+        continuation: @escaping (Any) throws -> ReflectiveGenerator<Output>,
+        choices: inout ChoiceCursor,
+        context: inout Context,
+    ) throws -> Output? {
+        guard choices.isEmpty == false,
+              let choice = choices.removeFirst(),
+              case .just = choice
+        else {
+            return nil
         }
+
+        let nextGen = try continuation(value)
+        return try materializeWithChoicesHelper(nextGen, with: &choices, context: &context)
+    }
+
+    @inline(__always)
+    private static func materializeWithChoicesGetSize<Output>(
+        continuation: @escaping (Any) throws -> ReflectiveGenerator<Output>,
+        choices: inout ChoiceCursor,
+        context: inout Context,
+    ) throws -> Output? {
+        guard choices.isEmpty == false,
+              let choice = choices.removeFirst(),
+              case let .getSize(size) = choice
+        else {
+            return nil
+        }
+
+        let nextGen = try continuation(size)
+        return try materializeWithChoicesHelper(nextGen, with: &choices, context: &context)
+    }
+
+    @inline(__always)
+    private static func materializeWithChoicesResize<Output>(
+        subGenerator: ReflectiveGenerator<Any>,
+        continuation: @escaping (Any) throws -> ReflectiveGenerator<Output>,
+        choices: inout ChoiceCursor,
+        context: inout Context,
+    ) throws -> Output? {
+        guard choices.isEmpty == false,
+              let choice = choices.removeFirst(),
+              case let .resize(_, subChoices) = choice
+        else {
+            return nil
+        }
+
+        var subChoicesCursor = ChoiceCursor(choices: subChoices)
+        guard let subResult = try materializeWithChoicesHelper(subGenerator, with: &subChoicesCursor, context: &context) else {
+            return nil
+        }
+        let nextGen = try continuation(subResult)
+        return try materializeWithChoicesHelper(nextGen, with: &choices, context: &context)
+    }
+
+    @inline(__always)
+    private static func materializeWithChoicesFilter<Output>(
+        gen: ReflectiveGenerator<Any>,
+        predicate: (Any) -> Bool,
+        choices: inout ChoiceCursor,
+        context: inout Context,
+    ) throws -> Output? {
+        guard let subResult = try materializeWithChoicesHelper(gen, with: &choices, context: &context),
+              let result = subResult as? Output,
+              predicate(result)
+        else {
+            return nil
+        }
+        return result
+    }
+
+    @inline(__always)
+    private static func materializeWithChoicesClassify<Output>(
+        gen: ReflectiveGenerator<Any>,
+        choices: inout ChoiceCursor,
+        context: inout Context,
+    ) throws -> Output? {
+        guard let subResult = try materializeWithChoicesHelper(gen, with: &choices, context: &context),
+              let result = subResult as? Output
+        else {
+            return nil
+        }
+        return result
     }
 
     private static func materializePickBranch<Output>(
@@ -752,10 +913,12 @@ extension Interpreters {
         continuation: (Any) throws -> ReflectiveGenerator<Output>,
         context: inout Context,
     ) throws -> ReflectiveGenerator<Output>? {
-        let unpacked = try unpackPickBranch(branch)
+        guard let unpacked = PickBranchResolution.unpack(branch) else {
+            throw MaterializeError.wrongInputChoice
+        }
 
         // Fast path: exact ID match
-        let index = Int(exactly: branch.unwrapped.branchId!)!
+        let index = Int(exactly: unpacked.id)!
         let chosenGen = generators[index]
         var attemptContext = context
         let result = switch context.strictness {

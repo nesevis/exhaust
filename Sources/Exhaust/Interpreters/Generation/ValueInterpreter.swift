@@ -86,83 +86,52 @@ public struct ValueInterpreter<Element>: IteratorProtocol, Sequence {
 
             switch operation {
             case let .contramap(_, nextGen):
-                // The contramap transform is not used in the forward pass
-                // Run the nested generator and pass its result to the continuation
-                guard let result = try generateRecursive(nextGen, with: inputValue, context: context) else { return nil }
-                return try runContinuation(result)
+                return try handleContramap(
+                    nextGen,
+                    inputValue: inputValue,
+                    context: context,
+                    runContinuation: runContinuation,
+                )
 
             case let .prune(nextGen):
-                guard let optional = .some(inputValue as Any?), let wrappedValue = optional else {
-                    return nil // Pruned!
-                }
-                guard let result = try generateRecursive(nextGen, with: wrappedValue, context: context) else { return nil }
-                return try runContinuation(result)
+                return try handlePrune(
+                    nextGen,
+                    inputValue: inputValue,
+                    context: context,
+                    runContinuation: runContinuation,
+                )
 
             case let .pick(choices):
-                let totalWeight = choices.reduce(0) { $0 + $1.weight }
-                var randomRoll = UInt64.random(in: 1 ... totalWeight, using: &context.prng)
-                // This will not be used, but we always have to consume it for parity with ValueAndChoiceTreeInterpreter's materializePicks
-                _ = context.prng.next()
-
-                for choice in choices {
-                    if randomRoll <= choice.weight {
-                        guard let result = try generateRecursive(choice.generator, with: inputValue, context: context) else { return nil }
-
-                        return try runContinuation(result)
-                    }
-                    randomRoll -= choice.weight
-                }
-
-                // Should be unreachable if totalWeight > 0
-                return nil
+                return try handlePick(
+                    choices,
+                    inputValue: inputValue,
+                    context: context,
+                    runContinuation: runContinuation,
+                )
 
             case let .chooseBits(min, max, _, _):
-                // 1. Generate the raw, random bits. The interpreter's only job
-                //    is to produce entropy within the specified bounds. It has
-                //    no knowledge of the final `Output` type (e.g., Int, Float).
-                let randomBits = UInt64.random(in: min ... max, using: &context.prng)
-
-                // 2. Pass the raw UInt64 bits to the continuation.
-                //    The `continuation` for a `FreeFunctions.choose<T>()` call was
-                //    constructed to specifically expect a `UInt64` and perform
-                //    the `T(bitPattern:)` decoding itself before continuing the chain.
-                return try runContinuation(randomBits)
+                return try handleChooseBits(
+                    min: min,
+                    max: max,
+                    context: context,
+                    runContinuation: runContinuation,
+                )
 
             case let .sequence(lengthGen, elementGen):
-                // An iterative loop, not a recursive one. This will never overflow the stack.
-                guard let length = try generateRecursive(lengthGen, with: () as! Input, context: context) else {
-                    return nil
-                }
-                var results: [Any] = []
-                results.reserveCapacity(Int(length))
-                for _ in 0 ..< length {
-                    // Run the element generator once for each item.
-                    // It's a self-contained generator, so its input is `()`.
-                    guard let element = try generateRecursive(elementGen, with: () as! Input, context: context) else {
-                        // If any element fails to generate, the whole sequence fails.
-                        return nil
-                    }
-                    results.append(element)
-                }
-
-                // Pass the completed array to the continuation.
-                return try runContinuation(results)
+                return try handleSequence(
+                    lengthGen: lengthGen,
+                    elementGen: elementGen,
+                    context: context,
+                    runContinuation: runContinuation,
+                )
 
             case let .zip(generators):
-                // This will reduce these generators into an array of results that the continuation will convert into a tuple
-                var results = [Any]()
-                results.reserveCapacity(generators.count)
-                for generator in generators {
-                    guard let result = try Self.generateRecursive(
-                        generator,
-                        with: inputValue,
-                        context: context,
-                    ) else {
-                        throw GeneratorError.couldNotGenerateConcomitantChoiceTree
-                    }
-                    results.append(result)
-                }
-                return try runContinuation(results)
+                return try handleZip(
+                    generators,
+                    inputValue: inputValue,
+                    context: context,
+                    runContinuation: runContinuation,
+                )
 
             case let .just(value):
                 return try runContinuation(value)
@@ -173,24 +142,160 @@ public struct ValueInterpreter<Element>: IteratorProtocol, Sequence {
                 return try runContinuation(size)
 
             case let .resize(newSize, nextGen):
-                context.sizeOverride = newSize
-                guard let result = try generateRecursive(nextGen, with: inputValue, context: context) else { return nil }
-                return try runContinuation(result)
+                return try handleResize(
+                    newSize: newSize,
+                    nextGen: nextGen,
+                    inputValue: inputValue,
+                    context: context,
+                    runContinuation: runContinuation,
+                )
 
             case let .filter(gen, _, _):
-                guard let result = try generateRecursive(gen, with: inputValue, context: context) else { return nil }
-                return try runContinuation(result)
+                return try handlePassthrough(
+                    gen,
+                    inputValue: inputValue,
+                    context: context,
+                    runContinuation: runContinuation,
+                )
 
             case let .classify(gen, _, _):
-                guard let result = try generateRecursive(gen, with: inputValue, context: context) else { return nil }
-
-//                for (label, classifier) in classifiers where classifier(result) {
-//                    context.classifications[fingerprint, default: [:]][label, default: []].insert(context.runs)
-//                }
-
-                return try runContinuation(result)
+                return try handlePassthrough(
+                    gen,
+                    inputValue: inputValue,
+                    context: context,
+                    runContinuation: runContinuation,
+                )
             }
         }
+    }
+
+    @inline(__always)
+    private static func handleContramap<Input, Output>(
+        _ nextGen: ReflectiveGenerator<Any>,
+        inputValue: Input,
+        context: Context,
+        runContinuation: (Any) throws -> Output?,
+    ) throws -> Output? {
+        try InterpreterWrapperHandlers.continueAfterSubgenerator(
+            runSubgenerator: { try generateRecursive(nextGen, with: inputValue, context: context) },
+            runContinuation: runContinuation,
+        )
+    }
+
+    @inline(__always)
+    private static func handlePrune<Input, Output>(
+        _ nextGen: ReflectiveGenerator<Any>,
+        inputValue: Input,
+        context: Context,
+        runContinuation: (Any) throws -> Output?,
+    ) throws -> Output? {
+        guard let wrappedValue = InterpreterWrapperHandlers.unwrapPruneInput(inputValue) else {
+            return nil
+        }
+        return try InterpreterWrapperHandlers.continueAfterSubgenerator(
+            runSubgenerator: { try generateRecursive(nextGen, with: wrappedValue, context: context) },
+            runContinuation: runContinuation,
+        )
+    }
+
+    @inline(__always)
+    private static func handlePick<Input, Output>(
+        _ choices: ContiguousArray<ReflectiveOperation.PickTuple>,
+        inputValue: Input,
+        context: Context,
+        runContinuation: (Any) throws -> Output?,
+    ) throws -> Output? {
+        guard let selectedChoice = WeightedPickSelection.draw(from: choices, using: &context.prng) else {
+            return nil
+        }
+        // Keep parity with ValueAndChoiceTreeInterpreter's materializePicks path.
+        _ = context.prng.next()
+        guard let result = try generateRecursive(selectedChoice.generator, with: inputValue, context: context) else {
+            return nil
+        }
+        return try runContinuation(result)
+    }
+
+    @inline(__always)
+    private static func handleChooseBits<Output>(
+        min: UInt64,
+        max: UInt64,
+        context: Context,
+        runContinuation: (Any) throws -> Output?,
+    ) throws -> Output? {
+        let randomBits = UInt64.random(in: min ... max, using: &context.prng)
+        return try runContinuation(randomBits)
+    }
+
+    @inline(__always)
+    private static func handleSequence<Output>(
+        lengthGen: ReflectiveGenerator<UInt64>,
+        elementGen: ReflectiveGenerator<Any>,
+        context: Context,
+        runContinuation: (Any) throws -> Output?,
+    ) throws -> Output? {
+        guard let length = try generateRecursive(lengthGen, with: (), context: context) else {
+            return nil
+        }
+        var results: [Any] = []
+        results.reserveCapacity(Int(length))
+        let didSucceed = try SequenceExecutionKernel.run(count: length) {
+            guard let element = try generateRecursive(elementGen, with: (), context: context) else {
+                return false
+            }
+            results.append(element)
+            return true
+        }
+        guard didSucceed else {
+            return nil
+        }
+        return try runContinuation(results)
+    }
+
+    @inline(__always)
+    private static func handleZip<Input, Output>(
+        _ generators: ContiguousArray<ReflectiveGenerator<Any>>,
+        inputValue: Input,
+        context: Context,
+        runContinuation: (Any) throws -> Output?,
+    ) throws -> Output? {
+        var results = [Any]()
+        results.reserveCapacity(generators.count)
+        for generator in generators {
+            guard let result = try generateRecursive(generator, with: inputValue, context: context) else {
+                throw GeneratorError.couldNotGenerateConcomitantChoiceTree
+            }
+            results.append(result)
+        }
+        return try runContinuation(results)
+    }
+
+    @inline(__always)
+    private static func handleResize<Input, Output>(
+        newSize: UInt64,
+        nextGen: ReflectiveGenerator<Any>,
+        inputValue: Input,
+        context: Context,
+        runContinuation: (Any) throws -> Output?,
+    ) throws -> Output? {
+        context.sizeOverride = newSize
+        guard let result = try generateRecursive(nextGen, with: inputValue, context: context) else {
+            return nil
+        }
+        return try runContinuation(result)
+    }
+
+    @inline(__always)
+    private static func handlePassthrough<Input, Output>(
+        _ gen: ReflectiveGenerator<Any>,
+        inputValue: Input,
+        context: Context,
+        runContinuation: (Any) throws -> Output?,
+    ) throws -> Output? {
+        try InterpreterWrapperHandlers.continueAfterSubgenerator(
+            runSubgenerator: { try generateRecursive(gen, with: inputValue, context: context) },
+            runContinuation: runContinuation,
+        )
     }
 
     // MARK: - Quickcheck logarithmic scaling of test cases
