@@ -133,7 +133,17 @@ extension ClosedRange where Bound: Comparable, Bound: BinaryFloatingPoint {
                 result.append(lowerBound + spacing * Bound(i))
             }
         }
-        print("\(Self.self) returning \(result.count) results for range \(self)")
+        if ExhaustLog.isEnabled(.trace, for: .extensions) {
+            ExhaustLog.trace(
+                category: .extensions,
+                event: "equally_spaced_excluding_bounds",
+                metadata: [
+                    "type": "\(Self.self)",
+                    "count": "\(result.count)",
+                    "range": "\(self)",
+                ],
+            )
+        }
         return result
     }
 }

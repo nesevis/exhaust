@@ -22,13 +22,34 @@ enum PropertyTest {
             let reflection = try Interpreters.reflect(gen, with: next)
             passFails[passed]?.append(reflection)
             if passed == false {
-                print("Failed after \(iterations)/\(maxIterations).")
-                print("Result: \(next)")
-                print("Blueprint:\n\(reflection!.debugDescription)")
+                ExhaustLog.error(
+                    category: .propertyTest,
+                    event: "property_failed",
+                    metadata: [
+                        "iteration": "\(iterations)",
+                        "max_iterations": "\(maxIterations)",
+                    ],
+                )
+                ExhaustLog.notice(
+                    category: .propertyTest,
+                    event: "counterexample",
+                    "\(next)",
+                )
+                ExhaustLog.notice(
+                    category: .propertyTest,
+                    event: "reflected_blueprint",
+                    reflection?.debugDescription ?? "nil",
+                )
                 // TODO: Add seed and size
                 return
             }
         }
-        print("Test passed after \(maxIterations) iterations")
+        ExhaustLog.notice(
+            category: .propertyTest,
+            event: "property_passed",
+            metadata: [
+                "iterations": "\(maxIterations)",
+            ],
+        )
     }
 }

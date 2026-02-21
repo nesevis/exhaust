@@ -353,7 +353,13 @@ enum SpeculativeAdaptationInterpreter {
         )
 
         guard numberOfSubranges > 1 else {
-            print("DEBUG: Not subdividing - numberOfSubranges=\(numberOfSubranges)")
+            ExhaustLog.debug(
+                category: .adaptation,
+                event: "sequence_range_not_subdivided",
+                metadata: [
+                    "number_of_subranges": "\(numberOfSubranges)",
+                ],
+            )
             // Range too small, fall back to original sequence
             return .impure(operation: .sequence(length: .impure(operation: .chooseBits(min: lengthMin, max: lengthMax, tag: lengthTag, isRangeExplicit: isRangeExplicit)) { .pure($0 as! UInt64) }, gen: elementGen), continuation: continuation)
         }

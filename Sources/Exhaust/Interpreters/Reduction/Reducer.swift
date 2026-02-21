@@ -126,7 +126,7 @@ public extension Interpreters {
         property: (Output) -> Bool,
     ) throws -> (ChoiceSequence, Output)? {
         // Mutable variables
-        let isInstrumented = false
+        let isInstrumented = ExhaustLog.isEnabled(.debug, for: .reducer)
         var currentSequence = ChoiceSequence.flatten(tree)
         // I don't think we need to reflect to regenerate this?
         // There is then a hard dependency on having to have reflectable generators, which is a pain
@@ -140,7 +140,11 @@ public extension Interpreters {
         let probeBudgets = config.probeBudgets
         let alignedDeletionBeamTuning = config.alignedDeletionBeamSearchTuning
         let budgetLogger: ((String) -> Void)? = isInstrumented ? { message in
-            print("! \(message)")
+            ExhaustLog.notice(
+                category: .reducer,
+                event: "probe_budget_exhausted",
+                message,
+            )
         } : nil
         var didNaivelyMinimise = false
         var loops = 0
@@ -153,7 +157,14 @@ public extension Interpreters {
             var didImprove = false
             var nextPasses = [ShrinkPass]()
             if isInstrumented {
-                print("Reducer, loop \(loops)")
+                ExhaustLog.debug(
+                    category: .reducer,
+                    event: "loop_start",
+                    metadata: [
+                        "loop": "\(loops)",
+                        "stall_budget": "\(stallBudget)",
+                    ],
+                )
             }
             for pass in passes {
                 // The order of shrink passes to take next turn
@@ -319,13 +330,28 @@ public extension Interpreters {
                 }
                 if passImproved {
                     if isInstrumented {
-                        print("> \(pass) succeeded \(oracleCalls[pass, default: 0]) \(currentOutput)")
+                        ExhaustLog.debug(
+                            category: .reducer,
+                            event: "pass_succeeded",
+                            metadata: [
+                                "pass": pass.rawValue,
+                                "oracle_calls": "\(oracleCalls[pass, default: 0])",
+                                "output": "\(currentOutput)",
+                            ],
+                        )
                     }
                     didImprove = true
                     nextPasses.insert(pass, at: 0)
                 } else {
                     if isInstrumented {
-                        print("x \(pass) failed \(oracleCalls[pass, default: 0])")
+                        ExhaustLog.debug(
+                            category: .reducer,
+                            event: "pass_failed",
+                            metadata: [
+                                "pass": pass.rawValue,
+                                "oracle_calls": "\(oracleCalls[pass, default: 0])",
+                            ],
+                        )
                     }
                     nextPasses.append(pass)
                 }
@@ -335,7 +361,13 @@ public extension Interpreters {
                 let recentWindow = recentSequences.suffix(config.recentCycleWindow)
                 if recentWindow.contains(currentSequence) {
                     if isInstrumented {
-                        print("Shrinker detected a cycle in the last \(config.recentCycleWindow) sequences; stopping.")
+                        ExhaustLog.notice(
+                            category: .reducer,
+                            event: "cycle_detected",
+                            metadata: [
+                                "window": "\(config.recentCycleWindow)",
+                            ],
+                        )
                     }
                     break
                 }
@@ -356,14 +388,34 @@ public extension Interpreters {
         }
 
         if isInstrumented {
-            print("Shrinker stalled after \(loops) loops.")
+            ExhaustLog.notice(
+                category: .reducer,
+                event: "stalled",
+                metadata: [
+                    "loops": "\(loops)",
+                    "improvements": "\(numberOfImprovements)",
+                ],
+            )
             oracleCalls
                 .map { ($0.key, $0.value) }
                 .sorted(by: { $0.0 < $1.0 })
                 .forEach { key, value in
-                    print("— \(value):\t\(key)")
+                    ExhaustLog.debug(
+                        category: .reducer,
+                        event: "oracle_call_count",
+                        metadata: [
+                            "pass": key.rawValue,
+                            "calls": "\(value)",
+                        ],
+                    )
                 }
-            print("\(oracleCalls.values.reduce(0, +)) oracle calls, total")
+            ExhaustLog.notice(
+                category: .reducer,
+                event: "oracle_call_total",
+                metadata: [
+                    "total": "\(oracleCalls.values.reduce(0, +))",
+                ],
+            )
         }
 
         return (currentSequence, currentOutput)

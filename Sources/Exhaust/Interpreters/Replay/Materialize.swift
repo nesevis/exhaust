@@ -9,14 +9,21 @@ import Foundation
 
 extension Interpreters {
     private struct Context {
-        static let isInstrumented = false
         let values: ChoiceSequence
         let strictness: Strictness
+        let isInstrumented: Bool
 
         private(set) var index: Int = 0 {
             willSet {
-                if Context.isInstrumented {
-                    print("Context being consumed: \(values[index...].map(\.shortString).joined()) -> \(values[newValue...].map(\.shortString).joined())")
+                if isInstrumented {
+                    ExhaustLog.debug(
+                        category: .materialize,
+                        event: "context_advance",
+                        metadata: [
+                            "from": values[index...].map(\.shortString).joined(),
+                            "to": values[newValue...].map(\.shortString).joined(),
+                        ],
+                    )
                 }
             }
         }
@@ -37,9 +44,10 @@ extension Interpreters {
             index >= values.count
         }
 
-        init(values: ChoiceSequence, strictness: Strictness) {
+        init(values: ChoiceSequence, strictness: Strictness, isInstrumented: Bool) {
             self.values = values
             self.strictness = strictness
+            self.isInstrumented = isInstrumented
         }
 
         // MARK: - Consume methods
@@ -49,8 +57,16 @@ extension Interpreters {
             guard case .group(isOpen) = peek else {
                 switch strictness {
                 case .normal:
-                    if Self.isInstrumented {
-                        print("Throwing group consume error \(isOpen) from line \(line) - \(shortString)")
+                    if isInstrumented {
+                        ExhaustLog.debug(
+                            category: .materialize,
+                            event: "consume_group_failed",
+                            metadata: [
+                                "is_open": "\(isOpen)",
+                                "line": "\(line)",
+                                "remaining": shortString,
+                            ],
+                        )
                     }
                     throw isOpen ? MaterializeError.groupNotOpen : .groupNotClosed
                 case .relaxed:
@@ -66,8 +82,16 @@ extension Interpreters {
             guard case .sequence(isOpen) = peek else {
                 switch strictness {
                 case .normal:
-                    if Self.isInstrumented {
-                        print("Throwing sequence consume error \(isOpen) from line \(line) - \(shortString)")
+                    if isInstrumented {
+                        ExhaustLog.debug(
+                            category: .materialize,
+                            event: "consume_sequence_failed",
+                            metadata: [
+                                "is_open": "\(isOpen)",
+                                "line": "\(line)",
+                                "remaining": shortString,
+                            ],
+                        )
                     }
                     throw isOpen ? MaterializeError.sequenceNotOpen : .sequenceNotClosed
                 case .relaxed:
@@ -80,8 +104,15 @@ extension Interpreters {
 
         mutating func consumeValue(line: Int = #line) throws -> ChoiceSequenceValue.Value {
             guard let value = consumeValueIfPresent() else {
-                if Self.isInstrumented {
-                    print("Throwing value consume error from line \(line) - \(shortString)")
+                if isInstrumented {
+                    ExhaustLog.debug(
+                        category: .materialize,
+                        event: "consume_value_failed",
+                        metadata: [
+                            "line": "\(line)",
+                            "remaining": shortString,
+                        ],
+                    )
                 }
                 throw MaterializeError.wrongInputChoice
             }
@@ -90,8 +121,16 @@ extension Interpreters {
 
         mutating func consumeValueIfPresent(line: Int = #line) -> ChoiceSequenceValue.Value? {
             guard let entry = peek else {
-                if Self.isInstrumented {
-                    print("consumeValueIfPresent returning nil from line \(line), got \(peek?.shortString ?? "nil") - \(shortString)")
+                if isInstrumented {
+                    ExhaustLog.debug(
+                        category: .materialize,
+                        event: "consume_value_if_present_nil",
+                        metadata: [
+                            "line": "\(line)",
+                            "peek": peek?.shortString ?? "nil",
+                            "remaining": shortString,
+                        ],
+                    )
                 }
                 return nil
             }
@@ -106,8 +145,16 @@ extension Interpreters {
 
         mutating func consumeBranchIfPresent(line: Int = #line) -> ChoiceSequenceValue.Branch? {
             guard case let .branch(v) = peek else {
-                if Self.isInstrumented {
-                    print("consumeBranchIfPresent returning nil from line \(line), got \(peek?.shortString ?? "nil") - \(shortString)")
+                if isInstrumented {
+                    ExhaustLog.debug(
+                        category: .materialize,
+                        event: "consume_branch_if_present_nil",
+                        metadata: [
+                            "line": "\(line)",
+                            "peek": peek?.shortString ?? "nil",
+                            "remaining": shortString,
+                        ],
+                    )
                 }
                 return nil
             }
@@ -219,18 +266,28 @@ extension Interpreters {
         using values: ChoiceSequence,
         strictness: Strictness = .normal
     ) throws -> Output? {
-        if Context.isInstrumented {
-            print("Starting materialize for \(values.shortString)")
+        let isInstrumented = ExhaustLog.isEnabled(.debug, for: .materialize)
+        if isInstrumented {
+            ExhaustLog.debug(
+                category: .materialize,
+                event: "materialize_start",
+                metadata: [
+                    "sequence": values.shortString,
+                ],
+            )
         }
         // Start the recursive process. The helper returns the value and any *unconsumed*
         // parts of the tree. A successful top-level replay should consume the entire tree.
-        var context = Context(values: values, strictness: strictness)
+        var context = Context(values: values, strictness: strictness, isInstrumented: isInstrumented)
         let result = try materializeRecursive(gen, with: tree, context: &context)
 
         // We can add a check here to ensure no parts of the tree were left over,
         // but the recursive logic should handle this correctly.
-        if Context.isInstrumented, context.isAtEnd == false {
-            print("Unexpected result: the `ChoiceSequence` should have been fully consumed")
+        if isInstrumented, context.isAtEnd == false {
+            ExhaustLog.warning(
+                category: .materialize,
+                event: "materialize_unconsumed_sequence",
+            )
         }
         return result
     }
@@ -930,8 +987,14 @@ extension Interpreters {
         if let result {
             context = attemptContext
             let result = try continuation(result)
-            if Context.isInstrumented {
-                print("Successful fast path: \(result)")
+            if context.isInstrumented {
+                ExhaustLog.debug(
+                    category: .materialize,
+                    event: "pick_branch_fast_path",
+                    metadata: [
+                        "branch_id": "\(unpacked.id)",
+                    ],
+                )
             }
             return result
         }
@@ -942,16 +1005,28 @@ extension Interpreters {
 
         // Fallback: branch ID not recognized (structurally edited tree).
         // Try each generator against the branch's choice content.
-        if Context.isInstrumented {
-            print("FB attempting all generators except the matching")
+        if context.isInstrumented {
+            ExhaustLog.debug(
+                category: .materialize,
+                event: "pick_branch_fallback_start",
+                metadata: [
+                    "excluded_branch_id": "\(unpacked.id)",
+                ],
+            )
         }
         var generators = generators
         generators.remove(at: index)
         for generator in generators {
             var attemptContext = context
             if let result = try? materializeRecursive(generator, with: unpacked.choice, context: &attemptContext) {
-                if Context.isInstrumented {
-                    print("Successful FB: \(result)")
+                if context.isInstrumented {
+                    ExhaustLog.debug(
+                        category: .materialize,
+                        event: "pick_branch_fallback_succeeded",
+                        metadata: [
+                            "branch_id": "\(unpacked.id)",
+                        ],
+                    )
                 }
                 context = attemptContext
                 // We're in a mismatched group. Consume as much leftover data as you can
@@ -960,8 +1035,14 @@ extension Interpreters {
             }
         }
         // We're in a mismatched group. Consume as much leftover data as you can
-        if Context.isInstrumented {
-            print("FB unsuccessful, skipping to group close")
+        if context.isInstrumented {
+            ExhaustLog.debug(
+                category: .materialize,
+                event: "pick_branch_fallback_failed",
+                metadata: [
+                    "branch_id": "\(unpacked.id)",
+                ],
+            )
         }
         context.skipToMatchingGroupClose()
         return nil

@@ -486,9 +486,19 @@ public struct ValueAndChoiceTreeInterpreter<FinalOutput>: IteratorProtocol, Sequ
 
         func printClassifications() {
             for (_, classifications) in classifications {
-                print("Classifications for ??")
+                ExhaustLog.info(
+                    category: .generation,
+                    event: "classifications_summary",
+                )
                 for (label, runs) in classifications {
-                    print("\(label):\t\(runs.count)")
+                    ExhaustLog.info(
+                        category: .generation,
+                        event: "classification_count",
+                        metadata: [
+                            "label": label,
+                            "count": "\(runs.count)",
+                        ],
+                    )
                 }
             }
         }
