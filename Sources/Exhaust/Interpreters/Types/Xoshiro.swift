@@ -55,17 +55,33 @@ public struct Xoshiro256: RandomNumberGenerator {
         return result
     }
 
-    /// Returns a random integer in `[0, upperBound)`.
+    /// Returns a uniformly distributed random integer in `[0, upperBound)`.
     ///
-    /// Delegates to Swift's standard range sampling algorithm while using this
-    /// generator as the entropy source.
+    /// Uses multiply-high with rejection sampling to avoid modulo bias.
+    /// This follows Lemire's approach and avoids `%` on the hot path.
     @inline(__always)
     public mutating func next(upperBound: UInt64) -> UInt64 {
         precondition(upperBound > 0, "upperBound must be > 0")
-        return UInt64.random(in: 0 ..< upperBound, using: &self)
+
+        // Power-of-two bounds can be sampled with a single mask.
+        if upperBound & (upperBound &- 1) == 0 {
+            return next() & (upperBound &- 1)
+        }
+
+        // Equivalent to 2^64 % upperBound using wrapping arithmetic.
+        let threshold = (0 &- upperBound) % upperBound
+        while true {
+            let product = next().multipliedFullWidth(by: upperBound)
+            if product.low >= threshold {
+                return product.high
+            }
+        }
     }
 
-    /// Returns a random integer in `range`.
+    /// Returns a random integer in `range` using Swift's range sampling.
+    ///
+    /// This is intentionally separate from `next(upperBound:)` so callers can
+    /// choose between stdlib range behavior and fast bounded sampling.
     @inline(__always)
     public mutating func next(in range: ClosedRange<UInt64>) -> UInt64 {
         UInt64.random(in: range, using: &self)

@@ -17,7 +17,7 @@ enum WeightedPickSelection {
         guard totalWeight > 0 else {
             return nil
         }
-        var roll = prng.next(in: 1 ... totalWeight)
+        var roll = prng.next(upperBound: totalWeight) &+ 1
         for choice in choices {
             if roll <= choice.weight {
                 return choice
