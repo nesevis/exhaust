@@ -105,13 +105,13 @@ struct Bound5ShrinkingChallenge {
             let (_, output) = try #require(try Interpreters.reduce(gen: Self.gen, tree: tree, config: .fast, property: Self.property))
             values.append((value, output))
         }
-        let list = values.enumerated().sorted(by: { lhs, rhs in
-            let lhs = lhs.element.after
-            let rhs = rhs.element.after
-            let lhsCount = lhs.0.count + lhs.1.count + lhs.2.count + lhs.3.count + lhs.4.count
-            let rhsCount = rhs.0.count + rhs.1.count + rhs.2.count + rhs.3.count + rhs.4.count
-            return lhsCount < rhsCount
-        })
+//        let list = values.enumerated().sorted(by: { lhs, rhs in
+//            let lhs = lhs.element.after
+//            let rhs = rhs.element.after
+//            let lhsCount = lhs.0.count + lhs.1.count + lhs.2.count + lhs.3.count + lhs.4.count
+//            let rhsCount = rhs.0.count + rhs.1.count + rhs.2.count + rhs.3.count + rhs.4.count
+//            return lhsCount < rhsCount
+//        })
 
 //        for (offset, values) in values.enumerated() {
 //            let (before, after) = values

@@ -52,7 +52,7 @@ extension ReducerStrategies {
             // Build a candidate with siblings in sorted order
             if let (newSeq, output) = try applySiblingPermutation(
                 gen, tree: tree, property: property,
-                sequence: current, ranges: ranges, permutation: sortedIndices, bloomFilter: &rejectCache,
+                sequence: current, ranges: ranges, permutation: sortedIndices, rejectCache: &rejectCache,
             ) {
                 current = newSeq
                 latestOutput = output
@@ -83,7 +83,7 @@ extension ReducerStrategies {
 
                     if let (newSeq, output) = try applySiblingPermutation(
                         gen, tree: tree, property: property,
-                        sequence: current, ranges: liveRanges, permutation: swapPerm, bloomFilter: &rejectCache,
+                        sequence: current, ranges: liveRanges, permutation: swapPerm, rejectCache: &rejectCache,
                     ) {
                         current = newSeq
                         latestOutput = output
@@ -117,7 +117,7 @@ extension ReducerStrategies {
         sequence: ChoiceSequence,
         ranges: [ClosedRange<Int>],
         permutation: [Int],
-        bloomFilter: inout ReducerCache,
+        rejectCache: inout ReducerCache,
     ) throws -> (ChoiceSequence, Output)? {
         // Extract the slices in original order
         let slices = ranges.map { Array(sequence[$0]) }
@@ -148,13 +148,13 @@ extension ReducerStrategies {
         // We are allowing this change to ignore shortlex in the hopes that it unlocks
         // a partial reduction that unlocks further ones. See `LargeUnionList` and `Difference`
 //        guard candidate.shortLexPrecedes(sequence) else { return nil }
-        guard bloomFilter.contains(candidate) == false else { return nil }
+        guard rejectCache.contains(candidate) == false else { return nil }
         guard let output = try? Interpreters.materialize(gen, with: tree, using: candidate) else {
-            bloomFilter.insert(candidate)
+            rejectCache.insert(candidate)
             return nil
         }
         guard property(output) == false else {
-            bloomFilter.insert(candidate)
+            rejectCache.insert(candidate)
             return nil
         }
 
