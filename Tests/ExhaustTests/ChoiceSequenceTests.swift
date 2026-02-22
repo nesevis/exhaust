@@ -155,23 +155,6 @@ struct ChoiceSequenceTests {
         }
     }
 
-    @Test("Flatten important marker is transparent")
-    func flattenImportant() {
-        let tree = ChoiceTree.important(
-            .choice(.unsigned(42, UInt64.self), ChoiceMetadata(validRanges: [0 ... 100])),
-        )
-
-        let flattened = ChoiceSequence.flatten(tree)
-
-        // Important wrapper should be transparent
-        #expect(flattened.count == 1)
-        guard case let .value(value) = flattened[0] else {
-            Issue.record("Expected value")
-            return
-        }
-        #expect(value.choice == .unsigned(42, UInt64.self))
-    }
-
     @Test("Flatten selected marker is transparent")
     func flattenSelected() {
         let tree = ChoiceTree.selected(

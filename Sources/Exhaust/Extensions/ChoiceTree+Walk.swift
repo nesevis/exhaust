@@ -43,8 +43,6 @@ extension ChoiceTree {
             [choice]
         case let .resize(_, choices):
             choices
-        case let .important(child):
-            [child]
         case let .selected(child):
             [child]
         }
@@ -70,9 +68,6 @@ extension ChoiceTree {
             var copy = choices
             copy[index] = newChild
             return .resize(newSize: newSize, choices: copy)
-        case .important:
-            precondition(index == 0, "important has exactly one child")
-            return .important(newChild)
         case .selected:
             precondition(index == 0, "selected has exactly one child")
             return .selected(newChild)

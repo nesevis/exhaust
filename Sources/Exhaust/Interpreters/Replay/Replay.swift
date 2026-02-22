@@ -23,20 +23,9 @@ extension Interpreters {
         _ gen: ReflectiveGenerator<Output>,
         using choiceTree: ChoiceTree,
     ) throws -> Output? {
-        // First let's unwrap any `.important` markers
-        let unwrappedChoice = choiceTree.map { choice in
-            if case let .important(choiceTree) = choice {
-                // FIXME: Why is it wrapped in important twice?!
-                if case let .important(wrappedTwice) = choiceTree {
-                    return wrappedTwice
-                }
-                return choiceTree
-            }
-            return choice
-        }
         // Start the recursive process. The helper returns the value and any *unconsumed*
         // parts of the tree. A successful top-level replay should consume the entire tree.
-        return try replayRecursive(gen, with: unwrappedChoice)
+        return try replayRecursive(gen, with: choiceTree)
 
         // We can add a check here to ensure no parts of the tree were left over,
         // but the recursive logic should handle this correctly.
@@ -293,11 +282,6 @@ extension Interpreters {
         _ gen: ReflectiveGenerator<Output>,
         with script: ChoiceTree,
     ) throws -> Output? {
-        var script = script
-        if case let .important(choice) = script {
-            script = choice
-        }
-
         // Handle group scripts by distributing choices to the generator
         // Groups containing branches represent `picks` and are handled together
         if case let .group(choices) = script {

@@ -86,9 +86,6 @@ extension ChoiceSequence {
             return [.group(true)]
                 + choices.flatMap(flatten)
                 + [.group(false)]
-        // Do we preserve these markers?
-        case let .important(tree):
-            return flatten(tree)
         case let .selected(tree):
             return flatten(tree)
         }
@@ -130,8 +127,6 @@ extension ChoiceSequence {
             return [.group(true)]
                 + choices.flatMap(flattenAll)
                 + [.group(false)]
-        case let .important(tree):
-            return flattenAll(tree)
         case let .selected(tree):
             return flattenAll(tree)
         }
