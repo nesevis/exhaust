@@ -810,7 +810,7 @@ struct ExtractSiblingGroupsTests {
         let groups = ChoiceSequence.extractSiblingGroups(from: seq)
         for group in groups {
             for range in group.ranges {
-                print("\(range): \(Array(seq[range]).shortString)")
+                print("\(range): \(ContiguousArray(seq[range]).shortString)")
             }
         }
         print()

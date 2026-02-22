@@ -10,8 +10,8 @@ public extension Gen {
     static func zip<each T>(
         _ generators: repeat ReflectiveGenerator<each T>,
     ) -> ReflectiveGenerator<(repeat each T)> {
-        // TODO: These extensions are good candidates for InlineArrays with declared sizes
         var erased: ContiguousArray<ReflectiveGenerator<Any>> = []
+        erased.reserveCapacity(5) // It will rarely exceed this size
         for generator in repeat each generators {
             erased.append(generator.erase())
         }

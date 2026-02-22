@@ -129,7 +129,7 @@ extension ReducerStrategies {
         let spanEnd = ranges.last!.upperBound
 
         // Prepopulate with outer spans
-        var candidate = Array(sequence[..<spanStart])
+        var candidate = ContiguousArray(sequence[..<spanStart])
         for i in ranges.indices {
             // If there's a gap between previous range end and current range start, include it
             if i > 0 {

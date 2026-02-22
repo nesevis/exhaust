@@ -440,7 +440,7 @@ struct MaterializeTests {
             guard case .value = element else { return element }
             return .value(.init(choice: .unsigned(0, UInt64.self), validRanges: []))
         }
-        let materialized = try #require(try Interpreters.materialize(gen, with: tree, using: minimized))
+        let materialized = try #require(try Interpreters.materialize(gen, with: tree, using: ContiguousArray(minimized)))
         #expect(materialized == [0, 0, 0, 0, 0])
     }
 

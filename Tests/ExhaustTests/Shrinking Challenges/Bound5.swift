@@ -71,7 +71,7 @@ struct Bound5ShrinkingChallenge {
         let tree = try #require(try Interpreters.reflect(Self.gen, with: value))
         let sequence = ChoiceSequence.flatten(tree)
 
-        let smokeTest = try #require(try Interpreters.materialize(Self.gen, with: tree, using: sequence))
+        _ = try #require(try Interpreters.materialize(Self.gen, with: tree, using: sequence))
         let (_, output) = try #require(try Interpreters.reduce(gen: Self.gen, tree: tree, config: .fast, property: Self.property))
 
         let arr = (output.0 + output.1 + output.2 + output.3 + output.4).sorted()
@@ -81,19 +81,21 @@ struct Bound5ShrinkingChallenge {
 
     @Test("Bound5, Pathological 3")
     func bound5Pathological3() throws {
-        /*
-         ([-11954, 25609, -21279], [20837, 6773, -1304, -13732, -2626, -3440, 15253, 28268, -31908, 30491], [23543, -10339, -12447, 9150, 18335, -2103, 15547, 11124], [-32635, 18394, -23954, 13750, 27692, 25639, 23372, -27650, 18759, 17794], [-6525, 2724, -30958, 28797, -2409, -1095, 2335, -14856])Lo
-         */
         let value: Bound5 = ([-11954, 25609, -21279], [20837, 6773, -1304, -13732, -2626, -3440, 15253, 28268, -31908, 30491], [23543, -10339, -12447, 9150, 18335, -2103, 15547, 11124], [-32635, 18394, -23954, 13750, 27692, 25639, 23372, -27650, 18759, 17794], [-6525, 2724, -30958, 28797, -2409, -1095, 2335, -14856])
         let tree = try #require(try Interpreters.reflect(Self.gen, with: value))
         let sequence = ChoiceSequence.flatten(tree)
 
-        let smokeTest = try #require(try Interpreters.materialize(Self.gen, with: tree, using: sequence))
+        ExhaustLog.setConfiguration(.init(isEnabled: true, minimumLevel: .info, categoryMinimumLevels: [.reducer: .debug], format: .llmOptimized))
         let (_, output) = try #require(try Interpreters.reduce(gen: Self.gen, tree: tree, config: .fast, property: Self.property))
 
         let arr = (output.0 + output.1 + output.2 + output.3 + output.4).sorted()
         #expect(arr.count == 2)
         #expect(arr == [-32768, -1])
+    }
+    
+    @Test("Bound5, using passing data")
+    func bound5PropTest() throws {
+        try PropertyTest.test(Self.gen, maxIterations: 100, property: Self.property)
     }
 
     @Test("Bound5, 50")

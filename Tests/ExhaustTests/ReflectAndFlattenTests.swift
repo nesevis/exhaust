@@ -609,7 +609,7 @@ struct ReflectAndFlattenTests {
             }
 
         print()
-        let materialized = try #require(try Interpreters.materialize(gen, with: tree, using: sequence))
+        let materialized = try #require(try Interpreters.materialize(gen, with: tree, using: ContiguousArray(sequence)))
         #expect(materialized.age == 0)
         #expect(materialized.name == Array(repeating: "A", count: value.name.count).joined())
     }

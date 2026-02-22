@@ -21,7 +21,13 @@ public struct ChoiceSpan: CustomDebugStringConvertible {
     }
 }
 
-public typealias ChoiceSequence = [ChoiceSequenceValue]
+public typealias ChoiceSequence = ContiguousArray<ChoiceSequenceValue>
+
+extension Collection where Element == ChoiceSequenceValue {
+    var shortString: String {
+        map(\.shortString).joined()
+    }
+}
 
 // MARK: - Helper functions
 
@@ -52,9 +58,9 @@ extension ChoiceSequence {
         case .just:
             return []
         case let .sequence(_, elements, _):
-            return CollectionOfOne(.sequence(true))
+            return [.sequence(true)]
                 + elements.flatMap(flatten)
-                + CollectionOfOne(.sequence(false))
+                + [.sequence(false)]
         // Do we only do the selected branch?
         case let .branch(_, _, _, gen):
             return flatten(gen)
@@ -71,15 +77,15 @@ extension ChoiceSequence {
                     + flatten(choice)
                     + [.group(false)]
             }
-            return CollectionOfOne(.group(true))
+            return [.group(true)]
                 + array.flatMap(flatten)
-                + CollectionOfOne(.group(false))
+                + [.group(false)]
         case .getSize:
             return []
         case let .resize(_, choices):
-            return CollectionOfOne(.group(true))
+            return [.group(true)]
                 + choices.flatMap(flatten)
-                + CollectionOfOne(.group(false))
+                + [.group(false)]
         // Do we preserve these markers?
         case let .important(tree):
             return flatten(tree)
@@ -97,9 +103,9 @@ extension ChoiceSequence {
         case .just:
             return []
         case let .sequence(_, elements, _):
-            return CollectionOfOne(.sequence(true))
+            return [.sequence(true)]
                 + elements.flatMap(flattenAll)
-                + CollectionOfOne(.sequence(false))
+                + [.sequence(false)]
         case let .branch(_, _, _, gen):
             return flattenAll(gen)
         case let .group(array):
@@ -115,15 +121,15 @@ extension ChoiceSequence {
                     + array.flatMap(flattenAll)
                     + [.group(false)]
             }
-            return CollectionOfOne(.group(true))
+            return [.group(true)]
                 + array.flatMap(flattenAll)
-                + CollectionOfOne(.group(false))
+                + [.group(false)]
         case .getSize:
             return []
         case let .resize(_, choices):
-            return CollectionOfOne(.group(true))
+            return [.group(true)]
                 + choices.flatMap(flattenAll)
-                + CollectionOfOne(.group(false))
+                + [.group(false)]
         case let .important(tree):
             return flattenAll(tree)
         case let .selected(tree):
@@ -338,10 +344,6 @@ extension ChoiceSequence {
         }
 
         return spans.reversed()
-    }
-
-    var shortString: String {
-        map(\.shortString).joined()
     }
 
     @inlinable
