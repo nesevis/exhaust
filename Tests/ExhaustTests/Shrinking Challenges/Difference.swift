@@ -77,12 +77,16 @@ struct DifferenceShrinkingChallenge {
             let diff = abs(arr[0] - arr[1])
             return arr[0] < 10 || diff != 1
         }
-
         let value = [700, 701] // A failing example
-        let tree = try #require(try Interpreters.reflect(gen, with: value))
-        let (seq, output) = try #require(try Interpreters.reduce(gen: gen, tree: tree, config: .fast, property: property))
+
+        // A failing example is sparse, so an explicit seed is provided
+        let output = try #exhaust(gen, .seed(99)) { arr in
+            count += 1
+            let diff = abs(arr[0] - arr[1])
+            return arr[0] < 10 || diff != 1
+        }
         #expect(property(value) == false)
-        #expect(count == 41)
+        #expect(count == 68)
         #expect(output == [10, 9])
     }
 }

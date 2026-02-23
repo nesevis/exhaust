@@ -10,83 +10,114 @@ private let testMacros: [String: any Macro.Type] = [
 
 @Suite("GenerateMacro expansion tests")
 struct GenerateMacroTests {
-    @Test("Single generator with struct init produces bidirectional mapped")
+    @Test("Single generator with struct init produces Mirror-based bidirectional")
     func singleGeneratorBidirectional() {
         assertMacroExpansion(
             """
-            #generate(nameGen) { name in
+            #gen(nameGen) { name in
                 Person(name: name)
             }
             """,
             expandedSource: """
-            nameGen.mapped(forward: { name in
+            Gen.contramap({ _mirrorExtract($0, label: "name") }, nameGen.map { name in
                 Person(name: name)
-            }, backward: { $0.name })
+            })
             """,
             macros: testMacros
         )
     }
 
-    @Test("Two generators with struct init produces zip + bidirectional mapped")
+    @Test("Two generators with struct init produces _mirrorMappedZip")
     func twoGeneratorsBidirectional() {
         assertMacroExpansion(
             """
-            #generate(nameGen, ageGen) { name, age in
+            #gen(nameGen, ageGen) { name, age in
                 Person(name: name, age: age)
             }
             """,
             expandedSource: """
-            Gen.zip(nameGen, ageGen).mapped(forward: { name, age in
+            Gen._mirrorMappedZip(nameGen, ageGen, labels: ["name", "age"], forward: { name, age in
                 Person(name: name, age: age)
-            }, backward: { ($0.name, $0.age) })
+            })
             """,
             macros: testMacros
         )
     }
 
-    @Test("Reordered arguments produce correctly ordered backward tuple")
+    @Test("Reordered arguments produce correctly ordered backward labels")
     func reorderedArguments() {
         assertMacroExpansion(
             """
-            #generate(ageGen, nameGen) { age, name in
+            #gen(ageGen, nameGen) { age, name in
                 Person(name: name, age: age)
             }
             """,
             expandedSource: """
-            Gen.zip(ageGen, nameGen).mapped(forward: { age, name in
+            Gen._mirrorMappedZip(ageGen, nameGen, labels: ["age", "name"], forward: { age, name in
                 Person(name: name, age: age)
-            }, backward: { ($0.age, $0.name) })
+            })
             """,
             macros: testMacros
         )
     }
 
-    @Test("Shorthand parameters produce forward-only with warning")
+    @Test("Shorthand parameters with non-init body produce forward-only")
     func shorthandParametersFallback() {
         assertMacroExpansion(
             """
-            #generate(intGen) { $0 * 2 }
+            #gen(intGen) { $0 * 2 }
             """,
             expandedSource: """
             intGen.map { $0 * 2 }
             """,
-            diagnostics: [
-                DiagnosticSpec(
-                    message: ExhaustMacroDiagnostic.forwardOnlyShorthandParams.rawValue,
-                    line: 1,
-                    column: 20,
-                    severity: .warning
-                ),
-            ],
             macros: testMacros
         )
     }
 
-    @Test("Complex argument expressions produce forward-only with warning")
+    @Test("Single generator with shorthand parameter produces bidirectional")
+    func singleGeneratorShorthandBidirectional() {
+        assertMacroExpansion(
+            """
+            #gen(nameGen) { Person(name: $0) }
+            """,
+            expandedSource: """
+            Gen.contramap({ _mirrorExtract($0, label: "name") }, nameGen.map { Person(name: $0) })
+            """,
+            macros: testMacros
+        )
+    }
+
+    @Test("Two generators with shorthand parameters produce bidirectional")
+    func twoGeneratorsShorthandBidirectional() {
+        assertMacroExpansion(
+            """
+            #gen(nameGen, ageGen) { Person(name: $0, age: $1) }
+            """,
+            expandedSource: """
+            Gen._mirrorMappedZip(nameGen, ageGen, labels: ["name", "age"], forward: { Person(name: $0, age: $1) })
+            """,
+            macros: testMacros
+        )
+    }
+
+    @Test("Shorthand parameters with reordered indices produce correct backward labels")
+    func shorthandReorderedIndices() {
+        assertMacroExpansion(
+            """
+            #gen(ageGen, nameGen) { Person(name: $1, age: $0) }
+            """,
+            expandedSource: """
+            Gen._mirrorMappedZip(ageGen, nameGen, labels: ["age", "name"], forward: { Person(name: $1, age: $0) })
+            """,
+            macros: testMacros
+        )
+    }
+
+    @Test("Complex argument expressions produce forward-only")
     func complexExpressionFallback() {
         assertMacroExpansion(
             """
-            #generate(nameGen) { name in
+            #gen(nameGen) { name in
                 Person(name: name.uppercased())
             }
             """,
@@ -95,23 +126,15 @@ struct GenerateMacroTests {
                 Person(name: name.uppercased())
             }
             """,
-            diagnostics: [
-                DiagnosticSpec(
-                    message: ExhaustMacroDiagnostic.forwardOnlyComplexArguments.rawValue,
-                    line: 1,
-                    column: 20,
-                    severity: .warning
-                ),
-            ],
             macros: testMacros
         )
     }
 
-    @Test("Multi-statement closure produces forward-only with warning")
+    @Test("Multi-statement closure produces forward-only")
     func multiStatementFallback() {
         assertMacroExpansion(
             """
-            #generate(intGen) { x in
+            #gen(intGen) { x in
                 let doubled = x * 2
                 return doubled
             }
@@ -122,35 +145,32 @@ struct GenerateMacroTests {
                 return doubled
             }
             """,
-            diagnostics: [
-                DiagnosticSpec(
-                    message: ExhaustMacroDiagnostic.forwardOnlyMultiStatement.rawValue,
-                    line: 1,
-                    column: 19,
-                    severity: .warning
-                ),
-            ],
             macros: testMacros
         )
     }
 
-    @Test("Missing trailing closure produces error")
-    func missingTrailingClosure() {
+    @Test("Single generator without closure passes through")
+    func singleGeneratorPassthrough() {
         assertMacroExpansion(
             """
-            #generate(intGen)
+            #gen(intGen)
             """,
             expandedSource: """
-            fatalError("#generate requires a trailing closure")
+            intGen
             """,
-            diagnostics: [
-                DiagnosticSpec(
-                    message: ExhaustMacroDiagnostic.missingTrailingClosure.rawValue,
-                    line: 1,
-                    column: 1,
-                    severity: .error
-                ),
-            ],
+            macros: testMacros
+        )
+    }
+
+    @Test("Multiple generators without closure produce zip")
+    func multipleGeneratorsZip() {
+        assertMacroExpansion(
+            """
+            #gen(intGen, stringGen)
+            """,
+            expandedSource: """
+            Gen.zip(intGen, stringGen)
+            """,
             macros: testMacros
         )
     }
@@ -159,41 +179,41 @@ struct GenerateMacroTests {
     func threeGeneratorsBidirectional() {
         assertMacroExpansion(
             """
-            #generate(nameGen, ageGen, emailGen) { name, age, email in
+            #gen(nameGen, ageGen, emailGen) { name, age, email in
                 User(name: name, age: age, email: email)
             }
             """,
             expandedSource: """
-            Gen.zip(nameGen, ageGen, emailGen).mapped(forward: { name, age, email in
+            Gen._mirrorMappedZip(nameGen, ageGen, emailGen, labels: ["name", "age", "email"], forward: { name, age, email in
                 User(name: name, age: age, email: email)
-            }, backward: { ($0.name, $0.age, $0.email) })
+            })
             """,
             macros: testMacros
         )
     }
 
-    @Test("Single generator with return statement produces bidirectional mapped")
+    @Test("Single generator with return statement produces Mirror-based bidirectional")
     func singleGeneratorWithReturn() {
         assertMacroExpansion(
             """
-            #generate(nameGen) { name in
+            #gen(nameGen) { name in
                 return Person(name: name)
             }
             """,
             expandedSource: """
-            nameGen.mapped(forward: { name in
+            Gen.contramap({ _mirrorExtract($0, label: "name") }, nameGen.map { name in
                 return Person(name: name)
-            }, backward: { $0.name })
+            })
             """,
             macros: testMacros
         )
     }
 
-    @Test("Unlabeled arguments produce forward-only with warning")
+    @Test("Unlabeled arguments produce forward-only")
     func unlabeledArgumentsFallback() {
         assertMacroExpansion(
             """
-            #generate(intGen) { x in
+            #gen(intGen) { x in
                 Wrapper(x)
             }
             """,
@@ -202,14 +222,6 @@ struct GenerateMacroTests {
                 Wrapper(x)
             }
             """,
-            diagnostics: [
-                DiagnosticSpec(
-                    message: ExhaustMacroDiagnostic.forwardOnlyUnlabeledArguments.rawValue,
-                    line: 1,
-                    column: 19,
-                    severity: .warning
-                ),
-            ],
             macros: testMacros
         )
     }

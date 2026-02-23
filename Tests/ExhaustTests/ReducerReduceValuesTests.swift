@@ -291,7 +291,7 @@ struct ReducerReduceValuesTests {
         // https://hedgehogqa.github.io/fsharp-hedgehog/articles/ranges.html?tabs=fsharp
         let interpreter = Array(ValueInterpreter(Int.arbitrary))
         
-        let counterExample = try PropertyTest.test(gen) { str in
+        let counterExample = try #exhaust(gen) { str in
             str.contains("@") == false
         }
         

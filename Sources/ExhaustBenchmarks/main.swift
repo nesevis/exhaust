@@ -97,6 +97,37 @@ benchmark("Zipped person with ChoiceTree") {
     }
 }
 
+benchmark("Bound5, 50 iterations, reflective") {
+    struct Bound5: Equatable {
+        let a: [Int16]
+        let b: [Int16]
+        let c: [Int16]
+        let d: [Int16]
+        let e: [Int16]
+    }
+    let arrGen = Gen.arrayOf(Int16.arbitrary, within: 0 ... 10)
+    
+    let property: (Bound5) -> Bool = { b5 in
+        let arr = b5.a + b5.b + b5.c + b5.d + b5.e
+        if arr.isEmpty {
+            return true
+        }
+        return arr.dropFirst().reduce(arr[0], &+) < 5 * 256
+    }
+
+    do {
+        let gen = #gen(arrGen, arrGen, arrGen, arrGen, arrGen) { a, b, c, d, e in
+            Bound5(a: a, b: b, c: c, d: d, e: e)
+        }
+        let iterator = ValueAndChoiceTreeInterpreter(gen, seed: 1337, maxRuns: 50)
+        for (value, tree) in iterator where property(value) == false {
+            _ = try Interpreters.reduce(gen: gen, tree: tree, config: .fast, property: property)
+        }
+    } catch {
+        print(error)
+    }
+}
+
 benchmark("Bound5, 50 iterations") {
     typealias Bound5 = ([Int16], [Int16], [Int16], [Int16], [Int16])
 

@@ -105,11 +105,29 @@ struct Bound5ShrinkingChallenge {
 
     @Test("Bound5, 50")
     func bound5Many() throws {
-        let iterator = ValueAndChoiceTreeInterpreter(Self.gen, materializePicks: true, seed: 1337, maxRuns: 100)
+        struct Bound5: Equatable {
+            let a: [Int16]
+            let b: [Int16]
+            let c: [Int16]
+            let d: [Int16]
+            let e: [Int16]
+        }
+        let arrGen = Gen.arrayOf(Int16.arbitrary, within: 0 ... 10)
+        let gen = Gen.zip(arrGen, arrGen, arrGen, arrGen, arrGen)
+            .map(Bound5.init)
+        
+        let property: (Bound5) -> Bool = { b5 in
+            let arr = b5.a + b5.b + b5.c + b5.d + b5.e
+            if arr.isEmpty {
+                return true
+            }
+            return arr.dropFirst().reduce(arr[0], &+) < 5 * 256
+        }
+        let iterator = ValueAndChoiceTreeInterpreter(gen, materializePicks: true, seed: 1337, maxRuns: 100)
 
 //        var values = [(before: Bound5, after: Bound5)]()
-        for (value, tree) in iterator where Self.property(value) == false {
-            let (_, output) = try #require(try Interpreters.reduce(gen: Self.gen, tree: tree, config: .fast, property: Self.property))
+        for (value, tree) in iterator where property(value) == false {
+            let (_, output) = try #require(try Interpreters.reduce(gen: gen, tree: tree, config: .fast, property: property))
 //            values.append((value, output))
         }
 //        let list = values.enumerated().sorted(by: { lhs, rhs in
@@ -124,5 +142,34 @@ struct Bound5ShrinkingChallenge {
 //            let (before, after) = values
 //            print("\(offset + 1): \(after) original: \(before)")
 //        }
+    }
+    
+    @Test("Bound5, reflectMirror")
+    func bound5ReflectMirror() throws {
+        struct Bound5: Equatable {
+            let a: [Int16]
+            let b: [Int16]
+            let c: [Int16]
+            let d: [Int16]
+            let e: [Int16]
+        }
+        let arrGen = #gen(.array(.int16(), length: 0...10))
+        
+        let gen = #gen(arrGen, arrGen, arrGen, arrGen, arrGen) {
+            Bound5(a: $0, b: $1, c: $2, d: $3, e: $4)
+        }
+        
+        let property: (Bound5) -> Bool = { b5 in
+            let arr = b5.a + b5.b + b5.c + b5.d + b5.e
+            if arr.isEmpty {
+                return true
+            }
+            return arr.dropFirst().reduce(arr[0], &+) < 5 * 256
+        }
+
+        let iterator = ValueAndChoiceTreeInterpreter(gen, seed: 1337, maxRuns: 100)
+        for (value, tree) in iterator where property(value) == false {
+            _ = try Interpreters.reduce(gen: gen, tree: tree, config: .fast, property: property)
+        }
     }
 }

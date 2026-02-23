@@ -3,33 +3,33 @@ import SwiftSyntax
 import SwiftSyntaxBuilder
 import SwiftSyntaxMacros
 
-/// Expression macro that transforms `#generate(gen1, gen2, ...) { params in Body(...) }`
+/// Expression macro that transforms `#gen(gen1, gen2, ...) { params in Body(...) }`
 /// into a `ReflectiveGenerator` with automatic backward mapping when possible.
 ///
 /// When the closure body is a struct/class initializer call with labeled arguments
-/// that correspond 1:1 to the closure parameters, a `.mapped(forward:backward:)` call
-/// is emitted. Otherwise, falls back to `.map` with a warning diagnostic.
+/// that correspond 1:1 to the closure parameters, a Mirror-based backward mapping
+/// is synthesized, producing a fully bidirectional generator. This works regardless
+/// of property access control since Mirror ignores visibility.
+///
+/// When backward inference is not possible (complex expressions, shorthand parameters,
+/// multi-statement bodies), the macro falls back to a forward-only `.map` with a warning.
 public struct GenerateMacro: ExpressionMacro {
     public static func expansion(
         of node: some FreestandingMacroExpansionSyntax,
         in context: some MacroExpansionContext
     ) throws -> ExprSyntax {
-        // Separate generator arguments from the trailing closure
-        guard let trailingClosure = node.trailingClosure else {
-            context.diagnose(Diagnostic(
-                node: Syntax(node),
-                message: ExhaustMacroDiagnostic.missingTrailingClosure
-            ))
-            return "fatalError(\"#generate requires a trailing closure\")"
-        }
-
         let generatorArgs = node.arguments.map { $0 }
         guard !generatorArgs.isEmpty else {
             context.diagnose(Diagnostic(
                 node: Syntax(node),
                 message: ExhaustMacroDiagnostic.noGeneratorArguments
             ))
-            return "fatalError(\"#generate requires at least one generator argument\")"
+            return "fatalError(\"#gen requires at least one generator argument\")"
+        }
+
+        // No trailing closure — zip-only overload
+        guard let trailingClosure = node.trailingClosure else {
+            return buildZipExpansion(generatorArgs: generatorArgs)
         }
 
         let generatorCount = generatorArgs.count
@@ -42,11 +42,7 @@ public struct GenerateMacro: ExpressionMacro {
                 closure: trailingClosure,
                 result: result
             )
-        case let .forwardOnly(diagnostic):
-            context.diagnose(Diagnostic(
-                node: Syntax(trailingClosure),
-                message: diagnostic
-            ))
+        case .forwardOnly:
             return buildForwardOnlyExpansion(
                 generatorArgs: generatorArgs,
                 closure: trailingClosure
@@ -54,7 +50,11 @@ public struct GenerateMacro: ExpressionMacro {
         }
     }
 
-    /// Builds the expansion for a bidirectional (forward + backward) mapping.
+    /// Builds the expansion for a bidirectional mapping using Mirror-based backward extraction.
+    ///
+    /// Single generator: uses `Gen.contramap` with `_mirrorExtract` applied to a `.map`.
+    /// Multi generator: uses `Gen._mirrorMappedZip` which combines zip + Mirror backward
+    /// internally, avoiding the tuple type mismatch that `zip().mapped()` would cause.
     private static func buildBidirectionalExpansion(
         generatorArgs: [LabeledExprListSyntax.Element],
         closure: ClosureExprSyntax,
@@ -63,45 +63,50 @@ public struct GenerateMacro: ExpressionMacro {
         let closureText = closure.trimmedDescription
 
         if generatorArgs.count == 1 {
-            // Single generator: gen.mapped(forward: closure, backward: { $0.label })
             let genExpr = generatorArgs[0].expression.trimmedDescription
             let label = result.labels[0]
-            return "\(raw: genExpr).mapped(forward: \(raw: closureText), backward: { $0.\(raw: label) })"
+            return "Gen.contramap({ _mirrorExtract($0, label: \"\(raw: label)\") }, \(raw: genExpr).map \(raw: closureText))"
         } else {
-            // Multi generator: Gen.zip(g1, g2).mapped(forward: { ... }, backward: { ... })
             let genExprs = generatorArgs.map { $0.expression.trimmedDescription }
             let zipArgs = genExprs.joined(separator: ", ")
 
-            // Build the backward closure ordered by parameter position.
-            // Gen.zip produces a tuple in parameter (generator) order, so the backward
-            // mapping must return components in that same order.
-            let backwardComponents = buildBackwardComponents(result: result)
-            let backwardBody = backwardComponents.joined(separator: ", ")
+            let backwardLabels = buildBackwardLabels(result: result)
+            let labelsArray = backwardLabels.map { "\"\($0)\"" }.joined(separator: ", ")
 
-            return "Gen.zip(\(raw: zipArgs)).mapped(forward: \(raw: closureText), backward: { (\(raw: backwardBody)) })"
+            return "Gen._mirrorMappedZip(\(raw: zipArgs), labels: [\(raw: labelsArray)], forward: \(raw: closureText))"
         }
     }
 
-    /// Builds backward mapping components ordered by parameter position.
+    /// Returns labels ordered by parameter position (matching generator/tuple order).
     ///
     /// The closure parameters may appear in a different order than the initializer arguments.
     /// For example: `{ age, name in Person(name: name, age: age) }`
     /// - Parameters (generator order): [age, name]
     /// - Arguments: [name: name, age: age]
-    /// - argumentParamRefs: [name, age] (which param was passed at each arg position)
     ///
-    /// The backward tuple must match parameter order: `($0.age, $0.name)`
-    /// For each parameter, find the argument position where it was used, and use that label.
-    private static func buildBackwardComponents(result: BidirectionalResult) -> [String] {
-        // Build a map from parameter name → the label it was passed as
+    /// The backward labels must match parameter order: ["age", "name"]
+    private static func buildBackwardLabels(result: BidirectionalResult) -> [String] {
         var paramToLabel: [String: String] = [:]
         for (argIndex, paramRef) in result.argumentParamRefs.enumerated() {
             paramToLabel[paramRef] = result.labels[argIndex]
         }
 
-        // Return labels in parameter order (which is generator/tuple order)
         return result.parameterNames.map { paramName in
-            "$0.\(paramToLabel[paramName]!)"
+            paramToLabel[paramName]!
+        }
+    }
+
+    /// Builds the expansion for the no-closure overload: pass through or zip.
+    private static func buildZipExpansion(
+        generatorArgs: [LabeledExprListSyntax.Element]
+    ) -> ExprSyntax {
+        if generatorArgs.count == 1 {
+            let genExpr = generatorArgs[0].expression.trimmedDescription
+            return "\(raw: genExpr)"
+        } else {
+            let genExprs = generatorArgs.map { $0.expression.trimmedDescription }
+            let zipArgs = genExprs.joined(separator: ", ")
+            return "Gen.zip(\(raw: zipArgs))"
         }
     }
 

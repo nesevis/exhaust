@@ -20,5 +20,5 @@
 public macro exhaust<T>(
     _ gen: ReflectiveGenerator<T>,
     _ settings: ExhaustSettings...,
-    property: (T) -> Bool
+    property: (T) throws -> Bool
 ) -> T? = #externalMacro(module: "ExhaustMacros", type: "ExhaustTestMacro")

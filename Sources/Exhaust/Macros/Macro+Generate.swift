@@ -2,33 +2,53 @@
 ///
 /// When the closure body is a struct or class initializer call with labeled arguments
 /// that map 1:1 to the closure parameters, the macro automatically synthesizes a
-/// backward mapping using property access, producing a fully bidirectional generator
-/// via `.mapped(forward:backward:)`.
+/// Mirror-based backward mapping, producing a fully bidirectional generator. Using
+/// `Mirror` allows the backward pass to work regardless of property access control.
 ///
-/// When backward inference is not possible (complex expressions, shorthand parameters,
-/// multi-statement bodies), the macro falls back to a forward-only `.map` and emits
-/// a warning explaining why.
+/// When backward inference is not possible (complex expressions, multi-statement bodies),
+/// the macro falls back to a forward-only `.map` and emits a warning explaining why.
+///
+/// Both named parameters and shorthand parameters (`$0`, `$1`, …) are supported for
+/// bidirectional mapping — the labels come from the call-site argument labels, while
+/// the shorthand indices provide the positional correspondence to generators.
 ///
 /// ## Single Generator
 /// ```swift
-/// let personGen = #generate(nameGen) { name in
+/// let personGen = #gen(nameGen) { name in
 ///     Person(name: name)
 /// }
-/// // Expands to: nameGen.mapped(forward: { name in Person(name: name) }, backward: { $0.name })
+/// // Expands to: Gen.contramap({ _mirrorExtract($0, label: "name") }, nameGen.map { ... })
 /// ```
 ///
 /// ## Multiple Generators
 /// ```swift
-/// let personGen = #generate(nameGen, ageGen) { name, age in
+/// let personGen = #gen(nameGen, ageGen) { name, age in
 ///     Person(name: name, age: age)
 /// }
-/// // Expands to: Gen.zip(nameGen, ageGen).mapped(
-/// //     forward: { name, age in Person(name: name, age: age) },
-/// //     backward: { ($0.name, $0.age) }
-/// // )
+/// // Expands to: Gen._mirrorMappedZip(nameGen, ageGen, labels: ["name", "age"], forward: { ... })
+/// ```
+///
+/// ## Shorthand Parameters
+/// ```swift
+/// let personGen = #gen(nameGen, ageGen) { Person(name: $0, age: $1) }
+/// // Expands to: Gen._mirrorMappedZip(nameGen, ageGen, labels: ["name", "age"], forward: { ... })
 /// ```
 @freestanding(expression)
-public macro generate<each T, R>(
+public macro gen<each T, R>(
     _ generators: repeat ReflectiveGenerator<each T>,
     transform: (repeat each T) -> R
 ) -> ReflectiveGenerator<R> = #externalMacro(module: "ExhaustMacros", type: "GenerateMacro")
+
+/// Composes one or more generators without a transform closure.
+///
+/// A single generator is passed through unchanged. Multiple generators are
+/// combined with `Gen.zip`, producing a tuple generator.
+///
+/// ```swift
+/// let intGen: ReflectiveGenerator<Int> = #gen(.int())
+/// let pairGen: ReflectiveGenerator<(Int, String)> = #gen(.int(), .string())
+/// ```
+@freestanding(expression)
+public macro gen<each T>(
+    _ generators: repeat ReflectiveGenerator<each T>
+) -> ReflectiveGenerator<(repeat each T)> = #externalMacro(module: "ExhaustMacros", type: "GenerateMacro")

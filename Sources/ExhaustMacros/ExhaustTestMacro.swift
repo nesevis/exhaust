@@ -32,6 +32,7 @@ public struct ExhaustTestMacro: ExpressionMacro {
             let sourceCode = trailingClosure.statements.trimmedDescription
                 .replacingOccurrences(of: "\\", with: "\\\\")
                 .replacingOccurrences(of: "\"", with: "\\\"")
+                .replacingOccurrences(of: "\n", with: "\\n")
 
             let closureText = trailingClosure.trimmedDescription
             let settingsArray = settingsExprs.isEmpty ? "[]" : "[\(settingsExprs.joined(separator: ", "))]"

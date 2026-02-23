@@ -69,7 +69,10 @@ public enum Gen {
             // This is where the backwards pass happens
             transform: {
                 // Handle optional inputs
-                try transform($0 as! NewInput) as Any
+                guard let input = $0 as? NewInput else {
+                    throw Interpreters.ReflectionError.contramapWasWrongType
+                }
+                return try transform(input) as Any
             },
             next: generator.erase(),
         )) { result in

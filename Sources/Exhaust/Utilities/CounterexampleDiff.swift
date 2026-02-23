@@ -31,6 +31,19 @@ enum CounterexampleDiff {
             }
             return "Counterexample diff (shrunk \u{2190} original):\n" + lines.joined(separator: "\n")
         } else {
+            let shrunkDesc = String(describing: shrunk)
+            let originalDesc = String(describing: original)
+            
+            switch (shrunkDesc.count, originalDesc.count) {
+            case (0...20, 0...30):
+                return "Counterexample \(shrunkDesc) \u{2190} \(originalDesc)"
+            case (21...40, _):
+                return "Counterexample \(shrunkDesc) \u{2190} \(originalDesc.prefix(30))…"
+            default:
+                return "Counterexample diff (shrunk \u{2190} original):\n"
+            }
+            
+            
             return "Counterexample diff (shrunk \u{2190} original):\n"
                 + "  shrunk:   \(String(describing: shrunk))\n"
                 + "  original: \(String(describing: original))"

@@ -1,4 +1,4 @@
-// Closure analysis for #generate macro — detects struct/class initializer calls
+// Closure analysis for #gen macro — detects struct/class initializer calls
 // and extracts argument labels for automatic backward mapping synthesis.
 //
 // Adapted from Swift Testing's ConditionArgumentParsing.swift approach for
@@ -38,7 +38,7 @@ struct BidirectionalResult {
 /// Analyzes a closure expression to determine if it can support automatic backward mapping.
 ///
 /// The analysis succeeds (returns `.bidirectional`) when:
-/// 1. The closure has explicitly named parameters (not $0, $1)
+/// 1. The closure has explicitly named parameters or uses shorthand `$0`, `$1`, etc.
 /// 2. The body is a single expression (or single return statement)
 /// 3. That expression is a function/initializer call
 /// 4. All arguments are labeled
@@ -59,8 +59,9 @@ func analyzeClosureForBidirectional(
             return .forwardOnly(.forwardOnlyShorthandParams)
         }
     } else {
-        // No signature at all — implies shorthand params
-        return .forwardOnly(.forwardOnlyShorthandParams)
+        // No signature — shorthand params ($0, $1, ...).
+        // Try to analyze the body for a labeled init call with shorthand references.
+        return analyzeShorthandClosure(closure, generatorCount: generatorCount)
     }
 
     // Step 2: Get the single expression from the body
@@ -68,12 +69,77 @@ func analyzeClosureForBidirectional(
         return .forwardOnly(.forwardOnlyMultiStatement)
     }
 
-    // Step 3: Check it's a function call
+    return analyzeFunctionCall(singleExpr, parameterNames: parameterNames, generatorCount: generatorCount)
+}
+
+/// Analyzes a closure that uses shorthand parameters ($0, $1, ...) for bidirectional capability.
+///
+/// Shorthand params provide implicit positional ordering — `$0` corresponds to the first generator,
+/// `$1` to the second, etc. The labels needed for Mirror-based backward extraction come from the
+/// function call argument labels, not from parameter names.
+private func analyzeShorthandClosure(
+    _ closure: ClosureExprSyntax,
+    generatorCount: Int
+) -> ClosureAnalysisOutcome {
+    guard let singleExpr = extractSingleExpression(from: closure.statements) else {
+        return .forwardOnly(.forwardOnlyMultiStatement)
+    }
+
     guard let funcCall = singleExpr.as(FunctionCallExprSyntax.self) else {
         return .forwardOnly(.forwardOnlyNotFunctionCall)
     }
 
-    // Step 4: Extract argument labels — all must be labeled
+    var labels: [String] = []
+    var argumentParamRefs: [String] = []
+    var indices: [Int] = []
+
+    for argument in funcCall.arguments {
+        guard let label = argument.label?.text else {
+            return .forwardOnly(.forwardOnlyUnlabeledArguments)
+        }
+        labels.append(label)
+
+        guard let declRef = argument.expression.as(DeclReferenceExprSyntax.self) else {
+            return .forwardOnly(.forwardOnlyComplexArguments)
+        }
+
+        let name = declRef.baseName.text
+        guard name.hasPrefix("$"), let index = Int(name.dropFirst()) else {
+            return .forwardOnly(.forwardOnlyComplexArguments)
+        }
+
+        argumentParamRefs.append(name)
+        indices.append(index)
+    }
+
+    // Verify the indices form exactly {0, 1, ..., generatorCount-1}
+    let indexSet = Set(indices)
+    let expectedSet = Set(0 ..< generatorCount)
+
+    guard indexSet == expectedSet, indices.count == generatorCount else {
+        return .forwardOnly(.forwardOnlyShorthandParams)
+    }
+
+    // Parameter names in ascending index order (matching generator order)
+    let parameterNames = (0 ..< generatorCount).map { "$\($0)" }
+
+    return .bidirectional(BidirectionalResult(
+        labels: labels,
+        parameterNames: parameterNames,
+        argumentParamRefs: argumentParamRefs
+    ))
+}
+
+/// Analyzes a single expression for a labeled function call with 1:1 parameter correspondence.
+private func analyzeFunctionCall(
+    _ singleExpr: ExprSyntax,
+    parameterNames: [String],
+    generatorCount: Int
+) -> ClosureAnalysisOutcome {
+    guard let funcCall = singleExpr.as(FunctionCallExprSyntax.self) else {
+        return .forwardOnly(.forwardOnlyNotFunctionCall)
+    }
+
     var labels: [String] = []
     var argumentParamRefs: [String] = []
 
@@ -83,14 +149,12 @@ func analyzeClosureForBidirectional(
         }
         labels.append(label)
 
-        // Step 5: Each argument must be a simple DeclReferenceExpr matching a closure param
         guard let declRef = argument.expression.as(DeclReferenceExprSyntax.self) else {
             return .forwardOnly(.forwardOnlyComplexArguments)
         }
         argumentParamRefs.append(declRef.baseName.text)
     }
 
-    // Step 6: Verify 1:1 correspondence
     let paramSet = Set(parameterNames)
     let argRefSet = Set(argumentParamRefs)
 

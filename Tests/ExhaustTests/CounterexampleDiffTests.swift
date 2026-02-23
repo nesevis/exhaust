@@ -81,19 +81,17 @@ struct CounterexampleDiffTests {
         #expect(result.contains("(no visible change)"))
     }
 
-    @Test("Non-struct types use fallback format")
+    @Test("Non-struct types use inline fallback format")
     func fallbackForNonStruct() {
         let result = CounterexampleDiff.format(original: 42, shrunk: 1)
 
-        #expect(result.contains("original:"))
-        #expect(result.contains("shrunk:"))
+        #expect(result.contains("1 \u{2190} 42"))
     }
 
-    @Test("Tuples use fallback format")
+    @Test("Tuples use inline fallback format")
     func fallbackForTuples() {
         let result = CounterexampleDiff.format(original: (1, "hello"), shrunk: (0, "a"))
 
-        #expect(result.contains("original:"))
-        #expect(result.contains("shrunk:"))
+        #expect(result.contains("\u{2190}"))
     }
 }
