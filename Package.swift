@@ -1,6 +1,7 @@
 // swift-tools-version: 6.2
 // The swift-tools-version declares the minimum version of Swift required to build this package.
 
+import CompilerPluginSupport
 import PackageDescription
 
 let package = Package(
@@ -24,7 +25,8 @@ let package = Package(
         .package(url: "https://github.com/google/swift-benchmark", from: "0.1.2"),
         .package(url: "https://github.com/nicklockwood/SwiftFormat", from: "0.59.1"),
         .package(url: "https://github.com/SimplyDanny/SwiftLintPlugins", from: "0.57.1"),
-        .package(url: "https://github.com/swiftlang/swift-docc-plugin", from: "1.4.6")
+        .package(url: "https://github.com/swiftlang/swift-docc-plugin", from: "1.4.6"),
+        .package(url: "https://github.com/swiftlang/swift-syntax.git", from: "600.0.1"),
     ],
     targets: [
         // Targets are the basic building blocks of a package, defining a module or a test suite.
@@ -33,7 +35,8 @@ let package = Package(
             name: "Exhaust",
             dependencies: [
                 .product(name: "CasePaths", package: "swift-case-paths"),
-                .product(name: "Algorithms", package: "swift-algorithms")
+                .product(name: "Algorithms", package: "swift-algorithms"),
+                "ExhaustMacros",
             ],
             swiftSettings: [
                 .unsafeFlags(["-whole-module-optimization"], .when(configuration: .release))
@@ -41,13 +44,31 @@ let package = Package(
             plugins: [
                 .plugin(name: "SwiftLintBuildToolPlugin", package: "SwiftLintPlugins")
             ]
-            
+
+        ),
+        .macro(
+            name: "ExhaustMacros",
+            dependencies: [
+                .product(name: "SwiftSyntax", package: "swift-syntax"),
+                .product(name: "SwiftSyntaxMacros", package: "swift-syntax"),
+                .product(name: "SwiftSyntaxBuilder", package: "swift-syntax"),
+                .product(name: "SwiftCompilerPlugin", package: "swift-syntax"),
+                .product(name: "SwiftDiagnostics", package: "swift-syntax"),
+            ]
         ),
         .testTarget(
             name: "ExhaustTests",
             dependencies: ["Exhaust"],
             plugins: [
                 .plugin(name: "SwiftLintBuildToolPlugin", package: "SwiftLintPlugins")
+            ]
+        ),
+        .testTarget(
+            name: "ExhaustMacrosTests",
+            dependencies: [
+                "Exhaust",
+                "ExhaustMacros",
+                .product(name: "SwiftSyntaxMacrosTestSupport", package: "swift-syntax"),
             ]
         ),
         .executableTarget(
