@@ -74,6 +74,11 @@ public enum __ExhaustRuntime {
                     )
                     ExhaustLog.notice(
                         category: .propertyTest,
+                        event: "counterexample_diff",
+                        CounterexampleDiff.format(original: next, shrunk: shrunkValue)
+                    )
+                    ExhaustLog.notice(
+                        category: .propertyTest,
                         event: "shrunk_blueprint",
                         "\(shrunkSequence.shortString)"
                     )
