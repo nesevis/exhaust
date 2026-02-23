@@ -32,7 +32,7 @@ public struct ValueAndChoiceTreeInterpreter<FinalOutput>: IteratorProtocol, Sequ
         )
     }
 
-    // MARK: - Next
+    // MARK: - Iterator
 
     public mutating func next() -> Element? {
         guard context.runs < context.maxRuns else {
@@ -67,7 +67,6 @@ public struct ValueAndChoiceTreeInterpreter<FinalOutput>: IteratorProtocol, Sequ
 
     // MARK: - Recursive Engine
 
-    /// This code is all inline for performance reasons
     private static func generateRecursive<Output>(
         _ gen: ReflectiveGenerator<Output>,
         with inputValue: some Any,
@@ -121,7 +120,7 @@ public struct ValueAndChoiceTreeInterpreter<FinalOutput>: IteratorProtocol, Sequ
                     runContinuation: runContinuation,
                 )
 
-                    // MARK: - Prune
+            // MARK: - Prune
 
             case let .prune(nextGen):
                 return try handlePrune(
@@ -131,7 +130,7 @@ public struct ValueAndChoiceTreeInterpreter<FinalOutput>: IteratorProtocol, Sequ
                     runContinuation: runContinuation,
                 )
 
-                    // MARK: - Pick
+            // MARK: - Pick
 
             case let .pick(choices):
                 return try handlePick(
@@ -141,7 +140,7 @@ public struct ValueAndChoiceTreeInterpreter<FinalOutput>: IteratorProtocol, Sequ
                     runContinuation: runContinuation,
                 )
 
-                    // MARK: - Choosebits
+            // MARK: - Choosebits
 
             case let .chooseBits(min, max, tag, _):
                 return try handleChooseBits(
@@ -152,7 +151,7 @@ public struct ValueAndChoiceTreeInterpreter<FinalOutput>: IteratorProtocol, Sequ
                     runContinuation: runContinuation,
                 )
 
-                    // MARK: - Sequence
+            // MARK: - Sequence
 
             case let .sequence(lengthGen, elementGen):
                 return try handleSequence(
@@ -163,7 +162,7 @@ public struct ValueAndChoiceTreeInterpreter<FinalOutput>: IteratorProtocol, Sequ
                     runContinuation: runContinuation,
                 )
 
-                    // MARK: - Zip
+            // MARK: - Zip
 
             case let .zip(generators):
                 return try handleZip(
@@ -173,19 +172,19 @@ public struct ValueAndChoiceTreeInterpreter<FinalOutput>: IteratorProtocol, Sequ
                     runContinuation: runContinuation,
                 )
 
-                    // MARK: - Just
+            // MARK: - Just
 
             case let .just(value):
                 return try runContinuation(value, .just("\(value)"))
 
-                    // MARK: - GetSize
+            // MARK: - GetSize
 
             case .getSize:
                 let size = context.sizeOverride ?? logarithmicallyScaledSize(context.maxRuns, context.runs)
                 context.sizeOverride = nil // getSize consumes the `sizeOverride`
                 return try runContinuation(size, .getSize(size))
 
-                    // MARK: - Resize
+            // MARK: - Resize
 
             case let .resize(newSize, gen):
                 return try handleResize(
@@ -196,7 +195,7 @@ public struct ValueAndChoiceTreeInterpreter<FinalOutput>: IteratorProtocol, Sequ
                     runContinuation: runContinuation,
                 )
 
-                    // MARK: - Filter
+            // MARK: - Filter
 
             case let .filter(gen, _, predicate):
                 // Optimise the `gen` with CGS here and execute it.

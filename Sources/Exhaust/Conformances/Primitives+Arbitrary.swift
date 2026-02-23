@@ -122,7 +122,7 @@ extension Int64: Arbitrary {
 extension Double: Arbitrary {
     public static var arbitrary: ReflectiveGenerator<Self> {
         Gen.getSize().bind { size in
-            // TODO: use pow() to scale range
+            // TODO: use pow() to scale range?
             let boundary = size == UInt64.max ? Double.greatestFiniteMagnitude : Double(size)
             return Gen.chooseDerived(in: -boundary ... boundary)
         }
@@ -175,7 +175,7 @@ extension Character: Arbitrary {
 extension String: Arbitrary {
     public static var arbitrary: ReflectiveGenerator<String> {
         Gen.arrayOf(Character.arbitrary)
-            .map { String($0) }
+            .mapped(forward: { String($0) }, backward: { Array($0) })
     }
 
     public static var arbitraryAscii: ReflectiveGenerator<String> {

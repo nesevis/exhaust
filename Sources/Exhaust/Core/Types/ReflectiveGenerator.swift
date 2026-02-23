@@ -252,7 +252,7 @@ public extension ReflectiveGenerator where Operation == ReflectiveOperation {
     // - Parameter transform: Function to convert operations to the new operation type
     // - Returns: An equivalent generator with transformed operation type
     // - Note: Marked private due to performance concerns and specialized use cases
-    #warning("This has performance overhead, use with caution")
+    #warning("Not currently used anywhere. Possibly for CGS adaptation? Computationally expensive!")
     func mapOperation<NewOperation>(_ transform: @escaping (Operation) -> NewOperation) -> FreerMonad<NewOperation, Value> {
         switch self {
         case let .pure(value):

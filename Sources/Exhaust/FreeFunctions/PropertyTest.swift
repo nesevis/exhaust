@@ -6,21 +6,21 @@
 //
 
 enum PropertyTest {
+    @discardableResult
     static func test<Output>(
         _ gen: ReflectiveGenerator<Output>,
         maxIterations: UInt64 = 100,
         seed: UInt64? = nil,
-        property: @escaping (Output) -> Bool,
-    ) throws {
+        property: (Output) -> Bool,
+    ) throws -> Output? {
         var iterations = 0
-        var generator = ValueInterpreter(gen, seed: seed, maxRuns: maxIterations)
+        var generator = ValueAndChoiceTreeInterpreter(gen, seed: seed, maxRuns: maxIterations)
         var passFails = Dictionary([(true, [ChoiceTree?]()), (false, [ChoiceTree?]())], uniquingKeysWith: { $1 })
 
-        while let next = generator.next() {
+        while let (next, tree) = generator.next() {
             iterations += 1
             let passed = property(next)
-            let reflection = try Interpreters.reflect(gen, with: next)
-            passFails[passed]?.append(reflection)
+            passFails[passed, default: []].append(tree)
             if passed == false {
                 ExhaustLog.error(
                     category: .propertyTest,
@@ -35,13 +35,28 @@ enum PropertyTest {
                     event: "counterexample",
                     "\(next)",
                 )
-                ExhaustLog.notice(
-                    category: .propertyTest,
-                    event: "reflected_blueprint",
-                    reflection?.debugDescription ?? "nil",
-                )
-                // TODO: Add seed and size
-                return
+
+                let successfulTraces = passFails[true]?.compactMap { $0 }.map { ChoiceSequence($0) } ?? []
+                if let (shrunkSequence, shrunkValue) = try Interpreters.reduce(
+                    gen: gen,
+                    tree: tree,
+                    config: .fast,
+//                    successfulTraces: successfulTraces,
+                    property: property
+                ) {
+                    ExhaustLog.notice(
+                        category: .propertyTest,
+                        event: "shrunk_counterexample",
+                        "\(shrunkValue)"
+                    )
+                    ExhaustLog.notice(
+                        category: .propertyTest,
+                        event: "shrunk_blueprint",
+                        "\(shrunkSequence.shortString)"
+                    )
+                    return shrunkValue
+                }
+                return nil
             }
         }
         ExhaustLog.notice(
@@ -51,5 +66,6 @@ enum PropertyTest {
                 "iterations": "\(maxIterations)",
             ],
         )
+        return nil
     }
 }

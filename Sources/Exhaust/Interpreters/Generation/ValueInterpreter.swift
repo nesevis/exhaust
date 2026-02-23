@@ -299,6 +299,7 @@ public struct ValueInterpreter<Element>: IteratorProtocol, Sequence {
     }
 
     // MARK: - Quickcheck logarithmic scaling of test cases
+    // FIXME: Adopt Hedgehog like range type control and oscillation
 
     private static func logarithmicallyScaledSize(_ maxSize: UInt64, _ successfulTests: UInt64) -> UInt64 {
         let n = Double(successfulTests)

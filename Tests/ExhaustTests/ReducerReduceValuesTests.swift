@@ -267,4 +267,40 @@ struct ReducerReduceValuesTests {
         // p <= left, p <= right, and left < right  ==>  (0, 0, 1)
         #expect(result.1 == (0, 0, 1))
     }
+    
+    //        ExhaustLog.setConfiguration(.init(isEnabled: true, minimumLevel: .info, categoryMinimumLevels: [.reducer: .debug], format: .human))
+    
+    @Test("Non-reflectable generator shrinks correctly")
+    func nonReflectableGeneratorShrinksCorrectly() throws {
+        let stringGen = Gen.chooseCharacter()
+            .proliferate(with: 0...20)
+            // Reversible, but only accidentally ([Character] is more or less equal to String)
+            .map { String($0) }
+        
+        let gen = Gen.zip(stringGen, stringGen, stringGen)
+            // Concatenating; irreversible
+            .map { $0 + $1 + $2 }
+        
+        let bla = try PropertyTest.test(.double(in: 1...10)) { int in
+            int == 1.0
+        }
+        
+//        let genny = PropertyTest.generate(Int.arbitrary) { n in
+//            true
+//        }
+        // https://hedgehogqa.github.io/fsharp-hedgehog/articles/ranges.html?tabs=fsharp
+        let interpreter = Array(ValueInterpreter(Int.arbitrary))
+        
+        let counterExample = try PropertyTest.test(gen) { str in
+            str.contains("@") == false
+        }
+        
+        #expect(counterExample == "@")
+    }
+}
+
+extension ReflectiveGenerator where Value == String {
+    static var name: ReflectiveGenerator<String> {
+        String.arbitrary
+    }
 }
