@@ -182,6 +182,34 @@ public extension Gen {
             )
     }
 
+    /// Shuffles the output of an array generator into a random permutation.
+    ///
+    /// Uses a sort-key approach: generates one random `UInt64` per element, then
+    /// sorts the array by those keys. This produces a uniform permutation and
+    /// shrinks cleanly toward the original generation order (identity permutation)
+    /// as the reducer drives sort keys toward zero. Identical keys preserve
+    /// relative order (stable sort), so partial shrinking is well-behaved.
+    ///
+    /// - Parameter gen: An array generator whose output should be shuffled
+    /// - Returns: A generator that produces a randomly permuted array
+    @inlinable
+    static func shuffle<Element, C: Collection>(
+        _ gen: ReflectiveGenerator<C>,
+    ) -> ReflectiveGenerator<[Element]> where C.Element == Element {
+        gen.bind { array in
+            guard array.count > 1 else { return .pure(Array(array)) }
+            return Gen.arrayOf(
+                Gen.choose(in: UInt64.min ... UInt64.max),
+                exactly: UInt64(array.count)
+            )
+            .map { keys in
+                Swift.zip(array, keys)
+                    .sorted { $0.1 < $1.1 }
+                    .map(\.0)
+            }
+        }
+    }
+
     /// Creates an array generator whose length is controlled by the current size parameter.
     ///
     /// This is a convenience method that combines `getSize` with `arrayOf` to create
@@ -243,6 +271,24 @@ public extension Gen {
                     return (subset.count, startPos)
                 },
             )
+        }
+    }
+
+    /// Creates a generator for a contiguous subrange of a generated collection.
+    ///
+    /// Composes the input generator with `subset(of:)` via `bind`, producing
+    /// the collection's `SubSequence` type. Shrinking comes for free: `subset(of:)`
+    /// already shrinks toward shorter subranges and earlier start positions, and
+    /// the inner generator shrinks its elements independently.
+    ///
+    /// - Parameter gen: A generator that produces a collection
+    /// - Returns: A generator that produces a contiguous subrange of the generated collection
+    @inlinable
+    static func sub<C: Collection>(
+        _ gen: ReflectiveGenerator<C>
+    ) -> ReflectiveGenerator<C.SubSequence> {
+        gen.bind { collection in
+            subset(of: collection)
         }
     }
 
