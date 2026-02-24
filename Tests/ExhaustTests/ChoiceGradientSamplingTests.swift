@@ -363,11 +363,11 @@ struct ChoiceGradientSamplingTests {
                 "Adapted rate (\(adaptedRate)) should exceed naive rate (\(naiveRate))")
     }
 
-    @Test("BST: 1-minute benchmark — CGS vs rejection sampling (paper comparison)")
-    func bstOneMinuteBenchmark() throws {
+    @Test("BST: 10 second benchmark — CGS vs rejection sampling (paper comparison)")
+    func bstTenSecondBenchmark() throws {
         let naive = BST.arbitrary
         let isValidBST: (BST) -> Bool = { $0.height >= 1 && $0.isValidBST() }
-        let duration: TimeInterval = 0.5
+        let duration: TimeInterval = 10
 
         // --- Rejection sampling (generate naively, keep only valid) ---
         var rejectionIterator = ValueInterpreter(naive, seed: 42, maxRuns: .max)
