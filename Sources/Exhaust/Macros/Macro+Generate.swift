@@ -25,13 +25,13 @@
 /// let personGen = #gen(nameGen, ageGen) { name, age in
 ///     Person(name: name, age: age)
 /// }
-/// // Expands to: Gen._mirrorMappedZip(nameGen, ageGen, labels: ["name", "age"], forward: { ... })
+/// // Expands to: Gen._macroZip(nameGen, ageGen, labels: ["name", "age"], forward: { ... })
 /// ```
 ///
 /// ## Shorthand Parameters
 /// ```swift
 /// let personGen = #gen(nameGen, ageGen) { Person(name: $0, age: $1) }
-/// // Expands to: Gen._mirrorMappedZip(nameGen, ageGen, labels: ["name", "age"], forward: { ... })
+/// // Expands to: Gen._macroZip(nameGen, ageGen, labels: ["name", "age"], forward: { ... })
 /// ```
 @freestanding(expression)
 public macro gen<each T, R>(

@@ -5,7 +5,7 @@ import Testing
 @testable import ExhaustMacros
 
 private let testMacros: [String: any Macro.Type] = [
-    "generate": GenerateMacro.self,
+    "gen": GenerateMacro.self,
 ]
 
 @Suite("GenerateMacro expansion tests")
@@ -27,7 +27,7 @@ struct GenerateMacroTests {
         )
     }
 
-    @Test("Two generators with struct init produces _mirrorMappedZip")
+    @Test("Two generators with struct init produces _macroZip")
     func twoGeneratorsBidirectional() {
         assertMacroExpansion(
             """
@@ -36,7 +36,7 @@ struct GenerateMacroTests {
             }
             """,
             expandedSource: """
-            Gen._mirrorMappedZip(nameGen, ageGen, labels: ["name", "age"], forward: { name, age in
+            Gen._macroZip(nameGen, ageGen, labels: ["name", "age"], forward: { name, age in
                 Person(name: name, age: age)
             })
             """,
@@ -53,7 +53,7 @@ struct GenerateMacroTests {
             }
             """,
             expandedSource: """
-            Gen._mirrorMappedZip(ageGen, nameGen, labels: ["age", "name"], forward: { age, name in
+            Gen._macroZip(ageGen, nameGen, labels: ["age", "name"], forward: { age, name in
                 Person(name: name, age: age)
             })
             """,
@@ -94,7 +94,7 @@ struct GenerateMacroTests {
             #gen(nameGen, ageGen) { Person(name: $0, age: $1) }
             """,
             expandedSource: """
-            Gen._mirrorMappedZip(nameGen, ageGen, labels: ["name", "age"], forward: { Person(name: $0, age: $1) })
+            Gen._macroZip(nameGen, ageGen, labels: ["name", "age"], forward: { Person(name: $0, age: $1) })
             """,
             macros: testMacros
         )
@@ -107,7 +107,7 @@ struct GenerateMacroTests {
             #gen(ageGen, nameGen) { Person(name: $1, age: $0) }
             """,
             expandedSource: """
-            Gen._mirrorMappedZip(ageGen, nameGen, labels: ["age", "name"], forward: { Person(name: $1, age: $0) })
+            Gen._macroZip(ageGen, nameGen, labels: ["age", "name"], forward: { Person(name: $1, age: $0) })
             """,
             macros: testMacros
         )
@@ -184,7 +184,7 @@ struct GenerateMacroTests {
             }
             """,
             expandedSource: """
-            Gen._mirrorMappedZip(nameGen, ageGen, emailGen, labels: ["name", "age", "email"], forward: { name, age, email in
+            Gen._macroZip(nameGen, ageGen, emailGen, labels: ["name", "age", "email"], forward: { name, age, email in
                 User(name: name, age: age, email: email)
             })
             """,

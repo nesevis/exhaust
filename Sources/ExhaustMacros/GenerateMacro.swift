@@ -53,7 +53,7 @@ public struct GenerateMacro: ExpressionMacro {
     /// Builds the expansion for a bidirectional mapping using Mirror-based backward extraction.
     ///
     /// Single generator: uses `Gen.contramap` with `_mirrorExtract` applied to a `.map`.
-    /// Multi generator: uses `Gen._mirrorMappedZip` which combines zip + Mirror backward
+    /// Multi generator: uses `Gen._macroZip` which combines zip + Mirror backward
     /// internally, avoiding the tuple type mismatch that `zip().mapped()` would cause.
     private static func buildBidirectionalExpansion(
         generatorArgs: [LabeledExprListSyntax.Element],
@@ -73,7 +73,7 @@ public struct GenerateMacro: ExpressionMacro {
             let backwardLabels = buildBackwardLabels(result: result)
             let labelsArray = backwardLabels.map { "\"\($0)\"" }.joined(separator: ", ")
 
-            return "Gen._mirrorMappedZip(\(raw: zipArgs), labels: [\(raw: labelsArray)], forward: \(raw: closureText))"
+            return "Gen._macroZip(\(raw: zipArgs), labels: [\(raw: labelsArray)], forward: \(raw: closureText))"
         }
     }
 

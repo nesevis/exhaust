@@ -17,6 +17,7 @@
 ///
 /// - Returns: The shrunk counterexample if the property fails, or `nil` if all iterations pass.
 @freestanding(expression)
+@discardableResult
 public macro exhaust<T>(
     _ gen: ReflectiveGenerator<T>,
     _ settings: ExhaustSettings...,

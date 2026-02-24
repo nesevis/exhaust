@@ -1,9 +1,28 @@
-/// Runtime support for the `#gen` macro's multi-generator backward mapping.
-///
-/// Combines `Gen.zip` with a Mirror-based backward extraction, bypassing the
-/// tuple-typed backward that `zip().mapped()` would require.
 public extension Gen {
-    static func _mirrorMappedZip<each T, NewOutput>(
+    /// Zips multiple generators with a forward transform and Mirror-based backward extraction.
+    ///
+    /// This is **macro infrastructure** — it exists solely as an expansion target for the `#gen` macro when multiple generators are combined with a labeled initializer call.
+    /// It must be `public` because macro expansions emit code at the call site (in the
+    /// user's module), but it is not intended for direct use.
+    ///
+    /// ## Why this exists
+    ///
+    /// `Gen.zip(a, b).mapped(forward:backward:)` requires the `backward` closure to
+    /// return the zip's tuple type (e.g. `(String, Int)`). The `#gen` macro doesn't have
+    /// type information — it only knows argument labels — so it can't synthesize typed
+    /// casts for each tuple element. This function sidesteps the problem by operating
+    /// entirely at the `[Any]` level: the backward pass uses `Mirror` to extract child
+    /// values by label into `[Any]`, and the forward pass reconstructs the typed tuple
+    /// via parameter pack iteration over the `[Any]` array.
+    ///
+    /// - Parameters:
+    ///   - generators: The generators to zip, one per struct/class init parameter.
+    ///   - labels: Argument labels from the initializer call, ordered to match generator
+    ///     position. Used by Mirror to extract the corresponding property values in the
+    ///     backward pass.
+    ///   - forward: The user's transform closure (e.g. `{ name, age in Person(name: name, age: age) }`).
+    /// - Returns: A bidirectional generator that can be reflected backward via Mirror.
+    static func _macroZip<each T, NewOutput>(
         _ generators: repeat ReflectiveGenerator<each T>,
         labels: [String],
         forward: @escaping ((repeat each T)) -> NewOutput

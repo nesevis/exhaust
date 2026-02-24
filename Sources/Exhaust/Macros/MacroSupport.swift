@@ -2,8 +2,7 @@
 ///
 /// The `__` prefix follows Swift Testing's convention (`Testing.__check`, `Testing.__Expression`)
 /// to signal that this is macro infrastructure, not public API.
-// swiftlint:disable:next type_name
-public enum __ExhaustRuntime {
+public enum __ExhaustRuntime { // swiftlint:disable:this type_name
     /// Runs a property test with the given generator, settings, and property.
     /// This is the runtime target of the `#exhaust` macro expansion.
     ///
