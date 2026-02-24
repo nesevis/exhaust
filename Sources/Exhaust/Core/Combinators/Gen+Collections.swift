@@ -121,6 +121,67 @@ public extension Gen {
         )
     }
 
+    /// Creates a generator for a set of unique random values.
+    ///
+    /// This implementation generates an array of elements, filters out any with duplicates,
+    /// and converts to a set. The filter operation ensures deterministic reproducibility
+    /// through seeds while leveraging CGS optimization to minimize wasted generation cycles.
+    ///
+    /// - Parameters:
+    ///   - elementGenerator: A generator for the elements of the set (must be Hashable)
+    ///   - length: Optional generator for the set size. Defaults to size-based length
+    /// - Returns: A generator that produces a set of unique elements
+    @inlinable
+    static func setOf<Element: Hashable>(
+        _ elementGenerator: ReflectiveGenerator<Element>,
+        _ length: ReflectiveGenerator<UInt64>? = nil,
+    ) -> ReflectiveGenerator<Set<Element>> {
+        arrayOf(elementGenerator, length)
+            .filter { Set($0).count == $0.count }
+            .mapped(
+                forward: { Set($0) },
+                backward: { Array($0) }
+            )
+    }
+
+    /// Creates a generator for a set with size constrained to a specific range.
+    ///
+    /// - Parameters:
+    ///   - elementGenerator: The generator for set elements (must be Hashable)
+    ///   - range: The allowed range for set size
+    /// - Returns: A generator that produces sets with size in the specified range
+    @inlinable
+    static func setOf<Element: Hashable>(
+        _ elementGenerator: ReflectiveGenerator<Element>,
+        within range: ClosedRange<UInt64>,
+    ) -> ReflectiveGenerator<Set<Element>> {
+        arrayOf(elementGenerator, within: range)
+            .filter { Set($0).count == $0.count }
+            .mapped(
+                forward: { Set($0) },
+                backward: { Array($0) }
+            )
+    }
+
+    /// Creates a generator for a set with exactly the specified number of elements.
+    ///
+    /// - Parameters:
+    ///   - elementGenerator: The generator for set elements (must be Hashable)
+    ///   - exactly: The exact number of elements the set should have
+    /// - Returns: A generator that produces sets of the specified size
+    @inlinable
+    static func setOf<Element: Hashable>(
+        _ elementGenerator: ReflectiveGenerator<Element>,
+        exactly: UInt64,
+    ) -> ReflectiveGenerator<Set<Element>> {
+        arrayOf(elementGenerator, exactly: exactly)
+            .filter { Set($0).count == $0.count }
+            .mapped(
+                forward: { Set($0) },
+                backward: { Array($0) }
+            )
+    }
+
     /// Creates an array generator whose length is controlled by the current size parameter.
     ///
     /// This is a convenience method that combines `getSize` with `arrayOf` to create

@@ -32,10 +32,39 @@ public extension ReflectiveGenerator {
         Gen.arrayOf(gen, exactly: length)
     }
 
+    static func set<Element: Hashable>(_ gen: ReflectiveGenerator<Element>) -> ReflectiveGenerator<Set<Element>> where Value == Set<Element> {
+        Gen.setOf(gen)
+    }
+
+    static func set<Element: Hashable>(
+        _ gen: ReflectiveGenerator<Element>,
+        count: ClosedRange<Int>
+    ) -> ReflectiveGenerator<Set<Element>> where Value == Set<Element> {
+        precondition(count.lowerBound >= 0, "Count must be non-negative")
+        return Gen.setOf(gen, within: UInt64(count.lowerBound)...UInt64(count.upperBound))
+    }
+
+    static func set<Element: Hashable>(
+        _ gen: ReflectiveGenerator<Element>,
+        count: UInt64
+    ) -> ReflectiveGenerator<Set<Element>> where Value == Set<Element> {
+        Gen.setOf(gen, exactly: count)
+    }
+
     static func dictionary<Key: Hashable, DictValue>(
         _ keyGen: ReflectiveGenerator<Key>,
         _ valueGen: ReflectiveGenerator<DictValue>
     ) -> ReflectiveGenerator<[Key: DictValue]> where Value == [Key: DictValue] {
         Gen.dictionaryOf(keyGen, valueGen)
+    }
+    
+    static func element<C: Collection>(_ collection: C) -> ReflectiveGenerator<C.Element> where C.Index == Int {
+        Gen.choose(from: collection)
+    }
+}
+
+public extension ReflectiveGenerator where Value: CaseIterable, Value.AllCases.Index == Int {
+    static func cases(_ type: Value.Type) -> ReflectiveGenerator<Value> {
+        Gen.choose(from: type.allCases)
     }
 }

@@ -115,6 +115,36 @@ public extension Gen {
             isRangeExplicit: isRangeExplicit,
         )
     }
+    
+    /// Chooses a random element from a collection by generating a random index.
+    @inlinable
+    static func choose<C: Collection>(
+        from collection: C
+    ) -> ReflectiveGenerator<C.Element> where C.Element: Equatable, C.Index == Int {
+        // Use Gen.contramap directly rather than .mapped because the backward
+        // closure throws and .mapped propagates that via rethrows (from FreerMonad.bind),
+        // which would force this function to be marked throws — even though the throw
+        // only happens at reflection time, never during construction.
+        Gen.contramap(
+            { (element: C.Element) throws -> Int in
+                guard let index = collection.firstIndex(of: element) else {
+                    throw Interpreters.ReflectionError.couldNotReflectOnSequenceElement("Collection does not contain \(element)")
+                }
+                return index
+            },
+            Gen.choose(in: collection.startIndex ... collection.endIndex.advanced(by: -1))
+                .map { collection[$0] }
+        )
+    }
+    
+    /// Chooses a random element from a collection by generating a random index.
+    @inlinable
+    static func choose<C: Collection>(
+        from collection: C
+    ) -> ReflectiveGenerator<C.Element> where C.Index == Int {
+        Gen.choose(in: collection.startIndex ... collection.endIndex.advanced(by: -1))
+            .map { collection[$0] }
+    }
 
     /// Internal helper for choose ranges derived from runtime context (e.g. `getSize`).
     ///
