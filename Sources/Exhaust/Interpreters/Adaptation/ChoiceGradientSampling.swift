@@ -230,6 +230,7 @@ enum ChoiceGradientSampling {
             )
 
             adaptedChoices.append(ReflectiveOperation.PickTuple(
+                siteID: choice.siteID,
                 id: choice.id,
                 weight: successCount,
                 generator: adaptedInner
@@ -239,7 +240,7 @@ enum ChoiceGradientSampling {
         // All-zero safety: restore with weight 1 to prevent draw returning nil
         if adaptedChoices.allSatisfy({ $0.weight == 0 }) {
             adaptedChoices = ContiguousArray(adaptedChoices.map {
-                ReflectiveOperation.PickTuple(id: $0.id, weight: 1, generator: $0.generator)
+                ReflectiveOperation.PickTuple(siteID: $0.siteID, id: $0.id, weight: 1, generator: $0.generator)
             })
         }
 
@@ -281,6 +282,7 @@ enum ChoiceGradientSampling {
                 continuation: { .pure($0) }
             )
             subrangeChoices.append(ReflectiveOperation.PickTuple(
+                siteID: context.rng.next(),
                 id: context.rng.next(),
                 weight: 1,
                 generator: subGen
@@ -344,6 +346,7 @@ enum ChoiceGradientSampling {
                 )
 
                 subrangeChoices.append(ReflectiveOperation.PickTuple(
+                    siteID: context.rng.next(),
                     id: context.rng.next(),
                     weight: 1,
                     generator: subSeqGen
@@ -399,6 +402,7 @@ enum ChoiceGradientSampling {
                 )
 
                 subrangeChoices.append(ReflectiveOperation.PickTuple(
+                    siteID: context.rng.next(),
                     id: context.rng.next(),
                     weight: 1,
                     generator: subSeqGen
@@ -465,6 +469,7 @@ enum ChoiceGradientSampling {
                 continuation: { .pure($0) }
             )
             subrangeChoices.append(ReflectiveOperation.PickTuple(
+                siteID: context.rng.next(),
                 id: context.rng.next(),
                 weight: 1,
                 generator: subGen
@@ -667,6 +672,7 @@ enum ChoiceGradientSampling {
             for (i, choice) in choices.enumerated() {
                 let scaled = max(1, UInt64((raw[i] / total) * 10000))
                 smoothed.append(ReflectiveOperation.PickTuple(
+                    siteID: choice.siteID,
                     id: choice.id,
                     weight: scaled,
                     generator: smoothGenerator(choice.generator, epsilon: epsilon, temperature: temperature)
@@ -711,6 +717,418 @@ enum ChoiceGradientSampling {
         case let .classify(gen, fingerprint, classifiers):
             return .classify(
                 gen: smoothGenerator(gen, epsilon: epsilon, temperature: temperature),
+                fingerprint: fingerprint,
+                classifiers: classifiers
+            )
+
+        case .chooseBits, .just, .getSize:
+            return op
+        }
+    }
+
+    // MARK: - Pick Site Profile
+
+    /// Statistics about a single pick site in a generator tree.
+    public struct SiteStats: CustomStringConvertible {
+        public let siteID: UInt64
+        public let depth: Int
+        public let branchCount: Int
+        public let weights: [UInt64]
+        /// Shannon entropy in bits, computed from the weight distribution.
+        public let entropy: Double
+        /// Maximum possible entropy: log₂(branchCount).
+        public let maxEntropy: Double
+        /// Ratio of actual entropy to maximum (0 = bottleneck, 1 = uniform).
+        public let entropyRatio: Double
+
+        // Empirical fields (nil when only static profiling is used)
+        public let selectionCounts: [UInt64: Int]?
+        public let validityCounts: [UInt64: (selected: Int, valid: Int)]?
+
+        public var description: String {
+            let empirical: String
+            if let validityCounts {
+                let pairs = validityCounts.sorted(by: { $0.key < $1.key })
+                    .map { "id \($0.key): \($0.value.valid)/\($0.value.selected)" }
+                    .joined(separator: ", ")
+                empirical = " validity=[\(pairs)]"
+            } else {
+                empirical = ""
+            }
+            return "SiteStats(siteID: \(siteID), depth: \(depth), branches: \(branchCount), " +
+                "entropy: \(String(format: "%.2f", entropy))/\(String(format: "%.2f", maxEntropy)), " +
+                "ratio: \(String(format: "%.3f", entropyRatio))\(empirical))"
+        }
+    }
+
+    /// A profile of all pick sites in a generator tree.
+    public struct PickSiteProfile: CustomStringConvertible {
+        public let sites: [SiteStats]
+
+        public var description: String {
+            sites.map(\.description).joined(separator: "\n")
+        }
+    }
+
+    // MARK: - Static Profile (Level 2)
+
+    /// Profiles all pick sites in a generator, computing entropy from weights.
+    ///
+    /// This walks the adapted `ReflectiveGenerator` tree and collects statistics
+    /// at each `.pick` site: weight distribution, Shannon entropy, and the
+    /// entropy ratio (how uniform the distribution is).
+    ///
+    /// - Parameter generator: The generator to profile (typically the output of ``adapt``).
+    /// - Returns: A profile containing statistics for every pick site.
+    public static func profile<Output>(
+        _ generator: ReflectiveGenerator<Output>
+    ) -> PickSiteProfile {
+        var sites = [SiteStats]()
+        profileGenerator(generator, depth: 0, sites: &sites)
+        return PickSiteProfile(sites: sites)
+    }
+
+    private static func profileGenerator<Output>(
+        _ gen: ReflectiveGenerator<Output>,
+        depth: Int,
+        sites: inout [SiteStats]
+    ) {
+        switch gen {
+        case .pure:
+            return
+        case let .impure(operation, _):
+            profileOperation(operation, depth: depth, sites: &sites)
+        }
+    }
+
+    private static func profileOperation(
+        _ op: ReflectiveOperation,
+        depth: Int,
+        sites: inout [SiteStats]
+    ) {
+        switch op {
+        case let .pick(choices):
+            guard let firstChoice = choices.first else { return }
+            let siteID = firstChoice.siteID
+            let weights = choices.map(\.weight)
+            let total = Double(weights.reduce(0, +))
+            let probs = total > 0 ? weights.map { Double($0) / total } : weights.map { _ in 1.0 / Double(weights.count) }
+            let entropy = -probs.filter { $0 > 0 }.reduce(0.0) { $0 + $1 * log2($1) }
+            let maxEntropy = log2(Double(choices.count))
+            let entropyRatio = maxEntropy > 0 ? entropy / maxEntropy : 1.0
+
+            sites.append(SiteStats(
+                siteID: siteID,
+                depth: depth,
+                branchCount: choices.count,
+                weights: weights,
+                entropy: entropy,
+                maxEntropy: maxEntropy,
+                entropyRatio: entropyRatio,
+                selectionCounts: nil,
+                validityCounts: nil
+            ))
+
+            for choice in choices {
+                profileGenerator(choice.generator, depth: depth + 1, sites: &sites)
+            }
+
+        case let .zip(generators):
+            for gen in generators {
+                profileGenerator(gen, depth: depth, sites: &sites)
+            }
+
+        case let .sequence(length, gen):
+            profileGenerator(length, depth: depth, sites: &sites)
+            profileGenerator(gen, depth: depth, sites: &sites)
+
+        case let .contramap(_, next):
+            profileGenerator(next, depth: depth, sites: &sites)
+
+        case let .prune(next):
+            profileGenerator(next, depth: depth, sites: &sites)
+
+        case let .resize(_, next):
+            profileGenerator(next, depth: depth, sites: &sites)
+
+        case let .filter(gen, _, _):
+            profileGenerator(gen, depth: depth, sites: &sites)
+
+        case let .classify(gen, _, _):
+            profileGenerator(gen, depth: depth, sites: &sites)
+
+        case .chooseBits, .just, .getSize:
+            return
+        }
+    }
+
+    // MARK: - Empirical Profile (Level 3)
+
+    /// Profiles a generator empirically by generating samples and testing them.
+    ///
+    /// This combines static weight analysis (Level 2) with empirical data from
+    /// actually running the generator: which branches are selected and which
+    /// selections lead to valid outputs.
+    ///
+    /// - Parameters:
+    ///   - generator: The generator to profile.
+    ///   - predicate: The validity predicate.
+    ///   - samples: Number of values to generate for empirical data.
+    ///   - seed: Optional seed for reproducibility.
+    /// - Returns: A profile with both static entropy and empirical validity data.
+    public static func profile<Output>(
+        _ generator: ReflectiveGenerator<Output>,
+        predicate: @escaping (Output) -> Bool,
+        samples: UInt64 = 1000,
+        seed: UInt64? = nil
+    ) -> PickSiteProfile {
+        // First, get the static profile
+        let staticProfile = profile(generator)
+
+        // Generate samples with choice trees
+        var iterator = ValueAndChoiceTreeInterpreter(
+            generator,
+            seed: seed,
+            maxRuns: samples
+        )
+
+        // Accumulate per-siteID empirical data
+        var selectionCounts = [UInt64: [UInt64: Int]]()
+        var validityCounts = [UInt64: [UInt64: (selected: Int, valid: Int)]]()
+
+        while let (value, tree) = iterator.next() {
+            let isValid = predicate(value)
+            collectEmpiricalData(
+                from: tree,
+                isValid: isValid,
+                selectionCounts: &selectionCounts,
+                validityCounts: &validityCounts
+            )
+        }
+
+        // Merge empirical data with static profile
+        let mergedSites = staticProfile.sites.map { site in
+            SiteStats(
+                siteID: site.siteID,
+                depth: site.depth,
+                branchCount: site.branchCount,
+                weights: site.weights,
+                entropy: site.entropy,
+                maxEntropy: site.maxEntropy,
+                entropyRatio: site.entropyRatio,
+                selectionCounts: selectionCounts[site.siteID],
+                validityCounts: validityCounts[site.siteID]
+            )
+        }
+
+        return PickSiteProfile(sites: mergedSites)
+    }
+
+    private static func collectEmpiricalData(
+        from tree: ChoiceTree,
+        isValid: Bool,
+        selectionCounts: inout [UInt64: [UInt64: Int]],
+        validityCounts: inout [UInt64: [UInt64: (selected: Int, valid: Int)]]
+    ) {
+        switch tree {
+        case let .selected(inner):
+            collectEmpiricalData(
+                from: inner,
+                isValid: isValid,
+                selectionCounts: &selectionCounts,
+                validityCounts: &validityCounts
+            )
+
+        case let .branch(siteID, _, id, _, choice):
+            selectionCounts[siteID, default: [:]][id, default: 0] += 1
+            var entry = validityCounts[siteID, default: [:]][id, default: (selected: 0, valid: 0)]
+            entry.selected += 1
+            if isValid { entry.valid += 1 }
+            validityCounts[siteID, default: [:]][id] = entry
+
+            collectEmpiricalData(
+                from: choice,
+                isValid: isValid,
+                selectionCounts: &selectionCounts,
+                validityCounts: &validityCounts
+            )
+
+        case let .group(children):
+            for child in children {
+                collectEmpiricalData(
+                    from: child,
+                    isValid: isValid,
+                    selectionCounts: &selectionCounts,
+                    validityCounts: &validityCounts
+                )
+            }
+
+        case let .sequence(_, elements, _):
+            for element in elements {
+                collectEmpiricalData(
+                    from: element,
+                    isValid: isValid,
+                    selectionCounts: &selectionCounts,
+                    validityCounts: &validityCounts
+                )
+            }
+
+        case let .resize(_, choices):
+            for choice in choices {
+                collectEmpiricalData(
+                    from: choice,
+                    isValid: isValid,
+                    selectionCounts: &selectionCounts,
+                    validityCounts: &validityCounts
+                )
+            }
+
+        case .choice, .just, .getSize:
+            return
+        }
+    }
+
+    // MARK: - Adaptive Smoothing
+
+    /// Applies per-site temperature scaling based on entropy analysis.
+    ///
+    /// Unlike ``smooth`` which applies the same temperature everywhere, this
+    /// function computes each pick site's entropy ratio and derives a
+    /// site-specific temperature:
+    ///
+    /// - Bottleneck sites (low entropy ratio) get high temperature → more exploration
+    /// - Well-distributed sites (high entropy ratio) get low temperature → preserve adapted weights
+    ///
+    /// This avoids sacrificing validity at well-distributed sites while still
+    /// recovering dead branches at bottleneck sites.
+    ///
+    /// - Parameters:
+    ///   - generator: An adapted generator (typically the output of ``adapt``).
+    ///   - epsilon: Laplace smoothing constant. Default: 1.0
+    ///   - baseTemperature: Temperature for well-distributed sites. Default: 1.0
+    ///   - maxTemperature: Temperature for bottleneck sites. Default: 4.0
+    /// - Returns: A generator with adaptively smoothed pick weights.
+    public static func smoothAdaptively<Output>(
+        _ generator: ReflectiveGenerator<Output>,
+        epsilon: Double = 1.0,
+        baseTemperature: Double = 1.0,
+        maxTemperature: Double = 4.0
+    ) -> ReflectiveGenerator<Output> {
+        smoothAdaptiveGenerator(
+            generator,
+            epsilon: epsilon,
+            baseTemperature: baseTemperature,
+            maxTemperature: maxTemperature
+        )
+    }
+
+    private static func smoothAdaptiveGenerator<Output>(
+        _ gen: ReflectiveGenerator<Output>,
+        epsilon: Double,
+        baseTemperature: Double,
+        maxTemperature: Double
+    ) -> ReflectiveGenerator<Output> {
+        switch gen {
+        case .pure:
+            return gen
+        case let .impure(operation, continuation):
+            let smoothed = smoothAdaptiveOperation(
+                operation,
+                epsilon: epsilon,
+                baseTemperature: baseTemperature,
+                maxTemperature: maxTemperature
+            )
+            return .impure(operation: smoothed, continuation: continuation)
+        }
+    }
+
+    private static func smoothAdaptiveOperation(
+        _ op: ReflectiveOperation,
+        epsilon: Double,
+        baseTemperature: Double,
+        maxTemperature: Double
+    ) -> ReflectiveOperation {
+        switch op {
+        case let .pick(choices):
+            // Compute Shannon entropy to measure how uniform the weight distribution is
+            let totalWeight = choices.reduce(into: UInt64(0)) { $0 += $1.weight }
+            let entropy: Double
+            if totalWeight > 0 {
+                let total = Double(totalWeight)
+                entropy = -choices.reduce(into: 0.0) { sum, choice in
+                    let p = Double(choice.weight) / total
+                    if p > 0 { sum += p * log2(p) }
+                }
+            } else {
+                entropy = log2(Double(choices.count))
+            }
+            let maxEntropy = log2(Double(choices.count))
+            let entropyRatio = maxEntropy > 0 ? entropy / maxEntropy : 1.0
+
+            // Bottleneck sites (low entropy) get high temperature; uniform sites stay cool
+            let siteTemp = baseTemperature + (maxTemperature - baseTemperature) * (1.0 - entropyRatio)
+
+            // Apply Laplace smoothing with site-specific temperature: w' = (w + ε)^(1/T)
+            let raw = choices.map { pow(Double($0.weight) + epsilon, 1.0 / siteTemp) }
+            let rawTotal = raw.reduce(0, +)
+
+            let smoothed = ContiguousArray(choices.enumerated().map { i, choice in
+                ReflectiveOperation.PickTuple(
+                    siteID: choice.siteID,
+                    id: choice.id,
+                    weight: max(1, UInt64(raw[i] / rawTotal * 10000)),
+                    generator: smoothAdaptiveGenerator(
+                        choice.generator,
+                        epsilon: epsilon,
+                        baseTemperature: baseTemperature,
+                        maxTemperature: maxTemperature
+                    )
+                )
+            })
+
+            return .pick(choices: smoothed)
+
+        case let .zip(generators):
+            return .zip(ContiguousArray(generators.map {
+                smoothAdaptiveGenerator(
+                    $0,
+                    epsilon: epsilon,
+                    baseTemperature: baseTemperature,
+                    maxTemperature: maxTemperature
+                )
+            }))
+
+        case let .sequence(length, gen):
+            return .sequence(
+                length: smoothAdaptiveGenerator(length, epsilon: epsilon, baseTemperature: baseTemperature, maxTemperature: maxTemperature),
+                gen: smoothAdaptiveGenerator(gen, epsilon: epsilon, baseTemperature: baseTemperature, maxTemperature: maxTemperature)
+            )
+
+        case let .contramap(transform, next):
+            return .contramap(
+                transform: transform,
+                next: smoothAdaptiveGenerator(next, epsilon: epsilon, baseTemperature: baseTemperature, maxTemperature: maxTemperature)
+            )
+
+        case let .prune(next):
+            return .prune(next: smoothAdaptiveGenerator(next, epsilon: epsilon, baseTemperature: baseTemperature, maxTemperature: maxTemperature))
+
+        case let .resize(newSize, next):
+            return .resize(
+                newSize: newSize,
+                next: smoothAdaptiveGenerator(next, epsilon: epsilon, baseTemperature: baseTemperature, maxTemperature: maxTemperature)
+            )
+
+        case let .filter(gen, fingerprint, predicate):
+            return .filter(
+                gen: smoothAdaptiveGenerator(gen, epsilon: epsilon, baseTemperature: baseTemperature, maxTemperature: maxTemperature),
+                fingerprint: fingerprint,
+                predicate: predicate
+            )
+
+        case let .classify(gen, fingerprint, classifiers):
+            return .classify(
+                gen: smoothAdaptiveGenerator(gen, epsilon: epsilon, baseTemperature: baseTemperature, maxTemperature: maxTemperature),
                 fingerprint: fingerprint,
                 classifiers: classifiers
             )

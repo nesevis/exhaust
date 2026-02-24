@@ -215,6 +215,7 @@ enum SpeculativeAdaptationInterpreter {
             }
 
             choices.append(.init(
+                siteID: branchIDRNG.next(),
                 id: branchIDRNG.next(),
                 weight: 1, // Start with equal weights
                 generator: subrangeGenerator,
@@ -389,6 +390,7 @@ enum SpeculativeAdaptationInterpreter {
             }
 
             lengthRangeChoices.append(.init(
+                siteID: branchIDRNG.next(),
                 id: branchIDRNG.next(),
                 weight: 1, // Start with equal weights
                 generator: lengthRangeGenerator,
@@ -675,6 +677,7 @@ enum SpeculativeAdaptationInterpreter {
             }
 
             choices.append(.init(
+                siteID: branchIDRNG.next(),
                 id: branchIDRNG.next(),
                 weight: 1,
                 generator: zipGenerator,
@@ -766,6 +769,7 @@ enum SpeculativeAdaptationInterpreter {
 
             // Store the adapted choice generator
             adaptedChoices.append(.init(
+                siteID: choice.siteID,
                 id: choice.id,
                 weight: choice.weight,
                 generator: adaptedChoiceGenerator,
@@ -778,6 +782,7 @@ enum SpeculativeAdaptationInterpreter {
             // Use the actual success count as the weight (0 means never select this choice)
             let newWeight = successCount
             return ReflectiveOperation.PickTuple(
+                siteID: choice.siteID,
                 id: choice.id,
                 weight: newWeight,
                 generator: choice.generator,
@@ -790,6 +795,7 @@ enum SpeculativeAdaptationInterpreter {
             // All choices failed - fall back to equal weights to avoid total failure
             ContiguousArray(adaptedChoices.map { choice in
                 ReflectiveOperation.PickTuple(
+                    siteID: choice.siteID,
                     id: choice.id,
                     weight: 1,
                     generator: choice.generator,

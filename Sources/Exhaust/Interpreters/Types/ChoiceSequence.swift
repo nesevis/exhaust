@@ -62,11 +62,11 @@ extension ChoiceSequence {
                 + elements.flatMap(flatten)
                 + [.sequence(false)]
         // Do we only do the selected branch?
-        case let .branch(_, _, _, gen):
+        case let .branch(_, _, _, _, gen):
             return flatten(gen)
         case let .group(array):
             if array.allSatisfy({ $0.isBranch || $0.isSelected }),
-               case let .selected(.branch(_, id, branchIDs, choice)) = array.first(where: \.isSelected),
+               case let .selected(.branch(_, _, id, branchIDs, choice)) = array.first(where: \.isSelected),
                choice.isCharacterChoice == false // Do not add this marker for characters
             {
                 let value = ChoiceSequenceValue.branch(.init(
@@ -103,11 +103,11 @@ extension ChoiceSequence {
             return [.sequence(true)]
                 + elements.flatMap(flattenAll)
                 + [.sequence(false)]
-        case let .branch(_, _, _, gen):
+        case let .branch(_, _, _, _, gen):
             return flattenAll(gen)
         case let .group(array):
             if array.allSatisfy({ $0.isBranch || $0.isSelected }),
-               case let .selected(.branch(_, id, branchIDs, choice)) = array.first(where: \.isSelected),
+               case let .selected(.branch(_, _, id, branchIDs, choice)) = array.first(where: \.isSelected),
                choice.isCharacterChoice == false
             {
                 let value = ChoiceSequenceValue.branch(.init(

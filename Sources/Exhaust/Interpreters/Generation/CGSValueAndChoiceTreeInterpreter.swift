@@ -373,6 +373,7 @@ public struct CGSValueAndChoiceTreeInterpreter<FinalOutput>: IteratorProtocol, S
         weightedChoices.reserveCapacity(choices.count)
         for (i, choice) in choices.enumerated() {
             weightedChoices.append(ReflectiveOperation.PickTuple(
+                siteID: choice.siteID,
                 id: choice.id,
                 weight: allZero ? 1 : fitnesses[i],
                 generator: choice.generator
@@ -416,6 +417,7 @@ public struct CGSValueAndChoiceTreeInterpreter<FinalOutput>: IteratorProtocol, S
                 {
                     value = final.0
                     branch = ChoiceTree.branch(
+                        siteID: choice.siteID,
                         weight: choice.weight,
                         id: choice.id,
                         branchIDs: branchIDs,
@@ -521,6 +523,7 @@ public struct CGSValueAndChoiceTreeInterpreter<FinalOutput>: IteratorProtocol, S
         weightedSubranges.reserveCapacity(subranges.count)
         for (i, subrange) in subranges.enumerated() {
             weightedSubranges.append(ReflectiveOperation.PickTuple(
+                siteID: 0,
                 id: UInt64(i),
                 weight: allZero ? 1 : fitnesses[i],
                 generator: .pure(subrange.lowerBound) // Placeholder — only weight and id matter

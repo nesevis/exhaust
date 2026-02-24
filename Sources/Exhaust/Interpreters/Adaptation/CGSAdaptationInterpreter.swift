@@ -75,6 +75,7 @@ enum CGSAdaptationInterpreter {
                             maxRuns: context.currentSampleCount,
                         )
                         return ReflectiveOperation.PickTuple(
+                            siteID: tuple.siteID,
                             id: tuple.id,
                             weight: UInt64(Array(valueInterpreter).count(where: validityPredicate)),
                             generator: tuple.generator.erase(),
@@ -116,6 +117,7 @@ enum CGSAdaptationInterpreter {
                                 validityPredicate: validityPredicate,
                             )
                             return ReflectiveOperation.PickTuple(
+                                siteID: context.rng.next(),
                                 id: context.rng.next(),
                                 weight: UInt64(1),
                                 generator: recursedGen.erase(),
@@ -249,6 +251,7 @@ enum CGSAdaptationInterpreter {
                             validityPredicate: validityPredicate,
                         )
                         return ReflectiveOperation.PickTuple(
+                            siteID: context.rng.next(),
                             id: context.rng.next(),
                             weight: UInt64(1),
                             generator: recursedGen.erase(),

@@ -297,6 +297,7 @@ public struct ValueAndChoiceTreeInterpreter<FinalOutput>: IteratorProtocol, Sequ
                 {
                     value = final.0
                     branch = ChoiceTree.branch(
+                        siteID: choice.siteID,
                         weight: choice.weight,
                         id: choice.id,
                         branchIDs: branchIDs,
