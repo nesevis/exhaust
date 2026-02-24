@@ -5,6 +5,8 @@
 //  Created by Chris Kolbu on 24/2/2026.
 //
 
+import Foundation
+
 /// Eager adaptation interpreter that transforms a generator's pick structure
 /// using Choice Gradient Sampling (CGS).
 ///
@@ -603,5 +605,118 @@ enum ChoiceGradientSampling {
             operation: .contramap(transform: transform, next: adaptedNext),
             continuation: continuation
         )
+    }
+
+    // MARK: - Weight Smoothing
+
+    /// Applies Laplace smoothing and temperature scaling to pick weights in an adapted generator.
+    ///
+    /// After ``adapt`` bakes success counts into pick weights, deeper branches may receive
+    /// weight 0 because composed predicates have near-zero success rates during sampling.
+    /// This post-processing step recovers dead branches and controls exploration:
+    ///
+    /// 1. **Laplace smoothing (ε)**: Adds ε to every weight before scaling, ensuring
+    ///    branches with zero success count still get non-zero probability.
+    /// 2. **Temperature (T)**: Raises smoothed weights to 1/T. T > 1 flattens toward
+    ///    uniform (more exploration). T < 1 sharpens toward argmax (more exploitation).
+    ///    T = 1 preserves original ratios with the ε offset.
+    ///
+    /// The transformation walks the generator tree and rescales every reachable pick's
+    /// weights to integers summing to ~10000, with a floor of 1 per branch.
+    ///
+    /// - Parameters:
+    ///   - generator: An adapted generator (typically the output of ``adapt``).
+    ///   - epsilon: Laplace smoothing constant. Default: 1.0
+    ///   - temperature: Temperature parameter. Default: 2.0
+    /// - Returns: A generator with smoothed pick weights throughout the tree.
+    public static func smooth<Output>(
+        _ generator: ReflectiveGenerator<Output>,
+        epsilon: Double = 1.0,
+        temperature: Double = 2.0
+    ) -> ReflectiveGenerator<Output> {
+        smoothGenerator(generator, epsilon: epsilon, temperature: temperature)
+    }
+
+    private static func smoothGenerator<Output>(
+        _ gen: ReflectiveGenerator<Output>,
+        epsilon: Double,
+        temperature: Double
+    ) -> ReflectiveGenerator<Output> {
+        switch gen {
+        case .pure:
+            return gen
+        case let .impure(operation, continuation):
+            let smoothed = smoothOperation(operation, epsilon: epsilon, temperature: temperature)
+            return .impure(operation: smoothed, continuation: continuation)
+        }
+    }
+
+    private static func smoothOperation(
+        _ op: ReflectiveOperation,
+        epsilon: Double,
+        temperature: Double
+    ) -> ReflectiveOperation {
+        switch op {
+        case let .pick(choices):
+            let raw = choices.map { pow(Double($0.weight) + epsilon, 1.0 / temperature) }
+            let total = raw.reduce(0, +)
+
+            var smoothed = ContiguousArray<ReflectiveOperation.PickTuple>()
+            smoothed.reserveCapacity(choices.count)
+
+            for (i, choice) in choices.enumerated() {
+                let scaled = max(1, UInt64((raw[i] / total) * 10000))
+                smoothed.append(ReflectiveOperation.PickTuple(
+                    id: choice.id,
+                    weight: scaled,
+                    generator: smoothGenerator(choice.generator, epsilon: epsilon, temperature: temperature)
+                ))
+            }
+
+            return .pick(choices: smoothed)
+
+        case let .zip(generators):
+            return .zip(ContiguousArray(generators.map {
+                smoothGenerator($0, epsilon: epsilon, temperature: temperature)
+            }))
+
+        case let .sequence(length, gen):
+            return .sequence(
+                length: smoothGenerator(length, epsilon: epsilon, temperature: temperature),
+                gen: smoothGenerator(gen, epsilon: epsilon, temperature: temperature)
+            )
+
+        case let .contramap(transform, next):
+            return .contramap(
+                transform: transform,
+                next: smoothGenerator(next, epsilon: epsilon, temperature: temperature)
+            )
+
+        case let .prune(next):
+            return .prune(next: smoothGenerator(next, epsilon: epsilon, temperature: temperature))
+
+        case let .resize(newSize, next):
+            return .resize(
+                newSize: newSize,
+                next: smoothGenerator(next, epsilon: epsilon, temperature: temperature)
+            )
+
+        case let .filter(gen, fingerprint, predicate):
+            return .filter(
+                gen: smoothGenerator(gen, epsilon: epsilon, temperature: temperature),
+                fingerprint: fingerprint,
+                predicate: predicate
+            )
+
+        case let .classify(gen, fingerprint, classifiers):
+            return .classify(
+                gen: smoothGenerator(gen, epsilon: epsilon, temperature: temperature),
+                fingerprint: fingerprint,
+                classifiers: classifiers
+            )
+
+        case .chooseBits, .just, .getSize:
+            return op
+        }
     }
 }

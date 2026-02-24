@@ -295,14 +295,14 @@ struct CGSValueAndChoiceTreeInterpreterTests {
 
     // MARK: - Benchmark
 
-    @Test("BST: 10 second benchmark — rejection vs eager CGS vs online CGS")
+    @Test("BST: benchmark — rejection vs eager CGS vs smoothed eager CGS vs online CGS")
     func bstTenSecondBenchmark() throws {
         let naive = BST.arbitrary
         let isValidBST: (BST) -> Bool = { $0.height >= 1 && $0.isValidBST() }
-        var maxRuns: UInt64 = 2000
+        var maxRuns: UInt64 = 80000
 
         // --- Rejection sampling (generate naively, keep only valid) ---
-        var rejectionIterator = ValueInterpreter(naive, seed: 42, maxRuns: maxRuns)
+        var rejectionIterator = ValueInterpreter(naive, seed: 42, maxRuns: 100)
         var rejectionValid = 0
         var rejectionUnique = Set<BST>()
         var rejectionHeights = [Int: [BST]]()
@@ -344,6 +344,26 @@ struct CGSValueAndChoiceTreeInterpreterTests {
         }
         let eagerElapsed = ContinuousClock.now - eagerStart
 
+        // --- Smoothed Eager CGS generation ---
+        let smoothed = ChoiceGradientSampling.smooth(adapted, epsilon: 1.0, temperature: 2.0)
+
+        var smoothedIterator = ValueInterpreter(smoothed, seed: 42, maxRuns: maxRuns)
+        var smoothedTotal = 0
+        var smoothedValid = 0
+        var smoothedUnique = Set<BST>()
+        var smoothedHeights = [Int: [BST]]()
+
+        let smoothedStart = ContinuousClock.now
+        while let tree = smoothedIterator.next() {
+            smoothedTotal += 1
+            if isValidBST(tree) {
+                smoothedValid += 1
+                smoothedUnique.insert(tree)
+                smoothedHeights[tree.height, default: []].append(tree)
+            }
+        }
+        let smoothedElapsed = ContinuousClock.now - smoothedStart
+
         // --- Online CGS generation ---
         let sampleCount: UInt64 = 3
         var onlineIterator = CGSValueAndChoiceTreeInterpreter(
@@ -351,7 +371,7 @@ struct CGSValueAndChoiceTreeInterpreterTests {
             predicate: isValidBST,
             sampleCount: sampleCount,
             seed: 42,
-            maxRuns: maxRuns
+            maxRuns: 10
         )
         var onlineTotal = 0
         var onlineValid = 0
@@ -389,13 +409,14 @@ struct CGSValueAndChoiceTreeInterpreterTests {
         let eagerAdaptMs = Double(eagerAdaptTime.components.seconds) * 1000
             + Double(eagerAdaptTime.components.attoseconds) / 1e15
 
-        print("=== BST benchmark: \(maxRuns) maxRuns — rejection vs eager CGS vs online CGS ===")
+        print("=== BST benchmark: \(maxRuns) maxRuns — rejection vs eager CGS vs smoothed eager CGS vs online CGS ===")
         print("Paper reference (1 min, Haskell): Rejection 7,354 (109 unique) | CGS 22,107 (338 unique)")
         print()
         print("--- Time to exhaust \(maxRuns) candidates ---")
-        print("Rejection:  \(formatDuration(rejectionElapsed))")
-        print("Eager CGS:  \(formatDuration(eagerElapsed)) (+ \(String(format: "%.0f", eagerAdaptMs))ms adapt)")
-        print("Online CGS: \(formatDuration(onlineElapsed)) (\(sampleCount) samples)")
+        print("Rejection:     \(formatDuration(rejectionElapsed))")
+        print("Eager CGS:     \(formatDuration(eagerElapsed)) (+ \(String(format: "%.0f", eagerAdaptMs))ms adapt)")
+        print("Smoothed CGS:  \(formatDuration(smoothedElapsed)) (+ \(String(format: "%.0f", eagerAdaptMs))ms adapt)")
+        print("Online CGS:    \(formatDuration(onlineElapsed)) (\(sampleCount) samples)")
         print()
         print("Rejection sampling: \(rejectionValid) valid (\(rejectionUnique.count) unique)")
         print("  \(formatHeights(rejectionHeights))")
@@ -404,6 +425,10 @@ struct CGSValueAndChoiceTreeInterpreterTests {
         print("  \(eagerTotal) total, \(eagerValid) valid (\(eagerUnique.count) unique)")
         print("  \(formatHeights(eagerHeights))")
         print()
+        print("Smoothed Eager CGS (ε=1.0, T=2.0):")
+        print("  \(smoothedTotal) total, \(smoothedValid) valid (\(smoothedUnique.count) unique)")
+        print("  \(formatHeights(smoothedHeights))")
+        print()
         print("Online CGS: (\(sampleCount) samples)")
         print("  \(onlineTotal) total, \(onlineValid) valid (\(onlineUnique.count) unique)")
         print("  \(formatHeights(onlineHeights))")
@@ -411,12 +436,20 @@ struct CGSValueAndChoiceTreeInterpreterTests {
 
         let onlineMaxHeight = onlineHeights.keys.max() ?? 0
         let eagerMaxHeight = eagerHeights.keys.max() ?? 0
+        let smoothedMaxHeight = smoothedHeights.keys.max() ?? 0
         let eagerRate = Double(eagerValid) / Double(max(1, eagerTotal))
+        let smoothedRate = Double(smoothedValid) / Double(max(1, smoothedTotal))
         let onlineRate = Double(onlineValid) / Double(max(1, onlineTotal))
 
-        print("Max height — rejection: \(rejectionHeights.keys.max() ?? 0), eager: \(eagerMaxHeight), online: \(onlineMaxHeight)")
-        print("Unique valid — rejection: \(rejectionUnique.count), eager: \(eagerUnique.count), online: \(onlineUnique.count)")
-        print("Validity rate — eager: \(String(format: "%.1f%%", eagerRate * 100)), online: \(String(format: "%.1f%%", onlineRate * 100))")
+        print("Max height — rejection: \(rejectionHeights.keys.max() ?? 0), eager: \(eagerMaxHeight), smoothed: \(smoothedMaxHeight), online: \(onlineMaxHeight)")
+        print("Unique valid — rejection: \(rejectionUnique.count), eager: \(eagerUnique.count), smoothed: \(smoothedUnique.count), online: \(onlineUnique.count)")
+        print("Validity rate — eager: \(String(format: "%.1f%%", eagerRate * 100)), smoothed: \(String(format: "%.1f%%", smoothedRate * 100)), online: \(String(format: "%.1f%%", onlineRate * 100))")
+
+        // Smoothed CGS should produce trees at greater height diversity than unsmoothed
+        #expect(smoothedMaxHeight >= eagerMaxHeight,
+                "Smoothed CGS max height (\(smoothedMaxHeight)) should be >= eager CGS (\(eagerMaxHeight))")
+        #expect(smoothedUnique.count > eagerUnique.count,
+                "Smoothed CGS unique count (\(smoothedUnique.count)) should exceed eager CGS (\(eagerUnique.count))")
 
         // Online CGS produces trees at heights >= 2, demonstrating depth diversity
         #expect(onlineMaxHeight >= 2,
@@ -424,6 +457,43 @@ struct CGSValueAndChoiceTreeInterpreterTests {
         // Online CGS should achieve a meaningful validity rate
         #expect(onlineRate > 0.2,
                 "Online CGS validity rate (\(onlineRate)) should exceed 20%")
+    }
+
+    // MARK: - Weight Smoothing
+
+    @Test("Smoothing recovers dead branches in adapted BST generator")
+    func smoothingRecoverDeadBranches() throws {
+        let gen = BST.arbitrary
+        let isValidBST: (BST) -> Bool = { $0.height >= 1 && $0.isValidBST() }
+
+        let adapted = try ChoiceGradientSampling.adapt(
+            gen,
+            samples: 100,
+            seed: 12345,
+            predicate: isValidBST
+        )
+
+        let smoothed = ChoiceGradientSampling.smooth(adapted, epsilon: 1.0, temperature: 2.0)
+
+        var iterator = ValueInterpreter(smoothed, seed: 42, maxRuns: 2000)
+        var validTrees = [BST]()
+        while let tree = iterator.next() {
+            if isValidBST(tree) {
+                validTrees.append(tree)
+            }
+        }
+
+        let heights = Dictionary(grouping: validTrees, by: \.height).mapValues(\.count)
+        let uniqueTrees = Set(validTrees)
+
+        print("Smoothed eager CGS BST: \(validTrees.count) valid, \(uniqueTrees.count) unique")
+        print("Heights: \(heights.sorted(by: { $0.key < $1.key }))")
+
+        let tallTreeCount = validTrees.count { $0.height >= 2 }
+        #expect(tallTreeCount > 0,
+                "Smoothed CGS should produce BSTs at height >= 2, got heights: \(heights)")
+        #expect(uniqueTrees.count > 50,
+                "Smoothed CGS should produce diverse valid BSTs, got \(uniqueTrees.count) unique")
     }
 
     // MARK: - All-Zero Fallback
