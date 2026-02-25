@@ -172,8 +172,9 @@ struct GeneratorTuningTests {
         let values = Array(ValueInterpreter(tuned, seed: 123, maxRuns: 100))
         let hitRate = Double(values.count(where: predicate)) / Double(values.count)
 
-        // Baseline for count <= 3 in range 1...50 is ~6%; adaptation should significantly improve this
-        #expect(hitRate > 0.15,
+        // Baseline for count <= 3 in range 1...50 is ~6%; adaptation should significantly improve this.
+        // The weight floor (0.1) limits how aggressively tuning can concentrate on short lengths.
+        #expect(hitRate > 0.10,
                 "Expected sequence adaptation to improve short array rate, got hit rate \(hitRate)")
     }
 

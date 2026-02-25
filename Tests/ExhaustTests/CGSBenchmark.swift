@@ -141,7 +141,9 @@ struct CGSBenchmark {
         }
 
         let baseElapsed = ContinuousClock.now - baseStart
-        print("Rejection:  \(String(format: "%.0f", ms(baseElapsed))) ms (\(baseTotal) gen → \(baseUnique.count) unique valid)")
+        let baseHeights = Dictionary(grouping: baseUnique, by: \.height).mapValues(\.count)
+            .sorted { $0.key < $1.key }.map { "h\($0.key):\($0.value)" }.joined(separator: " ")
+        print("Rejection:  \(String(format: "%.0f", ms(baseElapsed))) ms (\(baseTotal) gen → \(baseUnique.count) unique valid)  \(baseHeights)")
 
         // --- CGS sweep: vary maxRuns hint to show tuning budget vs quality trade-off ---
         for maxRunsHint: UInt64 in [100, 500, 1000, 5000] {
@@ -170,7 +172,9 @@ struct CGSBenchmark {
 
             let totalElapsed = ContinuousClock.now - start
 
-            print("maxRuns=\(String(format: "%-5d", maxRunsHint)) tune: \(String(format: "%3.0f", ms(tuneElapsed)))ms  total: \(String(format: "%3.0f", ms(totalElapsed)))ms  (\(totalCount) gen → \(uniqueValid.count) unique valid)")
+            let heights = Dictionary(grouping: uniqueValid, by: \.height).mapValues(\.count)
+                .sorted { $0.key < $1.key }.map { "h\($0.key):\($0.value)" }.joined(separator: " ")
+            print("maxRuns=\(String(format: "%-5d", maxRunsHint)) tune: \(String(format: "%3.0f", ms(tuneElapsed)))ms  total: \(String(format: "%3.0f", ms(totalElapsed)))ms  (\(totalCount) gen → \(uniqueValid.count) unique valid)  \(heights)")
         }
         print("==================================")
     }

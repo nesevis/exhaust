@@ -390,13 +390,13 @@ struct OnlineCGSInterpreterTests {
         let rootSites = profile.sites.filter { $0.depth == 0 }
         #expect(!rootSites.isEmpty, "Should have at least one root-depth pick site")
 
-        // After adaptation, root picks tend to be bottlenecks (low entropy ratio)
-        // because one branch dominates. Deeper synthesised picks from subdivision
-        // tend to be more uniform.
-        let bottleneckSites = profile.sites.filter { $0.entropyRatio < 0.3 }
-        print("Bottleneck sites (ratio < 0.3): \(bottleneckSites.count)")
-        #expect(!bottleneckSites.isEmpty,
-                "Tuned BST should have at least one bottleneck site")
+        // After adaptation with a weight floor (0.1), sites won't be extreme
+        // bottlenecks, but the root pick should still show some non-uniformity
+        // (the valid-BST branch gets higher weight than the leaf branch).
+        let nonUniformSites = profile.sites.filter { $0.entropyRatio < 0.95 }
+        print("Non-uniform sites (ratio < 0.95): \(nonUniformSites.count)")
+        #expect(!nonUniformSites.isEmpty,
+                "Tuned BST should have at least one non-uniform pick site")
     }
 
     // MARK: - Empirical Profile

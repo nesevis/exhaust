@@ -62,6 +62,21 @@ enum GeneratorTuning {
     /// Minimum total samples per choice before convergence checks begin (2 × batchSize).
     private static let convergenceMinSamples: UInt64 = 40
 
+    /// Minimum selection probability per choice. Prevents extreme weight ratios
+    /// from compounding across depth levels, which would collapse rare-but-valid
+    /// deep paths to near-zero probability. The paper (§4.3, Figure 13) shows
+    /// that bounding weights to [0.1, 0.9] prevents overfitting and improves
+    /// output diversity.
+    ///
+    /// **Caveat for wide picks:** the floor applies per-choice, so a pick with
+    /// many dead branches pays a cost proportional to `deadBranches / totalBranches`.
+    /// Binary picks lose at most ~10% of selection probability to the floor, but
+    /// e.g. a 20-way pick with 2 valid branches drops valid selection from ~100%
+    /// to ~36%. If this becomes a problem, scale the fraction inversely with
+    /// branch count (`weightFloorFraction / choiceCount`) to cap total floor
+    /// budget at a fixed share of weight regardless of branch count.
+    private static let weightFloorFraction: Double = 0.1
+
     // MARK: - Public API
 
     /// Probes a generator's structure by running it a few times and checking whether
@@ -265,7 +280,7 @@ enum GeneratorTuning {
             context.rng.spawned(streamID: UInt64($0))
         }
         var successCounts = Array(repeating: UInt64(0), count: choiceCount)
-        var distinctOutputs = Array(repeating: Set<AnyHashable>(), count: choiceCount)
+        var outputFrequencies = Array(repeating: [AnyHashable: UInt64](), count: choiceCount)
         var continuationCaches = Array(repeating: [AnyHashable: Bool](), count: choiceCount)
         var totalSampled: UInt64 = 0
 
@@ -311,7 +326,7 @@ enum GeneratorTuning {
                     if success {
                         successCounts[choiceIdx] += 1
                         if let hashable = output as? AnyHashable {
-                            distinctOutputs[choiceIdx].insert(hashable)
+                            outputFrequencies[choiceIdx][hashable, default: 0] += 1
                         }
                     }
                     if let hashable = innerValue as? AnyHashable {
@@ -418,12 +433,28 @@ enum GeneratorTuning {
                 predicate: composedPredicate
             )
 
-            // Spec entropy weighting: reward branches that produce diverse valid
-            // outputs, not just frequent ones. The log factor compresses the
-            // advantage of high-validity but low-diversity choices (e.g. leaf
-            // subtrees that always produce the same few trees).
-            let diversityFactor = log(Double(distinctOutputs[choiceIdx].count) + 1)
-            let weight = UInt64(Double(successCounts[choiceIdx]) * diversityFactor)
+            // Specification entropy weighting: reward branches that produce
+            // diverse valid outputs, not just frequent ones.  We estimate
+            // Shannon entropy from the empirical frequency distribution of
+            // valid outputs.  This is strictly more informative than the
+            // previous distinct-count heuristic: two branches may each produce
+            // 10 distinct outputs, but if one concentrates 90% of mass on a
+            // single value the entropy will be low, correctly down-weighting it.
+            // The +1 offset ensures branches with a single valid output still
+            // receive weight proportional to their success count.
+            let frequencies = outputFrequencies[choiceIdx]
+            let totalObservations = frequencies.values.reduce(UInt64(0), +)
+            let entropy: Double
+            if totalObservations <= 1 {
+                entropy = 0
+            } else {
+                let total = Double(totalObservations)
+                entropy = -frequencies.values.reduce(0.0) { acc, count in
+                    let p = Double(count) / total
+                    return acc + p * log(p)
+                }
+            }
+            let weight = UInt64(Double(successCounts[choiceIdx]) * (1 + entropy))
 
             tunedChoices.append(ReflectiveOperation.PickTuple(
                 siteID: choice.siteID,
@@ -431,6 +462,22 @@ enum GeneratorTuning {
                 weight: weight,
                 generator: tunedInner
             ))
+        }
+
+        // Weight floor: bound each choice's selection probability to at least
+        // weightFloorFraction. This prevents extreme ratios from compounding
+        // multiplicatively across depth (e.g. 0.9^5 leaf bias at every level
+        // would collapse h5 BST probability to 0.00001%).
+        let totalWeight = tunedChoices.reduce(UInt64(0)) { $0 + $1.weight }
+        if totalWeight > 0 {
+            let floor = max(UInt64(1), UInt64(Double(totalWeight) * weightFloorFraction))
+            tunedChoices = ContiguousArray(tunedChoices.map { choice in
+                guard choice.weight < floor else { return choice }
+                return ReflectiveOperation.PickTuple(
+                    siteID: choice.siteID, id: choice.id,
+                    weight: floor, generator: choice.generator
+                )
+            })
         }
 
         // All-zero safety: restore with weight 1 to prevent draw returning nil
