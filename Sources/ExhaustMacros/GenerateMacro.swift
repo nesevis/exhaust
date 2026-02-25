@@ -6,13 +6,18 @@ import SwiftSyntaxMacros
 /// Expression macro that transforms `#gen(gen1, gen2, ...) { params in Body(...) }`
 /// into a `ReflectiveGenerator` with automatic backward mapping when possible.
 ///
-/// When the closure body is a struct/class initializer call with labeled arguments
-/// that correspond 1:1 to the closure parameters, a Mirror-based backward mapping
-/// is synthesized, producing a fully bidirectional generator. This works regardless
-/// of property access control since Mirror ignores visibility.
+/// When the closure body is a struct or class initializer call with labeled arguments
+/// that map 1:1 to the closure parameters, the macro synthesizes a Mirror-based
+/// backward mapping, producing a fully bidirectional generator.
 ///
-/// When backward inference is not possible (complex expressions, shorthand parameters,
-/// multi-statement bodies), the macro falls back to a forward-only `.map` with a warning.
+/// When the closure body is an enum case construction (detected via member access
+/// callee, e.g. `Pet.cat(age)`), the macro synthesizes a pattern-matching backward
+/// closure inspired by [swift-case-paths](https://github.com/pointfreeco/swift-case-paths)
+/// by Point-Free. This returns `nil` for non-matching cases, enabling `pick` to prune
+/// branches during reflection.
+///
+/// When backward inference is not possible (complex expressions, multi-statement bodies),
+/// the macro falls back to a forward-only `.map` with a warning.
 public struct GenerateMacro: ExpressionMacro {
     public static func expansion(
         of node: some FreestandingMacroExpansionSyntax,
@@ -50,12 +55,34 @@ public struct GenerateMacro: ExpressionMacro {
         }
     }
 
-    /// Builds the expansion for a bidirectional mapping using Mirror-based backward extraction.
+    /// Builds the expansion for a bidirectional mapping.
     ///
-    /// Single generator: uses `Gen.contramap` with `_mirrorExtract` applied to a `.map`.
-    /// Multi generator: uses `Gen._macroZip` which combines zip + Mirror backward
-    /// internally, avoiding the tuple type mismatch that `zip().mapped()` would cause.
+    /// Dispatches to either Mirror-based extraction (struct/class init) or pattern-matching
+    /// extraction (enum case) based on whether the closure analysis detected a member access callee.
     private static func buildBidirectionalExpansion(
+        generatorArgs: [LabeledExprListSyntax.Element],
+        closure: ClosureExprSyntax,
+        result: BidirectionalResult
+    ) -> ExprSyntax {
+        if result.caseName != nil {
+            return buildEnumCaseExpansion(
+                generatorArgs: generatorArgs,
+                closure: closure,
+                result: result
+            )
+        } else {
+            return buildMirrorExpansion(
+                generatorArgs: generatorArgs,
+                closure: closure,
+                result: result
+            )
+        }
+    }
+
+    // MARK: - Mirror-based expansion (struct/class init)
+
+    /// Builds the expansion using Mirror-based backward extraction for struct/class inits.
+    private static func buildMirrorExpansion(
         generatorArgs: [LabeledExprListSyntax.Element],
         closure: ClosureExprSyntax,
         result: BidirectionalResult
@@ -65,7 +92,7 @@ public struct GenerateMacro: ExpressionMacro {
         if generatorArgs.count == 1 {
             let genExpr = generatorArgs[0].expression.trimmedDescription
             let label = result.labels[0]
-            return "Gen.contramap({ _mirrorExtract($0, label: \"\(raw: label)\") }, \(raw: genExpr).map \(raw: closureText))"
+            return "Gen._macroMap(\(raw: genExpr), label: \"\(raw: label)\", forward: \(raw: closureText))"
         } else {
             let genExprs = generatorArgs.map { $0.expression.trimmedDescription }
             let zipArgs = genExprs.joined(separator: ", ")
@@ -77,14 +104,7 @@ public struct GenerateMacro: ExpressionMacro {
         }
     }
 
-    /// Returns labels ordered by parameter position (matching generator/tuple order).
-    ///
-    /// The closure parameters may appear in a different order than the initializer arguments.
-    /// For example: `{ age, name in Person(name: name, age: age) }`
-    /// - Parameters (generator order): [age, name]
-    /// - Arguments: [name: name, age: age]
-    ///
-    /// The backward labels must match parameter order: ["age", "name"]
+    /// Returns Mirror labels ordered by parameter position (matching generator/tuple order).
     private static func buildBackwardLabels(result: BidirectionalResult) -> [String] {
         var paramToLabel: [String: String] = [:]
         for (argIndex, paramRef) in result.argumentParamRefs.enumerated() {
@@ -94,6 +114,62 @@ public struct GenerateMacro: ExpressionMacro {
         return result.parameterNames.map { paramName in
             paramToLabel[paramName]!
         }
+    }
+
+    // MARK: - Pattern-matching expansion (enum cases)
+
+    /// Builds the expansion using pattern-matching backward extraction for enum cases.
+    ///
+    /// Generates `guard case let .caseName(bindings) = $0 else { return nil }` closures
+    /// for the backward pass. This approach is inspired by
+    /// [swift-case-paths](https://github.com/pointfreeco/swift-case-paths) by Point-Free.
+    private static func buildEnumCaseExpansion(
+        generatorArgs: [LabeledExprListSyntax.Element],
+        closure: ClosureExprSyntax,
+        result: BidirectionalResult
+    ) -> ExprSyntax {
+        let closureText = closure.trimmedDescription
+        let caseName = result.caseName!
+        let argCount = result.originalArgumentLabels.count
+
+        // Build pattern bindings: `v0`, `v1`, ... with optional labels: `age: v0`
+        let patternBindings = (0 ..< argCount).map { i -> String in
+            if let label = result.originalArgumentLabels[i] {
+                return "\(label): v\(i)"
+            }
+            return "v\(i)"
+        }.joined(separator: ", ")
+
+        let casePattern = ".\(caseName)(\(patternBindings))"
+
+        if generatorArgs.count == 1 {
+            let genExpr = generatorArgs[0].expression.trimmedDescription
+            let backward = "{ guard case let \(casePattern) = $0 else { return nil }; return v0 }"
+            return "Gen._macroMap(\(raw: genExpr), backward: \(raw: backward), forward: \(raw: closureText))"
+        } else {
+            let genExprs = generatorArgs.map { $0.expression.trimmedDescription }
+            let zipArgs = genExprs.joined(separator: ", ")
+
+            // Reorder bindings from argument order to generator/parameter order
+            let paramOrder = buildBackwardArgIndices(result: result)
+            let returnValues = paramOrder.map { "v\($0) as Any" }.joined(separator: ", ")
+
+            let backward = "{ guard case let \(casePattern) = $0 else { return nil }; return [\(returnValues)] }"
+            return "Gen._macroZip(\(raw: zipArgs), backward: \(raw: backward), forward: \(raw: closureText))"
+        }
+    }
+
+    /// Returns argument indices ordered by parameter position (matching generator order).
+    ///
+    /// Pattern match bindings are in argument order (matching enum declaration order).
+    /// Generators are in parameter order. This maps parameter → argument index so the
+    /// backward closure returns values in the order the zip expects.
+    private static func buildBackwardArgIndices(result: BidirectionalResult) -> [Int] {
+        var paramToArgIndex: [String: Int] = [:]
+        for (argIndex, paramRef) in result.argumentParamRefs.enumerated() {
+            paramToArgIndex[paramRef] = argIndex
+        }
+        return result.parameterNames.map { paramToArgIndex[$0]! }
     }
 
     /// Builds the expansion for the no-closure overload: pass through or zip.

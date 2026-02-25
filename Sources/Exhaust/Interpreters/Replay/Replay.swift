@@ -192,18 +192,41 @@ extension Interpreters {
         continuation: @escaping (Any) throws -> ReflectiveGenerator<Output>,
         choices: inout [ChoiceTree],
     ) throws -> Output? {
-        guard generators.count == choices.count else {
-            throw ReplayError.mismatchInChoicesAndGenerators
+        // Mirroring materializeWithChoicesZip: try group-unwrapped first,
+        // then flat choices. reflectZipOperation wraps per-generator choices
+        // in a single .group, while generation produces flat choices.
+        typealias ZipAttempt = (scripts: [ChoiceTree], consumedCount: Int)
+        var attempts: [ZipAttempt] = []
+
+        if let first = choices.first,
+           case let .group(children) = first,
+           children.allSatisfy({ !$0.isBranch && !$0.isSelected })
+        {
+            attempts.append((scripts: children, consumedCount: 1))
         }
-        var subResults = [Any]()
-        for (generator, choiceTree) in zip(generators, choices) {
-            guard let subResult = try replayRecursive(generator, with: choiceTree) else {
-                return nil
+
+        if choices.count >= generators.count {
+            attempts.append((scripts: Array(choices.prefix(generators.count)), consumedCount: generators.count))
+        }
+
+        for attempt in attempts where attempt.scripts.count == generators.count {
+            var subResults = [Any]()
+            var didSucceed = true
+            for (generator, choiceTree) in zip(generators, attempt.scripts) {
+                guard let subResult = try replayRecursive(generator, with: choiceTree) else {
+                    didSucceed = false
+                    break
+                }
+                subResults.append(subResult)
             }
-            subResults.append(subResult)
+            guard didSucceed else { continue }
+
+            choices.removeFirst(attempt.consumedCount)
+            let nextGen = try continuation(subResults)
+            return try replayWithChoicesHelper(nextGen, choices: &choices)
         }
-        let nextGen = try continuation(subResults)
-        return try replayWithChoicesHelper(nextGen, choices: &choices)
+
+        throw ReplayError.mismatchInChoicesAndGenerators
     }
 
     @inline(__always)

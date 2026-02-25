@@ -10,7 +10,7 @@ private let testMacros: [String: any Macro.Type] = [
 
 @Suite("GenerateMacro expansion tests")
 struct GenerateMacroTests {
-    @Test("Single generator with struct init produces Mirror-based bidirectional")
+    @Test("Single generator with struct init produces _macroMap bidirectional")
     func singleGeneratorBidirectional() {
         assertMacroExpansion(
             """
@@ -19,7 +19,7 @@ struct GenerateMacroTests {
             }
             """,
             expandedSource: """
-            Gen.contramap({ _mirrorExtract($0, label: "name") }, nameGen.map { name in
+            Gen._macroMap(nameGen, label: "name", forward: { name in
                 Person(name: name)
             })
             """,
@@ -81,7 +81,7 @@ struct GenerateMacroTests {
             #gen(nameGen) { Person(name: $0) }
             """,
             expandedSource: """
-            Gen.contramap({ _mirrorExtract($0, label: "name") }, nameGen.map { Person(name: $0) })
+            Gen._macroMap(nameGen, label: "name", forward: { Person(name: $0) })
             """,
             macros: testMacros
         )
@@ -192,7 +192,7 @@ struct GenerateMacroTests {
         )
     }
 
-    @Test("Single generator with return statement produces Mirror-based bidirectional")
+    @Test("Single generator with return statement produces _macroMap bidirectional")
     func singleGeneratorWithReturn() {
         assertMacroExpansion(
             """
@@ -201,7 +201,7 @@ struct GenerateMacroTests {
             }
             """,
             expandedSource: """
-            Gen.contramap({ _mirrorExtract($0, label: "name") }, nameGen.map { name in
+            Gen._macroMap(nameGen, label: "name", forward: { name in
                 return Person(name: name)
             })
             """,
@@ -209,8 +209,8 @@ struct GenerateMacroTests {
         )
     }
 
-    @Test("Unlabeled arguments produce forward-only")
-    func unlabeledArgumentsFallback() {
+    @Test("Unlabeled arguments produce bidirectional with positional Mirror labels")
+    func unlabeledArgumentsBidirectional() {
         assertMacroExpansion(
             """
             #gen(intGen) { x in
@@ -218,9 +218,122 @@ struct GenerateMacroTests {
             }
             """,
             expandedSource: """
-            intGen.map { x in
+            Gen._macroMap(intGen, label: ".0", forward: { x in
                 Wrapper(x)
+            })
+            """,
+            macros: testMacros
+        )
+    }
+
+    @Test("Two unlabeled arguments produce bidirectional with positional Mirror labels")
+    func twoUnlabeledArgumentsBidirectional() {
+        assertMacroExpansion(
+            """
+            #gen(intGen, strGen) { x, y in
+                Pair(x, y)
             }
+            """,
+            expandedSource: """
+            Gen._macroZip(intGen, strGen, labels: [".0", ".1"], forward: { x, y in
+                Pair(x, y)
+            })
+            """,
+            macros: testMacros
+        )
+    }
+
+    @Test("Shorthand parameters with unlabeled arguments produce bidirectional")
+    func shorthandUnlabeledBidirectional() {
+        assertMacroExpansion(
+            """
+            #gen(intGen) { Wrapper($0) }
+            """,
+            expandedSource: """
+            Gen._macroMap(intGen, label: ".0", forward: { Wrapper($0) })
+            """,
+            macros: testMacros
+        )
+    }
+
+    // MARK: - Enum case pattern-matching backward
+
+    @Test("Single-value enum case produces pattern-matching backward")
+    func singleEnumCaseBidirectional() {
+        assertMacroExpansion(
+            """
+            #gen(intGen) { age in
+                Pet.cat(age)
+            }
+            """,
+            expandedSource: """
+            Gen._macroMap(intGen, backward: { guard case let .cat(v0) = $0 else { return nil }; return v0 }, forward: { age in
+                Pet.cat(age)
+            })
+            """,
+            macros: testMacros
+        )
+    }
+
+    @Test("Multi-value enum case produces pattern-matching backward")
+    func multiEnumCaseBidirectional() {
+        assertMacroExpansion(
+            """
+            #gen(intGen, strGen) { age, name in
+                Pet.dog(age, name)
+            }
+            """,
+            expandedSource: """
+            Gen._macroZip(intGen, strGen, backward: { guard case let .dog(v0, v1) = $0 else { return nil }; return [v0 as Any, v1 as Any] }, forward: { age, name in
+                Pet.dog(age, name)
+            })
+            """,
+            macros: testMacros
+        )
+    }
+
+    @Test("Labeled enum case produces labeled pattern bindings")
+    func labeledEnumCaseBidirectional() {
+        assertMacroExpansion(
+            """
+            #gen(intGen) { age in
+                Pet.cat(age: age)
+            }
+            """,
+            expandedSource: """
+            Gen._macroMap(intGen, backward: { guard case let .cat(age: v0) = $0 else { return nil }; return v0 }, forward: { age in
+                Pet.cat(age: age)
+            })
+            """,
+            macros: testMacros
+        )
+    }
+
+    @Test("Shorthand enum case produces pattern-matching backward")
+    func shorthandEnumCaseBidirectional() {
+        assertMacroExpansion(
+            """
+            #gen(intGen) { Pet.cat($0) }
+            """,
+            expandedSource: """
+            Gen._macroMap(intGen, backward: { guard case let .cat(v0) = $0 else { return nil }; return v0 }, forward: { Pet.cat($0) })
+            """,
+            macros: testMacros
+        )
+    }
+
+    @Test("Reordered enum case parameters produce correctly ordered backward")
+    func reorderedEnumCaseBidirectional() {
+        assertMacroExpansion(
+            """
+            #gen(nameGen, ageGen) { name, age in
+                Pet.dog(age, name)
+            }
+            """,
+            expandedSource: """
+            Gen._macroZip(nameGen, ageGen, backward: { guard case let .dog(v0, v1) = $0 else { return nil }; return [v1 as Any, v0 as Any] }, forward: { name, age in
+                Pet.dog(age, name)
+            })
             """,
             macros: testMacros
         )

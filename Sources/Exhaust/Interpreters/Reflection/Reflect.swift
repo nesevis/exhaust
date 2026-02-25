@@ -188,7 +188,7 @@ public enum Interpreters {
 
             } catch let error as ReflectionError {
                 switch error {
-                case .reflectedNil, .inputWasOutOfGeneratorRange:
+                case .reflectedNil, .inputWasOutOfGeneratorRange, .contramapWasWrongType:
                     return []
                 default:
                     throw error
