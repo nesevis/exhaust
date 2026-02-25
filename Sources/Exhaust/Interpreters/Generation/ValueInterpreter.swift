@@ -10,23 +10,43 @@ import Foundation
 public struct ValueInterpreter<Element>: IteratorProtocol, Sequence {
     let generator: ReflectiveGenerator<Element>
     private var context: Context
+    private let uniqueMaxAttempts: UInt64?
+    private var uniqueDelegate: ValueAndChoiceTreeInterpreter<Element>?
 
-    public init(_ generator: ReflectiveGenerator<Element>, seed: UInt64? = nil, maxRuns: UInt64? = nil) {
+    public init(
+        _ generator: ReflectiveGenerator<Element>,
+        seed: UInt64? = nil,
+        maxRuns: UInt64? = nil,
+        uniqueMaxAttempts: UInt64? = nil,
+    ) {
         self.generator = generator
+        self.uniqueMaxAttempts = uniqueMaxAttempts
         context = .init(
             maxRuns: maxRuns ?? 100,
             isFixed: false,
             size: 0,
             prng: seed.map { Xoshiro256(seed: $0) } ?? Xoshiro256(),
         )
+        if uniqueMaxAttempts != nil {
+            uniqueDelegate = ValueAndChoiceTreeInterpreter(
+                generator,
+                seed: seed,
+                maxRuns: maxRuns,
+                uniqueMaxAttempts: uniqueMaxAttempts,
+            )
+        }
     }
 
     public mutating func next() -> Element? {
+        if var delegate = uniqueDelegate {
+            let result = delegate.next()
+            uniqueDelegate = delegate
+            return result?.value
+        }
         guard context.size < context.maxRuns else {
             return nil
         }
         defer { context.size += context.isFixed ? 0 : 1 }
-        // Iterators can't have throwing `next` functions
         do {
             return try Self.generateRecursive(generator, with: (), context: context)
         } catch {
@@ -38,7 +58,12 @@ public struct ValueInterpreter<Element>: IteratorProtocol, Sequence {
     /// Used to generate results around a similar level of complexity.
     /// Intended to be used to increase pool of results to compare against
     func fixedAtSize() -> ValueInterpreter<Element> {
-        let fixed = ValueInterpreter(generator, seed: context.prng.seed, maxRuns: context.maxRuns)
+        let fixed = ValueInterpreter(
+            generator,
+            seed: context.prng.seed,
+            maxRuns: context.maxRuns,
+            uniqueMaxAttempts: uniqueMaxAttempts,
+        )
         fixed.context.isFixed = true
         fixed.context.size = context.size
         return fixed

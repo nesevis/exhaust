@@ -38,7 +38,8 @@ public struct CGSValueAndChoiceTreeInterpreter<FinalOutput>: IteratorProtocol, S
         sampleCount: UInt64 = 50,
         materializePicks: Bool = false,
         seed: UInt64? = nil,
-        maxRuns: UInt64? = nil
+        maxRuns: UInt64? = nil,
+        uniqueMaxAttempts: UInt64? = nil
     ) {
         self.generator = generator
         context = .init(
@@ -50,7 +51,8 @@ public struct CGSValueAndChoiceTreeInterpreter<FinalOutput>: IteratorProtocol, S
             prng: seed.map { Xoshiro256(seed: $0) } ?? Xoshiro256(),
             predicate: predicate,
             sampleCount: sampleCount,
-            samplingPRNG: seed.map { Xoshiro256(seed: $0 &+ 1) } ?? Xoshiro256()
+            samplingPRNG: seed.map { Xoshiro256(seed: $0 &+ 1) } ?? Xoshiro256(),
+            uniqueMaxAttempts: uniqueMaxAttempts
         )
     }
 
@@ -61,22 +63,65 @@ public struct CGSValueAndChoiceTreeInterpreter<FinalOutput>: IteratorProtocol, S
             context.printClassifications()
             return nil
         }
-        defer {
-            context.size += context.isFixed ? 0 : 1
-            context.runs += 1
+
+        let wrapper: DerivativeWrapper = { $0.map { $0 as! FinalOutput } }
+
+        // Fast path: no uniqueness constraint
+        guard let uniqueMaxAttempts = context.uniqueMaxAttempts else {
+            defer {
+                context.size += context.isFixed ? 0 : 1
+                context.runs += 1
+            }
+            do {
+                return try Self.generateRecursive(
+                    generator,
+                    with: (),
+                    context: context,
+                    wrapper: wrapper,
+                    insideSubdividedChooseBits: false
+                )
+            } catch {
+                fatalError(error.localizedDescription)
+            }
         }
-        do {
-            let wrapper: DerivativeWrapper = { $0.map { $0 as! FinalOutput } }
-            return try Self.generateRecursive(
-                generator,
-                with: (),
-                context: context,
-                wrapper: wrapper,
-                insideSubdividedChooseBits: false
-            )
-        } catch {
-            fatalError(error.localizedDescription)
+
+        // Uniqueness path: loop until we find a unique value or exhaust the budget
+        while context.totalAttempts < uniqueMaxAttempts {
+            context.totalAttempts += 1
+            do {
+                guard let result = try Self.generateRecursive(
+                    generator,
+                    with: (),
+                    context: context,
+                    wrapper: wrapper,
+                    insideSubdividedChooseBits: false
+                ) else {
+                    context.size += context.isFixed ? 0 : 1
+                    continue
+                }
+                let sequence = ChoiceSequence.flatten(result.1)
+                let (inserted, _) = context.seenSequences.insert(sequence)
+                if inserted {
+                    context.runs += 1
+                    context.size += context.isFixed ? 0 : 1
+                    return result
+                }
+                // Duplicate — increment size to explore different complexity levels
+                context.size += context.isFixed ? 0 : 1
+            } catch {
+                fatalError(error.localizedDescription)
+            }
         }
+
+        ExhaustLog.warning(
+            category: .generation,
+            event: "uniqueness_budget_exhausted",
+            metadata: [
+                "unique_count": "\(context.seenSequences.count)",
+                "max_attempts": "\(uniqueMaxAttempts)",
+            ]
+        )
+        return nil
     }
 
     // MARK: - Recursive Engine
@@ -767,6 +812,11 @@ public struct CGSValueAndChoiceTreeInterpreter<FinalOutput>: IteratorProtocol, S
         let sampleCount: UInt64
         var samplingPRNG: Xoshiro256
 
+        // Uniqueness constraint
+        let uniqueMaxAttempts: UInt64?
+        var totalAttempts: UInt64 = 0
+        var seenSequences: Set<ChoiceSequence> = []
+
         init(
             maxRuns: UInt64,
             materializePicks: Bool,
@@ -778,7 +828,8 @@ public struct CGSValueAndChoiceTreeInterpreter<FinalOutput>: IteratorProtocol, S
             prng: Xoshiro256,
             predicate: @escaping (FinalOutput) -> Bool,
             sampleCount: UInt64,
-            samplingPRNG: Xoshiro256
+            samplingPRNG: Xoshiro256,
+            uniqueMaxAttempts: UInt64? = nil
         ) {
             self.maxRuns = maxRuns
             self.materializePicks = materializePicks
@@ -791,6 +842,7 @@ public struct CGSValueAndChoiceTreeInterpreter<FinalOutput>: IteratorProtocol, S
             self.predicate = predicate
             self.sampleCount = sampleCount
             self.samplingPRNG = samplingPRNG
+            self.uniqueMaxAttempts = uniqueMaxAttempts
         }
 
         func jump(seed: UInt64) -> Context {
