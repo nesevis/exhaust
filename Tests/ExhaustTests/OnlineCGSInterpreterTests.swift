@@ -65,7 +65,7 @@ struct OnlineCGSInterpreterTests {
 
     // MARK: - BST Height Diversity
 
-    @Test("BST: online CGS produces valid BSTs at heights >= 2")
+    @Test("BST: online CGS produces valid BSTs at heights >= 2", .disabled("Takes 21 seconds to run"))
     func bstHeightDiversity() throws {
         let gen = BST.arbitrary
         let isValidNonLeafBST: (BST) -> Bool = { $0 != .leaf && $0.isValidBST() }

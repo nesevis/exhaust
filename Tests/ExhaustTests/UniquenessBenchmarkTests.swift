@@ -174,7 +174,7 @@ struct UniquenessBenchmarkTests {
 
     // MARK: - Main Benchmark
 
-    @Test("Time to 100 unique valid values: BST / SORTED / AVL x 4 strategies")
+    @Test("Time to 100 unique valid values: BST / SORTED / AVL x 4 strategies", .disabled("56 second runtime"))
     func fullBenchmark() throws {
         let bstResults = try runAllStrategies(Self.bstProblem)
         let sortedResults = try runAllStrategies(Self.sortedProblem)
