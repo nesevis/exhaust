@@ -205,7 +205,17 @@ enum GeneratorTuning {
                     predicate: predicate
                 )
 
-            case .just, .prune, .resize, .classify:
+            case let .resize(newSize, next):
+                return try tuneResize(
+                    newSize: newSize,
+                    next: next,
+                    continuation: continuation,
+                    context: context,
+                    insideSubdividedChooseBits: insideSubdividedChooseBits,
+                    predicate: predicate
+                )
+
+            case .just, .prune, .classify:
                 return gen
             }
         }
@@ -691,6 +701,43 @@ enum GeneratorTuning {
 
         return .impure(
             operation: .contramap(transform: transform, next: tunedNext),
+            continuation: continuation
+        )
+    }
+
+    // MARK: - Resize
+
+    private static func tuneResize<Output>(
+        newSize: UInt64,
+        next: ReflectiveGenerator<Any>,
+        continuation: @escaping (Any) throws -> ReflectiveGenerator<Output>,
+        context: TuningContext,
+        insideSubdividedChooseBits: Bool,
+        predicate: @escaping (Output) -> Bool
+    ) throws -> ReflectiveGenerator<Output> {
+        let composedPredicate: (Any) -> Bool = { innerValue in
+            do {
+                let nextGen = try continuation(innerValue)
+                let output = try ValueInterpreter<Output>.generate(
+                    nextGen,
+                    maxRuns: 1,
+                    using: &context.rng
+                )
+                return output.map(predicate) ?? false
+            } catch {
+                return false
+            }
+        }
+
+        let tunedNext = try tuneRecursive(
+            next,
+            context: context,
+            insideSubdividedChooseBits: insideSubdividedChooseBits,
+            predicate: composedPredicate
+        )
+
+        return .impure(
+            operation: .resize(newSize: newSize, next: tunedNext),
             continuation: continuation
         )
     }
