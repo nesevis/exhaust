@@ -234,23 +234,24 @@ public struct ValueAndChoiceTreeInterpreter<FinalOutput>: IteratorProtocol, Sequ
 
             // MARK: - Filter
 
-            case let .filter(gen, _, predicate):
-                // Optimise the `gen` with CGS here and execute it.
-                // The predicate is by contract validating the output of `gen`
-                // Q: How do we statefully preserve the CGS-optimised generator within this iterator?
-                // A: Create an `inout [fingerprint: generator]` cache to thread through `generateRecursive`
-                // Q: This fingerprint is created when the generator is specified, before it is run.
-                // This means that if you Gen.zip(A, A, A), and A is a generator with a filter on it,
-                // it will be generated once and cached for the run.
-                // But what happens if the generator is statically declared as let gen = … and never changes?
-                // …It would be CGS'ed once per iterator. Do we want a lock on a static cache, or keep it thread-local?
-                // For now, let's use rejection sampling
+            case let .filter(gen, fingerprint, predicate):
+                // Look up or create an adapted generator for this filter.
+                // The fingerprint is stable per filter site, so identical filters
+                // inside a bind will share the same adapted generator.
+                let adaptedGen: ReflectiveGenerator<Any>
+                if let cached = context.adaptedFilterCache[fingerprint] {
+                    adaptedGen = cached
+                } else {
+                    let adapted = try? ChoiceGradientSampling.autoAdapt(gen, predicate: predicate)
+                    adaptedGen = adapted ?? gen
+                    context.adaptedFilterCache[fingerprint] = adaptedGen
+                }
+
                 var attempts = 0 as UInt64
                 while attempts < context.maxFilterRuns {
-                    guard let (result, tree) = try runGenerator(gen, context) else { return nil }
+                    guard let (result, tree) = try runGenerator(adaptedGen, context) else { return nil }
 
                     if predicate(result) {
-                        // print("Gen.filter found result after \(attempts) attempts")
                         return try runContinuation(result, tree)
                     }
                     attempts += 1
@@ -501,6 +502,9 @@ public struct ValueAndChoiceTreeInterpreter<FinalOutput>: IteratorProtocol, Sequ
         let uniqueMaxAttempts: UInt64?
         var totalAttempts: UInt64 = 0
         var seenSequences: Set<ChoiceSequence> = []
+
+        // Cache of adapted generators keyed by filter fingerprint
+        var adaptedFilterCache: [UInt64: ReflectiveGenerator<Any>] = [:]
 
         init(
             maxRuns: UInt64,

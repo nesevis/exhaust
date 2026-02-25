@@ -277,7 +277,16 @@ public struct CGSValueAndChoiceTreeInterpreter<FinalOutput>: IteratorProtocol, S
 
             // MARK: - Filter
 
-            case let .filter(gen, _, predicate):
+            case let .filter(gen, fingerprint, predicate):
+                let adaptedGen: ReflectiveGenerator<Any>
+                if let cached = context.adaptedFilterCache[fingerprint] {
+                    adaptedGen = cached
+                } else {
+                    let adapted = try? ChoiceGradientSampling.autoAdapt(gen, predicate: predicate)
+                    adaptedGen = adapted ?? gen
+                    context.adaptedFilterCache[fingerprint] = adaptedGen
+                }
+
                 var attempts = 0 as UInt64
                 let runGenerator = { (gen: ReflectiveGenerator<Any>, context: Context) in
                     try Self.generateRecursive(
@@ -289,7 +298,7 @@ public struct CGSValueAndChoiceTreeInterpreter<FinalOutput>: IteratorProtocol, S
                     )
                 }
                 while attempts < context.maxFilterRuns {
-                    guard let (result, tree) = try runGenerator(gen, context) else { return nil }
+                    guard let (result, tree) = try runGenerator(adaptedGen, context) else { return nil }
 
                     if predicate(result) {
                         return try runContinuation(result, tree)
@@ -816,6 +825,9 @@ public struct CGSValueAndChoiceTreeInterpreter<FinalOutput>: IteratorProtocol, S
         let uniqueMaxAttempts: UInt64?
         var totalAttempts: UInt64 = 0
         var seenSequences: Set<ChoiceSequence> = []
+
+        // Cache of adapted generators keyed by filter fingerprint
+        var adaptedFilterCache: [UInt64: ReflectiveGenerator<Any>] = [:]
 
         init(
             maxRuns: UInt64,

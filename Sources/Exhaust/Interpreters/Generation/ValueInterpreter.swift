@@ -175,13 +175,26 @@ public struct ValueInterpreter<Element>: IteratorProtocol, Sequence {
                     runContinuation: runContinuation,
                 )
 
-            case let .filter(gen, _, _):
-                return try handlePassthrough(
-                    gen,
-                    inputValue: inputValue,
-                    context: context,
-                    runContinuation: runContinuation,
-                )
+            case let .filter(gen, fingerprint, predicate):
+                let adaptedGen: ReflectiveGenerator<Any>
+                if let cached = context.adaptedFilterCache[fingerprint] {
+                    adaptedGen = cached
+                } else {
+                    let adapted = try? ChoiceGradientSampling.autoAdapt(gen, predicate: predicate)
+                    adaptedGen = adapted ?? gen
+                    context.adaptedFilterCache[fingerprint] = adaptedGen
+                }
+
+                var attempts = 0 as UInt64
+                while attempts < context.maxFilterRuns {
+                    guard let result = try generateRecursive(adaptedGen, with: inputValue, context: context) else { return nil }
+
+                    if predicate(result) {
+                        return try runContinuation(result)
+                    }
+                    attempts += 1
+                }
+                throw GeneratorError.sparseValidityCondition
 
             case let .classify(gen, _, _):
                 return try handlePassthrough(
@@ -342,10 +355,14 @@ public struct ValueInterpreter<Element>: IteratorProtocol, Sequence {
 
     private final class Context {
         let maxRuns: UInt64
+        let maxFilterRuns: UInt64 = 500
         var isFixed: Bool
         var size: UInt64
         var sizeOverride: UInt64?
         var prng: Xoshiro256
+
+        // Cache of adapted generators keyed by filter fingerprint
+        var adaptedFilterCache: [UInt64: ReflectiveGenerator<Any>] = [:]
 
         init(
             maxRuns: UInt64,

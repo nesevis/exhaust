@@ -214,23 +214,17 @@ public extension ReflectiveGenerator where Operation == ReflectiveOperation {
     /// - Parameter predicate: Validity condition that generated values must satisfy
     /// - Returns: A filtered generator that only produces valid values
     @inlinable
-    func filter(_ predicate: @escaping (Value) -> Bool) -> ReflectiveGenerator<Value> {
-        // TODO: This is probably slightly too expensive?
-        var prng = Xoshiro256()
-        return switch self {
-        case .pure:
-            // This shouldn't happen? Should it be a no-op, or an error? Should we throw in the continuation?
-            .impure(
-                operation: .filter(gen: erase(), fingerprint: prng.next(), predicate: { value in predicate(value as! Value) }),
-                continuation: { .pure($0 as! Value) },
-            )
-        case .impure:
-            // How can we fingerprint the generator here. Generate a random value? UUID?
-            .impure(
-                operation: .filter(gen: erase(), fingerprint: prng.next(), predicate: { value in predicate(value as! Value) }),
-                continuation: { .pure($0 as! Value) },
-            )
-        }
+    func filter(
+        _ predicate: @escaping (Value) -> Bool,
+        fileID: String = #fileID,
+        line: UInt = #line
+    ) -> ReflectiveGenerator<Value> {
+        let fingerprint = fileID.hashValue.bitPattern64 &+ line.bitPattern64
+
+        return .impure(
+            operation: .filter(gen: erase(), fingerprint: fingerprint, predicate: { value in predicate(value as! Value) }),
+            continuation: { .pure($0 as! Value) }
+        )
     }
 
     @inlinable
