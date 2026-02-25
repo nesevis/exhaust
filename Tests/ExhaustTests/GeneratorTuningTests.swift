@@ -291,6 +291,59 @@ struct GeneratorTuningTests {
         #expect(values1 == values2, "Same seed should produce identical tuned generators")
     }
 
+    // MARK: - Convergence Early-Stopping
+
+    @Test("Convergence early-stopping produces equivalent results with fewer samples")
+    func convergenceEarlyStopping() throws {
+        // A pick where one branch trivially satisfies and the other never does.
+        // Convergence should stabilize quickly — a high sample cap shouldn't
+        // change the weights compared to a moderate one.
+        let gen = Gen.pick(choices: [
+            (weight: UInt64(1), generator: Gen.choose(in: 1 ... 50)),
+            (weight: UInt64(1), generator: Gen.choose(in: 501 ... 1000)),
+        ])
+
+        let predicate: (Int) -> Bool = { $0 <= 50 }
+
+        // Moderate budget — should converge well within this
+        let tunedModerate = try GeneratorTuning.tune(
+            gen, samples: 100, seed: 42, predicate: predicate
+        )
+
+        // Large budget — convergence should stop early, yielding similar weights
+        let tunedLarge = try GeneratorTuning.tune(
+            gen, samples: 2000, seed: 42, predicate: predicate
+        )
+
+        guard case let .impure(.pick(moderateChoices), _) = tunedModerate,
+              case let .impure(.pick(largeChoices), _) = tunedLarge else {
+            Issue.record("Expected both tuned generators to be picks")
+            return
+        }
+
+        // Both should have the first branch weighted higher than the second
+        #expect(moderateChoices[0].weight > moderateChoices[1].weight,
+                "Moderate: first branch should be favoured")
+        #expect(largeChoices[0].weight > largeChoices[1].weight,
+                "Large: first branch should be favoured")
+
+        // Weight ratios should be similar — convergence means the large budget
+        // didn't fundamentally change the distribution
+        let moderateTotal = Double(moderateChoices[0].weight + moderateChoices[1].weight)
+        let largeTotal = Double(largeChoices[0].weight + largeChoices[1].weight)
+
+        guard moderateTotal > 0, largeTotal > 0 else {
+            Issue.record("Expected non-zero total weights")
+            return
+        }
+
+        let moderateRatio = Double(moderateChoices[0].weight) / moderateTotal
+        let largeRatio = Double(largeChoices[0].weight) / largeTotal
+
+        #expect(abs(moderateRatio - largeRatio) < 0.15,
+                "Weight ratios should be similar (moderate: \(moderateRatio), large: \(largeRatio))")
+    }
+
     // MARK: - Depth Budget
 
     @Test("Deeply nested generators do not explode in sample count")

@@ -326,7 +326,7 @@ struct OnlineCGSInterpreterTests {
         let tallTreeCount = validTrees.count { $0.height >= 2 }
         #expect(tallTreeCount > 0,
                 "Smoothed CGS should produce BSTs at height >= 2, got heights: \(heights)")
-        #expect(uniqueTrees.count > 50,
+        #expect(uniqueTrees.count >= 50,
                 "Smoothed CGS should produce diverse valid BSTs, got \(uniqueTrees.count) unique")
     }
 

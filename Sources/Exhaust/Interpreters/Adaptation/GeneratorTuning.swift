@@ -43,13 +43,24 @@ enum GeneratorTuning {
             self.rng = rng
         }
 
-        /// Sample budget decays exponentially with depth to prevent blowup
-        /// in deeply nested generators.
-        var currentSampleCount: UInt64 {
-            guard depth > 0 else { return baseSampleCount }
-            return max(1, baseSampleCount / (2 << min(depth - 1, 10)))
+        /// Sample budget decays linearly with depth as a safety ceiling.
+        /// Convergence detection in `measureAndTunePick` typically stops
+        /// well before this cap, so deeper sites still get meaningful signal.
+        var maxSamplesPerSite: UInt64 {
+            max(1, baseSampleCount / (1 + depth))
         }
     }
+
+    // MARK: - Convergence Constants
+
+    /// Number of samples per choice in each batch before checking convergence.
+    private static let convergenceBatchSize: UInt64 = 20
+
+    /// Maximum absolute shift in normalized weights to consider converged.
+    private static let convergenceThreshold: Double = 0.05
+
+    /// Minimum total samples per choice before convergence checks begin (2 × batchSize).
+    private static let convergenceMinSamples: UInt64 = 40
 
     // MARK: - Public API
 
@@ -64,6 +75,8 @@ enum GeneratorTuning {
     ///   - probeRuns: Number of probe generations to inspect (default 10).
     ///   - minPerChoice: Minimum samples per choice at the deepest pick level (default 30).
     ///   - maxSamples: Upper bound on the computed sample count (default 5000).
+    ///   - maxRuns: Planned generation volume. When provided, the tuning budget is
+    ///     capped so that tuning doesn't dwarf generation time for small runs.
     ///   - maxSize: Maximum size parameter used when subdividing `getSize`.
     ///   - seed: Optional seed for deterministic tuning.
     ///   - predicate: The property that generated values should satisfy.
@@ -74,6 +87,7 @@ enum GeneratorTuning {
         probeRuns: UInt64 = 10,
         minPerChoice: UInt64 = 30,
         maxSamples: UInt64 = 5000,
+        maxRuns: UInt64? = nil,
         maxSize: UInt64 = 100,
         seed: UInt64? = nil,
         predicate: @escaping (Output) -> Bool
@@ -87,7 +101,15 @@ enum GeneratorTuning {
 
         guard maxComplexity > 0 else { return generator }
 
-        let samples = min(maxSamples, minPerChoice * maxComplexity)
+        var samples = min(maxSamples, minPerChoice * maxComplexity)
+
+        // Cap tuning budget relative to planned generation volume.
+        // Tuning cost should not dwarf generation time — for small runs
+        // we only need directionally correct weights, not precise ones.
+        // Convergence detection handles the rest.
+        if let maxRuns {
+            samples = min(samples, max(convergenceMinSamples, maxRuns / 5))
+        }
 
         let tuned = try tune(generator, samples: samples, maxSize: maxSize, seed: seed, predicate: predicate)
         return smoothAdaptively(tuned)
@@ -233,66 +255,147 @@ enum GeneratorTuning {
         context.depth += 1
         defer { context.depth -= 1 }
 
-        var tunedChoices = ContiguousArray<ReflectiveOperation.PickTuple>()
-        tunedChoices.reserveCapacity(choices.count)
+        let choiceCount = choices.count
+        let maxSamples = context.maxSamplesPerSite
 
-        for choice in choices {
-            // 1. Sample choice's inner generator, then feed through continuation.
-            //    Uses a jumped PRNG stream so Phase 1 sampling doesn't perturb
-            //    context.rng — keeping Phase 2's recursive tuning trajectory
-            //    independent of sampleCount.
-            var samplingRng = context.rng
-            samplingRng.jump()
+        // --- Phase 1: Batched sampling of all choices with convergence ---
 
-            let sampleCount = context.currentSampleCount
-            var successCount: UInt64 = 0
-            var distinctOutputs: Set<AnyHashable> = []
-            var continuationCache: [AnyHashable: Bool] = [:]
+        // Per-choice state: independent RNG stream, accumulators, cache
+        var choiceRngs = (0 ..< choiceCount).map {
+            context.rng.spawned(streamID: UInt64($0))
+        }
+        var successCounts = Array(repeating: UInt64(0), count: choiceCount)
+        var distinctOutputs = Array(repeating: Set<AnyHashable>(), count: choiceCount)
+        var continuationCaches = Array(repeating: [AnyHashable: Bool](), count: choiceCount)
+        var totalSampled: UInt64 = 0
 
-            for _ in 0 ..< sampleCount {
-                // Advance RNG to ensure each sample sees a unique state.
-                // Without this, choices with trivial generators (e.g. .just)
-                // leave the RNG frozen — the entire predicate chain may
-                // consist of .pure unwrapping that consumes no randomness,
-                // making all samples identical.
-                _ = samplingRng.next()
+        // Previous normalized weights for convergence comparison
+        var previousNormalized = Array(repeating: 0.0, count: choiceCount)
 
-                guard let innerValue = try ValueInterpreter<Any>.generate(
-                    choice.generator, maxRuns: 1, using: &samplingRng
-                ) else { continue }
+        // Trivial single-choice picks converge immediately after minimum samples
+        let isTrivial = choiceCount <= 1
 
-                let success: Bool
-                var output: Output?
-                do {
-                    let nextGen = try continuation(innerValue)
-                    output = try ValueInterpreter<Output>.generate(
-                        nextGen, maxRuns: 1, using: &samplingRng
-                    )
-                    success = output.map(predicate) ?? false
-                } catch {
-                    success = false
-                }
+        // Scale minimum samples with depth — deep sites shouldn't be forced
+        // to the full 40-sample floor when their cap is already low.
+        let effectiveMinSamples = min(convergenceMinSamples, maxSamples)
 
-                if success {
-                    successCount += 1
-                    if let hashable = output as? AnyHashable {
-                        distinctOutputs.insert(hashable)
+        while totalSampled < maxSamples {
+            let batchEnd = min(totalSampled + convergenceBatchSize, maxSamples)
+
+            // Sample one batch for every choice
+            for choiceIdx in 0 ..< choiceCount {
+                for _ in totalSampled ..< batchEnd {
+                    // Advance RNG to ensure each sample sees a unique state.
+                    // Without this, choices with trivial generators (e.g. .just)
+                    // leave the RNG frozen — the entire predicate chain may
+                    // consist of .pure unwrapping that consumes no randomness,
+                    // making all samples identical.
+                    _ = choiceRngs[choiceIdx].next()
+
+                    guard let innerValue = try ValueInterpreter<Any>.generate(
+                        choices[choiceIdx].generator, maxRuns: 1, using: &choiceRngs[choiceIdx]
+                    ) else { continue }
+
+                    let success: Bool
+                    var output: Output?
+                    do {
+                        let nextGen = try continuation(innerValue)
+                        output = try ValueInterpreter<Output>.generate(
+                            nextGen, maxRuns: 1, using: &choiceRngs[choiceIdx]
+                        )
+                        success = output.map(predicate) ?? false
+                    } catch {
+                        success = false
                     }
-                }
-                if let hashable = innerValue as? AnyHashable {
-                    continuationCache[hashable] = success
+
+                    if success {
+                        successCounts[choiceIdx] += 1
+                        if let hashable = output as? AnyHashable {
+                            distinctOutputs[choiceIdx].insert(hashable)
+                        }
+                    }
+                    if let hashable = innerValue as? AnyHashable {
+                        continuationCaches[choiceIdx][hashable] = success
+                    }
                 }
             }
 
-            // 2. Recursively tune the choice's inner generator.
-            //    The composed predicate checks the cache from Phase 1 first,
-            //    falling back to full continuation evaluation on cache miss.
-            //    Cache misses use their own RNG stream (continuing from the
-            //    sampling stream) to avoid perturbing context.rng.
-            var composedRng = samplingRng
+            totalSampled = batchEnd
+
+            // Trivial picks (single choice) are converged by definition
+            if isTrivial, totalSampled >= effectiveMinSamples { break }
+
+            // All checks below require the minimum sample floor
+            guard totalSampled >= effectiveMinSamples else { continue }
+
+            // Unambiguous early exit: if one choice has ≥80% success rate and
+            // another has 0%, the signal is clear — stop without waiting for
+            // the second convergence check (which needs one more batch to see
+            // the shift stabilize).
+            if !isTrivial {
+                let hasZero = successCounts.contains(0)
+                let maxRate = Double(successCounts.max()!) / Double(totalSampled)
+                if hasZero, maxRate >= 0.8 {
+                    break
+                }
+            }
+
+            // All-zero successes: skip convergence, keep sampling to the cap
+            let totalSuccesses = successCounts.reduce(0, +)
+            guard totalSuccesses > 0 else { continue }
+
+            // Compute normalized success distribution
+            let normalized = successCounts.map {
+                Double($0) / Double(totalSuccesses)
+            }
+
+            // Check max absolute shift from previous normalized distribution
+            let maxShift = zip(normalized, previousNormalized)
+                .map { abs($0 - $1) }
+                .max() ?? .infinity
+
+            if maxShift < convergenceThreshold {
+                break
+            }
+
+            previousNormalized = normalized
+        }
+
+        // Advance context RNG once for deterministic Phase 2
+        context.rng.jump()
+
+        // --- Phase 2: Recursive tuning per choice ---
+
+        var tunedChoices = ContiguousArray<ReflectiveOperation.PickTuple>()
+        tunedChoices.reserveCapacity(choiceCount)
+
+        // Only skip dominated branches if at least one branch has positive
+        // successes. When all branches scored 0, the all-zero fallback will
+        // restore weight 1, so those branches need tuned inner generators.
+        let hasAnySuccess = successCounts.contains(where: { $0 > 0 })
+
+        for choiceIdx in 0 ..< choiceCount {
+            let choice = choices[choiceIdx]
+
+            // Skip recursive tuning for dominated branches — their weight
+            // will be 0 and they won't be selected during generation.
+            if hasAnySuccess, successCounts[choiceIdx] == 0 {
+                tunedChoices.append(ReflectiveOperation.PickTuple(
+                    siteID: choice.siteID,
+                    id: choice.id,
+                    weight: 0,
+                    generator: choice.generator
+                ))
+                continue
+            }
+
+            // The composed predicate checks the cache from Phase 1 first,
+            // falling back to full continuation evaluation on cache miss.
+            var composedRng = choiceRngs[choiceIdx]
+            let cache = continuationCaches[choiceIdx]
             let composedPredicate: (Any) -> Bool = { innerValue in
                 if let hashable = innerValue as? AnyHashable,
-                   let cached = continuationCache[hashable] {
+                   let cached = cache[hashable] {
                     return cached
                 }
                 do {
@@ -319,8 +422,8 @@ enum GeneratorTuning {
             // outputs, not just frequent ones. The log factor compresses the
             // advantage of high-validity but low-diversity choices (e.g. leaf
             // subtrees that always produce the same few trees).
-            let diversityFactor = log(Double(distinctOutputs.count) + 1)
-            let weight = UInt64(Double(successCount) * diversityFactor)
+            let diversityFactor = log(Double(distinctOutputs[choiceIdx].count) + 1)
+            let weight = UInt64(Double(successCounts[choiceIdx]) * diversityFactor)
 
             tunedChoices.append(ReflectiveOperation.PickTuple(
                 siteID: choice.siteID,
