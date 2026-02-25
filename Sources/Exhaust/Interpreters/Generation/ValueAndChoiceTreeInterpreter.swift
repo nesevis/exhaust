@@ -234,22 +234,25 @@ public struct ValueAndChoiceTreeInterpreter<FinalOutput>: IteratorProtocol, Sequ
 
             // MARK: - Filter
 
-            case let .filter(gen, fingerprint, predicate):
+            case let .filter(gen, fingerprint, filterType, predicate):
                 // Look up or create a tuned generator for this filter.
                 // The fingerprint is stable per filter site, so identical filters
                 // inside a bind will share the same tuned generator.
-                let tunedGen: ReflectiveGenerator<Any>
-                if let cached = context.tunedFilterCache[fingerprint] {
-                    tunedGen = cached
+                let filteredGen: ReflectiveGenerator<Any>
+                if filterType == .reject {
+                    // Pure rejection sampling; no tuning required
+                    filteredGen = gen
+                } else if let cached = context.tunedFilterCache[fingerprint] {
+                    filteredGen = cached
                 } else {
                     let tuned = try? GeneratorTuning.probeAndTune(gen, predicate: predicate)
-                    tunedGen = tuned ?? gen
-                    context.tunedFilterCache[fingerprint] = tunedGen
+                    filteredGen = tuned ?? gen
+                    context.tunedFilterCache[fingerprint] = filteredGen
                 }
 
                 var attempts = 0 as UInt64
                 while attempts < context.maxFilterRuns {
-                    guard let (result, tree) = try runGenerator(tunedGen, context) else { return nil }
+                    guard let (result, tree) = try runGenerator(filteredGen, context) else { return nil }
 
                     if predicate(result) {
                         return try runContinuation(result, tree)

@@ -126,7 +126,7 @@ public enum Interpreters {
         case let .zip(generators):
             return try reflectZipOperation(generators: generators, finalOutput: finalOutput)
 
-        case let .filter(gen, _, _):
+        case let .filter(gen, _, _, _):
             return try reflectPassthroughOperation(gen: gen, finalOutput: finalOutput)
 
         case let .classify(gen, _, _):

@@ -101,7 +101,7 @@ extension Interpreters {
                 continuation: continuation,
                 choices: &choices,
             )
-        case let .filter(gen, _, _), let .classify(gen, _, _):
+        case let .filter(gen, _, _, _), let .classify(gen, _, _):
             try replayWithChoicesHelper(gen, choices: &choices) as? Output
         }
     }
@@ -381,7 +381,7 @@ extension Interpreters {
             )
         case let .prune(subGenerator):
             try replayRecursive(subGenerator, with: script) as? Output
-        case let .filter(gen, _, _), let .classify(gen, _, _):
+        case let .filter(gen, _, _, _), let .classify(gen, _, _):
             try replayRecursive(gen, with: script) as? Output
         }
     }

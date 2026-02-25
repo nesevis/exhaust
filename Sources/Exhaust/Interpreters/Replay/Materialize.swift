@@ -367,7 +367,7 @@ extension Interpreters {
             )
         case .prune:
             fatalError("Should not be encountered")
-        case let .filter(gen, _, predicate):
+        case let .filter(gen, _, _, predicate):
             try materializeRecursiveFilter(
                 gen: gen,
                 predicate: predicate,
@@ -664,7 +664,7 @@ extension Interpreters {
                 choices: &choices,
                 context: &context,
             )
-        case let .filter(gen, _, predicate):
+        case let .filter(gen, _, _, predicate):
             try materializeWithChoicesFilter(
                 gen: gen,
                 predicate: predicate,

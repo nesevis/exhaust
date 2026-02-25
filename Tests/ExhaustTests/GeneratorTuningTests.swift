@@ -194,7 +194,7 @@ struct GeneratorTuningTests {
         )
 
         // Verify that the tuned generator structure contains a filter with an tuned inner gen
-        guard case let .impure(.filter(tunedInner, _, _), _) = tuned else {
+        guard case let .impure(.filter(tunedInner, _, _, _), _) = tuned else {
             Issue.record("Expected tuned generator to be a filter")
             return
         }

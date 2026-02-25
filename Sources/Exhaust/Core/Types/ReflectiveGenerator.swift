@@ -176,45 +176,43 @@ public extension ReflectiveGenerator where Operation == ReflectiveOperation {
         Gen.arrayOf(self, Gen.choose(in: range))
     }
 
-    /// Creates a filtered generator that only produces values satisfying a validity condition.
+    /// Creates a filtered generator that only produces values satisfying a predicate.
     ///
-    /// This combinator wraps the current generator with a validity predicate, enabling automatic
-    /// optimization through Choice Gradient Sampling (CGS) or fallback to rejection sampling.
-    /// The filter operation signals to the framework that this generator has specific validity
-    /// requirements that could benefit from intelligent optimization.
+    /// The filter combinator supports two strategies for satisfying the predicate,
+    /// selectable via the `type` parameter:
     ///
-    /// **Optimization Strategy**:
-    /// - **CGS-suitable generators**: The system analyzes which random choices lead to predicate
-    ///   satisfaction and biases future generation toward valid outputs
-    /// - **CGS-unsuitable generators**: Falls back to deterministic rejection sampling using a
-    ///   separate PRNG to maintain reproducibility
+    /// - ``FilterType/reject``: Pure rejection sampling — generate values and discard
+    ///   those that fail the predicate. Simple and predictable, but inefficient when
+    ///   valid values are sparse.
+    /// - ``FilterType/tune``: Probes each branching point's choices through the
+    ///   continuation pipeline to measure predicate satisfaction rates, then biases
+    ///   weights toward valid outputs before generation begins. More expensive upfront,
+    ///   but dramatically reduces rejection attempts for structurally constrained
+    ///   generators.
+    /// - ``FilterType/auto`` (default): Selects a strategy based on generator structure.
+    ///   Uses ``FilterType/tune`` when the generator contains branching points,
+    ///   otherwise falls back to ``FilterType/reject``.
     ///
-    /// **Deterministic Behavior**: Even with rejection sampling, the filtered generator maintains
-    /// deterministic behavior. Given the same seed, it will reject the same sequence of invalid
-    /// values and accept the same valid value, preserving reproducibility for testing.
-    ///
-    /// **Performance Considerations**: Filtering can significantly improve test efficiency by
-    /// reducing wasted generation attempts, especially when combined with CGS optimization.
-    /// However, overly restrictive predicates may still require many rejection attempts.
+    /// Both strategies maintain deterministic behaviour — given the same seed, the
+    /// generator will produce the same sequence of values.
     ///
     /// ```swift
-    /// // Example: Generate only positive integers
-    /// let positiveInts = Gen.choose(in: Int.min...Int.max)
-    ///     .filter { $0 > 0 }
-    ///
-    /// // Example: Generate balanced binary search trees
+    /// // Auto strategy (default) — tunes if branching points are present
     /// let balancedBST = BinaryTree.arbitrary
-    ///     .filter { tree in tree.isBalanced && tree.satisfiesBSTProperty }
+    ///     .filter { $0.isBalanced && $0.satisfiesBSTProperty }
+    ///
+    /// // Explicit rejection sampling
+    /// let positive = Gen.choose(in: Int.min...Int.max)
+    ///     .filter(.reject) { $0 > 0 }
     /// ```
     ///
-    /// **Fingerprinting**: The implementation automatically generates a unique fingerprint for
-    /// each filter operation, enabling the optimization system to cache and reuse learned
-    /// gradients across different instances with the same logical constraints.
-    ///
-    /// - Parameter predicate: Validity condition that generated values must satisfy
-    /// - Returns: A filtered generator that only produces valid values
+    /// - Parameters:
+    ///   - type: Strategy for satisfying the predicate. Defaults to ``FilterType/auto``.
+    ///   - predicate: Validity condition that generated values must satisfy.
+    /// - Returns: A filtered generator that only produces valid values.
     @inlinable
     func filter(
+        _ type: FilterType = .auto,
         _ predicate: @escaping (Value) -> Bool,
         fileID: String = #fileID,
         line: UInt = #line
@@ -222,7 +220,7 @@ public extension ReflectiveGenerator where Operation == ReflectiveOperation {
         let fingerprint = fileID.hashValue.bitPattern64 &+ line.bitPattern64
 
         return .impure(
-            operation: .filter(gen: erase(), fingerprint: fingerprint, predicate: { value in predicate(value as! Value) }),
+            operation: .filter(gen: erase(), fingerprint: fingerprint, filterType: type, predicate: { value in predicate(value as! Value) }),
             continuation: { .pure($0 as! Value) }
         )
     }

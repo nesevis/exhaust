@@ -175,9 +175,11 @@ public struct ValueInterpreter<Element>: IteratorProtocol, Sequence {
                     runContinuation: runContinuation,
                 )
 
-            case let .filter(gen, fingerprint, predicate):
+            case let .filter(gen, fingerprint, filterType, predicate):
                 let tunedGen: ReflectiveGenerator<Any>
-                if let cached = context.tunedFilterCache[fingerprint] {
+                if filterType == .reject {
+                    tunedGen = gen
+                } else if let cached = context.tunedFilterCache[fingerprint] {
                     tunedGen = cached
                 } else {
                     let tuned = try? GeneratorTuning.probeAndTune(gen, predicate: predicate)

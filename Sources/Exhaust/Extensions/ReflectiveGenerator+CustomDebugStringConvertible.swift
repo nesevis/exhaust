@@ -109,7 +109,7 @@ extension ReflectiveGenerator: CustomDebugStringConvertible where Operation == R
         case .getSize:
             return "getSize"
 
-        case let .filter(gen, fingerprint, _):
+        case let .filter(gen, fingerprint, _, _):
             let fingerprintShort = String(format: "%08X", fingerprint & 0xFFFF_FFFF)
             let genDesc = gen.treeDescription(prefix: childPrefix, isLast: true, depth: depth + 1)
             return "filter(fingerprint: \(fingerprintShort))\n" + genDesc

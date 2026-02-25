@@ -224,10 +224,11 @@ enum GeneratorTuning {
                     predicate: predicate
                 )
 
-            case let .filter(subGen, fingerprint, filterPredicate):
+            case let .filter(subGen, fingerprint, filterType, filterPredicate):
                 return try tuneFilter(
                     subGen: subGen,
                     fingerprint: fingerprint,
+                    filterType: filterType,
                     filterPredicate: filterPredicate,
                     continuation: continuation,
                     context: context
@@ -801,10 +802,18 @@ enum GeneratorTuning {
     private static func tuneFilter<Output>(
         subGen: ReflectiveGenerator<Any>,
         fingerprint: UInt64,
+        filterType: FilterType,
         filterPredicate: @escaping (Any) -> Bool,
         continuation: @escaping (Any) throws -> ReflectiveGenerator<Output>,
         context: TuningContext
     ) throws -> ReflectiveGenerator<Output> {
+        guard filterType != .reject else {
+            return .impure(
+                operation: .filter(gen: subGen, fingerprint: fingerprint, filterType: filterType, predicate: filterPredicate),
+                continuation: continuation
+            )
+        }
+
         // Use the filter's own predicate to tune the inner generator
         let tunedInner = try tuneRecursive(
             subGen,
@@ -814,7 +823,7 @@ enum GeneratorTuning {
         )
 
         return .impure(
-            operation: .filter(gen: tunedInner, fingerprint: fingerprint, predicate: filterPredicate),
+            operation: .filter(gen: tunedInner, fingerprint: fingerprint, filterType: filterType, predicate: filterPredicate),
             continuation: continuation
         )
     }
@@ -987,10 +996,11 @@ enum GeneratorTuning {
                 next: smoothGenerator(next, epsilon: epsilon, temperature: temperature)
             )
 
-        case let .filter(gen, fingerprint, predicate):
+        case let .filter(gen, fingerprint, filterType, predicate):
             return .filter(
                 gen: smoothGenerator(gen, epsilon: epsilon, temperature: temperature),
                 fingerprint: fingerprint,
+                filterType: filterType,
                 predicate: predicate
             )
 
@@ -1131,7 +1141,7 @@ enum GeneratorTuning {
         case let .resize(_, next):
             profileGenerator(next, depth: depth, sites: &sites)
 
-        case let .filter(gen, _, _):
+        case let .filter(gen, _, _, _):
             profileGenerator(gen, depth: depth, sites: &sites)
 
         case let .classify(gen, _, _):
@@ -1399,10 +1409,11 @@ enum GeneratorTuning {
                 next: smoothAdaptiveGenerator(next, epsilon: epsilon, baseTemperature: baseTemperature, maxTemperature: maxTemperature)
             )
 
-        case let .filter(gen, fingerprint, predicate):
+        case let .filter(gen, fingerprint, filterType, predicate):
             return .filter(
                 gen: smoothAdaptiveGenerator(gen, epsilon: epsilon, baseTemperature: baseTemperature, maxTemperature: maxTemperature),
                 fingerprint: fingerprint,
+                filterType: filterType,
                 predicate: predicate
             )
 
