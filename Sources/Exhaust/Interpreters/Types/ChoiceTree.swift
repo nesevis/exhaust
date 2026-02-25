@@ -87,6 +87,25 @@ extension ChoiceTree {
         return false
     }
 
+    /// Whether this tree contains any pick sites (`.branch` nodes).
+    /// Short-circuits on the first pick found.
+    var containsPicks: Bool {
+        switch self {
+        case .branch:
+            return true
+        case .choice, .just, .getSize:
+            return false
+        case let .selected(inner):
+            return inner.containsPicks
+        case let .sequence(_, elements, _):
+            return elements.contains(where: \.containsPicks)
+        case let .group(array):
+            return array.contains(where: \.containsPicks)
+        case let .resize(_, choices):
+            return choices.contains(where: \.containsPicks)
+        }
+    }
+
     var structuralComplexity: UInt64 {
         switch self {
         case .choice:

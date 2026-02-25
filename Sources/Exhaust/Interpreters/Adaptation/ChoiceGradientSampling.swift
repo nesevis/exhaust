@@ -53,6 +53,44 @@ enum ChoiceGradientSampling {
 
     // MARK: - Public API
 
+    /// Probes a generator's structure by running it a few times and checking whether
+    /// the resulting choice trees contain any pick sites. If picks are present,
+    /// performs full CGS adaptation with adaptive smoothing. If not, returns the
+    /// generator unchanged — adaptation has nothing to attach weights to.
+    ///
+    /// - Parameters:
+    ///   - generator: The generator to probe and possibly adapt.
+    ///   - probeSeed: Seed for the probe runs (default 0).
+    ///   - probeRuns: Number of probe generations to inspect (default 10).
+    ///   - samples: Base number of samples per pick choice for adaptation (decays with depth).
+    ///   - maxSize: Maximum size parameter used when subdividing `getSize`.
+    ///   - seed: Optional seed for deterministic adaptation.
+    ///   - predicate: The property that generated values should satisfy.
+    /// - Returns: An adapted generator if picks were found, or the original generator unchanged.
+    static func autoAdapt<Output>(
+        _ generator: ReflectiveGenerator<Output>,
+        probeSeed: UInt64 = 0,
+        probeRuns: UInt64 = 10,
+        samples: UInt64 = 100,
+        maxSize: UInt64 = 100,
+        seed: UInt64? = nil,
+        predicate: @escaping (Output) -> Bool
+    ) throws -> ReflectiveGenerator<Output> {
+        var probe = ValueAndChoiceTreeInterpreter(generator, seed: probeSeed, maxRuns: probeRuns)
+        var hasPicks = false
+        while let (_, tree) = probe.next() {
+            if tree.containsPicks {
+                hasPicks = true
+                break
+            }
+        }
+
+        guard hasPicks else { return generator }
+
+        let adapted = try adapt(generator, samples: samples, maxSize: maxSize, seed: seed, predicate: predicate)
+        return smoothAdaptively(adapted)
+    }
+
     /// Adapts a generator so that its pick weights reflect predicate satisfaction rates.
     ///
     /// The transformation is eager — the returned generator has its structure fully
