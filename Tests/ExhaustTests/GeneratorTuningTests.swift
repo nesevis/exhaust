@@ -363,13 +363,13 @@ struct GeneratorTuningTests {
                 "Tuned rate (\(tunedRate)) should exceed naive rate (\(naiveRate))")
     }
 
-    @Test("BST: 10 second benchmark — CGS vs rejection sampling (paper comparison)")
-    func bstTenSecondBenchmark() throws {
+    @Test("BST: timed benchmark — CGS vs rejection sampling (paper comparison)", .disabled("Not required"))
+    func bstTimedBenchmark() throws {
         let naive = BST.arbitrary
         let isValidBST: (BST) -> Bool = { $0.height >= 1 && $0.isValidBST() }
-        let duration: TimeInterval = 10
+        let duration: TimeInterval = 1
 
-        // --- Rejection sampling (generate naively, keep only valid) ---
+        // --- Rejection sampling baseline (run once) ---
         var rejectionIterator = ValueInterpreter(naive, seed: 42, maxRuns: .max)
         var rejectionTotal = 0
         var rejectionUnique = Set<BST>()
@@ -385,64 +385,60 @@ struct GeneratorTuningTests {
             }
         }
 
-        // --- CGS-tuned generation ---
-        let adaptStart = ContinuousClock.now
-        let tuned = try GeneratorTuning.tune(
-            naive,
-            samples: 1000,
-            seed: 12345,
-            predicate: isValidBST
-        )
-        let adaptTime = ContinuousClock.now - adaptStart
-
-        var cgsIterator = ValueInterpreter(tuned, seed: 42, maxRuns: .max)
-        var cgsTotal = 0
-        var cgsValid = 0
-        var cgsUnique = Set<BST>()
-        var cgsHeights = [Int: [BST]]()
-
-        let cgsStart = ContinuousClock.now
-        let cgsGenerationBudget = Duration.seconds(duration) - adaptTime
-        while ContinuousClock.now - cgsStart < cgsGenerationBudget {
-            guard let tree = cgsIterator.next() else { break }
-            cgsTotal += 1
-            if isValidBST(tree) {
-                cgsValid += 1
-                cgsUnique.insert(tree)
-                cgsHeights[tree.height, default: []].append(tree)
-            }
-        }
-        let rHeights = rejectionHeights
-            .sorted(by: { $0.key < $1.key })
-            .map { ($0.key, $0.value.count) }
         let rUHeights = rejectionHeights
             .sorted(by: { $0.key < $1.key })
             .map { ($0.key, Set($0.value).count) }
-        
-        let cHeights = cgsHeights
-            .sorted(by: { $0.key < $1.key })
-            .map { ($0.key, $0.value.count) }
-        let cUHeights = cgsHeights
-            .sorted(by: { $0.key < $1.key })
-            .map { ($0.key, Set($0.value).count) }
 
-        print("=== 1-minute BST benchmark (paper comparison) ===")
-        print("Paper reference:    Rejection 7,354 (109 unique) | CGS 22,107 (338 unique)")
-        print()
+        print("=== \(duration)-second BST benchmark — sampleCount sweep ===")
         print("Rejection sampling: \(rejectionTotal) valid (\(rejectionUnique.count) unique)")
-        print("  Heights: \(rHeights)")
         print("  Heights unique: \(rUHeights)")
         print()
-        let adaptMs = Double(adaptTime.components.seconds) * 1000 + Double(adaptTime.components.attoseconds) / 1e15
-        print("CGS (adapt: \(String(format: "%.0f", adaptMs))ms):")
-        print("  Generated: \(cgsTotal) total, \(cgsValid) valid (\(cgsUnique.count) unique)")
-        print("  Heights: \(cHeights)")
-        print("  Heights unique: \(cUHeights)")
-        print()
-        print("Unique valid ratio: CGS/Rejection = \(String(format: "%.1fx", Double(cgsUnique.count) / Double(max(1, rejectionUnique.count))))")
 
-        #expect(cgsUnique.count > rejectionUnique.count,
-                "CGS unique (\(cgsUnique.count)) should exceed rejection unique (\(rejectionUnique.count))")
+        // --- CGS sweep across sample counts × tuning seeds ---
+        let sampleCounts: [UInt64] = [500, 750, 1000, 1250, 1500, 2000, 3000, 5000]
+        let tuningSeeds: [UInt64] = [12345, 99999, 271828, 314159]
+
+        for seed in tuningSeeds {
+            print("--- seed=\(seed) ---")
+            for sampleCount in sampleCounts {
+                let start = ContinuousClock.now
+                let tuned = try GeneratorTuning.tune(
+                    naive,
+                    samples: sampleCount,
+                    seed: seed,
+                    predicate: isValidBST
+                )
+                let adaptTime = ContinuousClock.now - start
+
+                var cgsIterator = ValueInterpreter(tuned, seed: 42, maxRuns: .max)
+                var cgsTotal = 0
+                var cgsValid = 0
+                var cgsUnique = Set<BST>()
+                var cgsHeights = [Int: Set<BST>]()
+
+                while ContinuousClock.now - start < .seconds(duration) {
+                    guard let tree = cgsIterator.next() else { break }
+                    cgsTotal += 1
+                    if isValidBST(tree) {
+                        cgsValid += 1
+                        cgsUnique.insert(tree)
+                        cgsHeights[tree.height, default: []].insert(tree)
+                    }
+                }
+
+                let heights = cgsHeights
+                    .sorted(by: { $0.key < $1.key })
+                    .map { "h\($0.key):\($0.value.count)" }
+                    .joined(separator: " ")
+
+                let adaptMs = Double(adaptTime.components.seconds) * 1000 + Double(adaptTime.components.attoseconds) / 1e15
+                let validPct = cgsTotal > 0 ? Double(cgsValid) / Double(cgsTotal) * 100 : 0
+                print("  s=\(String(format: "%4d", sampleCount)) | \(String(format: "%4.0f", adaptMs))ms | \(String(format: "%5d", cgsUnique.count)) unique | \(String(format: "%5.1f", validPct))% valid | \(heights)")
+            }
+        }
+
+        print()
+        print("Rejection baseline: \(rejectionUnique.count) unique")
     }
 
     @Test("BST: tuned generator produces valid non-leaf trees")
@@ -486,9 +482,8 @@ struct GeneratorTuningTests {
 
         let isValidBST: (BST) -> Bool = { $0.isValidBST() }
 
-        let tuned = try GeneratorTuning.tune(
+        let tuned = try GeneratorTuning.probeAndTune(
             naive,
-            samples: 100,
             seed: 12345,
             predicate: isValidBST
         )

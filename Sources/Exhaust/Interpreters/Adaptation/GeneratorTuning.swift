@@ -62,7 +62,8 @@ enum GeneratorTuning {
     ///   - generator: The generator to probe and possibly tune.
     ///   - probeSeed: Seed for the probe runs (default 0).
     ///   - probeRuns: Number of probe generations to inspect (default 10).
-    ///   - samples: Base number of samples per pick choice for tuning (decays with depth).
+    ///   - minPerChoice: Minimum samples per choice at the deepest pick level (default 30).
+    ///   - maxSamples: Upper bound on the computed sample count (default 5000).
     ///   - maxSize: Maximum size parameter used when subdividing `getSize`.
     ///   - seed: Optional seed for deterministic tuning.
     ///   - predicate: The property that generated values should satisfy.
@@ -71,21 +72,22 @@ enum GeneratorTuning {
         _ generator: ReflectiveGenerator<Output>,
         probeSeed: UInt64 = 0,
         probeRuns: UInt64 = 10,
-        samples: UInt64 = 100,
+        minPerChoice: UInt64 = 30,
+        maxSamples: UInt64 = 5000,
         maxSize: UInt64 = 100,
         seed: UInt64? = nil,
         predicate: @escaping (Output) -> Bool
     ) throws -> ReflectiveGenerator<Output> {
         var probe = ValueAndChoiceTreeInterpreter(generator, seed: probeSeed, maxRuns: probeRuns)
-        var hasPicks = false
+        var maxComplexity: UInt64 = 0
+
         while let (_, tree) = probe.next() {
-            if tree.containsPicks {
-                hasPicks = true
-                break
-            }
+            maxComplexity = max(maxComplexity, tree.pickComplexity)
         }
 
-        guard hasPicks else { return generator }
+        guard maxComplexity > 0 else { return generator }
+
+        let samples = min(maxSamples, minPerChoice * maxComplexity)
 
         let tuned = try tune(generator, samples: samples, maxSize: maxSize, seed: seed, predicate: predicate)
         return smoothAdaptively(tuned)
@@ -225,9 +227,13 @@ enum GeneratorTuning {
         tunedChoices.reserveCapacity(choices.count)
 
         for choice in choices {
-            // 1. Sample choice's inner generator, then feed through continuation
-            //    This exposes intermediate inner values for caching, eliminating
-            //    redundant continuation evaluations in Phase 2's composed predicate.
+            // 1. Sample choice's inner generator, then feed through continuation.
+            //    Uses a jumped PRNG stream so Phase 1 sampling doesn't perturb
+            //    context.rng — keeping Phase 2's recursive tuning trajectory
+            //    independent of sampleCount.
+            var samplingRng = context.rng
+            samplingRng.jump()
+
             let sampleCount = context.currentSampleCount
             var successCount: UInt64 = 0
             var distinctOutputs: Set<AnyHashable> = []
@@ -236,13 +242,13 @@ enum GeneratorTuning {
             for _ in 0 ..< sampleCount {
                 // Advance RNG to ensure each sample sees a unique state.
                 // Without this, choices with trivial generators (e.g. .just)
-                // leave context.rng frozen — the entire predicate chain may
+                // leave the RNG frozen — the entire predicate chain may
                 // consist of .pure unwrapping that consumes no randomness,
                 // making all samples identical.
-                _ = context.rng.next()
+                _ = samplingRng.next()
 
                 guard let innerValue = try ValueInterpreter<Any>.generate(
-                    choice.generator, maxRuns: 1, using: &context.rng
+                    choice.generator, maxRuns: 1, using: &samplingRng
                 ) else { continue }
 
                 let success: Bool
@@ -250,7 +256,7 @@ enum GeneratorTuning {
                 do {
                     let nextGen = try continuation(innerValue)
                     output = try ValueInterpreter<Output>.generate(
-                        nextGen, maxRuns: 1, using: &context.rng
+                        nextGen, maxRuns: 1, using: &samplingRng
                     )
                     success = output.map(predicate) ?? false
                 } catch {
@@ -271,6 +277,9 @@ enum GeneratorTuning {
             // 2. Recursively tune the choice's inner generator.
             //    The composed predicate checks the cache from Phase 1 first,
             //    falling back to full continuation evaluation on cache miss.
+            //    Cache misses use their own RNG stream (continuing from the
+            //    sampling stream) to avoid perturbing context.rng.
+            var composedRng = samplingRng
             let composedPredicate: (Any) -> Bool = { innerValue in
                 if let hashable = innerValue as? AnyHashable,
                    let cached = continuationCache[hashable] {
@@ -281,7 +290,7 @@ enum GeneratorTuning {
                     let output = try ValueInterpreter<Output>.generate(
                         nextGen,
                         maxRuns: 1,
-                        using: &context.rng
+                        using: &composedRng
                     )
                     return output.map(predicate) ?? false
                 } catch {

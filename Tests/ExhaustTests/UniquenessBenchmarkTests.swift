@@ -358,7 +358,6 @@ struct UniquenessBenchmarkTests {
 
         let generator = try GeneratorTuning.probeAndTune(
             problem.generator,
-            samples: 1000,
             seed: 12345,
             predicate: problem.predicate
         )

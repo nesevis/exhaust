@@ -106,6 +106,31 @@ extension ChoiceTree {
         }
     }
 
+    /// Returns the maximum `breadth × 2^pickDepth` across all pick sites,
+    /// where pickDepth counts nested `.branch` levels.
+    var pickComplexity: UInt64 {
+        pickComplexityHelper(pickDepth: 0)
+    }
+
+    private func pickComplexityHelper(pickDepth: Int) -> UInt64 {
+        switch self {
+        case .choice, .just, .getSize:
+            return 0
+        case let .branch(_, _, _, branchIDs, choice):
+            let here = UInt64(branchIDs.count) * (1 << pickDepth)
+            let deeper = choice.pickComplexityHelper(pickDepth: pickDepth + 1)
+            return max(here, deeper)
+        case let .selected(inner):
+            return inner.pickComplexityHelper(pickDepth: pickDepth)
+        case let .sequence(_, elements, _):
+            return elements.map { $0.pickComplexityHelper(pickDepth: pickDepth) }.max() ?? 0
+        case let .group(array):
+            return array.map { $0.pickComplexityHelper(pickDepth: pickDepth) }.max() ?? 0
+        case let .resize(_, choices):
+            return choices.map { $0.pickComplexityHelper(pickDepth: pickDepth) }.max() ?? 0
+        }
+    }
+
     var structuralComplexity: UInt64 {
         switch self {
         case .choice:
