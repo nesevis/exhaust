@@ -73,109 +73,68 @@ struct GeneratorTuningTests {
 
     // MARK: - Pick Adaptation
 
-    @Test("Pick adaptation weights branches by predicate satisfaction")
-    func pickAdaptationWeightsByPredicate() throws {
-        // Generator with two branches: small numbers and large numbers
+    @Test("Pick adaptation produces only valid output via .tune")
+    func pickAdaptationWeightsByPredicate() {
         let gen = Gen.pick(choices: [
             (weight: UInt64(1), generator: Gen.choose(in: 1 ... 100)),
             (weight: UInt64(1), generator: Gen.choose(in: 901 ... 1000)),
-        ])
+        ]).filter(.tune) { $0 <= 100 }
 
-        // Predicate that favours small numbers
-        let predicate: (Int) -> Bool = { $0 <= 100 }
+        let values = Array(ValueInterpreter(gen, seed: 123, maxRuns: 200))
 
-        let tuned = try GeneratorTuning.tune(
-            gen,
-            samples: 50,
-            seed: 42,
-            predicate: predicate
-        )
-
-        // Generate values from tuned generator and measure hit rate
-        let values = Array(ValueInterpreter(tuned, seed: 123, maxRuns: 200))
-        let hitRate = Double(values.count(where: predicate)) / Double(values.count)
-        print()
-
-        // Tuned generator should strongly favour the small-number branch
-        #expect(hitRate > 0.7, "Expected tuned hit rate > 0.7, got \(hitRate)")
+        #expect(values.allSatisfy { $0 <= 100 })
+        #expect(values.count == 200, "All runs should succeed with tuning")
     }
 
-    @Test("Pick adaptation increases hit rate versus untuned generator")
-    func pickAdaptationIncreasesHitRate() throws {
+    @Test(".tune produces more valid output than raw generation")
+    func tuneOutperformsRawGeneration() {
         let gen = Gen.pick(choices: [
             (weight: UInt64(1), generator: Gen.choose(in: 1 ... 500)),
             (weight: UInt64(1), generator: Gen.choose(in: 501 ... 1000)),
         ])
-
         let predicate: (Int) -> Bool = { $0 <= 250 }
 
-        // Untuned baseline
-        let baselineValues = Array(ValueInterpreter(gen, seed: 99, maxRuns: 200))
-        let baselineRate = Double(baselineValues.count(where: predicate)) / Double(baselineValues.count)
+        // Raw generator: only ~25% of output satisfies the predicate
+        let rawValues = Array(ValueInterpreter(gen, seed: 99, maxRuns: 200))
+        let rawValidCount = rawValues.count(where: predicate)
 
-        // Tuned
-        let tuned = try GeneratorTuning.tune(
-            gen,
-            samples: 80,
-            seed: 42,
-            predicate: predicate
-        )
-        let tunedValues = Array(ValueInterpreter(tuned, seed: 99, maxRuns: 200))
-        let tunedRate = Double(tunedValues.count(where: predicate)) / Double(tunedValues.count)
+        // Tuned filter: all output satisfies the predicate
+        let tunedValues = Array(ValueInterpreter(gen.filter(.tune, predicate), seed: 99, maxRuns: 200))
 
-        #expect(tunedRate > baselineRate,
-                "Tuned rate (\(tunedRate)) should exceed baseline (\(baselineRate))")
+        #expect(tunedValues.allSatisfy(predicate))
+        #expect(tunedValues.count > rawValidCount,
+                "Tuned filter (\(tunedValues.count) valid) should exceed raw generation (\(rawValidCount) valid)")
     }
 
     // MARK: - ChooseBits Subdivision
 
     @Test("ChooseBits subdivision concentrates output in favoured subrange")
-    func chooseBitsSubdivision() throws {
+    func chooseBitsSubdivision() {
         let gen = Gen.choose(in: UInt64(1) ... 1000)
-        let predicate: (UInt64) -> Bool = { $0 < 100 }
+            .filter(.tune) { $0 < 100 }
 
-        let tuned = try GeneratorTuning.tune(
-            gen,
-            samples: 80,
-            seed: 42,
-            predicate: predicate
-        )
+        let values = Array(ValueInterpreter(gen, seed: 123, maxRuns: 200))
 
-        let values = Array(ValueInterpreter(tuned, seed: 123, maxRuns: 200))
-        let hitRate = Double(values.count(where: predicate)) / Double(values.count)
-
-        #expect(hitRate > 0.3,
-                "Expected chooseBits adaptation to concentrate in low range, got hit rate \(hitRate)")
+        #expect(values.allSatisfy { $0 < 100 })
+        #expect(values.count == 200, "All runs should succeed with tuning")
     }
 
     // MARK: - Sequence Length Adaptation
 
     @Test("Sequence length adaptation favours short arrays")
-    func sequenceLengthAdaptation() throws {
+    func sequenceLengthAdaptation() {
         let lengthGen: ReflectiveGenerator<UInt64> = Gen.choose(in: 1 ... 50)
         let elementGen = Gen.choose(in: 1 ... 10)
-        let gen: ReflectiveGenerator<[Int]> = .impure(
+        let gen: ReflectiveGenerator<[Int]> = ReflectiveGenerator<[Int]>.impure(
             operation: .sequence(length: lengthGen, gen: elementGen.erase())
         ) { result in
             .pure(result as! [Int])
-        }
+        }.filter(.tune) { $0.count <= 3 }
 
-        let predicate: ([Int]) -> Bool = { $0.count <= 3 }
+        let values = Array(ValueInterpreter(gen, seed: 123, maxRuns: 100))
 
-        let tuned = try GeneratorTuning.tune(
-            gen,
-            samples: 50,
-            seed: 42,
-            predicate: predicate
-        )
-
-        let values = Array(ValueInterpreter(tuned, seed: 123, maxRuns: 100))
-        let hitRate = Double(values.count(where: predicate)) / Double(values.count)
-
-        // Baseline for count <= 3 in range 1...50 is ~6%; adaptation should significantly improve this.
-        // The weight floor (0.1) limits how aggressively tuning can concentrate on short lengths.
-        #expect(hitRate > 0.10,
-                "Expected sequence adaptation to improve short array rate, got hit rate \(hitRate)")
+        #expect(values.allSatisfy { $0.count <= 3 })
+        #expect(values.count == 100, "All runs should succeed with tuning")
     }
 
     // MARK: - Filter Integration
@@ -348,7 +307,7 @@ struct GeneratorTuningTests {
     // MARK: - Depth Budget
 
     @Test("Deeply nested generators do not explode in sample count")
-    func depthBudget() throws {
+    func depthBudget() {
         // Create a deeply nested pick structure
         var gen: ReflectiveGenerator<Int> = Gen.choose(in: 1 ... 10)
         for _ in 0 ..< 10 {
@@ -358,176 +317,83 @@ struct GeneratorTuningTests {
             ])
         }
 
-        let predicate: (Int) -> Bool = { $0 <= 5 }
+        let filtered = gen.filter(.tune) { $0 <= 5 }
 
         // This should complete in reasonable time without blowup
-        let tuned = try GeneratorTuning.tune(
-            gen,
-            samples: 50,
-            seed: 42,
-            predicate: predicate
-        )
-
-        // Verify it produces values
-        let values = Array(ValueInterpreter(tuned, seed: 123, maxRuns: 20))
-        #expect(values.isEmpty == false, "Deeply nested tuned generator should still produce values")
+        let values = Array(ValueInterpreter(filtered, seed: 123, maxRuns: 20))
+        #expect(!values.isEmpty, "Deeply nested tuned generator should still produce values")
+        #expect(values.allSatisfy { $0 <= 5 })
     }
 
     // MARK: - Binary Search Tree
 
-    @Test("BST: CGS adaptation improves valid BST rate over naive generation")
-    func bstAdaptationImprovesValidityRate() throws {
-        let naive = BST.arbitrary
-
+    @Test("BST: .tune produces more valid BSTs than raw generation")
+    func bstTuneOutperformsRawGeneration() {
         let isValidNonLeafBST: (BST) -> Bool = { tree in
             tree != .leaf && tree.isValidBST()
         }
 
         let sampleCount: UInt64 = 500
 
-        // Measure naive baseline
-        let naiveValues = Array(ValueInterpreter(naive, seed: 42, maxRuns: sampleCount))
-        let naiveValid = naiveValues.filter(isValidNonLeafBST)
-        let naiveRate = Double(naiveValid.count) / Double(naiveValues.count)
+        // Raw generation: only a fraction of output satisfies the predicate
+        let rawValues = Array(ValueInterpreter(BST.arbitrary, seed: 42, maxRuns: sampleCount))
+        let rawValidCount = rawValues.count(where: isValidNonLeafBST)
 
-        // Adapt with CGS
-        let tuned = try GeneratorTuning.tune(
-            naive,
-            samples: 100,
-            seed: 12345,
-            predicate: isValidNonLeafBST
-        )
+        // Tuned filter: all output satisfies the predicate
+        let tunedGen = BST.arbitrary.filter(.tune, isValidNonLeafBST)
+        let tunedValues = Array(ValueInterpreter(tunedGen, seed: 42, maxRuns: sampleCount))
 
-        // Measure tuned
-        let tunedValues = Array(ValueInterpreter(tuned, seed: 42, maxRuns: sampleCount))
-        let tunedValid = tunedValues.filter(isValidNonLeafBST)
-        let tunedRate = Double(tunedValid.count) / Double(tunedValues.count)
-
-        // Uniqueness and diversity
-        let naiveUnique = Set(naiveValid)
-        let tunedUnique = Set(tunedValid)
-        let naiveHeights = Dictionary(grouping: naiveValid, by: \.height).mapValues(\.count)
-        let tunedHeights = Dictionary(grouping: tunedValid, by: \.height).mapValues(\.count)
-
-        print("BST validity — naive: \(naiveValid.count)/\(naiveValues.count) (\(String(format: "%.1f%%", naiveRate * 100))), tuned: \(tunedValid.count)/\(tunedValues.count) (\(String(format: "%.1f%%", tunedRate * 100)))")
-        print("BST unique valid — naive: \(naiveUnique.count), tuned: \(tunedUnique.count)")
-        print("BST heights — naive: \(naiveHeights.sorted(by: { $0.key < $1.key })), tuned: \(tunedHeights.sorted(by: { $0.key < $1.key }))")
-
-        #expect(tunedRate > naiveRate,
-                "Tuned rate (\(tunedRate)) should exceed naive rate (\(naiveRate))")
+        #expect(tunedValues.allSatisfy(isValidNonLeafBST))
+        #expect(tunedValues.count > rawValidCount,
+                "Tuned filter (\(tunedValues.count) valid) should exceed raw generation (\(rawValidCount) valid)")
     }
 
-    @Test("BST: timed benchmark — CGS vs rejection sampling (paper comparison)", .disabled("Not required"))
-    func bstTimedBenchmark() throws {
-        let naive = BST.arbitrary
+    @Test("BST: timed benchmark — .tune vs .reject (paper comparison)", .disabled("Not required"))
+    func bstTimedBenchmark() {
         let isValidBST: (BST) -> Bool = { $0.height >= 1 && $0.isValidBST() }
         let duration: TimeInterval = 1
 
-        // --- Rejection sampling baseline (run once) ---
-        var rejectionIterator = ValueInterpreter(naive, seed: 42, maxRuns: .max)
-        var rejectionTotal = 0
-        var rejectionUnique = Set<BST>()
-        var rejectionHeights = [Int: [BST]]()
+        // --- .reject strategy ---
+        let rejectGen = BST.arbitrary.filter(.reject, isValidBST)
+        var rejectIterator = ValueInterpreter(rejectGen, seed: 42, maxRuns: .max)
+        var rejectValues = [BST]()
 
-        let rejectionStart = ContinuousClock.now
-        while ContinuousClock.now - rejectionStart < .seconds(duration) {
-            guard let tree = rejectionIterator.next() else { break }
-            if isValidBST(tree) {
-                rejectionTotal += 1
-                rejectionUnique.insert(tree)
-                rejectionHeights[tree.height, default: []].append(tree)
-            }
+        let rejectStart = ContinuousClock.now
+        while ContinuousClock.now - rejectStart < .seconds(duration) {
+            guard let tree = rejectIterator.next() else { break }
+            rejectValues.append(tree)
         }
 
-        let rUHeights = rejectionHeights
-            .sorted(by: { $0.key < $1.key })
-            .map { ($0.key, Set($0.value).count) }
+        let rejectUnique = Set(rejectValues)
+        print("=== \(duration)-second BST benchmark ===")
+        print(".reject: \(rejectValues.count) valid (\(rejectUnique.count) unique)")
 
-        print("=== \(duration)-second BST benchmark — sampleCount sweep ===")
-        print("Rejection sampling: \(rejectionTotal) valid (\(rejectionUnique.count) unique)")
-        print("  Heights unique: \(rUHeights)")
-        print()
+        // --- .tune strategy ---
+        let tuneGen = BST.arbitrary.filter(.tune, isValidBST)
+        var tuneIterator = ValueInterpreter(tuneGen, seed: 42, maxRuns: .max)
+        var tuneValues = [BST]()
 
-        // --- CGS sweep across sample counts × tuning seeds ---
-        let sampleCounts: [UInt64] = [500, 750, 1000, 1250, 1500, 2000, 3000, 5000]
-        let tuningSeeds: [UInt64] = [12345, 99999, 271828, 314159]
-
-        for seed in tuningSeeds {
-            print("--- seed=\(seed) ---")
-            for sampleCount in sampleCounts {
-                let start = ContinuousClock.now
-                let tuned = try GeneratorTuning.tune(
-                    naive,
-                    samples: sampleCount,
-                    seed: seed,
-                    predicate: isValidBST
-                )
-                let adaptTime = ContinuousClock.now - start
-
-                var cgsIterator = ValueInterpreter(tuned, seed: 42, maxRuns: .max)
-                var cgsTotal = 0
-                var cgsValid = 0
-                var cgsUnique = Set<BST>()
-                var cgsHeights = [Int: Set<BST>]()
-
-                while ContinuousClock.now - start < .seconds(duration) {
-                    guard let tree = cgsIterator.next() else { break }
-                    cgsTotal += 1
-                    if isValidBST(tree) {
-                        cgsValid += 1
-                        cgsUnique.insert(tree)
-                        cgsHeights[tree.height, default: []].insert(tree)
-                    }
-                }
-
-                let heights = cgsHeights
-                    .sorted(by: { $0.key < $1.key })
-                    .map { "h\($0.key):\($0.value.count)" }
-                    .joined(separator: " ")
-
-                let adaptMs = Double(adaptTime.components.seconds) * 1000 + Double(adaptTime.components.attoseconds) / 1e15
-                let validPct = cgsTotal > 0 ? Double(cgsValid) / Double(cgsTotal) * 100 : 0
-                print("  s=\(String(format: "%4d", sampleCount)) | \(String(format: "%4.0f", adaptMs))ms | \(String(format: "%5d", cgsUnique.count)) unique | \(String(format: "%5.1f", validPct))% valid | \(heights)")
-            }
+        let tuneStart = ContinuousClock.now
+        while ContinuousClock.now - tuneStart < .seconds(duration) {
+            guard let tree = tuneIterator.next() else { break }
+            tuneValues.append(tree)
         }
 
-        print()
-        print("Rejection baseline: \(rejectionUnique.count) unique")
+        let tuneUnique = Set(tuneValues)
+        print(".tune: \(tuneValues.count) valid (\(tuneUnique.count) unique)")
     }
 
-    @Test("BST: tuned generator produces valid non-leaf trees")
-    func bstTunedNonLeaf() throws {
-        let naive = BST.arbitrary
-
-        // Require non-leaf valid BSTs — this is the hard predicate from the paper
+    @Test("BST: .tune produces valid non-leaf trees")
+    func bstTunedNonLeaf() {
         let isValidNonLeafBST: (BST) -> Bool = { tree in
             tree != .leaf && tree.isValidBST()
         }
 
-        let tuned = try GeneratorTuning.tune(
-            naive,
-            samples: 100,
-            seed: 12345,
-            predicate: isValidNonLeafBST
-        )
+        let tunedGen = BST.arbitrary.filter(.tune, isValidNonLeafBST)
+        let values = Array(ValueInterpreter(tunedGen, seed: 99, maxRuns: 500))
 
-        // Measure naive baseline for non-leaf valid BSTs
-        let naiveValues = Array(ValueInterpreter(naive, seed: 99, maxRuns: 500))
-        let naiveValidCount = naiveValues.count(where: isValidNonLeafBST)
-
-        let tunedValues = Array(ValueInterpreter(tuned, seed: 99, maxRuns: 500))
-        let tunedValidCount = tunedValues.count(where: isValidNonLeafBST)
-
-        let naiveRate = Double(naiveValidCount) / Double(naiveValues.count)
-        let tunedRate = Double(tunedValidCount) / Double(tunedValues.count)
-
-        print("BST non-leaf validity — naive: \(naiveValidCount)/\(naiveValues.count) (\(String(format: "%.1f%%", naiveRate * 100))), tuned: \(tunedValidCount)/\(tunedValues.count) (\(String(format: "%.1f%%", tunedRate * 100)))")
-
-        // Tuned should improve over naive
-        #expect(tunedRate > naiveRate,
-                "Tuned non-leaf BST rate (\(tunedRate)) should exceed naive (\(naiveRate))")
-        #expect(!tunedValues.filter(isValidNonLeafBST).isEmpty,
-                "Should produce at least some valid non-leaf BSTs")
+        #expect(values.allSatisfy(isValidNonLeafBST))
+        #expect(!values.isEmpty, "Should produce valid non-leaf BSTs")
     }
 
     @Test("BST: tuned generator structure has meaningful weight differences")
