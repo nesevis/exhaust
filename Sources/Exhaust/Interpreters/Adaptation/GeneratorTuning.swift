@@ -225,28 +225,50 @@ enum GeneratorTuning {
         tunedChoices.reserveCapacity(choices.count)
 
         for choice in choices {
-            // 1. Create single-branch pick, complete through continuation
-            let singleBranchPick: ReflectiveGenerator<Output> = .impure(
-                operation: .pick(choices: [choice]),
-                continuation: continuation
-            )
-
-            // 2. Sample and count predicate successes
+            // 1. Sample choice's inner generator, then feed through continuation
+            //    This exposes intermediate inner values for caching, eliminating
+            //    redundant continuation evaluations in Phase 2's composed predicate.
             let sampleCount = context.currentSampleCount
             var successCount: UInt64 = 0
+            var continuationCache: [AnyHashable: Bool] = [:]
+
             for _ in 0 ..< sampleCount {
-                let result = try ValueInterpreter<Output>.generate(
-                    singleBranchPick,
-                    maxRuns: 1,
-                    using: &context.rng
-                )
-                if let value = result, predicate(value) {
-                    successCount += 1
+                // Advance RNG to ensure each sample sees a unique state.
+                // Without this, choices with trivial generators (e.g. .just)
+                // leave context.rng frozen — the entire predicate chain may
+                // consist of .pure unwrapping that consumes no randomness,
+                // making all samples identical.
+                _ = context.rng.next()
+
+                guard let innerValue = try ValueInterpreter<Any>.generate(
+                    choice.generator, maxRuns: 1, using: &context.rng
+                ) else { continue }
+
+                let success: Bool
+                do {
+                    let nextGen = try continuation(innerValue)
+                    let output = try ValueInterpreter<Output>.generate(
+                        nextGen, maxRuns: 1, using: &context.rng
+                    )
+                    success = output.map(predicate) ?? false
+                } catch {
+                    success = false
+                }
+
+                if success { successCount += 1 }
+                if let hashable = innerValue as? AnyHashable {
+                    continuationCache[hashable] = success
                 }
             }
 
-            // 3. Recursively tune the choice's inner generator
+            // 2. Recursively tune the choice's inner generator.
+            //    The composed predicate checks the cache from Phase 1 first,
+            //    falling back to full continuation evaluation on cache miss.
             let composedPredicate: (Any) -> Bool = { innerValue in
+                if let hashable = innerValue as? AnyHashable,
+                   let cached = continuationCache[hashable] {
+                    return cached
+                }
                 do {
                     let nextGen = try continuation(innerValue)
                     let output = try ValueInterpreter<Output>.generate(
