@@ -139,7 +139,7 @@ struct UniquenessConstraintTests {
         #expect(vactiValues == viValues, "ValueInterpreter delegation should match VACTI output")
     }
 
-    // MARK: - CGSValueAndChoiceTreeInterpreter
+    // MARK: - OnlineCGSInterpreter
 
     @Test("CGS interpreter with uniqueness produces unique values")
     func cgsUniqueness() {
@@ -149,7 +149,7 @@ struct UniquenessConstraintTests {
             (1, Gen.just(3)),
         ])
 
-        var iterator = CGSValueAndChoiceTreeInterpreter(
+        var iterator = OnlineCGSInterpreter(
             gen,
             predicate: { _ in true },
             seed: 42,

@@ -241,7 +241,7 @@ struct UniquenessBenchmarkTests {
         var unique = Set<Value>()
         var total = 0
         var quality = [Int: Int]()
-        var iterator = CGSValueAndChoiceTreeInterpreter(
+        var iterator = OnlineCGSInterpreter(
             problem.generator,
             predicate: problem.predicate,
             sampleCount: 3,
@@ -275,13 +275,13 @@ struct UniquenessBenchmarkTests {
     ) throws -> BenchmarkResult {
         let start = ContinuousClock.now
 
-        let adapted = try ChoiceGradientSampling.adapt(
+        let tuned = try GeneratorTuning.tune(
             problem.generator,
             samples: 1000,
             seed: 12345,
             predicate: problem.predicate
         )
-        let smoothed = ChoiceGradientSampling.smooth(adapted, epsilon: 1.0, temperature: 2.0)
+        let smoothed = GeneratorTuning.smooth(tuned, epsilon: 1.0, temperature: 2.0)
 
         var unique = Set<Value>()
         var total = 0
@@ -313,14 +313,14 @@ struct UniquenessBenchmarkTests {
     ) throws -> BenchmarkResult {
         let start = ContinuousClock.now
 
-        let adapted = try ChoiceGradientSampling.adapt(
+        let tuned = try GeneratorTuning.tune(
             problem.generator,
             samples: 1000,
             seed: 12345,
             predicate: problem.predicate
         )
-        let adaptive = ChoiceGradientSampling.smoothAdaptively(
-            adapted,
+        let adaptive = GeneratorTuning.smoothAdaptively(
+            tuned,
             epsilon: 1.0,
             baseTemperature: 1.0,
             maxTemperature: 4.0
@@ -356,7 +356,7 @@ struct UniquenessBenchmarkTests {
     ) throws -> BenchmarkResult {
         let start = ContinuousClock.now
 
-        let generator = try ChoiceGradientSampling.autoAdapt(
+        let generator = try GeneratorTuning.probeAndTune(
             problem.generator,
             samples: 1000,
             seed: 12345,

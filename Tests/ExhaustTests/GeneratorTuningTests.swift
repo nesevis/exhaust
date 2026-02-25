@@ -1,8 +1,8 @@
 //
-//  ChoiceGradientSamplingTests.swift
+//  GeneratorTuningTests.swift
 //  ExhaustTests
 //
-//  Tests for the Choice Gradient Sampling adaptation interpreter.
+//  Tests for the offline generator tuning algorithm.
 //
 
 import Foundation
@@ -69,7 +69,7 @@ private enum BST: Equatable, Hashable {
 }
 
 @Suite("Choice Gradient Sampling")
-struct ChoiceGradientSamplingTests {
+struct GeneratorTuningTests {
 
     // MARK: - Pick Adaptation
 
@@ -84,23 +84,23 @@ struct ChoiceGradientSamplingTests {
         // Predicate that favours small numbers
         let predicate: (Int) -> Bool = { $0 <= 100 }
 
-        let adapted = try ChoiceGradientSampling.adapt(
+        let tuned = try GeneratorTuning.tune(
             gen,
             samples: 50,
             seed: 42,
             predicate: predicate
         )
 
-        // Generate values from adapted generator and measure hit rate
-        let values = Array(ValueInterpreter(adapted, seed: 123, maxRuns: 200))
+        // Generate values from tuned generator and measure hit rate
+        let values = Array(ValueInterpreter(tuned, seed: 123, maxRuns: 200))
         let hitRate = Double(values.count(where: predicate)) / Double(values.count)
         print()
 
-        // Adapted generator should strongly favour the small-number branch
-        #expect(hitRate > 0.7, "Expected adapted hit rate > 0.7, got \(hitRate)")
+        // Tuned generator should strongly favour the small-number branch
+        #expect(hitRate > 0.7, "Expected tuned hit rate > 0.7, got \(hitRate)")
     }
 
-    @Test("Pick adaptation increases hit rate versus unadapted generator")
+    @Test("Pick adaptation increases hit rate versus untuned generator")
     func pickAdaptationIncreasesHitRate() throws {
         let gen = Gen.pick(choices: [
             (weight: UInt64(1), generator: Gen.choose(in: 1 ... 500)),
@@ -109,22 +109,22 @@ struct ChoiceGradientSamplingTests {
 
         let predicate: (Int) -> Bool = { $0 <= 250 }
 
-        // Unadapted baseline
+        // Untuned baseline
         let baselineValues = Array(ValueInterpreter(gen, seed: 99, maxRuns: 200))
         let baselineRate = Double(baselineValues.count(where: predicate)) / Double(baselineValues.count)
 
-        // Adapted
-        let adapted = try ChoiceGradientSampling.adapt(
+        // Tuned
+        let tuned = try GeneratorTuning.tune(
             gen,
             samples: 80,
             seed: 42,
             predicate: predicate
         )
-        let adaptedValues = Array(ValueInterpreter(adapted, seed: 99, maxRuns: 200))
-        let adaptedRate = Double(adaptedValues.count(where: predicate)) / Double(adaptedValues.count)
+        let tunedValues = Array(ValueInterpreter(tuned, seed: 99, maxRuns: 200))
+        let tunedRate = Double(tunedValues.count(where: predicate)) / Double(tunedValues.count)
 
-        #expect(adaptedRate > baselineRate,
-                "Adapted rate (\(adaptedRate)) should exceed baseline (\(baselineRate))")
+        #expect(tunedRate > baselineRate,
+                "Tuned rate (\(tunedRate)) should exceed baseline (\(baselineRate))")
     }
 
     // MARK: - ChooseBits Subdivision
@@ -134,14 +134,14 @@ struct ChoiceGradientSamplingTests {
         let gen = Gen.choose(in: UInt64(1) ... 1000)
         let predicate: (UInt64) -> Bool = { $0 < 100 }
 
-        let adapted = try ChoiceGradientSampling.adapt(
+        let tuned = try GeneratorTuning.tune(
             gen,
             samples: 80,
             seed: 42,
             predicate: predicate
         )
 
-        let values = Array(ValueInterpreter(adapted, seed: 123, maxRuns: 200))
+        let values = Array(ValueInterpreter(tuned, seed: 123, maxRuns: 200))
         let hitRate = Double(values.count(where: predicate)) / Double(values.count)
 
         #expect(hitRate > 0.3,
@@ -162,14 +162,14 @@ struct ChoiceGradientSamplingTests {
 
         let predicate: ([Int]) -> Bool = { $0.count <= 3 }
 
-        let adapted = try ChoiceGradientSampling.adapt(
+        let tuned = try GeneratorTuning.tune(
             gen,
             samples: 50,
             seed: 42,
             predicate: predicate
         )
 
-        let values = Array(ValueInterpreter(adapted, seed: 123, maxRuns: 100))
+        let values = Array(ValueInterpreter(tuned, seed: 123, maxRuns: 100))
         let hitRate = Double(values.count(where: predicate)) / Double(values.count)
 
         // Baseline for count <= 3 in range 1...50 is ~6%; adaptation should significantly improve this
@@ -185,23 +185,23 @@ struct ChoiceGradientSamplingTests {
         let gen = innerGen.filter { ($0 as! Int) < 200 }
 
         // The outer predicate is irrelevant — filter's predicate should drive adaptation
-        let adapted = try ChoiceGradientSampling.adapt(
+        let tuned = try GeneratorTuning.tune(
             gen,
             samples: 50,
             seed: 42,
             predicate: { (_: Int) in true }
         )
 
-        // Verify that the adapted generator structure contains a filter with an adapted inner gen
-        guard case let .impure(.filter(adaptedInner, _, _), _) = adapted else {
-            Issue.record("Expected adapted generator to be a filter")
+        // Verify that the tuned generator structure contains a filter with an tuned inner gen
+        guard case let .impure(.filter(tunedInner, _, _), _) = tuned else {
+            Issue.record("Expected tuned generator to be a filter")
             return
         }
 
         // The inner generator should now be a pick (from chooseBits subdivision)
-        // rather than the original chooseBits, because CGS adapted it using the filter predicate
-        guard case let .impure(.pick(choices), _) = adaptedInner else {
-            Issue.record("Expected inner generator to be adapted into a pick, got \(adaptedInner)")
+        // rather than the original chooseBits, because CGS tuned it using the filter predicate
+        guard case let .impure(.pick(choices), _) = tunedInner else {
+            Issue.record("Expected inner generator to be tuned into a pick, got \(tunedInner)")
             return
         }
 
@@ -214,7 +214,7 @@ struct ChoiceGradientSamplingTests {
 
     // MARK: - Zero-weight Branches
 
-    @Test("Zero-weight branches are preserved in adapted structure")
+    @Test("Zero-weight branches are preserved in tuned structure")
     func zeroWeightBranchesPreserved() throws {
         // One branch always satisfies, one never does
         let gen = Gen.pick(choices: [
@@ -224,16 +224,16 @@ struct ChoiceGradientSamplingTests {
 
         let predicate: (Int) -> Bool = { $0 <= 10 }
 
-        let adapted = try ChoiceGradientSampling.adapt(
+        let tuned = try GeneratorTuning.tune(
             gen,
             samples: 50,
             seed: 42,
             predicate: predicate
         )
 
-        // Inspect the adapted structure: should have 2 branches still
-        guard case let .impure(.pick(choices), _) = adapted else {
-            Issue.record("Expected adapted generator to be a pick")
+        // Inspect the tuned structure: should have 2 branches still
+        guard case let .impure(.pick(choices), _) = tuned else {
+            Issue.record("Expected tuned generator to be a pick")
             return
         }
 
@@ -250,15 +250,15 @@ struct ChoiceGradientSamplingTests {
 
         let predicate: (Int) -> Bool = { _ in false }
 
-        let adapted = try ChoiceGradientSampling.adapt(
+        let tuned = try GeneratorTuning.tune(
             gen,
             samples: 20,
             seed: 42,
             predicate: predicate
         )
 
-        guard case let .impure(.pick(choices), _) = adapted else {
-            Issue.record("Expected adapted generator to be a pick")
+        guard case let .impure(.pick(choices), _) = tuned else {
+            Issue.record("Expected tuned generator to be a pick")
             return
         }
 
@@ -269,7 +269,7 @@ struct ChoiceGradientSamplingTests {
 
     // MARK: - Deterministic Seeding
 
-    @Test("Same seed produces same adapted structure")
+    @Test("Same seed produces same tuned structure")
     func deterministicSeeding() throws {
         let gen = Gen.pick(choices: [
             (weight: UInt64(1), generator: Gen.choose(in: 1 ... 500)),
@@ -277,18 +277,18 @@ struct ChoiceGradientSamplingTests {
         ])
         let predicate: (Int) -> Bool = { $0 <= 250 }
 
-        let adapted1 = try ChoiceGradientSampling.adapt(
+        let tuned1 = try GeneratorTuning.tune(
             gen, samples: 50, seed: 42, predicate: predicate
         )
-        let adapted2 = try ChoiceGradientSampling.adapt(
+        let tuned2 = try GeneratorTuning.tune(
             gen, samples: 50, seed: 42, predicate: predicate
         )
 
         // Generate from both and verify identical output
-        let values1 = Array(ValueInterpreter(adapted1, seed: 99, maxRuns: 50))
-        let values2 = Array(ValueInterpreter(adapted2, seed: 99, maxRuns: 50))
+        let values1 = Array(ValueInterpreter(tuned1, seed: 99, maxRuns: 50))
+        let values2 = Array(ValueInterpreter(tuned2, seed: 99, maxRuns: 50))
 
-        #expect(values1 == values2, "Same seed should produce identical adapted generators")
+        #expect(values1 == values2, "Same seed should produce identical tuned generators")
     }
 
     // MARK: - Depth Budget
@@ -307,7 +307,7 @@ struct ChoiceGradientSamplingTests {
         let predicate: (Int) -> Bool = { $0 <= 5 }
 
         // This should complete in reasonable time without blowup
-        let adapted = try ChoiceGradientSampling.adapt(
+        let tuned = try GeneratorTuning.tune(
             gen,
             samples: 50,
             seed: 42,
@@ -315,8 +315,8 @@ struct ChoiceGradientSamplingTests {
         )
 
         // Verify it produces values
-        let values = Array(ValueInterpreter(adapted, seed: 123, maxRuns: 20))
-        #expect(values.isEmpty == false, "Deeply nested adapted generator should still produce values")
+        let values = Array(ValueInterpreter(tuned, seed: 123, maxRuns: 20))
+        #expect(values.isEmpty == false, "Deeply nested tuned generator should still produce values")
     }
 
     // MARK: - Binary Search Tree
@@ -337,30 +337,30 @@ struct ChoiceGradientSamplingTests {
         let naiveRate = Double(naiveValid.count) / Double(naiveValues.count)
 
         // Adapt with CGS
-        let adapted = try ChoiceGradientSampling.adapt(
+        let tuned = try GeneratorTuning.tune(
             naive,
             samples: 100,
             seed: 12345,
             predicate: isValidNonLeafBST
         )
 
-        // Measure adapted
-        let adaptedValues = Array(ValueInterpreter(adapted, seed: 42, maxRuns: sampleCount))
-        let adaptedValid = adaptedValues.filter(isValidNonLeafBST)
-        let adaptedRate = Double(adaptedValid.count) / Double(adaptedValues.count)
+        // Measure tuned
+        let tunedValues = Array(ValueInterpreter(tuned, seed: 42, maxRuns: sampleCount))
+        let tunedValid = tunedValues.filter(isValidNonLeafBST)
+        let tunedRate = Double(tunedValid.count) / Double(tunedValues.count)
 
         // Uniqueness and diversity
         let naiveUnique = Set(naiveValid)
-        let adaptedUnique = Set(adaptedValid)
+        let tunedUnique = Set(tunedValid)
         let naiveHeights = Dictionary(grouping: naiveValid, by: \.height).mapValues(\.count)
-        let adaptedHeights = Dictionary(grouping: adaptedValid, by: \.height).mapValues(\.count)
+        let tunedHeights = Dictionary(grouping: tunedValid, by: \.height).mapValues(\.count)
 
-        print("BST validity — naive: \(naiveValid.count)/\(naiveValues.count) (\(String(format: "%.1f%%", naiveRate * 100))), adapted: \(adaptedValid.count)/\(adaptedValues.count) (\(String(format: "%.1f%%", adaptedRate * 100)))")
-        print("BST unique valid — naive: \(naiveUnique.count), adapted: \(adaptedUnique.count)")
-        print("BST heights — naive: \(naiveHeights.sorted(by: { $0.key < $1.key })), adapted: \(adaptedHeights.sorted(by: { $0.key < $1.key }))")
+        print("BST validity — naive: \(naiveValid.count)/\(naiveValues.count) (\(String(format: "%.1f%%", naiveRate * 100))), tuned: \(tunedValid.count)/\(tunedValues.count) (\(String(format: "%.1f%%", tunedRate * 100)))")
+        print("BST unique valid — naive: \(naiveUnique.count), tuned: \(tunedUnique.count)")
+        print("BST heights — naive: \(naiveHeights.sorted(by: { $0.key < $1.key })), tuned: \(tunedHeights.sorted(by: { $0.key < $1.key }))")
 
-        #expect(adaptedRate > naiveRate,
-                "Adapted rate (\(adaptedRate)) should exceed naive rate (\(naiveRate))")
+        #expect(tunedRate > naiveRate,
+                "Tuned rate (\(tunedRate)) should exceed naive rate (\(naiveRate))")
     }
 
     @Test("BST: 10 second benchmark — CGS vs rejection sampling (paper comparison)")
@@ -385,9 +385,9 @@ struct ChoiceGradientSamplingTests {
             }
         }
 
-        // --- CGS-adapted generation ---
+        // --- CGS-tuned generation ---
         let adaptStart = ContinuousClock.now
-        let adapted = try ChoiceGradientSampling.adapt(
+        let tuned = try GeneratorTuning.tune(
             naive,
             samples: 1000,
             seed: 12345,
@@ -395,7 +395,7 @@ struct ChoiceGradientSamplingTests {
         )
         let adaptTime = ContinuousClock.now - adaptStart
 
-        var cgsIterator = ValueInterpreter(adapted, seed: 42, maxRuns: .max)
+        var cgsIterator = ValueInterpreter(tuned, seed: 42, maxRuns: .max)
         var cgsTotal = 0
         var cgsValid = 0
         var cgsUnique = Set<BST>()
@@ -445,8 +445,8 @@ struct ChoiceGradientSamplingTests {
                 "CGS unique (\(cgsUnique.count)) should exceed rejection unique (\(rejectionUnique.count))")
     }
 
-    @Test("BST: adapted generator produces valid non-leaf trees")
-    func bstAdaptedNonLeaf() throws {
+    @Test("BST: tuned generator produces valid non-leaf trees")
+    func bstTunedNonLeaf() throws {
         let naive = BST.arbitrary
 
         // Require non-leaf valid BSTs — this is the hard predicate from the paper
@@ -454,7 +454,7 @@ struct ChoiceGradientSamplingTests {
             tree != .leaf && tree.isValidBST()
         }
 
-        let adapted = try ChoiceGradientSampling.adapt(
+        let tuned = try GeneratorTuning.tune(
             naive,
             samples: 100,
             seed: 12345,
@@ -465,39 +465,39 @@ struct ChoiceGradientSamplingTests {
         let naiveValues = Array(ValueInterpreter(naive, seed: 99, maxRuns: 500))
         let naiveValidCount = naiveValues.count(where: isValidNonLeafBST)
 
-        let adaptedValues = Array(ValueInterpreter(adapted, seed: 99, maxRuns: 500))
-        let adaptedValidCount = adaptedValues.count(where: isValidNonLeafBST)
+        let tunedValues = Array(ValueInterpreter(tuned, seed: 99, maxRuns: 500))
+        let tunedValidCount = tunedValues.count(where: isValidNonLeafBST)
 
         let naiveRate = Double(naiveValidCount) / Double(naiveValues.count)
-        let adaptedRate = Double(adaptedValidCount) / Double(adaptedValues.count)
+        let tunedRate = Double(tunedValidCount) / Double(tunedValues.count)
 
-        print("BST non-leaf validity — naive: \(naiveValidCount)/\(naiveValues.count) (\(String(format: "%.1f%%", naiveRate * 100))), adapted: \(adaptedValidCount)/\(adaptedValues.count) (\(String(format: "%.1f%%", adaptedRate * 100)))")
+        print("BST non-leaf validity — naive: \(naiveValidCount)/\(naiveValues.count) (\(String(format: "%.1f%%", naiveRate * 100))), tuned: \(tunedValidCount)/\(tunedValues.count) (\(String(format: "%.1f%%", tunedRate * 100)))")
 
-        // Adapted should improve over naive
-        #expect(adaptedRate > naiveRate,
-                "Adapted non-leaf BST rate (\(adaptedRate)) should exceed naive (\(naiveRate))")
-        #expect(!adaptedValues.filter(isValidNonLeafBST).isEmpty,
+        // Tuned should improve over naive
+        #expect(tunedRate > naiveRate,
+                "Tuned non-leaf BST rate (\(tunedRate)) should exceed naive (\(naiveRate))")
+        #expect(!tunedValues.filter(isValidNonLeafBST).isEmpty,
                 "Should produce at least some valid non-leaf BSTs")
     }
 
-    @Test("BST: adapted generator structure has meaningful weight differences")
-    func bstAdaptedStructure() throws {
+    @Test("BST: tuned generator structure has meaningful weight differences")
+    func bstTunedStructure() throws {
         let naive = BST.arbitrary
 
         let isValidBST: (BST) -> Bool = { $0.isValidBST() }
 
-        let adapted = try ChoiceGradientSampling.adapt(
+        let tuned = try GeneratorTuning.tune(
             naive,
             samples: 100,
             seed: 12345,
             predicate: isValidBST
         )
 
-        print("Adapted BST generator:\n\(adapted.debugDescription)")
+        print("Tuned BST generator:\n\(tuned.debugDescription)")
 
         // The top-level should be a pick (leaf vs node)
-        guard case let .impure(.pick(choices), _) = adapted else {
-            Issue.record("Expected adapted generator to be a pick at top level")
+        guard case let .impure(.pick(choices), _) = tuned else {
+            Issue.record("Expected tuned generator to be a pick at top level")
             return
         }
 

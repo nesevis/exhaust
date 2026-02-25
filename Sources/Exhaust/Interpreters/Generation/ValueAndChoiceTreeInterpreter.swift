@@ -235,21 +235,21 @@ public struct ValueAndChoiceTreeInterpreter<FinalOutput>: IteratorProtocol, Sequ
             // MARK: - Filter
 
             case let .filter(gen, fingerprint, predicate):
-                // Look up or create an adapted generator for this filter.
+                // Look up or create a tuned generator for this filter.
                 // The fingerprint is stable per filter site, so identical filters
-                // inside a bind will share the same adapted generator.
-                let adaptedGen: ReflectiveGenerator<Any>
-                if let cached = context.adaptedFilterCache[fingerprint] {
-                    adaptedGen = cached
+                // inside a bind will share the same tuned generator.
+                let tunedGen: ReflectiveGenerator<Any>
+                if let cached = context.tunedFilterCache[fingerprint] {
+                    tunedGen = cached
                 } else {
-                    let adapted = try? ChoiceGradientSampling.autoAdapt(gen, predicate: predicate)
-                    adaptedGen = adapted ?? gen
-                    context.adaptedFilterCache[fingerprint] = adaptedGen
+                    let tuned = try? GeneratorTuning.probeAndTune(gen, predicate: predicate)
+                    tunedGen = tuned ?? gen
+                    context.tunedFilterCache[fingerprint] = tunedGen
                 }
 
                 var attempts = 0 as UInt64
                 while attempts < context.maxFilterRuns {
-                    guard let (result, tree) = try runGenerator(adaptedGen, context) else { return nil }
+                    guard let (result, tree) = try runGenerator(tunedGen, context) else { return nil }
 
                     if predicate(result) {
                         return try runContinuation(result, tree)
@@ -503,8 +503,8 @@ public struct ValueAndChoiceTreeInterpreter<FinalOutput>: IteratorProtocol, Sequ
         var totalAttempts: UInt64 = 0
         var seenSequences: Set<ChoiceSequence> = []
 
-        // Cache of adapted generators keyed by filter fingerprint
-        var adaptedFilterCache: [UInt64: ReflectiveGenerator<Any>] = [:]
+        // Cache of tuned generators keyed by filter fingerprint
+        var tunedFilterCache: [UInt64: ReflectiveGenerator<Any>] = [:]
 
         init(
             maxRuns: UInt64,

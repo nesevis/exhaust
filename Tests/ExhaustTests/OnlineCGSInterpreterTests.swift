@@ -1,8 +1,8 @@
 //
-//  CGSValueAndChoiceTreeInterpreterTests.swift
+//  OnlineCGSInterpreterTests.swift
 //  ExhaustTests
 //
-//  Tests for the online Choice Gradient Sampling interpreter.
+//  Tests for the online CGS interpreter.
 //
 
 import Foundation
@@ -61,7 +61,7 @@ private enum BST: Equatable, Hashable {
 }
 
 @Suite("Online CGS Interpreter")
-struct CGSValueAndChoiceTreeInterpreterTests {
+struct OnlineCGSInterpreterTests {
 
     // MARK: - BST Height Diversity
 
@@ -70,7 +70,7 @@ struct CGSValueAndChoiceTreeInterpreterTests {
         let gen = BST.arbitrary
         let isValidNonLeafBST: (BST) -> Bool = { $0 != .leaf && $0.isValidBST() }
 
-        var iterator = CGSValueAndChoiceTreeInterpreter(
+        var iterator = OnlineCGSInterpreter(
             gen,
             predicate: isValidNonLeafBST,
             sampleCount: 50,
@@ -107,7 +107,7 @@ struct CGSValueAndChoiceTreeInterpreterTests {
         ])
         let predicate: (Int) -> Bool = { $0 <= 100 }
 
-        var iterator = CGSValueAndChoiceTreeInterpreter(
+        var iterator = OnlineCGSInterpreter(
             gen,
             predicate: predicate,
             sampleCount: 30,
@@ -136,7 +136,7 @@ struct CGSValueAndChoiceTreeInterpreterTests {
         // Property: all values should be <= 50 (branch 2 will fail)
         let property: (Int) -> Bool = { $0 <= 50 }
 
-        var iterator = CGSValueAndChoiceTreeInterpreter(
+        var iterator = OnlineCGSInterpreter(
             gen,
             predicate: { _ in true }, // Predicate for generation guidance (accept all)
             sampleCount: 20,
@@ -180,7 +180,7 @@ struct CGSValueAndChoiceTreeInterpreterTests {
         let predicate: (Int) -> Bool = { $0 <= 100 }
 
         let cgsValues = Array(
-            CGSValueAndChoiceTreeInterpreter(
+            OnlineCGSInterpreter(
                 gen,
                 predicate: predicate,
                 sampleCount: 50,
@@ -213,7 +213,7 @@ struct CGSValueAndChoiceTreeInterpreterTests {
         let predicate: (Int) -> Bool = { $0 <= 250 }
 
         let values1 = Array(
-            CGSValueAndChoiceTreeInterpreter(
+            OnlineCGSInterpreter(
                 gen,
                 predicate: predicate,
                 sampleCount: 30,
@@ -223,7 +223,7 @@ struct CGSValueAndChoiceTreeInterpreterTests {
         ).map(\.value)
 
         let values2 = Array(
-            CGSValueAndChoiceTreeInterpreter(
+            OnlineCGSInterpreter(
                 gen,
                 predicate: predicate,
                 sampleCount: 30,
@@ -246,7 +246,7 @@ struct CGSValueAndChoiceTreeInterpreterTests {
         let predicate: ((Int, Int)) -> Bool = { $0.0 + $0.1 < 10 }
 
         let cgsValues = Array(
-            CGSValueAndChoiceTreeInterpreter(
+            OnlineCGSInterpreter(
                 gen,
                 predicate: predicate,
                 sampleCount: 50,
@@ -275,7 +275,7 @@ struct CGSValueAndChoiceTreeInterpreterTests {
         let predicate: (UInt64) -> Bool = { $0 < 100 }
 
         let cgsValues = Array(
-            CGSValueAndChoiceTreeInterpreter(
+            OnlineCGSInterpreter(
                 gen,
                 predicate: predicate,
                 sampleCount: 50,
@@ -295,19 +295,19 @@ struct CGSValueAndChoiceTreeInterpreterTests {
 
     // MARK: - Weight Smoothing
 
-    @Test("Smoothing recovers dead branches in adapted BST generator")
+    @Test("Smoothing recovers dead branches in tuned BST generator")
     func smoothingRecoverDeadBranches() throws {
         let gen = BST.arbitrary
         let isValidBST: (BST) -> Bool = { $0.height >= 1 && $0.isValidBST() }
 
-        let adapted = try ChoiceGradientSampling.adapt(
+        let tuned = try GeneratorTuning.tune(
             gen,
             samples: 100,
             seed: 12345,
             predicate: isValidBST
         )
 
-        let smoothed = ChoiceGradientSampling.smooth(adapted, epsilon: 1.0, temperature: 2.0)
+        let smoothed = GeneratorTuning.smooth(tuned, epsilon: 1.0, temperature: 2.0)
 
         var iterator = ValueInterpreter(smoothed, seed: 42, maxRuns: 2000)
         var validTrees = [BST]()
@@ -343,7 +343,7 @@ struct CGSValueAndChoiceTreeInterpreterTests {
         let predicate: (Int) -> Bool = { _ in false }
 
         let values = Array(
-            CGSValueAndChoiceTreeInterpreter(
+            OnlineCGSInterpreter(
                 gen,
                 predicate: predicate,
                 sampleCount: 20,
@@ -364,26 +364,26 @@ struct CGSValueAndChoiceTreeInterpreterTests {
 
     // MARK: - Static Profile
 
-    @Test("Static profile: adapted BST shows low entropy at depth-1+ picks")
+    @Test("Static profile: tuned BST shows low entropy at depth-1+ picks")
     func staticProfileEntropy() throws {
         let gen = BST.arbitrary
         let isValidBST: (BST) -> Bool = { $0.height >= 1 && $0.isValidBST() }
 
-        let adapted = try ChoiceGradientSampling.adapt(
+        let tuned = try GeneratorTuning.tune(
             gen,
             samples: 500,
             seed: 12345,
             predicate: isValidBST
         )
 
-        let profile = ChoiceGradientSampling.profile(adapted)
+        let profile = GeneratorTuning.profile(tuned)
 
         print("=== Static Profile ===")
         print(profile)
 
         // Should have multiple pick sites
         #expect(profile.sites.count >= 2,
-                "Adapted BST should have multiple pick sites, got \(profile.sites.count)")
+                "Tuned BST should have multiple pick sites, got \(profile.sites.count)")
 
         // Root pick (depth 0) should exist and often be a bottleneck
         // (adaptation concentrates weight on the valid branch)
@@ -396,7 +396,7 @@ struct CGSValueAndChoiceTreeInterpreterTests {
         let bottleneckSites = profile.sites.filter { $0.entropyRatio < 0.3 }
         print("Bottleneck sites (ratio < 0.3): \(bottleneckSites.count)")
         #expect(!bottleneckSites.isEmpty,
-                "Adapted BST should have at least one bottleneck site")
+                "Tuned BST should have at least one bottleneck site")
     }
 
     // MARK: - Empirical Profile
@@ -406,15 +406,15 @@ struct CGSValueAndChoiceTreeInterpreterTests {
         let gen = BST.arbitrary
         let isValidBST: (BST) -> Bool = { $0.height >= 1 && $0.isValidBST() }
 
-        let adapted = try ChoiceGradientSampling.adapt(
+        let tuned = try GeneratorTuning.tune(
             gen,
             samples: 200,
             seed: 12345,
             predicate: isValidBST
         )
 
-        let profile = ChoiceGradientSampling.profile(
-            adapted,
+        let profile = GeneratorTuning.profile(
+            tuned,
             predicate: isValidBST,
             samples: 1000,
             seed: 42
@@ -446,7 +446,7 @@ struct CGSValueAndChoiceTreeInterpreterTests {
         let maxRuns: UInt64 = 100
 
         let adaptStart = ContinuousClock().now
-        let adapted = try ChoiceGradientSampling.adapt(
+        let tuned = try GeneratorTuning.tune(
             gen,
             samples: 1000,
             seed: 12345,
@@ -456,7 +456,7 @@ struct CGSValueAndChoiceTreeInterpreterTests {
 
         // Global smooth
         let globalSmoothStart = ContinuousClock().now
-        let globalSmoothed = ChoiceGradientSampling.smooth(adapted, epsilon: 1.0, temperature: 2.0)
+        let globalSmoothed = GeneratorTuning.smooth(tuned, epsilon: 1.0, temperature: 2.0)
         let globalSmoothTime = ContinuousClock().now - globalSmoothStart
 
         let globalGenStart = ContinuousClock().now
@@ -476,8 +476,8 @@ struct CGSValueAndChoiceTreeInterpreterTests {
 
         // Adaptive smooth
         let adaptiveSmoothStart = ContinuousClock().now
-        let adaptiveSmoothed = ChoiceGradientSampling.smoothAdaptively(
-            adapted,
+        let adaptiveSmoothed = GeneratorTuning.smoothAdaptively(
+            tuned,
             epsilon: 1.0,
             baseTemperature: 1.0,
             maxTemperature: 4.0

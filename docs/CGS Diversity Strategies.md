@@ -4,13 +4,13 @@ Approaches for improving output diversity of eager Choice Gradient Sampling.
 
 ## Problem
 
-`ChoiceGradientSampling.adapt` pre-computes pick weights as success counts in a
+`GeneratorTuning.tune` pre-computes pick weights as success counts in a
 single top-down pass. For recursive generators like BSTs (~31 pick sites),
 depth-2+ branches often receive **weight 0** because composed predicates have
 near-zero success rates during sampling. This causes diversity collapse: high
 throughput and validity rate, but almost all outputs are height-1 trees.
 
-The online CGS (`CGSValueAndChoiceTreeInterpreter`) avoids this by computing
+The online CGS (`OnlineCGSInterpreter`) avoids this by computing
 gradients at every pick during generation, but the multiplicative sampling
 overhead at each recursion level makes it orders of magnitude slower.
 
@@ -18,9 +18,9 @@ overhead at each recursion level makes it orders of magnitude slower.
 
 ### 1. Weight Smoothing + Temperature
 
-`ChoiceGradientSampling.smooth(_:epsilon:temperature:)`
+`GeneratorTuning.smooth(_:epsilon:temperature:)`
 
-Post-processing pass that walks the adapted generator tree and transforms every
+Post-processing pass that walks the tuned generator tree and transforms every
 pick's weights:
 
 ```
@@ -42,19 +42,19 @@ scaled_i   = max(1, round(smoothed_i / sum * 10000))
 | Unique at h2    | 12        | 47                        |
 | Unique at h3    | 1         | 13                        |
 
-Cheap to apply, no re-adaptation needed. Good baseline to layer other strategies on.
+Cheap to apply, no re-tuning needed. Good baseline to layer other strategies on.
 
 ## Candidates for Exploration
 
 ### 2. Multi-Seed Ensemble
 
-Run `adapt` N times with different random seeds. Each discovers slightly
+Run `tune` N times with different random seeds. Each discovers slightly
 different weight configurations because sampling is stochastic. Round-robin (or
 randomly select) between the resulting generators during generation.
 
 - Dead simple, no algorithmic changes needed.
-- Each adaptation may find a different "mode" of the valid space.
-- Linear cost in adaptation time (N adapts), but generation cost is unchanged.
+- Each tuning pass may find a different "mode" of the valid space.
+- Linear cost in tuning time (N tune calls), but generation cost is unchanged.
 - Composes well with smoothing: smooth each ensemble member independently.
 
 **Open questions**: How many seeds are needed? Is random selection or
@@ -74,7 +74,7 @@ noisy_weight_i = (1 - alpha) * weight_i + alpha * Dir(concentration)
 - Harder to tune: requires choosing alpha and Dirichlet concentration.
 - Could be combined with smoothing as the base weights.
 
-### 4. Stratified Adaptation
+### 4. Stratified Tuning
 
 Adapt with progressively specific predicates:
 
@@ -87,7 +87,7 @@ Interleave the generators during sampling.
 
 - Very effective for the BST case specifically.
 - Requires domain knowledge about which strata matter.
-- Could be automated: adapt once, profile the output distribution, then create
+- Could be automated: tune once, profile the output distribution, then create
   strata predicates for under-represented regions.
 
 ### 5. Alpha-Blending with Uniform
@@ -116,7 +116,7 @@ Repeatedly alternates between exploration (high T) and exploitation (low T).
 Prevents settling into a single mode.
 
 - Composes directly with the existing `smooth` function — just vary T per batch.
-- No additional adaptation cost.
+- No additional tuning cost.
 - Tuning: period length, amplitude, base temperature.
 
 ### 7. Duplicate Tracking with Dynamic Adjustment
@@ -137,9 +137,9 @@ else:
 
 ### 8. Mixed-Strategy Generation
 
-Alternate between CGS-adapted and uniform/unweighted generators:
+Alternate between CGS-tuned and uniform/unweighted generators:
 
-- Even steps: use adapted generator (high validity rate).
+- Even steps: use tuned generator (high validity rate).
 - Odd steps: use original generator (high diversity, lower validity).
 
 Simple interleaving recovers diversity without any weight manipulation. The
@@ -147,28 +147,28 @@ unweighted generator naturally explores branches that CGS suppressed.
 
 - No tuning parameters beyond the mix ratio.
 - Validity rate is the average of both strategies.
-- Could use the smoothed generator as the "adapted" side for best of both.
+- Could use the smoothed generator as the "tuned" side for best of both.
 
-### 9. Periodic Re-Adaptation
+### 9. Periodic Re-Tuning
 
-Re-run `adapt` from a fresh seed after every K generations. Each adaptation
+Re-run `tune` from a fresh seed after every K generations. Each tuning
 round samples differently, discovering new weight configurations over time.
 
-- More expensive than ensemble (adapts repeatedly, not upfront).
-- But adapts to the current state of exploration.
-- Could be combined with modified predicates (see Stratified Adaptation).
+- More expensive than ensemble (tunes repeatedly, not upfront).
+- But tunes to the current state of exploration.
+- Could be combined with modified predicates (see Stratified Tuning).
 
 ### 10. Epoch-Based Re-Weighting
 
 Generate a batch with current weights, analyse the output distribution, then
-re-adapt with a modified predicate that penalises over-represented regions:
+re-tune with a modified predicate that penalises over-represented regions:
 
 ```
 modified_predicate(x) = base_predicate(x) && !is_over_represented(x)
 ```
 
-- Closed-loop: uses actual output distribution to guide re-adaptation.
-- Expensive: requires periodic re-adaptation.
+- Closed-loop: uses actual output distribution to guide re-tuning.
+- Expensive: requires periodic re-tuning.
 - Most complex to implement but potentially most effective for sustained runs.
 
 ## Composability Notes
@@ -178,7 +178,7 @@ Many of these strategies compose:
 - **Smoothing** is a good base layer for everything else.
 - **Temperature cycling** and **duplicate tracking** can wrap any smoothed generator.
 - **Ensemble** and **mixed-strategy** are orthogonal to per-weight transformations.
-- **Stratified adaptation** and **epoch-based re-weighting** are the most
+- **Stratified tuning** and **epoch-based re-weighting** are the most
   heavyweight but can use smoothing internally.
 
 A reasonable progression for experimentation:
@@ -186,4 +186,4 @@ A reasonable progression for experimentation:
 1. Smoothing (done) — fixes the zero-weight problem.
 2. Temperature cycling — adds dynamic exploration at near-zero cost.
 3. Duplicate tracking — makes exploration adaptive to actual output.
-4. Multi-seed ensemble — if single-adapt coverage is still insufficient.
+4. Multi-seed ensemble — if single-tune coverage is still insufficient.

@@ -1,5 +1,5 @@
 //
-//  ChoiceGradientSampling.swift
+//  GeneratorTuning.swift
 //  Exhaust
 //
 //  Created by Chris Kolbu on 24/2/2026.
@@ -7,10 +7,10 @@
 
 import Foundation
 
-/// Eager adaptation interpreter that transforms a generator's pick structure
-/// using Choice Gradient Sampling (CGS).
+/// Offline, one-shot tuning that transforms a generator's pick structure
+/// using fitness-weighted sampling inspired by Choice Gradient Sampling (CGS).
 ///
-/// Adaptation is performed once at creation time via a single top-down recursive
+/// Tuning is performed once at creation time via a single top-down recursive
 /// pass. The result is a normal `ReflectiveGenerator` with synthesised pick
 /// structure whose weights reflect predicate satisfaction rates. Shrinking is
 /// unaffected because the reducer operates on `ChoiceTree`/`ChoiceSequence`
@@ -21,17 +21,17 @@ import Foundation
 /// At every `pick`, each choice is sampled through the continuation pipeline
 /// to measure how often the final output satisfies the predicate. The measured
 /// success count becomes the choice's weight. Inner generators are recursively
-/// adapted using *composed predicates* — the current continuation is folded
+/// tuned using *composed predicates* — the current continuation is folded
 /// into the predicate so that inner operations always evaluate against the
 /// final output.
 ///
 /// `chooseBits` and `getSize` operations are subdivided into synthesised picks
-/// of subranges, then adapted through the pick path.
-enum ChoiceGradientSampling {
+/// of subranges, then tuned through the pick path.
+enum GeneratorTuning {
 
     // MARK: - Context
 
-    final class AdaptationContext {
+    final class TuningContext {
         let baseSampleCount: UInt64
         let maxSize: UInt64
         var depth: UInt64 = 0
@@ -55,19 +55,19 @@ enum ChoiceGradientSampling {
 
     /// Probes a generator's structure by running it a few times and checking whether
     /// the resulting choice trees contain any pick sites. If picks are present,
-    /// performs full CGS adaptation with adaptive smoothing. If not, returns the
-    /// generator unchanged — adaptation has nothing to attach weights to.
+    /// performs full tuning with adaptive smoothing. If not, returns the
+    /// generator unchanged — tuning has nothing to attach weights to.
     ///
     /// - Parameters:
-    ///   - generator: The generator to probe and possibly adapt.
+    ///   - generator: The generator to probe and possibly tune.
     ///   - probeSeed: Seed for the probe runs (default 0).
     ///   - probeRuns: Number of probe generations to inspect (default 10).
-    ///   - samples: Base number of samples per pick choice for adaptation (decays with depth).
+    ///   - samples: Base number of samples per pick choice for tuning (decays with depth).
     ///   - maxSize: Maximum size parameter used when subdividing `getSize`.
-    ///   - seed: Optional seed for deterministic adaptation.
+    ///   - seed: Optional seed for deterministic tuning.
     ///   - predicate: The property that generated values should satisfy.
-    /// - Returns: An adapted generator if picks were found, or the original generator unchanged.
-    static func autoAdapt<Output>(
+    /// - Returns: A tuned generator if picks were found, or the original generator unchanged.
+    static func probeAndTune<Output>(
         _ generator: ReflectiveGenerator<Output>,
         probeSeed: UInt64 = 0,
         probeRuns: UInt64 = 10,
@@ -87,35 +87,35 @@ enum ChoiceGradientSampling {
 
         guard hasPicks else { return generator }
 
-        let adapted = try adapt(generator, samples: samples, maxSize: maxSize, seed: seed, predicate: predicate)
-        return smoothAdaptively(adapted)
+        let tuned = try tune(generator, samples: samples, maxSize: maxSize, seed: seed, predicate: predicate)
+        return smoothAdaptively(tuned)
     }
 
-    /// Adapts a generator so that its pick weights reflect predicate satisfaction rates.
+    /// Tunes a generator so that its pick weights reflect predicate satisfaction rates.
     ///
     /// The transformation is eager — the returned generator has its structure fully
-    /// adapted and can be used with any interpreter.
+    /// tuned and can be used with any interpreter.
     ///
     /// - Parameters:
-    ///   - generator: The generator to adapt.
+    ///   - generator: The generator to tune.
     ///   - samples: Base number of samples per pick choice (decays with depth).
     ///   - maxSize: Maximum size parameter used when subdividing `getSize`.
-    ///   - seed: Optional seed for deterministic adaptation.
+    ///   - seed: Optional seed for deterministic tuning.
     ///   - predicate: The property that generated values should satisfy.
-    /// - Returns: An adapted generator with weights biased toward predicate satisfaction.
-    static func adapt<Output>(
+    /// - Returns: A tuned generator with weights biased toward predicate satisfaction.
+    static func tune<Output>(
         _ generator: ReflectiveGenerator<Output>,
         samples: UInt64 = 100,
         maxSize: UInt64 = 100,
         seed: UInt64? = nil,
         predicate: @escaping (Output) -> Bool
     ) throws -> ReflectiveGenerator<Output> {
-        let context = AdaptationContext(
+        let context = TuningContext(
             baseSampleCount: samples,
             maxSize: maxSize,
             rng: seed.map(Xoshiro256.init(seed:)) ?? .init()
         )
-        return try adaptRecursive(
+        return try tuneRecursive(
             generator,
             context: context,
             insideSubdividedChooseBits: false,
@@ -125,9 +125,9 @@ enum ChoiceGradientSampling {
 
     // MARK: - Recursive Engine
 
-    private static func adaptRecursive<Output>(
+    private static func tuneRecursive<Output>(
         _ gen: ReflectiveGenerator<Output>,
-        context: AdaptationContext,
+        context: TuningContext,
         insideSubdividedChooseBits: Bool,
         predicate: @escaping (Output) -> Bool
     ) throws -> ReflectiveGenerator<Output> {
@@ -138,7 +138,7 @@ enum ChoiceGradientSampling {
         case let .impure(op, continuation):
             switch op {
             case let .pick(choices):
-                return try adaptPick(
+                return try measureAndTunePick(
                     choices: choices,
                     continuation: continuation,
                     context: context,
@@ -150,7 +150,7 @@ enum ChoiceGradientSampling {
                 if insideSubdividedChooseBits {
                     return gen
                 }
-                return try adaptChooseBits(
+                return try tuneChooseBits(
                     lower: lower,
                     upper: upper,
                     tag: tag,
@@ -161,7 +161,7 @@ enum ChoiceGradientSampling {
                 )
 
             case let .sequence(lengthGen, elementGen):
-                return try adaptSequence(
+                return try tuneSequence(
                     lengthGen: lengthGen,
                     elementGen: elementGen,
                     continuation: continuation,
@@ -171,14 +171,14 @@ enum ChoiceGradientSampling {
                 )
 
             case .getSize:
-                return try adaptGetSize(
+                return try tuneGetSize(
                     continuation: continuation,
                     context: context,
                     predicate: predicate
                 )
 
             case let .zip(generators):
-                return try adaptZip(
+                return try tuneZip(
                     generators: generators,
                     continuation: continuation,
                     context: context,
@@ -186,7 +186,7 @@ enum ChoiceGradientSampling {
                 )
 
             case let .filter(subGen, fingerprint, filterPredicate):
-                return try adaptFilter(
+                return try tuneFilter(
                     subGen: subGen,
                     fingerprint: fingerprint,
                     filterPredicate: filterPredicate,
@@ -195,7 +195,7 @@ enum ChoiceGradientSampling {
                 )
 
             case let .contramap(transform, next):
-                return try adaptContramap(
+                return try tuneContramap(
                     transform: transform,
                     next: next,
                     continuation: continuation,
@@ -211,18 +211,18 @@ enum ChoiceGradientSampling {
 
     // MARK: - Pick
 
-    private static func adaptPick<Output>(
+    private static func measureAndTunePick<Output>(
         choices: ContiguousArray<ReflectiveOperation.PickTuple>,
         continuation: @escaping (Any) throws -> ReflectiveGenerator<Output>,
-        context: AdaptationContext,
+        context: TuningContext,
         insideSubdividedChooseBits: Bool,
         predicate: @escaping (Output) -> Bool
     ) throws -> ReflectiveGenerator<Output> {
         context.depth += 1
         defer { context.depth -= 1 }
 
-        var adaptedChoices = ContiguousArray<ReflectiveOperation.PickTuple>()
-        adaptedChoices.reserveCapacity(choices.count)
+        var tunedChoices = ContiguousArray<ReflectiveOperation.PickTuple>()
+        tunedChoices.reserveCapacity(choices.count)
 
         for choice in choices {
             // 1. Create single-branch pick, complete through continuation
@@ -245,7 +245,7 @@ enum ChoiceGradientSampling {
                 }
             }
 
-            // 3. Recursively adapt the choice's inner generator
+            // 3. Recursively tune the choice's inner generator
             let composedPredicate: (Any) -> Bool = { innerValue in
                 do {
                     let nextGen = try continuation(innerValue)
@@ -260,43 +260,43 @@ enum ChoiceGradientSampling {
                 }
             }
 
-            let adaptedInner = try adaptRecursive(
+            let tunedInner = try tuneRecursive(
                 choice.generator,
                 context: context,
                 insideSubdividedChooseBits: insideSubdividedChooseBits,
                 predicate: composedPredicate
             )
 
-            adaptedChoices.append(ReflectiveOperation.PickTuple(
+            tunedChoices.append(ReflectiveOperation.PickTuple(
                 siteID: choice.siteID,
                 id: choice.id,
                 weight: successCount,
-                generator: adaptedInner
+                generator: tunedInner
             ))
         }
 
         // All-zero safety: restore with weight 1 to prevent draw returning nil
-        if adaptedChoices.allSatisfy({ $0.weight == 0 }) {
-            adaptedChoices = ContiguousArray(adaptedChoices.map {
+        if tunedChoices.allSatisfy({ $0.weight == 0 }) {
+            tunedChoices = ContiguousArray(tunedChoices.map {
                 ReflectiveOperation.PickTuple(siteID: $0.siteID, id: $0.id, weight: 1, generator: $0.generator)
             })
         }
 
         return .impure(
-            operation: .pick(choices: adaptedChoices),
+            operation: .pick(choices: tunedChoices),
             continuation: continuation
         )
     }
 
     // MARK: - ChooseBits
 
-    private static func adaptChooseBits<Output>(
+    private static func tuneChooseBits<Output>(
         lower: UInt64,
         upper: UInt64,
         tag: TypeTag,
         isRangeExplicit: Bool,
         continuation: @escaping (Any) throws -> ReflectiveGenerator<Output>,
-        context: AdaptationContext,
+        context: TuningContext,
         predicate: @escaping (Output) -> Bool
     ) throws -> ReflectiveGenerator<Output> {
         context.depth += 1
@@ -332,8 +332,8 @@ enum ChoiceGradientSampling {
             continuation: continuation
         )
 
-        // Re-enter adaptRecursive to weight the synthesised pick
-        return try adaptRecursive(
+        // Re-enter tuneRecursive to weight the synthesised pick
+        return try tuneRecursive(
             synthesisedPick,
             context: context,
             insideSubdividedChooseBits: true,
@@ -343,11 +343,11 @@ enum ChoiceGradientSampling {
 
     // MARK: - Sequence
 
-    private static func adaptSequence<Output>(
+    private static func tuneSequence<Output>(
         lengthGen: ReflectiveGenerator<UInt64>,
         elementGen: ReflectiveGenerator<Any>,
         continuation: @escaping (Any) throws -> ReflectiveGenerator<Output>,
-        context: AdaptationContext,
+        context: TuningContext,
         insideSubdividedChooseBits: Bool,
         predicate: @escaping (Output) -> Bool
     ) throws -> ReflectiveGenerator<Output> {
@@ -396,7 +396,7 @@ enum ChoiceGradientSampling {
                 continuation: continuation
             )
 
-            return try adaptRecursive(
+            return try tuneRecursive(
                 synthesisedPick,
                 context: context,
                 insideSubdividedChooseBits: true,
@@ -452,7 +452,7 @@ enum ChoiceGradientSampling {
                 continuation: continuation
             )
 
-            return try adaptRecursive(
+            return try tuneRecursive(
                 synthesisedPick,
                 context: context,
                 insideSubdividedChooseBits: true,
@@ -460,7 +460,7 @@ enum ChoiceGradientSampling {
             )
         }
 
-        // Fallback: adapt element generator with composed predicate
+        // Fallback: tune element generator with composed predicate
         let composedElementPredicate: (Any) -> Bool = { elementValue in
             // We can't meaningfully compose through the sequence continuation
             // without knowing the full array context, so return true to keep
@@ -468,7 +468,7 @@ enum ChoiceGradientSampling {
             true
         }
 
-        let adaptedElementGen = try adaptRecursive(
+        let tunedElementGen = try tuneRecursive(
             elementGen,
             context: context,
             insideSubdividedChooseBits: false,
@@ -476,16 +476,16 @@ enum ChoiceGradientSampling {
         )
 
         return .impure(
-            operation: .sequence(length: lengthGen, gen: adaptedElementGen),
+            operation: .sequence(length: lengthGen, gen: tunedElementGen),
             continuation: continuation
         )
     }
 
     // MARK: - GetSize
 
-    private static func adaptGetSize<Output>(
+    private static func tuneGetSize<Output>(
         continuation: @escaping (Any) throws -> ReflectiveGenerator<Output>,
-        context: AdaptationContext,
+        context: TuningContext,
         predicate: @escaping (Output) -> Bool
     ) throws -> ReflectiveGenerator<Output> {
         context.depth += 1
@@ -519,7 +519,7 @@ enum ChoiceGradientSampling {
             continuation: continuation
         )
 
-        return try adaptRecursive(
+        return try tuneRecursive(
             synthesisedPick,
             context: context,
             insideSubdividedChooseBits: true,
@@ -529,17 +529,17 @@ enum ChoiceGradientSampling {
 
     // MARK: - Zip
 
-    private static func adaptZip<Output>(
+    private static func tuneZip<Output>(
         generators: ContiguousArray<ReflectiveGenerator<Any>>,
         continuation: @escaping (Any) throws -> ReflectiveGenerator<Output>,
-        context: AdaptationContext,
+        context: TuningContext,
         predicate: @escaping (Output) -> Bool
     ) throws -> ReflectiveGenerator<Output> {
         context.depth += 1
         defer { context.depth -= 1 }
 
-        var adaptedGens = ContiguousArray<ReflectiveGenerator<Any>>()
-        adaptedGens.reserveCapacity(generators.count)
+        var tunedGens = ContiguousArray<ReflectiveGenerator<Any>>()
+        tunedGens.reserveCapacity(generators.count)
 
         for (index, componentGen) in generators.enumerated() {
             let composedPredicate: (Any) -> Bool = { componentValue in
@@ -576,32 +576,32 @@ enum ChoiceGradientSampling {
                 }
             }
 
-            let adapted = try adaptRecursive(
+            let tuned = try tuneRecursive(
                 componentGen,
                 context: context,
                 insideSubdividedChooseBits: false,
                 predicate: composedPredicate
             )
-            adaptedGens.append(adapted)
+            tunedGens.append(tuned)
         }
 
         return .impure(
-            operation: .zip(adaptedGens),
+            operation: .zip(tunedGens),
             continuation: continuation
         )
     }
 
     // MARK: - Filter
 
-    private static func adaptFilter<Output>(
+    private static func tuneFilter<Output>(
         subGen: ReflectiveGenerator<Any>,
         fingerprint: UInt64,
         filterPredicate: @escaping (Any) -> Bool,
         continuation: @escaping (Any) throws -> ReflectiveGenerator<Output>,
-        context: AdaptationContext
+        context: TuningContext
     ) throws -> ReflectiveGenerator<Output> {
-        // Use the filter's own predicate to adapt the inner generator
-        let adaptedInner = try adaptRecursive(
+        // Use the filter's own predicate to tune the inner generator
+        let tunedInner = try tuneRecursive(
             subGen,
             context: context,
             insideSubdividedChooseBits: false,
@@ -609,18 +609,18 @@ enum ChoiceGradientSampling {
         )
 
         return .impure(
-            operation: .filter(gen: adaptedInner, fingerprint: fingerprint, predicate: filterPredicate),
+            operation: .filter(gen: tunedInner, fingerprint: fingerprint, predicate: filterPredicate),
             continuation: continuation
         )
     }
 
     // MARK: - Contramap
 
-    private static func adaptContramap<Output>(
+    private static func tuneContramap<Output>(
         transform: @escaping (Any) throws -> Any?,
         next: ReflectiveGenerator<Any>,
         continuation: @escaping (Any) throws -> ReflectiveGenerator<Output>,
-        context: AdaptationContext,
+        context: TuningContext,
         predicate: @escaping (Output) -> Bool
     ) throws -> ReflectiveGenerator<Output> {
         let composedPredicate: (Any) -> Bool = { innerValue in
@@ -637,7 +637,7 @@ enum ChoiceGradientSampling {
             }
         }
 
-        let adaptedNext = try adaptRecursive(
+        let tunedNext = try tuneRecursive(
             next,
             context: context,
             insideSubdividedChooseBits: false,
@@ -645,16 +645,16 @@ enum ChoiceGradientSampling {
         )
 
         return .impure(
-            operation: .contramap(transform: transform, next: adaptedNext),
+            operation: .contramap(transform: transform, next: tunedNext),
             continuation: continuation
         )
     }
 
     // MARK: - Weight Smoothing
 
-    /// Applies Laplace smoothing and temperature scaling to pick weights in an adapted generator.
+    /// Applies Laplace smoothing and temperature scaling to pick weights in a tuned generator.
     ///
-    /// After ``adapt`` bakes success counts into pick weights, deeper branches may receive
+    /// After ``tune`` bakes success counts into pick weights, deeper branches may receive
     /// weight 0 because composed predicates have near-zero success rates during sampling.
     /// This post-processing step recovers dead branches and controls exploration:
     ///
@@ -668,7 +668,7 @@ enum ChoiceGradientSampling {
     /// weights to integers summing to ~10000, with a floor of 1 per branch.
     ///
     /// - Parameters:
-    ///   - generator: An adapted generator (typically the output of ``adapt``).
+    ///   - generator: A tuned generator (typically the output of ``tune``).
     ///   - epsilon: Laplace smoothing constant. Default: 1.0
     ///   - temperature: Temperature parameter. Default: 2.0
     /// - Returns: A generator with smoothed pick weights throughout the tree.
@@ -812,11 +812,11 @@ enum ChoiceGradientSampling {
 
     /// Profiles all pick sites in a generator, computing entropy from weights.
     ///
-    /// This walks the adapted `ReflectiveGenerator` tree and collects statistics
+    /// This walks the tuned `ReflectiveGenerator` tree and collects statistics
     /// at each `.pick` site: weight distribution, Shannon entropy, and the
     /// entropy ratio (how uniform the distribution is).
     ///
-    /// - Parameter generator: The generator to profile (typically the output of ``adapt``).
+    /// - Parameter generator: The generator to profile (typically the output of ``tune``).
     /// - Returns: A profile containing statistics for every pick site.
     public static func profile<Output>(
         _ generator: ReflectiveGenerator<Output>
@@ -1035,13 +1035,13 @@ enum ChoiceGradientSampling {
     /// site-specific temperature:
     ///
     /// - Bottleneck sites (low entropy ratio) get high temperature → more exploration
-    /// - Well-distributed sites (high entropy ratio) get low temperature → preserve adapted weights
+    /// - Well-distributed sites (high entropy ratio) get low temperature → preserve tuned weights
     ///
     /// This avoids sacrificing validity at well-distributed sites while still
     /// recovering dead branches at bottleneck sites.
     ///
     /// - Parameters:
-    ///   - generator: An adapted generator (typically the output of ``adapt``).
+    ///   - generator: A tuned generator (typically the output of ``tune``).
     ///   - epsilon: Laplace smoothing constant. Default: 1.0
     ///   - baseTemperature: Temperature for well-distributed sites. Default: 1.0
     ///   - maxTemperature: Temperature for bottleneck sites. Default: 4.0

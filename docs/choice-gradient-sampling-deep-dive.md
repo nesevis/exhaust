@@ -2,13 +2,13 @@
 
 ## Overview
 
-The `SpeculativeAdaptationInterpreter` implements **Choice Gradient Sampling (CGS)**, an advanced technique for adapting generators to maximize the hit rate for validity predicates. Unlike traditional property-based testing that generates random values uniformly, CGS learns which choices in the generator are more likely to produce valid outputs and adjusts weights accordingly.
+The `SpeculativeAdaptationInterpreter` implements **Choice Gradient Sampling (CGS)**, an advanced technique for tuning generators to maximize the hit rate for validity predicates. Unlike traditional property-based testing that generates random values uniformly, CGS learns which choices in the generator are more likely to produce valid outputs and adjusts weights accordingly.
 
 ## Core Principle: Depth-Based Effort Allocation
 
 ### The Key Insight
 
-**Choices made earlier in the generator tree (lower depth) have exponentially more impact on the final output, so they deserve exponentially more adaptation effort.**
+**Choices made earlier in the generator tree (lower depth) have exponentially more impact on the final output, so they deserve exponentially more tuning effort.**
 
 ### Implementation
 
@@ -34,7 +34,7 @@ var currentSampleCount: UInt64 {
 1. **Structural Importance**: Top-level decisions affect all downstream choices
 2. **Statistical Efficiency**: Focuses sampling power where it matters most
 3. **Performance Scaling**: Prevents combinatorial explosion in deep generators
-4. **Automatic Adaptation**: Works for any generator structure without manual tuning
+4. **Automatic Tuning**: Works for any generator structure without manual configuration
 
 ## Speculative Execution Strategy
 
@@ -46,7 +46,7 @@ Instead of materializing generators with fixed values (which loses randomness), 
    - The continuation (rest of computation)
 3. Run each complete generator multiple times to test success rates
 4. Adjust weights based on empirical success counts
-5. Recursively adapt nested choices with reduced effort
+5. Recursively tune nested choices with reduced effort
 
 ## Key Features
 
@@ -59,7 +59,7 @@ Converts `chooseBits` operations into weighted picks over subranges:
 chooseBits(Int: 1...1000)
 ```
 
-**After CGS adaptation:**
+**After CGS tuning:**
 ```
 pick(choices: 4)
 ├── choice [weight: 50] → chooseBits(Int: 1...250)
@@ -73,9 +73,9 @@ pick(choices: 4)
 - Minimum 5 samples per subrange
 - Statistical significance testing prevents unnecessary subdivision
 
-### 2. Sequence Length Adaptation
+### 2. Sequence Length Tuning
 
-Adapts sequence length ranges when the length generator is a `chooseBits` operation:
+Tunes sequence length ranges when the length generator is a `chooseBits` operation:
 
 **Before:**
 ```
@@ -84,7 +84,7 @@ sequence
 └── chooseBits(Int: 1...10)
 ```
 
-**After CGS adaptation:**
+**After CGS tuning:**
 ```
 pick(choices: 8)
 ├── choice [weight: 49]
@@ -146,7 +146,7 @@ Subdivision only happens when statistically significant differences are detected
 - Expected success rate: ~6% (3/50 valid lengths)
 - Average length: ~25 (midpoint of range)
 
-**After CGS adaptation:**
+**After CGS tuning:**
 - Success rate: **42.5%** (7x improvement!)
 - Average length: **3.9** (near optimal)
 - Length distribution: Only lengths 1-7 generated, 8-50 completely eliminated
@@ -182,14 +182,14 @@ final class SpeculativeContext {
 }
 ```
 
-- Shared across recursive adaptations
+- Shared across recursive tuning calls
 - Tracks current depth for effort allocation
 - Calculates available samples at each level
 
-### Recursive Adaptation
+### Recursive Tuning
 
 ```swift
-static func adaptRecursive<Input, Output>(
+static func tuneRecursive<Input, Output>(
     gen: ReflectiveGenerator<Output>,
     input: Input,
     context: SpeculativeContext,
@@ -201,7 +201,7 @@ static func adaptRecursive<Input, Output>(
 **Key features:**
 - Depth tracking with increment/decrement
 - Flag to prevent infinite chooseBits subdivision
-- Recursive adaptation of continuations
+- Recursive tuning of continuations
 - Statistical significance testing
 
 ### Weight Calculation
@@ -262,7 +262,7 @@ if totalWeight == 0 {
 
 ### 1. Handle Complex Length Generators
 
-Currently, sequence length adaptation only works when the length generator is a direct `chooseBits`. Common patterns like `Gen.arrayOf(gen, within: range)` use `.bind` operations that aren't currently detected:
+Currently, sequence length tuning only works when the length generator is a direct `chooseBits`. Common patterns like `Gen.arrayOf(gen, within: range)` use `.bind` operations that aren't currently detected:
 
 ```swift
 Gen.getSize().bind { size in
@@ -283,7 +283,7 @@ Currently uses fixed formulas for calculating number of subranges. Could potenti
 For expensive predicates, cache success/failure results to avoid redundant evaluation:
 - Hash generator structure + input
 - Store success counts per structure
-- Reuse across multiple adaptation runs
+- Reuse across multiple tuning runs
 
 ### 4. Multi-Armed Bandit Approach
 
@@ -294,6 +294,6 @@ Instead of upfront sampling, use online learning:
 
 ## Conclusion
 
-Choice Gradient Sampling with depth-based effort allocation provides a principled, efficient approach to generator adaptation. By focusing sampling effort on structurally important choices and allowing complete elimination of unproductive paths, CGS achieves dramatic improvements in hit rates (up to 7x in our test cases) while maintaining tractable performance even for deeply nested generators.
+Choice Gradient Sampling with depth-based effort allocation provides a principled, efficient approach to generator tuning. By focusing sampling effort on structurally important choices and allowing complete elimination of unproductive paths, CGS achieves dramatic improvements in hit rates (up to 7x in our test cases) while maintaining tractable performance even for deeply nested generators.
 
-The key insight—that structural depth determines choice importance—enables automatic, intelligent adaptation without manual tuning or arbitrary thresholds. Combined with zero-weight optimization and adaptive significance testing, the system learns precisely which paths lead to valid outputs and eliminates the rest.
+The key insight—that structural depth determines choice importance—enables automatic, intelligent tuning without manual configuration or arbitrary thresholds. Combined with zero-weight optimization and adaptive significance testing, the system learns precisely which paths lead to valid outputs and eliminates the rest.

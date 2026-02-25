@@ -1,5 +1,5 @@
 //
-//  CGSValueAndChoiceTreeInterpreter.swift
+//  OnlineCGSInterpreter.swift
 //  Exhaust
 //
 //  Created by Chris Kolbu on 24/2/2026.
@@ -9,7 +9,7 @@ import Foundation
 
 /// Online Choice Gradient Sampling interpreter that generates values with choice trees.
 ///
-/// Unlike the eager `ChoiceGradientSampling` adapter (which pre-computes all pick weights
+/// Unlike the eager `GeneratorTuning` tuner (which pre-computes all pick weights
 /// in a single top-down pass), this interpreter implements the paper's **online, per-value**
 /// algorithm (Figure 3.3). At each `pick` encountered during generation, it computes
 /// "derivatives" (residual generators after choosing each branch), samples from each
@@ -20,7 +20,7 @@ import Foundation
 ///
 /// The interpreter produces `(value, ChoiceTree)` pairs identical in structure to
 /// `ValueAndChoiceTreeInterpreter`, ensuring full compatibility with shrinking and replay.
-public struct CGSValueAndChoiceTreeInterpreter<FinalOutput>: IteratorProtocol, Sequence {
+public struct OnlineCGSInterpreter<FinalOutput>: IteratorProtocol, Sequence {
     public typealias Element = (value: FinalOutput, tree: ChoiceTree)
     typealias RunContinuation<Output> = (Any, ChoiceTree) throws -> (Output, ChoiceTree)?
 
@@ -278,13 +278,13 @@ public struct CGSValueAndChoiceTreeInterpreter<FinalOutput>: IteratorProtocol, S
             // MARK: - Filter
 
             case let .filter(gen, fingerprint, predicate):
-                let adaptedGen: ReflectiveGenerator<Any>
-                if let cached = context.adaptedFilterCache[fingerprint] {
-                    adaptedGen = cached
+                let tunedGen: ReflectiveGenerator<Any>
+                if let cached = context.tunedFilterCache[fingerprint] {
+                    tunedGen = cached
                 } else {
-                    let adapted = try? ChoiceGradientSampling.autoAdapt(gen, predicate: predicate)
-                    adaptedGen = adapted ?? gen
-                    context.adaptedFilterCache[fingerprint] = adaptedGen
+                    let tuned = try? GeneratorTuning.probeAndTune(gen, predicate: predicate)
+                    tunedGen = tuned ?? gen
+                    context.tunedFilterCache[fingerprint] = tunedGen
                 }
 
                 var attempts = 0 as UInt64
@@ -298,7 +298,7 @@ public struct CGSValueAndChoiceTreeInterpreter<FinalOutput>: IteratorProtocol, S
                     )
                 }
                 while attempts < context.maxFilterRuns {
-                    guard let (result, tree) = try runGenerator(adaptedGen, context) else { return nil }
+                    guard let (result, tree) = try runGenerator(tunedGen, context) else { return nil }
 
                     if predicate(result) {
                         return try runContinuation(result, tree)
@@ -826,8 +826,8 @@ public struct CGSValueAndChoiceTreeInterpreter<FinalOutput>: IteratorProtocol, S
         var totalAttempts: UInt64 = 0
         var seenSequences: Set<ChoiceSequence> = []
 
-        // Cache of adapted generators keyed by filter fingerprint
-        var adaptedFilterCache: [UInt64: ReflectiveGenerator<Any>] = [:]
+        // Cache of tuned generators keyed by filter fingerprint
+        var tunedFilterCache: [UInt64: ReflectiveGenerator<Any>] = [:]
 
         init(
             maxRuns: UInt64,
