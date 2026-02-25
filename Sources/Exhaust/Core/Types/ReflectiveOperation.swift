@@ -42,15 +42,18 @@ public enum ReflectiveOperation {
     /// - **weight**: Probability mass for random selection during generation
     /// - **generator**: The sub-generator to execute if this choice is selected
     public struct PickTuple {
+        public let siteID: UInt64
         public let id: UInt64
         public let weight: UInt64
         public let generator: ReflectiveGenerator<Any>
 
         public init(
+            siteID: UInt64,
             id: UInt64,
             weight: UInt64,
             generator: ReflectiveGenerator<Any>,
         ) {
+            self.siteID = siteID
             self.id = id
             self.weight = weight
             self.generator = generator

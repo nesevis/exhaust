@@ -103,7 +103,7 @@ extension ReducerStrategies {
     private static func selectedBranchID(of group: ChoiceTree) -> UInt64? {
         guard case let .group(array) = group else { return nil }
         for element in array {
-            if case let .selected(.branch(_, id, _, _)) = element {
+            if case let .selected(.branch(_, _, id, _, _)) = element {
                 return id
             }
         }

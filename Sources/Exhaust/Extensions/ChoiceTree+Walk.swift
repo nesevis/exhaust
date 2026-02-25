@@ -39,7 +39,7 @@ extension ChoiceTree {
             elements
         case let .sequence(_, elements, _):
             elements
-        case let .branch(_, _, _, choice):
+        case let .branch(_, _, _, _, choice):
             [choice]
         case let .resize(_, choices):
             choices
@@ -61,9 +61,9 @@ extension ChoiceTree {
             var copy = elements
             copy[index] = newChild
             return .sequence(length: length, elements: copy, metadata)
-        case let .branch(weight, id, branchIDs, _):
+        case let .branch(siteID, weight, id, branchIDs, _):
             precondition(index == 0, "branch has exactly one child")
-            return .branch(weight: weight, id: id, branchIDs: branchIDs, choice: newChild)
+            return .branch(siteID: siteID, weight: weight, id: id, branchIDs: branchIDs, choice: newChild)
         case let .resize(newSize, choices):
             var copy = choices
             copy[index] = newChild

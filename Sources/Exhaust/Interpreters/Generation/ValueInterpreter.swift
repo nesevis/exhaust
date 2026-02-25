@@ -10,23 +10,43 @@ import Foundation
 public struct ValueInterpreter<Element>: IteratorProtocol, Sequence {
     let generator: ReflectiveGenerator<Element>
     private var context: Context
+    private let uniqueMaxAttempts: UInt64?
+    private var uniqueDelegate: ValueAndChoiceTreeInterpreter<Element>?
 
-    public init(_ generator: ReflectiveGenerator<Element>, seed: UInt64? = nil, maxRuns: UInt64? = nil) {
+    public init(
+        _ generator: ReflectiveGenerator<Element>,
+        seed: UInt64? = nil,
+        maxRuns: UInt64? = nil,
+        uniqueMaxAttempts: UInt64? = nil,
+    ) {
         self.generator = generator
+        self.uniqueMaxAttempts = uniqueMaxAttempts
         context = .init(
             maxRuns: maxRuns ?? 100,
             isFixed: false,
             size: 0,
             prng: seed.map { Xoshiro256(seed: $0) } ?? Xoshiro256(),
         )
+        if uniqueMaxAttempts != nil {
+            uniqueDelegate = ValueAndChoiceTreeInterpreter(
+                generator,
+                seed: seed,
+                maxRuns: maxRuns,
+                uniqueMaxAttempts: uniqueMaxAttempts,
+            )
+        }
     }
 
     public mutating func next() -> Element? {
+        if var delegate = uniqueDelegate {
+            let result = delegate.next()
+            uniqueDelegate = delegate
+            return result?.value
+        }
         guard context.size < context.maxRuns else {
             return nil
         }
         defer { context.size += context.isFixed ? 0 : 1 }
-        // Iterators can't have throwing `next` functions
         do {
             return try Self.generateRecursive(generator, with: (), context: context)
         } catch {
@@ -38,7 +58,12 @@ public struct ValueInterpreter<Element>: IteratorProtocol, Sequence {
     /// Used to generate results around a similar level of complexity.
     /// Intended to be used to increase pool of results to compare against
     func fixedAtSize() -> ValueInterpreter<Element> {
-        let fixed = ValueInterpreter(generator, seed: context.prng.seed, maxRuns: context.maxRuns)
+        let fixed = ValueInterpreter(
+            generator,
+            seed: context.prng.seed,
+            maxRuns: context.maxRuns,
+            uniqueMaxAttempts: uniqueMaxAttempts,
+        )
         fixed.context.isFixed = true
         fixed.context.size = context.size
         return fixed
@@ -150,13 +175,26 @@ public struct ValueInterpreter<Element>: IteratorProtocol, Sequence {
                     runContinuation: runContinuation,
                 )
 
-            case let .filter(gen, _, _):
-                return try handlePassthrough(
-                    gen,
-                    inputValue: inputValue,
-                    context: context,
-                    runContinuation: runContinuation,
-                )
+            case let .filter(gen, fingerprint, predicate):
+                let tunedGen: ReflectiveGenerator<Any>
+                if let cached = context.tunedFilterCache[fingerprint] {
+                    tunedGen = cached
+                } else {
+                    let tuned = try? GeneratorTuning.probeAndTune(gen, predicate: predicate)
+                    tunedGen = tuned ?? gen
+                    context.tunedFilterCache[fingerprint] = tunedGen
+                }
+
+                var attempts = 0 as UInt64
+                while attempts < context.maxFilterRuns {
+                    guard let result = try generateRecursive(tunedGen, with: inputValue, context: context) else { return nil }
+
+                    if predicate(result) {
+                        return try runContinuation(result)
+                    }
+                    attempts += 1
+                }
+                throw GeneratorError.sparseValidityCondition
 
             case let .classify(gen, _, _):
                 return try handlePassthrough(
@@ -317,10 +355,14 @@ public struct ValueInterpreter<Element>: IteratorProtocol, Sequence {
 
     private final class Context {
         let maxRuns: UInt64
+        let maxFilterRuns: UInt64 = 500
         var isFixed: Bool
         var size: UInt64
         var sizeOverride: UInt64?
         var prng: Xoshiro256
+
+        // Cache of tuned generators keyed by filter fingerprint
+        var tunedFilterCache: [UInt64: ReflectiveGenerator<Any>] = [:]
 
         init(
             maxRuns: UInt64,

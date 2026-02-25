@@ -23,7 +23,8 @@ enum ClosureAnalysisOutcome {
 /// Information extracted from a successfully analyzed bidirectional closure.
 struct BidirectionalResult {
     /// The argument labels from the function/initializer call, in argument order.
-    /// These become property access paths in the backward mapping.
+    /// For struct inits these become Mirror extraction labels.
+    /// For enum cases with positional fallback these are ".0", ".1", etc. (unused).
     let labels: [String]
 
     /// The parameter names from the closure signature, in parameter order.
@@ -33,6 +34,15 @@ struct BidirectionalResult {
     /// For each argument position, which closure parameter name was used.
     /// Same length and order as `labels`.
     let argumentParamRefs: [String]
+
+    /// If the callee is a member access (e.g. `Pet.cat`), the member name.
+    /// When set, the backward mapping uses pattern matching instead of Mirror.
+    let caseName: String?
+
+    /// Original argument labels from the call site, in argument order.
+    /// `nil` for unlabeled arguments. Used to generate labeled pattern bindings
+    /// for enum case backward mapping (e.g. `case let .cat(age: v0)`).
+    let originalArgumentLabels: [String?]
 }
 
 /// Analyzes a closure expression to determine if it can support automatic backward mapping.
@@ -89,15 +99,17 @@ private func analyzeShorthandClosure(
         return .forwardOnly(.forwardOnlyNotFunctionCall)
     }
 
+    let caseName = extractCaseName(from: funcCall.calledExpression)
+
     var labels: [String] = []
+    var originalArgumentLabels: [String?] = []
     var argumentParamRefs: [String] = []
     var indices: [Int] = []
 
-    for argument in funcCall.arguments {
-        guard let label = argument.label?.text else {
-            return .forwardOnly(.forwardOnlyUnlabeledArguments)
-        }
-        labels.append(label)
+    for (index, argument) in funcCall.arguments.enumerated() {
+        let originalLabel = argument.label?.text
+        originalArgumentLabels.append(originalLabel)
+        labels.append(originalLabel ?? ".\(index)")
 
         guard let declRef = argument.expression.as(DeclReferenceExprSyntax.self) else {
             return .forwardOnly(.forwardOnlyComplexArguments)
@@ -126,11 +138,17 @@ private func analyzeShorthandClosure(
     return .bidirectional(BidirectionalResult(
         labels: labels,
         parameterNames: parameterNames,
-        argumentParamRefs: argumentParamRefs
+        argumentParamRefs: argumentParamRefs,
+        caseName: caseName,
+        originalArgumentLabels: originalArgumentLabels
     ))
 }
 
-/// Analyzes a single expression for a labeled function call with 1:1 parameter correspondence.
+/// Analyzes a single expression for a function call with 1:1 parameter correspondence.
+///
+/// Detects two callee patterns:
+/// - **Direct call** (e.g. `Person(name: name)`): struct/class init → Mirror-based backward
+/// - **Member access** (e.g. `Pet.cat(age)`): likely enum case → pattern-matching backward
 private func analyzeFunctionCall(
     _ singleExpr: ExprSyntax,
     parameterNames: [String],
@@ -140,14 +158,21 @@ private func analyzeFunctionCall(
         return .forwardOnly(.forwardOnlyNotFunctionCall)
     }
 
+    // Detect enum case callee: `Pet.cat(...)` is a MemberAccessExprSyntax.
+    // Exclude explicit `.init` calls which are struct/class initializers.
+    let caseName = extractCaseName(from: funcCall.calledExpression)
+
     var labels: [String] = []
+    var originalArgumentLabels: [String?] = []
     var argumentParamRefs: [String] = []
 
-    for argument in funcCall.arguments {
-        guard let label = argument.label?.text else {
-            return .forwardOnly(.forwardOnlyUnlabeledArguments)
-        }
-        labels.append(label)
+    for (index, argument) in funcCall.arguments.enumerated() {
+        let originalLabel = argument.label?.text
+        originalArgumentLabels.append(originalLabel)
+        // Labeled arguments use their label (struct properties).
+        // Unlabeled arguments fall back to positional Mirror labels
+        // (`.0`, `.1`, …) which Mirror uses for enum associated values.
+        labels.append(originalLabel ?? ".\(index)")
 
         guard let declRef = argument.expression.as(DeclReferenceExprSyntax.self) else {
             return .forwardOnly(.forwardOnlyComplexArguments)
@@ -169,8 +194,25 @@ private func analyzeFunctionCall(
     return .bidirectional(BidirectionalResult(
         labels: labels,
         parameterNames: parameterNames,
-        argumentParamRefs: argumentParamRefs
+        argumentParamRefs: argumentParamRefs,
+        caseName: caseName,
+        originalArgumentLabels: originalArgumentLabels
     ))
+}
+
+/// Extracts the enum case name from a member access callee expression.
+///
+/// Returns the member name for patterns like `Pet.cat(...)` or `Shape.circle(...)`,
+/// which are syntactically `MemberAccessExprSyntax` nodes. Returns `nil` for direct
+/// calls like `Person(...)` or explicit `.init(...)` calls.
+private func extractCaseName(from callee: ExprSyntax) -> String? {
+    guard let memberAccess = callee.as(MemberAccessExprSyntax.self) else {
+        return nil
+    }
+    let member = memberAccess.declName.baseName.text
+    // Exclude explicit .init calls — those are struct/class initializers
+    guard member != "init" else { return nil }
+    return member
 }
 
 /// Extracts a single expression from a code block, unwrapping a `return` statement if present.

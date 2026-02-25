@@ -11,10 +11,16 @@ enum PropertyTest {
         _ gen: ReflectiveGenerator<Output>,
         maxIterations: UInt64 = 100,
         seed: UInt64? = nil,
+        uniqueMaxAttempts: UInt64? = nil,
         property: (Output) -> Bool,
     ) throws -> Output? {
         var iterations = 0
-        var generator = ValueAndChoiceTreeInterpreter(gen, seed: seed, maxRuns: maxIterations)
+        var generator = ValueAndChoiceTreeInterpreter(
+            gen,
+            seed: seed,
+            maxRuns: maxIterations,
+            uniqueMaxAttempts: uniqueMaxAttempts,
+        )
         var passFails = Dictionary([(true, [ChoiceTree?]()), (false, [ChoiceTree?]())], uniquingKeysWith: { $1 })
 
         while let (next, tree) = generator.next() {

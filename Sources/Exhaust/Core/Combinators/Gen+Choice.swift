@@ -21,12 +21,16 @@ public extension Gen {
         // The nested generators must all have the same Output type.
         // We erase it to `Any` for the operation, but the `liftF` call
         // ensures the final monad has the correct `Output` type.
+        var prng = Xoshiro256()
+        let siteID = prng.next()
+
         var array = ContiguousArray<ReflectiveOperation.PickTuple>()
         array.reserveCapacity(choices.count)
 
         for index in choices.indices {
             let choice = choices[index]
             array.append(.init(
+                siteID: siteID,
                 id: UInt64(index),
                 weight: choice.weight,
                 generator: choice.generator.erase(),

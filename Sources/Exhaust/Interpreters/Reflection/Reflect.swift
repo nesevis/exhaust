@@ -163,7 +163,7 @@ public enum Interpreters {
         finalOutput: Any,
     ) throws -> [(value: Any, path: [ChoiceTree])] {
         let branchIDs = choices.map(\.id)
-        let results = try choices.flatMap { choice -> [(value: Any, weight: UInt64, id: UInt64, isPicked: Bool, path: ChoiceTree)] in
+        let results = try choices.flatMap { choice -> [(value: Any, siteID: UInt64, weight: UInt64, id: UInt64, isPicked: Bool, path: ChoiceTree)] in
             do {
                 let subPaths = try reflectRecursive(choice.generator, onFinalOutput: finalOutput)
                 let value = subPaths.firstNonNil(\.value)
@@ -182,13 +182,13 @@ public enum Interpreters {
                         guard let path = pathTree.first else {
                             return nil
                         }
-                        return (value, choice.weight, choice.id, isPicked, path)
+                        return (value, choice.siteID, choice.weight, choice.id, isPicked, path)
                     }
                     .filter(\.isPicked)
 
             } catch let error as ReflectionError {
                 switch error {
-                case .reflectedNil, .inputWasOutOfGeneratorRange:
+                case .reflectedNil, .inputWasOutOfGeneratorRange, .contramapWasWrongType:
                     return []
                 default:
                     throw error
@@ -198,6 +198,7 @@ public enum Interpreters {
 
         let mappedBranches = results.map {
             let branch = ChoiceTree.branch(
+                siteID: $0.siteID,
                 weight: $0.weight,
                 id: $0.id,
                 branchIDs: branchIDs,
