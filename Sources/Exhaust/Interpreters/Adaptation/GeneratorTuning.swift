@@ -230,6 +230,7 @@ enum GeneratorTuning {
             //    redundant continuation evaluations in Phase 2's composed predicate.
             let sampleCount = context.currentSampleCount
             var successCount: UInt64 = 0
+            var distinctOutputs: Set<AnyHashable> = []
             var continuationCache: [AnyHashable: Bool] = [:]
 
             for _ in 0 ..< sampleCount {
@@ -245,9 +246,10 @@ enum GeneratorTuning {
                 ) else { continue }
 
                 let success: Bool
+                var output: Output?
                 do {
                     let nextGen = try continuation(innerValue)
-                    let output = try ValueInterpreter<Output>.generate(
+                    output = try ValueInterpreter<Output>.generate(
                         nextGen, maxRuns: 1, using: &context.rng
                     )
                     success = output.map(predicate) ?? false
@@ -255,7 +257,12 @@ enum GeneratorTuning {
                     success = false
                 }
 
-                if success { successCount += 1 }
+                if success {
+                    successCount += 1
+                    if let hashable = output as? AnyHashable {
+                        distinctOutputs.insert(hashable)
+                    }
+                }
                 if let hashable = innerValue as? AnyHashable {
                     continuationCache[hashable] = success
                 }
@@ -289,10 +296,17 @@ enum GeneratorTuning {
                 predicate: composedPredicate
             )
 
+            // Spec entropy weighting: reward branches that produce diverse valid
+            // outputs, not just frequent ones. The log factor compresses the
+            // advantage of high-validity but low-diversity choices (e.g. leaf
+            // subtrees that always produce the same few trees).
+            let diversityFactor = log(Double(distinctOutputs.count) + 1)
+            let weight = UInt64(Double(successCount) * diversityFactor)
+
             tunedChoices.append(ReflectiveOperation.PickTuple(
                 siteID: choice.siteID,
                 id: choice.id,
-                weight: successCount,
+                weight: weight,
                 generator: tunedInner
             ))
         }
