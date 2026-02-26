@@ -7,7 +7,6 @@
 
 extension PropertyTest {
     // This is it. This parameter pack + closure will let us enforce applicative generator construction by sheer force of user laziness.
-    // We should do away with `Arbitrary` altogether
     static func generate<each T, R>(
         _ generators: repeat ReflectiveGenerator<each T>,
         closure: @escaping ((repeat each T)) -> R

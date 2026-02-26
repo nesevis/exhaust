@@ -1,5 +1,5 @@
 //
-//  Primitives+Arbitrary.swift
+//  Primitives+Generators.swift
 //  Exhaust
 //
 //  Created by Chris Kolbu on 18/7/2025.
@@ -7,7 +7,7 @@
 
 // MARK: - Unsigned Integers
 
-extension UInt: Arbitrary {
+extension UInt {
     public static var arbitrary: ReflectiveGenerator<Self> {
         Gen.getSize().bind { size in
             // This needs a bit more work to slow the scaling down a tad. Counteract logarithm?
@@ -17,7 +17,7 @@ extension UInt: Arbitrary {
     }
 }
 
-extension UInt64: Arbitrary {
+extension UInt64 {
     public static var arbitrary: ReflectiveGenerator<Self> {
         Gen.getSize().bind { size in
             // This needs a bit more work to slow the scaling down a tad. Counteract logarithm?
@@ -29,7 +29,7 @@ extension UInt64: Arbitrary {
 
 // MARK: - Signed integers
 
-extension UInt8: Arbitrary {
+extension UInt8 {
     public static var arbitrary: ReflectiveGenerator<Self> {
         Gen.getSize().bind { size in
             let expanded: UInt64 = size < 7 ? 1 << size : UInt64(UInt8.max)
@@ -38,7 +38,7 @@ extension UInt8: Arbitrary {
     }
 }
 
-extension UInt16: Arbitrary {
+extension UInt16 {
     public static var arbitrary: ReflectiveGenerator<Self> {
         Gen.getSize().bind { size in
             let expanded: UInt64 = size < 15 ? 1 << size : UInt64(UInt16.max)
@@ -47,7 +47,7 @@ extension UInt16: Arbitrary {
     }
 }
 
-extension UInt32: Arbitrary {
+extension UInt32 {
     public static var arbitrary: ReflectiveGenerator<Self> {
         Gen.getSize().bind { size in
             let expanded: UInt64 = size < 31 ? 1 << size : UInt64(UInt32.max)
@@ -56,7 +56,7 @@ extension UInt32: Arbitrary {
     }
 }
 
-extension Int: Arbitrary {
+extension Int {
     public static var arbitrary: ReflectiveGenerator<Self> {
         Gen.getSize().bind { size in
             if size < 63 {
@@ -68,7 +68,7 @@ extension Int: Arbitrary {
     }
 }
 
-extension Int8: Arbitrary {
+extension Int8 {
     public static var arbitrary: ReflectiveGenerator<Self> {
         Gen.getSize().bind { size in
             if size < 7 {
@@ -80,7 +80,7 @@ extension Int8: Arbitrary {
     }
 }
 
-extension Int16: Arbitrary {
+extension Int16 {
     public static var arbitrary: ReflectiveGenerator<Self> {
         Gen.getSize().bind { size in
             if size < 15 {
@@ -93,7 +93,7 @@ extension Int16: Arbitrary {
     }
 }
 
-extension Int32: Arbitrary {
+extension Int32 {
     public static var arbitrary: ReflectiveGenerator<Self> {
         Gen.getSize().bind { size in
             if size < 31 {
@@ -105,7 +105,7 @@ extension Int32: Arbitrary {
     }
 }
 
-extension Int64: Arbitrary {
+extension Int64 {
     public static var arbitrary: ReflectiveGenerator<Self> {
         Gen.getSize().bind { size in
             if size < 63 {
@@ -119,7 +119,7 @@ extension Int64: Arbitrary {
 
 // MARK: - Floating points
 
-extension Double: Arbitrary {
+extension Double {
     public static var arbitrary: ReflectiveGenerator<Self> {
         Gen.getSize().bind { size in
             // TODO: use pow() to scale range?
@@ -129,7 +129,7 @@ extension Double: Arbitrary {
     }
 }
 
-extension Float: Arbitrary {
+extension Float {
     public static var arbitrary: ReflectiveGenerator<Self> {
         Gen.getSize().bind { size in
             // TODO: use pow() to scale range
@@ -141,7 +141,7 @@ extension Float: Arbitrary {
 
 // MARK: - Boolean
 
-extension Bool: Arbitrary {
+extension Bool {
     public static var arbitrary: ReflectiveGenerator<Bool> {
         Gen.pick(choices: [
             (1, Gen.just(true)),
@@ -152,7 +152,7 @@ extension Bool: Arbitrary {
 
 // MARK: - Strings and Characters
 
-extension Character: Arbitrary {
+extension Character {
     public static var arbitrary: ReflectiveGenerator<Character> {
         // This is nearly ten times slower than `arbitraryAscii`.
         Gen.getSize().bind { size in
@@ -172,7 +172,7 @@ extension Character: Arbitrary {
     }
 }
 
-extension String: Arbitrary {
+extension String {
     public static var arbitrary: ReflectiveGenerator<String> {
         Gen.arrayOf(Character.arbitrary)
             .mapped(forward: { String($0) }, backward: { Array($0) })
@@ -186,20 +186,9 @@ extension String: Arbitrary {
 
 // MARK: - AnyIndex
 
-extension AnyIndex: Arbitrary {
+extension AnyIndex {
     /// Returns a generator of `AnyForwardIndex` values.
     public static var arbitrary: ReflectiveGenerator<AnyIndex> {
         Gen.choose(in: 0 ... Int.max).map(AnyIndex.init)
-    }
-}
-
-// MARK: - Optional
-
-extension Optional: Arbitrary where Wrapped: Arbitrary, Wrapped: Equatable {
-    public static var arbitrary: ReflectiveGenerator<Wrapped?> {
-        Gen.pick(choices: [
-            (1, Gen.just(.none)),
-            (5, Wrapped.arbitrary.asOptional()),
-        ])
     }
 }
