@@ -225,6 +225,73 @@ public extension ReflectiveGenerator where Operation == ReflectiveOperation {
         )
     }
 
+    /// Creates a generator that only produces unique values, deduplicated by choice sequence.
+    ///
+    /// Each generated value's underlying choice sequence is tracked. If a duplicate
+    /// choice sequence is encountered, the generator retries (up to `maxFilterRuns`
+    /// from the interpreter context). This is useful when the generator's domain is
+    /// large but you want to avoid repeating the same random path.
+    ///
+    /// - Parameters:
+    ///   - fileID: Source file identifier for fingerprinting (auto-captured).
+    ///   - line: Source line number for fingerprinting (auto-captured).
+    /// - Returns: A generator that only yields values with unique choice sequences.
+    @inlinable
+    func unique(
+        fileID: String = #fileID,
+        line: UInt = #line
+    ) -> ReflectiveGenerator<Value> {
+        let fingerprint = fileID.hashValue.bitPattern64 &+ line.bitPattern64
+
+        return .impure(
+            operation: .unique(gen: erase(), fingerprint: fingerprint, keyExtractor: nil),
+            continuation: { .pure($0 as! Value) }
+        )
+    }
+
+    /// Creates a generator that only produces unique values, deduplicated by a key path.
+    ///
+    /// The value at the given key path is used as the deduplication key. Two values
+    /// are considered duplicates if they produce the same key.
+    ///
+    /// - Parameters:
+    ///   - keyPath: A key path to the hashable property used for deduplication.
+    ///   - fileID: Source file identifier for fingerprinting (auto-captured).
+    ///   - line: Source line number for fingerprinting (auto-captured).
+    /// - Returns: A generator that only yields values with unique keys.
+    @inlinable
+    func unique<Key: Hashable>(
+        by keyPath: KeyPath<Value, Key>,
+        fileID: String = #fileID,
+        line: UInt = #line
+    ) -> ReflectiveGenerator<Value> {
+        unique(by: { $0[keyPath: keyPath] }, fileID: fileID, line: line)
+    }
+
+    /// Creates a generator that only produces unique values, deduplicated by a transform.
+    ///
+    /// The transform function extracts a hashable key from each generated value.
+    /// Two values are considered duplicates if they produce the same key.
+    ///
+    /// - Parameters:
+    ///   - transform: A function that extracts a hashable key from the generated value.
+    ///   - fileID: Source file identifier for fingerprinting (auto-captured).
+    ///   - line: Source line number for fingerprinting (auto-captured).
+    /// - Returns: A generator that only yields values with unique keys.
+    @inlinable
+    func unique<Key: Hashable>(
+        by transform: @escaping (Value) -> Key,
+        fileID: String = #fileID,
+        line: UInt = #line
+    ) -> ReflectiveGenerator<Value> {
+        let fingerprint = fileID.hashValue.bitPattern64 &+ line.bitPattern64
+
+        return .impure(
+            operation: .unique(gen: erase(), fingerprint: fingerprint, keyExtractor: { value in AnyHashable(transform(value as! Value)) }),
+            continuation: { .pure($0 as! Value) }
+        )
+    }
+
     @inlinable
     func compose<OtherValue>(with other: ReflectiveGenerator<OtherValue>) -> ReflectiveGenerator<(Value, OtherValue)> {
         Gen.zip(self, other)

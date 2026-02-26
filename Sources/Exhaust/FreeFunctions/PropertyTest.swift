@@ -11,7 +11,6 @@ enum PropertyTest {
         _ gen: ReflectiveGenerator<Output>,
         maxIterations: UInt64 = 100,
         seed: UInt64? = nil,
-        uniqueMaxAttempts: UInt64? = nil,
         property: (Output) -> Bool,
     ) throws -> Output? {
         var iterations = 0
@@ -19,7 +18,6 @@ enum PropertyTest {
             gen,
             seed: seed,
             maxRuns: maxIterations,
-            uniqueMaxAttempts: uniqueMaxAttempts,
         )
         var passFails = Dictionary([(true, [ChoiceTree?]()), (false, [ChoiceTree?]())], uniquingKeysWith: { $1 })
 

@@ -13,6 +13,7 @@ public enum GeneratorError: LocalizedError {
     case liftFTypeMismatch(expected: String, actual: String)
     case typeMismatch(expected: String, actual: String)
     case sparseValidityCondition
+    case uniqueBudgetExhausted
 
     var errorDescription: String {
         switch self {
@@ -26,6 +27,8 @@ public enum GeneratorError: LocalizedError {
             "Type mismatch: expected \(expected), got \(actual)"
         case .sparseValidityCondition:
             "Sparse validity condition"
+        case .uniqueBudgetExhausted:
+            "Unique combinator exhausted retry budget without finding a new unique value"
         }
     }
 }

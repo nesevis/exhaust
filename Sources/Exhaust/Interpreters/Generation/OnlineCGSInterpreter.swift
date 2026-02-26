@@ -39,7 +39,6 @@ public struct OnlineCGSInterpreter<FinalOutput>: IteratorProtocol, Sequence {
         materializePicks: Bool = false,
         seed: UInt64? = nil,
         maxRuns: UInt64? = nil,
-        uniqueMaxAttempts: UInt64? = nil
     ) {
         self.generator = generator
         context = .init(
@@ -52,7 +51,6 @@ public struct OnlineCGSInterpreter<FinalOutput>: IteratorProtocol, Sequence {
             predicate: predicate,
             sampleCount: sampleCount,
             samplingPRNG: seed.map { Xoshiro256(seed: $0 &+ 1) } ?? Xoshiro256(),
-            uniqueMaxAttempts: uniqueMaxAttempts
         )
     }
 
@@ -66,62 +64,32 @@ public struct OnlineCGSInterpreter<FinalOutput>: IteratorProtocol, Sequence {
 
         let wrapper: DerivativeWrapper = { $0.map { $0 as! FinalOutput } }
 
-        // Fast path: no uniqueness constraint
-        guard let uniqueMaxAttempts = context.uniqueMaxAttempts else {
-            defer {
-                context.size += context.isFixed ? 0 : 1
-                context.runs += 1
-            }
-            do {
-                return try Self.generateRecursive(
-                    generator,
-                    with: (),
-                    context: context,
-                    wrapper: wrapper,
-                    insideSubdividedChooseBits: false
-                )
-            } catch {
-                fatalError(error.localizedDescription)
-            }
+        defer {
+            context.size += context.isFixed ? 0 : 1
+            context.runs += 1
         }
-
-        // Uniqueness path: loop until we find a unique value or exhaust the budget
-        while context.totalAttempts < uniqueMaxAttempts {
-            context.totalAttempts += 1
-            do {
-                guard let result = try Self.generateRecursive(
-                    generator,
-                    with: (),
-                    context: context,
-                    wrapper: wrapper,
-                    insideSubdividedChooseBits: false
-                ) else {
-                    context.size += context.isFixed ? 0 : 1
-                    continue
-                }
-                let sequence = ChoiceSequence.flatten(result.1)
-                let (inserted, _) = context.seenSequences.insert(sequence)
-                if inserted {
-                    context.runs += 1
-                    context.size += context.isFixed ? 0 : 1
-                    return result
-                }
-                // Duplicate — increment size to explore different complexity levels
-                context.size += context.isFixed ? 0 : 1
-            } catch {
-                fatalError(error.localizedDescription)
-            }
+        do {
+            return try Self.generateRecursive(
+                generator,
+                with: (),
+                context: context,
+                wrapper: wrapper,
+                insideSubdividedChooseBits: false
+            )
+        } catch GeneratorError.uniqueBudgetExhausted {
+            ExhaustLog.warning(
+                category: .generation,
+                event: "uniqueness_budget_exhausted",
+                metadata: [
+                    "unique_count": "\(context.runs)",
+                    "requested": "\(context.maxRuns)",
+                ],
+            )
+            context.runs = context.maxRuns
+            return nil
+        } catch {
+            fatalError(error.localizedDescription)
         }
-
-        ExhaustLog.warning(
-            category: .generation,
-            event: "uniqueness_budget_exhausted",
-            metadata: [
-                "unique_count": "\(context.seenSequences.count)",
-                "max_attempts": "\(uniqueMaxAttempts)",
-            ]
-        )
-        return nil
     }
 
     // MARK: - Recursive Engine
@@ -322,6 +290,39 @@ public struct OnlineCGSInterpreter<FinalOutput>: IteratorProtocol, Sequence {
                     insideSubdividedChooseBits: insideSubdividedChooseBits,
                     runContinuation: runContinuation
                 )
+
+            // MARK: - Unique
+
+            case let .unique(gen, fingerprint, keyExtractor):
+                let runGenerator = { (gen: ReflectiveGenerator<Any>) in
+                    try Self.generateRecursive(
+                        gen,
+                        with: inputValue,
+                        context: context,
+                        wrapper: wrapper,
+                        insideSubdividedChooseBits: insideSubdividedChooseBits
+                    )
+                }
+
+                var attempts = 0 as UInt64
+                while attempts < context.maxFilterRuns {
+                    guard let (result, tree) = try runGenerator(gen) else { return nil }
+
+                    let isDuplicate: Bool
+                    if let keyExtractor {
+                        let key = keyExtractor(result)
+                        isDuplicate = !context.uniqueSeenKeys[fingerprint, default: []].insert(key).inserted
+                    } else {
+                        let sequence = ChoiceSequence.flatten(tree)
+                        isDuplicate = !context.uniqueSeenSequences[fingerprint, default: []].insert(sequence).inserted
+                    }
+
+                    if !isDuplicate {
+                        return try runContinuation(result, tree)
+                    }
+                    attempts += 1
+                }
+                throw GeneratorError.uniqueBudgetExhausted
             }
         }
     }
@@ -823,13 +824,12 @@ public struct OnlineCGSInterpreter<FinalOutput>: IteratorProtocol, Sequence {
         let sampleCount: UInt64
         var samplingPRNG: Xoshiro256
 
-        // Uniqueness constraint
-        let uniqueMaxAttempts: UInt64?
-        var totalAttempts: UInt64 = 0
-        var seenSequences: Set<ChoiceSequence> = []
-
         // Cache of tuned generators keyed by filter fingerprint
         var tunedFilterCache: [UInt64: ReflectiveGenerator<Any>] = [:]
+
+        // Unique combinator state
+        var uniqueSeenKeys: [UInt64: Set<AnyHashable>] = [:]
+        var uniqueSeenSequences: [UInt64: Set<ChoiceSequence>] = [:]
 
         init(
             maxRuns: UInt64,
@@ -843,7 +843,6 @@ public struct OnlineCGSInterpreter<FinalOutput>: IteratorProtocol, Sequence {
             predicate: @escaping (FinalOutput) -> Bool,
             sampleCount: UInt64,
             samplingPRNG: Xoshiro256,
-            uniqueMaxAttempts: UInt64? = nil
         ) {
             self.maxRuns = maxRuns
             self.materializePicks = materializePicks
@@ -856,7 +855,6 @@ public struct OnlineCGSInterpreter<FinalOutput>: IteratorProtocol, Sequence {
             self.predicate = predicate
             self.sampleCount = sampleCount
             self.samplingPRNG = samplingPRNG
-            self.uniqueMaxAttempts = uniqueMaxAttempts
         }
 
         func jump(seed: UInt64) -> Context {

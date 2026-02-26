@@ -20,7 +20,6 @@ public struct ValueAndChoiceTreeInterpreter<FinalOutput>: IteratorProtocol, Sequ
         materializePicks: Bool = false,
         seed: UInt64? = nil,
         maxRuns: UInt64? = nil,
-        uniqueMaxAttempts: UInt64? = nil,
     ) {
         self.generator = generator
         context = .init(
@@ -30,7 +29,6 @@ public struct ValueAndChoiceTreeInterpreter<FinalOutput>: IteratorProtocol, Sequ
             size: 0,
             runs: 0,
             prng: seed.map { Xoshiro256(seed: $0) } ?? Xoshiro256(),
-            uniqueMaxAttempts: uniqueMaxAttempts,
         )
     }
 
@@ -42,50 +40,26 @@ public struct ValueAndChoiceTreeInterpreter<FinalOutput>: IteratorProtocol, Sequ
             return nil
         }
 
-        // Fast path: no uniqueness constraint
-        guard let uniqueMaxAttempts = context.uniqueMaxAttempts else {
-            defer {
-                context.size += context.isFixed ? 0 : 1
-                context.runs += 1
-            }
-            do {
-                return try Self.generateRecursive(generator, with: (), context: context)
-            } catch {
-                fatalError(error.localizedDescription)
-            }
+        defer {
+            context.size += context.isFixed ? 0 : 1
+            context.runs += 1
         }
-
-        // Uniqueness path: loop until we find a unique value or exhaust the budget
-        while context.totalAttempts < uniqueMaxAttempts {
-            context.totalAttempts += 1
-            do {
-                guard let result = try Self.generateRecursive(generator, with: (), context: context) else {
-                    context.size += context.isFixed ? 0 : 1
-                    continue
-                }
-                let sequence = ChoiceSequence.flatten(result.1)
-                let (inserted, _) = context.seenSequences.insert(sequence)
-                if inserted {
-                    context.runs += 1
-                    context.size += context.isFixed ? 0 : 1
-                    return result
-                }
-                // Duplicate — increment size to explore different complexity levels
-                context.size += context.isFixed ? 0 : 1
-            } catch {
-                fatalError(error.localizedDescription)
-            }
+        do {
+            return try Self.generateRecursive(generator, with: (), context: context)
+        } catch GeneratorError.uniqueBudgetExhausted {
+            ExhaustLog.warning(
+                category: .generation,
+                event: "uniqueness_budget_exhausted",
+                metadata: [
+                    "unique_count": "\(context.runs)",
+                    "requested": "\(context.maxRuns)",
+                ],
+            )
+            context.runs = context.maxRuns
+            return nil
+        } catch {
+            fatalError(error.localizedDescription)
         }
-
-        ExhaustLog.warning(
-            category: .generation,
-            event: "uniqueness_budget_exhausted",
-            metadata: [
-                "unique_count": "\(context.seenSequences.count)",
-                "max_attempts": "\(uniqueMaxAttempts)",
-            ]
-        )
-        return nil
     }
 
     /// Used to generate results around a similar level of complexity.
@@ -96,7 +70,6 @@ public struct ValueAndChoiceTreeInterpreter<FinalOutput>: IteratorProtocol, Sequ
             materializePicks: context.materializePicks,
             seed: context.prng.seed,
             maxRuns: context.maxRuns,
-            uniqueMaxAttempts: context.uniqueMaxAttempts,
         )
         fixed.context.isFixed = true
         return fixed
@@ -104,7 +77,7 @@ public struct ValueAndChoiceTreeInterpreter<FinalOutput>: IteratorProtocol, Sequ
 
     // MARK: - Recursive Engine
 
-    private static func generateRecursive<Output>(
+    static func generateRecursive<Output>(
         _ gen: ReflectiveGenerator<Output>,
         with inputValue: some Any,
         context: Context,
@@ -272,6 +245,27 @@ public struct ValueAndChoiceTreeInterpreter<FinalOutput>: IteratorProtocol, Sequ
                     context: context,
                     runContinuation: runContinuation,
                 )
+
+            case let .unique(gen, fingerprint, keyExtractor):
+                var attempts = 0 as UInt64
+                while attempts < context.maxFilterRuns {
+                    guard let (result, tree) = try runGenerator(gen, context) else { return nil }
+
+                    let isDuplicate: Bool
+                    if let keyExtractor {
+                        let key = keyExtractor(result)
+                        isDuplicate = !context.uniqueSeenKeys[fingerprint, default: []].insert(key).inserted
+                    } else {
+                        let sequence = ChoiceSequence.flatten(tree)
+                        isDuplicate = !context.uniqueSeenSequences[fingerprint, default: []].insert(sequence).inserted
+                    }
+
+                    if !isDuplicate {
+                        return try runContinuation(result, tree)
+                    }
+                    attempts += 1
+                }
+                throw GeneratorError.uniqueBudgetExhausted
             }
         }
     }
@@ -489,7 +483,7 @@ public struct ValueAndChoiceTreeInterpreter<FinalOutput>: IteratorProtocol, Sequ
 
     // MARK: - Context
 
-    private final class Context {
+    final class Context {
         let maxRuns: UInt64
         let materializePicks: Bool
         var isFixed: Bool
@@ -501,13 +495,12 @@ public struct ValueAndChoiceTreeInterpreter<FinalOutput>: IteratorProtocol, Sequ
         var classifications: [UInt64: [String: Set<UInt64>]] = [:]
         var prng: Xoshiro256
 
-        // Uniqueness constraint
-        let uniqueMaxAttempts: UInt64?
-        var totalAttempts: UInt64 = 0
-        var seenSequences: Set<ChoiceSequence> = []
-
         // Cache of tuned generators keyed by filter fingerprint
         var tunedFilterCache: [UInt64: ReflectiveGenerator<Any>] = [:]
+
+        // Unique combinator state
+        var uniqueSeenKeys: [UInt64: Set<AnyHashable>] = [:]
+        var uniqueSeenSequences: [UInt64: Set<ChoiceSequence>] = [:]
 
         init(
             maxRuns: UInt64,
@@ -518,7 +511,6 @@ public struct ValueAndChoiceTreeInterpreter<FinalOutput>: IteratorProtocol, Sequ
             sizeOverride: UInt64? = nil,
             classifications: [UInt64: [String: Set<UInt64>]] = [:],
             prng: Xoshiro256,
-            uniqueMaxAttempts: UInt64? = nil,
         ) {
             self.maxRuns = maxRuns
             self.materializePicks = materializePicks
@@ -528,7 +520,6 @@ public struct ValueAndChoiceTreeInterpreter<FinalOutput>: IteratorProtocol, Sequ
             self.sizeOverride = sizeOverride
             self.classifications = classifications
             self.prng = prng
-            self.uniqueMaxAttempts = uniqueMaxAttempts
         }
 
         func jump(seed: UInt64) -> Context {

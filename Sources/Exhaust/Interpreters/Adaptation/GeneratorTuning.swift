@@ -253,6 +253,18 @@ enum GeneratorTuning {
                     predicate: predicate
                 )
 
+            case let .unique(subGen, fingerprint, keyExtractor):
+                let tunedInner = try tuneRecursive(
+                    subGen,
+                    context: context,
+                    insideSubdividedChooseBits: insideSubdividedChooseBits,
+                    predicate: { _ in true }
+                )
+                return .impure(
+                    operation: .unique(gen: tunedInner, fingerprint: fingerprint, keyExtractor: keyExtractor),
+                    continuation: continuation
+                )
+
             case .just, .prune, .classify:
                 return gen
             }
@@ -1011,6 +1023,13 @@ enum GeneratorTuning {
                 classifiers: classifiers
             )
 
+        case let .unique(gen, fingerprint, keyExtractor):
+            return .unique(
+                gen: smoothGenerator(gen, epsilon: epsilon, temperature: temperature),
+                fingerprint: fingerprint,
+                keyExtractor: keyExtractor
+            )
+
         case .chooseBits, .just, .getSize:
             return op
         }
@@ -1145,6 +1164,9 @@ enum GeneratorTuning {
             profileGenerator(gen, depth: depth, sites: &sites)
 
         case let .classify(gen, _, _):
+            profileGenerator(gen, depth: depth, sites: &sites)
+
+        case let .unique(gen, _, _):
             profileGenerator(gen, depth: depth, sites: &sites)
 
         case .chooseBits, .just, .getSize:
@@ -1422,6 +1444,13 @@ enum GeneratorTuning {
                 gen: smoothAdaptiveGenerator(gen, epsilon: epsilon, baseTemperature: baseTemperature, maxTemperature: maxTemperature),
                 fingerprint: fingerprint,
                 classifiers: classifiers
+            )
+
+        case let .unique(gen, fingerprint, keyExtractor):
+            return .unique(
+                gen: smoothAdaptiveGenerator(gen, epsilon: epsilon, baseTemperature: baseTemperature, maxTemperature: maxTemperature),
+                fingerprint: fingerprint,
+                keyExtractor: keyExtractor
             )
 
         case .chooseBits, .just, .getSize:

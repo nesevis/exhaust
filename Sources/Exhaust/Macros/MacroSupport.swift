@@ -23,7 +23,6 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
         var maxIterations: UInt64 = 100
         var seed: UInt64?
         var shrinkConfig: Interpreters.ShrinkConfiguration = .fast
-        var uniqueMaxAttempts: UInt64?
 
         for setting in settings {
             switch setting {
@@ -33,8 +32,6 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
                 seed = s
             case let .shrinkBudget(config):
                 shrinkConfig = config
-            case let .unique(maxAttempts):
-                uniqueMaxAttempts = maxAttempts
             }
         }
 
@@ -42,8 +39,7 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
         var generator = ValueAndChoiceTreeInterpreter(
             gen,
             seed: seed,
-            maxRuns: maxIterations,
-            uniqueMaxAttempts: uniqueMaxAttempts
+            maxRuns: maxIterations
         )
 
         while let (next, tree) = generator.next() {

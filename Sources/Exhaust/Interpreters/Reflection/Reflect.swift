@@ -131,6 +131,9 @@ public enum Interpreters {
 
         case let .classify(gen, _, _):
             return try reflectPassthroughOperation(gen: gen, finalOutput: finalOutput)
+
+        case let .unique(gen, _, _):
+            return try reflectPassthroughOperation(gen: gen, finalOutput: finalOutput)
         }
     }
 

@@ -10,40 +10,36 @@ import Testing
 
 @Suite("Uniqueness Constraint")
 struct UniquenessConstraintTests {
-    // MARK: - ValueAndChoiceTreeInterpreter
+    // MARK: - Choice-sequence uniqueness via combinator
 
     @Test("High-cardinality generator produces all maxRuns unique values")
     func highCardinalityProducesAllUnique() {
-        let gen = UInt64.arbitrary
+        let gen = UInt64.arbitrary.unique()
         let maxRuns: UInt64 = 50
         var iterator = ValueAndChoiceTreeInterpreter(
             gen,
             seed: 42,
-            maxRuns: maxRuns,
-            uniqueMaxAttempts: 200
+            maxRuns: maxRuns
         )
 
         var values = [UInt64]()
-        var sequences = Set<ChoiceSequence>()
-        while let (value, tree) = iterator.next() {
+        while let (value, _) = iterator.next() {
             values.append(value)
-            let seq = ChoiceSequence.flatten(tree)
-            sequences.insert(seq)
         }
 
         #expect(values.count == Int(maxRuns))
-        #expect(sequences.count == Int(maxRuns), "All choice sequences should be unique")
+        let uniqueValues = Set(values)
+        #expect(uniqueValues.count == Int(maxRuns), "All values should be unique")
     }
 
-    @Test("Low-cardinality generator exhausts budget early")
-    func lowCardinalityExhaustsBudget() {
+    @Test("Low-cardinality generator exhausts retry budget")
+    func lowCardinalityExhaustsRetryBudget() {
         // Gen.exact always produces the same value with the same choice sequence
-        let gen = Gen.exact(42)
+        let gen = Gen.exact(42).unique()
         var iterator = ValueAndChoiceTreeInterpreter(
             gen,
             seed: 1,
-            maxRuns: 10,
-            uniqueMaxAttempts: 20
+            maxRuns: 10
         )
 
         var count = 0
@@ -51,17 +47,16 @@ struct UniquenessConstraintTests {
             count += 1
         }
 
-        #expect(count == 1, "Gen.exact(42) can only produce 1 unique value, got \(count)")
+        #expect(count == 1, "Gen.exact(42).unique() can only produce 1 unique value, got \(count)")
     }
 
     @Test("Bool generator produces exactly 2 unique values")
     func boolProducesExactlyTwo() {
-        let gen = Bool.arbitrary
+        let gen = Bool.arbitrary.unique()
         var iterator = ValueAndChoiceTreeInterpreter(
             gen,
             seed: 42,
-            maxRuns: 100,
-            uniqueMaxAttempts: 200
+            maxRuns: 100
         )
 
         var values = Set<Bool>()
@@ -74,18 +69,17 @@ struct UniquenessConstraintTests {
         #expect(values.contains(false))
     }
 
-    @Test("Determinism: same seed and uniqueMaxAttempts produces identical results")
+    @Test("Determinism: same seed produces identical unique results")
     func determinism() {
-        let gen = UInt64.arbitrary
+        let gen = UInt64.arbitrary.unique()
         let seed: UInt64 = 99
         let maxRuns: UInt64 = 20
-        let maxAttempts: UInt64 = 100
 
         var iter1 = ValueAndChoiceTreeInterpreter(
-            gen, seed: seed, maxRuns: maxRuns, uniqueMaxAttempts: maxAttempts
+            gen, seed: seed, maxRuns: maxRuns
         )
         var iter2 = ValueAndChoiceTreeInterpreter(
-            gen, seed: seed, maxRuns: maxRuns, uniqueMaxAttempts: maxAttempts
+            gen, seed: seed, maxRuns: maxRuns
         )
 
         var values1 = [UInt64]()
@@ -96,65 +90,95 @@ struct UniquenessConstraintTests {
         #expect(values1 == values2, "Same seed should produce identical unique sequences")
     }
 
-    @Test("Without uniqueMaxAttempts, behavior is unchanged")
-    func noUniquenessIsIdentical() {
-        let gen = UInt64.arbitrary
+    // MARK: - ValueInterpreter with unique combinator
 
-        var withoutUniqueness = ValueAndChoiceTreeInterpreter(
-            gen, seed: 42, maxRuns: 10
-        )
-        var withNil = ValueAndChoiceTreeInterpreter(
-            gen, seed: 42, maxRuns: 10, uniqueMaxAttempts: nil
-        )
-
-        var valuesA = [UInt64]()
-        var valuesB = [UInt64]()
-        while let (v, _) = withoutUniqueness.next() { valuesA.append(v) }
-        while let (v, _) = withNil.next() { valuesB.append(v) }
-
-        #expect(valuesA == valuesB, "nil uniqueMaxAttempts should not change behavior")
-    }
-
-    // MARK: - ValueInterpreter delegation
-
-    @Test("ValueInterpreter with uniqueMaxAttempts delegates to VACTI")
-    func valueInterpreterDelegation() {
-        let gen = UInt64.arbitrary
+    @Test("ValueInterpreter with unique combinator produces unique values")
+    func valueInterpreterUniqueness() {
+        let gen = UInt64.arbitrary.unique()
         let seed: UInt64 = 42
         let maxRuns: UInt64 = 20
-        let maxAttempts: UInt64 = 100
 
-        var vacti = ValueAndChoiceTreeInterpreter(
-            gen, seed: seed, maxRuns: maxRuns, uniqueMaxAttempts: maxAttempts
-        )
-        var vi = ValueInterpreter(
-            gen, seed: seed, maxRuns: maxRuns, uniqueMaxAttempts: maxAttempts
-        )
+        var vi = ValueInterpreter(gen, seed: seed, maxRuns: maxRuns)
 
-        var vactiValues = [UInt64]()
-        var viValues = [UInt64]()
-        while let (v, _) = vacti.next() { vactiValues.append(v) }
-        while let v = vi.next() { viValues.append(v) }
+        var values = [UInt64]()
+        while let v = vi.next() { values.append(v) }
 
-        #expect(vactiValues == viValues, "ValueInterpreter delegation should match VACTI output")
+        let uniqueValues = Set(values)
+        #expect(values.count == uniqueValues.count, "ValueInterpreter with .unique() should produce unique values")
     }
 
-    // MARK: - OnlineCGSInterpreter
+    // MARK: - Key-based uniqueness (unique(by:) with key path)
 
-    @Test("CGS interpreter with uniqueness produces unique values")
+    @Test("unique(by:) deduplicates by key path")
+    func uniqueByKeyPath() {
+        // Generate pairs where first element varies but second is bounded (0-4)
+        let secondGen: ReflectiveGenerator<UInt64> = Gen.choose(in: 0 ... 4)
+        let pairGen: ReflectiveGenerator<(UInt64, UInt64)> = Gen.zip(
+            UInt64.arbitrary,
+            secondGen
+        ).unique(by: \.1)
+
+        var iterator = ValueAndChoiceTreeInterpreter(
+            pairGen,
+            seed: 42,
+            maxRuns: 100
+        )
+
+        var seenKeys = Set<UInt64>()
+        var count = 0
+        while let (pair, _) = iterator.next() {
+            let key = pair.1
+            let inserted = seenKeys.insert(key).inserted
+            #expect(inserted, "Key \(key) was already seen — unique(by: \\.1) should deduplicate")
+            count += 1
+        }
+
+        // There are only 5 possible keys (0...4), so we should get at most 5
+        #expect(count <= 5, "Should produce at most 5 unique keys, got \(count)")
+        #expect(count >= 3, "Should produce at least 3 unique keys, got \(count)")
+    }
+
+    // MARK: - Key-based uniqueness (unique(by:) with transform)
+
+    @Test("unique(by:) deduplicates by transform function")
+    func uniqueByTransform() {
+        // Generate values and deduplicate by modulo 5
+        let gen = UInt64.arbitrary
+            .unique(by: { $0 % 5 })
+
+        var iterator = ValueAndChoiceTreeInterpreter(
+            gen,
+            seed: 42,
+            maxRuns: 100
+        )
+
+        var seenRemainders = Set<UInt64>()
+        var count = 0
+        while let (value, _) = iterator.next() {
+            let remainder = value % 5
+            let inserted = seenRemainders.insert(remainder).inserted
+            #expect(inserted, "Remainder \(remainder) was already seen — unique(by:) should deduplicate")
+            count += 1
+        }
+
+        #expect(count == 5, "Should produce exactly 5 unique remainders (0-4), got \(count)")
+    }
+
+    // MARK: - CGS interpreter with unique combinator
+
+    @Test("CGS interpreter with unique combinator produces unique values")
     func cgsUniqueness() {
         let gen = Gen.pick(choices: [
             (1, Gen.just(1)),
             (1, Gen.just(2)),
             (1, Gen.just(3)),
-        ])
+        ]).unique()
 
         var iterator = OnlineCGSInterpreter(
             gen,
             predicate: { _ in true },
             seed: 42,
-            maxRuns: 100,
-            uniqueMaxAttempts: 200
+            maxRuns: 100
         )
 
         var sequences = Set<ChoiceSequence>()
@@ -167,23 +191,22 @@ struct UniquenessConstraintTests {
         #expect(sequences.count == 3, "3-way pick should produce exactly 3 unique values, got \(sequences.count)")
     }
 
-    // MARK: - PropertyTest
+    // MARK: - PropertyTest with unique combinator
 
-    @Test("PropertyTest.test with uniqueMaxAttempts passes through to interpreter")
+    @Test("PropertyTest with unique combinator passes through")
     func propertyTestPassthrough() throws {
-        let gen = Bool.arbitrary
+        let gen = Bool.arbitrary.unique()
         var seen = Set<Bool>()
 
         try PropertyTest.test(
             gen,
             maxIterations: 100,
-            seed: 42,
-            uniqueMaxAttempts: 200
+            seed: 42
         ) { value in
             seen.insert(value)
             return true
         }
 
-        #expect(seen.count == 2, "Bool with uniqueness should produce both true and false")
+        #expect(seen.count == 2, "Bool with .unique() should produce both true and false")
     }
 }

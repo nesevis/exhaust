@@ -10,47 +10,40 @@ import Foundation
 public struct ValueInterpreter<Element>: IteratorProtocol, Sequence {
     let generator: ReflectiveGenerator<Element>
     private var context: Context
-    private let uniqueMaxAttempts: UInt64?
-    private var uniqueDelegate: ValueAndChoiceTreeInterpreter<Element>?
 
     public init(
         _ generator: ReflectiveGenerator<Element>,
         seed: UInt64? = nil,
         maxRuns: UInt64? = nil,
-        uniqueMaxAttempts: UInt64? = nil,
     ) {
         self.generator = generator
-        self.uniqueMaxAttempts = uniqueMaxAttempts
         context = .init(
             maxRuns: maxRuns ?? 100,
             isFixed: false,
             size: 0,
             prng: seed.map { Xoshiro256(seed: $0) } ?? Xoshiro256(),
         )
-        if uniqueMaxAttempts != nil {
-            uniqueDelegate = ValueAndChoiceTreeInterpreter(
-                generator,
-                seed: seed,
-                maxRuns: maxRuns,
-                uniqueMaxAttempts: uniqueMaxAttempts,
-            )
-        }
     }
 
     public mutating func next() -> Element? {
-        if var delegate = uniqueDelegate {
-            let result = delegate.next()
-            uniqueDelegate = delegate
-            return result?.value
-        }
         guard context.size < context.maxRuns else {
             return nil
         }
         defer { context.size += context.isFixed ? 0 : 1 }
         do {
             return try Self.generateRecursive(generator, with: (), context: context)
+        } catch GeneratorError.uniqueBudgetExhausted {
+            ExhaustLog.warning(
+                category: .generation,
+                event: "uniqueness_budget_exhausted",
+                metadata: [
+                    "unique_count": "\(context.size)",
+                    "requested": "\(context.maxRuns)",
+                ],
+            )
+            context.size = context.maxRuns
+            return nil
         } catch {
-            let error = error
             fatalError(error.localizedDescription)
         }
     }
@@ -62,7 +55,6 @@ public struct ValueInterpreter<Element>: IteratorProtocol, Sequence {
             generator,
             seed: context.prng.seed,
             maxRuns: context.maxRuns,
-            uniqueMaxAttempts: uniqueMaxAttempts,
         )
         fixed.context.isFixed = true
         fixed.context.size = context.size
@@ -205,6 +197,45 @@ public struct ValueInterpreter<Element>: IteratorProtocol, Sequence {
                     context: context,
                     runContinuation: runContinuation,
                 )
+
+            case let .unique(gen, fingerprint, keyExtractor):
+                var attempts = 0 as UInt64
+                while attempts < context.maxFilterRuns {
+                    if let keyExtractor {
+                        // Key-based: generate value directly and dedup by extracted key
+                        guard let result = try generateRecursive(gen, with: inputValue, context: context) else { return nil }
+                        let key = keyExtractor(result)
+                        let isDuplicate = !context.uniqueSeenKeys[fingerprint, default: []].insert(key).inserted
+                        if !isDuplicate {
+                            return try runContinuation(result)
+                        }
+                    } else {
+                        // Choice-sequence-based: need the tree to compute the sequence
+                        let vactiContext = ValueAndChoiceTreeInterpreter<Any>.Context(
+                            maxRuns: context.maxRuns,
+                            materializePicks: false,
+                            isFixed: context.isFixed,
+                            size: context.size,
+                            runs: 0,
+                            prng: context.prng
+                        )
+                        guard let (result, tree) = try ValueAndChoiceTreeInterpreter<Any>.generateRecursive(
+                            gen, with: inputValue, context: vactiContext
+                        ) else {
+                            context.prng = vactiContext.prng
+                            return nil
+                        }
+                        context.prng = vactiContext.prng
+
+                        let sequence = ChoiceSequence.flatten(tree)
+                        let isDuplicate = !context.uniqueSeenSequences[fingerprint, default: []].insert(sequence).inserted
+                        if !isDuplicate {
+                            return try runContinuation(result)
+                        }
+                    }
+                    attempts += 1
+                }
+                throw GeneratorError.uniqueBudgetExhausted
             }
         }
     }
@@ -365,6 +396,10 @@ public struct ValueInterpreter<Element>: IteratorProtocol, Sequence {
 
         // Cache of tuned generators keyed by filter fingerprint
         var tunedFilterCache: [UInt64: ReflectiveGenerator<Any>] = [:]
+
+        // Unique combinator state
+        var uniqueSeenKeys: [UInt64: Set<AnyHashable>] = [:]
+        var uniqueSeenSequences: [UInt64: Set<ChoiceSequence>] = [:]
 
         init(
             maxRuns: UInt64,

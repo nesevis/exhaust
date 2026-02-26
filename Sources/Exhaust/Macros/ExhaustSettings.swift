@@ -16,11 +16,4 @@ public enum ExhaustSettings {
     /// The shrink configuration to use when a counterexample is found.
     case shrinkBudget(Interpreters.ShrinkConfiguration)
 
-    /// Ensures only unique values are yielded, using the flattened `ChoiceSequence` as the
-    /// deduplication key. When combined with `.iterations(n)`, produces `n` unique values.
-    ///
-    /// - Parameter maxAttempts: The maximum number of generation attempts before giving up.
-    ///   If the budget is exhausted before `iterations` unique values are produced, a warning
-    ///   is logged and generation stops early.
-    case unique(maxAttempts: UInt64)
 }

@@ -376,6 +376,8 @@ extension Interpreters {
             )
         case let .classify(gen, _, _):
             try materializeRecursiveClassify(gen: gen, tree: tree, context: &context)
+        case let .unique(gen, _, _):
+            try materializeRecursiveClassify(gen: gen, tree: tree, context: &context)
         }
     }
 
@@ -672,6 +674,12 @@ extension Interpreters {
                 context: &context,
             )
         case let .classify(gen, _, _):
+            try materializeWithChoicesClassify(
+                gen: gen,
+                choices: &choices,
+                context: &context,
+            )
+        case let .unique(gen, _, _):
             try materializeWithChoicesClassify(
                 gen: gen,
                 choices: &choices,

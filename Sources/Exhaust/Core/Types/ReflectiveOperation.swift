@@ -315,4 +315,29 @@ public enum ReflectiveOperation {
     ///   - fingerprint: Unique identifier for this classification operation
     ///   - classifiers: Array of (label, predicate) pairs for categorizing values
     case classify(gen: ReflectiveGenerator<Any>, fingerprint: UInt64, classifiers: [(label: String, predicate: (Any) -> Bool)])
+
+    /// Deduplicates generated values, ensuring each output is unique.
+    ///
+    /// This operation wraps a generator and tracks previously seen outputs to prevent
+    /// duplicates. Two deduplication strategies are supported:
+    ///
+    /// - **Choice-sequence based** (`keyExtractor == nil`): Deduplicates by the flattened
+    ///   `ChoiceSequence` of the inner generator's choice tree. Two values are considered
+    ///   duplicates if they were produced by the same random choices, even if the resulting
+    ///   values differ in non-deterministic ways.
+    ///
+    /// - **Key-based** (`keyExtractor != nil`): Deduplicates by a user-provided key
+    ///   extracted from the generated value. This enables value-based deduplication
+    ///   using key paths or arbitrary transforms.
+    ///
+    /// **Forward pass**: Generates values and checks against seen set; retries on duplicates
+    /// **Backward pass**: Passes through to inner generator (no dedup during reflection)
+    /// **Replay pass**: Passes through to inner generator (no dedup during replay)
+    ///
+    /// - Parameters:
+    ///   - gen: The base generator to deduplicate
+    ///   - fingerprint: Unique identifier for this unique site (for per-site tracking)
+    ///   - keyExtractor: Optional function to extract a hashable key from generated values.
+    ///     When `nil`, deduplication uses the choice sequence instead.
+    case unique(gen: ReflectiveGenerator<Any>, fingerprint: UInt64, keyExtractor: ((Any) -> AnyHashable)?)
 }
