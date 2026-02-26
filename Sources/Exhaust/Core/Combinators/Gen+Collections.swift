@@ -41,25 +41,27 @@ public extension Gen {
     /// Creates a generator for an array with length constrained to a specific range.
     ///
     /// This variant allows precise control over array length by specifying exact bounds.
-    /// The size parameter acts as an upper bound within the range, so early (small-size)
-    /// test cases produce shorter arrays while the full range remains available for shrinking.
+    /// The `scaling` parameter controls how the length range interacts with the size
+    /// parameter (1–100), following Hedgehog's Range model:
+    ///
+    /// - `.constant`: The full range is available at all sizes.
+    /// - `.linear` (default): The upper bound grows linearly from the lower bound toward
+    ///   the specified upper bound as size increases.
+    /// - `.exponential`: Same as linear but with exponential interpolation.
     ///
     /// - Parameters:
     ///   - elementGenerator: The generator for array elements
     ///   - range: The allowed range for array length
+    ///   - scaling: The distribution strategy for the length. Defaults to `.linear`
     /// - Returns: A generator that produces arrays with length in the specified range
     @inlinable
     static func arrayOf<Output>(
         _ elementGenerator: ReflectiveGenerator<Output>,
         within range: ClosedRange<UInt64>,
+        scaling: SizeScaling<UInt64> = .linear,
     ) -> ReflectiveGenerator<[Output]> {
-        // Use `bind` to get the result of the length generator.
         let sequenceOperation = ReflectiveOperation.sequence(
-            length: Gen.getSize().bind { size in
-                let upper = min(size, range.upperBound)
-                let clamped = range.lowerBound ... max(range.lowerBound, upper)
-                return Gen.chooseDerived(in: clamped)
-            },
+            length: Gen.choose(in: range, scaling: scaling),
             gen: elementGenerator.erase(),
         )
         // Lift the operation. The continuation will decode the `[Any]` result.
@@ -149,13 +151,15 @@ public extension Gen {
     /// - Parameters:
     ///   - elementGenerator: The generator for set elements (must be Hashable)
     ///   - range: The allowed range for set size
+    ///   - scaling: The distribution strategy for the set size. Defaults to `.linear`
     /// - Returns: A generator that produces sets with size in the specified range
     @inlinable
     static func setOf<Element: Hashable>(
         _ elementGenerator: ReflectiveGenerator<Element>,
         within range: ClosedRange<UInt64>,
+        scaling: SizeScaling<UInt64> = .linear,
     ) -> ReflectiveGenerator<Set<Element>> {
-        arrayOf(elementGenerator, within: range)
+        arrayOf(elementGenerator, within: range, scaling: scaling)
             .filter { Set($0).count == $0.count }
             .mapped(
                 forward: { Set($0) },

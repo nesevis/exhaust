@@ -22,18 +22,18 @@ public extension ReflectiveGenerator where Value == Character {
 }
 
 public extension ReflectiveGenerator where Value == String {
-    static func string(length: ClosedRange<UInt64>? = nil) -> ReflectiveGenerator<Value> {
+    static func string(length: ClosedRange<UInt64>? = nil, scaling: SizeScaling<UInt64> = .linear) -> ReflectiveGenerator<Value> {
         if let length {
-            return Gen.arrayOf(.character(), within: length)
+            return Gen.arrayOf(.character(), within: length, scaling: scaling)
                 .mapped(forward: { String($0) }, backward: { Array($0) })
         }
         return Gen.arrayOf(.character())
             .mapped(forward: { String($0) }, backward: { Array($0) })
     }
-    
-    static func ascii(length: ClosedRange<UInt64>? = nil) -> ReflectiveGenerator<Value> {
+
+    static func ascii(length: ClosedRange<UInt64>? = nil, scaling: SizeScaling<UInt64> = .linear) -> ReflectiveGenerator<Value> {
         if let length {
-            return Gen.arrayOf(Gen.chooseCharacter(in: Character.bitPatternRanges[0]), within: length)
+            return Gen.arrayOf(Gen.chooseCharacter(in: Character.bitPatternRanges[0]), within: length, scaling: scaling)
                 .mapped(forward: { String($0) }, backward: { Array($0) })
         }
         return Gen.arrayOf(Gen.chooseCharacter(in: Character.bitPatternRanges[0]))

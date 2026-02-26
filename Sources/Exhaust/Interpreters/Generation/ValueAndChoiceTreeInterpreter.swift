@@ -190,7 +190,7 @@ public struct ValueAndChoiceTreeInterpreter<FinalOutput>: IteratorProtocol, Sequ
             // MARK: - GetSize
 
             case .getSize:
-                let size = context.sizeOverride ?? logarithmicallyScaledSize(context.maxRuns, context.runs)
+                let size = context.sizeOverride ?? scaledSize(context.maxRuns, context.runs)
                 context.sizeOverride = nil // getSize consumes the `sizeOverride`
                 return try runContinuation(size, .getSize(size))
 
@@ -474,11 +474,11 @@ public struct ValueAndChoiceTreeInterpreter<FinalOutput>: IteratorProtocol, Sequ
         )
     }
 
-    // MARK: - Quickcheck logarithmic scaling of test cases
+    // MARK: - Linear size scaling (1–100)
 
-    private static func logarithmicallyScaledSize(_ maxSize: UInt64, _ successfulTests: UInt64) -> UInt64 {
-        let n = Double(successfulTests)
-        return UInt64(log(n + 1) * Double(maxSize) / log(100))
+    private static func scaledSize(_ maxRuns: UInt64, _ completedRuns: UInt64) -> UInt64 {
+        guard maxRuns > 1 else { return 1 }
+        return 1 + completedRuns * 99 / (maxRuns - 1)
     }
 
     // MARK: - Context

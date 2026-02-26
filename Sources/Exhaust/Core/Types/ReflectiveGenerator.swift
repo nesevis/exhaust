@@ -169,11 +169,13 @@ public extension ReflectiveGenerator where Operation == ReflectiveOperation {
     /// instances, which is exactly what array generation accomplishes while maintaining the
     /// bidirectional properties essential for reflection and replay.
     ///
-    /// - Parameter range: The allowed range for the resulting array length
+    /// - Parameters:
+    ///   - range: The allowed range for the resulting array length
+    ///   - scaling: The distribution strategy for the length. Defaults to `.linear`
     /// - Returns: A generator that produces arrays with length in the specified range
     @inlinable
-    func proliferate(with range: ClosedRange<UInt64>) -> ReflectiveGenerator<[Value]> {
-        Gen.arrayOf(self, Gen.choose(in: range))
+    func proliferate(with range: ClosedRange<UInt64>, scaling: SizeScaling<UInt64> = .linear) -> ReflectiveGenerator<[Value]> {
+        Gen.arrayOf(self, within: range, scaling: scaling)
     }
 
     /// Creates a filtered generator that only produces values satisfying a predicate.

@@ -17,4 +17,13 @@ public protocol BitPatternConvertible: Equatable, Sendable {
     /// Provides the raw `UInt64` bit pattern for this specific instance.
     /// This is the core encoding step used by the `reflect` interpreter.
     var bitPattern64: UInt64 { get }
+
+    /// The preferred size-scaling distribution for this type when used with
+    /// ``Gen/choose(in:scaling:)``. Override to control how `arbitrary`
+    /// generators expand their range as the size parameter grows.
+    static var defaultScaling: SizeScaling<Self> { get }
+}
+
+extension BitPatternConvertible {
+    public static var defaultScaling: SizeScaling<Self> { .constant }
 }

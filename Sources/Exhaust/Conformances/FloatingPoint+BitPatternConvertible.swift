@@ -10,6 +10,8 @@ extension Float: BitPatternConvertible {
         .float
     }
 
+    public static var defaultScaling: SizeScaling<Self> { .exponentialFrom(origin: 0) }
+
     private static let signBitMask: UInt32 = 0x8000_0000
 
     /// A `Float` can use the entire `UInt32` space for its bit pattern.
@@ -55,6 +57,8 @@ extension Double: BitPatternConvertible {
     public static var tag: TypeTag {
         .double
     }
+
+    public static var defaultScaling: SizeScaling<Self> { .exponentialFrom(origin: 0) }
 
     private static let signBitMask: UInt64 = 0x8000_0000_0000_0000
 

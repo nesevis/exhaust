@@ -1,3 +1,5 @@
+import Foundation
+
 /// Operations for making choices and generating random values within ranges.
 /// These combinators handle weighted selection and bounded value generation.
 public extension Gen {
@@ -164,6 +166,88 @@ public extension Gen {
             type: Output.self,
             isRangeExplicit: false,
         )
+    }
+
+    /// Generates a random value within a range, using a ``SizeScaling`` distribution
+    /// to control how tightly values cluster around an origin at small sizes.
+    ///
+    /// For `.constant`, delegates directly to ``choose(in:type:)`` with no size interaction.
+    /// For all other scalings, the effective range is computed from the current size (1–100)
+    /// using either linear or exponential interpolation in bit-pattern space.
+    ///
+    /// - Parameters:
+    ///   - range: The full range of values to generate from at size 100.
+    ///   - scaling: The distribution strategy controlling how the range expands.
+    /// - Returns: A generator that produces size-scaled random values.
+    @inlinable
+    static func choose<Output: BitPatternConvertible>(
+        in range: ClosedRange<Output>,
+        scaling: SizeScaling<Output>,
+    ) -> ReflectiveGenerator<Output> {
+        switch scaling {
+        case .constant:
+            return Gen.choose(in: range)
+        case .linear, .linearFrom, .exponential, .exponentialFrom:
+            return Gen.getSize().bind { size in
+                let effectiveRange = scaledRange(range, scaling: scaling, size: size)
+                return Gen.chooseDerived(in: effectiveRange)
+            }
+        }
+    }
+
+    /// Computes the effective range for a given size by interpolating from the origin
+    /// toward the bounds using the specified scaling strategy.
+    @usableFromInline
+    internal static func scaledRange<Output: BitPatternConvertible>(
+        _ range: ClosedRange<Output>,
+        scaling: SizeScaling<Output>,
+        size: UInt64,
+    ) -> ClosedRange<Output> {
+        let fraction = min(Double(size) / 100.0, 1.0)
+        guard fraction < 1.0 else { return range }
+
+        let lowerBits = range.lowerBound.bitPattern64
+        let upperBits = range.upperBound.bitPattern64
+
+        let originBits: UInt64
+        let isExponential: Bool
+
+        switch scaling {
+        case .constant:
+            return range
+        case .linear:
+            originBits = lowerBits
+            isExponential = false
+        case let .linearFrom(origin):
+            originBits = min(max(origin.bitPattern64, lowerBits), upperBits)
+            isExponential = false
+        case .exponential:
+            originBits = lowerBits
+            isExponential = true
+        case let .exponentialFrom(origin):
+            originBits = min(max(origin.bitPattern64, lowerBits), upperBits)
+            isExponential = true
+        }
+
+        let effectiveLower = originBits - scaledDistance(originBits - lowerBits, fraction: fraction, isExponential: isExponential)
+        let effectiveUpper = originBits + scaledDistance(upperBits - originBits, fraction: fraction, isExponential: isExponential)
+
+        return Output(bitPattern64: effectiveLower) ... Output(bitPattern64: effectiveUpper)
+    }
+
+    /// Scales a distance from origin to bound by the given fraction (0–1).
+    @usableFromInline
+    internal static func scaledDistance(_ distance: UInt64, fraction: Double, isExponential: Bool) -> UInt64 {
+        guard distance > 0, fraction > 0 else { return 0 }
+
+        if isExponential {
+            // pow(distance + 1, fraction) - 1, clamped to avoid overflow on UInt64 conversion
+            let result = pow(Double(distance) + 1.0, fraction) - 1.0
+            return min(UInt64(result), distance)
+        } else {
+            let result = Double(distance) * fraction
+            return min(UInt64(result), distance)
+        }
     }
 
     @usableFromInline

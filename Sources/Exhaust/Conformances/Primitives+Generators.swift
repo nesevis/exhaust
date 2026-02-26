@@ -9,111 +9,63 @@
 
 extension UInt {
     public static var arbitrary: ReflectiveGenerator<Self> {
-        Gen.getSize().bind { size in
-            // This needs a bit more work to slow the scaling down a tad. Counteract logarithm?
-            let expanded: UInt = size < 64 ? 1 << size : UInt.max
-            return Gen.chooseDerived(in: UInt.min ... expanded)
-        }
+        Gen.choose(in: Self.min ... Self.max, scaling: Self.defaultScaling)
     }
 }
 
 extension UInt64 {
     public static var arbitrary: ReflectiveGenerator<Self> {
-        Gen.getSize().bind { size in
-            // This needs a bit more work to slow the scaling down a tad. Counteract logarithm?
-            let expanded: UInt64 = size < 64 ? 1 << size : UInt64.max
-            return Gen.chooseDerived(in: UInt64.min ... expanded)
-        }
+        Gen.choose(in: Self.min ... Self.max, scaling: Self.defaultScaling)
     }
 }
 
-// MARK: - Signed integers
-
 extension UInt8 {
     public static var arbitrary: ReflectiveGenerator<Self> {
-        Gen.getSize().bind { size in
-            let expanded: UInt64 = size < 7 ? 1 << size : UInt64(UInt8.max)
-            return Gen.chooseDerived(in: 0 ... UInt8(expanded))
-        }
+        Gen.choose(in: Self.min ... Self.max, scaling: Self.defaultScaling)
     }
 }
 
 extension UInt16 {
     public static var arbitrary: ReflectiveGenerator<Self> {
-        Gen.getSize().bind { size in
-            let expanded: UInt64 = size < 15 ? 1 << size : UInt64(UInt16.max)
-            return Gen.chooseDerived(in: 0 ... UInt16(expanded))
-        }
+        Gen.choose(in: Self.min ... Self.max, scaling: Self.defaultScaling)
     }
 }
 
 extension UInt32 {
     public static var arbitrary: ReflectiveGenerator<Self> {
-        Gen.getSize().bind { size in
-            let expanded: UInt64 = size < 31 ? 1 << size : UInt64(UInt32.max)
-            return Gen.chooseDerived(in: 0 ... UInt32(expanded))
-        }
+        Gen.choose(in: Self.min ... Self.max, scaling: Self.defaultScaling)
     }
 }
 
+// MARK: - Signed integers
+
 extension Int {
     public static var arbitrary: ReflectiveGenerator<Self> {
-        Gen.getSize().bind { size in
-            if size < 63 {
-                let expanded: UInt64 = 1 << size
-                return Gen.chooseDerived(in: -Int(expanded) ... Int(expanded))
-            }
-            return Gen.chooseDerived(in: Int.min ... Int.max)
-        }
+        Gen.choose(in: Self.min ... Self.max, scaling: Self.defaultScaling)
     }
 }
 
 extension Int8 {
     public static var arbitrary: ReflectiveGenerator<Self> {
-        Gen.getSize().bind { size in
-            if size < 7 {
-                let expanded: UInt64 = 1 << size
-                return Gen.chooseDerived(in: -Int8(expanded) ... Int8(expanded))
-            }
-            return Gen.chooseDerived(in: Int8.min ... Int8.max)
-        }
+        Gen.choose(in: Self.min ... Self.max, scaling: Self.defaultScaling)
     }
 }
 
 extension Int16 {
     public static var arbitrary: ReflectiveGenerator<Self> {
-        Gen.getSize().bind { size in
-            if size < 15 {
-                let expanded: UInt64 = 1 << size
-                return Gen.chooseDerived(in: -Int16(expanded) ... Int16(expanded))
-            }
-            // TODO: Fix this elsewhere
-            return Gen.chooseDerived(in: Int16.min ... Int16.max)
-        }
+        Gen.choose(in: Self.min ... Self.max, scaling: Self.defaultScaling)
     }
 }
 
 extension Int32 {
     public static var arbitrary: ReflectiveGenerator<Self> {
-        Gen.getSize().bind { size in
-            if size < 31 {
-                let expanded: UInt64 = 1 << size
-                return Gen.chooseDerived(in: -Int32(expanded) ... Int32(expanded))
-            }
-            return Gen.chooseDerived(in: Int32.min ... Int32.max)
-        }
+        Gen.choose(in: Self.min ... Self.max, scaling: Self.defaultScaling)
     }
 }
 
 extension Int64 {
     public static var arbitrary: ReflectiveGenerator<Self> {
-        Gen.getSize().bind { size in
-            if size < 63 {
-                let expanded: UInt64 = 1 << size
-                return Gen.chooseDerived(in: -Int64(expanded) ... Int64(expanded))
-            }
-            return Gen.chooseDerived(in: Int64.min ... Int64.max)
-        }
+        Gen.choose(in: Self.min ... Self.max, scaling: Self.defaultScaling)
     }
 }
 
@@ -121,21 +73,19 @@ extension Int64 {
 
 extension Double {
     public static var arbitrary: ReflectiveGenerator<Self> {
-        Gen.getSize().bind { size in
-            // TODO: use pow() to scale range?
-            let boundary = size == UInt64.max ? Double.greatestFiniteMagnitude : Double(size)
-            return Gen.chooseDerived(in: -boundary ... boundary)
-        }
+        Gen.choose(
+            in: -Double.greatestFiniteMagnitude ... Double.greatestFiniteMagnitude,
+            scaling: Self.defaultScaling,
+        )
     }
 }
 
 extension Float {
     public static var arbitrary: ReflectiveGenerator<Self> {
-        Gen.getSize().bind { size in
-            // TODO: use pow() to scale range
-            let boundary = size == UInt64.max ? Float.greatestFiniteMagnitude : Float(size)
-            return Gen.chooseDerived(in: -boundary ... boundary)
-        }
+        Gen.choose(
+            in: -Float.greatestFiniteMagnitude ... Float.greatestFiniteMagnitude,
+            scaling: Self.defaultScaling,
+        )
     }
 }
 

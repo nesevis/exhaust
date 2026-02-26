@@ -19,10 +19,11 @@ public extension ReflectiveGenerator {
     
     static func array<Element>(
         _ gen: ReflectiveGenerator<Element>,
-        length: ClosedRange<Int>
+        length: ClosedRange<Int>,
+        scaling: SizeScaling<UInt64> = .linear
     ) -> ReflectiveGenerator<[Element]> where Value == [Element] {
         precondition(length.lowerBound >= 0, "Length must be non-negative")
-        return Gen.arrayOf(gen, within: UInt64(length.lowerBound)...UInt64(length.upperBound))
+        return Gen.arrayOf(gen, within: UInt64(length.lowerBound)...UInt64(length.upperBound), scaling: scaling)
     }
 
     static func array<Element>(
@@ -38,10 +39,11 @@ public extension ReflectiveGenerator {
 
     static func set<Element: Hashable>(
         _ gen: ReflectiveGenerator<Element>,
-        count: ClosedRange<Int>
+        count: ClosedRange<Int>,
+        scaling: SizeScaling<UInt64> = .linear
     ) -> ReflectiveGenerator<Set<Element>> where Value == Set<Element> {
         precondition(count.lowerBound >= 0, "Count must be non-negative")
-        return Gen.setOf(gen, within: UInt64(count.lowerBound)...UInt64(count.upperBound))
+        return Gen.setOf(gen, within: UInt64(count.lowerBound)...UInt64(count.upperBound), scaling: scaling)
     }
 
     static func set<Element: Hashable>(
