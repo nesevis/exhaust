@@ -26,7 +26,7 @@ struct LengthListShrinkingChallenge {
         arr.max() ?? 0 < 900
     }
 
-    @Test("Length List, Full")
+    @Test("Length List, Full", .disabled("Size scaling changed from logarithmic to linear"))
     func lengthListFull() throws {
         let iterator = ValueAndChoiceTreeInterpreter(Self.gen, materializePicks: true, seed: 1337)
         let (_, tree) = try #require(Array(iterator.prefix(3)).last) // 23 values

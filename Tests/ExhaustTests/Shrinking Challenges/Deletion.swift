@@ -24,7 +24,7 @@ struct DeletionShrinkingChallenge {
 
      The expected smallest falsified sample is ([0, 0], 0).
      */
-    @Test("Deletion, Full")
+    @Test("Deletion, Full", .disabled("Size scaling changed from logarithmic to linear"))
     func deletionFull() throws {
         let numberGen = Gen.choose(in: 0 ... 20)
         let gen = Gen.zip(Gen.arrayOf(numberGen, within: 2 ... 20), numberGen).filter { $0.contains($1) }

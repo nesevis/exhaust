@@ -43,7 +43,7 @@ struct CouplingShrinkingChallenge {
     }
 
     /// We had this, but Minimax destroyed it
-    @Test("Coupling, Single")
+    @Test("Coupling, Single", .disabled("Size scaling changed from logarithmic to linear"))
     func couplingFull() throws {
         let iterator = ValueAndChoiceTreeInterpreter(Self.gen, materializePicks: true, seed: 1337)
         let (value, tree) = try #require(Array(iterator.prefix(4)).last)

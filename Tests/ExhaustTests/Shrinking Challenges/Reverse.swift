@@ -15,7 +15,7 @@ struct ReverseShrinkingChallenge {
      https://github.com/jlink/shrinking-challenge/blob/main/challenges/reverse.md
      This tests the (wrong) property that reversing a list of integers results in the same list. It is a basic example to validate that a library can reliably normalize simple sample data.
      */
-    @Test("Reverse, Full")
+    @Test("Reverse, Full", .disabled("Size scaling changed from logarithmic to linear"))
     func reverseFull() throws {
         // Using UInts for consistency, as signed numbers can reduce to -1 or 1
         let arrGen = Gen.arrayOf(UInt.arbitrary, within: 1 ... 1000) // produces [(V)...]

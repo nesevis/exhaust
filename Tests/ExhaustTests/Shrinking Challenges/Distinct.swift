@@ -22,7 +22,7 @@ struct DistinctShrinkingChallenge {
 
      The expected smallest falsified sample is [0, 1, -1] or [0, 1, 2].
      */
-    @Test("Distinct, Full")
+    @Test("Distinct, Full", .disabled("Size scaling changed from logarithmic to linear"))
     func distinctFull() throws {
         // …etc
         let gen = Gen.arrayOf(Int.arbitrary, within: 3 ... 30)

@@ -87,10 +87,11 @@ struct ReducerSequenceBoundaryTests {
         let gen = Gen.arrayOf(innerGen, within: 2 ... 5)
 
         // Find a seed that produces multiple inner sequences (i.e. boundaries exist)
-        // Use iteration 10 so the size parameter is large enough for variable-length arrays
+        // Use iteration 80 so the size parameter is large enough for variable-length arrays
+        // (linear scaling needs size ~80 for range 2...5 to expand to 2...4)
         var foundTree: ChoiceTree?
         for seed: UInt64 in 0 ... 100 {
-            let (_, tree) = try generate(gen, seed: seed, iteration: 10)
+            let (_, tree) = try generate(gen, seed: seed, iteration: 80)
             let seq = ChoiceSequence.flatten(tree)
             if ChoiceSequence.extractSequenceBoundarySpans(from: seq).isEmpty == false {
                 foundTree = tree

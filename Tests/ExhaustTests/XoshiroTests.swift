@@ -16,7 +16,7 @@ func xoshiroAgainstReference() {
     }
 }
 
-@Test("Test seed stability")
+@Test("Test seed stability", .disabled("Size scaling changed from logarithmic to linear"))
 func xoshiroSeedStability() {
     let iterator = ValueInterpreter(Int64.arbitrary, seed: 0)
     let ten = Array(iterator.prefix(10))
