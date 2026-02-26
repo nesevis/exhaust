@@ -13,10 +13,12 @@
 // - ??
 
 public extension ReflectiveGenerator {
-    static func array<Element>(_ gen: ReflectiveGenerator<Element>) -> ReflectiveGenerator<[Element]> where Value == [Element] {
+    static func array<Element>(
+        _ gen: ReflectiveGenerator<Element>
+    ) -> ReflectiveGenerator<[Element]> where Value == [Element] {
         Gen.arrayOf(gen)
     }
-    
+
     static func array<Element>(
         _ gen: ReflectiveGenerator<Element>,
         length: ClosedRange<Int>,
@@ -33,7 +35,9 @@ public extension ReflectiveGenerator {
         Gen.arrayOf(gen, exactly: length)
     }
 
-    static func set<Element: Hashable>(_ gen: ReflectiveGenerator<Element>) -> ReflectiveGenerator<Set<Element>> where Value == Set<Element> {
+    static func set<Element: Hashable>(
+        _ gen: ReflectiveGenerator<Element>
+    ) -> ReflectiveGenerator<Set<Element>> where Value == Set<Element> {
         Gen.setOf(gen)
     }
 
@@ -59,18 +63,22 @@ public extension ReflectiveGenerator {
     ) -> ReflectiveGenerator<[Key: DictValue]> where Value == [Key: DictValue] {
         Gen.dictionaryOf(keyGen, valueGen)
     }
-    
+
     static func sub<C: Collection>(
         _ gen: ReflectiveGenerator<C>
     ) -> ReflectiveGenerator<C.SubSequence> where Value == C.SubSequence {
         Gen.sub(gen)
     }
 
-    static func shuffle(_ gen: ReflectiveGenerator<Value>) -> ReflectiveGenerator<[Value.Element]> where Value: Collection {
+    static func shuffle(
+        _ gen: ReflectiveGenerator<Value>
+    ) -> ReflectiveGenerator<[Value.Element]> where Value: Collection {
         Gen.shuffle(gen)
     }
 
-    static func element<C: Collection>(_ collection: C) -> ReflectiveGenerator<C.Element> where C.Index == Int {
+    static func element<C: Collection>(
+        _ collection: C
+    ) -> ReflectiveGenerator<C.Element> where C.Index == Int {
         Gen.choose(from: collection)
     }
 }
