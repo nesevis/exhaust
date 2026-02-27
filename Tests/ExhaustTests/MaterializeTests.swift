@@ -166,10 +166,10 @@ struct MaterializeTests {
         var insideSequence = false
         for element in flattened {
             switch element {
-            case .sequence(true):
+            case .sequence(true, isLengthExplicit: _):
                 emptySequence.append(element)
                 insideSequence = true
-            case .sequence(false):
+            case .sequence(false, isLengthExplicit: _):
                 emptySequence.append(element)
                 insideSequence = false
             default:

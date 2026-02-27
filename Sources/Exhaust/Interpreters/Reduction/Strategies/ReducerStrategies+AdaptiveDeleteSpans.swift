@@ -19,6 +19,7 @@ extension ReducerStrategies {
         sequence: ChoiceSequence,
         spans: [ChoiceSpan],
         rejectCache: inout ReducerCache,
+        strictness: Interpreters.Strictness = .normal,
     ) throws -> (ChoiceSequence, Output)? {
         var current = sequence
 
@@ -56,7 +57,7 @@ extension ReducerStrategies {
                 guard rejectCache.contains(candidate) == false else {
                     return false
                 }
-                guard let output = try? Interpreters.materialize(gen, with: tree, using: candidate) else {
+                guard let output = try? Interpreters.materialize(gen, with: tree, using: candidate, strictness: strictness) else {
                     rejectCache.insert(candidate)
                     return false
                 }
@@ -88,7 +89,7 @@ extension ReducerStrategies {
                 }
                 var candidate = current
                 candidate.removeSubranges(rangeSet)
-                if let output = try? Interpreters.materialize(gen, with: tree, using: candidate),
+                if let output = try? Interpreters.materialize(gen, with: tree, using: candidate, strictness: strictness),
                    property(output) == false
                 {
                     current = candidate

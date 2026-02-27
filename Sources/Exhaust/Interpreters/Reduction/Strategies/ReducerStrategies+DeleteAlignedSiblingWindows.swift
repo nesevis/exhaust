@@ -275,10 +275,12 @@ extension ReducerStrategies {
         in sequence: ChoiceSequence,
     ) -> [[AlignedDeletionSlot]] {
         let sequenceContainerSpans = ChoiceSequence.extractContainerSpans(from: sequence).filter { span in
-            guard span.kind == .sequence(true) else { return false }
+            guard case .sequence(true, isLengthExplicit: _) = span.kind else { return false }
             guard span.range.lowerBound >= 0, span.range.upperBound < sequence.count else { return false }
-            return sequence[span.range.lowerBound] == .sequence(true)
-                && sequence[span.range.upperBound] == .sequence(false)
+            guard case .sequence(true, isLengthExplicit: _) = sequence[span.range.lowerBound],
+                  case .sequence(false, isLengthExplicit: _) = sequence[span.range.upperBound]
+            else { return false }
+            return true
         }
         guard sequenceContainerSpans.count >= 2 else { return [] }
         guard let minDepth = sequenceContainerSpans.map(\.depth).min() else { return [] }

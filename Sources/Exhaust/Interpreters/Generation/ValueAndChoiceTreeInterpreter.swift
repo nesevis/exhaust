@@ -152,11 +152,12 @@ public struct ValueAndChoiceTreeInterpreter<FinalOutput>: IteratorProtocol, Sequ
 
             // MARK: - Choosebits
 
-            case let .chooseBits(min, max, tag, _):
+            case let .chooseBits(min, max, tag, isRangeExplicit):
                 return try handleChooseBits(
                     min: min,
                     max: max,
                     tag: tag,
+                    isRangeExplicit: isRangeExplicit,
                     context: context,
                     runContinuation: runContinuation,
                 )
@@ -364,11 +365,15 @@ public struct ValueAndChoiceTreeInterpreter<FinalOutput>: IteratorProtocol, Sequ
         min: UInt64,
         max: UInt64,
         tag: TypeTag,
+        isRangeExplicit: Bool,
         context: Context,
         runContinuation: RunContinuation<Output>,
     ) throws -> (Output, ChoiceTree)? {
         let randomBits = context.prng.next(in: min ... max)
-        let choiceTree = ChoiceTree.choice(ChoiceValue(randomBits, tag: tag), .init(validRanges: [min ... max]))
+        let choiceTree = ChoiceTree.choice(
+            ChoiceValue(randomBits, tag: tag),
+            .init(validRanges: [min ... max], isRangeExplicit: isRangeExplicit),
+        )
         return try runContinuation(randomBits, choiceTree)
     }
 

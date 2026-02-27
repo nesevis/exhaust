@@ -244,7 +244,7 @@ public enum Interpreters {
             reflectedRanges = [fallbackRange]
         }
 
-        let metadata = ChoiceMetadata(validRanges: reflectedRanges)
+        let metadata = ChoiceMetadata(validRanges: reflectedRanges, isRangeExplicit: isRangeExplicit)
         return [(value: finalOutput, path: [.choice(.init(convertibleValue, tag: tag), metadata)])]
     }
 
@@ -273,6 +273,7 @@ public enum Interpreters {
         var combinedResults: [Any] = []
 
         let validRanges: [ClosedRange<UInt64>]
+        let isLengthRangeExplicit = lengthGen.associatedRange != nil
         if let lengthRange = lengthGen.associatedRange {
             validRanges = [lengthRange]
         } else {
@@ -293,7 +294,7 @@ public enum Interpreters {
         let finalTree = ChoiceTree.sequence(
             length: UInt64(targetArray.underestimatedCount),
             elements: combinedPath,
-            ChoiceMetadata(validRanges: validRanges),
+            ChoiceMetadata(validRanges: validRanges, isRangeExplicit: isLengthRangeExplicit),
         )
         return [(value: combinedResults, path: [finalTree])]
     }

@@ -309,9 +309,9 @@ struct ChoiceSequenceTests {
 
         for element in flattened {
             switch element {
-            case .group(true), .sequence(true):
+            case .group(true), .sequence(true, isLengthExplicit: _):
                 openCount += 1
-            case .group(false), .sequence(false):
+            case .group(false), .sequence(false, isLengthExplicit: _):
                 closeCount += 1
             default:
                 continue

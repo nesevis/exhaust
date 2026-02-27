@@ -78,7 +78,7 @@ extension Interpreters {
 
         @discardableResult
         mutating func consumeSequence(_ isOpen: Bool, line: Int = #line) throws -> ChoiceSequenceValue {
-            guard case .sequence(isOpen) = peek else {
+            guard case .sequence(isOpen, isLengthExplicit: _) = peek else {
                 switch strictness {
                 case .normal:
                     if isInstrumented {
@@ -462,6 +462,7 @@ extension Interpreters {
             context: &context,
             requireElements: false,
             validLengthRanges: lengthMeta.validRanges,
+            isLengthRangeExplicit: lengthMeta.isRangeExplicit,
         ) else {
             return nil
         }
@@ -530,6 +531,7 @@ extension Interpreters {
         context: inout Context,
         requireElements: Bool,
         validLengthRanges: [ClosedRange<UInt64>] = [],
+        isLengthRangeExplicit: Bool = false,
     ) throws -> [Any]? {
         try context.consumeSequence(true)
 
@@ -569,7 +571,12 @@ extension Interpreters {
                         validRanges: validLengthRanges,
                     )
                 case .relaxed:
-                    break
+                    if isLengthRangeExplicit {
+                        throw MaterializeError.generatorConstraintViolated(
+                            actualLength: count,
+                            validRanges: validLengthRanges,
+                        )
+                    }
                 }
             }
         }
@@ -801,6 +808,7 @@ extension Interpreters {
             context: &context,
             requireElements: true,
             validLengthRanges: lengthMeta.validRanges,
+            isLengthRangeExplicit: lengthMeta.isRangeExplicit,
         ) else {
             return nil
         }

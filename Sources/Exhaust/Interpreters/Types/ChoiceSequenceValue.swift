@@ -12,7 +12,7 @@ public enum ChoiceSequenceValue: Hashable, Equatable, Sendable {
     case group(Bool)
     /// Values that repeat within a sequence
     /// The elements within the `true`---`false` range are elements of the sequence
-    case sequence(Bool)
+    case sequence(Bool, isLengthExplicit: Bool = false)
     /// A marker for a branching choice.
     /// Stores selected branch id and the valid branch ids for the pick site.
     /// This marker has no explicit closing marker.
@@ -37,13 +37,13 @@ public enum ChoiceSequenceValue: Hashable, Equatable, Sendable {
 
     public func shortLexCompare(_ other: ChoiceSequenceValue) -> ShortlexOrder {
         switch (self, other) {
-        case (.group(true), .group(true)), (.sequence(true), .sequence(true)):
+        case (.group(true), .group(true)), (.sequence(true, isLengthExplicit: _), .sequence(true, isLengthExplicit: _)):
             return .eq
-        case (.group(false), .group(false)), (.sequence(false), .sequence(false)):
+        case (.group(false), .group(false)), (.sequence(false, isLengthExplicit: _), .sequence(false, isLengthExplicit: _)):
             return .eq
-        case (.group(false), .group(true)), (.sequence(false), .sequence(true)):
+        case (.group(false), .group(true)), (.sequence(false, isLengthExplicit: _), .sequence(true, isLengthExplicit: _)):
             return .lt
-        case (.group(true), .group(false)), (.sequence(true), .sequence(false)):
+        case (.group(true), .group(false)), (.sequence(true, isLengthExplicit: _), .sequence(false, isLengthExplicit: _)):
             return .gt
         case let (.branch(a), .branch(b)):
             return a.shortLexCompare(b)
@@ -73,9 +73,9 @@ public enum ChoiceSequenceValue: Hashable, Equatable, Sendable {
             return "("
         case .group(false):
             return ")"
-        case .sequence(true):
+        case .sequence(true, isLengthExplicit: _):
             return "["
-        case .sequence(false):
+        case .sequence(false, isLengthExplicit: _):
             return "]"
         case .value:
             return "V"
@@ -116,10 +116,12 @@ public enum ChoiceSequenceValue: Hashable, Equatable, Sendable {
     public struct Value: Hashable, Equatable, Sendable {
         let choice: ChoiceValue
         let validRanges: [ClosedRange<UInt64>]
+        let isRangeExplicit: Bool
 
-        public init(choice: ChoiceValue, validRanges: [ClosedRange<UInt64>]) {
+        public init(choice: ChoiceValue, validRanges: [ClosedRange<UInt64>], isRangeExplicit: Bool = false) {
             self.choice = choice
             self.validRanges = validRanges
+            self.isRangeExplicit = isRangeExplicit
         }
 
         func shortLexCompare(_ other: Value) -> ShortlexOrder {

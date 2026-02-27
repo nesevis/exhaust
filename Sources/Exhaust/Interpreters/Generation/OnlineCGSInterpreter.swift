@@ -188,6 +188,7 @@ public struct OnlineCGSInterpreter<FinalOutput>: IteratorProtocol, Sequence {
                     min: min,
                     max: max,
                     tag: tag,
+                    isRangeExplicit: isRangeExplicit,
                     context: context,
                     runContinuation: runContinuation,
                 )
@@ -508,11 +509,15 @@ public struct OnlineCGSInterpreter<FinalOutput>: IteratorProtocol, Sequence {
         min: UInt64,
         max: UInt64,
         tag: TypeTag,
+        isRangeExplicit: Bool,
         context: Context,
         runContinuation: RunContinuation<Output>,
     ) throws -> (Output, ChoiceTree)? {
         let randomBits = context.prng.next(in: min ... max)
-        let choiceTree = ChoiceTree.choice(ChoiceValue(randomBits, tag: tag), .init(validRanges: [min ... max]))
+        let choiceTree = ChoiceTree.choice(
+            ChoiceValue(randomBits, tag: tag),
+            .init(validRanges: [min ... max], isRangeExplicit: isRangeExplicit),
+        )
         return try runContinuation(randomBits, choiceTree)
     }
 
@@ -598,7 +603,7 @@ public struct OnlineCGSInterpreter<FinalOutput>: IteratorProtocol, Sequence {
         // Produce a choice tree with the ORIGINAL full range for replay compatibility
         let choiceTree = ChoiceTree.choice(
             ChoiceValue(randomBits, tag: tag),
-            .init(validRanges: [min ... max]),
+            .init(validRanges: [min ... max], isRangeExplicit: isRangeExplicit),
         )
 
         // Run through the continuation (same as handleChooseBits)

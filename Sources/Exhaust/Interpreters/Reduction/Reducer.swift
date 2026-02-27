@@ -225,7 +225,7 @@ public extension Interpreters {
                 case .deleteSequenceBoundaries:
                     // Pass 2a: Collapse sequence boundaries, i.e [[V][V][V]] -> [[VVV]]
                     let boundarySpans = ChoiceSequence.extractSequenceBoundarySpans(from: currentSequence)
-                    if boundarySpans.isEmpty == false, let (newSequence, output) = try ReducerStrategies.adaptiveDeleteSpans(gen, tree: currentTree, property: oracle, sequence: currentSequence, spans: boundarySpans, rejectCache: &rejectCache) {
+                    if boundarySpans.isEmpty == false, let (newSequence, output) = try ReducerStrategies.adaptiveDeleteSpans(gen, tree: currentTree, property: oracle, sequence: currentSequence, spans: boundarySpans, rejectCache: &rejectCache, strictness: .relaxed) {
                         currentSequence = newSequence
                         currentOutput = output
                         passImproved = true
@@ -233,7 +233,7 @@ public extension Interpreters {
                 case .deleteFreeStandingValues:
                     // Pass 2b: Sequence element deletion, i.e the individual Vs in [VVVVV]
                     let freeStandingValueSpans = ChoiceSequence.extractFreeStandingValueSpans(from: currentSequence)
-                    if freeStandingValueSpans.isEmpty == false, let (newSequence, output) = try ReducerStrategies.adaptiveDeleteSpans(gen, tree: currentTree, property: oracle, sequence: currentSequence, spans: freeStandingValueSpans, rejectCache: &rejectCache) {
+                    if freeStandingValueSpans.isEmpty == false, let (newSequence, output) = try ReducerStrategies.adaptiveDeleteSpans(gen, tree: currentTree, property: oracle, sequence: currentSequence, spans: freeStandingValueSpans, rejectCache: &rejectCache, strictness: .relaxed) {
                         currentSequence = newSequence
                         currentOutput = output
                         passImproved = true
