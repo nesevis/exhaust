@@ -6,6 +6,10 @@
 //
 
 public extension ReflectiveGenerator {
+    static func bool() -> ReflectiveGenerator<Bool> {
+        Gen.choose(from: [true, false])
+    }
+
     static func optional(_ gen: ReflectiveGenerator<Value>) -> ReflectiveGenerator<Value?> {
         Gen.pick(choices: [
             (1, Gen.just(.none)),
@@ -21,5 +25,14 @@ public extension ReflectiveGenerator {
     /// Creates a generator that randomly selects from weighted generators.
     static func oneOf(_ choices: (Int, ReflectiveGenerator<Value>)...) -> ReflectiveGenerator<Value> {
         Gen.pick(choices: choices.map { ($0.0, $0.1) })
+    }
+}
+
+public extension ReflectiveGenerator where Operation == ReflectiveOperation {
+    func optional() -> ReflectiveGenerator<Value?> {
+        Gen.pick(choices: [
+            (1, Gen.just(.none)),
+            (5, self.asOptional()),
+        ])
     }
 }

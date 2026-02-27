@@ -378,9 +378,6 @@ struct OnlineCGSInterpreterTests {
 
         let profile = GeneratorTuning.profile(tuned)
 
-        print("=== Static Profile ===")
-        print(profile)
-
         // Should have multiple pick sites
         #expect(profile.sites.count >= 2,
                 "Tuned BST should have multiple pick sites, got \(profile.sites.count)")
@@ -394,7 +391,6 @@ struct OnlineCGSInterpreterTests {
         // bottlenecks, but the root pick should still show some non-uniformity
         // (the valid-BST branch gets higher weight than the leaf branch).
         let nonUniformSites = profile.sites.filter { $0.entropyRatio < 0.95 }
-        print("Non-uniform sites (ratio < 0.95): \(nonUniformSites.count)")
         #expect(!nonUniformSites.isEmpty,
                 "Tuned BST should have at least one non-uniform pick site")
     }
@@ -419,9 +415,6 @@ struct OnlineCGSInterpreterTests {
             samples: 1000,
             seed: 42
         )
-
-        print("=== Empirical Profile ===")
-        print(profile)
 
         // Should have empirical data
         let sitesWithValidity = profile.sites.filter { $0.validityCounts != nil }

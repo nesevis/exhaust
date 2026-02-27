@@ -90,11 +90,11 @@ public struct GenerateMacro: ExpressionMacro {
         let closureText = closure.trimmedDescription
 
         if generatorArgs.count == 1 {
-            let genExpr = resolveImplicitMember(generatorArgs[0].expression.trimmedDescription)
+            let genExpr = generatorArgs[0].expression.trimmedDescription
             let label = result.labels[0]
             return "Gen._macroMap(\(raw: genExpr), label: \"\(raw: label)\", forward: \(raw: closureText))"
         } else {
-            let genExprs = generatorArgs.map { resolveImplicitMember($0.expression.trimmedDescription) }
+            let genExprs = generatorArgs.map { $0.expression.trimmedDescription }
             let zipArgs = genExprs.joined(separator: ", ")
 
             let backwardLabels = buildBackwardLabels(result: result)
@@ -143,11 +143,11 @@ public struct GenerateMacro: ExpressionMacro {
         let casePattern = ".\(caseName)(\(patternBindings))"
 
         if generatorArgs.count == 1 {
-            let genExpr = resolveImplicitMember(generatorArgs[0].expression.trimmedDescription)
+            let genExpr = generatorArgs[0].expression.trimmedDescription
             let backward = "{ guard case let \(casePattern) = $0 else { return nil }; return v0 }"
             return "Gen._macroMap(\(raw: genExpr), backward: \(raw: backward), forward: \(raw: closureText))"
         } else {
-            let genExprs = generatorArgs.map { resolveImplicitMember($0.expression.trimmedDescription) }
+            let genExprs = generatorArgs.map { $0.expression.trimmedDescription }
             let zipArgs = genExprs.joined(separator: ", ")
 
             // Reorder bindings from argument order to generator/parameter order
@@ -172,24 +172,15 @@ public struct GenerateMacro: ExpressionMacro {
         return result.parameterNames.map { paramToArgIndex[$0]! }
     }
 
-    /// Resolves implicit member expressions (`.foo().bar()`) by prepending `ReflectiveGenerator`.
-    ///
-    /// Swift's implicit member chains don't support type-changing chains — if `.int()` pins the
-    /// contextual type to `ReflectiveGenerator<Int>`, a subsequent `.array()` returning
-    /// `ReflectiveGenerator<[Int]>` causes a type mismatch. Making the base type explicit avoids this.
-    private static func resolveImplicitMember(_ expr: String) -> String {
-        expr.hasPrefix(".") ? "ReflectiveGenerator\(expr)" : expr
-    }
-
     /// Builds the expansion for the no-closure overload: pass through or zip.
     private static func buildZipExpansion(
         generatorArgs: [LabeledExprListSyntax.Element]
     ) -> ExprSyntax {
         if generatorArgs.count == 1 {
-            let genExpr = resolveImplicitMember(generatorArgs[0].expression.trimmedDescription)
+            let genExpr = generatorArgs[0].expression.trimmedDescription
             return "\(raw: genExpr)"
         } else {
-            let genExprs = generatorArgs.map { resolveImplicitMember($0.expression.trimmedDescription) }
+            let genExprs = generatorArgs.map { $0.expression.trimmedDescription }
             let zipArgs = genExprs.joined(separator: ", ")
             return "Gen.zip(\(raw: zipArgs))"
         }
@@ -203,10 +194,10 @@ public struct GenerateMacro: ExpressionMacro {
         let closureText = closure.trimmedDescription
 
         if generatorArgs.count == 1 {
-            let genExpr = resolveImplicitMember(generatorArgs[0].expression.trimmedDescription)
+            let genExpr = generatorArgs[0].expression.trimmedDescription
             return "\(raw: genExpr).map \(raw: closureText)"
         } else {
-            let genExprs = generatorArgs.map { resolveImplicitMember($0.expression.trimmedDescription) }
+            let genExprs = generatorArgs.map { $0.expression.trimmedDescription }
             let zipArgs = genExprs.joined(separator: ", ")
             return "Gen.zip(\(raw: zipArgs)).map \(raw: closureText)"
         }
