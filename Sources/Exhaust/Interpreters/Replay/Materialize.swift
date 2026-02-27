@@ -544,11 +544,15 @@ extension Interpreters {
 
         if let elementScript {
             while context.peek != .sequence(false), !context.isAtEnd {
+                let indexBefore = context.index
                 let elementValue = try materializeRecursive(elementGenerator, with: elementScript, context: &context)
                 if let elementValue {
                     accumulatedValues.append(elementValue)
                 } else if requireElements {
                     return nil
+                } else if context.index == indexBefore {
+                    // No progress was made — break to prevent infinite loop
+                    break
                 }
             }
         }
@@ -558,7 +562,15 @@ extension Interpreters {
         if validLengthRanges.isEmpty == false {
             let count = UInt64(accumulatedValues.count)
             if validLengthRanges.contains(where: { $0.contains(count) }) == false {
-                return nil
+                switch context.strictness {
+                case .normal:
+                    throw MaterializeError.generatorConstraintViolated(
+                        actualLength: count,
+                        validRanges: validLengthRanges,
+                    )
+                case .relaxed:
+                    break
+                }
             }
         }
 
@@ -1063,5 +1075,6 @@ extension Interpreters {
         case groupNotClosed
         case sequenceNotOpen
         case sequenceNotClosed
+        case generatorConstraintViolated(actualLength: UInt64, validRanges: [ClosedRange<UInt64>])
     }
 }

@@ -614,26 +614,12 @@ struct ReflectAndFlattenTests {
         #expect(materialized.name == Array(repeating: "A", count: value.name.count).joined())
     }
 
-    @Test("Test cross-boundary shrinking", .disabled("Size scaling changed from logarithmic to linear"))
+    @Test("Test cross-boundary shrinking")
     func crossBoundaryShrinkingWorks() throws {
-        let arrayGen = Gen.arrayOf(Int.arbitrary, within: 1 ... 10)
-        let gen = Gen.arrayOf(arrayGen, within: 1 ... 10)
-        
-        let gg = #gen(.array(.array(.int(in: 1...10), length: 1...10), length: 1...10))
-        let all = Array(ValueAndChoiceTreeInterpreter(gg, seed: 1337))
-        let (value, tree) = try #require(Array(ValueAndChoiceTreeInterpreter(gg, seed: 1337).prefix(99)).last)
-        
+        let gen = #gen(.array(.array(.int(in: 1...10), length: 1...10), length: 1...10))
+        let (value, tree) = try #require(Array(ValueAndChoiceTreeInterpreter(gen, seed: 1337).prefix(14)).last)
 
-        // Reflect the generator with the value
-        // For now it does not work with `materializePicks`
-        // 1. If it is enabled, the flattened sequence contains N values
-        // 2. The materializer will only use the `.selected` branch and leave the other values unconsumed.
-
-        // Flatten the reflected tree
-        // and reduce the values to their most semantically simple form
-        // the sequence is a representation that lends itself to direct mutation in ways shrinking via a ChoiceTree cannot
         var sequence = ChoiceSequence.flatten(tree)
-        let spans = ChoiceSequence.extractContainerSpans(from: sequence)
 
         let sequenceStarts = sequence
             .enumerated()
@@ -642,22 +628,15 @@ struct ReflectAndFlattenTests {
             .dropFirst()
 
         // Remove a sequence close and open to remove the barrier between two arrays, collapsing them
-        let candidate = sequenceStarts[3]
+        let candidate = sequenceStarts.last!
         sequence.removeSubrange((candidate - 1) ... candidate)
-
         try #require(ChoiceSequence.validate(sequence))
+        let materialized = try #require(try Interpreters.materialize(gen, with: tree, using: sequence, strictness: .relaxed))
 
-        let materialized = try #require(try Interpreters.materialize(gen, with: tree, using: sequence))
-//        print("Materialized array count: \(materialized.count)")
-//        print("Materialized child array counts: \(materialized.map(\.count))")
-
-        let valueFlat = value.flatMap(\.self)
-        let materializedFlat = materialized.flatMap(\.self)
-
-        // There are now 9 arrays
-        #expect(materialized.count == 9)
+        // Merging removed one boundary, so one fewer array
+        #expect(materialized.count == value.count - 1)
         // Elements are the same, even if the exact division isn't
-        #expect(valueFlat == materializedFlat)
+        #expect(value.flatMap(\.self) == materialized.flatMap(\.self))
     }
 }
 
