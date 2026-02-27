@@ -19,21 +19,23 @@ struct NestedListsShrinkingChallenge {
 
      Some libraries, e.g. Hypothesis and jqwik, can shrink this reliably to a single list of 11 elements: [[0, 0, 0, 0, 0, 0, 0, 0, 0, 0]].
      */
-    @Test("Nested Lists", .disabled("Size scaling changed from logarithmic to linear"))
+    @Test("Nested Lists")
     func nestedListsFull() throws {
-        let gen = Gen.arrayOf(Gen.arrayOf(UInt.arbitrary))
+        let gen = #gen(.uint().array().array())
 
         var count = 0
         let property: ([[UInt]]) -> Bool = { arr in
             count += 1
             return arr.map(\.count).reduce(0, +) <= 10
         }
+//        ExhaustLog.setConfiguration(.init(isEnabled: true, minimumLevel: .info, categoryMinimumLevels: [.reducer: .debug], format: .human))
         let iterator = ValueAndChoiceTreeInterpreter(gen, materializePicks: true, seed: 1337)
-        // Outputs an array of 14 arrays containing 2–20 values each
-        let (_, tree) = try #require(Array(iterator.prefix(2)).last)
+        // Outputs an array of 32 arrays containing 5–33 values each
+        let (_, tree) = try #require(Array(iterator.prefix(37)).last)
         let (_, output) = try #require(try Interpreters.reduce(gen: gen, tree: tree, config: .fast, property: property))
         // How many times the `property` is called, which is a slightly smaller number than the times materialize is called
-        #expect(count == 77)
+        print()
+        #expect(count == 17)
         // Shrinks to [[0,…x11]]
         #expect(output == [Array(repeating: UInt(0), count: 11)])
     }

@@ -23,9 +23,9 @@ struct Bound5ShrinkingChallenge {
     typealias Bound5 = ([Int16], [Int16], [Int16], [Int16], [Int16])
 
     private static let gen: ReflectiveGenerator<Bound5> = {
-        let arrGen = Gen.arrayOf(Int16.arbitrary, within: 0 ... 10)
+        let arr = #gen(.int16().array(length: 0...10))
             .filter { $0.isEmpty || $0.dropFirst().reduce($0[0], &+) < 256 }
-        return Gen.zip(arrGen, arrGen, arrGen, arrGen, arrGen)
+        return #gen(arr, arr, arr, arr, arr)
     }()
 
     private static let property: (Bound5) -> Bool = { arg in
@@ -37,13 +37,12 @@ struct Bound5ShrinkingChallenge {
         return arr.dropFirst().reduce(arr[0], &+) < 5 * 256
     }
 
-    @Test("Bound5, Single", .disabled("Size scaling changed from logarithmic to linear"))
+    @Test("Bound5, Single")
     func bound5Single() throws {
         let iterator = ValueAndChoiceTreeInterpreter(Self.gen, materializePicks: true, seed: 1337)
-        let (value, tree) = try #require(Array(iterator.prefix(4)).last)
+        let (_, tree) = try #require(Array(iterator.prefix(80)).last)
         let sequence = ChoiceSequence.flatten(tree)
-        print()
-        let smokeTest = try #require(try Interpreters.materialize(Self.gen, with: tree, using: sequence))
+        let _ = try #require(try Interpreters.materialize(Self.gen, with: tree, using: sequence))
         let (_, output) = try #require(try Interpreters.reduce(gen: Self.gen, tree: tree, config: .fast, property: Self.property))
 
         // ([-1], [-32768], [], [], [])
@@ -84,7 +83,6 @@ struct Bound5ShrinkingChallenge {
     func bound5Pathological3() throws {
         let value: Bound5 = ([-11954, 25609, -21279], [20837, 6773, -1304, -13732, -2626, -3440, 15253, 28268, -31908, 30491], [23543, -10339, -12447, 9150, 18335, -2103, 15547, 11124], [-32635, 18394, -23954, 13750, 27692, 25639, 23372, -27650, 18759, 17794], [-6525, 2724, -30958, 28797, -2409, -1095, 2335, -14856])
         let tree = try #require(try Interpreters.reflect(Self.gen, with: value))
-        let sequence = ChoiceSequence.flatten(tree)
 
 //        ExhaustLog.setConfiguration(.init(isEnabled: true, minimumLevel: .info, categoryMinimumLevels: [.reducer: .debug], format: .llmOptimized))
         let (_, output) = try #require(try Interpreters.reduce(gen: Self.gen, tree: tree, config: .fast, property: Self.property))
@@ -92,15 +90,6 @@ struct Bound5ShrinkingChallenge {
         let arr = (output.0 + output.1 + output.2 + output.3 + output.4).sorted()
         #expect(arr.count == 2)
         #expect(arr == [-32768, -1])
-    }
-
-    @Test("Bound5, using passing data", .disabled("Inconsistent"))
-    func bound5PropTest() throws {
-//        ExhaustLog.setConfiguration(.init(isEnabled: true, minimumLevel: .info, categoryMinimumLevels: [.materialize: .trace], format: .human))
-        let output = try #require(try PropertyTest.test(Self.gen, maxIterations: 100, seed: 1, property: Self.property))
-        let arr = (output.0 + output.1 + output.2 + output.3 + output.4).sorted()
-//        #expect(arr.count == 2)
-//        #expect(arr == [-32768, -1])
     }
 
     @Test("Bound5, 50")

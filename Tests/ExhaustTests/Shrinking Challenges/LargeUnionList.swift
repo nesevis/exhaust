@@ -28,11 +28,11 @@ struct LargeUnionListShrinkingChallenge {
         Set(arr.flatMap(\.self)).count <= 4
     }
 
-    @Test("Large Union List, Single", .disabled("Size scaling changed from logarithmic to linear"))
+    @Test("Large Union List, Single")
     func largeUnionListFull() throws {
         let iterator = ValueAndChoiceTreeInterpreter(Self.gen, materializePicks: true, seed: 1337)
-        let (value, tree) = try #require(Array(iterator.prefix(4)).last) // 23 values
-        let (sequence, output) = try #require(try Interpreters.reduce(gen: Self.gen, tree: tree, config: .fast, property: Self.property))
+        let (_, tree) = try #require(Array(iterator.prefix(93)).last)
+        let (_, output) = try #require(try Interpreters.reduce(gen: Self.gen, tree: tree, config: .fast, property: Self.property))
         #expect(output.flatMap(\.self) == [-1, 0, 1, 2, 3])
     }
 

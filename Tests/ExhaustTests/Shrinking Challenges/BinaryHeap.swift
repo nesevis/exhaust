@@ -151,7 +151,7 @@ struct BinaryHeapShrinkingChallenge {
         let (value, tree) = try #require(iterator.first(where: { Self.property($0.0) == false }))
         #expect(Self.property(value) == false)
 
-        let (seq, output) = try #require(try Interpreters.reduce(gen: Self.gen, tree: tree, config: .fast, property: Self.property))
+        let (_, output) = try #require(try Interpreters.reduce(gen: Self.gen, tree: tree, config: .fast, property: Self.property))
         #expect(Self.property(output) == false)
 
         // The shrunken result should have 4 values — the minimal failing heap

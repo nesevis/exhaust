@@ -43,12 +43,13 @@ struct CouplingShrinkingChallenge {
     }
 
     /// We had this, but Minimax destroyed it
-    @Test("Coupling, Single", .disabled("Size scaling changed from logarithmic to linear"))
+    @Test("Coupling, Single")
     func couplingFull() throws {
         let iterator = ValueAndChoiceTreeInterpreter(Self.gen, materializePicks: true, seed: 1337)
-        let (value, tree) = try #require(Array(iterator.prefix(4)).last)
-        let (seq, output) = try #require(try Interpreters.reduce(gen: Self.gen, tree: tree, config: .fast, property: Self.property))
+        let (value, tree) = try #require(Array(iterator.prefix(96)).last)
+        let (_, output) = try #require(try Interpreters.reduce(gen: Self.gen, tree: tree, config: .fast, property: Self.property))
 
+        #expect(Self.property(value) == false)
         // We expect this array to be shortened to only include the two values that cause a cycle
         // And for those two values to be reduced to [0,1] rather than [15, 4]
         #expect(output.count == 2)
@@ -62,7 +63,7 @@ struct CouplingShrinkingChallenge {
         // This is not reflectable.
         let tree = try #require(try Interpreters.reflect(Self.gen, with: value))
 
-        let (seq, output) = try #require(try Interpreters.reduce(gen: Self.gen, tree: tree, config: .fast, property: Self.property))
+        let (_, output) = try #require(try Interpreters.reduce(gen: Self.gen, tree: tree, config: .fast, property: Self.property))
 
         // We expect this array to be shortened to only include the two values that cause a cycle
         // And for those two values to be reduced to [0,1] rather than [15, 4]
@@ -74,7 +75,7 @@ struct CouplingShrinkingChallenge {
     func couplingBatch() throws {
         let iterator = ValueAndChoiceTreeInterpreter(Self.gen, materializePicks: true, seed: 1337, maxRuns: 50)
         for (value, tree) in iterator where Self.property(value) == false {
-            let (seq, output) = try #require(try Interpreters.reduce(gen: Self.gen, tree: tree, config: .fast, property: Self.property))
+            let (_, output) = try #require(try Interpreters.reduce(gen: Self.gen, tree: tree, config: .fast, property: Self.property))
             #expect(output.count == 2)
             #expect(output == [1, 0])
         }

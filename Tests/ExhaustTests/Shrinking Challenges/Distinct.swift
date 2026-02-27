@@ -22,7 +22,7 @@ struct DistinctShrinkingChallenge {
 
      The expected smallest falsified sample is [0, 1, -1] or [0, 1, 2].
      */
-    @Test("Distinct, Full", .disabled("Size scaling changed from logarithmic to linear"))
+    @Test("Distinct, Full")
     func distinctFull() throws {
         // …etc
         let gen = Gen.arrayOf(Int.arbitrary, within: 3 ... 30)
@@ -34,9 +34,9 @@ struct DistinctShrinkingChallenge {
         }
 
         let iterator = ValueAndChoiceTreeInterpreter(gen, materializePicks: true, seed: 1337)
-        let (value, tree) = try #require(Array(iterator.prefix(40)).last) // 23 values
-        let (seq, output) = try #require(try Interpreters.reduce(gen: gen, tree: tree, config: .fast, property: property))
-        #expect(count == 206)
+        let (_, tree) = try #require(Array(iterator.prefix(40)).last) // 13 values
+        let (_, output) = try #require(try Interpreters.reduce(gen: gen, tree: tree, config: .fast, property: property))
+        #expect(count == 94)
         #expect(output == [-1, 0, 1])
     }
 }
