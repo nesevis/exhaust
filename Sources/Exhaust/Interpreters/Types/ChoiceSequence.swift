@@ -323,11 +323,11 @@ extension ChoiceSequence {
             let preceding = i > 0 ? sequence[i - 1] : nil
 
             switch (preceding, entry) {
-            case (nil, .value):
+            case (nil, .value), (nil, .reduced):
                 spans.append(ChoiceSpan(kind: entry, range: i ... i, depth: depth))
-            case (.value, .value), (.reduced, .value):
+            case (.value, .value), (.reduced, .value), (.value, .reduced), (.reduced, .reduced):
                 spans.append(ChoiceSpan(kind: entry, range: i ... i, depth: depth))
-            case (.sequence(true, isLengthExplicit: _), .value):
+            case (.sequence(true, isLengthExplicit: _), .value), (.sequence(true, isLengthExplicit: _), .reduced):
                 spans.append(ChoiceSpan(kind: entry, range: i ... i, depth: depth))
             case (_, .group(true)), (_, .sequence(true, isLengthExplicit: _)):
                 depth += 1

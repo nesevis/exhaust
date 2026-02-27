@@ -182,8 +182,10 @@ extension ReducerStrategies {
                                 )
                             #endif
 
+                            let afterPair = [newChoice1.shortlexKey, newChoice2.shortlexKey].sorted()
                             let improvesStructure = probe.shortLexPrecedes(current)
                                 || probeNonSemanticCount < currentNonSemanticCount
+                                || afterPair.lexicographicallyPrecedes(beforePair)
                             guard improvesStructure else { return false }
 
                             guard rejectCache.contains(probe) == false else {
@@ -203,7 +205,6 @@ extension ReducerStrategies {
                                 // Record only probes that actually change the pair multiset.
                                 // This avoids committing pure cross-container swaps like (-1, -32768) <-> (-32768, -1),
                                 // while still allowing the monotone search to continue probing larger k.
-                                let afterPair = [newChoice1.shortlexKey, newChoice2.shortlexKey].sorted()
                                 if afterPair != beforePair {
                                     lastProbe = probe
                                     lastProbeOutput = output
@@ -285,11 +286,11 @@ extension ReducerStrategies {
                                         "SequenceSemanticStats delta mismatch in redistributeNumericPairs fallback",
                                     )
                                 #endif
+                                let afterPair = [newChoice1.shortlexKey, newChoice2.shortlexKey].sorted()
                                 let improvesStructure = probe.shortLexPrecedes(current)
                                     || probeNonSemanticCount < currentNonSemanticCount
+                                    || afterPair.lexicographicallyPrecedes(beforePair)
                                 guard improvesStructure else { continue }
-
-                                let afterPair = [newChoice1.shortlexKey, newChoice2.shortlexKey].sorted()
                                 guard afterPair != beforePair else { continue }
                                 guard rejectCache.contains(probe) == false else { continue }
                                 guard budget.consume() else {
@@ -334,10 +335,13 @@ extension ReducerStrategies {
                         if let probe = lastProbe,
                            let output = lastProbeOutput,
                            let probeEntry1 = lastProbeEntry1,
-                           let probeEntry2 = lastProbeEntry2,
-                           probe.shortLexPrecedes(current)
-                           || lastProbeNonSemanticCount < currentNonSemanticCount
+                           let probeEntry2 = lastProbeEntry2
                         {
+                            let afterPairSorted = [probeEntry1.value!.choice.shortlexKey, probeEntry2.value!.choice.shortlexKey].sorted()
+                            guard probe.shortLexPrecedes(current)
+                                || lastProbeNonSemanticCount < currentNonSemanticCount
+                                || afterPairSorted.lexicographicallyPrecedes(beforePair)
+                            else { continue }
                             current = probe
                             latestOutput = output
                             progress = true

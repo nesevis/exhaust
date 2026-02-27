@@ -1,6 +1,8 @@
 import Benchmark
 import Exhaust
 
+// swiftlint:disable force_try
+
 benchmark("Int Generation") {
     let generator = Gen.choose(in: 0 ... 1000)
     var iterator = ValueInterpreter(generator, seed: 1, maxRuns: 100)
@@ -97,6 +99,40 @@ benchmark("Zipped person with ChoiceTree") {
     }
 }
 
+benchmark("Bound5, pathological") {
+    struct Bound5: Equatable {
+        let a: [Int16]
+        let b: [Int16]
+        let c: [Int16]
+        let d: [Int16]
+        let e: [Int16]
+    }
+    let arr = #gen(.int16().array(length: 0 ... 10))
+        .filter { $0.isEmpty || $0.dropFirst().reduce($0[0], &+) < 256 }
+    let gen = #gen(arr, arr, arr, arr, arr) {
+        Bound5(a: $0, b: $1, c: $2, d: $3, e: $4)
+    }
+    let property: (Bound5) -> Bool = { b5 in
+        let arr = b5.a + b5.b + b5.c + b5.d + b5.e
+        if arr.isEmpty {
+            return true
+        }
+        return arr.dropFirst().reduce(arr[0], &+) < 5 * 256
+    }
+    let value = Bound5(
+        a: [-10709],
+        b: [29251, 31661],
+        c: [-18678],
+        d: [-2824, 15387, -15932, -23458, -6124, 3327, -21001, 16059, -21211, -27710],
+        e: [16775, -32275, 813, 11044]
+    )
+    
+    // Takes about 3.7ms, 20ms in a Swift Testing test. So shrinking is 5 times faster
+    if let tree = try? Interpreters.reflect(gen, with: value) {
+        _ = try? Interpreters.reduce(gen: gen, tree: tree, config: .fast, property: property)
+    }
+}
+
 benchmark("Bound5, 50 iterations, reflective") {
     struct Bound5: Equatable {
         let a: [Int16]
@@ -106,6 +142,7 @@ benchmark("Bound5, 50 iterations, reflective") {
         let e: [Int16]
     }
     let arrGen = Gen.arrayOf(Int16.arbitrary, within: 0 ... 10)
+        .filter { $0.isEmpty || $0.dropFirst().reduce($0[0], &+) < 256 }
 
     let property: (Bound5) -> Bool = { b5 in
         let arr = b5.a + b5.b + b5.c + b5.d + b5.e
@@ -119,9 +156,14 @@ benchmark("Bound5, 50 iterations, reflective") {
         let gen = #gen(arrGen, arrGen, arrGen, arrGen, arrGen) { a, b, c, d, e in
             Bound5(a: a, b: b, c: c, d: d, e: e)
         }
-        let iterator = ValueAndChoiceTreeInterpreter(gen, seed: 1337, maxRuns: 50)
+        let iterator = ValueAndChoiceTreeInterpreter(gen, seed: 1337, maxRuns: 1000)
+        var count = 0
         for (value, tree) in iterator where property(value) == false {
+            count += 1
             _ = try Interpreters.reduce(gen: gen, tree: tree, config: .fast, property: property)
+            if count >= 50 {
+                break
+            }
         }
     } catch {
         print(error)
@@ -144,11 +186,16 @@ benchmark("Bound5, 50 iterations") {
         return arr.dropFirst().reduce(arr[0], &+) < 5 * 256
     }
 
-    let iterator = ValueAndChoiceTreeInterpreter(gen, seed: 1337, maxRuns: 50)
+    let iterator = ValueAndChoiceTreeInterpreter(gen, seed: 1337, maxRuns: 1000)
 
     do {
+        var count = 0
         for (value, tree) in iterator where property(value) == false {
+            count += 1
             _ = try Interpreters.reduce(gen: gen, tree: tree, config: .fast, property: property)
+            if count >= 50 {
+                break
+            }
         }
     } catch {
         print(error)

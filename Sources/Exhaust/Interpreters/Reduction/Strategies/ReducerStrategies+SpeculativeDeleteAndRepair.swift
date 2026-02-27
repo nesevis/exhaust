@@ -70,12 +70,18 @@ extension ReducerStrategies {
         }
         // Not adding to the bloom filter here, as it will be retried in repairAfterDeletion
 
-        // Only try repair when materialization fails (nil).
-        // If materialization succeeds, the values are structurally valid —
-        // either the property fails (handled by other passes) or passes
-        // (repair can't help since values are already in-range).
+        // Try materializing the shortened sequence directly.
         let pureDeletion = try? Interpreters.materialize(gen, with: tree, using: shortened)
-        if pureDeletion == nil {
+        if let output = pureDeletion {
+            // Pure deletion succeeded. Check property — non-monotone deletions can produce
+            // valid counterexamples even when smaller deletions do not.
+            if property(output) == false, shortened.shortLexPrecedes(sequence) {
+                return (shortened, output)
+            } else {
+                rejectCache.insert(shortened)
+            }
+        } else {
+            // Materialization failed — try uniform value repair to find a valid configuration.
             if let result = try repairAfterDeletion(
                 gen, tree: tree, property: property,
                 original: sequence, shortened: shortened, rejectCache: &rejectCache,
