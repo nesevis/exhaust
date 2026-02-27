@@ -5,11 +5,8 @@
 //  Created by Chris Kolbu on 16/7/2025.
 //
 
-import Algorithms
-import CasePaths
 import Foundation
 
-@CasePathable
 package enum ChoiceTree: Hashable, Equatable, Sendable {
     /// A primitive choice, typically a number or a high-level semantic label.
     case choice(ChoiceValue, ChoiceMetadata)

@@ -6,7 +6,6 @@
 //  and complex scenarios.
 //
 
-import CasePaths
 import Testing
 @testable import Exhaust
 @testable import ExhaustCore

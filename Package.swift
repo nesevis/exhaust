@@ -11,10 +11,7 @@ let coreTarget: Target = usePrecompiled
     ? .binaryTarget(name: "ExhaustCore", path: "Frameworks/ExhaustCore.xcframework")
     : .target(
         name: "ExhaustCore",
-        dependencies: [
-            .product(name: "CasePaths", package: "swift-case-paths"),
-            .product(name: "Algorithms", package: "swift-algorithms"),
-        ],
+        dependencies: [],
         swiftSettings: [
             .unsafeFlags(["-whole-module-optimization"], .when(configuration: .release))
         ],
@@ -38,8 +35,6 @@ let package = Package(
         )
     ],
     dependencies: [
-        .package(url: "https://github.com/pointfreeco/swift-case-paths", from: "1.5.0"),
-        .package(url: "https://github.com/apple/swift-algorithms", from: "1.2.0"),
         .package(url: "https://github.com/google/swift-benchmark", from: "0.1.2"),
         .package(url: "https://github.com/nicklockwood/SwiftFormat", from: "0.59.1"),
         .package(url: "https://github.com/SimplyDanny/SwiftLintPlugins", from: "0.57.1"),
