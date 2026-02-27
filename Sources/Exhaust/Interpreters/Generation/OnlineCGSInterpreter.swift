@@ -74,7 +74,7 @@ public struct OnlineCGSInterpreter<FinalOutput>: IteratorProtocol, Sequence {
                 with: (),
                 context: context,
                 wrapper: wrapper,
-                insideSubdividedChooseBits: false
+                insideSubdividedChooseBits: false,
             )
         } catch GeneratorError.uniqueBudgetExhausted {
             ExhaustLog.warning(
@@ -99,7 +99,7 @@ public struct OnlineCGSInterpreter<FinalOutput>: IteratorProtocol, Sequence {
         with inputValue: some Any,
         context: Context,
         wrapper: @escaping DerivativeWrapper,
-        insideSubdividedChooseBits: Bool
+        insideSubdividedChooseBits: Bool,
     ) throws -> (Output, ChoiceTree)? {
         switch gen {
         case let .pure(value):
@@ -117,7 +117,7 @@ public struct OnlineCGSInterpreter<FinalOutput>: IteratorProtocol, Sequence {
                     with: inputValue,
                     context: context,
                     wrapper: wrapper,
-                    insideSubdividedChooseBits: insideSubdividedChooseBits
+                    insideSubdividedChooseBits: insideSubdividedChooseBits,
                 ) {
                     if nextGen.isPure {
                         return (continuationResult, calleeChoiceTree)
@@ -138,7 +138,7 @@ public struct OnlineCGSInterpreter<FinalOutput>: IteratorProtocol, Sequence {
                     context: context,
                     wrapper: wrapper,
                     insideSubdividedChooseBits: insideSubdividedChooseBits,
-                    runContinuation: runContinuation
+                    runContinuation: runContinuation,
                 )
 
             // MARK: - Prune
@@ -150,7 +150,7 @@ public struct OnlineCGSInterpreter<FinalOutput>: IteratorProtocol, Sequence {
                     context: context,
                     wrapper: wrapper,
                     insideSubdividedChooseBits: insideSubdividedChooseBits,
-                    runContinuation: runContinuation
+                    runContinuation: runContinuation,
                 )
 
             // MARK: - Pick
@@ -163,7 +163,7 @@ public struct OnlineCGSInterpreter<FinalOutput>: IteratorProtocol, Sequence {
                     context: context,
                     wrapper: wrapper,
                     insideSubdividedChooseBits: insideSubdividedChooseBits,
-                    runContinuation: runContinuation
+                    runContinuation: runContinuation,
                 )
 
             // MARK: - ChooseBits
@@ -180,7 +180,7 @@ public struct OnlineCGSInterpreter<FinalOutput>: IteratorProtocol, Sequence {
                             continuation: continuation,
                             inputValue: inputValue,
                             context: context,
-                            wrapper: wrapper
+                            wrapper: wrapper,
                         )
                     }
                 }
@@ -189,7 +189,7 @@ public struct OnlineCGSInterpreter<FinalOutput>: IteratorProtocol, Sequence {
                     max: max,
                     tag: tag,
                     context: context,
-                    runContinuation: runContinuation
+                    runContinuation: runContinuation,
                 )
 
             // MARK: - Sequence
@@ -202,7 +202,7 @@ public struct OnlineCGSInterpreter<FinalOutput>: IteratorProtocol, Sequence {
                     inputValue: inputValue,
                     wrapper: wrapper,
                     insideSubdividedChooseBits: insideSubdividedChooseBits,
-                    runContinuation: runContinuation
+                    runContinuation: runContinuation,
                 )
 
             // MARK: - Zip
@@ -215,7 +215,7 @@ public struct OnlineCGSInterpreter<FinalOutput>: IteratorProtocol, Sequence {
                     context: context,
                     wrapper: wrapper,
                     insideSubdividedChooseBits: insideSubdividedChooseBits,
-                    runContinuation: runContinuation
+                    runContinuation: runContinuation,
                 )
 
             // MARK: - Just
@@ -240,7 +240,7 @@ public struct OnlineCGSInterpreter<FinalOutput>: IteratorProtocol, Sequence {
                     context: context,
                     wrapper: wrapper,
                     insideSubdividedChooseBits: insideSubdividedChooseBits,
-                    runContinuation: runContinuation
+                    runContinuation: runContinuation,
                 )
 
             // MARK: - Filter
@@ -264,7 +264,7 @@ public struct OnlineCGSInterpreter<FinalOutput>: IteratorProtocol, Sequence {
                         with: inputValue,
                         context: context,
                         wrapper: wrapper,
-                        insideSubdividedChooseBits: insideSubdividedChooseBits
+                        insideSubdividedChooseBits: insideSubdividedChooseBits,
                     )
                 }
                 while attempts < context.maxFilterRuns {
@@ -288,7 +288,7 @@ public struct OnlineCGSInterpreter<FinalOutput>: IteratorProtocol, Sequence {
                     context: context,
                     wrapper: wrapper,
                     insideSubdividedChooseBits: insideSubdividedChooseBits,
-                    runContinuation: runContinuation
+                    runContinuation: runContinuation,
                 )
 
             // MARK: - Unique
@@ -300,7 +300,7 @@ public struct OnlineCGSInterpreter<FinalOutput>: IteratorProtocol, Sequence {
                         with: inputValue,
                         context: context,
                         wrapper: wrapper,
-                        insideSubdividedChooseBits: insideSubdividedChooseBits
+                        insideSubdividedChooseBits: insideSubdividedChooseBits,
                     )
                 }
 
@@ -336,7 +336,7 @@ public struct OnlineCGSInterpreter<FinalOutput>: IteratorProtocol, Sequence {
         context: Context,
         wrapper: @escaping DerivativeWrapper,
         insideSubdividedChooseBits: Bool,
-        runContinuation: RunContinuation<Output>
+        runContinuation: RunContinuation<Output>,
     ) throws -> (Output, ChoiceTree)? {
         try InterpreterWrapperHandlers.continueAfterSubgenerator(
             runSubgenerator: {
@@ -345,10 +345,10 @@ public struct OnlineCGSInterpreter<FinalOutput>: IteratorProtocol, Sequence {
                     with: inputValue,
                     context: context,
                     wrapper: wrapper,
-                    insideSubdividedChooseBits: insideSubdividedChooseBits
+                    insideSubdividedChooseBits: insideSubdividedChooseBits,
                 )
             },
-            runContinuation: { try runContinuation($0.0, $0.1) }
+            runContinuation: { try runContinuation($0.0, $0.1) },
         )
     }
 
@@ -361,7 +361,7 @@ public struct OnlineCGSInterpreter<FinalOutput>: IteratorProtocol, Sequence {
         context: Context,
         wrapper: @escaping DerivativeWrapper,
         insideSubdividedChooseBits: Bool,
-        runContinuation: RunContinuation<Output>
+        runContinuation: RunContinuation<Output>,
     ) throws -> (Output, ChoiceTree)? {
         guard let wrappedValue = InterpreterWrapperHandlers.unwrapPruneInput(inputValue) else {
             return nil
@@ -373,10 +373,10 @@ public struct OnlineCGSInterpreter<FinalOutput>: IteratorProtocol, Sequence {
                     with: wrappedValue,
                     context: context,
                     wrapper: wrapper,
-                    insideSubdividedChooseBits: insideSubdividedChooseBits
+                    insideSubdividedChooseBits: insideSubdividedChooseBits,
                 )
             },
-            runContinuation: { try runContinuation($0.0, $0.1) }
+            runContinuation: { try runContinuation($0.0, $0.1) },
         )
     }
 
@@ -390,7 +390,7 @@ public struct OnlineCGSInterpreter<FinalOutput>: IteratorProtocol, Sequence {
         context: Context,
         wrapper: @escaping DerivativeWrapper,
         insideSubdividedChooseBits: Bool,
-        runContinuation: RunContinuation<Output>
+        runContinuation: RunContinuation<Output>,
     ) throws -> (Output, ChoiceTree)? {
         // 1. Compute fitness for each choice via derivative sampling
         var fitnesses = ContiguousArray<UInt64>()
@@ -412,7 +412,7 @@ public struct OnlineCGSInterpreter<FinalOutput>: IteratorProtocol, Sequence {
                     let result = try ValueInterpreter<FinalOutput>.generate(
                         fullDerivative,
                         maxRuns: 1,
-                        using: &context.samplingPRNG
+                        using: &context.samplingPRNG,
                     )
                     if let value = result, context.predicate(value) {
                         successCount += 1
@@ -433,7 +433,7 @@ public struct OnlineCGSInterpreter<FinalOutput>: IteratorProtocol, Sequence {
                 siteID: choice.siteID,
                 id: choice.id,
                 weight: allZero ? 1 : fitnesses[i],
-                generator: choice.generator
+                generator: choice.generator,
             ))
         }
 
@@ -468,7 +468,7 @@ public struct OnlineCGSInterpreter<FinalOutput>: IteratorProtocol, Sequence {
                     with: inputValue,
                     context: isSelected ? context : context.jump(seed: jumpSeed),
                     wrapper: branchWrapper,
-                    insideSubdividedChooseBits: insideSubdividedChooseBits
+                    insideSubdividedChooseBits: insideSubdividedChooseBits,
                 ),
                     let final = try runContinuation(result.0, result.1)
                 {
@@ -478,7 +478,7 @@ public struct OnlineCGSInterpreter<FinalOutput>: IteratorProtocol, Sequence {
                         weight: choice.weight,
                         id: choice.id,
                         branchIDs: branchIDs,
-                        choice: final.1
+                        choice: final.1,
                     )
                 }
             }
@@ -509,7 +509,7 @@ public struct OnlineCGSInterpreter<FinalOutput>: IteratorProtocol, Sequence {
         max: UInt64,
         tag: TypeTag,
         context: Context,
-        runContinuation: RunContinuation<Output>
+        runContinuation: RunContinuation<Output>,
     ) throws -> (Output, ChoiceTree)? {
         let randomBits = context.prng.next(in: min ... max)
         let choiceTree = ChoiceTree.choice(ChoiceValue(randomBits, tag: tag), .init(validRanges: [min ... max]))
@@ -530,7 +530,7 @@ public struct OnlineCGSInterpreter<FinalOutput>: IteratorProtocol, Sequence {
         continuation: @escaping (Any) throws -> ReflectiveGenerator<Output>,
         inputValue: some Any,
         context: Context,
-        wrapper: @escaping DerivativeWrapper
+        wrapper: @escaping DerivativeWrapper,
     ) throws -> (Output, ChoiceTree)? {
         let rangeSize = max - min + 1
         let subrangeCount = Swift.min(4, Int(Swift.min(rangeSize, UInt64(Int.max))))
@@ -546,9 +546,9 @@ public struct OnlineCGSInterpreter<FinalOutput>: IteratorProtocol, Sequence {
                     min: subrange.lowerBound,
                     max: subrange.upperBound,
                     tag: tag,
-                    isRangeExplicit: isRangeExplicit
+                    isRangeExplicit: isRangeExplicit,
                 ),
-                continuation: { .pure($0) }
+                continuation: { .pure($0) },
             )
             // Full derivative: subrange chooseBits → continuation → outer wrapper
             let derivative = try subGen.bind { innerValue in
@@ -562,7 +562,7 @@ public struct OnlineCGSInterpreter<FinalOutput>: IteratorProtocol, Sequence {
                     let result = try ValueInterpreter<FinalOutput>.generate(
                         fullDerivative,
                         maxRuns: 1,
-                        using: &context.samplingPRNG
+                        using: &context.samplingPRNG,
                     )
                     if let value = result, context.predicate(value) {
                         successCount += 1
@@ -583,7 +583,7 @@ public struct OnlineCGSInterpreter<FinalOutput>: IteratorProtocol, Sequence {
                 siteID: 0,
                 id: UInt64(i),
                 weight: allZero ? 1 : fitnesses[i],
-                generator: .pure(subrange.lowerBound) // Placeholder — only weight and id matter
+                generator: .pure(subrange.lowerBound), // Placeholder — only weight and id matter
             ))
         }
 
@@ -598,7 +598,7 @@ public struct OnlineCGSInterpreter<FinalOutput>: IteratorProtocol, Sequence {
         // Produce a choice tree with the ORIGINAL full range for replay compatibility
         let choiceTree = ChoiceTree.choice(
             ChoiceValue(randomBits, tag: tag),
-            .init(validRanges: [min ... max])
+            .init(validRanges: [min ... max]),
         )
 
         // Run through the continuation (same as handleChooseBits)
@@ -612,7 +612,7 @@ public struct OnlineCGSInterpreter<FinalOutput>: IteratorProtocol, Sequence {
                 with: inputValue,
                 context: context,
                 wrapper: wrapper,
-                insideSubdividedChooseBits: false
+                insideSubdividedChooseBits: false,
             ) {
                 if nextGen.isPure {
                     return (continuationResult, calleeChoiceTree)
@@ -636,14 +636,14 @@ public struct OnlineCGSInterpreter<FinalOutput>: IteratorProtocol, Sequence {
         inputValue: some Any,
         wrapper: @escaping DerivativeWrapper,
         insideSubdividedChooseBits: Bool,
-        runContinuation: RunContinuation<Output>
+        runContinuation: RunContinuation<Output>,
     ) throws -> (Output, ChoiceTree)? {
         guard let (length, lengthTrees) = try generateRecursive(
             lengthGen,
             with: inputValue,
             context: context,
             wrapper: wrapper,
-            insideSubdividedChooseBits: insideSubdividedChooseBits
+            insideSubdividedChooseBits: insideSubdividedChooseBits,
         ) else {
             return nil
         }
@@ -659,7 +659,7 @@ public struct OnlineCGSInterpreter<FinalOutput>: IteratorProtocol, Sequence {
                 with: inputValue,
                 context: context,
                 wrapper: wrapper,
-                insideSubdividedChooseBits: insideSubdividedChooseBits
+                insideSubdividedChooseBits: insideSubdividedChooseBits,
             ) else {
                 return false
             }
@@ -674,7 +674,7 @@ public struct OnlineCGSInterpreter<FinalOutput>: IteratorProtocol, Sequence {
         let choiceTree = ChoiceTree.sequence(
             length: length,
             elements: elements,
-            lengthTrees.metadata
+            lengthTrees.metadata,
         )
 
         if let (result, _) = try runContinuation(results, choiceTree) {
@@ -693,7 +693,7 @@ public struct OnlineCGSInterpreter<FinalOutput>: IteratorProtocol, Sequence {
         context: Context,
         wrapper: @escaping DerivativeWrapper,
         insideSubdividedChooseBits: Bool,
-        runContinuation: RunContinuation<Output>
+        runContinuation: RunContinuation<Output>,
     ) throws -> (Output, ChoiceTree)? {
         var results = [Any]()
         results.reserveCapacity(generators.count)
@@ -719,7 +719,7 @@ public struct OnlineCGSInterpreter<FinalOutput>: IteratorProtocol, Sequence {
                     }
                     return ReflectiveGenerator<Any>.impure(
                         operation: .zip(gens),
-                        continuation: { .pure($0) }
+                        continuation: { .pure($0) },
                     )
                 }
                 return try wrapper(zipGen.bind { zipResult in
@@ -732,7 +732,7 @@ public struct OnlineCGSInterpreter<FinalOutput>: IteratorProtocol, Sequence {
                 with: inputValue,
                 context: context,
                 wrapper: componentWrapper,
-                insideSubdividedChooseBits: insideSubdividedChooseBits
+                insideSubdividedChooseBits: insideSubdividedChooseBits,
             ) else {
                 throw GeneratorError.couldNotGenerateConcomitantChoiceTree
             }
@@ -752,7 +752,7 @@ public struct OnlineCGSInterpreter<FinalOutput>: IteratorProtocol, Sequence {
         context: Context,
         wrapper: @escaping DerivativeWrapper,
         insideSubdividedChooseBits: Bool,
-        runContinuation: RunContinuation<Output>
+        runContinuation: RunContinuation<Output>,
     ) throws -> (Output, ChoiceTree)? {
         context.sizeOverride = newSize
         guard let result = try generateRecursive(
@@ -760,7 +760,7 @@ public struct OnlineCGSInterpreter<FinalOutput>: IteratorProtocol, Sequence {
             with: inputValue,
             context: context,
             wrapper: wrapper,
-            insideSubdividedChooseBits: insideSubdividedChooseBits
+            insideSubdividedChooseBits: insideSubdividedChooseBits,
         ) else {
             return nil
         }
@@ -778,7 +778,7 @@ public struct OnlineCGSInterpreter<FinalOutput>: IteratorProtocol, Sequence {
         context: Context,
         wrapper: @escaping DerivativeWrapper,
         insideSubdividedChooseBits: Bool,
-        runContinuation: RunContinuation<Output>
+        runContinuation: RunContinuation<Output>,
     ) throws -> (Output, ChoiceTree)? {
         try InterpreterWrapperHandlers.continueAfterSubgenerator(
             runSubgenerator: {
@@ -787,7 +787,7 @@ public struct OnlineCGSInterpreter<FinalOutput>: IteratorProtocol, Sequence {
                     with: inputValue,
                     context: context,
                     wrapper: wrapper,
-                    insideSubdividedChooseBits: insideSubdividedChooseBits
+                    insideSubdividedChooseBits: insideSubdividedChooseBits,
                 )
             },
             runContinuation: { result in
@@ -795,7 +795,7 @@ public struct OnlineCGSInterpreter<FinalOutput>: IteratorProtocol, Sequence {
                     context.classifications[fingerprint, default: [:]][label, default: []].insert(context.runs)
                 }
                 return try runContinuation(result.0, result.1)
-            }
+            },
         )
     }
 
@@ -824,7 +824,7 @@ public struct OnlineCGSInterpreter<FinalOutput>: IteratorProtocol, Sequence {
         let sampleCount: UInt64
         var samplingPRNG: Xoshiro256
 
-        // Cache of tuned generators keyed by filter fingerprint
+        /// Cache of tuned generators keyed by filter fingerprint
         var tunedFilterCache: [UInt64: ReflectiveGenerator<Any>] = [:]
 
         // Unique combinator state
@@ -867,7 +867,7 @@ public struct OnlineCGSInterpreter<FinalOutput>: IteratorProtocol, Sequence {
                 prng: .init(seed: seed),
                 predicate: predicate,
                 sampleCount: sampleCount,
-                samplingPRNG: samplingPRNG
+                samplingPRNG: samplingPRNG,
             )
         }
 
@@ -875,7 +875,7 @@ public struct OnlineCGSInterpreter<FinalOutput>: IteratorProtocol, Sequence {
             for (_, classifications) in classifications {
                 ExhaustLog.info(
                     category: .generation,
-                    event: "classifications_summary"
+                    event: "classifications_summary",
                 )
                 for (label, runs) in classifications {
                     ExhaustLog.info(
@@ -884,7 +884,7 @@ public struct OnlineCGSInterpreter<FinalOutput>: IteratorProtocol, Sequence {
                         metadata: [
                             "label": label,
                             "count": "\(runs.count)",
-                        ]
+                        ],
                     )
                 }
             }

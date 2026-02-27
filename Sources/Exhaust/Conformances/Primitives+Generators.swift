@@ -7,92 +7,92 @@
 
 // MARK: - Unsigned Integers
 
-extension UInt {
-    public static var arbitrary: ReflectiveGenerator<Self> {
-        Gen.choose(in: Self.min ... Self.max, scaling: Self.defaultScaling)
+public extension UInt {
+    static var arbitrary: ReflectiveGenerator<Self> {
+        Gen.choose(in: Self.min ... Self.max, scaling: defaultScaling)
     }
 }
 
-extension UInt64 {
-    public static var arbitrary: ReflectiveGenerator<Self> {
-        Gen.choose(in: Self.min ... Self.max, scaling: Self.defaultScaling)
+public extension UInt64 {
+    static var arbitrary: ReflectiveGenerator<Self> {
+        Gen.choose(in: Self.min ... Self.max, scaling: defaultScaling)
     }
 }
 
-extension UInt8 {
-    public static var arbitrary: ReflectiveGenerator<Self> {
-        Gen.choose(in: Self.min ... Self.max, scaling: Self.defaultScaling)
+public extension UInt8 {
+    static var arbitrary: ReflectiveGenerator<Self> {
+        Gen.choose(in: Self.min ... Self.max, scaling: defaultScaling)
     }
 }
 
-extension UInt16 {
-    public static var arbitrary: ReflectiveGenerator<Self> {
-        Gen.choose(in: Self.min ... Self.max, scaling: Self.defaultScaling)
+public extension UInt16 {
+    static var arbitrary: ReflectiveGenerator<Self> {
+        Gen.choose(in: Self.min ... Self.max, scaling: defaultScaling)
     }
 }
 
-extension UInt32 {
-    public static var arbitrary: ReflectiveGenerator<Self> {
-        Gen.choose(in: Self.min ... Self.max, scaling: Self.defaultScaling)
+public extension UInt32 {
+    static var arbitrary: ReflectiveGenerator<Self> {
+        Gen.choose(in: Self.min ... Self.max, scaling: defaultScaling)
     }
 }
 
 // MARK: - Signed integers
 
-extension Int {
-    public static var arbitrary: ReflectiveGenerator<Self> {
-        Gen.choose(in: Self.min ... Self.max, scaling: Self.defaultScaling)
+public extension Int {
+    static var arbitrary: ReflectiveGenerator<Self> {
+        Gen.choose(in: Self.min ... Self.max, scaling: defaultScaling)
     }
 }
 
-extension Int8 {
-    public static var arbitrary: ReflectiveGenerator<Self> {
-        Gen.choose(in: Self.min ... Self.max, scaling: Self.defaultScaling)
+public extension Int8 {
+    static var arbitrary: ReflectiveGenerator<Self> {
+        Gen.choose(in: Self.min ... Self.max, scaling: defaultScaling)
     }
 }
 
-extension Int16 {
-    public static var arbitrary: ReflectiveGenerator<Self> {
-        Gen.choose(in: Self.min ... Self.max, scaling: Self.defaultScaling)
+public extension Int16 {
+    static var arbitrary: ReflectiveGenerator<Self> {
+        Gen.choose(in: Self.min ... Self.max, scaling: defaultScaling)
     }
 }
 
-extension Int32 {
-    public static var arbitrary: ReflectiveGenerator<Self> {
-        Gen.choose(in: Self.min ... Self.max, scaling: Self.defaultScaling)
+public extension Int32 {
+    static var arbitrary: ReflectiveGenerator<Self> {
+        Gen.choose(in: Self.min ... Self.max, scaling: defaultScaling)
     }
 }
 
-extension Int64 {
-    public static var arbitrary: ReflectiveGenerator<Self> {
-        Gen.choose(in: Self.min ... Self.max, scaling: Self.defaultScaling)
+public extension Int64 {
+    static var arbitrary: ReflectiveGenerator<Self> {
+        Gen.choose(in: Self.min ... Self.max, scaling: defaultScaling)
     }
 }
 
 // MARK: - Floating points
 
-extension Double {
-    public static var arbitrary: ReflectiveGenerator<Self> {
+public extension Double {
+    static var arbitrary: ReflectiveGenerator<Self> {
         Gen.choose(
             in: -Double.greatestFiniteMagnitude ... Double.greatestFiniteMagnitude,
-            scaling: Self.defaultScaling,
+            scaling: defaultScaling,
         )
     }
 }
 
-extension Float {
-    public static var arbitrary: ReflectiveGenerator<Self> {
+public extension Float {
+    static var arbitrary: ReflectiveGenerator<Self> {
         Gen.choose(
             in: -Float.greatestFiniteMagnitude ... Float.greatestFiniteMagnitude,
-            scaling: Self.defaultScaling,
+            scaling: defaultScaling,
         )
     }
 }
 
 // MARK: - Boolean
 
-extension Bool {
-    public static var arbitrary: ReflectiveGenerator<Bool> {
+public extension Bool {
+    static var arbitrary: ReflectiveGenerator<Bool> {
         Gen.pick(choices: [
             (1, Gen.just(true)),
             (1, Gen.just(false)),
@@ -122,13 +122,13 @@ extension Character {
     }
 }
 
-extension String {
-    public static var arbitrary: ReflectiveGenerator<String> {
+public extension String {
+    static var arbitrary: ReflectiveGenerator<String> {
         Gen.arrayOf(Character.arbitrary)
             .mapped(forward: { String($0) }, backward: { Array($0) })
     }
 
-    public static var arbitraryAscii: ReflectiveGenerator<String> {
+    static var arbitraryAscii: ReflectiveGenerator<String> {
         Gen.arrayOf(Character.arbitraryAscii)
             .mapped(forward: { String($0) }, backward: { Array($0) })
     }
@@ -136,9 +136,9 @@ extension String {
 
 // MARK: - AnyIndex
 
-extension AnyIndex {
+public extension AnyIndex {
     /// Returns a generator of `AnyForwardIndex` values.
-    public static var arbitrary: ReflectiveGenerator<AnyIndex> {
+    static var arbitrary: ReflectiveGenerator<AnyIndex> {
         Gen.choose(in: 0 ... Int.max).map(AnyIndex.init)
     }
 }

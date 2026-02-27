@@ -28,7 +28,7 @@ private enum BST: Equatable, Hashable {
             (weight: 3, Gen.zip(
                 bstGenerator(maxDepth: maxDepth - 1),
                 Gen.choose(in: UInt(0) ... 9),
-                bstGenerator(maxDepth: maxDepth - 1)
+                bstGenerator(maxDepth: maxDepth - 1),
             ).map { left, value, right in
                 .node(left: left, value: value, right: right)
             }),
@@ -53,24 +53,23 @@ private enum BST: Equatable, Hashable {
 
     var height: Int {
         switch self {
-        case .leaf: return 0
+        case .leaf: 0
         case let .node(left, _, right):
-            return 1 + Swift.max(left.height, right.height)
+            1 + Swift.max(left.height, right.height)
         }
     }
 
     var nodeCount: Int {
         switch self {
-        case .leaf: return 0
+        case .leaf: 0
         case let .node(left, _, right):
-            return 1 + left.nodeCount + right.nodeCount
+            1 + left.nodeCount + right.nodeCount
         }
     }
 }
 
 @Suite("Choice Gradient Sampling")
 struct GeneratorTuningTests {
-
     // MARK: - Pick Adaptation
 
     @Test("Pick adaptation produces only valid output via .tune")
@@ -125,8 +124,8 @@ struct GeneratorTuningTests {
     func sequenceLengthAdaptation() {
         let lengthGen: ReflectiveGenerator<UInt64> = Gen.choose(in: 1 ... 50)
         let elementGen = Gen.choose(in: 1 ... 10)
-        let gen: ReflectiveGenerator<[Int]> = ReflectiveGenerator<[Int]>.impure(
-            operation: .sequence(length: lengthGen, gen: elementGen.erase())
+        let gen = ReflectiveGenerator<[Int]>.impure(
+            operation: .sequence(length: lengthGen, gen: elementGen.erase()),
         ) { result in
             .pure(result as! [Int])
         }.filter(.tune) { $0.count <= 3 }
@@ -149,7 +148,7 @@ struct GeneratorTuningTests {
             gen,
             samples: 50,
             seed: 42,
-            predicate: { (_: Int) in true }
+            predicate: { (_: Int) in true },
         )
 
         // Verify that the tuned generator structure contains a filter with an tuned inner gen
@@ -188,7 +187,7 @@ struct GeneratorTuningTests {
             gen,
             samples: 50,
             seed: 42,
-            predicate: predicate
+            predicate: predicate,
         )
 
         // Inspect the tuned structure: should have 2 branches still
@@ -214,7 +213,7 @@ struct GeneratorTuningTests {
             gen,
             samples: 20,
             seed: 42,
-            predicate: predicate
+            predicate: predicate,
         )
 
         guard case let .impure(.pick(choices), _) = tuned else {
@@ -238,10 +237,10 @@ struct GeneratorTuningTests {
         let predicate: (Int) -> Bool = { $0 <= 250 }
 
         let tuned1 = try GeneratorTuning.tune(
-            gen, samples: 50, seed: 42, predicate: predicate
+            gen, samples: 50, seed: 42, predicate: predicate,
         )
         let tuned2 = try GeneratorTuning.tune(
-            gen, samples: 50, seed: 42, predicate: predicate
+            gen, samples: 50, seed: 42, predicate: predicate,
         )
 
         // Generate from both and verify identical output
@@ -267,16 +266,17 @@ struct GeneratorTuningTests {
 
         // Moderate budget — should converge well within this
         let tunedModerate = try GeneratorTuning.tune(
-            gen, samples: 100, seed: 42, predicate: predicate
+            gen, samples: 100, seed: 42, predicate: predicate,
         )
 
         // Large budget — convergence should stop early, yielding similar weights
         let tunedLarge = try GeneratorTuning.tune(
-            gen, samples: 2000, seed: 42, predicate: predicate
+            gen, samples: 2000, seed: 42, predicate: predicate,
         )
 
         guard case let .impure(.pick(moderateChoices), _) = tunedModerate,
-              case let .impure(.pick(largeChoices), _) = tunedLarge else {
+              case let .impure(.pick(largeChoices), _) = tunedLarge
+        else {
             Issue.record("Expected both tuned generators to be picks")
             return
         }
@@ -405,7 +405,7 @@ struct GeneratorTuningTests {
         let tuned = try GeneratorTuning.probeAndTune(
             naive,
             seed: 12345,
-            predicate: isValidBST
+            predicate: isValidBST,
         )
 
         print("Tuned BST generator:\n\(tuned.debugDescription)")

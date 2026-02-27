@@ -92,17 +92,17 @@ extension ChoiceTree {
     var containsPicks: Bool {
         switch self {
         case .branch:
-            return true
+            true
         case .choice, .just, .getSize:
-            return false
+            false
         case let .selected(inner):
-            return inner.containsPicks
+            inner.containsPicks
         case let .sequence(_, elements, _):
-            return elements.contains(where: \.containsPicks)
+            elements.contains(where: \.containsPicks)
         case let .group(array):
-            return array.contains(where: \.containsPicks)
+            array.contains(where: \.containsPicks)
         case let .resize(_, choices):
-            return choices.contains(where: \.containsPicks)
+            choices.contains(where: \.containsPicks)
         }
     }
 

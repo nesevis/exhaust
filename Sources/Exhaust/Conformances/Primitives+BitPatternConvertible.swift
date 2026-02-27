@@ -35,7 +35,9 @@ extension UInt8: BitPatternConvertible {
         .uint8
     }
 
-    public static var defaultScaling: SizeScaling<Self> { .exponential }
+    public static var defaultScaling: SizeScaling<Self> {
+        .exponential
+    }
 
     public init(bitPattern64: UInt64) {
         self = UInt8(truncatingIfNeeded: bitPattern64)
@@ -57,7 +59,9 @@ extension UInt16: BitPatternConvertible {
         .uint16
     }
 
-    public static var defaultScaling: SizeScaling<Self> { .exponential }
+    public static var defaultScaling: SizeScaling<Self> {
+        .exponential
+    }
 
     public init(bitPattern64: UInt64) {
         self = UInt16(bitPattern64)
@@ -79,7 +83,9 @@ extension UInt32: BitPatternConvertible {
         .uint32
     }
 
-    public static var defaultScaling: SizeScaling<Self> { .exponential }
+    public static var defaultScaling: SizeScaling<Self> {
+        .exponential
+    }
 
     public init(bitPattern64: UInt64) {
         self = UInt32(bitPattern64)
@@ -102,7 +108,9 @@ extension UInt64: BitPatternConvertible {
         .uint64
     }
 
-    public static var defaultScaling: SizeScaling<Self> { .exponential }
+    public static var defaultScaling: SizeScaling<Self> {
+        .exponential
+    }
 
     public static var bitPatternRanges: [ClosedRange<UInt64>] {
         [
@@ -124,7 +132,9 @@ extension UInt: BitPatternConvertible {
         .uint
     }
 
-    public static var defaultScaling: SizeScaling<Self> { .exponential }
+    public static var defaultScaling: SizeScaling<Self> {
+        .exponential
+    }
 
     public static var bitPatternRanges: [ClosedRange<UInt64>] {
         [
@@ -146,7 +156,9 @@ extension Int8: BitPatternConvertible {
         .int8
     }
 
-    public static var defaultScaling: SizeScaling<Self> { .exponentialFrom(origin: 0) }
+    public static var defaultScaling: SizeScaling<Self> {
+        .exponentialFrom(origin: 0)
+    }
 
     private static let signBitMask: UInt8 = 0x80
 
@@ -170,7 +182,9 @@ extension Int16: BitPatternConvertible {
         .int16
     }
 
-    public static var defaultScaling: SizeScaling<Self> { .exponentialFrom(origin: 0) }
+    public static var defaultScaling: SizeScaling<Self> {
+        .exponentialFrom(origin: 0)
+    }
 
     private static let signBitMask: UInt16 = 0x8000
 
@@ -194,7 +208,9 @@ extension Int32: BitPatternConvertible {
         .int32
     }
 
-    public static var defaultScaling: SizeScaling<Self> { .exponentialFrom(origin: 0) }
+    public static var defaultScaling: SizeScaling<Self> {
+        .exponentialFrom(origin: 0)
+    }
 
     private static let signBitMask: UInt32 = 0x8000_0000
 
@@ -218,7 +234,9 @@ extension Int64: BitPatternConvertible {
         .int64
     }
 
-    public static var defaultScaling: SizeScaling<Self> { .exponentialFrom(origin: 0) }
+    public static var defaultScaling: SizeScaling<Self> {
+        .exponentialFrom(origin: 0)
+    }
 
     private static let signBitMask: UInt64 = 0x8000_0000_0000_0000
 
@@ -242,7 +260,9 @@ extension Int: BitPatternConvertible {
         .int
     }
 
-    public static var defaultScaling: SizeScaling<Self> { .exponentialFrom(origin: 0) }
+    public static var defaultScaling: SizeScaling<Self> {
+        .exponentialFrom(origin: 0)
+    }
 
     private static let signBitMask: UInt64 = 0x8000_0000_0000_0000
     public init(bitPattern64: UInt64) {

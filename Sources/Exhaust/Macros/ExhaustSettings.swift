@@ -15,5 +15,4 @@ public enum ExhaustSettings {
 
     /// The shrink configuration to use when a counterexample is found.
     case shrinkBudget(Interpreters.ShrinkConfiguration)
-
 }

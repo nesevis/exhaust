@@ -142,7 +142,7 @@ public extension Gen {
             .filter { Set($0).count == $0.count }
             .mapped(
                 forward: { Set($0) },
-                backward: { Array($0) }
+                backward: { Array($0) },
             )
     }
 
@@ -163,7 +163,7 @@ public extension Gen {
             .filter { Set($0).count == $0.count }
             .mapped(
                 forward: { Set($0) },
-                backward: { Array($0) }
+                backward: { Array($0) },
             )
     }
 
@@ -182,7 +182,7 @@ public extension Gen {
             .filter { Set($0).count == $0.count }
             .mapped(
                 forward: { Set($0) },
-                backward: { Array($0) }
+                backward: { Array($0) },
             )
     }
 
@@ -197,14 +197,14 @@ public extension Gen {
     /// - Parameter gen: An array generator whose output should be shuffled
     /// - Returns: A generator that produces a randomly permuted array
     @inlinable
-    static func shuffle<Element, C: Collection>(
-        _ gen: ReflectiveGenerator<C>,
-    ) -> ReflectiveGenerator<[Element]> where C.Element == Element {
+    static func shuffle<Element>(
+        _ gen: ReflectiveGenerator<some Collection<Element>>,
+    ) -> ReflectiveGenerator<[Element]> {
         gen.bind { array in
             guard array.count > 1 else { return .pure(Array(array)) }
             return Gen.arrayOf(
                 Gen.choose(in: UInt64.min ... UInt64.max),
-                exactly: UInt64(array.count)
+                exactly: UInt64(array.count),
             )
             .map { keys in
                 Swift.zip(array, keys)
@@ -289,7 +289,7 @@ public extension Gen {
     /// - Returns: A generator that produces a contiguous subrange of the generated collection
     @inlinable
     static func sub<C: Collection>(
-        _ gen: ReflectiveGenerator<C>
+        _ gen: ReflectiveGenerator<C>,
     ) -> ReflectiveGenerator<C.SubSequence> {
         gen.bind { collection in
             subset(of: collection)

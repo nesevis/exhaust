@@ -11,7 +11,6 @@ import Testing
 
 @Suite("#gen macro reflection")
 struct GenerateMacroIntegrationTests {
-
     private struct Person: Equatable {
         var name: String
         var age: Int
@@ -38,11 +37,11 @@ struct GenerateMacroIntegrationTests {
 
         let sequence = ChoiceSequence(tree)
         let materialized = try #require(
-            try Interpreters.materialize(personGen, with: tree, using: sequence)
+            try Interpreters.materialize(personGen, with: tree, using: sequence),
         )
         #expect(materialized == target)
     }
-    
+
     @Test("Enum case generator is reflected")
     func enumCaseReflection() throws {
         enum Pet: Equatable {
@@ -75,7 +74,7 @@ struct GenerateMacroIntegrationTests {
 
         let sequence = ChoiceSequence(tree)
         let materialized = try #require(
-            try Interpreters.materialize(coordGen, with: tree, using: sequence)
+            try Interpreters.materialize(coordGen, with: tree, using: sequence),
         )
         #expect(materialized == target)
     }
@@ -95,7 +94,7 @@ struct GenerateMacroIntegrationTests {
             let reflectedTree = try #require(try Interpreters.reflect(personGen, with: generated))
             let sequence = ChoiceSequence(reflectedTree)
             let roundTripped = try #require(
-                try Interpreters.materialize(personGen, with: reflectedTree, using: sequence)
+                try Interpreters.materialize(personGen, with: reflectedTree, using: sequence),
             )
             #expect(roundTripped == generated)
         }
@@ -114,7 +113,7 @@ struct GenerateMacroIntegrationTests {
 
         let sequence = ChoiceSequence(tree)
         let materialized = try #require(
-            try Interpreters.materialize(personGen, with: tree, using: sequence)
+            try Interpreters.materialize(personGen, with: tree, using: sequence),
         )
         #expect(materialized == target)
     }
@@ -136,7 +135,7 @@ struct GenerateMacroIntegrationTests {
         #expect(property(failing) == false)
 
         let (_, shrunk) = try #require(
-            try Interpreters.reduce(gen: personGen, tree: tree, config: .fast, property: property)
+            try Interpreters.reduce(gen: personGen, tree: tree, config: .fast, property: property),
         )
         #expect(property(shrunk) == false)
         #expect(shrunk.age <= failing.age)

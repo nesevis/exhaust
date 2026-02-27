@@ -18,7 +18,7 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
         _ gen: ReflectiveGenerator<Output>,
         settings: [ExhaustSettings],
         sourceCode: String?,
-        property: (Output) -> Bool
+        property: (Output) -> Bool,
     ) throws -> Output? {
         var maxIterations: UInt64 = 100
         var seed: UInt64?
@@ -39,7 +39,7 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
         var generator = ValueAndChoiceTreeInterpreter(
             gen,
             seed: seed,
-            maxRuns: maxIterations
+            maxRuns: maxIterations,
         )
 
         while let (next, tree) = generator.next() {
@@ -56,34 +56,34 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
                 ExhaustLog.error(
                     category: .propertyTest,
                     event: "property_failed",
-                    metadata: failMetadata
+                    metadata: failMetadata,
                 )
                 ExhaustLog.notice(
                     category: .propertyTest,
                     event: "counterexample",
-                    "\(next)"
+                    "\(next)",
                 )
 
                 if let (shrunkSequence, shrunkValue) = try Interpreters.reduce(
                     gen: gen,
                     tree: tree,
                     config: shrinkConfig,
-                    property: property
+                    property: property,
                 ) {
                     ExhaustLog.notice(
                         category: .propertyTest,
                         event: "shrunk_counterexample",
-                        "\(shrunkValue)"
+                        "\(shrunkValue)",
                     )
                     ExhaustLog.notice(
                         category: .propertyTest,
                         event: "counterexample_diff",
-                        CounterexampleDiff.format(original: next, shrunk: shrunkValue)
+                        CounterexampleDiff.format(original: next, shrunk: shrunkValue),
                     )
                     ExhaustLog.notice(
                         category: .propertyTest,
                         event: "shrunk_blueprint",
-                        "\(shrunkSequence.shortString)"
+                        "\(shrunkSequence.shortString)",
                     )
                     return shrunkValue
                 }
@@ -98,7 +98,7 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
         ExhaustLog.notice(
             category: .propertyTest,
             event: "property_passed",
-            metadata: passMetadata
+            metadata: passMetadata,
         )
         return nil
     }

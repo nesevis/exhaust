@@ -27,7 +27,7 @@ private enum BenchBST: Equatable, Hashable {
             (weight: 3, Gen.zip(
                 bstGenerator(maxDepth: maxDepth - 1),
                 Gen.choose(in: UInt(0) ... 9),
-                bstGenerator(maxDepth: maxDepth - 1)
+                bstGenerator(maxDepth: maxDepth - 1),
             ).map { left, value, right in
                 .node(left: left, value: value, right: right)
             }),
@@ -52,16 +52,15 @@ private enum BenchBST: Equatable, Hashable {
 
     var height: Int {
         switch self {
-        case .leaf: return 0
+        case .leaf: 0
         case let .node(left, _, right):
-            return 1 + Swift.max(left.height, right.height)
+            1 + Swift.max(left.height, right.height)
         }
     }
 }
 
 @Suite("CGS Benchmark", .disabled("Manual benchmark — run with --filter"))
 struct CGSBenchmark {
-
     @Test("BST throughput — 20-second generation benchmark")
     func bstThroughput() throws {
         let naive = BenchBST.arbitrary
@@ -74,7 +73,7 @@ struct CGSBenchmark {
             naive,
             samples: 500,
             seed: 12345,
-            predicate: isValid
+            predicate: isValid,
         )
         let tuneElapsed = ContinuousClock.now - tuneStart
         let tuneMs = Double(tuneElapsed.components.seconds) * 1000
@@ -153,7 +152,7 @@ struct CGSBenchmark {
                 naive,
                 maxRuns: maxRunsHint,
                 seed: 12345,
-                predicate: isValid
+                predicate: isValid,
             )
 
             let tuneElapsed = ContinuousClock.now - start

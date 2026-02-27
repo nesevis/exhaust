@@ -12,22 +12,22 @@ import SwiftSyntaxMacros
 public struct ExhaustTestMacro: ExpressionMacro {
     public static func expansion(
         of node: some FreestandingMacroExpansionSyntax,
-        in context: some MacroExpansionContext
+        in context: some MacroExpansionContext,
     ) throws -> ExprSyntax {
-        let args = node.arguments.map { $0 }
+        let args = node.arguments.map(\.self)
 
         if let trailingClosure = node.trailingClosure {
             // Trailing closure path — capture source code
             guard !args.isEmpty else {
                 context.diagnose(Diagnostic(
                     node: Syntax(node),
-                    message: ExhaustMacroDiagnostic.exhaustMissingGenerator
+                    message: ExhaustMacroDiagnostic.exhaustMissingGenerator,
                 ))
                 return "fatalError(\"#exhaust requires a generator argument\")"
             }
 
             let generatorExpr = args[0].expression.trimmedDescription
-            let settingsExprs = args.dropFirst().map { $0.expression.trimmedDescription }
+            let settingsExprs = args.dropFirst().map(\.expression.trimmedDescription)
 
             let sourceCode = trailingClosure.statements.trimmedDescription
                 .replacingOccurrences(of: "\\", with: "\\\\")
@@ -38,19 +38,19 @@ public struct ExhaustTestMacro: ExpressionMacro {
             let settingsArray = settingsExprs.isEmpty ? "[]" : "[\(settingsExprs.joined(separator: ", "))]"
 
             return """
-                __ExhaustRuntime.__exhaust(
-                    \(raw: generatorExpr),
-                    settings: \(raw: settingsArray),
-                    sourceCode: "\(raw: sourceCode)",
-                    property: \(raw: closureText)
-                )
-                """
+            __ExhaustRuntime.__exhaust(
+                \(raw: generatorExpr),
+                settings: \(raw: settingsArray),
+                sourceCode: "\(raw: sourceCode)",
+                property: \(raw: closureText)
+            )
+            """
         } else {
             // No trailing closure — property is the last labeled argument
             guard args.count >= 2 else {
                 context.diagnose(Diagnostic(
                     node: Syntax(node),
-                    message: ExhaustMacroDiagnostic.exhaustMissingProperty
+                    message: ExhaustMacroDiagnostic.exhaustMissingProperty,
                 ))
                 return "fatalError(\"#exhaust requires a property argument\")"
             }
@@ -61,23 +61,23 @@ public struct ExhaustTestMacro: ExpressionMacro {
             guard let propertyArg = args.last, propertyArg.label?.text == "property" else {
                 context.diagnose(Diagnostic(
                     node: Syntax(node),
-                    message: ExhaustMacroDiagnostic.exhaustMissingProperty
+                    message: ExhaustMacroDiagnostic.exhaustMissingProperty,
                 ))
                 return "fatalError(\"#exhaust requires a property argument\")"
             }
 
             let propertyExpr = propertyArg.expression.trimmedDescription
-            let settingsExprs = args.dropFirst().dropLast().map { $0.expression.trimmedDescription }
+            let settingsExprs = args.dropFirst().dropLast().map(\.expression.trimmedDescription)
             let settingsArray = settingsExprs.isEmpty ? "[]" : "[\(settingsExprs.joined(separator: ", "))]"
 
             return """
-                __ExhaustRuntime.__exhaust(
-                    \(raw: generatorExpr),
-                    settings: \(raw: settingsArray),
-                    sourceCode: nil,
-                    property: \(raw: propertyExpr)
-                )
-                """
+            __ExhaustRuntime.__exhaust(
+                \(raw: generatorExpr),
+                settings: \(raw: settingsArray),
+                sourceCode: nil,
+                property: \(raw: propertyExpr)
+            )
+            """
         }
     }
 }

@@ -28,7 +28,7 @@ private enum BST: Equatable, Hashable {
             (weight: 3, Gen.zip(
                 bstGenerator(maxDepth: maxDepth - 1),
                 Gen.choose(in: UInt(0) ... 9),
-                bstGenerator(maxDepth: maxDepth - 1)
+                bstGenerator(maxDepth: maxDepth - 1),
             ).map { left, value, right in
                 .node(left: left, value: value, right: right)
             }),
@@ -53,20 +53,19 @@ private enum BST: Equatable, Hashable {
 
     var height: Int {
         switch self {
-        case .leaf: return 0
+        case .leaf: 0
         case let .node(left, _, right):
-            return 1 + Swift.max(left.height, right.height)
+            1 + Swift.max(left.height, right.height)
         }
     }
 }
 
 @Suite("Online CGS Interpreter")
 struct OnlineCGSInterpreterTests {
-
     // MARK: - BST Height Diversity
 
     @Test("BST: online CGS produces valid BSTs at heights >= 2", .disabled("Takes 21 seconds to run"))
-    func bstHeightDiversity() throws {
+    func bstHeightDiversity() {
         let gen = BST.arbitrary
         let isValidNonLeafBST: (BST) -> Bool = { $0 != .leaf && $0.isValidBST() }
 
@@ -75,7 +74,7 @@ struct OnlineCGSInterpreterTests {
             predicate: isValidNonLeafBST,
             sampleCount: 50,
             seed: 42,
-            maxRuns: 500
+            maxRuns: 500,
         )
 
         var validTrees = [BST]()
@@ -113,7 +112,7 @@ struct OnlineCGSInterpreterTests {
             sampleCount: 30,
             materializePicks: true,
             seed: 42,
-            maxRuns: 10
+            maxRuns: 10,
         )
 
         for _ in 0 ..< 10 {
@@ -142,7 +141,7 @@ struct OnlineCGSInterpreterTests {
             sampleCount: 20,
             materializePicks: true,
             seed: 42,
-            maxRuns: 100
+            maxRuns: 100,
         )
 
         // Find a counterexample
@@ -162,7 +161,7 @@ struct OnlineCGSInterpreterTests {
             gen: gen,
             tree: ce.tree,
             config: .fast,
-            property: property
+            property: property,
         )
 
         let (_, shrunk) = try #require(reduced, "Shrinking should produce a result")
@@ -172,7 +171,7 @@ struct OnlineCGSInterpreterTests {
     // MARK: - Simple Pick Guidance
 
     @Test("Pick guidance: CGS favours branch matching predicate")
-    func simplePickGuidance() throws {
+    func simplePickGuidance() {
         let gen = Gen.pick(choices: [
             (weight: UInt64(1), generator: Gen.choose(in: 1 ... 100)),
             (weight: UInt64(1), generator: Gen.choose(in: 901 ... 1000)),
@@ -185,8 +184,8 @@ struct OnlineCGSInterpreterTests {
                 predicate: predicate,
                 sampleCount: 50,
                 seed: 42,
-                maxRuns: 200
-            )
+                maxRuns: 200,
+            ),
         ).map(\.value)
 
         let cgsHitRate = Double(cgsValues.count(where: predicate)) / Double(cgsValues.count)
@@ -218,8 +217,8 @@ struct OnlineCGSInterpreterTests {
                 predicate: predicate,
                 sampleCount: 30,
                 seed: 42,
-                maxRuns: 50
-            )
+                maxRuns: 50,
+            ),
         ).map(\.value)
 
         let values2 = Array(
@@ -228,8 +227,8 @@ struct OnlineCGSInterpreterTests {
                 predicate: predicate,
                 sampleCount: 30,
                 seed: 42,
-                maxRuns: 50
-            )
+                maxRuns: 50,
+            ),
         ).map(\.value)
 
         #expect(values1 == values2, "Same seed should produce identical output sequences")
@@ -238,10 +237,10 @@ struct OnlineCGSInterpreterTests {
     // MARK: - Zip CGS Guidance
 
     @Test("Zip: CGS guidance improves joint predicate satisfaction")
-    func zipCGSGuidance() throws {
+    func zipCGSGuidance() {
         let gen = Gen.zip(
             Gen.choose(in: 1 ... 20),
-            Gen.choose(in: 1 ... 20)
+            Gen.choose(in: 1 ... 20),
         )
         let predicate: ((Int, Int)) -> Bool = { $0.0 + $0.1 < 10 }
 
@@ -251,8 +250,8 @@ struct OnlineCGSInterpreterTests {
                 predicate: predicate,
                 sampleCount: 50,
                 seed: 42,
-                maxRuns: 200
-            )
+                maxRuns: 200,
+            ),
         ).map(\.value)
 
         let cgsHitRate = Double(cgsValues.count(where: predicate)) / Double(cgsValues.count)
@@ -280,8 +279,8 @@ struct OnlineCGSInterpreterTests {
                 predicate: predicate,
                 sampleCount: 50,
                 seed: 42,
-                maxRuns: 200
-            )
+                maxRuns: 200,
+            ),
         ).map(\.value)
 
         let hitRate = Double(cgsValues.count(where: predicate)) / Double(cgsValues.count)
@@ -304,7 +303,7 @@ struct OnlineCGSInterpreterTests {
             gen,
             samples: 100,
             seed: 12345,
-            predicate: isValidBST
+            predicate: isValidBST,
         )
 
         let smoothed = GeneratorTuning.smooth(tuned, epsilon: 1.0, temperature: 2.0)
@@ -348,8 +347,8 @@ struct OnlineCGSInterpreterTests {
                 predicate: predicate,
                 sampleCount: 20,
                 seed: 42,
-                maxRuns: 50
-            )
+                maxRuns: 50,
+            ),
         ).map(\.value)
 
         // Should still produce values (not crash)
@@ -373,7 +372,7 @@ struct OnlineCGSInterpreterTests {
             gen,
             samples: 500,
             seed: 12345,
-            predicate: isValidBST
+            predicate: isValidBST,
         )
 
         let profile = GeneratorTuning.profile(tuned)
@@ -406,14 +405,14 @@ struct OnlineCGSInterpreterTests {
             gen,
             samples: 200,
             seed: 12345,
-            predicate: isValidBST
+            predicate: isValidBST,
         )
 
         let profile = GeneratorTuning.profile(
             tuned,
             predicate: isValidBST,
             samples: 1000,
-            seed: 42
+            seed: 42,
         )
 
         // Should have empirical data
@@ -443,7 +442,7 @@ struct OnlineCGSInterpreterTests {
             gen,
             samples: 1000,
             seed: 12345,
-            predicate: isValidBST
+            predicate: isValidBST,
         )
         let adaptTime = ContinuousClock().now - adaptStart
 
@@ -473,7 +472,7 @@ struct OnlineCGSInterpreterTests {
             tuned,
             epsilon: 1.0,
             baseTemperature: 1.0,
-            maxTemperature: 4.0
+            maxTemperature: 4.0,
         )
         let adaptiveSmoothTime = ContinuousClock().now - adaptiveSmoothStart
 

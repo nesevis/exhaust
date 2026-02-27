@@ -616,7 +616,7 @@ struct ReflectAndFlattenTests {
 
     @Test("Test cross-boundary shrinking")
     func crossBoundaryShrinkingWorks() throws {
-        let gen = #gen(.int(in: 1...10).array(length: 1...10).array(length: 1...10))
+        let gen = #gen(.int(in: 1 ... 10).array(length: 1 ... 10).array(length: 1 ... 10))
         let (value, tree) = try #require(Array(ValueAndChoiceTreeInterpreter(gen, seed: 1337).prefix(14)).last)
 
         var sequence = ChoiceSequence.flatten(tree)

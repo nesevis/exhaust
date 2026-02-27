@@ -31,7 +31,7 @@ private enum BST: Equatable, Hashable, CustomStringConvertible {
             (weight: 3, Gen.zip(
                 bstGenerator(maxDepth: maxDepth - 1),
                 Gen.choose(in: UInt(0) ... 9),
-                bstGenerator(maxDepth: maxDepth - 1)
+                bstGenerator(maxDepth: maxDepth - 1),
             ).map { left, value, right in
                 .node(left: left, value: value, right: right)
             }),
@@ -70,16 +70,16 @@ private enum BST: Equatable, Hashable, CustomStringConvertible {
 
     var height: Int {
         switch self {
-        case .leaf: return 0
+        case .leaf: 0
         case let .node(left, _, right):
-            return 1 + Swift.max(left.height, right.height)
+            1 + Swift.max(left.height, right.height)
         }
     }
 
     var description: String {
         switch self {
-        case .leaf: return "."
-        case let .node(left, value, right): return "(\(left) \(value) \(right))"
+        case .leaf: "."
+        case let .node(left, value, right): "(\(left) \(value) \(right))"
         }
     }
 }
@@ -104,7 +104,9 @@ private struct BenchmarkResult {
     let elapsed: Duration
     let qualityDistribution: [Int: Int]
 
-    var reachedTarget: Bool { uniqueCount >= 100 }
+    var reachedTarget: Bool {
+        uniqueCount >= 100
+    }
 }
 
 // MARK: - Benchmark
@@ -123,12 +125,12 @@ struct UniquenessBenchmarkTests {
             generator: BST.arbitrary,
             predicate: { $0.height >= 1 && $0.isValidBST() },
             qualityBucket: \.height,
-            bucketLabel: "height"
+            bucketLabel: "height",
         )
     }
 
-    // Length 20 with 10 values has validity ~10^-13 — intractable for any strategy.
-    // Length 8 gives ~1 in 4000 — sparse enough to differentiate strategies.
+    /// Length 20 with 10 values has validity ~10^-13 — intractable for any strategy.
+    /// Length 8 gives ~1 in 4000 — sparse enough to differentiate strategies.
     private static let sortedLength: UInt64 = 8
 
     private static var sortedProblem: BenchmarkProblem<[UInt]> {
@@ -140,7 +142,7 @@ struct UniquenessBenchmarkTests {
                 return zip(list, list.dropFirst()).allSatisfy { $0 <= $1 }
             },
             qualityBucket: { Set($0).count },
-            bucketLabel: "distinct"
+            bucketLabel: "distinct",
         )
     }
 
@@ -150,7 +152,7 @@ struct UniquenessBenchmarkTests {
             generator: BST.arbitrary,
             predicate: { $0.height >= 1 && $0.isValidAVL() },
             qualityBucket: \.height,
-            bucketLabel: "height"
+            bucketLabel: "height",
         )
     }
 
@@ -164,7 +166,7 @@ struct UniquenessBenchmarkTests {
     }
 
     /// Runs the generator a handful of times and returns true as soon as any tree contains a pick site.
-    private func probeContainsPicks<Value>(_ generator: ReflectiveGenerator<Value>) -> Bool {
+    private func probeContainsPicks(_ generator: ReflectiveGenerator<some Any>) -> Bool {
         var iterator = ValueAndChoiceTreeInterpreter(generator, seed: Self.seed, maxRuns: 10)
         while let (_, tree) = iterator.next() {
             if tree.containsPicks { return true }
@@ -193,8 +195,8 @@ struct UniquenessBenchmarkTests {
 
     // MARK: - Strategy Runner
 
-    private func runAllStrategies<Value: Hashable>(
-        _ problem: BenchmarkProblem<Value>
+    private func runAllStrategies(
+        _ problem: BenchmarkProblem<some Hashable>,
     ) throws -> [BenchmarkResult] {
         let rejection = measureRejection(problem)
         let onlineCGS = measureOnlineCGS(problem)
@@ -207,7 +209,7 @@ struct UniquenessBenchmarkTests {
     // MARK: - Strategy Implementations
 
     private func measureRejection<Value: Hashable>(
-        _ problem: BenchmarkProblem<Value>
+        _ problem: BenchmarkProblem<Value>,
     ) -> BenchmarkResult {
         var unique = Set<Value>()
         var total = 0
@@ -231,12 +233,12 @@ struct UniquenessBenchmarkTests {
             uniqueCount: unique.count,
             totalGenerated: total,
             elapsed: elapsed,
-            qualityDistribution: quality
+            qualityDistribution: quality,
         )
     }
 
     private func measureOnlineCGS<Value: Hashable>(
-        _ problem: BenchmarkProblem<Value>
+        _ problem: BenchmarkProblem<Value>,
     ) -> BenchmarkResult {
         var unique = Set<Value>()
         var total = 0
@@ -246,7 +248,7 @@ struct UniquenessBenchmarkTests {
             predicate: problem.predicate,
             sampleCount: 3,
             seed: Self.seed,
-            maxRuns: Self.budget
+            maxRuns: Self.budget,
         )
 
         let start = ContinuousClock.now
@@ -266,12 +268,12 @@ struct UniquenessBenchmarkTests {
             uniqueCount: unique.count,
             totalGenerated: total,
             elapsed: elapsed,
-            qualityDistribution: quality
+            qualityDistribution: quality,
         )
     }
 
     private func measureSmoothed<Value: Hashable>(
-        _ problem: BenchmarkProblem<Value>
+        _ problem: BenchmarkProblem<Value>,
     ) throws -> BenchmarkResult {
         let start = ContinuousClock.now
 
@@ -279,7 +281,7 @@ struct UniquenessBenchmarkTests {
             problem.generator,
             samples: 1000,
             seed: 12345,
-            predicate: problem.predicate
+            predicate: problem.predicate,
         )
         let smoothed = GeneratorTuning.smooth(tuned, epsilon: 1.0, temperature: 2.0)
 
@@ -304,12 +306,12 @@ struct UniquenessBenchmarkTests {
             uniqueCount: unique.count,
             totalGenerated: total,
             elapsed: elapsed,
-            qualityDistribution: quality
+            qualityDistribution: quality,
         )
     }
 
     private func measureAdaptivelySmoothed<Value: Hashable>(
-        _ problem: BenchmarkProblem<Value>
+        _ problem: BenchmarkProblem<Value>,
     ) throws -> BenchmarkResult {
         let start = ContinuousClock.now
 
@@ -317,13 +319,13 @@ struct UniquenessBenchmarkTests {
             problem.generator,
             samples: 1000,
             seed: 12345,
-            predicate: problem.predicate
+            predicate: problem.predicate,
         )
         let adaptive = GeneratorTuning.smoothAdaptively(
             tuned,
             epsilon: 1.0,
             baseTemperature: 1.0,
-            maxTemperature: 4.0
+            maxTemperature: 4.0,
         )
 
         var unique = Set<Value>()
@@ -347,19 +349,19 @@ struct UniquenessBenchmarkTests {
             uniqueCount: unique.count,
             totalGenerated: total,
             elapsed: elapsed,
-            qualityDistribution: quality
+            qualityDistribution: quality,
         )
     }
 
     private func measureAutoAdapted<Value: Hashable>(
-        _ problem: BenchmarkProblem<Value>
+        _ problem: BenchmarkProblem<Value>,
     ) throws -> BenchmarkResult {
         let start = ContinuousClock.now
 
         let generator = try GeneratorTuning.probeAndTune(
             problem.generator,
             seed: 12345,
-            predicate: problem.predicate
+            predicate: problem.predicate,
         )
 
         var unique = Set<Value>()
@@ -383,7 +385,7 @@ struct UniquenessBenchmarkTests {
             uniqueCount: unique.count,
             totalGenerated: total,
             elapsed: elapsed,
-            qualityDistribution: quality
+            qualityDistribution: quality,
         )
     }
 
@@ -415,7 +417,7 @@ struct UniquenessBenchmarkTests {
         print("└──────────────┴────────┴──────────┴────────────────────────────────────────────────┘")
 
         // Bar chart
-        let allBuckets = Set(results.flatMap { $0.qualityDistribution.keys }).sorted()
+        let allBuckets = Set(results.flatMap(\.qualityDistribution.keys)).sorted()
         guard !allBuckets.isEmpty else { return }
 
         print()
@@ -442,13 +444,18 @@ struct UniquenessBenchmarkTests {
     }
 }
 
-// Helper protocol so printProblemResults can access name/label without generic parameter
+/// Helper protocol so printProblemResults can access name/label without generic parameter
 private protocol BenchmarkProblemInfo {
     var problemName: String { get }
     var problemBucketLabel: String { get }
 }
 
 extension BenchmarkProblem: BenchmarkProblemInfo {
-    var problemName: String { name }
-    var problemBucketLabel: String { bucketLabel }
+    var problemName: String {
+        name
+    }
+
+    var problemBucketLabel: String {
+        bucketLabel
+    }
 }

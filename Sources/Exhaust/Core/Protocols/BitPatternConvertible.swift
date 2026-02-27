@@ -24,6 +24,8 @@ public protocol BitPatternConvertible: Equatable, Sendable {
     static var defaultScaling: SizeScaling<Self> { get }
 }
 
-extension BitPatternConvertible {
-    public static var defaultScaling: SizeScaling<Self> { .constant }
+public extension BitPatternConvertible {
+    static var defaultScaling: SizeScaling<Self> {
+        .constant
+    }
 }

@@ -106,7 +106,7 @@ benchmark("Bound5, 50 iterations, reflective") {
         let e: [Int16]
     }
     let arrGen = Gen.arrayOf(Int16.arbitrary, within: 0 ... 10)
-    
+
     let property: (Bound5) -> Bool = { b5 in
         let arr = b5.a + b5.b + b5.c + b5.d + b5.e
         if arr.isEmpty {

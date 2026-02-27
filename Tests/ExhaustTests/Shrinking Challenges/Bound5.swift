@@ -93,7 +93,7 @@ struct Bound5ShrinkingChallenge {
         #expect(arr.count == 2)
         #expect(arr == [-32768, -1])
     }
-    
+
     @Test("Bound5, using passing data", .disabled("Inconsistent"))
     func bound5PropTest() throws {
 //        ExhaustLog.setConfiguration(.init(isEnabled: true, minimumLevel: .info, categoryMinimumLevels: [.materialize: .trace], format: .human))
@@ -115,7 +115,7 @@ struct Bound5ShrinkingChallenge {
         let arrGen = Gen.arrayOf(Int16.arbitrary, within: 0 ... 10)
         let gen = Gen.zip(arrGen, arrGen, arrGen, arrGen, arrGen)
             .map(Bound5.init)
-        
+
         let property: (Bound5) -> Bool = { b5 in
             let arr = b5.a + b5.b + b5.c + b5.d + b5.e
             if arr.isEmpty {
@@ -143,7 +143,7 @@ struct Bound5ShrinkingChallenge {
 //            print("\(offset + 1): \(after) original: \(before)")
 //        }
     }
-    
+
     @Test("Bound5, reflectMirror")
     func bound5ReflectMirror() throws {
         struct Bound5: Equatable {
@@ -153,12 +153,12 @@ struct Bound5ShrinkingChallenge {
             let d: [Int16]
             let e: [Int16]
         }
-        let arrGen = #gen(.array(.int16(), length: 0...10))
-        
+        let arrGen = #gen(.array(.int16(), length: 0 ... 10))
+
         let gen = #gen(arrGen, arrGen, arrGen, arrGen, arrGen) {
             Bound5(a: $0, b: $1, c: $2, d: $3, e: $4)
         }
-        
+
         let property: (Bound5) -> Bool = { b5 in
             let arr = b5.a + b5.b + b5.c + b5.d + b5.e
             if arr.isEmpty {

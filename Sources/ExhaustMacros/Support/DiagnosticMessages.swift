@@ -11,7 +11,9 @@ enum ExhaustMacroDiagnostic: String, DiagnosticMessage {
     case exhaustMissingProperty = "#exhaust requires a property (trailing closure or 'property:' argument)"
     case exhaustMissingGenerator = "#exhaust requires a generator as its first argument"
 
-    var message: String { rawValue }
+    var message: String {
+        rawValue
+    }
 
     var diagnosticID: MessageID {
         MessageID(domain: "ExhaustMacros", id: "\(self)")

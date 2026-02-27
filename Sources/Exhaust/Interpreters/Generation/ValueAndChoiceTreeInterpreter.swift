@@ -495,7 +495,7 @@ public struct ValueAndChoiceTreeInterpreter<FinalOutput>: IteratorProtocol, Sequ
         var classifications: [UInt64: [String: Set<UInt64>]] = [:]
         var prng: Xoshiro256
 
-        // Cache of tuned generators keyed by filter fingerprint
+        /// Cache of tuned generators keyed by filter fingerprint
         var tunedFilterCache: [UInt64: ReflectiveGenerator<Any>] = [:]
 
         // Unique combinator state

@@ -10,7 +10,9 @@ extension Float: BitPatternConvertible {
         .float
     }
 
-    public static var defaultScaling: SizeScaling<Self> { .exponentialFrom(origin: 0) }
+    public static var defaultScaling: SizeScaling<Self> {
+        .exponentialFrom(origin: 0)
+    }
 
     private static let signBitMask: UInt32 = 0x8000_0000
 
@@ -58,7 +60,9 @@ extension Double: BitPatternConvertible {
         .double
     }
 
-    public static var defaultScaling: SizeScaling<Self> { .exponentialFrom(origin: 0) }
+    public static var defaultScaling: SizeScaling<Self> {
+        .exponentialFrom(origin: 0)
+    }
 
     private static let signBitMask: UInt64 = 0x8000_0000_0000_0000
 

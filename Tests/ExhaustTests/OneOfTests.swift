@@ -10,7 +10,6 @@ import Testing
 
 @Suite("oneOf combinator")
 struct OneOfTests {
-
     // MARK: - Helpers
 
     private func roundTrip<Output: Equatable>(

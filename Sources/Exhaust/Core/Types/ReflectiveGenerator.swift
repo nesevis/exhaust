@@ -217,13 +217,13 @@ public extension ReflectiveGenerator where Operation == ReflectiveOperation {
         _ type: FilterType = .auto,
         _ predicate: @escaping (Value) -> Bool,
         fileID: String = #fileID,
-        line: UInt = #line
+        line: UInt = #line,
     ) -> ReflectiveGenerator<Value> {
         let fingerprint = fileID.hashValue.bitPattern64 &+ line.bitPattern64
 
         return .impure(
             operation: .filter(gen: erase(), fingerprint: fingerprint, filterType: type, predicate: { value in predicate(value as! Value) }),
-            continuation: { .pure($0 as! Value) }
+            continuation: { .pure($0 as! Value) },
         )
     }
 
@@ -241,13 +241,13 @@ public extension ReflectiveGenerator where Operation == ReflectiveOperation {
     @inlinable
     func unique(
         fileID: String = #fileID,
-        line: UInt = #line
+        line: UInt = #line,
     ) -> ReflectiveGenerator<Value> {
         let fingerprint = fileID.hashValue.bitPattern64 &+ line.bitPattern64
 
         return .impure(
             operation: .unique(gen: erase(), fingerprint: fingerprint, keyExtractor: nil),
-            continuation: { .pure($0 as! Value) }
+            continuation: { .pure($0 as! Value) },
         )
     }
 
@@ -262,10 +262,10 @@ public extension ReflectiveGenerator where Operation == ReflectiveOperation {
     ///   - line: Source line number for fingerprinting (auto-captured).
     /// - Returns: A generator that only yields values with unique keys.
     @inlinable
-    func unique<Key: Hashable>(
-        by keyPath: KeyPath<Value, Key>,
+    func unique(
+        by keyPath: KeyPath<Value, some Hashable>,
         fileID: String = #fileID,
-        line: UInt = #line
+        line: UInt = #line,
     ) -> ReflectiveGenerator<Value> {
         unique(by: { $0[keyPath: keyPath] }, fileID: fileID, line: line)
     }
@@ -281,59 +281,21 @@ public extension ReflectiveGenerator where Operation == ReflectiveOperation {
     ///   - line: Source line number for fingerprinting (auto-captured).
     /// - Returns: A generator that only yields values with unique keys.
     @inlinable
-    func unique<Key: Hashable>(
-        by transform: @escaping (Value) -> Key,
+    func unique(
+        by transform: @escaping (Value) -> some Hashable,
         fileID: String = #fileID,
-        line: UInt = #line
+        line: UInt = #line,
     ) -> ReflectiveGenerator<Value> {
         let fingerprint = fileID.hashValue.bitPattern64 &+ line.bitPattern64
 
         return .impure(
             operation: .unique(gen: erase(), fingerprint: fingerprint, keyExtractor: { value in AnyHashable(transform(value as! Value)) }),
-            continuation: { .pure($0 as! Value) }
+            continuation: { .pure($0 as! Value) },
         )
     }
 
     @inlinable
     func compose<OtherValue>(with other: ReflectiveGenerator<OtherValue>) -> ReflectiveGenerator<(Value, OtherValue)> {
         Gen.zip(self, other)
-    }
-
-    // Transforms the operation type of this generator while preserving the value type.
-    //
-    // **Warning**: This operation has significant performance overhead as it must traverse
-    // and rebuild the entire generator structure. Use sparingly and prefer type-safe alternatives.
-    //
-    // This is an internal utility for advanced generator transformations that need to change
-    // the underlying operation type (e.g., wrapping `ReflectiveOperation` in a larger operation type).
-    //
-    // The transformation is applied recursively to all operations in the generator tree,
-    // requiring a complete structural traversal.
-    //
-    // - Parameter transform: Function to convert operations to the new operation type
-    // - Returns: An equivalent generator with transformed operation type
-    // - Note: Marked private due to performance concerns and specialized use cases
-    #warning("Not currently used anywhere. Possibly for CGS adaptation? Computationally expensive!")
-    func mapOperation<NewOperation>(_ transform: @escaping (Operation) -> NewOperation) -> FreerMonad<NewOperation, Value> {
-        switch self {
-        case let .pure(value):
-            // If we're at a pure value, there's no operation to transform. Return as is.
-            return .pure(value)
-
-        case let .impure(operation, continuation):
-            // If we have a suspended operation:
-            // 1. Transform the current operation.
-            let newOperation = transform(operation)
-
-            // 2. Create a new continuation. This new continuation must return a monad
-            //    with the NewOperation type. We do this by recursively calling
-            //    `mapOperation` on the result of the original continuation.
-            let newContinuation = { (val: Any) -> FreerMonad<NewOperation, Value> in
-                try continuation(val).mapOperation(transform)
-            }
-
-            // 3. Return a new impure case with the transformed operation and continuation.
-            return .impure(operation: newOperation, continuation: newContinuation)
-        }
     }
 }

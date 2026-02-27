@@ -19,7 +19,7 @@ struct UniquenessConstraintTests {
         var iterator = ValueAndChoiceTreeInterpreter(
             gen,
             seed: 42,
-            maxRuns: maxRuns
+            maxRuns: maxRuns,
         )
 
         var values = [UInt64]()
@@ -39,7 +39,7 @@ struct UniquenessConstraintTests {
         var iterator = ValueAndChoiceTreeInterpreter(
             gen,
             seed: 1,
-            maxRuns: 10
+            maxRuns: 10,
         )
 
         var count = 0
@@ -56,7 +56,7 @@ struct UniquenessConstraintTests {
         var iterator = ValueAndChoiceTreeInterpreter(
             gen,
             seed: 42,
-            maxRuns: 100
+            maxRuns: 100,
         )
 
         var values = Set<Bool>()
@@ -76,16 +76,20 @@ struct UniquenessConstraintTests {
         let maxRuns: UInt64 = 20
 
         var iter1 = ValueAndChoiceTreeInterpreter(
-            gen, seed: seed, maxRuns: maxRuns
+            gen, seed: seed, maxRuns: maxRuns,
         )
         var iter2 = ValueAndChoiceTreeInterpreter(
-            gen, seed: seed, maxRuns: maxRuns
+            gen, seed: seed, maxRuns: maxRuns,
         )
 
         var values1 = [UInt64]()
         var values2 = [UInt64]()
-        while let (v, _) = iter1.next() { values1.append(v) }
-        while let (v, _) = iter2.next() { values2.append(v) }
+        while let (v, _) = iter1.next() {
+            values1.append(v)
+        }
+        while let (v, _) = iter2.next() {
+            values2.append(v)
+        }
 
         #expect(values1 == values2, "Same seed should produce identical unique sequences")
     }
@@ -101,7 +105,9 @@ struct UniquenessConstraintTests {
         var vi = ValueInterpreter(gen, seed: seed, maxRuns: maxRuns)
 
         var values = [UInt64]()
-        while let v = vi.next() { values.append(v) }
+        while let v = vi.next() {
+            values.append(v)
+        }
 
         let uniqueValues = Set(values)
         #expect(values.count == uniqueValues.count, "ValueInterpreter with .unique() should produce unique values")
@@ -115,13 +121,13 @@ struct UniquenessConstraintTests {
         let secondGen: ReflectiveGenerator<UInt64> = Gen.choose(in: 0 ... 4)
         let pairGen: ReflectiveGenerator<(UInt64, UInt64)> = Gen.zip(
             UInt64.arbitrary,
-            secondGen
+            secondGen,
         ).unique(by: \.1)
 
         var iterator = ValueAndChoiceTreeInterpreter(
             pairGen,
             seed: 42,
-            maxRuns: 100
+            maxRuns: 100,
         )
 
         var seenKeys = Set<UInt64>()
@@ -149,7 +155,7 @@ struct UniquenessConstraintTests {
         var iterator = ValueAndChoiceTreeInterpreter(
             gen,
             seed: 42,
-            maxRuns: 100
+            maxRuns: 100,
         )
 
         var seenRemainders = Set<UInt64>()
@@ -178,7 +184,7 @@ struct UniquenessConstraintTests {
             gen,
             predicate: { _ in true },
             seed: 42,
-            maxRuns: 100
+            maxRuns: 100,
         )
 
         var sequences = Set<ChoiceSequence>()
@@ -201,7 +207,7 @@ struct UniquenessConstraintTests {
         try PropertyTest.test(
             gen,
             maxIterations: 100,
-            seed: 42
+            seed: 42,
         ) { value in
             seen.insert(value)
             return true

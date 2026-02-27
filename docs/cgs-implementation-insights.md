@@ -29,21 +29,7 @@ The CGS algorithm from Figure 3.3 of Harrison Goldstein's thesis follows this pa
 - How to handle different types of choices
 
 **Implementation Strategy:**
-Use `.mapOperation` to transform the generator, keeping only the specified choice branch:
-
-```swift
-generator.mapOperation { operation in
-    switch operation {
-    case .pick(let choices):
-        if let targetChoice = choices.first(where: { $0.label == choice.label }) {
-            return .pick(choices: ContiguousArray([(weight: 1, label: targetChoice.label, generator: targetChoice.generator)]))
-        }
-        return operation
-    default:
-        return operation
-    }
-}
-```
+`GeneratorTuning` solves this through a recursive top-down walk of the generator tree, pattern-matching on each `ReflectiveOperation` case. For each `.pick`, it samples through continuations with per-choice RNG streams, measures predicate satisfaction rates, and reweights branches accordingly. This avoids the need for an operation-type transformation (`mapOperation` was originally considered but proved unnecessary since adaptation is expressed through weight adjustments on the existing operation type).
 
 ### 2. Types of Choice Points
 

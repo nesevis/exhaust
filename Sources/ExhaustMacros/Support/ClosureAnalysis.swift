@@ -56,15 +56,15 @@ struct BidirectionalResult {
 /// 6. There is a 1:1 correspondence between parameters and arguments
 func analyzeClosureForBidirectional(
     _ closure: ClosureExprSyntax,
-    generatorCount: Int
+    generatorCount: Int,
 ) -> ClosureAnalysisOutcome {
     // Step 1: Extract named closure parameters
     let parameterNames: [String]
     if let signature = closure.signature {
         if let paramList = signature.parameterClause?.as(ClosureShorthandParameterListSyntax.self) {
-            parameterNames = paramList.map { $0.name.text }
+            parameterNames = paramList.map(\.name.text)
         } else if let paramClause = signature.parameterClause?.as(ClosureParameterClauseSyntax.self) {
-            parameterNames = paramClause.parameters.map { $0.firstName.text }
+            parameterNames = paramClause.parameters.map(\.firstName.text)
         } else {
             return .forwardOnly(.forwardOnlyShorthandParams)
         }
@@ -89,7 +89,7 @@ func analyzeClosureForBidirectional(
 /// function call argument labels, not from parameter names.
 private func analyzeShorthandClosure(
     _ closure: ClosureExprSyntax,
-    generatorCount: Int
+    generatorCount: Int,
 ) -> ClosureAnalysisOutcome {
     guard let singleExpr = extractSingleExpression(from: closure.statements) else {
         return .forwardOnly(.forwardOnlyMultiStatement)
@@ -140,7 +140,7 @@ private func analyzeShorthandClosure(
         parameterNames: parameterNames,
         argumentParamRefs: argumentParamRefs,
         caseName: caseName,
-        originalArgumentLabels: originalArgumentLabels
+        originalArgumentLabels: originalArgumentLabels,
     ))
 }
 
@@ -152,7 +152,7 @@ private func analyzeShorthandClosure(
 private func analyzeFunctionCall(
     _ singleExpr: ExprSyntax,
     parameterNames: [String],
-    generatorCount: Int
+    generatorCount: Int,
 ) -> ClosureAnalysisOutcome {
     guard let funcCall = singleExpr.as(FunctionCallExprSyntax.self) else {
         return .forwardOnly(.forwardOnlyNotFunctionCall)
@@ -196,7 +196,7 @@ private func analyzeFunctionCall(
         parameterNames: parameterNames,
         argumentParamRefs: argumentParamRefs,
         caseName: caseName,
-        originalArgumentLabels: originalArgumentLabels
+        originalArgumentLabels: originalArgumentLabels,
     ))
 }
 
@@ -230,7 +230,8 @@ private func extractSingleExpression(from statements: CodeBlockItemListSyntax) -
 
     // Return statement wrapping an expression
     if let returnStmt = singleItem.item.as(ReturnStmtSyntax.self),
-       let expr = returnStmt.expression {
+       let expr = returnStmt.expression
+    {
         return expr
     }
 

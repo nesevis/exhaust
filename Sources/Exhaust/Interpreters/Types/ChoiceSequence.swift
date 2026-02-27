@@ -23,7 +23,7 @@ public struct ChoiceSpan: CustomDebugStringConvertible {
 
 public typealias ChoiceSequence = ContiguousArray<ChoiceSequenceValue>
 
-extension Collection where Element == ChoiceSequenceValue {
+extension Collection<ChoiceSequenceValue> {
     var shortString: String {
         map(\.shortString).joined()
     }

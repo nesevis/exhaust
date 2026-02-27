@@ -25,7 +25,7 @@ extension Interpreters {
     ) throws -> Output? {
         // Start the recursive process. The helper returns the value and any *unconsumed*
         // parts of the tree. A successful top-level replay should consume the entire tree.
-        return try replayRecursive(gen, with: choiceTree)
+        try replayRecursive(gen, with: choiceTree)
 
         // We can add a check here to ensure no parts of the tree were left over,
         // but the recursive logic should handle this correctly.

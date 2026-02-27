@@ -10,14 +10,13 @@ import Testing
 
 @Suite("CounterexampleDiff")
 struct CounterexampleDiffTests {
-
-    private class Person {
-        internal init(name: String, age: Int, scores: [Int]) {
+    private final class Person {
+        init(name: String, age: Int, scores: [Int]) {
             self.name = name
             self.age = age
             self.scores = scores
         }
-        
+
         var name: String
         var age: Int
         var scores: [Int]

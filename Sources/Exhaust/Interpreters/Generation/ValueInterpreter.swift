@@ -217,10 +217,10 @@ public struct ValueInterpreter<Element>: IteratorProtocol, Sequence {
                             isFixed: context.isFixed,
                             size: context.size,
                             runs: 0,
-                            prng: context.prng
+                            prng: context.prng,
                         )
                         guard let (result, tree) = try ValueAndChoiceTreeInterpreter<Any>.generateRecursive(
-                            gen, with: inputValue, context: vactiContext
+                            gen, with: inputValue, context: vactiContext,
                         ) else {
                             context.prng = vactiContext.prng
                             return nil
@@ -392,7 +392,7 @@ public struct ValueInterpreter<Element>: IteratorProtocol, Sequence {
         var sizeOverride: UInt64?
         var prng: Xoshiro256
 
-        // Cache of tuned generators keyed by filter fingerprint
+        /// Cache of tuned generators keyed by filter fingerprint
         var tunedFilterCache: [UInt64: ReflectiveGenerator<Any>] = [:]
 
         // Unique combinator state

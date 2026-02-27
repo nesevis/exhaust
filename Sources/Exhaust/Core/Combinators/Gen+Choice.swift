@@ -121,11 +121,11 @@ public extension Gen {
             isRangeExplicit: isRangeExplicit,
         )
     }
-    
+
     /// Chooses a random element from a collection by generating a random index.
     @inlinable
     static func choose<C: Collection>(
-        from collection: C
+        from collection: C,
     ) -> ReflectiveGenerator<C.Element> where C.Element: Equatable, C.Index == Int {
         // Use Gen.contramap directly rather than .mapped because the backward
         // closure throws and .mapped propagates that via rethrows (from FreerMonad.bind),
@@ -139,14 +139,14 @@ public extension Gen {
                 return index
             },
             Gen.choose(in: collection.startIndex ... collection.endIndex.advanced(by: -1))
-                .map { collection[$0] }
+                .map { collection[$0] },
         )
     }
-    
+
     /// Chooses a random element from a collection by generating a random index.
     @inlinable
     static func choose<C: Collection>(
-        from collection: C
+        from collection: C,
     ) -> ReflectiveGenerator<C.Element> where C.Index == Int {
         Gen.choose(in: collection.startIndex ... collection.endIndex.advanced(by: -1))
             .map { collection[$0] }
@@ -186,9 +186,9 @@ public extension Gen {
     ) -> ReflectiveGenerator<Output> {
         switch scaling {
         case .constant:
-            return Gen.choose(in: range)
+            Gen.choose(in: range)
         case .linear, .linearFrom, .exponential, .exponentialFrom:
-            return Gen.getSize().bind { size in
+            Gen.getSize().bind { size in
                 let effectiveRange = scaledRange(range, scaling: scaling, size: size)
                 return Gen.chooseDerived(in: effectiveRange)
             }

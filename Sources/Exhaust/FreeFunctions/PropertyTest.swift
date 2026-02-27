@@ -40,28 +40,28 @@ enum PropertyTest {
                     "\(next)",
                 )
 
-                let successfulTraces = passFails[true]?.compactMap { $0 }.map { ChoiceSequence($0) } ?? []
+                let successfulTraces = passFails[true]?.compactMap(\.self).map { ChoiceSequence($0) } ?? []
                 if let (shrunkSequence, shrunkValue) = try Interpreters.reduce(
                     gen: gen,
                     tree: tree,
                     config: .fast,
 //                    successfulTraces: successfulTraces,
-                    property: property
+                    property: property,
                 ) {
                     ExhaustLog.notice(
                         category: .propertyTest,
                         event: "shrunk_counterexample",
-                        "\(shrunkValue)"
+                        "\(shrunkValue)",
                     )
                     ExhaustLog.notice(
                         category: .propertyTest,
                         event: "counterexample_diff",
-                        CounterexampleDiff.format(original: next, shrunk: shrunkValue)
+                        CounterexampleDiff.format(original: next, shrunk: shrunkValue),
                     )
                     ExhaustLog.notice(
                         category: .propertyTest,
                         event: "shrunk_blueprint",
-                        "\(shrunkSequence.shortString)"
+                        "\(shrunkSequence.shortString)",
                     )
                     return shrunkValue
                 }

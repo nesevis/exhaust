@@ -1,7 +1,6 @@
 import SwiftSyntaxMacros
 import SwiftSyntaxMacrosTestSupport
 import Testing
-
 @testable import ExhaustMacros
 
 private let testMacros: [String: any Macro.Type] = [
@@ -28,7 +27,7 @@ struct ExhaustMacroTests {
             }
             )
             """,
-            macros: testMacros
+            macros: testMacros,
         )
     }
 
@@ -50,7 +49,7 @@ struct ExhaustMacroTests {
             }
             )
             """,
-            macros: testMacros
+            macros: testMacros,
         )
     }
 
@@ -68,7 +67,7 @@ struct ExhaustMacroTests {
                 property: isValid
             )
             """,
-            macros: testMacros
+            macros: testMacros,
         )
     }
 
@@ -86,7 +85,7 @@ struct ExhaustMacroTests {
                 property: isValid
             )
             """,
-            macros: testMacros
+            macros: testMacros,
         )
     }
 
@@ -104,10 +103,10 @@ struct ExhaustMacroTests {
                     message: ExhaustMacroDiagnostic.exhaustMissingProperty.rawValue,
                     line: 1,
                     column: 1,
-                    severity: .error
+                    severity: .error,
                 ),
             ],
-            macros: testMacros
+            macros: testMacros,
         )
     }
 }

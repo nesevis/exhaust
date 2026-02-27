@@ -19,11 +19,11 @@ public extension Gen {
     static func _macroMap<Input, Output>(
         _ generator: ReflectiveGenerator<Input>,
         label: String,
-        forward: @escaping (Input) -> Output
+        forward: @escaping (Input) -> Output,
     ) -> ReflectiveGenerator<Output> {
         Gen.contramap(
             { _mirrorExtract($0, label: label) },
-            generator.map(forward)
+            generator.map(forward),
         )
     }
 
@@ -46,7 +46,7 @@ public extension Gen {
     static func _macroMap<Input, Output>(
         _ generator: ReflectiveGenerator<Input>,
         backward: @escaping (Output) -> Input?,
-        forward: @escaping (Input) -> Output
+        forward: @escaping (Input) -> Output,
     ) -> ReflectiveGenerator<Output> {
         Gen.contramap(
             { (output: Output) throws -> Input in
@@ -55,7 +55,7 @@ public extension Gen {
                 }
                 return input
             },
-            generator.map(forward)
+            generator.map(forward),
         )
     }
 
@@ -85,7 +85,7 @@ public extension Gen {
     static func _macroZip<each T, NewOutput>(
         _ generators: repeat ReflectiveGenerator<each T>,
         labels: [String],
-        forward: @escaping ((repeat each T)) -> NewOutput
+        forward: @escaping ((repeat each T)) -> NewOutput,
     ) -> ReflectiveGenerator<NewOutput> {
         var erased: ContiguousArray<ReflectiveGenerator<Any>> = []
         erased.reserveCapacity(5)
@@ -95,7 +95,7 @@ public extension Gen {
 
         let impure: ReflectiveGenerator<[Any]> = .impure(
             operation: .zip(erased),
-            continuation: { .pure($0 as! [Any]) }
+            continuation: { .pure($0 as! [Any]) },
         )
 
         let forwardFromArray: ([Any]) -> NewOutput = { values in
@@ -133,7 +133,7 @@ public extension Gen {
     static func _macroZip<each T, NewOutput>(
         _ generators: repeat ReflectiveGenerator<each T>,
         backward: @escaping (NewOutput) -> [Any]?,
-        forward: @escaping ((repeat each T)) -> NewOutput
+        forward: @escaping ((repeat each T)) -> NewOutput,
     ) -> ReflectiveGenerator<NewOutput> {
         var erased: ContiguousArray<ReflectiveGenerator<Any>> = []
         erased.reserveCapacity(5)
@@ -143,7 +143,7 @@ public extension Gen {
 
         let impure: ReflectiveGenerator<[Any]> = .impure(
             operation: .zip(erased),
-            continuation: { .pure($0 as! [Any]) }
+            continuation: { .pure($0 as! [Any]) },
         )
 
         let forwardFromArray: ([Any]) -> NewOutput = { values in

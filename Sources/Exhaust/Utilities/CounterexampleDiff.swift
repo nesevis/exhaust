@@ -6,7 +6,6 @@
 //
 
 enum CounterexampleDiff {
-
     /// Formats a human-readable diff between an original failing value and its shrunk counterpart.
     ///
     /// For structs/classes with labeled children, produces a property-level diff showing only
@@ -14,7 +13,7 @@ enum CounterexampleDiff {
     /// on separate lines for unlabeled or mismatched types.
     static func format<Output>(
         original: Output,
-        shrunk: Output
+        shrunk: Output,
     ) -> String {
         var lines: [String] = []
         let correlated = correlatedDiff(
@@ -22,7 +21,7 @@ enum CounterexampleDiff {
             shrunk: shrunk,
             prefix: "",
             depth: 0,
-            lines: &lines
+            lines: &lines,
         )
 
         if correlated {
@@ -33,17 +32,16 @@ enum CounterexampleDiff {
         } else {
             let shrunkDesc = String(describing: shrunk)
             let originalDesc = String(describing: original)
-            
+
             switch (shrunkDesc.count, originalDesc.count) {
-            case (0...20, 0...30):
+            case (0 ... 20, 0 ... 30):
                 return "Counterexample \(shrunkDesc) \u{2190} \(originalDesc)"
-            case (21...40, _):
+            case (21 ... 40, _):
                 return "Counterexample \(shrunkDesc) \u{2190} \(originalDesc.prefix(30))…"
             default:
                 return "Counterexample diff (shrunk \u{2190} original):\n"
             }
-            
-            
+
             return "Counterexample diff (shrunk \u{2190} original):\n"
                 + "  shrunk:   \(String(describing: shrunk))\n"
                 + "  original: \(String(describing: original))"
@@ -61,7 +59,7 @@ enum CounterexampleDiff {
         shrunk: Value,
         prefix: String,
         depth: Int,
-        lines: inout [String]
+        lines: inout [String],
     ) -> Bool {
         let originalMirror = Mirror(reflecting: original)
         let shrunkMirror = Mirror(reflecting: shrunk)
@@ -87,13 +85,14 @@ enum CounterexampleDiff {
             if depth < maxDepth,
                isLabeledStructural(childOriginalMirror),
                isLabeledStructural(Mirror(reflecting: shrunkChild.value)),
-               !childOriginalMirror.children.isEmpty {
+               !childOriginalMirror.children.isEmpty
+            {
                 let childCorrelated = correlatedDiff(
                     original: originalChild.value,
                     shrunk: shrunkChild.value,
                     prefix: key,
                     depth: depth + 1,
-                    lines: &lines
+                    lines: &lines,
                 )
                 if !childCorrelated {
                     lines.append("  \(key): \(shrunkDesc) \u{2190} \(originalDesc)")
@@ -109,9 +108,9 @@ enum CounterexampleDiff {
     private static func isLabeledStructural(_ mirror: Mirror) -> Bool {
         switch mirror.displayStyle {
         case .struct, .class:
-            return mirror.children.allSatisfy { $0.label != nil }
+            mirror.children.allSatisfy { $0.label != nil }
         default:
-            return false
+            false
         }
     }
 }

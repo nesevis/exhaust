@@ -28,7 +28,6 @@ import Foundation
 /// `chooseBits` and `getSize` operations are subdivided into synthesised picks
 /// of subranges, then tuned through the pick path.
 enum GeneratorTuning {
-
     // MARK: - Context
 
     final class TuningContext {
@@ -105,7 +104,7 @@ enum GeneratorTuning {
         maxRuns: UInt64? = nil,
         maxSize: UInt64 = 100,
         seed: UInt64? = nil,
-        predicate: @escaping (Output) -> Bool
+        predicate: @escaping (Output) -> Bool,
     ) throws -> ReflectiveGenerator<Output> {
         var probe = ValueAndChoiceTreeInterpreter(generator, seed: probeSeed, maxRuns: probeRuns)
         var maxComplexity: UInt64 = 0
@@ -147,18 +146,18 @@ enum GeneratorTuning {
         samples: UInt64 = 100,
         maxSize: UInt64 = 100,
         seed: UInt64? = nil,
-        predicate: @escaping (Output) -> Bool
+        predicate: @escaping (Output) -> Bool,
     ) throws -> ReflectiveGenerator<Output> {
         let context = TuningContext(
             baseSampleCount: samples,
             maxSize: maxSize,
-            rng: seed.map(Xoshiro256.init(seed:)) ?? .init()
+            rng: seed.map(Xoshiro256.init(seed:)) ?? .init(),
         )
         return try tuneRecursive(
             generator,
             context: context,
             insideSubdividedChooseBits: false,
-            predicate: predicate
+            predicate: predicate,
         )
     }
 
@@ -168,7 +167,7 @@ enum GeneratorTuning {
         _ gen: ReflectiveGenerator<Output>,
         context: TuningContext,
         insideSubdividedChooseBits: Bool,
-        predicate: @escaping (Output) -> Bool
+        predicate: @escaping (Output) -> Bool,
     ) throws -> ReflectiveGenerator<Output> {
         switch gen {
         case .pure:
@@ -182,7 +181,7 @@ enum GeneratorTuning {
                     continuation: continuation,
                     context: context,
                     insideSubdividedChooseBits: insideSubdividedChooseBits,
-                    predicate: predicate
+                    predicate: predicate,
                 )
 
             case let .chooseBits(lower, upper, tag, isRangeExplicit):
@@ -196,7 +195,7 @@ enum GeneratorTuning {
                     isRangeExplicit: isRangeExplicit,
                     continuation: continuation,
                     context: context,
-                    predicate: predicate
+                    predicate: predicate,
                 )
 
             case let .sequence(lengthGen, elementGen):
@@ -206,14 +205,14 @@ enum GeneratorTuning {
                     continuation: continuation,
                     context: context,
                     insideSubdividedChooseBits: insideSubdividedChooseBits,
-                    predicate: predicate
+                    predicate: predicate,
                 )
 
             case .getSize:
                 return try tuneGetSize(
                     continuation: continuation,
                     context: context,
-                    predicate: predicate
+                    predicate: predicate,
                 )
 
             case let .zip(generators):
@@ -221,7 +220,7 @@ enum GeneratorTuning {
                     generators: generators,
                     continuation: continuation,
                     context: context,
-                    predicate: predicate
+                    predicate: predicate,
                 )
 
             case let .filter(subGen, fingerprint, filterType, filterPredicate):
@@ -231,7 +230,7 @@ enum GeneratorTuning {
                     filterType: filterType,
                     filterPredicate: filterPredicate,
                     continuation: continuation,
-                    context: context
+                    context: context,
                 )
 
             case let .contramap(transform, next):
@@ -240,7 +239,7 @@ enum GeneratorTuning {
                     next: next,
                     continuation: continuation,
                     context: context,
-                    predicate: predicate
+                    predicate: predicate,
                 )
 
             case let .resize(newSize, next):
@@ -250,7 +249,7 @@ enum GeneratorTuning {
                     continuation: continuation,
                     context: context,
                     insideSubdividedChooseBits: insideSubdividedChooseBits,
-                    predicate: predicate
+                    predicate: predicate,
                 )
 
             case let .unique(subGen, fingerprint, keyExtractor):
@@ -258,11 +257,11 @@ enum GeneratorTuning {
                     subGen,
                     context: context,
                     insideSubdividedChooseBits: insideSubdividedChooseBits,
-                    predicate: { _ in true }
+                    predicate: { _ in true },
                 )
                 return .impure(
                     operation: .unique(gen: tunedInner, fingerprint: fingerprint, keyExtractor: keyExtractor),
-                    continuation: continuation
+                    continuation: continuation,
                 )
 
             case .just, .prune, .classify:
@@ -278,7 +277,7 @@ enum GeneratorTuning {
         continuation: @escaping (Any) throws -> ReflectiveGenerator<Output>,
         context: TuningContext,
         insideSubdividedChooseBits: Bool,
-        predicate: @escaping (Output) -> Bool
+        predicate: @escaping (Output) -> Bool,
     ) throws -> ReflectiveGenerator<Output> {
         context.depth += 1
         defer { context.depth -= 1 }
@@ -321,7 +320,7 @@ enum GeneratorTuning {
                     _ = choiceRngs[choiceIdx].next()
 
                     guard let innerValue = try ValueInterpreter<Any>.generate(
-                        choices[choiceIdx].generator, maxRuns: 1, using: &choiceRngs[choiceIdx]
+                        choices[choiceIdx].generator, maxRuns: 1, using: &choiceRngs[choiceIdx],
                     ) else { continue }
 
                     let success: Bool
@@ -329,7 +328,7 @@ enum GeneratorTuning {
                     do {
                         let nextGen = try continuation(innerValue)
                         output = try ValueInterpreter<Output>.generate(
-                            nextGen, maxRuns: 1, using: &choiceRngs[choiceIdx]
+                            nextGen, maxRuns: 1, using: &choiceRngs[choiceIdx],
                         )
                         success = output.map(predicate) ?? false
                     } catch {
@@ -412,7 +411,7 @@ enum GeneratorTuning {
                     siteID: choice.siteID,
                     id: choice.id,
                     weight: 0,
-                    generator: choice.generator
+                    generator: choice.generator,
                 ))
                 continue
             }
@@ -423,7 +422,8 @@ enum GeneratorTuning {
             let cache = continuationCaches[choiceIdx]
             let composedPredicate: (Any) -> Bool = { innerValue in
                 if let hashable = innerValue as? AnyHashable,
-                   let cached = cache[hashable] {
+                   let cached = cache[hashable]
+                {
                     return cached
                 }
                 do {
@@ -431,7 +431,7 @@ enum GeneratorTuning {
                     let output = try ValueInterpreter<Output>.generate(
                         nextGen,
                         maxRuns: 1,
-                        using: &composedRng
+                        using: &composedRng,
                     )
                     return output.map(predicate) ?? false
                 } catch {
@@ -443,7 +443,7 @@ enum GeneratorTuning {
                 choice.generator,
                 context: context,
                 insideSubdividedChooseBits: insideSubdividedChooseBits,
-                predicate: composedPredicate
+                predicate: composedPredicate,
             )
 
             // Specification entropy weighting: reward branches that produce
@@ -473,7 +473,7 @@ enum GeneratorTuning {
                 siteID: choice.siteID,
                 id: choice.id,
                 weight: weight,
-                generator: tunedInner
+                generator: tunedInner,
             ))
         }
 
@@ -488,7 +488,7 @@ enum GeneratorTuning {
                 guard choice.weight < floor else { return choice }
                 return ReflectiveOperation.PickTuple(
                     siteID: choice.siteID, id: choice.id,
-                    weight: floor, generator: choice.generator
+                    weight: floor, generator: choice.generator,
                 )
             })
         }
@@ -502,7 +502,7 @@ enum GeneratorTuning {
 
         return .impure(
             operation: .pick(choices: tunedChoices),
-            continuation: continuation
+            continuation: continuation,
         )
     }
 
@@ -515,7 +515,7 @@ enum GeneratorTuning {
         isRangeExplicit: Bool,
         continuation: @escaping (Any) throws -> ReflectiveGenerator<Output>,
         context: TuningContext,
-        predicate: @escaping (Output) -> Bool
+        predicate: @escaping (Output) -> Bool,
     ) throws -> ReflectiveGenerator<Output> {
         context.depth += 1
         defer { context.depth -= 1 }
@@ -533,21 +533,21 @@ enum GeneratorTuning {
                     min: subrange.lowerBound,
                     max: subrange.upperBound,
                     tag: tag,
-                    isRangeExplicit: isRangeExplicit
+                    isRangeExplicit: isRangeExplicit,
                 ),
-                continuation: { .pure($0) }
+                continuation: { .pure($0) },
             )
             subrangeChoices.append(ReflectiveOperation.PickTuple(
                 siteID: context.rng.next(),
                 id: context.rng.next(),
                 weight: 1,
-                generator: subGen
+                generator: subGen,
             ))
         }
 
         let synthesisedPick: ReflectiveGenerator<Output> = .impure(
             operation: .pick(choices: subrangeChoices),
-            continuation: continuation
+            continuation: continuation,
         )
 
         // Re-enter tuneRecursive to weight the synthesised pick
@@ -555,7 +555,7 @@ enum GeneratorTuning {
             synthesisedPick,
             context: context,
             insideSubdividedChooseBits: true,
-            predicate: predicate
+            predicate: predicate,
         )
     }
 
@@ -567,12 +567,13 @@ enum GeneratorTuning {
         continuation: @escaping (Any) throws -> ReflectiveGenerator<Output>,
         context: TuningContext,
         insideSubdividedChooseBits: Bool,
-        predicate: @escaping (Output) -> Bool
+        predicate: @escaping (Output) -> Bool,
     ) throws -> ReflectiveGenerator<Output> {
         // Try to subdivide the length generator if it's a chooseBits
         // (only if we haven't already subdivided)
         if !insideSubdividedChooseBits,
-           case let .impure(.chooseBits(lower, upper, tag, isRangeExplicit), lengthContinuation) = lengthGen {
+           case let .impure(.chooseBits(lower, upper, tag, isRangeExplicit), lengthContinuation) = lengthGen
+        {
             context.depth += 1
             defer { context.depth -= 1 }
 
@@ -590,42 +591,43 @@ enum GeneratorTuning {
                         min: subrange.lowerBound,
                         max: subrange.upperBound,
                         tag: tag,
-                        isRangeExplicit: isRangeExplicit
+                        isRangeExplicit: isRangeExplicit,
                     ),
-                    continuation: lengthContinuation
+                    continuation: lengthContinuation,
                 )
 
                 // Create a sequence generator with this sub-length
                 let subSeqGen: ReflectiveGenerator<Any> = .impure(
                     operation: .sequence(length: subLengthGen, gen: elementGen),
-                    continuation: { .pure($0) }
+                    continuation: { .pure($0) },
                 )
 
                 subrangeChoices.append(ReflectiveOperation.PickTuple(
                     siteID: context.rng.next(),
                     id: context.rng.next(),
                     weight: 1,
-                    generator: subSeqGen
+                    generator: subSeqGen,
                 ))
             }
 
             let synthesisedPick: ReflectiveGenerator<Output> = .impure(
                 operation: .pick(choices: subrangeChoices),
-                continuation: continuation
+                continuation: continuation,
             )
 
             return try tuneRecursive(
                 synthesisedPick,
                 context: context,
                 insideSubdividedChooseBits: true,
-                predicate: predicate
+                predicate: predicate,
             )
         }
 
         // If the length generator uses getSize + bind (the common pattern),
         // try to look one level deeper (only if we haven't already subdivided)
         if !insideSubdividedChooseBits,
-           case let .impure(.getSize, getSizeContinuation) = lengthGen {
+           case let .impure(.getSize, getSizeContinuation) = lengthGen
+        {
             // Adapt as getSize → pick of subranges, each producing a sequence
             context.depth += 1
             defer { context.depth -= 1 }
@@ -642,44 +644,44 @@ enum GeneratorTuning {
                         min: subrange.lowerBound,
                         max: subrange.upperBound,
                         tag: .uint64,
-                        isRangeExplicit: false
+                        isRangeExplicit: false,
                     ),
-                    continuation: { .pure($0 as! UInt64) }
+                    continuation: { .pure($0 as! UInt64) },
                 )
 
                 // Feed the size into the original getSize continuation to produce
                 // the actual length generator, then build the sequence
-                let subSeqGen: ReflectiveGenerator<Any> = .impure(
+                let subSeqGen: ReflectiveGenerator<Any> = try .impure(
                     operation: .sequence(
-                        length: try subSizeGen.bind(getSizeContinuation),
-                        gen: elementGen
+                        length: subSizeGen.bind(getSizeContinuation),
+                        gen: elementGen,
                     ),
-                    continuation: { .pure($0) }
+                    continuation: { .pure($0) },
                 )
 
                 subrangeChoices.append(ReflectiveOperation.PickTuple(
                     siteID: context.rng.next(),
                     id: context.rng.next(),
                     weight: 1,
-                    generator: subSeqGen
+                    generator: subSeqGen,
                 ))
             }
 
             let synthesisedPick: ReflectiveGenerator<Output> = .impure(
                 operation: .pick(choices: subrangeChoices),
-                continuation: continuation
+                continuation: continuation,
             )
 
             return try tuneRecursive(
                 synthesisedPick,
                 context: context,
                 insideSubdividedChooseBits: true,
-                predicate: predicate
+                predicate: predicate,
             )
         }
 
         // Fallback: tune element generator with composed predicate
-        let composedElementPredicate: (Any) -> Bool = { elementValue in
+        let composedElementPredicate: (Any) -> Bool = { _ in
             // We can't meaningfully compose through the sequence continuation
             // without knowing the full array context, so return true to keep
             // all element branches available for shrinking
@@ -690,12 +692,12 @@ enum GeneratorTuning {
             elementGen,
             context: context,
             insideSubdividedChooseBits: false,
-            predicate: composedElementPredicate
+            predicate: composedElementPredicate,
         )
 
         return .impure(
             operation: .sequence(length: lengthGen, gen: tunedElementGen),
-            continuation: continuation
+            continuation: continuation,
         )
     }
 
@@ -704,7 +706,7 @@ enum GeneratorTuning {
     private static func tuneGetSize<Output>(
         continuation: @escaping (Any) throws -> ReflectiveGenerator<Output>,
         context: TuningContext,
-        predicate: @escaping (Output) -> Bool
+        predicate: @escaping (Output) -> Bool,
     ) throws -> ReflectiveGenerator<Output> {
         context.depth += 1
         defer { context.depth -= 1 }
@@ -720,28 +722,28 @@ enum GeneratorTuning {
                     min: subrange.lowerBound,
                     max: subrange.upperBound,
                     tag: .uint64,
-                    isRangeExplicit: false
+                    isRangeExplicit: false,
                 ),
-                continuation: { .pure($0) }
+                continuation: { .pure($0) },
             )
             subrangeChoices.append(ReflectiveOperation.PickTuple(
                 siteID: context.rng.next(),
                 id: context.rng.next(),
                 weight: 1,
-                generator: subGen
+                generator: subGen,
             ))
         }
 
         let synthesisedPick: ReflectiveGenerator<Output> = .impure(
             operation: .pick(choices: subrangeChoices),
-            continuation: continuation
+            continuation: continuation,
         )
 
         return try tuneRecursive(
             synthesisedPick,
             context: context,
             insideSubdividedChooseBits: true,
-            predicate: predicate
+            predicate: predicate,
         )
     }
 
@@ -751,7 +753,7 @@ enum GeneratorTuning {
         generators: ContiguousArray<ReflectiveGenerator<Any>>,
         continuation: @escaping (Any) throws -> ReflectiveGenerator<Output>,
         context: TuningContext,
-        predicate: @escaping (Output) -> Bool
+        predicate: @escaping (Output) -> Bool,
     ) throws -> ReflectiveGenerator<Output> {
         context.depth += 1
         defer { context.depth -= 1 }
@@ -774,7 +776,7 @@ enum GeneratorTuning {
                             guard let otherValue = try ValueInterpreter<Any>.generate(
                                 otherGen,
                                 maxRuns: 1,
-                                using: &rngCopy
+                                using: &rngCopy,
                             ) else {
                                 return false
                             }
@@ -786,7 +788,7 @@ enum GeneratorTuning {
                     let output = try ValueInterpreter<Output>.generate(
                         nextGen,
                         maxRuns: 1,
-                        using: &context.rng
+                        using: &context.rng,
                     )
                     return output.map(predicate) ?? false
                 } catch {
@@ -798,14 +800,14 @@ enum GeneratorTuning {
                 componentGen,
                 context: context,
                 insideSubdividedChooseBits: false,
-                predicate: composedPredicate
+                predicate: composedPredicate,
             )
             tunedGens.append(tuned)
         }
 
         return .impure(
             operation: .zip(tunedGens),
-            continuation: continuation
+            continuation: continuation,
         )
     }
 
@@ -817,12 +819,12 @@ enum GeneratorTuning {
         filterType: FilterType,
         filterPredicate: @escaping (Any) -> Bool,
         continuation: @escaping (Any) throws -> ReflectiveGenerator<Output>,
-        context: TuningContext
+        context: TuningContext,
     ) throws -> ReflectiveGenerator<Output> {
         guard filterType != .reject else {
             return .impure(
                 operation: .filter(gen: subGen, fingerprint: fingerprint, filterType: filterType, predicate: filterPredicate),
-                continuation: continuation
+                continuation: continuation,
             )
         }
 
@@ -831,12 +833,12 @@ enum GeneratorTuning {
             subGen,
             context: context,
             insideSubdividedChooseBits: false,
-            predicate: filterPredicate
+            predicate: filterPredicate,
         )
 
         return .impure(
             operation: .filter(gen: tunedInner, fingerprint: fingerprint, filterType: filterType, predicate: filterPredicate),
-            continuation: continuation
+            continuation: continuation,
         )
     }
 
@@ -847,7 +849,7 @@ enum GeneratorTuning {
         next: ReflectiveGenerator<Any>,
         continuation: @escaping (Any) throws -> ReflectiveGenerator<Output>,
         context: TuningContext,
-        predicate: @escaping (Output) -> Bool
+        predicate: @escaping (Output) -> Bool,
     ) throws -> ReflectiveGenerator<Output> {
         let composedPredicate: (Any) -> Bool = { innerValue in
             do {
@@ -855,7 +857,7 @@ enum GeneratorTuning {
                 let output = try ValueInterpreter<Output>.generate(
                     nextGen,
                     maxRuns: 1,
-                    using: &context.rng
+                    using: &context.rng,
                 )
                 return output.map(predicate) ?? false
             } catch {
@@ -867,12 +869,12 @@ enum GeneratorTuning {
             next,
             context: context,
             insideSubdividedChooseBits: false,
-            predicate: composedPredicate
+            predicate: composedPredicate,
         )
 
         return .impure(
             operation: .contramap(transform: transform, next: tunedNext),
-            continuation: continuation
+            continuation: continuation,
         )
     }
 
@@ -884,7 +886,7 @@ enum GeneratorTuning {
         continuation: @escaping (Any) throws -> ReflectiveGenerator<Output>,
         context: TuningContext,
         insideSubdividedChooseBits: Bool,
-        predicate: @escaping (Output) -> Bool
+        predicate: @escaping (Output) -> Bool,
     ) throws -> ReflectiveGenerator<Output> {
         let composedPredicate: (Any) -> Bool = { innerValue in
             do {
@@ -892,7 +894,7 @@ enum GeneratorTuning {
                 let output = try ValueInterpreter<Output>.generate(
                     nextGen,
                     maxRuns: 1,
-                    using: &context.rng
+                    using: &context.rng,
                 )
                 return output.map(predicate) ?? false
             } catch {
@@ -904,12 +906,12 @@ enum GeneratorTuning {
             next,
             context: context,
             insideSubdividedChooseBits: insideSubdividedChooseBits,
-            predicate: composedPredicate
+            predicate: composedPredicate,
         )
 
         return .impure(
             operation: .resize(newSize: newSize, next: tunedNext),
-            continuation: continuation
+            continuation: continuation,
         )
     }
 
@@ -935,10 +937,10 @@ enum GeneratorTuning {
     ///   - epsilon: Laplace smoothing constant. Default: 1.0
     ///   - temperature: Temperature parameter. Default: 2.0
     /// - Returns: A generator with smoothed pick weights throughout the tree.
-    public static func smooth<Output>(
+    static func smooth<Output>(
         _ generator: ReflectiveGenerator<Output>,
         epsilon: Double = 1.0,
-        temperature: Double = 2.0
+        temperature: Double = 2.0,
     ) -> ReflectiveGenerator<Output> {
         smoothGenerator(generator, epsilon: epsilon, temperature: temperature)
     }
@@ -946,7 +948,7 @@ enum GeneratorTuning {
     private static func smoothGenerator<Output>(
         _ gen: ReflectiveGenerator<Output>,
         epsilon: Double,
-        temperature: Double
+        temperature: Double,
     ) -> ReflectiveGenerator<Output> {
         switch gen {
         case .pure:
@@ -960,7 +962,7 @@ enum GeneratorTuning {
     private static func smoothOperation(
         _ op: ReflectiveOperation,
         epsilon: Double,
-        temperature: Double
+        temperature: Double,
     ) -> ReflectiveOperation {
         switch op {
         case let .pick(choices):
@@ -976,7 +978,7 @@ enum GeneratorTuning {
                     siteID: choice.siteID,
                     id: choice.id,
                     weight: scaled,
-                    generator: smoothGenerator(choice.generator, epsilon: epsilon, temperature: temperature)
+                    generator: smoothGenerator(choice.generator, epsilon: epsilon, temperature: temperature),
                 ))
             }
 
@@ -990,13 +992,13 @@ enum GeneratorTuning {
         case let .sequence(length, gen):
             return .sequence(
                 length: smoothGenerator(length, epsilon: epsilon, temperature: temperature),
-                gen: smoothGenerator(gen, epsilon: epsilon, temperature: temperature)
+                gen: smoothGenerator(gen, epsilon: epsilon, temperature: temperature),
             )
 
         case let .contramap(transform, next):
             return .contramap(
                 transform: transform,
-                next: smoothGenerator(next, epsilon: epsilon, temperature: temperature)
+                next: smoothGenerator(next, epsilon: epsilon, temperature: temperature),
             )
 
         case let .prune(next):
@@ -1005,7 +1007,7 @@ enum GeneratorTuning {
         case let .resize(newSize, next):
             return .resize(
                 newSize: newSize,
-                next: smoothGenerator(next, epsilon: epsilon, temperature: temperature)
+                next: smoothGenerator(next, epsilon: epsilon, temperature: temperature),
             )
 
         case let .filter(gen, fingerprint, filterType, predicate):
@@ -1013,21 +1015,21 @@ enum GeneratorTuning {
                 gen: smoothGenerator(gen, epsilon: epsilon, temperature: temperature),
                 fingerprint: fingerprint,
                 filterType: filterType,
-                predicate: predicate
+                predicate: predicate,
             )
 
         case let .classify(gen, fingerprint, classifiers):
             return .classify(
                 gen: smoothGenerator(gen, epsilon: epsilon, temperature: temperature),
                 fingerprint: fingerprint,
-                classifiers: classifiers
+                classifiers: classifiers,
             )
 
         case let .unique(gen, fingerprint, keyExtractor):
             return .unique(
                 gen: smoothGenerator(gen, epsilon: epsilon, temperature: temperature),
                 fingerprint: fingerprint,
-                keyExtractor: keyExtractor
+                keyExtractor: keyExtractor,
             )
 
         case .chooseBits, .just, .getSize:
@@ -1038,23 +1040,23 @@ enum GeneratorTuning {
     // MARK: - Pick Site Profile
 
     /// Statistics about a single pick site in a generator tree.
-    public struct SiteStats: CustomStringConvertible {
-        public let siteID: UInt64
-        public let depth: Int
-        public let branchCount: Int
-        public let weights: [UInt64]
+    struct SiteStats: CustomStringConvertible {
+        let siteID: UInt64
+        let depth: Int
+        let branchCount: Int
+        let weights: [UInt64]
         /// Shannon entropy in bits, computed from the weight distribution.
-        public let entropy: Double
+        let entropy: Double
         /// Maximum possible entropy: log₂(branchCount).
-        public let maxEntropy: Double
+        let maxEntropy: Double
         /// Ratio of actual entropy to maximum (0 = bottleneck, 1 = uniform).
-        public let entropyRatio: Double
+        let entropyRatio: Double
 
         // Empirical fields (nil when only static profiling is used)
-        public let selectionCounts: [UInt64: Int]?
-        public let validityCounts: [UInt64: (selected: Int, valid: Int)]?
+        let selectionCounts: [UInt64: Int]?
+        let validityCounts: [UInt64: (selected: Int, valid: Int)]?
 
-        public var description: String {
+        var description: String {
             let empirical: String
             if let validityCounts {
                 let pairs = validityCounts.sorted(by: { $0.key < $1.key })
@@ -1071,10 +1073,10 @@ enum GeneratorTuning {
     }
 
     /// A profile of all pick sites in a generator tree.
-    public struct PickSiteProfile: CustomStringConvertible {
-        public let sites: [SiteStats]
+    struct PickSiteProfile: CustomStringConvertible {
+        let sites: [SiteStats]
 
-        public var description: String {
+        var description: String {
             sites.map(\.description).joined(separator: "\n")
         }
     }
@@ -1089,18 +1091,18 @@ enum GeneratorTuning {
     ///
     /// - Parameter generator: The generator to profile (typically the output of ``tune``).
     /// - Returns: A profile containing statistics for every pick site.
-    public static func profile<Output>(
-        _ generator: ReflectiveGenerator<Output>
+    static func profile(
+        _ generator: ReflectiveGenerator<some Any>,
     ) -> PickSiteProfile {
         var sites = [SiteStats]()
         profileGenerator(generator, depth: 0, sites: &sites)
         return PickSiteProfile(sites: sites)
     }
 
-    private static func profileGenerator<Output>(
-        _ gen: ReflectiveGenerator<Output>,
+    private static func profileGenerator(
+        _ gen: ReflectiveGenerator<some Any>,
         depth: Int,
-        sites: inout [SiteStats]
+        sites: inout [SiteStats],
     ) {
         switch gen {
         case .pure:
@@ -1113,7 +1115,7 @@ enum GeneratorTuning {
     private static func profileOperation(
         _ op: ReflectiveOperation,
         depth: Int,
-        sites: inout [SiteStats]
+        sites: inout [SiteStats],
     ) {
         switch op {
         case let .pick(choices):
@@ -1135,7 +1137,7 @@ enum GeneratorTuning {
                 maxEntropy: maxEntropy,
                 entropyRatio: entropyRatio,
                 selectionCounts: nil,
-                validityCounts: nil
+                validityCounts: nil,
             ))
 
             for choice in choices {
@@ -1188,11 +1190,11 @@ enum GeneratorTuning {
     ///   - samples: Number of values to generate for empirical data.
     ///   - seed: Optional seed for reproducibility.
     /// - Returns: A profile with both static entropy and empirical validity data.
-    public static func profile<Output>(
+    static func profile<Output>(
         _ generator: ReflectiveGenerator<Output>,
         predicate: @escaping (Output) -> Bool,
         samples: UInt64 = 1000,
-        seed: UInt64? = nil
+        seed: UInt64? = nil,
     ) -> PickSiteProfile {
         // First, get the static profile
         let staticProfile = profile(generator)
@@ -1201,7 +1203,7 @@ enum GeneratorTuning {
         var iterator = ValueAndChoiceTreeInterpreter(
             generator,
             seed: seed,
-            maxRuns: samples
+            maxRuns: samples,
         )
 
         // Accumulate per-siteID empirical data
@@ -1214,7 +1216,7 @@ enum GeneratorTuning {
                 from: tree,
                 isValid: isValid,
                 selectionCounts: &selectionCounts,
-                validityCounts: &validityCounts
+                validityCounts: &validityCounts,
             )
         }
 
@@ -1229,7 +1231,7 @@ enum GeneratorTuning {
                 maxEntropy: site.maxEntropy,
                 entropyRatio: site.entropyRatio,
                 selectionCounts: selectionCounts[site.siteID],
-                validityCounts: validityCounts[site.siteID]
+                validityCounts: validityCounts[site.siteID],
             )
         }
 
@@ -1240,7 +1242,7 @@ enum GeneratorTuning {
         from tree: ChoiceTree,
         isValid: Bool,
         selectionCounts: inout [UInt64: [UInt64: Int]],
-        validityCounts: inout [UInt64: [UInt64: (selected: Int, valid: Int)]]
+        validityCounts: inout [UInt64: [UInt64: (selected: Int, valid: Int)]],
     ) {
         switch tree {
         case let .selected(inner):
@@ -1248,7 +1250,7 @@ enum GeneratorTuning {
                 from: inner,
                 isValid: isValid,
                 selectionCounts: &selectionCounts,
-                validityCounts: &validityCounts
+                validityCounts: &validityCounts,
             )
 
         case let .branch(siteID, _, id, _, choice):
@@ -1262,7 +1264,7 @@ enum GeneratorTuning {
                 from: choice,
                 isValid: isValid,
                 selectionCounts: &selectionCounts,
-                validityCounts: &validityCounts
+                validityCounts: &validityCounts,
             )
 
         case let .group(children):
@@ -1271,7 +1273,7 @@ enum GeneratorTuning {
                     from: child,
                     isValid: isValid,
                     selectionCounts: &selectionCounts,
-                    validityCounts: &validityCounts
+                    validityCounts: &validityCounts,
                 )
             }
 
@@ -1281,7 +1283,7 @@ enum GeneratorTuning {
                     from: element,
                     isValid: isValid,
                     selectionCounts: &selectionCounts,
-                    validityCounts: &validityCounts
+                    validityCounts: &validityCounts,
                 )
             }
 
@@ -1291,7 +1293,7 @@ enum GeneratorTuning {
                     from: choice,
                     isValid: isValid,
                     selectionCounts: &selectionCounts,
-                    validityCounts: &validityCounts
+                    validityCounts: &validityCounts,
                 )
             }
 
@@ -1320,17 +1322,17 @@ enum GeneratorTuning {
     ///   - baseTemperature: Temperature for well-distributed sites. Default: 1.0
     ///   - maxTemperature: Temperature for bottleneck sites. Default: 4.0
     /// - Returns: A generator with adaptively smoothed pick weights.
-    public static func smoothAdaptively<Output>(
+    static func smoothAdaptively<Output>(
         _ generator: ReflectiveGenerator<Output>,
         epsilon: Double = 1.0,
         baseTemperature: Double = 1.0,
-        maxTemperature: Double = 4.0
+        maxTemperature: Double = 4.0,
     ) -> ReflectiveGenerator<Output> {
         smoothAdaptiveGenerator(
             generator,
             epsilon: epsilon,
             baseTemperature: baseTemperature,
-            maxTemperature: maxTemperature
+            maxTemperature: maxTemperature,
         )
     }
 
@@ -1338,7 +1340,7 @@ enum GeneratorTuning {
         _ gen: ReflectiveGenerator<Output>,
         epsilon: Double,
         baseTemperature: Double,
-        maxTemperature: Double
+        maxTemperature: Double,
     ) -> ReflectiveGenerator<Output> {
         switch gen {
         case .pure:
@@ -1348,7 +1350,7 @@ enum GeneratorTuning {
                 operation,
                 epsilon: epsilon,
                 baseTemperature: baseTemperature,
-                maxTemperature: maxTemperature
+                maxTemperature: maxTemperature,
             )
             return .impure(operation: smoothed, continuation: continuation)
         }
@@ -1358,7 +1360,7 @@ enum GeneratorTuning {
         _ op: ReflectiveOperation,
         epsilon: Double,
         baseTemperature: Double,
-        maxTemperature: Double
+        maxTemperature: Double,
     ) -> ReflectiveOperation {
         switch op {
         case let .pick(choices):
@@ -1393,8 +1395,8 @@ enum GeneratorTuning {
                         choice.generator,
                         epsilon: epsilon,
                         baseTemperature: baseTemperature,
-                        maxTemperature: maxTemperature
-                    )
+                        maxTemperature: maxTemperature,
+                    ),
                 )
             })
 
@@ -1406,20 +1408,20 @@ enum GeneratorTuning {
                     $0,
                     epsilon: epsilon,
                     baseTemperature: baseTemperature,
-                    maxTemperature: maxTemperature
+                    maxTemperature: maxTemperature,
                 )
             }))
 
         case let .sequence(length, gen):
             return .sequence(
                 length: smoothAdaptiveGenerator(length, epsilon: epsilon, baseTemperature: baseTemperature, maxTemperature: maxTemperature),
-                gen: smoothAdaptiveGenerator(gen, epsilon: epsilon, baseTemperature: baseTemperature, maxTemperature: maxTemperature)
+                gen: smoothAdaptiveGenerator(gen, epsilon: epsilon, baseTemperature: baseTemperature, maxTemperature: maxTemperature),
             )
 
         case let .contramap(transform, next):
             return .contramap(
                 transform: transform,
-                next: smoothAdaptiveGenerator(next, epsilon: epsilon, baseTemperature: baseTemperature, maxTemperature: maxTemperature)
+                next: smoothAdaptiveGenerator(next, epsilon: epsilon, baseTemperature: baseTemperature, maxTemperature: maxTemperature),
             )
 
         case let .prune(next):
@@ -1428,7 +1430,7 @@ enum GeneratorTuning {
         case let .resize(newSize, next):
             return .resize(
                 newSize: newSize,
-                next: smoothAdaptiveGenerator(next, epsilon: epsilon, baseTemperature: baseTemperature, maxTemperature: maxTemperature)
+                next: smoothAdaptiveGenerator(next, epsilon: epsilon, baseTemperature: baseTemperature, maxTemperature: maxTemperature),
             )
 
         case let .filter(gen, fingerprint, filterType, predicate):
@@ -1436,21 +1438,21 @@ enum GeneratorTuning {
                 gen: smoothAdaptiveGenerator(gen, epsilon: epsilon, baseTemperature: baseTemperature, maxTemperature: maxTemperature),
                 fingerprint: fingerprint,
                 filterType: filterType,
-                predicate: predicate
+                predicate: predicate,
             )
 
         case let .classify(gen, fingerprint, classifiers):
             return .classify(
                 gen: smoothAdaptiveGenerator(gen, epsilon: epsilon, baseTemperature: baseTemperature, maxTemperature: maxTemperature),
                 fingerprint: fingerprint,
-                classifiers: classifiers
+                classifiers: classifiers,
             )
 
         case let .unique(gen, fingerprint, keyExtractor):
             return .unique(
                 gen: smoothAdaptiveGenerator(gen, epsilon: epsilon, baseTemperature: baseTemperature, maxTemperature: maxTemperature),
                 fingerprint: fingerprint,
-                keyExtractor: keyExtractor
+                keyExtractor: keyExtractor,
             )
 
         case .chooseBits, .just, .getSize:

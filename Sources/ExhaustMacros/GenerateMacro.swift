@@ -21,13 +21,13 @@ import SwiftSyntaxMacros
 public struct GenerateMacro: ExpressionMacro {
     public static func expansion(
         of node: some FreestandingMacroExpansionSyntax,
-        in context: some MacroExpansionContext
+        in context: some MacroExpansionContext,
     ) throws -> ExprSyntax {
-        let generatorArgs = node.arguments.map { $0 }
+        let generatorArgs = node.arguments.map(\.self)
         guard !generatorArgs.isEmpty else {
             context.diagnose(Diagnostic(
                 node: Syntax(node),
-                message: ExhaustMacroDiagnostic.noGeneratorArguments
+                message: ExhaustMacroDiagnostic.noGeneratorArguments,
             ))
             return "fatalError(\"#gen requires at least one generator argument\")"
         }
@@ -45,12 +45,12 @@ public struct GenerateMacro: ExpressionMacro {
             return buildBidirectionalExpansion(
                 generatorArgs: generatorArgs,
                 closure: trailingClosure,
-                result: result
+                result: result,
             )
         case .forwardOnly:
             return buildForwardOnlyExpansion(
                 generatorArgs: generatorArgs,
-                closure: trailingClosure
+                closure: trailingClosure,
             )
         }
     }
@@ -62,19 +62,19 @@ public struct GenerateMacro: ExpressionMacro {
     private static func buildBidirectionalExpansion(
         generatorArgs: [LabeledExprListSyntax.Element],
         closure: ClosureExprSyntax,
-        result: BidirectionalResult
+        result: BidirectionalResult,
     ) -> ExprSyntax {
         if result.caseName != nil {
-            return buildEnumCaseExpansion(
+            buildEnumCaseExpansion(
                 generatorArgs: generatorArgs,
                 closure: closure,
-                result: result
+                result: result,
             )
         } else {
-            return buildMirrorExpansion(
+            buildMirrorExpansion(
                 generatorArgs: generatorArgs,
                 closure: closure,
-                result: result
+                result: result,
             )
         }
     }
@@ -85,7 +85,7 @@ public struct GenerateMacro: ExpressionMacro {
     private static func buildMirrorExpansion(
         generatorArgs: [LabeledExprListSyntax.Element],
         closure: ClosureExprSyntax,
-        result: BidirectionalResult
+        result: BidirectionalResult,
     ) -> ExprSyntax {
         let closureText = closure.trimmedDescription
 
@@ -94,7 +94,7 @@ public struct GenerateMacro: ExpressionMacro {
             let label = result.labels[0]
             return "Gen._macroMap(\(raw: genExpr), label: \"\(raw: label)\", forward: \(raw: closureText))"
         } else {
-            let genExprs = generatorArgs.map { $0.expression.trimmedDescription }
+            let genExprs = generatorArgs.map(\.expression.trimmedDescription)
             let zipArgs = genExprs.joined(separator: ", ")
 
             let backwardLabels = buildBackwardLabels(result: result)
@@ -126,7 +126,7 @@ public struct GenerateMacro: ExpressionMacro {
     private static func buildEnumCaseExpansion(
         generatorArgs: [LabeledExprListSyntax.Element],
         closure: ClosureExprSyntax,
-        result: BidirectionalResult
+        result: BidirectionalResult,
     ) -> ExprSyntax {
         let closureText = closure.trimmedDescription
         let caseName = result.caseName!
@@ -147,7 +147,7 @@ public struct GenerateMacro: ExpressionMacro {
             let backward = "{ guard case let \(casePattern) = $0 else { return nil }; return v0 }"
             return "Gen._macroMap(\(raw: genExpr), backward: \(raw: backward), forward: \(raw: closureText))"
         } else {
-            let genExprs = generatorArgs.map { $0.expression.trimmedDescription }
+            let genExprs = generatorArgs.map(\.expression.trimmedDescription)
             let zipArgs = genExprs.joined(separator: ", ")
 
             // Reorder bindings from argument order to generator/parameter order
@@ -174,13 +174,13 @@ public struct GenerateMacro: ExpressionMacro {
 
     /// Builds the expansion for the no-closure overload: pass through or zip.
     private static func buildZipExpansion(
-        generatorArgs: [LabeledExprListSyntax.Element]
+        generatorArgs: [LabeledExprListSyntax.Element],
     ) -> ExprSyntax {
         if generatorArgs.count == 1 {
             let genExpr = generatorArgs[0].expression.trimmedDescription
             return "\(raw: genExpr)"
         } else {
-            let genExprs = generatorArgs.map { $0.expression.trimmedDescription }
+            let genExprs = generatorArgs.map(\.expression.trimmedDescription)
             let zipArgs = genExprs.joined(separator: ", ")
             return "Gen.zip(\(raw: zipArgs))"
         }
@@ -189,7 +189,7 @@ public struct GenerateMacro: ExpressionMacro {
     /// Builds the expansion for a forward-only mapping (no backward).
     private static func buildForwardOnlyExpansion(
         generatorArgs: [LabeledExprListSyntax.Element],
-        closure: ClosureExprSyntax
+        closure: ClosureExprSyntax,
     ) -> ExprSyntax {
         let closureText = closure.trimmedDescription
 
@@ -197,7 +197,7 @@ public struct GenerateMacro: ExpressionMacro {
             let genExpr = generatorArgs[0].expression.trimmedDescription
             return "\(raw: genExpr).map \(raw: closureText)"
         } else {
-            let genExprs = generatorArgs.map { $0.expression.trimmedDescription }
+            let genExprs = generatorArgs.map(\.expression.trimmedDescription)
             let zipArgs = genExprs.joined(separator: ", ")
             return "Gen.zip(\(raw: zipArgs)).map \(raw: closureText)"
         }

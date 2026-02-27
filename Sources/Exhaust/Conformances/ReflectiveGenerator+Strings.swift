@@ -10,7 +10,7 @@ public extension ReflectiveGenerator {
         if let range {
             let charMin = range.lowerBound.unicodeScalars.min()?.value ?? 0
             let charMax = range.upperBound.unicodeScalars.max()?.value ?? 0
-            return Gen.chooseCharacter(in: charMin.bitPattern64...charMax.bitPattern64)
+            return Gen.chooseCharacter(in: charMin.bitPattern64 ... charMax.bitPattern64)
         }
         return Gen.chooseCharacter()
     }
