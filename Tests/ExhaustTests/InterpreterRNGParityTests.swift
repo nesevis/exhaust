@@ -8,6 +8,7 @@
 import Foundation
 import Testing
 @testable import Exhaust
+@testable import ExhaustCore
 
 @Suite("Interpreter RNG Parity")
 struct InterpreterRNGParityTests {

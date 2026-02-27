@@ -9,6 +9,7 @@
 import CasePaths
 import Testing
 @testable import Exhaust
+@testable import ExhaustCore
 
 // MARK: - Advanced Data Structures
 

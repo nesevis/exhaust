@@ -6,6 +6,7 @@
 ////
 //
 // @testable import Exhaust
+@testable import ExhaustCore
 // import Testing
 //
 // @Suite("Shrinking challenges")

@@ -1,4 +1,5 @@
 import Foundation
+import ExhaustCore
 
 /// Operations for making choices and generating random values within ranges.
 /// These combinators handle weighted selection and bounded value generation.

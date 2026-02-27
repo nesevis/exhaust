@@ -8,6 +8,7 @@
 import Foundation
 import Testing
 @testable import Exhaust
+@testable import ExhaustCore
 
 @Suite("Shrinking Challenge: Nested Lists")
 struct NestedListsShrinkingChallenge {

@@ -1,5 +1,7 @@
 /// Core fundamental operations for the generator combinators.
 /// These operations form the building blocks for more complex generator behavior.
+import ExhaustCore
+
 public enum Gen {
     /// Lifts a reflective operation into a generator with type-safe result handling.
     ///

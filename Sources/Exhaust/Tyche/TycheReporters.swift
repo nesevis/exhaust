@@ -1,4 +1,5 @@
 import Foundation
+import ExhaustCore
 
 // MARK: - Reporter Protocol
 

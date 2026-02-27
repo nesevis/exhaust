@@ -1,4 +1,5 @@
 import Foundation
+import ExhaustCore
 
 // MARK: - Main Tyche API
 

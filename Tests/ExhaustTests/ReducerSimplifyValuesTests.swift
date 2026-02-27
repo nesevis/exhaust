@@ -9,6 +9,7 @@
 
 import Testing
 @testable import Exhaust
+@testable import ExhaustCore
 
 // MARK: - Helpers
 

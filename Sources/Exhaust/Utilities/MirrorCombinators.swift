@@ -1,3 +1,5 @@
+import ExhaustCore
+
 public extension Gen {
     /// Maps a single generator with a forward transform and Mirror-based backward extraction.
     ///

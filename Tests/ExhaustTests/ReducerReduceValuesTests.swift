@@ -9,6 +9,7 @@
 
 import Testing
 @testable import Exhaust
+@testable import ExhaustCore
 
 // MARK: - Helpers
 
@@ -299,7 +300,7 @@ struct ReducerReduceValuesTests {
     }
 }
 
-extension ReflectiveGenerator where Value == String {
+extension ExhaustCore.ReflectiveGenerator where Value == String {
     static var name: ReflectiveGenerator<String> {
         String.arbitrary
     }

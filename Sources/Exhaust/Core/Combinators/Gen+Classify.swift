@@ -5,6 +5,8 @@
 //  Created by Chris Kolbu on 14/8/2025.
 //
 
+import ExhaustCore
+
 public extension Gen {
     /// Creates a generator that categorizes generated values for statistical analysis.
     ///

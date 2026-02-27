@@ -8,6 +8,7 @@
 
 import Testing
 @testable import Exhaust
+@testable import ExhaustCore
 
 @Suite("Core Generator Functionality")
 struct CoreGeneratorTests {

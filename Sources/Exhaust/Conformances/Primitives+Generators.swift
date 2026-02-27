@@ -7,6 +7,8 @@
 
 // MARK: - Unsigned Integers
 
+import ExhaustCore
+
 public extension UInt {
     static var arbitrary: ReflectiveGenerator<Self> {
         Gen.choose(in: Self.min ... Self.max, scaling: defaultScaling)

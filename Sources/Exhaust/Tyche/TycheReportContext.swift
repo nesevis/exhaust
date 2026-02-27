@@ -1,4 +1,5 @@
 import Foundation
+import ExhaustCore
 
 /// Thread-safe context for collecting Tyche reporting data
 public final class TycheReportContext {

@@ -7,6 +7,7 @@
 
 import Testing
 @testable import Exhaust
+@testable import ExhaustCore
 
 @Test("Test Xoshiro against reference implementation")
 func xoshiroAgainstReference() {

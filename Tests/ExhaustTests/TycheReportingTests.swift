@@ -9,6 +9,7 @@
 import Foundation
 import Testing
 @testable import Exhaust
+@testable import ExhaustCore
 
 @Suite("Tyche Reporting Framework")
 struct TycheReportingTests {

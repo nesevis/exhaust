@@ -5,6 +5,8 @@
 //  Created by Chris Kolbu on 30/7/2025.
 //
 
+import ExhaustCore
+
 enum PropertyTest {
     @discardableResult
     static func test<Output>(

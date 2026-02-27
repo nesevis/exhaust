@@ -1,5 +1,6 @@
 import Benchmark
 import Exhaust
+import ExhaustCore
 
 // swiftlint:disable force_try
 
@@ -99,7 +100,7 @@ benchmark("Zipped person with ChoiceTree") {
     }
 }
 
-benchmark("Bound5, pathological") {
+benchmark("Bound5, pathological 2") {
     struct Bound5: Equatable {
         let a: [Int16]
         let b: [Int16]
@@ -108,7 +109,7 @@ benchmark("Bound5, pathological") {
         let e: [Int16]
     }
     let arr = #gen(.int16().array(length: 0 ... 10))
-        .filter { $0.isEmpty || $0.dropFirst().reduce($0[0], &+) < 256 }
+        .filter(.auto) { $0.isEmpty || $0.dropFirst().reduce($0[0], &+) < 256 }
     let gen = #gen(arr, arr, arr, arr, arr) {
         Bound5(a: $0, b: $1, c: $2, d: $3, e: $4)
     }

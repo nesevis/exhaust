@@ -76,6 +76,7 @@
 import Foundation
 import Testing
 @testable import Exhaust
+@testable import ExhaustCore
 
 private enum HypothesisFloatParityHelpers {
     static func reduce<Output>(

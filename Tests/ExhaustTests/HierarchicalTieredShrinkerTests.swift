@@ -7,6 +7,7 @@
 //
 // import Testing
 // @testable import Exhaust
+@testable import ExhaustCore
 //
 // @Suite("Hierarchical shrinking iterator")
 // struct HierarchicalTieredShrinkerTests {

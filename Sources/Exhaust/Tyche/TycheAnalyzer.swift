@@ -1,4 +1,5 @@
 import Foundation
+import ExhaustCore
 
 /// Statistical analyzer for Tyche reporting data
 struct TycheAnalyzer {

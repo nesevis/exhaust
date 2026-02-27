@@ -5,6 +5,8 @@
 //  Created by Chris Kolbu on 22/2/2026.
 //
 
+import ExhaustCore
+
 public extension ReflectiveGenerator {
     static func character(in range: ClosedRange<Character>? = nil) -> ReflectiveGenerator<Character> {
         if let range {

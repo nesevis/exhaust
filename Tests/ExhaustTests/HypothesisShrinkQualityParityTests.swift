@@ -8,6 +8,7 @@
 
 import Testing
 @testable import Exhaust
+@testable import ExhaustCore
 
 @Suite("Hypothesis Shrink Quality Parity")
 struct HypothesisShrinkQualityParityTests {

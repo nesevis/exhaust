@@ -11,6 +11,7 @@
 import Foundation
 import Testing
 @testable import Exhaust
+@testable import ExhaustCore
 
 // MARK: - BST
 

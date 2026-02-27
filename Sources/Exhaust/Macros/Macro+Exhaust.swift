@@ -16,6 +16,8 @@
 /// ```
 ///
 /// - Returns: The shrunk counterexample if the property fails, or `nil` if all iterations pass.
+import ExhaustCore
+
 @freestanding(expression)
 @discardableResult
 public macro exhaust<T>(

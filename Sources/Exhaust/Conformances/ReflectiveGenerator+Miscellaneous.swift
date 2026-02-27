@@ -5,6 +5,8 @@
 //  Created by Chris Kolbu on 24/2/2026.
 //
 
+import ExhaustCore
+
 public extension ReflectiveGenerator {
     static func bool() -> ReflectiveGenerator<Bool> {
         Gen.choose(from: [true, false])

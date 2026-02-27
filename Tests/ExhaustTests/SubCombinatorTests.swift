@@ -1,5 +1,6 @@
 import Testing
 @testable import Exhaust
+@testable import ExhaustCore
 
 @Suite("Gen.sub Combinator")
 struct SubCombinatorTests {

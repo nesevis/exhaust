@@ -5,6 +5,8 @@
 //  Created by Chris Kolbu on 21/7/2025.
 //
 
+import ExhaustCore
+
 public extension Gen {
     @inlinable
     static func zip<each T>(

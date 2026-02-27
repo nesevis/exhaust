@@ -9,6 +9,7 @@
 import Foundation
 import Testing
 @testable import Exhaust
+@testable import ExhaustCore
 
 private enum BenchBST: Equatable, Hashable {
     case leaf

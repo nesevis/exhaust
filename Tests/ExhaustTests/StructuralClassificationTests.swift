@@ -15,6 +15,7 @@
 
 import Testing
 @testable import Exhaust
+@testable import ExhaustCore
 
 // @Suite("Structural Classification Overview")
 // struct StructuralClassificationTests {

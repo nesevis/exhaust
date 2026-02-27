@@ -2,6 +2,8 @@
 ///
 /// Runtime support for the `#gen` macro's backward mapping.
 /// Not intended for direct use.
+import ExhaustCore
+
 @inline(__always)
 public func _mirrorExtract(_ value: Any, label: String) -> Any {
     Mirror(reflecting: value).children.first(where: { $0.label == label })!.value

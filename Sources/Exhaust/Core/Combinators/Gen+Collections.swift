@@ -1,5 +1,7 @@
 /// Operations for generating collections like arrays and dictionaries.
 /// These combinators handle the complexities of generating structured data with proper shrinking behavior.
+import ExhaustCore
+
 public extension Gen {
     /// Creates a generator for an array of random values.
     ///
