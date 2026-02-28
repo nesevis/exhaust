@@ -8,6 +8,7 @@
 struct GenerationContext {
     // Constants
     let maxRuns: UInt64
+    let baseSeed: UInt64
     static let maxFilterRuns: UInt64 = 500
 
     // Mutable generation state
@@ -31,6 +32,7 @@ struct GenerationContext {
     func jump(seed: UInt64) -> GenerationContext {
         GenerationContext(
             maxRuns: maxRuns,
+            baseSeed: baseSeed,
             isFixed: isFixed,
             size: size,
             prng: .init(seed: seed),
@@ -60,10 +62,18 @@ struct GenerationContext {
         }
     }
 
-    // MARK: - Linear size scaling (1–100)
+    // MARK: - Cycling size (1–100, independent of maxRuns)
 
-    static func scaledSize(_ maxRuns: UInt64, _ completedRuns: UInt64) -> UInt64 {
-        guard maxRuns > 1 else { return 1 }
-        return 1 + completedRuns * 99 / (maxRuns - 1)
+    static func scaledSize(forRun runIndex: UInt64) -> UInt64 {
+        (runIndex % 100) + 1
+    }
+
+    // MARK: - Per-run seed derivation (SplitMix64 mixing)
+
+    static func runSeed(base: UInt64, runIndex: UInt64) -> UInt64 {
+        var z = base &+ runIndex &* 0x9E37_79B9_7F4A_7C15
+        z = (z ^ (z &>> 30)) &* 0xBF58_476D_1CE4_E5B9
+        z = (z ^ (z &>> 27)) &* 0x94D0_49BB_1331_11EB
+        return z ^ (z &>> 31)
     }
 }

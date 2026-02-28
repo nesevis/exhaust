@@ -22,13 +22,19 @@ import Foundation
         maxRuns: UInt64? = nil,
     ) {
         self.generator = generator
+        let prng = seed.map { Xoshiro256(seed: $0) } ?? Xoshiro256()
         context = .init(
             maxRuns: maxRuns ?? 100,
+            baseSeed: prng.seed,
             isFixed: false,
             size: 0,
-            prng: seed.map { Xoshiro256(seed: $0) } ?? Xoshiro256(),
+            prng: prng,
             materializePicks: materializePicks,
         )
+    }
+
+    @_spi(ExhaustInternal) public var baseSeed: UInt64 {
+        context.baseSeed
     }
 
     // MARK: - Iterator
@@ -39,8 +45,13 @@ import Foundation
             return nil
         }
 
+        // Per-run seed derivation: each run gets an independent PRNG
+        if !context.isFixed {
+            let runSeed = GenerationContext.runSeed(base: context.baseSeed, runIndex: context.runs)
+            context.prng = Xoshiro256(seed: runSeed)
+        }
+
         defer {
-            context.size += context.isFixed ? 0 : 1
             context.runs += 1
         }
         do {
@@ -67,10 +78,11 @@ import Foundation
         var fixed = ValueAndChoiceTreeInterpreter(
             generator,
             materializePicks: context.materializePicks,
-            seed: context.prng.seed,
+            seed: context.baseSeed,
             maxRuns: context.maxRuns,
         )
         fixed.context.isFixed = true
+        fixed.context.runs = context.runs
         return fixed
     }
 
@@ -168,7 +180,7 @@ import Foundation
             // MARK: - GetSize
 
             case .getSize:
-                let size = context.sizeOverride ?? GenerationContext.scaledSize(context.maxRuns, context.runs)
+                let size = context.sizeOverride ?? GenerationContext.scaledSize(forRun: context.runs)
                 context.sizeOverride = nil // getSize consumes the `sizeOverride`
                 return try runContinuation(
                     result: size,

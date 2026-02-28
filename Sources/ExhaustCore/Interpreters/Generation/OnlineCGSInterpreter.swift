@@ -49,14 +49,16 @@ import Foundation
         self.generator = generator
         self.predicate = predicate
         self.sampleCount = sampleCount
-        cgsState = CGSState(
-            samplingPRNG: seed.map { Xoshiro256(seed: $0 &+ 1) } ?? Xoshiro256()
-        )
+        let prng = seed.map { Xoshiro256(seed: $0) } ?? Xoshiro256()
+        var samplingPRNG = prng
+        samplingPRNG.jump()
+        cgsState = CGSState(samplingPRNG: samplingPRNG)
         context = .init(
             maxRuns: maxRuns ?? 100,
+            baseSeed: prng.seed,
             isFixed: false,
             size: 0,
-            prng: seed.map { Xoshiro256(seed: $0) } ?? Xoshiro256(),
+            prng: prng,
         )
     }
 
@@ -68,10 +70,16 @@ import Foundation
             return nil
         }
 
+        // Per-run seed derivation: each run gets an independent PRNG
+        let runSeed = GenerationContext.runSeed(base: context.baseSeed, runIndex: context.runs)
+        context.prng = Xoshiro256(seed: runSeed)
+        var samplingPRNG = context.prng
+        samplingPRNG.jump()
+        cgsState.samplingPRNG = samplingPRNG
+
         let wrapper: DerivativeWrapper = { $0.unsafeCast(to: FinalOutput.self) }
 
         defer {
-            context.size += context.isFixed ? 0 : 1
             context.runs += 1
         }
 
@@ -302,7 +310,7 @@ import Foundation
             // MARK: - GetSize
 
             case .getSize:
-                let size = context.sizeOverride ?? GenerationContext.scaledSize(context.maxRuns, context.runs)
+                let size = context.sizeOverride ?? GenerationContext.scaledSize(forRun: context.runs)
                 context.sizeOverride = nil
                 return try runContinuation(
                     result: size,
@@ -499,7 +507,7 @@ import Foundation
         insideSubdividedChooseBits: Bool,
     ) throws -> Output? {
         // 1. Compute fitness for each choice via derivative sampling
-        let currentSize = context.sizeOverride ?? GenerationContext.scaledSize(context.maxRuns, context.runs)
+        let currentSize = context.sizeOverride ?? GenerationContext.scaledSize(forRun: context.runs)
         var fitnesses = ContiguousArray<UInt64>()
         fitnesses.reserveCapacity(choices.count)
 
@@ -605,7 +613,7 @@ import Foundation
         let rangeSize = max - min + 1
         let subrangeCount = Swift.min(4, Int(Swift.min(rangeSize, UInt64(Int.max))))
         let subranges = (min ... max).split(into: subrangeCount)
-        let currentSize = context.sizeOverride ?? GenerationContext.scaledSize(context.maxRuns, context.runs)
+        let currentSize = context.sizeOverride ?? GenerationContext.scaledSize(forRun: context.runs)
 
         // Compute fitness for each subrange via derivative sampling
         var fitnesses = [UInt64]()

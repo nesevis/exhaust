@@ -114,7 +114,7 @@ private struct BenchmarkResult {
 
 @Suite("Uniqueness Benchmark")
 struct UniquenessBenchmarkTests {
-    private static let targetUnique = 100
+    private static let targetUnique = 1000
     private static let seed: UInt64 = 42
     private static let budget: UInt64 = 500_000
 
@@ -177,7 +177,7 @@ struct UniquenessBenchmarkTests {
 
     // MARK: - Main Benchmark
     
-    @Test("Time to 200 BST")
+    @Test("Time to 200 BST", .disabled("Takes 246 seconds at 1000"))
     func bstBenchmark() throws {
 //        Self.targetUnique = 1000
         let onlineCGS = measureOnlineCGS(Self.bstProblem)

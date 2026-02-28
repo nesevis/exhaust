@@ -15,7 +15,8 @@ struct UniquenessConstraintTests {
 
     @Test("High-cardinality generator produces all maxRuns unique values")
     func highCardinalityProducesAllUnique() {
-        let gen = UInt64.arbitrary.unique()
+        // Use a non-size-scaled generator to avoid collisions from small sizes
+        let gen = Gen.choose(in: UInt64(0) ... UInt64.max).unique()
         let maxRuns: UInt64 = 50
         var iterator = ValueAndChoiceTreeInterpreter(
             gen,
@@ -99,7 +100,8 @@ struct UniquenessConstraintTests {
 
     @Test("ValueInterpreter with unique combinator produces unique values")
     func valueInterpreterUniqueness() {
-        let gen = UInt64.arbitrary.unique()
+        // Use a non-size-scaled generator to avoid collisions from small sizes
+        let gen = Gen.choose(in: UInt64(0) ... UInt64.max).unique()
         let seed: UInt64 = 42
         let maxRuns: UInt64 = 20
 
