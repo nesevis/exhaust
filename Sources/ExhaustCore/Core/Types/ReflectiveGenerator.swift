@@ -42,6 +42,11 @@ public extension ReflectiveGenerator where Operation == ReflectiveOperation {
     /// This property is used internally for optimization and analysis of generator constraints.
     ///
     /// - Returns: The UInt64 range for choice operations, or nil if not applicable
+    var isPure: Bool {
+        if case .pure = self { return true }
+        return false
+    }
+
     var associatedRange: ClosedRange<UInt64>? {
         switch self {
         case .pure:
