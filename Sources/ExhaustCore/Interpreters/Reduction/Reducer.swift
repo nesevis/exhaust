@@ -229,6 +229,10 @@ public extension Interpreters {
                         currentSequence = newSequence
                         currentOutput = output
                         passImproved = true
+                        // After merging sequences, inner sequence lengths may exceed the tree's
+                        // recorded ranges. Relax non-explicit length ranges so subsequent passes
+                        // can still materialize the modified sequence.
+                        currentTree = currentTree.relaxingNonExplicitSequenceLengthRanges()
                     }
                 case .deleteFreeStandingValues:
                     // Pass 2b: Sequence element deletion, i.e the individual Vs in [VVVVV]

@@ -13,4 +13,5 @@ struct UnlockProbeInput {
     let targetBP: UInt64
     let semanticTargetBP: UInt64
     let validRanges: [ClosedRange<UInt64>]
+    let isRangeExplicit: Bool
 }

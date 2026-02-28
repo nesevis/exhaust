@@ -296,6 +296,9 @@ extension ExhaustCore.FreerMonad where Value == Any {
 }
 public typealias ReflectiveGenerator<Output> = ExhaustCore.FreerMonad<ExhaustCore.ReflectiveOperation, Output>
 extension ExhaustCore.FreerMonad where Operation == ExhaustCore.ReflectiveOperation {
+  public var isPure: Swift.Bool {
+    get
+  }
   #if compiler(>=5.3) && $NonescapableTypes
   public var associatedRange: Swift.ClosedRange<Swift.UInt64>? {
     get

@@ -58,18 +58,31 @@ struct LargeUnionListShrinkingChallenge {
         let (_, output) = try #require(try Interpreters.reduce(gen: Self.gen, tree: tree, config: .fast, property: Self.property))
         #expect(output.flatMap(\.self) == [-1, 0, 1, 2, 3])
     }
+    
+    @Test("Large Union List, Pathological single 3")
+    func largeUnionListPathological3() throws {
+        let value = [[76132], [-61180, -48610, 71763], [-25593]]
+        let tree = try #require(try Interpreters.reflect(Self.gen, with: value))
+        let (_, output) = try #require(try Interpreters.reduce(gen: Self.gen, tree: tree, config: .fast, property: Self.property))
+        #expect(output.flatMap(\.self) == [-1, 0, 1, 2, 3])
+    }
 
-    @Test("Large Union List, 50", .disabled("Size scaling changed from logarithmic to linear"))
+    @Test("Large Union List, 50")
     func largeUnionListBatch() throws {
         let iterator = ValueAndChoiceTreeInterpreter(Self.gen, materializePicks: true, seed: 1337, maxRuns: 100)
 
-        var outputs = [[[Int]]]()
+        var outputs = [(value: [[Int]], shrunk: [[Int]])]()
         for (value, tree) in iterator where Self.property(value) == false && outputs.count <= 50 {
-            let (seq, output) = try #require(try Interpreters.reduce(gen: Self.gen, tree: tree, config: .fast, property: Self.property))
-            outputs.append(output)
+            let (_, output) = try #require(try Interpreters.reduce(gen: Self.gen, tree: tree, config: .fast, property: Self.property))
+            outputs.append((value, output))
         }
 
         for (index, output) in outputs.enumerated() {
+            let (value, output) = output
+            let flat = output.flatMap(\.self)
+            let pass = output.count == 1 && flat.count == 5
+                && zip(flat, flat.dropFirst()).allSatisfy { $1 - $0 == 1 }
+
             // Expect there to be one nested array
             #expect(output.count == 1)
             // Expect there to be five entries in this array
@@ -82,6 +95,11 @@ struct LargeUnionListShrinkingChallenge {
                 steps.insert(value - array[index - 1])
             }
             #expect(steps == [1])
+            
+            if !pass {
+                print("Fail on original [\(index)] \(value) shrunk \(output)")
+                break
+            }
         }
     }
 }

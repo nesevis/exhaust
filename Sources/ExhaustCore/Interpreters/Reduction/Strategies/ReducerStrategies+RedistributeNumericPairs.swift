@@ -149,11 +149,13 @@ extension ReducerStrategies {
                             ) else {
                                 return false
                             }
-                            if floatContext != nil,
-                               newChoice1.fits(in: fresh1.validRanges) == false
-                               || newChoice2.fits(in: fresh2.validRanges) == false
-                            {
-                                return false
+                            if floatContext != nil {
+                                if fresh1.isRangeExplicit, newChoice1.fits(in: fresh1.validRanges) == false {
+                                    return false
+                                }
+                                if fresh2.isRangeExplicit, newChoice2.fits(in: fresh2.validRanges) == false {
+                                    return false
+                                }
                             }
 
                             // Do not range-gate here: recorded valid ranges can be stale after prior
@@ -161,10 +163,12 @@ extension ReducerStrategies {
                             let probeEntry1 = ChoiceSequenceValue.reduced(.init(
                                 choice: newChoice1,
                                 validRanges: fresh1.validRanges,
+                                isRangeExplicit: fresh1.isRangeExplicit,
                             ))
                             let probeEntry2 = ChoiceSequenceValue.value(.init(
                                 choice: newChoice2,
                                 validRanges: fresh2.validRanges,
+                                isRangeExplicit: fresh2.isRangeExplicit,
                             ))
                             let probeNonSemanticCount = semanticStats.nonSemanticCount(
                                 afterReplacing: (idx1, probeEntry1),
@@ -256,20 +260,24 @@ extension ReducerStrategies {
                                 ) else {
                                     continue
                                 }
-                                if floatContext != nil,
-                                   newChoice1.fits(in: fresh1.validRanges) == false
-                                   || newChoice2.fits(in: fresh2.validRanges) == false
-                                {
-                                    continue
+                                if floatContext != nil {
+                                    if fresh1.isRangeExplicit, newChoice1.fits(in: fresh1.validRanges) == false {
+                                        continue
+                                    }
+                                    if fresh2.isRangeExplicit, newChoice2.fits(in: fresh2.validRanges) == false {
+                                        continue
+                                    }
                                 }
 
                                 let probeEntry1 = ChoiceSequenceValue.reduced(.init(
                                     choice: newChoice1,
                                     validRanges: fresh1.validRanges,
+                                    isRangeExplicit: fresh1.isRangeExplicit,
                                 ))
                                 let probeEntry2 = ChoiceSequenceValue.value(.init(
                                     choice: newChoice2,
                                     validRanges: fresh2.validRanges,
+                                    isRangeExplicit: fresh2.isRangeExplicit,
                                 ))
 
                                 var probe = current

@@ -325,7 +325,7 @@ extension ReducerStrategies {
                     tag: plan.tag,
                 )
             }
-            guard newChoice.fits(in: value.validRanges) else {
+            guard !value.isRangeExplicit || newChoice.fits(in: value.validRanges) else {
                 continue
             }
             if plan.disallowAwayMoves {
@@ -339,6 +339,7 @@ extension ReducerStrategies {
             let newEntry = ChoiceSequenceValue.value(.init(
                 choice: newChoice,
                 validRanges: value.validRanges,
+                isRangeExplicit: value.isRangeExplicit,
             ))
             let order = newEntry.shortLexCompare(originalEntry)
             guard order != .eq else { continue }

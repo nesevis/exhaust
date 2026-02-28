@@ -57,6 +57,7 @@ struct CouplingShrinkingChallenge {
         #expect(output == [1, 0])
     }
 
+    // [2, 4, 13, 11, 10, 2, 0, 6, 2, 2, 13, 12, 3, 10]
     @Test("Coupling, Pathological", .disabled("Value is not reflectable due to `bind`"))
     func couplingPathological() throws {
         let value = [3, 0, 11, 2, 15, 11, 6, 9, 17, 9, 1, 16, 4, 10, 15, 5, 11, 2]
@@ -72,9 +73,9 @@ struct CouplingShrinkingChallenge {
         #expect(output == [1, 0])
     }
 
-    @Test("Coupling, 50")
+    @Test("Coupling, ~75")
     func couplingBatch() throws {
-        let iterator = ValueAndChoiceTreeInterpreter(Self.gen, materializePicks: true, seed: 1337, maxRuns: 50)
+        let iterator = ValueAndChoiceTreeInterpreter(Self.gen, materializePicks: true, seed: 1337, maxRuns: 400)
         for (value, tree) in iterator where Self.property(value) == false {
             let (_, output) = try #require(try Interpreters.reduce(gen: Self.gen, tree: tree, config: .fast, property: Self.property))
             #expect(output.count == 2)

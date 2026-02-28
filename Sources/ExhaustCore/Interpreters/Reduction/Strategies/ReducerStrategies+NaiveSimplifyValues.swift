@@ -23,8 +23,8 @@ extension ReducerStrategies {
             let seqIdx = span.range.lowerBound
             guard case let .value(v) = sequence[seqIdx] else { continue }
             let simplified = v.choice.semanticSimplest
-            guard simplified != v.choice, simplified.fits(in: v.validRanges) else { continue }
-            updatedSequence[seqIdx] = .value(.init(choice: simplified, validRanges: v.validRanges))
+            guard simplified != v.choice, !v.isRangeExplicit || simplified.fits(in: v.validRanges) else { continue }
+            updatedSequence[seqIdx] = .value(.init(choice: simplified, validRanges: v.validRanges, isRangeExplicit: v.isRangeExplicit))
         }
         guard updatedSequence != sequence, rejectCache.contains(updatedSequence) == false else {
             return nil

@@ -35,10 +35,11 @@ extension ReducerStrategies {
             guard let v = current[seqIdx].value else { continue }
 
             let validRanges = v.validRanges
+            let isRangeExplicit = v.isRangeExplicit
             let choiceTag = v.choice.tag
             let currentBP = v.choice.bitPattern64
             let semanticTargetBP = v.choice.semanticSimplest.bitPattern64
-            let isWithinRecordedRange = v.choice.fits(in: validRanges)
+            let isWithinRecordedRange = v.isRangeExplicit && v.choice.fits(in: validRanges)
             let targetBP = isWithinRecordedRange
                 ? v.choice.reductionTarget(in: validRanges)
                 : semanticTargetBP
@@ -57,6 +58,7 @@ extension ReducerStrategies {
                             targetBP: targetBP,
                             semanticTargetBP: semanticTargetBP,
                             validRanges: validRanges,
+                            isRangeExplicit: isRangeExplicit,
                         ),
                         gen: gen,
                         tree: tree,
@@ -91,7 +93,7 @@ extension ReducerStrategies {
                 choiceTag.makeConvertible(bitPattern64: targetBP),
                 tag: choiceTag,
             )
-            let targetEntry = ChoiceSequenceValue.reduced(.init(choice: targetChoice, validRanges: validRanges))
+            let targetEntry = ChoiceSequenceValue.reduced(.init(choice: targetChoice, validRanges: validRanges, isRangeExplicit: isRangeExplicit))
             var candidate = current
             candidate[seqIdx] = targetEntry
             if targetEntry.shortLexCompare(current[seqIdx]) == .lt, rejectCache.contains(candidate) == false {
@@ -195,6 +197,7 @@ extension ReducerStrategies {
                             targetBP: targetBP,
                             semanticTargetBP: semanticTargetBP,
                             validRanges: validRanges,
+                            isRangeExplicit: isRangeExplicit,
                         ),
                         gen: gen,
                         tree: tree,
@@ -230,7 +233,7 @@ extension ReducerStrategies {
                     if isWithinRecordedRange, newChoice.fits(in: validRanges) == false {
                         return false
                     }
-                    let probeEntry = ChoiceSequenceValue.reduced(.init(choice: newChoice, validRanges: validRanges))
+                    let probeEntry = ChoiceSequenceValue.reduced(.init(choice: newChoice, validRanges: validRanges, isRangeExplicit: isRangeExplicit))
                     guard probeEntry.shortLexCompare(originalEntry) == .lt else {
                         return false
                     }
@@ -273,7 +276,7 @@ extension ReducerStrategies {
                     choiceTag.makeConvertible(bitPattern64: newBP),
                     tag: choiceTag,
                 )
-                let candidateEntry = ChoiceSequenceValue.reduced(.init(choice: newChoice, validRanges: validRanges))
+                let candidateEntry = ChoiceSequenceValue.reduced(.init(choice: newChoice, validRanges: validRanges, isRangeExplicit: isRangeExplicit))
                 var candidate = current
                 candidate[seqIdx] = candidateEntry
                 if candidateEntry.shortLexCompare(current[seqIdx]) == .lt,
@@ -306,7 +309,7 @@ extension ReducerStrategies {
                     if isWithinRecordedRange, boundaryChoice.fits(in: validRanges) == false {
                         continue
                     }
-                    let boundaryEntry = ChoiceSequenceValue.value(.init(choice: boundaryChoice, validRanges: validRanges))
+                    let boundaryEntry = ChoiceSequenceValue.value(.init(choice: boundaryChoice, validRanges: validRanges, isRangeExplicit: isRangeExplicit))
                     guard boundaryEntry.shortLexCompare(current[seqIdx]) == .lt else { continue }
                     boundary[seqIdx] = boundaryEntry
 
@@ -340,6 +343,7 @@ extension ReducerStrategies {
                             targetBP: targetBP,
                             semanticTargetBP: semanticTargetBP,
                             validRanges: validRanges,
+                            isRangeExplicit: isRangeExplicit,
                         ),
                         gen: gen,
                         tree: tree,
@@ -419,7 +423,7 @@ extension ReducerStrategies {
             input.choiceTag.makeConvertible(bitPattern64: unlockBP),
             tag: input.choiceTag,
         )
-        let unlockEntry = ChoiceSequenceValue.reduced(.init(choice: unlockChoice, validRanges: input.validRanges))
+        let unlockEntry = ChoiceSequenceValue.reduced(.init(choice: unlockChoice, validRanges: input.validRanges, isRangeExplicit: input.isRangeExplicit))
         var unlockCandidate = currentSequence
         unlockCandidate[input.seqIdx] = unlockEntry
         guard unlockEntry.shortLexCompare(input.currentEntry) == .lt,
@@ -588,6 +592,7 @@ extension ReducerStrategies {
         let candidateEntry = ChoiceSequenceValue.reduced(.init(
             choice: candidateChoice,
             validRanges: currentValue.validRanges,
+            isRangeExplicit: currentValue.isRangeExplicit,
         ))
         guard candidateEntry.shortLexCompare(currentSequence[seqIdx]) == .lt else {
             return false
@@ -684,6 +689,7 @@ extension ReducerStrategies {
                 let candidateEntry = ChoiceSequenceValue.reduced(.init(
                     choice: candidateChoice,
                     validRanges: value.validRanges,
+                    isRangeExplicit: value.isRangeExplicit,
                 ))
                 if isWithinRecordedRange, candidateChoice.fits(in: value.validRanges) == false {
                     return false
@@ -794,6 +800,7 @@ extension ReducerStrategies {
                 let candidateEntry = ChoiceSequenceValue.reduced(.init(
                     choice: candidateChoice,
                     validRanges: value.validRanges,
+                    isRangeExplicit: value.isRangeExplicit,
                 ))
                 if isWithinRecordedRange, candidateChoice.fits(in: value.validRanges) == false {
                     return false

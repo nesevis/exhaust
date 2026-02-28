@@ -176,8 +176,17 @@ struct UniquenessBenchmarkTests {
     }
 
     // MARK: - Main Benchmark
+    
+    @Test("Time to 200 BST", .disabled("Slow benchmark"))
+    func bstBenchmark() throws {
+//        Self.targetUnique = 1000
+        let onlineCGS = measureOnlineCGS(Self.bstProblem)
+        let adaptive = try measureAdaptivelySmoothed(Self.bstProblem)
+        printProblemResults(Self.bstProblem, results: [onlineCGS, adaptive])
+        
+    }
 
-    @Test("Time to 100 unique valid values: BST / SORTED / AVL x 4 strategies", .disabled("56 second runtime"))
+    @Test("Time to 100 unique valid values: BST / SORTED / AVL x 4 strategies", .disabled("Slow benchmark"))
     func fullBenchmark() throws {
         let bstResults = try runAllStrategies(Self.bstProblem)
         let sortedResults = try runAllStrategies(Self.sortedProblem)
@@ -200,8 +209,8 @@ struct UniquenessBenchmarkTests {
         _ problem: BenchmarkProblem<some Hashable>,
     ) throws -> [BenchmarkResult] {
         let rejection = measureRejection(problem)
-        let onlineCGS = measureOnlineCGS(problem)
         let smoothed = try measureSmoothed(problem)
+        let onlineCGS = measureOnlineCGS(problem)
         let adaptive = try measureAdaptivelySmoothed(problem)
         let auto = try measureAutoAdapted(problem)
         return [rejection, onlineCGS, smoothed, adaptive, auto]

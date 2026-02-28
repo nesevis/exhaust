@@ -26,7 +26,7 @@ extension ReducerStrategies {
             let seqIdx = span.range.lowerBound
             guard case let .value(v) = sequence[seqIdx] else { continue }
             let simplified = v.choice.semanticSimplest
-            guard simplified != v.choice, simplified.fits(in: v.validRanges) else { continue }
+            guard simplified != v.choice, !v.isRangeExplicit || simplified.fits(in: v.validRanges) else { continue }
             valueIndices.append(seqIdx)
         }
 
@@ -50,7 +50,7 @@ extension ReducerStrategies {
                     let seqIdx = valueIndices[idx]
                     guard case let .value(v) = candidate[seqIdx] else { return false }
                     let simplified = v.choice.semanticSimplest
-                    candidate[seqIdx] = .value(.init(choice: simplified, validRanges: v.validRanges))
+                    candidate[seqIdx] = .value(.init(choice: simplified, validRanges: v.validRanges, isRangeExplicit: v.isRangeExplicit))
                 }
                 guard candidate.shortLexPrecedes(current) else {
                     return false
@@ -87,7 +87,7 @@ extension ReducerStrategies {
                         let seqIdx = valueIndices[i + j]
                         guard case let .value(v) = candidate[seqIdx] else { continue }
                         let simplified = v.choice.semanticSimplest
-                        candidate[seqIdx] = .value(.init(choice: simplified, validRanges: v.validRanges))
+                        candidate[seqIdx] = .value(.init(choice: simplified, validRanges: v.validRanges, isRangeExplicit: v.isRangeExplicit))
                     }
                     if candidate.shortLexPrecedes(current),
                        let output = try? Interpreters.materialize(gen, with: tree, using: candidate),

@@ -161,6 +161,27 @@ extension ChoiceTree {
         }
     }
 
+    /// Widens non-explicit sequence length ranges to accept any length.
+    ///
+    /// After structural passes like `deleteSequenceBoundaries` merge inner sequences,
+    /// the tree's recorded length ranges can become stale. This method relaxes those
+    /// ranges so subsequent materialization passes don't reject valid candidates.
+    /// Only affects sequence nodes whose `isRangeExplicit` is `false`.
+    func relaxingNonExplicitSequenceLengthRanges() -> ChoiceTree {
+        map { node in
+            guard case let .sequence(length, elements, metadata) = node,
+                  metadata.isRangeExplicit == false
+            else {
+                return node
+            }
+            return .sequence(
+                length: length,
+                elements: elements,
+                ChoiceMetadata(validRanges: [0 ... UInt64.max], isRangeExplicit: false),
+            )
+        }
+    }
+
     func contains(_ predicate: (ChoiceTree) -> Bool) -> Bool {
         let selfResult = predicate(self)
         guard selfResult == false else {

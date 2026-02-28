@@ -263,9 +263,10 @@ extension ReducerStrategies {
     ) -> [[AlignedDeletionSlot]] {
         var cohorts = [[AlignedDeletionSlot]]()
         for group in siblingGroups where group.ranges.count >= 2 {
-            // Focus this pass on coordinated container deletions to avoid overlapping
-            // behavior with single-value deletion passes.
-            guard group.kind != .bareValue else { continue }
+            // Small bare-value groups are handled well by contiguous deletion passes.
+            // Include larger groups (≥ 4) so the beam search can attempt non-contiguous
+            // deletion with value repair for coupled failures.
+            if group.kind == .bareValue, group.ranges.count < 4 { continue }
             cohorts.append(group.ranges.map { AlignedDeletionSlot(ranges: [$0]) })
         }
         return cohorts
@@ -372,6 +373,7 @@ extension ReducerStrategies {
             frontier = expanded
 
             let evaluationCount = min(frontier.count, evaluationsPerLayer)
+            var layerRepairBudget = 3
             for state in frontier.prefix(evaluationCount) {
                 if context.budgetExhausted {
                     break
@@ -380,34 +382,55 @@ extension ReducerStrategies {
                 var candidate = sequence
                 candidate.removeSubranges(state.rangeSet)
                 guard candidate.shortLexPrecedes(sequence) else { continue }
-                guard let output = evaluateDeletionCandidate(
+
+                let resultCandidate: ChoiceSequence
+                let resultOutput: Output
+
+                if let output = evaluateDeletionCandidate(
                     candidate: candidate,
                     property: property,
                     context: &context,
-                ) else {
+                ) {
+                    resultCandidate = candidate
+                    resultOutput = output
+                } else if state.deletionCount >= 2, layerRepairBudget > 0, !context.budgetExhausted {
+                    layerRepairBudget -= 1
+                    guard let (repairedCandidate, output) = try? repairAfterDeletion(
+                        context.gen,
+                        tree: context.tree,
+                        property: property,
+                        original: sequence,
+                        shortened: candidate,
+                        rejectCache: &context.rejectCache,
+                    ) else {
+                        continue
+                    }
+                    resultCandidate = repairedCandidate
+                    resultOutput = output
+                } else {
                     continue
                 }
 
                 if bestCandidate == nil {
-                    bestCandidate = candidate
-                    bestOutput = output
+                    bestCandidate = resultCandidate
+                    bestOutput = resultOutput
                     bestDeletionCount = state.deletionCount
                     continue
                 }
 
                 if state.deletionCount > bestDeletionCount {
-                    bestCandidate = candidate
-                    bestOutput = output
+                    bestCandidate = resultCandidate
+                    bestOutput = resultOutput
                     bestDeletionCount = state.deletionCount
                     continue
                 }
 
                 if state.deletionCount == bestDeletionCount,
                    let currentBest = bestCandidate,
-                   candidate.shortLexPrecedes(currentBest)
+                   resultCandidate.shortLexPrecedes(currentBest)
                 {
-                    bestCandidate = candidate
-                    bestOutput = output
+                    bestCandidate = resultCandidate
+                    bestOutput = resultOutput
                 }
             }
         }

@@ -296,6 +296,9 @@ extension ExhaustCore.FreerMonad where Value == Any {
 }
 public typealias ReflectiveGenerator<Output> = ExhaustCore.FreerMonad<ExhaustCore.ReflectiveOperation, Output>
 extension ExhaustCore.FreerMonad where Operation == ExhaustCore.ReflectiveOperation {
+  public var isPure: Swift.Bool {
+    get
+  }
   #if compiler(>=5.3) && $NonescapableTypes
   public var associatedRange: Swift.ClosedRange<Swift.UInt64>? {
     get
@@ -617,7 +620,7 @@ extension ExhaustCore.Interpreters {
     @_spi(ExhaustInternal) get
   }
   @_spi(ExhaustInternal) public init(_ tree: ExhaustCore.ChoiceTree)
-  @_spi(ExhaustInternal) public static func flatten(_ tree: ExhaustCore.ChoiceTree) -> ExhaustCore.ChoiceSequence
+  @_spi(ExhaustInternal) public static func flatten(_ tree: ExhaustCore.ChoiceTree, includingAllBranches: Swift.Bool = false) -> ExhaustCore.ChoiceSequence
   @_spi(ExhaustInternal) public static func extractContainerSpans(from sequence: ExhaustCore.ChoiceSequence) -> [ExhaustCore.ChoiceSpan]
   @_spi(ExhaustInternal) public static func extractDescendantGroupSpans(from sequence: ExhaustCore.ChoiceSequence, in range: Swift.ClosedRange<Swift.Int>) -> [ExhaustCore.ChoiceSpan]
   @_spi(ExhaustInternal) public static func extractSequenceBoundarySpans(from sequence: ExhaustCore.ChoiceSequence) -> [ExhaustCore.ChoiceSpan]

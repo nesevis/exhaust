@@ -1349,6 +1349,50 @@
           },
           {
             "kind": "Var",
+            "name": "isPure",
+            "printedName": "isPure",
+            "children": [
+              {
+                "kind": "TypeNominal",
+                "name": "Bool",
+                "printedName": "Swift.Bool",
+                "usr": "s:Sb"
+              }
+            ],
+            "declKind": "Var",
+            "usr": "s:11ExhaustCore10FreerMonadOA2A19ReflectiveOperationORszrlE6isPureSbvp",
+            "mangledName": "$s11ExhaustCore10FreerMonadOA2A19ReflectiveOperationORszrlE6isPureSbvp",
+            "moduleName": "ExhaustCore",
+            "declAttributes": [
+              "RawDocComment"
+            ],
+            "isFromExtension": true,
+            "accessors": [
+              {
+                "kind": "Accessor",
+                "name": "Get",
+                "printedName": "Get()",
+                "children": [
+                  {
+                    "kind": "TypeNominal",
+                    "name": "Bool",
+                    "printedName": "Swift.Bool",
+                    "usr": "s:Sb"
+                  }
+                ],
+                "declKind": "Accessor",
+                "usr": "s:11ExhaustCore10FreerMonadOA2A19ReflectiveOperationORszrlE6isPureSbvg",
+                "mangledName": "$s11ExhaustCore10FreerMonadOA2A19ReflectiveOperationORszrlE6isPureSbvg",
+                "moduleName": "ExhaustCore",
+                "genericSig": "<τ_0_0, τ_0_1 where τ_0_0 == ExhaustCore.ReflectiveOperation>",
+                "sugared_genericSig": "<Operation, Value where Operation == ExhaustCore.ReflectiveOperation>",
+                "isFromExtension": true,
+                "accessorKind": "get"
+              }
+            ]
+          },
+          {
+            "kind": "Var",
             "name": "associatedRange",
             "printedName": "associatedRange",
             "children": [
@@ -1379,9 +1423,6 @@
             "usr": "s:11ExhaustCore10FreerMonadOA2A19ReflectiveOperationORszrlE15associatedRangeSNys6UInt64VGSgvp",
             "mangledName": "$s11ExhaustCore10FreerMonadOA2A19ReflectiveOperationORszrlE15associatedRangeSNys6UInt64VGSgvp",
             "moduleName": "ExhaustCore",
-            "declAttributes": [
-              "RawDocComment"
-            ],
             "isFromExtension": true,
             "accessors": [
               {
@@ -6536,6 +6577,1958 @@
         ]
       },
       {
+        "kind": "TypeDecl",
+        "name": "ChoiceTreeHandlers",
+        "printedName": "ChoiceTreeHandlers",
+        "children": [
+          {
+            "kind": "Function",
+            "name": "resolveFilterGenerator",
+            "printedName": "resolveFilterGenerator(gen:fingerprint:filterType:predicate:context:)",
+            "children": [
+              {
+                "kind": "TypeNominal",
+                "name": "FreerMonad",
+                "printedName": "ExhaustCore.FreerMonad<ExhaustCore.ReflectiveOperation, Any>",
+                "children": [
+                  {
+                    "kind": "TypeNominal",
+                    "name": "ReflectiveOperation",
+                    "printedName": "ExhaustCore.ReflectiveOperation",
+                    "usr": "s:11ExhaustCore19ReflectiveOperationO"
+                  },
+                  {
+                    "kind": "TypeNominal",
+                    "name": "ProtocolComposition",
+                    "printedName": "Any"
+                  }
+                ],
+                "usr": "s:11ExhaustCore10FreerMonadO"
+              },
+              {
+                "kind": "TypeNominal",
+                "name": "FreerMonad",
+                "printedName": "ExhaustCore.FreerMonad<ExhaustCore.ReflectiveOperation, Any>",
+                "children": [
+                  {
+                    "kind": "TypeNominal",
+                    "name": "ReflectiveOperation",
+                    "printedName": "ExhaustCore.ReflectiveOperation",
+                    "usr": "s:11ExhaustCore19ReflectiveOperationO"
+                  },
+                  {
+                    "kind": "TypeNominal",
+                    "name": "ProtocolComposition",
+                    "printedName": "Any"
+                  }
+                ],
+                "usr": "s:11ExhaustCore10FreerMonadO"
+              },
+              {
+                "kind": "TypeNominal",
+                "name": "UInt64",
+                "printedName": "Swift.UInt64",
+                "usr": "s:s6UInt64V"
+              },
+              {
+                "kind": "TypeNominal",
+                "name": "FilterType",
+                "printedName": "ExhaustCore.FilterType",
+                "usr": "s:11ExhaustCore10FilterTypeO"
+              },
+              {
+                "kind": "TypeFunc",
+                "name": "Function",
+                "printedName": "(Any) -> Swift.Bool",
+                "children": [
+                  {
+                    "kind": "TypeNominal",
+                    "name": "Bool",
+                    "printedName": "Swift.Bool",
+                    "usr": "s:Sb"
+                  },
+                  {
+                    "kind": "TypeNominal",
+                    "name": "ProtocolComposition",
+                    "printedName": "Any"
+                  }
+                ]
+              },
+              {
+                "kind": "TypeNominal",
+                "name": "GenerationContext",
+                "printedName": "ExhaustCore.GenerationContext",
+                "paramValueOwnership": "InOut",
+                "usr": "s:11ExhaustCore17GenerationContextV"
+              }
+            ],
+            "declKind": "Func",
+            "usr": "s:11ExhaustCore18ChoiceTreeHandlersO22resolveFilterGenerator3gen11fingerprint10filterType9predicate7contextAA10FreerMonadOyAA19ReflectiveOperationOypGAN_s6UInt64VAA0gL0OSbypcAA17GenerationContextVztFZ",
+            "mangledName": "$s11ExhaustCore18ChoiceTreeHandlersO22resolveFilterGenerator3gen11fingerprint10filterType9predicate7contextAA10FreerMonadOyAA19ReflectiveOperationOypGAN_s6UInt64VAA0gL0OSbypcAA17GenerationContextVztFZ",
+            "moduleName": "ExhaustCore",
+            "static": true,
+            "declAttributes": [
+              "Inline",
+              "RawDocComment"
+            ],
+            "funcSelfKind": "NonMutating"
+          },
+          {
+            "kind": "Function",
+            "name": "checkDuplicate",
+            "printedName": "checkDuplicate(result:tree:fingerprint:keyExtractor:context:)",
+            "children": [
+              {
+                "kind": "TypeNominal",
+                "name": "Bool",
+                "printedName": "Swift.Bool",
+                "usr": "s:Sb"
+              },
+              {
+                "kind": "TypeNominal",
+                "name": "ProtocolComposition",
+                "printedName": "Any"
+              },
+              {
+                "kind": "TypeNominal",
+                "name": "ChoiceTree",
+                "printedName": "ExhaustCore.ChoiceTree",
+                "usr": "s:11ExhaustCore10ChoiceTreeO"
+              },
+              {
+                "kind": "TypeNominal",
+                "name": "UInt64",
+                "printedName": "Swift.UInt64",
+                "usr": "s:s6UInt64V"
+              },
+              {
+                "kind": "TypeNominal",
+                "name": "Optional",
+                "printedName": "((Any) -> Swift.AnyHashable)?",
+                "children": [
+                  {
+                    "kind": "TypeFunc",
+                    "name": "Function",
+                    "printedName": "(Any) -> Swift.AnyHashable",
+                    "children": [
+                      {
+                        "kind": "TypeNominal",
+                        "name": "AnyHashable",
+                        "printedName": "Swift.AnyHashable",
+                        "usr": "s:s11AnyHashableV"
+                      },
+                      {
+                        "kind": "TypeNominal",
+                        "name": "ProtocolComposition",
+                        "printedName": "Any"
+                      }
+                    ]
+                  }
+                ],
+                "usr": "s:Sq"
+              },
+              {
+                "kind": "TypeNominal",
+                "name": "GenerationContext",
+                "printedName": "ExhaustCore.GenerationContext",
+                "paramValueOwnership": "InOut",
+                "usr": "s:11ExhaustCore17GenerationContextV"
+              }
+            ],
+            "declKind": "Func",
+            "usr": "s:11ExhaustCore18ChoiceTreeHandlersO14checkDuplicate6result4tree11fingerprint12keyExtractor7contextSbyp_AA0cD0Os6UInt64Vs11AnyHashableVypcSgAA17GenerationContextVztFZ",
+            "mangledName": "$s11ExhaustCore18ChoiceTreeHandlersO14checkDuplicate6result4tree11fingerprint12keyExtractor7contextSbyp_AA0cD0Os6UInt64Vs11AnyHashableVypcSgAA17GenerationContextVztFZ",
+            "moduleName": "ExhaustCore",
+            "static": true,
+            "declAttributes": [
+              "Inline",
+              "RawDocComment"
+            ],
+            "funcSelfKind": "NonMutating"
+          }
+        ],
+        "declKind": "Enum",
+        "usr": "s:11ExhaustCore18ChoiceTreeHandlersO",
+        "mangledName": "$s11ExhaustCore18ChoiceTreeHandlersO",
+        "moduleName": "ExhaustCore",
+        "declAttributes": [
+          "RawDocComment"
+        ],
+        "isEnumExhaustive": true,
+        "conformances": [
+          {
+            "kind": "Conformance",
+            "name": "Copyable",
+            "printedName": "Copyable",
+            "usr": "s:s8CopyableP",
+            "mangledName": "$ss8CopyableP"
+          },
+          {
+            "kind": "Conformance",
+            "name": "Escapable",
+            "printedName": "Escapable",
+            "usr": "s:s9EscapableP",
+            "mangledName": "$ss9EscapableP"
+          },
+          {
+            "kind": "Conformance",
+            "name": "Sendable",
+            "printedName": "Sendable",
+            "usr": "s:s8SendableP",
+            "mangledName": "$ss8SendableP"
+          },
+          {
+            "kind": "Conformance",
+            "name": "BitwiseCopyable",
+            "printedName": "BitwiseCopyable",
+            "usr": "s:s15BitwiseCopyableP",
+            "mangledName": "$ss15BitwiseCopyableP"
+          }
+        ]
+      },
+      {
+        "kind": "TypeDecl",
+        "name": "GenerationContext",
+        "printedName": "GenerationContext",
+        "children": [
+          {
+            "kind": "Var",
+            "name": "maxRuns",
+            "printedName": "maxRuns",
+            "children": [
+              {
+                "kind": "TypeNominal",
+                "name": "UInt64",
+                "printedName": "Swift.UInt64",
+                "usr": "s:s6UInt64V"
+              }
+            ],
+            "declKind": "Var",
+            "usr": "s:11ExhaustCore17GenerationContextV7maxRunss6UInt64Vvp",
+            "mangledName": "$s11ExhaustCore17GenerationContextV7maxRunss6UInt64Vvp",
+            "moduleName": "ExhaustCore",
+            "declAttributes": [
+              "HasStorage",
+              "RawDocComment"
+            ],
+            "fixedbinaryorder": 0,
+            "isLet": true,
+            "hasStorage": true,
+            "accessors": [
+              {
+                "kind": "Accessor",
+                "name": "Get",
+                "printedName": "Get()",
+                "children": [
+                  {
+                    "kind": "TypeNominal",
+                    "name": "UInt64",
+                    "printedName": "Swift.UInt64",
+                    "usr": "s:s6UInt64V"
+                  }
+                ],
+                "declKind": "Accessor",
+                "usr": "s:11ExhaustCore17GenerationContextV7maxRunss6UInt64Vvg",
+                "mangledName": "$s11ExhaustCore17GenerationContextV7maxRunss6UInt64Vvg",
+                "moduleName": "ExhaustCore",
+                "implicit": true,
+                "declAttributes": [
+                  "Transparent"
+                ],
+                "accessorKind": "get"
+              }
+            ]
+          },
+          {
+            "kind": "Var",
+            "name": "maxFilterRuns",
+            "printedName": "maxFilterRuns",
+            "children": [
+              {
+                "kind": "TypeNominal",
+                "name": "UInt64",
+                "printedName": "Swift.UInt64",
+                "usr": "s:s6UInt64V"
+              }
+            ],
+            "declKind": "Var",
+            "usr": "s:11ExhaustCore17GenerationContextV13maxFilterRunss6UInt64VvpZ",
+            "mangledName": "$s11ExhaustCore17GenerationContextV13maxFilterRunss6UInt64VvpZ",
+            "moduleName": "ExhaustCore",
+            "static": true,
+            "declAttributes": [
+              "HasInitialValue",
+              "HasStorage"
+            ],
+            "isLet": true,
+            "hasStorage": true,
+            "accessors": [
+              {
+                "kind": "Accessor",
+                "name": "Get",
+                "printedName": "Get()",
+                "children": [
+                  {
+                    "kind": "TypeNominal",
+                    "name": "UInt64",
+                    "printedName": "Swift.UInt64",
+                    "usr": "s:s6UInt64V"
+                  }
+                ],
+                "declKind": "Accessor",
+                "usr": "s:11ExhaustCore17GenerationContextV13maxFilterRunss6UInt64VvgZ",
+                "mangledName": "$s11ExhaustCore17GenerationContextV13maxFilterRunss6UInt64VvgZ",
+                "moduleName": "ExhaustCore",
+                "static": true,
+                "implicit": true,
+                "declAttributes": [
+                  "Transparent"
+                ],
+                "accessorKind": "get"
+              }
+            ]
+          },
+          {
+            "kind": "Var",
+            "name": "isFixed",
+            "printedName": "isFixed",
+            "children": [
+              {
+                "kind": "TypeNominal",
+                "name": "Bool",
+                "printedName": "Swift.Bool",
+                "usr": "s:Sb"
+              }
+            ],
+            "declKind": "Var",
+            "usr": "s:11ExhaustCore17GenerationContextV7isFixedSbvp",
+            "mangledName": "$s11ExhaustCore17GenerationContextV7isFixedSbvp",
+            "moduleName": "ExhaustCore",
+            "declAttributes": [
+              "HasStorage",
+              "RawDocComment"
+            ],
+            "fixedbinaryorder": 1,
+            "hasStorage": true,
+            "accessors": [
+              {
+                "kind": "Accessor",
+                "name": "Get",
+                "printedName": "Get()",
+                "children": [
+                  {
+                    "kind": "TypeNominal",
+                    "name": "Bool",
+                    "printedName": "Swift.Bool",
+                    "usr": "s:Sb"
+                  }
+                ],
+                "declKind": "Accessor",
+                "usr": "s:11ExhaustCore17GenerationContextV7isFixedSbvg",
+                "mangledName": "$s11ExhaustCore17GenerationContextV7isFixedSbvg",
+                "moduleName": "ExhaustCore",
+                "implicit": true,
+                "declAttributes": [
+                  "Transparent"
+                ],
+                "accessorKind": "get"
+              },
+              {
+                "kind": "Accessor",
+                "name": "Set",
+                "printedName": "Set()",
+                "children": [
+                  {
+                    "kind": "TypeNominal",
+                    "name": "Void",
+                    "printedName": "()"
+                  },
+                  {
+                    "kind": "TypeNominal",
+                    "name": "Bool",
+                    "printedName": "Swift.Bool",
+                    "usr": "s:Sb"
+                  }
+                ],
+                "declKind": "Accessor",
+                "usr": "s:11ExhaustCore17GenerationContextV7isFixedSbvs",
+                "mangledName": "$s11ExhaustCore17GenerationContextV7isFixedSbvs",
+                "moduleName": "ExhaustCore",
+                "implicit": true,
+                "declAttributes": [
+                  "Transparent"
+                ],
+                "accessorKind": "set"
+              },
+              {
+                "kind": "Accessor",
+                "name": "Modify",
+                "printedName": "Modify()",
+                "children": [
+                  {
+                    "kind": "TypeNominal",
+                    "name": "Void",
+                    "printedName": "()"
+                  }
+                ],
+                "declKind": "Accessor",
+                "usr": "s:11ExhaustCore17GenerationContextV7isFixedSbvM",
+                "mangledName": "$s11ExhaustCore17GenerationContextV7isFixedSbvM",
+                "moduleName": "ExhaustCore",
+                "implicit": true,
+                "declAttributes": [
+                  "Transparent"
+                ],
+                "accessorKind": "_modify"
+              }
+            ]
+          },
+          {
+            "kind": "Var",
+            "name": "size",
+            "printedName": "size",
+            "children": [
+              {
+                "kind": "TypeNominal",
+                "name": "UInt64",
+                "printedName": "Swift.UInt64",
+                "usr": "s:s6UInt64V"
+              }
+            ],
+            "declKind": "Var",
+            "usr": "s:11ExhaustCore17GenerationContextV4sizes6UInt64Vvp",
+            "mangledName": "$s11ExhaustCore17GenerationContextV4sizes6UInt64Vvp",
+            "moduleName": "ExhaustCore",
+            "declAttributes": [
+              "HasStorage"
+            ],
+            "fixedbinaryorder": 2,
+            "hasStorage": true,
+            "accessors": [
+              {
+                "kind": "Accessor",
+                "name": "Get",
+                "printedName": "Get()",
+                "children": [
+                  {
+                    "kind": "TypeNominal",
+                    "name": "UInt64",
+                    "printedName": "Swift.UInt64",
+                    "usr": "s:s6UInt64V"
+                  }
+                ],
+                "declKind": "Accessor",
+                "usr": "s:11ExhaustCore17GenerationContextV4sizes6UInt64Vvg",
+                "mangledName": "$s11ExhaustCore17GenerationContextV4sizes6UInt64Vvg",
+                "moduleName": "ExhaustCore",
+                "implicit": true,
+                "declAttributes": [
+                  "Transparent"
+                ],
+                "accessorKind": "get"
+              },
+              {
+                "kind": "Accessor",
+                "name": "Set",
+                "printedName": "Set()",
+                "children": [
+                  {
+                    "kind": "TypeNominal",
+                    "name": "Void",
+                    "printedName": "()"
+                  },
+                  {
+                    "kind": "TypeNominal",
+                    "name": "UInt64",
+                    "printedName": "Swift.UInt64",
+                    "usr": "s:s6UInt64V"
+                  }
+                ],
+                "declKind": "Accessor",
+                "usr": "s:11ExhaustCore17GenerationContextV4sizes6UInt64Vvs",
+                "mangledName": "$s11ExhaustCore17GenerationContextV4sizes6UInt64Vvs",
+                "moduleName": "ExhaustCore",
+                "implicit": true,
+                "declAttributes": [
+                  "Transparent"
+                ],
+                "accessorKind": "set"
+              },
+              {
+                "kind": "Accessor",
+                "name": "Modify",
+                "printedName": "Modify()",
+                "children": [
+                  {
+                    "kind": "TypeNominal",
+                    "name": "Void",
+                    "printedName": "()"
+                  }
+                ],
+                "declKind": "Accessor",
+                "usr": "s:11ExhaustCore17GenerationContextV4sizes6UInt64VvM",
+                "mangledName": "$s11ExhaustCore17GenerationContextV4sizes6UInt64VvM",
+                "moduleName": "ExhaustCore",
+                "implicit": true,
+                "declAttributes": [
+                  "Transparent"
+                ],
+                "accessorKind": "_modify"
+              }
+            ]
+          },
+          {
+            "kind": "Var",
+            "name": "sizeOverride",
+            "printedName": "sizeOverride",
+            "children": [
+              {
+                "kind": "TypeNominal",
+                "name": "Optional",
+                "printedName": "Swift.UInt64?",
+                "children": [
+                  {
+                    "kind": "TypeNominal",
+                    "name": "UInt64",
+                    "printedName": "Swift.UInt64",
+                    "usr": "s:s6UInt64V"
+                  }
+                ],
+                "usr": "s:Sq"
+              }
+            ],
+            "declKind": "Var",
+            "usr": "s:11ExhaustCore17GenerationContextV12sizeOverrides6UInt64VSgvp",
+            "mangledName": "$s11ExhaustCore17GenerationContextV12sizeOverrides6UInt64VSgvp",
+            "moduleName": "ExhaustCore",
+            "declAttributes": [
+              "HasInitialValue",
+              "HasStorage"
+            ],
+            "fixedbinaryorder": 3,
+            "hasStorage": true,
+            "accessors": [
+              {
+                "kind": "Accessor",
+                "name": "Get",
+                "printedName": "Get()",
+                "children": [
+                  {
+                    "kind": "TypeNominal",
+                    "name": "Optional",
+                    "printedName": "Swift.UInt64?",
+                    "children": [
+                      {
+                        "kind": "TypeNominal",
+                        "name": "UInt64",
+                        "printedName": "Swift.UInt64",
+                        "usr": "s:s6UInt64V"
+                      }
+                    ],
+                    "usr": "s:Sq"
+                  }
+                ],
+                "declKind": "Accessor",
+                "usr": "s:11ExhaustCore17GenerationContextV12sizeOverrides6UInt64VSgvg",
+                "mangledName": "$s11ExhaustCore17GenerationContextV12sizeOverrides6UInt64VSgvg",
+                "moduleName": "ExhaustCore",
+                "implicit": true,
+                "declAttributes": [
+                  "Transparent"
+                ],
+                "accessorKind": "get"
+              },
+              {
+                "kind": "Accessor",
+                "name": "Set",
+                "printedName": "Set()",
+                "children": [
+                  {
+                    "kind": "TypeNominal",
+                    "name": "Void",
+                    "printedName": "()"
+                  },
+                  {
+                    "kind": "TypeNominal",
+                    "name": "Optional",
+                    "printedName": "Swift.UInt64?",
+                    "children": [
+                      {
+                        "kind": "TypeNominal",
+                        "name": "UInt64",
+                        "printedName": "Swift.UInt64",
+                        "usr": "s:s6UInt64V"
+                      }
+                    ],
+                    "usr": "s:Sq"
+                  }
+                ],
+                "declKind": "Accessor",
+                "usr": "s:11ExhaustCore17GenerationContextV12sizeOverrides6UInt64VSgvs",
+                "mangledName": "$s11ExhaustCore17GenerationContextV12sizeOverrides6UInt64VSgvs",
+                "moduleName": "ExhaustCore",
+                "implicit": true,
+                "declAttributes": [
+                  "Transparent"
+                ],
+                "accessorKind": "set"
+              },
+              {
+                "kind": "Accessor",
+                "name": "Modify",
+                "printedName": "Modify()",
+                "children": [
+                  {
+                    "kind": "TypeNominal",
+                    "name": "Void",
+                    "printedName": "()"
+                  }
+                ],
+                "declKind": "Accessor",
+                "usr": "s:11ExhaustCore17GenerationContextV12sizeOverrides6UInt64VSgvM",
+                "mangledName": "$s11ExhaustCore17GenerationContextV12sizeOverrides6UInt64VSgvM",
+                "moduleName": "ExhaustCore",
+                "implicit": true,
+                "declAttributes": [
+                  "Transparent"
+                ],
+                "accessorKind": "_modify"
+              }
+            ]
+          },
+          {
+            "kind": "Var",
+            "name": "prng",
+            "printedName": "prng",
+            "children": [
+              {
+                "kind": "TypeNominal",
+                "name": "Xoshiro256",
+                "printedName": "ExhaustCore.Xoshiro256",
+                "usr": "s:11ExhaustCore10Xoshiro256V"
+              }
+            ],
+            "declKind": "Var",
+            "usr": "s:11ExhaustCore17GenerationContextV4prngAA10Xoshiro256Vvp",
+            "mangledName": "$s11ExhaustCore17GenerationContextV4prngAA10Xoshiro256Vvp",
+            "moduleName": "ExhaustCore",
+            "declAttributes": [
+              "HasStorage"
+            ],
+            "fixedbinaryorder": 4,
+            "hasStorage": true,
+            "accessors": [
+              {
+                "kind": "Accessor",
+                "name": "Get",
+                "printedName": "Get()",
+                "children": [
+                  {
+                    "kind": "TypeNominal",
+                    "name": "Xoshiro256",
+                    "printedName": "ExhaustCore.Xoshiro256",
+                    "usr": "s:11ExhaustCore10Xoshiro256V"
+                  }
+                ],
+                "declKind": "Accessor",
+                "usr": "s:11ExhaustCore17GenerationContextV4prngAA10Xoshiro256Vvg",
+                "mangledName": "$s11ExhaustCore17GenerationContextV4prngAA10Xoshiro256Vvg",
+                "moduleName": "ExhaustCore",
+                "implicit": true,
+                "declAttributes": [
+                  "Transparent"
+                ],
+                "accessorKind": "get"
+              },
+              {
+                "kind": "Accessor",
+                "name": "Set",
+                "printedName": "Set()",
+                "children": [
+                  {
+                    "kind": "TypeNominal",
+                    "name": "Void",
+                    "printedName": "()"
+                  },
+                  {
+                    "kind": "TypeNominal",
+                    "name": "Xoshiro256",
+                    "printedName": "ExhaustCore.Xoshiro256",
+                    "usr": "s:11ExhaustCore10Xoshiro256V"
+                  }
+                ],
+                "declKind": "Accessor",
+                "usr": "s:11ExhaustCore17GenerationContextV4prngAA10Xoshiro256Vvs",
+                "mangledName": "$s11ExhaustCore17GenerationContextV4prngAA10Xoshiro256Vvs",
+                "moduleName": "ExhaustCore",
+                "implicit": true,
+                "declAttributes": [
+                  "Transparent"
+                ],
+                "accessorKind": "set"
+              },
+              {
+                "kind": "Accessor",
+                "name": "Modify",
+                "printedName": "Modify()",
+                "children": [
+                  {
+                    "kind": "TypeNominal",
+                    "name": "Void",
+                    "printedName": "()"
+                  }
+                ],
+                "declKind": "Accessor",
+                "usr": "s:11ExhaustCore17GenerationContextV4prngAA10Xoshiro256VvM",
+                "mangledName": "$s11ExhaustCore17GenerationContextV4prngAA10Xoshiro256VvM",
+                "moduleName": "ExhaustCore",
+                "implicit": true,
+                "declAttributes": [
+                  "Transparent"
+                ],
+                "accessorKind": "_modify"
+              }
+            ]
+          },
+          {
+            "kind": "Var",
+            "name": "tunedFilterCache",
+            "printedName": "tunedFilterCache",
+            "children": [
+              {
+                "kind": "TypeNominal",
+                "name": "Dictionary",
+                "printedName": "[Swift.UInt64 : ExhaustCore.FreerMonad<ExhaustCore.ReflectiveOperation, Any>]",
+                "children": [
+                  {
+                    "kind": "TypeNominal",
+                    "name": "UInt64",
+                    "printedName": "Swift.UInt64",
+                    "usr": "s:s6UInt64V"
+                  },
+                  {
+                    "kind": "TypeNominal",
+                    "name": "FreerMonad",
+                    "printedName": "ExhaustCore.FreerMonad<ExhaustCore.ReflectiveOperation, Any>",
+                    "children": [
+                      {
+                        "kind": "TypeNominal",
+                        "name": "ReflectiveOperation",
+                        "printedName": "ExhaustCore.ReflectiveOperation",
+                        "usr": "s:11ExhaustCore19ReflectiveOperationO"
+                      },
+                      {
+                        "kind": "TypeNominal",
+                        "name": "ProtocolComposition",
+                        "printedName": "Any"
+                      }
+                    ],
+                    "usr": "s:11ExhaustCore10FreerMonadO"
+                  }
+                ],
+                "usr": "s:SD"
+              }
+            ],
+            "declKind": "Var",
+            "usr": "s:11ExhaustCore17GenerationContextV16tunedFilterCacheSDys6UInt64VAA10FreerMonadOyAA19ReflectiveOperationOypGGvp",
+            "mangledName": "$s11ExhaustCore17GenerationContextV16tunedFilterCacheSDys6UInt64VAA10FreerMonadOyAA19ReflectiveOperationOypGGvp",
+            "moduleName": "ExhaustCore",
+            "declAttributes": [
+              "HasInitialValue",
+              "HasStorage",
+              "RawDocComment"
+            ],
+            "fixedbinaryorder": 5,
+            "hasStorage": true,
+            "accessors": [
+              {
+                "kind": "Accessor",
+                "name": "Get",
+                "printedName": "Get()",
+                "children": [
+                  {
+                    "kind": "TypeNominal",
+                    "name": "Dictionary",
+                    "printedName": "[Swift.UInt64 : ExhaustCore.FreerMonad<ExhaustCore.ReflectiveOperation, Any>]",
+                    "children": [
+                      {
+                        "kind": "TypeNominal",
+                        "name": "UInt64",
+                        "printedName": "Swift.UInt64",
+                        "usr": "s:s6UInt64V"
+                      },
+                      {
+                        "kind": "TypeNominal",
+                        "name": "FreerMonad",
+                        "printedName": "ExhaustCore.FreerMonad<ExhaustCore.ReflectiveOperation, Any>",
+                        "children": [
+                          {
+                            "kind": "TypeNominal",
+                            "name": "ReflectiveOperation",
+                            "printedName": "ExhaustCore.ReflectiveOperation",
+                            "usr": "s:11ExhaustCore19ReflectiveOperationO"
+                          },
+                          {
+                            "kind": "TypeNominal",
+                            "name": "ProtocolComposition",
+                            "printedName": "Any"
+                          }
+                        ],
+                        "usr": "s:11ExhaustCore10FreerMonadO"
+                      }
+                    ],
+                    "usr": "s:SD"
+                  }
+                ],
+                "declKind": "Accessor",
+                "usr": "s:11ExhaustCore17GenerationContextV16tunedFilterCacheSDys6UInt64VAA10FreerMonadOyAA19ReflectiveOperationOypGGvg",
+                "mangledName": "$s11ExhaustCore17GenerationContextV16tunedFilterCacheSDys6UInt64VAA10FreerMonadOyAA19ReflectiveOperationOypGGvg",
+                "moduleName": "ExhaustCore",
+                "implicit": true,
+                "declAttributes": [
+                  "Transparent"
+                ],
+                "accessorKind": "get"
+              },
+              {
+                "kind": "Accessor",
+                "name": "Set",
+                "printedName": "Set()",
+                "children": [
+                  {
+                    "kind": "TypeNominal",
+                    "name": "Void",
+                    "printedName": "()"
+                  },
+                  {
+                    "kind": "TypeNominal",
+                    "name": "Dictionary",
+                    "printedName": "[Swift.UInt64 : ExhaustCore.FreerMonad<ExhaustCore.ReflectiveOperation, Any>]",
+                    "children": [
+                      {
+                        "kind": "TypeNominal",
+                        "name": "UInt64",
+                        "printedName": "Swift.UInt64",
+                        "usr": "s:s6UInt64V"
+                      },
+                      {
+                        "kind": "TypeNominal",
+                        "name": "FreerMonad",
+                        "printedName": "ExhaustCore.FreerMonad<ExhaustCore.ReflectiveOperation, Any>",
+                        "children": [
+                          {
+                            "kind": "TypeNominal",
+                            "name": "ReflectiveOperation",
+                            "printedName": "ExhaustCore.ReflectiveOperation",
+                            "usr": "s:11ExhaustCore19ReflectiveOperationO"
+                          },
+                          {
+                            "kind": "TypeNominal",
+                            "name": "ProtocolComposition",
+                            "printedName": "Any"
+                          }
+                        ],
+                        "usr": "s:11ExhaustCore10FreerMonadO"
+                      }
+                    ],
+                    "usr": "s:SD"
+                  }
+                ],
+                "declKind": "Accessor",
+                "usr": "s:11ExhaustCore17GenerationContextV16tunedFilterCacheSDys6UInt64VAA10FreerMonadOyAA19ReflectiveOperationOypGGvs",
+                "mangledName": "$s11ExhaustCore17GenerationContextV16tunedFilterCacheSDys6UInt64VAA10FreerMonadOyAA19ReflectiveOperationOypGGvs",
+                "moduleName": "ExhaustCore",
+                "implicit": true,
+                "declAttributes": [
+                  "Transparent"
+                ],
+                "accessorKind": "set"
+              },
+              {
+                "kind": "Accessor",
+                "name": "Modify",
+                "printedName": "Modify()",
+                "children": [
+                  {
+                    "kind": "TypeNominal",
+                    "name": "Void",
+                    "printedName": "()"
+                  }
+                ],
+                "declKind": "Accessor",
+                "usr": "s:11ExhaustCore17GenerationContextV16tunedFilterCacheSDys6UInt64VAA10FreerMonadOyAA19ReflectiveOperationOypGGvM",
+                "mangledName": "$s11ExhaustCore17GenerationContextV16tunedFilterCacheSDys6UInt64VAA10FreerMonadOyAA19ReflectiveOperationOypGGvM",
+                "moduleName": "ExhaustCore",
+                "implicit": true,
+                "declAttributes": [
+                  "Transparent"
+                ],
+                "accessorKind": "_modify"
+              }
+            ]
+          },
+          {
+            "kind": "Var",
+            "name": "uniqueSeenKeys",
+            "printedName": "uniqueSeenKeys",
+            "children": [
+              {
+                "kind": "TypeNominal",
+                "name": "Dictionary",
+                "printedName": "[Swift.UInt64 : Swift.Set<Swift.AnyHashable>]",
+                "children": [
+                  {
+                    "kind": "TypeNominal",
+                    "name": "UInt64",
+                    "printedName": "Swift.UInt64",
+                    "usr": "s:s6UInt64V"
+                  },
+                  {
+                    "kind": "TypeNominal",
+                    "name": "Set",
+                    "printedName": "Swift.Set<Swift.AnyHashable>",
+                    "children": [
+                      {
+                        "kind": "TypeNominal",
+                        "name": "AnyHashable",
+                        "printedName": "Swift.AnyHashable",
+                        "usr": "s:s11AnyHashableV"
+                      }
+                    ],
+                    "usr": "s:Sh"
+                  }
+                ],
+                "usr": "s:SD"
+              }
+            ],
+            "declKind": "Var",
+            "usr": "s:11ExhaustCore17GenerationContextV14uniqueSeenKeysSDys6UInt64VShys11AnyHashableVGGvp",
+            "mangledName": "$s11ExhaustCore17GenerationContextV14uniqueSeenKeysSDys6UInt64VShys11AnyHashableVGGvp",
+            "moduleName": "ExhaustCore",
+            "declAttributes": [
+              "HasInitialValue",
+              "HasStorage"
+            ],
+            "fixedbinaryorder": 6,
+            "hasStorage": true,
+            "accessors": [
+              {
+                "kind": "Accessor",
+                "name": "Get",
+                "printedName": "Get()",
+                "children": [
+                  {
+                    "kind": "TypeNominal",
+                    "name": "Dictionary",
+                    "printedName": "[Swift.UInt64 : Swift.Set<Swift.AnyHashable>]",
+                    "children": [
+                      {
+                        "kind": "TypeNominal",
+                        "name": "UInt64",
+                        "printedName": "Swift.UInt64",
+                        "usr": "s:s6UInt64V"
+                      },
+                      {
+                        "kind": "TypeNominal",
+                        "name": "Set",
+                        "printedName": "Swift.Set<Swift.AnyHashable>",
+                        "children": [
+                          {
+                            "kind": "TypeNominal",
+                            "name": "AnyHashable",
+                            "printedName": "Swift.AnyHashable",
+                            "usr": "s:s11AnyHashableV"
+                          }
+                        ],
+                        "usr": "s:Sh"
+                      }
+                    ],
+                    "usr": "s:SD"
+                  }
+                ],
+                "declKind": "Accessor",
+                "usr": "s:11ExhaustCore17GenerationContextV14uniqueSeenKeysSDys6UInt64VShys11AnyHashableVGGvg",
+                "mangledName": "$s11ExhaustCore17GenerationContextV14uniqueSeenKeysSDys6UInt64VShys11AnyHashableVGGvg",
+                "moduleName": "ExhaustCore",
+                "implicit": true,
+                "declAttributes": [
+                  "Transparent"
+                ],
+                "accessorKind": "get"
+              },
+              {
+                "kind": "Accessor",
+                "name": "Set",
+                "printedName": "Set()",
+                "children": [
+                  {
+                    "kind": "TypeNominal",
+                    "name": "Void",
+                    "printedName": "()"
+                  },
+                  {
+                    "kind": "TypeNominal",
+                    "name": "Dictionary",
+                    "printedName": "[Swift.UInt64 : Swift.Set<Swift.AnyHashable>]",
+                    "children": [
+                      {
+                        "kind": "TypeNominal",
+                        "name": "UInt64",
+                        "printedName": "Swift.UInt64",
+                        "usr": "s:s6UInt64V"
+                      },
+                      {
+                        "kind": "TypeNominal",
+                        "name": "Set",
+                        "printedName": "Swift.Set<Swift.AnyHashable>",
+                        "children": [
+                          {
+                            "kind": "TypeNominal",
+                            "name": "AnyHashable",
+                            "printedName": "Swift.AnyHashable",
+                            "usr": "s:s11AnyHashableV"
+                          }
+                        ],
+                        "usr": "s:Sh"
+                      }
+                    ],
+                    "usr": "s:SD"
+                  }
+                ],
+                "declKind": "Accessor",
+                "usr": "s:11ExhaustCore17GenerationContextV14uniqueSeenKeysSDys6UInt64VShys11AnyHashableVGGvs",
+                "mangledName": "$s11ExhaustCore17GenerationContextV14uniqueSeenKeysSDys6UInt64VShys11AnyHashableVGGvs",
+                "moduleName": "ExhaustCore",
+                "implicit": true,
+                "declAttributes": [
+                  "Transparent"
+                ],
+                "accessorKind": "set"
+              },
+              {
+                "kind": "Accessor",
+                "name": "Modify",
+                "printedName": "Modify()",
+                "children": [
+                  {
+                    "kind": "TypeNominal",
+                    "name": "Void",
+                    "printedName": "()"
+                  }
+                ],
+                "declKind": "Accessor",
+                "usr": "s:11ExhaustCore17GenerationContextV14uniqueSeenKeysSDys6UInt64VShys11AnyHashableVGGvM",
+                "mangledName": "$s11ExhaustCore17GenerationContextV14uniqueSeenKeysSDys6UInt64VShys11AnyHashableVGGvM",
+                "moduleName": "ExhaustCore",
+                "implicit": true,
+                "declAttributes": [
+                  "Transparent"
+                ],
+                "accessorKind": "_modify"
+              }
+            ]
+          },
+          {
+            "kind": "Var",
+            "name": "uniqueSeenSequences",
+            "printedName": "uniqueSeenSequences",
+            "children": [
+              {
+                "kind": "TypeNominal",
+                "name": "Dictionary",
+                "printedName": "[Swift.UInt64 : Swift.Set<Swift.ContiguousArray<ExhaustCore.ChoiceSequenceValue>>]",
+                "children": [
+                  {
+                    "kind": "TypeNominal",
+                    "name": "UInt64",
+                    "printedName": "Swift.UInt64",
+                    "usr": "s:s6UInt64V"
+                  },
+                  {
+                    "kind": "TypeNominal",
+                    "name": "Set",
+                    "printedName": "Swift.Set<Swift.ContiguousArray<ExhaustCore.ChoiceSequenceValue>>",
+                    "children": [
+                      {
+                        "kind": "TypeNominal",
+                        "name": "ContiguousArray",
+                        "printedName": "Swift.ContiguousArray<ExhaustCore.ChoiceSequenceValue>",
+                        "children": [
+                          {
+                            "kind": "TypeNominal",
+                            "name": "ChoiceSequenceValue",
+                            "printedName": "ExhaustCore.ChoiceSequenceValue",
+                            "usr": "s:11ExhaustCore19ChoiceSequenceValueO"
+                          }
+                        ],
+                        "usr": "s:s15ContiguousArrayV"
+                      }
+                    ],
+                    "usr": "s:Sh"
+                  }
+                ],
+                "usr": "s:SD"
+              }
+            ],
+            "declKind": "Var",
+            "usr": "s:11ExhaustCore17GenerationContextV19uniqueSeenSequencesSDys6UInt64VShys15ContiguousArrayVyAA19ChoiceSequenceValueOGGGvp",
+            "mangledName": "$s11ExhaustCore17GenerationContextV19uniqueSeenSequencesSDys6UInt64VShys15ContiguousArrayVyAA19ChoiceSequenceValueOGGGvp",
+            "moduleName": "ExhaustCore",
+            "declAttributes": [
+              "HasInitialValue",
+              "HasStorage"
+            ],
+            "fixedbinaryorder": 7,
+            "hasStorage": true,
+            "accessors": [
+              {
+                "kind": "Accessor",
+                "name": "Get",
+                "printedName": "Get()",
+                "children": [
+                  {
+                    "kind": "TypeNominal",
+                    "name": "Dictionary",
+                    "printedName": "[Swift.UInt64 : Swift.Set<Swift.ContiguousArray<ExhaustCore.ChoiceSequenceValue>>]",
+                    "children": [
+                      {
+                        "kind": "TypeNominal",
+                        "name": "UInt64",
+                        "printedName": "Swift.UInt64",
+                        "usr": "s:s6UInt64V"
+                      },
+                      {
+                        "kind": "TypeNominal",
+                        "name": "Set",
+                        "printedName": "Swift.Set<Swift.ContiguousArray<ExhaustCore.ChoiceSequenceValue>>",
+                        "children": [
+                          {
+                            "kind": "TypeNominal",
+                            "name": "ContiguousArray",
+                            "printedName": "Swift.ContiguousArray<ExhaustCore.ChoiceSequenceValue>",
+                            "children": [
+                              {
+                                "kind": "TypeNominal",
+                                "name": "ChoiceSequenceValue",
+                                "printedName": "ExhaustCore.ChoiceSequenceValue",
+                                "usr": "s:11ExhaustCore19ChoiceSequenceValueO"
+                              }
+                            ],
+                            "usr": "s:s15ContiguousArrayV"
+                          }
+                        ],
+                        "usr": "s:Sh"
+                      }
+                    ],
+                    "usr": "s:SD"
+                  }
+                ],
+                "declKind": "Accessor",
+                "usr": "s:11ExhaustCore17GenerationContextV19uniqueSeenSequencesSDys6UInt64VShys15ContiguousArrayVyAA19ChoiceSequenceValueOGGGvg",
+                "mangledName": "$s11ExhaustCore17GenerationContextV19uniqueSeenSequencesSDys6UInt64VShys15ContiguousArrayVyAA19ChoiceSequenceValueOGGGvg",
+                "moduleName": "ExhaustCore",
+                "implicit": true,
+                "declAttributes": [
+                  "Transparent"
+                ],
+                "accessorKind": "get"
+              },
+              {
+                "kind": "Accessor",
+                "name": "Set",
+                "printedName": "Set()",
+                "children": [
+                  {
+                    "kind": "TypeNominal",
+                    "name": "Void",
+                    "printedName": "()"
+                  },
+                  {
+                    "kind": "TypeNominal",
+                    "name": "Dictionary",
+                    "printedName": "[Swift.UInt64 : Swift.Set<Swift.ContiguousArray<ExhaustCore.ChoiceSequenceValue>>]",
+                    "children": [
+                      {
+                        "kind": "TypeNominal",
+                        "name": "UInt64",
+                        "printedName": "Swift.UInt64",
+                        "usr": "s:s6UInt64V"
+                      },
+                      {
+                        "kind": "TypeNominal",
+                        "name": "Set",
+                        "printedName": "Swift.Set<Swift.ContiguousArray<ExhaustCore.ChoiceSequenceValue>>",
+                        "children": [
+                          {
+                            "kind": "TypeNominal",
+                            "name": "ContiguousArray",
+                            "printedName": "Swift.ContiguousArray<ExhaustCore.ChoiceSequenceValue>",
+                            "children": [
+                              {
+                                "kind": "TypeNominal",
+                                "name": "ChoiceSequenceValue",
+                                "printedName": "ExhaustCore.ChoiceSequenceValue",
+                                "usr": "s:11ExhaustCore19ChoiceSequenceValueO"
+                              }
+                            ],
+                            "usr": "s:s15ContiguousArrayV"
+                          }
+                        ],
+                        "usr": "s:Sh"
+                      }
+                    ],
+                    "usr": "s:SD"
+                  }
+                ],
+                "declKind": "Accessor",
+                "usr": "s:11ExhaustCore17GenerationContextV19uniqueSeenSequencesSDys6UInt64VShys15ContiguousArrayVyAA19ChoiceSequenceValueOGGGvs",
+                "mangledName": "$s11ExhaustCore17GenerationContextV19uniqueSeenSequencesSDys6UInt64VShys15ContiguousArrayVyAA19ChoiceSequenceValueOGGGvs",
+                "moduleName": "ExhaustCore",
+                "implicit": true,
+                "declAttributes": [
+                  "Transparent"
+                ],
+                "accessorKind": "set"
+              },
+              {
+                "kind": "Accessor",
+                "name": "Modify",
+                "printedName": "Modify()",
+                "children": [
+                  {
+                    "kind": "TypeNominal",
+                    "name": "Void",
+                    "printedName": "()"
+                  }
+                ],
+                "declKind": "Accessor",
+                "usr": "s:11ExhaustCore17GenerationContextV19uniqueSeenSequencesSDys6UInt64VShys15ContiguousArrayVyAA19ChoiceSequenceValueOGGGvM",
+                "mangledName": "$s11ExhaustCore17GenerationContextV19uniqueSeenSequencesSDys6UInt64VShys15ContiguousArrayVyAA19ChoiceSequenceValueOGGGvM",
+                "moduleName": "ExhaustCore",
+                "implicit": true,
+                "declAttributes": [
+                  "Transparent"
+                ],
+                "accessorKind": "_modify"
+              }
+            ]
+          },
+          {
+            "kind": "Var",
+            "name": "materializePicks",
+            "printedName": "materializePicks",
+            "children": [
+              {
+                "kind": "TypeNominal",
+                "name": "Bool",
+                "printedName": "Swift.Bool",
+                "usr": "s:Sb"
+              }
+            ],
+            "declKind": "Var",
+            "usr": "s:11ExhaustCore17GenerationContextV16materializePicksSbvp",
+            "mangledName": "$s11ExhaustCore17GenerationContextV16materializePicksSbvp",
+            "moduleName": "ExhaustCore",
+            "declAttributes": [
+              "HasInitialValue",
+              "HasStorage",
+              "RawDocComment"
+            ],
+            "fixedbinaryorder": 8,
+            "hasStorage": true,
+            "accessors": [
+              {
+                "kind": "Accessor",
+                "name": "Get",
+                "printedName": "Get()",
+                "children": [
+                  {
+                    "kind": "TypeNominal",
+                    "name": "Bool",
+                    "printedName": "Swift.Bool",
+                    "usr": "s:Sb"
+                  }
+                ],
+                "declKind": "Accessor",
+                "usr": "s:11ExhaustCore17GenerationContextV16materializePicksSbvg",
+                "mangledName": "$s11ExhaustCore17GenerationContextV16materializePicksSbvg",
+                "moduleName": "ExhaustCore",
+                "implicit": true,
+                "declAttributes": [
+                  "Transparent"
+                ],
+                "accessorKind": "get"
+              },
+              {
+                "kind": "Accessor",
+                "name": "Set",
+                "printedName": "Set()",
+                "children": [
+                  {
+                    "kind": "TypeNominal",
+                    "name": "Void",
+                    "printedName": "()"
+                  },
+                  {
+                    "kind": "TypeNominal",
+                    "name": "Bool",
+                    "printedName": "Swift.Bool",
+                    "usr": "s:Sb"
+                  }
+                ],
+                "declKind": "Accessor",
+                "usr": "s:11ExhaustCore17GenerationContextV16materializePicksSbvs",
+                "mangledName": "$s11ExhaustCore17GenerationContextV16materializePicksSbvs",
+                "moduleName": "ExhaustCore",
+                "implicit": true,
+                "declAttributes": [
+                  "Transparent"
+                ],
+                "accessorKind": "set"
+              },
+              {
+                "kind": "Accessor",
+                "name": "Modify",
+                "printedName": "Modify()",
+                "children": [
+                  {
+                    "kind": "TypeNominal",
+                    "name": "Void",
+                    "printedName": "()"
+                  }
+                ],
+                "declKind": "Accessor",
+                "usr": "s:11ExhaustCore17GenerationContextV16materializePicksSbvM",
+                "mangledName": "$s11ExhaustCore17GenerationContextV16materializePicksSbvM",
+                "moduleName": "ExhaustCore",
+                "implicit": true,
+                "declAttributes": [
+                  "Transparent"
+                ],
+                "accessorKind": "_modify"
+              }
+            ]
+          },
+          {
+            "kind": "Var",
+            "name": "runs",
+            "printedName": "runs",
+            "children": [
+              {
+                "kind": "TypeNominal",
+                "name": "UInt64",
+                "printedName": "Swift.UInt64",
+                "usr": "s:s6UInt64V"
+              }
+            ],
+            "declKind": "Var",
+            "usr": "s:11ExhaustCore17GenerationContextV4runss6UInt64Vvp",
+            "mangledName": "$s11ExhaustCore17GenerationContextV4runss6UInt64Vvp",
+            "moduleName": "ExhaustCore",
+            "declAttributes": [
+              "HasInitialValue",
+              "HasStorage"
+            ],
+            "fixedbinaryorder": 9,
+            "hasStorage": true,
+            "accessors": [
+              {
+                "kind": "Accessor",
+                "name": "Get",
+                "printedName": "Get()",
+                "children": [
+                  {
+                    "kind": "TypeNominal",
+                    "name": "UInt64",
+                    "printedName": "Swift.UInt64",
+                    "usr": "s:s6UInt64V"
+                  }
+                ],
+                "declKind": "Accessor",
+                "usr": "s:11ExhaustCore17GenerationContextV4runss6UInt64Vvg",
+                "mangledName": "$s11ExhaustCore17GenerationContextV4runss6UInt64Vvg",
+                "moduleName": "ExhaustCore",
+                "implicit": true,
+                "declAttributes": [
+                  "Transparent"
+                ],
+                "accessorKind": "get"
+              },
+              {
+                "kind": "Accessor",
+                "name": "Set",
+                "printedName": "Set()",
+                "children": [
+                  {
+                    "kind": "TypeNominal",
+                    "name": "Void",
+                    "printedName": "()"
+                  },
+                  {
+                    "kind": "TypeNominal",
+                    "name": "UInt64",
+                    "printedName": "Swift.UInt64",
+                    "usr": "s:s6UInt64V"
+                  }
+                ],
+                "declKind": "Accessor",
+                "usr": "s:11ExhaustCore17GenerationContextV4runss6UInt64Vvs",
+                "mangledName": "$s11ExhaustCore17GenerationContextV4runss6UInt64Vvs",
+                "moduleName": "ExhaustCore",
+                "implicit": true,
+                "declAttributes": [
+                  "Transparent"
+                ],
+                "accessorKind": "set"
+              },
+              {
+                "kind": "Accessor",
+                "name": "Modify",
+                "printedName": "Modify()",
+                "children": [
+                  {
+                    "kind": "TypeNominal",
+                    "name": "Void",
+                    "printedName": "()"
+                  }
+                ],
+                "declKind": "Accessor",
+                "usr": "s:11ExhaustCore17GenerationContextV4runss6UInt64VvM",
+                "mangledName": "$s11ExhaustCore17GenerationContextV4runss6UInt64VvM",
+                "moduleName": "ExhaustCore",
+                "implicit": true,
+                "declAttributes": [
+                  "Transparent"
+                ],
+                "accessorKind": "_modify"
+              }
+            ]
+          },
+          {
+            "kind": "Var",
+            "name": "classifications",
+            "printedName": "classifications",
+            "children": [
+              {
+                "kind": "TypeNominal",
+                "name": "Dictionary",
+                "printedName": "[Swift.UInt64 : [Swift.String : Swift.Set<Swift.UInt64>]]",
+                "children": [
+                  {
+                    "kind": "TypeNominal",
+                    "name": "UInt64",
+                    "printedName": "Swift.UInt64",
+                    "usr": "s:s6UInt64V"
+                  },
+                  {
+                    "kind": "TypeNominal",
+                    "name": "Dictionary",
+                    "printedName": "[Swift.String : Swift.Set<Swift.UInt64>]",
+                    "children": [
+                      {
+                        "kind": "TypeNominal",
+                        "name": "String",
+                        "printedName": "Swift.String",
+                        "usr": "s:SS"
+                      },
+                      {
+                        "kind": "TypeNominal",
+                        "name": "Set",
+                        "printedName": "Swift.Set<Swift.UInt64>",
+                        "children": [
+                          {
+                            "kind": "TypeNominal",
+                            "name": "UInt64",
+                            "printedName": "Swift.UInt64",
+                            "usr": "s:s6UInt64V"
+                          }
+                        ],
+                        "usr": "s:Sh"
+                      }
+                    ],
+                    "usr": "s:SD"
+                  }
+                ],
+                "usr": "s:SD"
+              }
+            ],
+            "declKind": "Var",
+            "usr": "s:11ExhaustCore17GenerationContextV15classificationsSDys6UInt64VSDySSShyAFGGGvp",
+            "mangledName": "$s11ExhaustCore17GenerationContextV15classificationsSDys6UInt64VSDySSShyAFGGGvp",
+            "moduleName": "ExhaustCore",
+            "declAttributes": [
+              "HasInitialValue",
+              "HasStorage"
+            ],
+            "fixedbinaryorder": 10,
+            "hasStorage": true,
+            "accessors": [
+              {
+                "kind": "Accessor",
+                "name": "Get",
+                "printedName": "Get()",
+                "children": [
+                  {
+                    "kind": "TypeNominal",
+                    "name": "Dictionary",
+                    "printedName": "[Swift.UInt64 : [Swift.String : Swift.Set<Swift.UInt64>]]",
+                    "children": [
+                      {
+                        "kind": "TypeNominal",
+                        "name": "UInt64",
+                        "printedName": "Swift.UInt64",
+                        "usr": "s:s6UInt64V"
+                      },
+                      {
+                        "kind": "TypeNominal",
+                        "name": "Dictionary",
+                        "printedName": "[Swift.String : Swift.Set<Swift.UInt64>]",
+                        "children": [
+                          {
+                            "kind": "TypeNominal",
+                            "name": "String",
+                            "printedName": "Swift.String",
+                            "usr": "s:SS"
+                          },
+                          {
+                            "kind": "TypeNominal",
+                            "name": "Set",
+                            "printedName": "Swift.Set<Swift.UInt64>",
+                            "children": [
+                              {
+                                "kind": "TypeNominal",
+                                "name": "UInt64",
+                                "printedName": "Swift.UInt64",
+                                "usr": "s:s6UInt64V"
+                              }
+                            ],
+                            "usr": "s:Sh"
+                          }
+                        ],
+                        "usr": "s:SD"
+                      }
+                    ],
+                    "usr": "s:SD"
+                  }
+                ],
+                "declKind": "Accessor",
+                "usr": "s:11ExhaustCore17GenerationContextV15classificationsSDys6UInt64VSDySSShyAFGGGvg",
+                "mangledName": "$s11ExhaustCore17GenerationContextV15classificationsSDys6UInt64VSDySSShyAFGGGvg",
+                "moduleName": "ExhaustCore",
+                "implicit": true,
+                "declAttributes": [
+                  "Transparent"
+                ],
+                "accessorKind": "get"
+              },
+              {
+                "kind": "Accessor",
+                "name": "Set",
+                "printedName": "Set()",
+                "children": [
+                  {
+                    "kind": "TypeNominal",
+                    "name": "Void",
+                    "printedName": "()"
+                  },
+                  {
+                    "kind": "TypeNominal",
+                    "name": "Dictionary",
+                    "printedName": "[Swift.UInt64 : [Swift.String : Swift.Set<Swift.UInt64>]]",
+                    "children": [
+                      {
+                        "kind": "TypeNominal",
+                        "name": "UInt64",
+                        "printedName": "Swift.UInt64",
+                        "usr": "s:s6UInt64V"
+                      },
+                      {
+                        "kind": "TypeNominal",
+                        "name": "Dictionary",
+                        "printedName": "[Swift.String : Swift.Set<Swift.UInt64>]",
+                        "children": [
+                          {
+                            "kind": "TypeNominal",
+                            "name": "String",
+                            "printedName": "Swift.String",
+                            "usr": "s:SS"
+                          },
+                          {
+                            "kind": "TypeNominal",
+                            "name": "Set",
+                            "printedName": "Swift.Set<Swift.UInt64>",
+                            "children": [
+                              {
+                                "kind": "TypeNominal",
+                                "name": "UInt64",
+                                "printedName": "Swift.UInt64",
+                                "usr": "s:s6UInt64V"
+                              }
+                            ],
+                            "usr": "s:Sh"
+                          }
+                        ],
+                        "usr": "s:SD"
+                      }
+                    ],
+                    "usr": "s:SD"
+                  }
+                ],
+                "declKind": "Accessor",
+                "usr": "s:11ExhaustCore17GenerationContextV15classificationsSDys6UInt64VSDySSShyAFGGGvs",
+                "mangledName": "$s11ExhaustCore17GenerationContextV15classificationsSDys6UInt64VSDySSShyAFGGGvs",
+                "moduleName": "ExhaustCore",
+                "implicit": true,
+                "declAttributes": [
+                  "Transparent"
+                ],
+                "accessorKind": "set"
+              },
+              {
+                "kind": "Accessor",
+                "name": "Modify",
+                "printedName": "Modify()",
+                "children": [
+                  {
+                    "kind": "TypeNominal",
+                    "name": "Void",
+                    "printedName": "()"
+                  }
+                ],
+                "declKind": "Accessor",
+                "usr": "s:11ExhaustCore17GenerationContextV15classificationsSDys6UInt64VSDySSShyAFGGGvM",
+                "mangledName": "$s11ExhaustCore17GenerationContextV15classificationsSDys6UInt64VSDySSShyAFGGGvM",
+                "moduleName": "ExhaustCore",
+                "implicit": true,
+                "declAttributes": [
+                  "Transparent"
+                ],
+                "accessorKind": "_modify"
+              }
+            ]
+          },
+          {
+            "kind": "Function",
+            "name": "jump",
+            "printedName": "jump(seed:)",
+            "children": [
+              {
+                "kind": "TypeNominal",
+                "name": "GenerationContext",
+                "printedName": "ExhaustCore.GenerationContext",
+                "usr": "s:11ExhaustCore17GenerationContextV"
+              },
+              {
+                "kind": "TypeNominal",
+                "name": "UInt64",
+                "printedName": "Swift.UInt64",
+                "usr": "s:s6UInt64V"
+              }
+            ],
+            "declKind": "Func",
+            "usr": "s:11ExhaustCore17GenerationContextV4jump4seedACs6UInt64V_tF",
+            "mangledName": "$s11ExhaustCore17GenerationContextV4jump4seedACs6UInt64V_tF",
+            "moduleName": "ExhaustCore",
+            "declAttributes": [
+              "RawDocComment"
+            ],
+            "funcSelfKind": "NonMutating"
+          },
+          {
+            "kind": "Function",
+            "name": "printClassifications",
+            "printedName": "printClassifications()",
+            "children": [
+              {
+                "kind": "TypeNominal",
+                "name": "Void",
+                "printedName": "()"
+              }
+            ],
+            "declKind": "Func",
+            "usr": "s:11ExhaustCore17GenerationContextV20printClassificationsyyF",
+            "mangledName": "$s11ExhaustCore17GenerationContextV20printClassificationsyyF",
+            "moduleName": "ExhaustCore",
+            "declAttributes": [
+              "RawDocComment"
+            ],
+            "funcSelfKind": "NonMutating"
+          },
+          {
+            "kind": "Function",
+            "name": "scaledSize",
+            "printedName": "scaledSize(_:_:)",
+            "children": [
+              {
+                "kind": "TypeNominal",
+                "name": "UInt64",
+                "printedName": "Swift.UInt64",
+                "usr": "s:s6UInt64V"
+              },
+              {
+                "kind": "TypeNominal",
+                "name": "UInt64",
+                "printedName": "Swift.UInt64",
+                "usr": "s:s6UInt64V"
+              },
+              {
+                "kind": "TypeNominal",
+                "name": "UInt64",
+                "printedName": "Swift.UInt64",
+                "usr": "s:s6UInt64V"
+              }
+            ],
+            "declKind": "Func",
+            "usr": "s:11ExhaustCore17GenerationContextV10scaledSizeys6UInt64VAF_AFtFZ",
+            "mangledName": "$s11ExhaustCore17GenerationContextV10scaledSizeys6UInt64VAF_AFtFZ",
+            "moduleName": "ExhaustCore",
+            "static": true,
+            "declAttributes": [
+              "RawDocComment"
+            ],
+            "funcSelfKind": "NonMutating"
+          },
+          {
+            "kind": "Constructor",
+            "name": "init",
+            "printedName": "init(maxRuns:isFixed:size:sizeOverride:prng:tunedFilterCache:uniqueSeenKeys:uniqueSeenSequences:materializePicks:runs:classifications:)",
+            "children": [
+              {
+                "kind": "TypeNominal",
+                "name": "GenerationContext",
+                "printedName": "ExhaustCore.GenerationContext",
+                "usr": "s:11ExhaustCore17GenerationContextV"
+              },
+              {
+                "kind": "TypeNominal",
+                "name": "UInt64",
+                "printedName": "Swift.UInt64",
+                "usr": "s:s6UInt64V"
+              },
+              {
+                "kind": "TypeNominal",
+                "name": "Bool",
+                "printedName": "Swift.Bool",
+                "usr": "s:Sb"
+              },
+              {
+                "kind": "TypeNominal",
+                "name": "UInt64",
+                "printedName": "Swift.UInt64",
+                "usr": "s:s6UInt64V"
+              },
+              {
+                "kind": "TypeNominal",
+                "name": "Optional",
+                "printedName": "Swift.UInt64?",
+                "children": [
+                  {
+                    "kind": "TypeNominal",
+                    "name": "UInt64",
+                    "printedName": "Swift.UInt64",
+                    "usr": "s:s6UInt64V"
+                  }
+                ],
+                "hasDefaultArg": true,
+                "usr": "s:Sq"
+              },
+              {
+                "kind": "TypeNominal",
+                "name": "Xoshiro256",
+                "printedName": "ExhaustCore.Xoshiro256",
+                "usr": "s:11ExhaustCore10Xoshiro256V"
+              },
+              {
+                "kind": "TypeNominal",
+                "name": "Dictionary",
+                "printedName": "[Swift.UInt64 : ExhaustCore.FreerMonad<ExhaustCore.ReflectiveOperation, Any>]",
+                "children": [
+                  {
+                    "kind": "TypeNominal",
+                    "name": "UInt64",
+                    "printedName": "Swift.UInt64",
+                    "usr": "s:s6UInt64V"
+                  },
+                  {
+                    "kind": "TypeNominal",
+                    "name": "FreerMonad",
+                    "printedName": "ExhaustCore.FreerMonad<ExhaustCore.ReflectiveOperation, Any>",
+                    "children": [
+                      {
+                        "kind": "TypeNominal",
+                        "name": "ReflectiveOperation",
+                        "printedName": "ExhaustCore.ReflectiveOperation",
+                        "usr": "s:11ExhaustCore19ReflectiveOperationO"
+                      },
+                      {
+                        "kind": "TypeNominal",
+                        "name": "ProtocolComposition",
+                        "printedName": "Any"
+                      }
+                    ],
+                    "usr": "s:11ExhaustCore10FreerMonadO"
+                  }
+                ],
+                "hasDefaultArg": true,
+                "usr": "s:SD"
+              },
+              {
+                "kind": "TypeNominal",
+                "name": "Dictionary",
+                "printedName": "[Swift.UInt64 : Swift.Set<Swift.AnyHashable>]",
+                "children": [
+                  {
+                    "kind": "TypeNominal",
+                    "name": "UInt64",
+                    "printedName": "Swift.UInt64",
+                    "usr": "s:s6UInt64V"
+                  },
+                  {
+                    "kind": "TypeNominal",
+                    "name": "Set",
+                    "printedName": "Swift.Set<Swift.AnyHashable>",
+                    "children": [
+                      {
+                        "kind": "TypeNominal",
+                        "name": "AnyHashable",
+                        "printedName": "Swift.AnyHashable",
+                        "usr": "s:s11AnyHashableV"
+                      }
+                    ],
+                    "usr": "s:Sh"
+                  }
+                ],
+                "hasDefaultArg": true,
+                "usr": "s:SD"
+              },
+              {
+                "kind": "TypeNominal",
+                "name": "Dictionary",
+                "printedName": "[Swift.UInt64 : Swift.Set<Swift.ContiguousArray<ExhaustCore.ChoiceSequenceValue>>]",
+                "children": [
+                  {
+                    "kind": "TypeNominal",
+                    "name": "UInt64",
+                    "printedName": "Swift.UInt64",
+                    "usr": "s:s6UInt64V"
+                  },
+                  {
+                    "kind": "TypeNominal",
+                    "name": "Set",
+                    "printedName": "Swift.Set<Swift.ContiguousArray<ExhaustCore.ChoiceSequenceValue>>",
+                    "children": [
+                      {
+                        "kind": "TypeNominal",
+                        "name": "ContiguousArray",
+                        "printedName": "Swift.ContiguousArray<ExhaustCore.ChoiceSequenceValue>",
+                        "children": [
+                          {
+                            "kind": "TypeNominal",
+                            "name": "ChoiceSequenceValue",
+                            "printedName": "ExhaustCore.ChoiceSequenceValue",
+                            "usr": "s:11ExhaustCore19ChoiceSequenceValueO"
+                          }
+                        ],
+                        "usr": "s:s15ContiguousArrayV"
+                      }
+                    ],
+                    "usr": "s:Sh"
+                  }
+                ],
+                "hasDefaultArg": true,
+                "usr": "s:SD"
+              },
+              {
+                "kind": "TypeNominal",
+                "name": "Bool",
+                "printedName": "Swift.Bool",
+                "hasDefaultArg": true,
+                "usr": "s:Sb"
+              },
+              {
+                "kind": "TypeNominal",
+                "name": "UInt64",
+                "printedName": "Swift.UInt64",
+                "hasDefaultArg": true,
+                "usr": "s:s6UInt64V"
+              },
+              {
+                "kind": "TypeNominal",
+                "name": "Dictionary",
+                "printedName": "[Swift.UInt64 : [Swift.String : Swift.Set<Swift.UInt64>]]",
+                "children": [
+                  {
+                    "kind": "TypeNominal",
+                    "name": "UInt64",
+                    "printedName": "Swift.UInt64",
+                    "usr": "s:s6UInt64V"
+                  },
+                  {
+                    "kind": "TypeNominal",
+                    "name": "Dictionary",
+                    "printedName": "[Swift.String : Swift.Set<Swift.UInt64>]",
+                    "children": [
+                      {
+                        "kind": "TypeNominal",
+                        "name": "String",
+                        "printedName": "Swift.String",
+                        "usr": "s:SS"
+                      },
+                      {
+                        "kind": "TypeNominal",
+                        "name": "Set",
+                        "printedName": "Swift.Set<Swift.UInt64>",
+                        "children": [
+                          {
+                            "kind": "TypeNominal",
+                            "name": "UInt64",
+                            "printedName": "Swift.UInt64",
+                            "usr": "s:s6UInt64V"
+                          }
+                        ],
+                        "usr": "s:Sh"
+                      }
+                    ],
+                    "usr": "s:SD"
+                  }
+                ],
+                "hasDefaultArg": true,
+                "usr": "s:SD"
+              }
+            ],
+            "declKind": "Constructor",
+            "usr": "s:11ExhaustCore17GenerationContextV7maxRuns7isFixed4size0I8Override4prng16tunedFilterCache14uniqueSeenKeys0oP9Sequences16materializePicks4runs15classificationsACs6UInt64V_SbA2PSgAA10Xoshiro256VSDyApA10FreerMonadOyAA19ReflectiveOperationOypGGSDyAPShys11AnyHashableVGGSDyAPShys15ContiguousArrayVyAA19ChoiceSequenceValueOGGGSbAPSDyAPSDySSShyAPGGGtcfc",
+            "mangledName": "$s11ExhaustCore17GenerationContextV7maxRuns7isFixed4size0I8Override4prng16tunedFilterCache14uniqueSeenKeys0oP9Sequences16materializePicks4runs15classificationsACs6UInt64V_SbA2PSgAA10Xoshiro256VSDyApA10FreerMonadOyAA19ReflectiveOperationOypGGSDyAPShys11AnyHashableVGGSDyAPShys15ContiguousArrayVyAA19ChoiceSequenceValueOGGGSbAPSDyAPSDySSShyAPGGGtcfc",
+            "moduleName": "ExhaustCore",
+            "implicit": true,
+            "init_kind": "Designated"
+          }
+        ],
+        "declKind": "Struct",
+        "usr": "s:11ExhaustCore17GenerationContextV",
+        "mangledName": "$s11ExhaustCore17GenerationContextV",
+        "moduleName": "ExhaustCore",
+        "declAttributes": [
+          "RawDocComment"
+        ],
+        "conformances": [
+          {
+            "kind": "Conformance",
+            "name": "Copyable",
+            "printedName": "Copyable",
+            "usr": "s:s8CopyableP",
+            "mangledName": "$ss8CopyableP"
+          },
+          {
+            "kind": "Conformance",
+            "name": "Escapable",
+            "printedName": "Escapable",
+            "usr": "s:s9EscapableP",
+            "mangledName": "$ss9EscapableP"
+          }
+        ]
+      },
+      {
         "kind": "Import",
         "name": "Foundation",
         "printedName": "Foundation",
@@ -7004,6 +8997,57 @@
             ]
           },
           {
+            "kind": "Var",
+            "name": "context",
+            "printedName": "context",
+            "children": [
+              {
+                "kind": "TypeNominal",
+                "name": "GenerationContext",
+                "printedName": "ExhaustCore.GenerationContext",
+                "usr": "s:11ExhaustCore17GenerationContextV"
+              }
+            ],
+            "declKind": "Var",
+            "usr": "s:11ExhaustCore29ValueAndChoiceTreeInterpreterV7contextAA17GenerationContextVvp",
+            "mangledName": "$s11ExhaustCore29ValueAndChoiceTreeInterpreterV7contextAA17GenerationContextVvp",
+            "moduleName": "ExhaustCore",
+            "declAttributes": [
+              "HasStorage",
+              "SetterAccess"
+            ],
+            "spi_group_names": [
+              "ExhaustInternal"
+            ],
+            "hasStorage": true,
+            "accessors": [
+              {
+                "kind": "Accessor",
+                "name": "Get",
+                "printedName": "Get()",
+                "children": [
+                  {
+                    "kind": "TypeNominal",
+                    "name": "GenerationContext",
+                    "printedName": "ExhaustCore.GenerationContext",
+                    "usr": "s:11ExhaustCore17GenerationContextV"
+                  }
+                ],
+                "declKind": "Accessor",
+                "usr": "s:11ExhaustCore29ValueAndChoiceTreeInterpreterV7contextAA17GenerationContextVvg",
+                "mangledName": "$s11ExhaustCore29ValueAndChoiceTreeInterpreterV7contextAA17GenerationContextVvg",
+                "moduleName": "ExhaustCore",
+                "genericSig": "<τ_0_0>",
+                "sugared_genericSig": "<FinalOutput>",
+                "implicit": true,
+                "spi_group_names": [
+                  "ExhaustInternal"
+                ],
+                "accessorKind": "get"
+              }
+            ]
+          },
+          {
             "kind": "Constructor",
             "name": "init",
             "printedName": "init(_:materializePicks:seed:maxRuns:)",
@@ -7232,14 +9276,15 @@
               },
               {
                 "kind": "TypeNominal",
-                "name": "Context",
-                "printedName": "ExhaustCore.ValueAndChoiceTreeInterpreter<τ_0_0>.Context",
-                "usr": "s:11ExhaustCore29ValueAndChoiceTreeInterpreterV7ContextC"
+                "name": "GenerationContext",
+                "printedName": "ExhaustCore.GenerationContext",
+                "paramValueOwnership": "InOut",
+                "usr": "s:11ExhaustCore17GenerationContextV"
               }
             ],
             "declKind": "Func",
-            "usr": "s:11ExhaustCore29ValueAndChoiceTreeInterpreterV17generateRecursive_4with7contextqd___AA0eF0OtSgAA10FreerMonadOyAA19ReflectiveOperationOqd__G_qd_0_AC7ContextCyx_GtKr0_lFZ",
-            "mangledName": "$s11ExhaustCore29ValueAndChoiceTreeInterpreterV17generateRecursive_4with7contextqd___AA0eF0OtSgAA10FreerMonadOyAA19ReflectiveOperationOqd__G_qd_0_AC7ContextCyx_GtKr0_lFZ",
+            "usr": "s:11ExhaustCore29ValueAndChoiceTreeInterpreterV17generateRecursive_4with7contextqd___AA0eF0OtSgAA10FreerMonadOyAA19ReflectiveOperationOqd__G_qd_0_AA17GenerationContextVztKr0_lFZ",
+            "mangledName": "$s11ExhaustCore29ValueAndChoiceTreeInterpreterV17generateRecursive_4with7contextqd___AA0eF0OtSgAA10FreerMonadOyAA19ReflectiveOperationOqd__G_qd_0_AA17GenerationContextVztKr0_lFZ",
             "moduleName": "ExhaustCore",
             "genericSig": "<τ_0_0, τ_1_0, τ_1_1>",
             "sugared_genericSig": "<FinalOutput, Output>",
@@ -7252,1809 +9297,6 @@
             ],
             "throwing": true,
             "funcSelfKind": "NonMutating"
-          },
-          {
-            "kind": "TypeDecl",
-            "name": "Context",
-            "printedName": "Context",
-            "children": [
-              {
-                "kind": "Var",
-                "name": "maxRuns",
-                "printedName": "maxRuns",
-                "children": [
-                  {
-                    "kind": "TypeNominal",
-                    "name": "UInt64",
-                    "printedName": "Swift.UInt64",
-                    "usr": "s:s6UInt64V"
-                  }
-                ],
-                "declKind": "Var",
-                "usr": "s:11ExhaustCore29ValueAndChoiceTreeInterpreterV7ContextC7maxRunss6UInt64Vvp",
-                "mangledName": "$s11ExhaustCore29ValueAndChoiceTreeInterpreterV7ContextC7maxRunss6UInt64Vvp",
-                "moduleName": "ExhaustCore",
-                "declAttributes": [
-                  "Final",
-                  "HasStorage"
-                ],
-                "fixedbinaryorder": 0,
-                "spi_group_names": [
-                  "ExhaustInternal"
-                ],
-                "isLet": true,
-                "hasStorage": true,
-                "accessors": [
-                  {
-                    "kind": "Accessor",
-                    "name": "Get",
-                    "printedName": "Get()",
-                    "children": [
-                      {
-                        "kind": "TypeNominal",
-                        "name": "UInt64",
-                        "printedName": "Swift.UInt64",
-                        "usr": "s:s6UInt64V"
-                      }
-                    ],
-                    "declKind": "Accessor",
-                    "usr": "s:11ExhaustCore29ValueAndChoiceTreeInterpreterV7ContextC7maxRunss6UInt64Vvg",
-                    "mangledName": "$s11ExhaustCore29ValueAndChoiceTreeInterpreterV7ContextC7maxRunss6UInt64Vvg",
-                    "moduleName": "ExhaustCore",
-                    "genericSig": "<τ_0_0>",
-                    "sugared_genericSig": "<FinalOutput>",
-                    "implicit": true,
-                    "declAttributes": [
-                      "Transparent",
-                      "Final"
-                    ],
-                    "spi_group_names": [
-                      "ExhaustInternal"
-                    ],
-                    "accessorKind": "get"
-                  }
-                ]
-              },
-              {
-                "kind": "Var",
-                "name": "materializePicks",
-                "printedName": "materializePicks",
-                "children": [
-                  {
-                    "kind": "TypeNominal",
-                    "name": "Bool",
-                    "printedName": "Swift.Bool",
-                    "usr": "s:Sb"
-                  }
-                ],
-                "declKind": "Var",
-                "usr": "s:11ExhaustCore29ValueAndChoiceTreeInterpreterV7ContextC16materializePicksSbvp",
-                "mangledName": "$s11ExhaustCore29ValueAndChoiceTreeInterpreterV7ContextC16materializePicksSbvp",
-                "moduleName": "ExhaustCore",
-                "declAttributes": [
-                  "Final",
-                  "HasStorage"
-                ],
-                "fixedbinaryorder": 1,
-                "spi_group_names": [
-                  "ExhaustInternal"
-                ],
-                "isLet": true,
-                "hasStorage": true,
-                "accessors": [
-                  {
-                    "kind": "Accessor",
-                    "name": "Get",
-                    "printedName": "Get()",
-                    "children": [
-                      {
-                        "kind": "TypeNominal",
-                        "name": "Bool",
-                        "printedName": "Swift.Bool",
-                        "usr": "s:Sb"
-                      }
-                    ],
-                    "declKind": "Accessor",
-                    "usr": "s:11ExhaustCore29ValueAndChoiceTreeInterpreterV7ContextC16materializePicksSbvg",
-                    "mangledName": "$s11ExhaustCore29ValueAndChoiceTreeInterpreterV7ContextC16materializePicksSbvg",
-                    "moduleName": "ExhaustCore",
-                    "genericSig": "<τ_0_0>",
-                    "sugared_genericSig": "<FinalOutput>",
-                    "implicit": true,
-                    "declAttributes": [
-                      "Transparent",
-                      "Final"
-                    ],
-                    "spi_group_names": [
-                      "ExhaustInternal"
-                    ],
-                    "accessorKind": "get"
-                  }
-                ]
-              },
-              {
-                "kind": "Var",
-                "name": "isFixed",
-                "printedName": "isFixed",
-                "children": [
-                  {
-                    "kind": "TypeNominal",
-                    "name": "Bool",
-                    "printedName": "Swift.Bool",
-                    "usr": "s:Sb"
-                  }
-                ],
-                "declKind": "Var",
-                "usr": "s:11ExhaustCore29ValueAndChoiceTreeInterpreterV7ContextC7isFixedSbvp",
-                "mangledName": "$s11ExhaustCore29ValueAndChoiceTreeInterpreterV7ContextC7isFixedSbvp",
-                "moduleName": "ExhaustCore",
-                "declAttributes": [
-                  "Final",
-                  "HasStorage"
-                ],
-                "fixedbinaryorder": 2,
-                "spi_group_names": [
-                  "ExhaustInternal"
-                ],
-                "hasStorage": true,
-                "accessors": [
-                  {
-                    "kind": "Accessor",
-                    "name": "Get",
-                    "printedName": "Get()",
-                    "children": [
-                      {
-                        "kind": "TypeNominal",
-                        "name": "Bool",
-                        "printedName": "Swift.Bool",
-                        "usr": "s:Sb"
-                      }
-                    ],
-                    "declKind": "Accessor",
-                    "usr": "s:11ExhaustCore29ValueAndChoiceTreeInterpreterV7ContextC7isFixedSbvg",
-                    "mangledName": "$s11ExhaustCore29ValueAndChoiceTreeInterpreterV7ContextC7isFixedSbvg",
-                    "moduleName": "ExhaustCore",
-                    "genericSig": "<τ_0_0>",
-                    "sugared_genericSig": "<FinalOutput>",
-                    "implicit": true,
-                    "declAttributes": [
-                      "Transparent",
-                      "Final"
-                    ],
-                    "spi_group_names": [
-                      "ExhaustInternal"
-                    ],
-                    "accessorKind": "get"
-                  },
-                  {
-                    "kind": "Accessor",
-                    "name": "Set",
-                    "printedName": "Set()",
-                    "children": [
-                      {
-                        "kind": "TypeNominal",
-                        "name": "Void",
-                        "printedName": "()"
-                      },
-                      {
-                        "kind": "TypeNominal",
-                        "name": "Bool",
-                        "printedName": "Swift.Bool",
-                        "usr": "s:Sb"
-                      }
-                    ],
-                    "declKind": "Accessor",
-                    "usr": "s:11ExhaustCore29ValueAndChoiceTreeInterpreterV7ContextC7isFixedSbvs",
-                    "mangledName": "$s11ExhaustCore29ValueAndChoiceTreeInterpreterV7ContextC7isFixedSbvs",
-                    "moduleName": "ExhaustCore",
-                    "genericSig": "<τ_0_0>",
-                    "sugared_genericSig": "<FinalOutput>",
-                    "implicit": true,
-                    "declAttributes": [
-                      "Transparent",
-                      "Final"
-                    ],
-                    "spi_group_names": [
-                      "ExhaustInternal"
-                    ],
-                    "accessorKind": "set"
-                  },
-                  {
-                    "kind": "Accessor",
-                    "name": "Modify",
-                    "printedName": "Modify()",
-                    "children": [
-                      {
-                        "kind": "TypeNominal",
-                        "name": "Void",
-                        "printedName": "()"
-                      }
-                    ],
-                    "declKind": "Accessor",
-                    "usr": "s:11ExhaustCore29ValueAndChoiceTreeInterpreterV7ContextC7isFixedSbvM",
-                    "mangledName": "$s11ExhaustCore29ValueAndChoiceTreeInterpreterV7ContextC7isFixedSbvM",
-                    "moduleName": "ExhaustCore",
-                    "genericSig": "<τ_0_0>",
-                    "sugared_genericSig": "<FinalOutput>",
-                    "implicit": true,
-                    "declAttributes": [
-                      "Transparent",
-                      "Final"
-                    ],
-                    "spi_group_names": [
-                      "ExhaustInternal"
-                    ],
-                    "accessorKind": "_modify"
-                  }
-                ]
-              },
-              {
-                "kind": "Var",
-                "name": "size",
-                "printedName": "size",
-                "children": [
-                  {
-                    "kind": "TypeNominal",
-                    "name": "UInt64",
-                    "printedName": "Swift.UInt64",
-                    "usr": "s:s6UInt64V"
-                  }
-                ],
-                "declKind": "Var",
-                "usr": "s:11ExhaustCore29ValueAndChoiceTreeInterpreterV7ContextC4sizes6UInt64Vvp",
-                "mangledName": "$s11ExhaustCore29ValueAndChoiceTreeInterpreterV7ContextC4sizes6UInt64Vvp",
-                "moduleName": "ExhaustCore",
-                "declAttributes": [
-                  "Final",
-                  "HasStorage"
-                ],
-                "fixedbinaryorder": 3,
-                "spi_group_names": [
-                  "ExhaustInternal"
-                ],
-                "hasStorage": true,
-                "accessors": [
-                  {
-                    "kind": "Accessor",
-                    "name": "Get",
-                    "printedName": "Get()",
-                    "children": [
-                      {
-                        "kind": "TypeNominal",
-                        "name": "UInt64",
-                        "printedName": "Swift.UInt64",
-                        "usr": "s:s6UInt64V"
-                      }
-                    ],
-                    "declKind": "Accessor",
-                    "usr": "s:11ExhaustCore29ValueAndChoiceTreeInterpreterV7ContextC4sizes6UInt64Vvg",
-                    "mangledName": "$s11ExhaustCore29ValueAndChoiceTreeInterpreterV7ContextC4sizes6UInt64Vvg",
-                    "moduleName": "ExhaustCore",
-                    "genericSig": "<τ_0_0>",
-                    "sugared_genericSig": "<FinalOutput>",
-                    "implicit": true,
-                    "declAttributes": [
-                      "Transparent",
-                      "Final"
-                    ],
-                    "spi_group_names": [
-                      "ExhaustInternal"
-                    ],
-                    "accessorKind": "get"
-                  },
-                  {
-                    "kind": "Accessor",
-                    "name": "Set",
-                    "printedName": "Set()",
-                    "children": [
-                      {
-                        "kind": "TypeNominal",
-                        "name": "Void",
-                        "printedName": "()"
-                      },
-                      {
-                        "kind": "TypeNominal",
-                        "name": "UInt64",
-                        "printedName": "Swift.UInt64",
-                        "usr": "s:s6UInt64V"
-                      }
-                    ],
-                    "declKind": "Accessor",
-                    "usr": "s:11ExhaustCore29ValueAndChoiceTreeInterpreterV7ContextC4sizes6UInt64Vvs",
-                    "mangledName": "$s11ExhaustCore29ValueAndChoiceTreeInterpreterV7ContextC4sizes6UInt64Vvs",
-                    "moduleName": "ExhaustCore",
-                    "genericSig": "<τ_0_0>",
-                    "sugared_genericSig": "<FinalOutput>",
-                    "implicit": true,
-                    "declAttributes": [
-                      "Transparent",
-                      "Final"
-                    ],
-                    "spi_group_names": [
-                      "ExhaustInternal"
-                    ],
-                    "accessorKind": "set"
-                  },
-                  {
-                    "kind": "Accessor",
-                    "name": "Modify",
-                    "printedName": "Modify()",
-                    "children": [
-                      {
-                        "kind": "TypeNominal",
-                        "name": "Void",
-                        "printedName": "()"
-                      }
-                    ],
-                    "declKind": "Accessor",
-                    "usr": "s:11ExhaustCore29ValueAndChoiceTreeInterpreterV7ContextC4sizes6UInt64VvM",
-                    "mangledName": "$s11ExhaustCore29ValueAndChoiceTreeInterpreterV7ContextC4sizes6UInt64VvM",
-                    "moduleName": "ExhaustCore",
-                    "genericSig": "<τ_0_0>",
-                    "sugared_genericSig": "<FinalOutput>",
-                    "implicit": true,
-                    "declAttributes": [
-                      "Transparent",
-                      "Final"
-                    ],
-                    "spi_group_names": [
-                      "ExhaustInternal"
-                    ],
-                    "accessorKind": "_modify"
-                  }
-                ]
-              },
-              {
-                "kind": "Var",
-                "name": "runs",
-                "printedName": "runs",
-                "children": [
-                  {
-                    "kind": "TypeNominal",
-                    "name": "UInt64",
-                    "printedName": "Swift.UInt64",
-                    "usr": "s:s6UInt64V"
-                  }
-                ],
-                "declKind": "Var",
-                "usr": "s:11ExhaustCore29ValueAndChoiceTreeInterpreterV7ContextC4runss6UInt64Vvp",
-                "mangledName": "$s11ExhaustCore29ValueAndChoiceTreeInterpreterV7ContextC4runss6UInt64Vvp",
-                "moduleName": "ExhaustCore",
-                "declAttributes": [
-                  "Final",
-                  "HasStorage"
-                ],
-                "fixedbinaryorder": 4,
-                "spi_group_names": [
-                  "ExhaustInternal"
-                ],
-                "hasStorage": true,
-                "accessors": [
-                  {
-                    "kind": "Accessor",
-                    "name": "Get",
-                    "printedName": "Get()",
-                    "children": [
-                      {
-                        "kind": "TypeNominal",
-                        "name": "UInt64",
-                        "printedName": "Swift.UInt64",
-                        "usr": "s:s6UInt64V"
-                      }
-                    ],
-                    "declKind": "Accessor",
-                    "usr": "s:11ExhaustCore29ValueAndChoiceTreeInterpreterV7ContextC4runss6UInt64Vvg",
-                    "mangledName": "$s11ExhaustCore29ValueAndChoiceTreeInterpreterV7ContextC4runss6UInt64Vvg",
-                    "moduleName": "ExhaustCore",
-                    "genericSig": "<τ_0_0>",
-                    "sugared_genericSig": "<FinalOutput>",
-                    "implicit": true,
-                    "declAttributes": [
-                      "Transparent",
-                      "Final"
-                    ],
-                    "spi_group_names": [
-                      "ExhaustInternal"
-                    ],
-                    "accessorKind": "get"
-                  },
-                  {
-                    "kind": "Accessor",
-                    "name": "Set",
-                    "printedName": "Set()",
-                    "children": [
-                      {
-                        "kind": "TypeNominal",
-                        "name": "Void",
-                        "printedName": "()"
-                      },
-                      {
-                        "kind": "TypeNominal",
-                        "name": "UInt64",
-                        "printedName": "Swift.UInt64",
-                        "usr": "s:s6UInt64V"
-                      }
-                    ],
-                    "declKind": "Accessor",
-                    "usr": "s:11ExhaustCore29ValueAndChoiceTreeInterpreterV7ContextC4runss6UInt64Vvs",
-                    "mangledName": "$s11ExhaustCore29ValueAndChoiceTreeInterpreterV7ContextC4runss6UInt64Vvs",
-                    "moduleName": "ExhaustCore",
-                    "genericSig": "<τ_0_0>",
-                    "sugared_genericSig": "<FinalOutput>",
-                    "implicit": true,
-                    "declAttributes": [
-                      "Transparent",
-                      "Final"
-                    ],
-                    "spi_group_names": [
-                      "ExhaustInternal"
-                    ],
-                    "accessorKind": "set"
-                  },
-                  {
-                    "kind": "Accessor",
-                    "name": "Modify",
-                    "printedName": "Modify()",
-                    "children": [
-                      {
-                        "kind": "TypeNominal",
-                        "name": "Void",
-                        "printedName": "()"
-                      }
-                    ],
-                    "declKind": "Accessor",
-                    "usr": "s:11ExhaustCore29ValueAndChoiceTreeInterpreterV7ContextC4runss6UInt64VvM",
-                    "mangledName": "$s11ExhaustCore29ValueAndChoiceTreeInterpreterV7ContextC4runss6UInt64VvM",
-                    "moduleName": "ExhaustCore",
-                    "genericSig": "<τ_0_0>",
-                    "sugared_genericSig": "<FinalOutput>",
-                    "implicit": true,
-                    "declAttributes": [
-                      "Transparent",
-                      "Final"
-                    ],
-                    "spi_group_names": [
-                      "ExhaustInternal"
-                    ],
-                    "accessorKind": "_modify"
-                  }
-                ]
-              },
-              {
-                "kind": "Var",
-                "name": "sizeOverride",
-                "printedName": "sizeOverride",
-                "children": [
-                  {
-                    "kind": "TypeNominal",
-                    "name": "Optional",
-                    "printedName": "Swift.UInt64?",
-                    "children": [
-                      {
-                        "kind": "TypeNominal",
-                        "name": "UInt64",
-                        "printedName": "Swift.UInt64",
-                        "usr": "s:s6UInt64V"
-                      }
-                    ],
-                    "usr": "s:Sq"
-                  }
-                ],
-                "declKind": "Var",
-                "usr": "s:11ExhaustCore29ValueAndChoiceTreeInterpreterV7ContextC12sizeOverrides6UInt64VSgvp",
-                "mangledName": "$s11ExhaustCore29ValueAndChoiceTreeInterpreterV7ContextC12sizeOverrides6UInt64VSgvp",
-                "moduleName": "ExhaustCore",
-                "declAttributes": [
-                  "HasInitialValue",
-                  "Final",
-                  "HasStorage"
-                ],
-                "fixedbinaryorder": 5,
-                "spi_group_names": [
-                  "ExhaustInternal"
-                ],
-                "hasStorage": true,
-                "accessors": [
-                  {
-                    "kind": "Accessor",
-                    "name": "Get",
-                    "printedName": "Get()",
-                    "children": [
-                      {
-                        "kind": "TypeNominal",
-                        "name": "Optional",
-                        "printedName": "Swift.UInt64?",
-                        "children": [
-                          {
-                            "kind": "TypeNominal",
-                            "name": "UInt64",
-                            "printedName": "Swift.UInt64",
-                            "usr": "s:s6UInt64V"
-                          }
-                        ],
-                        "usr": "s:Sq"
-                      }
-                    ],
-                    "declKind": "Accessor",
-                    "usr": "s:11ExhaustCore29ValueAndChoiceTreeInterpreterV7ContextC12sizeOverrides6UInt64VSgvg",
-                    "mangledName": "$s11ExhaustCore29ValueAndChoiceTreeInterpreterV7ContextC12sizeOverrides6UInt64VSgvg",
-                    "moduleName": "ExhaustCore",
-                    "genericSig": "<τ_0_0>",
-                    "sugared_genericSig": "<FinalOutput>",
-                    "implicit": true,
-                    "declAttributes": [
-                      "Transparent",
-                      "Final"
-                    ],
-                    "spi_group_names": [
-                      "ExhaustInternal"
-                    ],
-                    "accessorKind": "get"
-                  },
-                  {
-                    "kind": "Accessor",
-                    "name": "Set",
-                    "printedName": "Set()",
-                    "children": [
-                      {
-                        "kind": "TypeNominal",
-                        "name": "Void",
-                        "printedName": "()"
-                      },
-                      {
-                        "kind": "TypeNominal",
-                        "name": "Optional",
-                        "printedName": "Swift.UInt64?",
-                        "children": [
-                          {
-                            "kind": "TypeNominal",
-                            "name": "UInt64",
-                            "printedName": "Swift.UInt64",
-                            "usr": "s:s6UInt64V"
-                          }
-                        ],
-                        "usr": "s:Sq"
-                      }
-                    ],
-                    "declKind": "Accessor",
-                    "usr": "s:11ExhaustCore29ValueAndChoiceTreeInterpreterV7ContextC12sizeOverrides6UInt64VSgvs",
-                    "mangledName": "$s11ExhaustCore29ValueAndChoiceTreeInterpreterV7ContextC12sizeOverrides6UInt64VSgvs",
-                    "moduleName": "ExhaustCore",
-                    "genericSig": "<τ_0_0>",
-                    "sugared_genericSig": "<FinalOutput>",
-                    "implicit": true,
-                    "declAttributes": [
-                      "Transparent",
-                      "Final"
-                    ],
-                    "spi_group_names": [
-                      "ExhaustInternal"
-                    ],
-                    "accessorKind": "set"
-                  },
-                  {
-                    "kind": "Accessor",
-                    "name": "Modify",
-                    "printedName": "Modify()",
-                    "children": [
-                      {
-                        "kind": "TypeNominal",
-                        "name": "Void",
-                        "printedName": "()"
-                      }
-                    ],
-                    "declKind": "Accessor",
-                    "usr": "s:11ExhaustCore29ValueAndChoiceTreeInterpreterV7ContextC12sizeOverrides6UInt64VSgvM",
-                    "mangledName": "$s11ExhaustCore29ValueAndChoiceTreeInterpreterV7ContextC12sizeOverrides6UInt64VSgvM",
-                    "moduleName": "ExhaustCore",
-                    "genericSig": "<τ_0_0>",
-                    "sugared_genericSig": "<FinalOutput>",
-                    "implicit": true,
-                    "declAttributes": [
-                      "Transparent",
-                      "Final"
-                    ],
-                    "spi_group_names": [
-                      "ExhaustInternal"
-                    ],
-                    "accessorKind": "_modify"
-                  }
-                ]
-              },
-              {
-                "kind": "Var",
-                "name": "maxFilterRuns",
-                "printedName": "maxFilterRuns",
-                "children": [
-                  {
-                    "kind": "TypeNominal",
-                    "name": "UInt64",
-                    "printedName": "Swift.UInt64",
-                    "usr": "s:s6UInt64V"
-                  }
-                ],
-                "declKind": "Var",
-                "usr": "s:11ExhaustCore29ValueAndChoiceTreeInterpreterV7ContextC13maxFilterRunss6UInt64Vvp",
-                "mangledName": "$s11ExhaustCore29ValueAndChoiceTreeInterpreterV7ContextC13maxFilterRunss6UInt64Vvp",
-                "moduleName": "ExhaustCore",
-                "declAttributes": [
-                  "HasInitialValue",
-                  "Final",
-                  "HasStorage"
-                ],
-                "fixedbinaryorder": 6,
-                "spi_group_names": [
-                  "ExhaustInternal"
-                ],
-                "isLet": true,
-                "hasStorage": true,
-                "accessors": [
-                  {
-                    "kind": "Accessor",
-                    "name": "Get",
-                    "printedName": "Get()",
-                    "children": [
-                      {
-                        "kind": "TypeNominal",
-                        "name": "UInt64",
-                        "printedName": "Swift.UInt64",
-                        "usr": "s:s6UInt64V"
-                      }
-                    ],
-                    "declKind": "Accessor",
-                    "usr": "s:11ExhaustCore29ValueAndChoiceTreeInterpreterV7ContextC13maxFilterRunss6UInt64Vvg",
-                    "mangledName": "$s11ExhaustCore29ValueAndChoiceTreeInterpreterV7ContextC13maxFilterRunss6UInt64Vvg",
-                    "moduleName": "ExhaustCore",
-                    "genericSig": "<τ_0_0>",
-                    "sugared_genericSig": "<FinalOutput>",
-                    "implicit": true,
-                    "declAttributes": [
-                      "Transparent",
-                      "Final"
-                    ],
-                    "spi_group_names": [
-                      "ExhaustInternal"
-                    ],
-                    "accessorKind": "get"
-                  }
-                ]
-              },
-              {
-                "kind": "Var",
-                "name": "classifications",
-                "printedName": "classifications",
-                "children": [
-                  {
-                    "kind": "TypeNominal",
-                    "name": "Dictionary",
-                    "printedName": "[Swift.UInt64 : [Swift.String : Swift.Set<Swift.UInt64>]]",
-                    "children": [
-                      {
-                        "kind": "TypeNominal",
-                        "name": "UInt64",
-                        "printedName": "Swift.UInt64",
-                        "usr": "s:s6UInt64V"
-                      },
-                      {
-                        "kind": "TypeNominal",
-                        "name": "Dictionary",
-                        "printedName": "[Swift.String : Swift.Set<Swift.UInt64>]",
-                        "children": [
-                          {
-                            "kind": "TypeNominal",
-                            "name": "String",
-                            "printedName": "Swift.String",
-                            "usr": "s:SS"
-                          },
-                          {
-                            "kind": "TypeNominal",
-                            "name": "Set",
-                            "printedName": "Swift.Set<Swift.UInt64>",
-                            "children": [
-                              {
-                                "kind": "TypeNominal",
-                                "name": "UInt64",
-                                "printedName": "Swift.UInt64",
-                                "usr": "s:s6UInt64V"
-                              }
-                            ],
-                            "usr": "s:Sh"
-                          }
-                        ],
-                        "usr": "s:SD"
-                      }
-                    ],
-                    "usr": "s:SD"
-                  }
-                ],
-                "declKind": "Var",
-                "usr": "s:11ExhaustCore29ValueAndChoiceTreeInterpreterV7ContextC15classificationsSDys6UInt64VSDySSShyAHGGGvp",
-                "mangledName": "$s11ExhaustCore29ValueAndChoiceTreeInterpreterV7ContextC15classificationsSDys6UInt64VSDySSShyAHGGGvp",
-                "moduleName": "ExhaustCore",
-                "declAttributes": [
-                  "HasInitialValue",
-                  "Final",
-                  "HasStorage",
-                  "RawDocComment"
-                ],
-                "fixedbinaryorder": 7,
-                "spi_group_names": [
-                  "ExhaustInternal"
-                ],
-                "hasStorage": true,
-                "accessors": [
-                  {
-                    "kind": "Accessor",
-                    "name": "Get",
-                    "printedName": "Get()",
-                    "children": [
-                      {
-                        "kind": "TypeNominal",
-                        "name": "Dictionary",
-                        "printedName": "[Swift.UInt64 : [Swift.String : Swift.Set<Swift.UInt64>]]",
-                        "children": [
-                          {
-                            "kind": "TypeNominal",
-                            "name": "UInt64",
-                            "printedName": "Swift.UInt64",
-                            "usr": "s:s6UInt64V"
-                          },
-                          {
-                            "kind": "TypeNominal",
-                            "name": "Dictionary",
-                            "printedName": "[Swift.String : Swift.Set<Swift.UInt64>]",
-                            "children": [
-                              {
-                                "kind": "TypeNominal",
-                                "name": "String",
-                                "printedName": "Swift.String",
-                                "usr": "s:SS"
-                              },
-                              {
-                                "kind": "TypeNominal",
-                                "name": "Set",
-                                "printedName": "Swift.Set<Swift.UInt64>",
-                                "children": [
-                                  {
-                                    "kind": "TypeNominal",
-                                    "name": "UInt64",
-                                    "printedName": "Swift.UInt64",
-                                    "usr": "s:s6UInt64V"
-                                  }
-                                ],
-                                "usr": "s:Sh"
-                              }
-                            ],
-                            "usr": "s:SD"
-                          }
-                        ],
-                        "usr": "s:SD"
-                      }
-                    ],
-                    "declKind": "Accessor",
-                    "usr": "s:11ExhaustCore29ValueAndChoiceTreeInterpreterV7ContextC15classificationsSDys6UInt64VSDySSShyAHGGGvg",
-                    "mangledName": "$s11ExhaustCore29ValueAndChoiceTreeInterpreterV7ContextC15classificationsSDys6UInt64VSDySSShyAHGGGvg",
-                    "moduleName": "ExhaustCore",
-                    "genericSig": "<τ_0_0>",
-                    "sugared_genericSig": "<FinalOutput>",
-                    "implicit": true,
-                    "declAttributes": [
-                      "Transparent",
-                      "Final"
-                    ],
-                    "spi_group_names": [
-                      "ExhaustInternal"
-                    ],
-                    "accessorKind": "get"
-                  },
-                  {
-                    "kind": "Accessor",
-                    "name": "Set",
-                    "printedName": "Set()",
-                    "children": [
-                      {
-                        "kind": "TypeNominal",
-                        "name": "Void",
-                        "printedName": "()"
-                      },
-                      {
-                        "kind": "TypeNominal",
-                        "name": "Dictionary",
-                        "printedName": "[Swift.UInt64 : [Swift.String : Swift.Set<Swift.UInt64>]]",
-                        "children": [
-                          {
-                            "kind": "TypeNominal",
-                            "name": "UInt64",
-                            "printedName": "Swift.UInt64",
-                            "usr": "s:s6UInt64V"
-                          },
-                          {
-                            "kind": "TypeNominal",
-                            "name": "Dictionary",
-                            "printedName": "[Swift.String : Swift.Set<Swift.UInt64>]",
-                            "children": [
-                              {
-                                "kind": "TypeNominal",
-                                "name": "String",
-                                "printedName": "Swift.String",
-                                "usr": "s:SS"
-                              },
-                              {
-                                "kind": "TypeNominal",
-                                "name": "Set",
-                                "printedName": "Swift.Set<Swift.UInt64>",
-                                "children": [
-                                  {
-                                    "kind": "TypeNominal",
-                                    "name": "UInt64",
-                                    "printedName": "Swift.UInt64",
-                                    "usr": "s:s6UInt64V"
-                                  }
-                                ],
-                                "usr": "s:Sh"
-                              }
-                            ],
-                            "usr": "s:SD"
-                          }
-                        ],
-                        "usr": "s:SD"
-                      }
-                    ],
-                    "declKind": "Accessor",
-                    "usr": "s:11ExhaustCore29ValueAndChoiceTreeInterpreterV7ContextC15classificationsSDys6UInt64VSDySSShyAHGGGvs",
-                    "mangledName": "$s11ExhaustCore29ValueAndChoiceTreeInterpreterV7ContextC15classificationsSDys6UInt64VSDySSShyAHGGGvs",
-                    "moduleName": "ExhaustCore",
-                    "genericSig": "<τ_0_0>",
-                    "sugared_genericSig": "<FinalOutput>",
-                    "implicit": true,
-                    "declAttributes": [
-                      "Transparent",
-                      "Final"
-                    ],
-                    "spi_group_names": [
-                      "ExhaustInternal"
-                    ],
-                    "accessorKind": "set"
-                  },
-                  {
-                    "kind": "Accessor",
-                    "name": "Modify",
-                    "printedName": "Modify()",
-                    "children": [
-                      {
-                        "kind": "TypeNominal",
-                        "name": "Void",
-                        "printedName": "()"
-                      }
-                    ],
-                    "declKind": "Accessor",
-                    "usr": "s:11ExhaustCore29ValueAndChoiceTreeInterpreterV7ContextC15classificationsSDys6UInt64VSDySSShyAHGGGvM",
-                    "mangledName": "$s11ExhaustCore29ValueAndChoiceTreeInterpreterV7ContextC15classificationsSDys6UInt64VSDySSShyAHGGGvM",
-                    "moduleName": "ExhaustCore",
-                    "genericSig": "<τ_0_0>",
-                    "sugared_genericSig": "<FinalOutput>",
-                    "implicit": true,
-                    "declAttributes": [
-                      "Transparent",
-                      "Final"
-                    ],
-                    "spi_group_names": [
-                      "ExhaustInternal"
-                    ],
-                    "accessorKind": "_modify"
-                  }
-                ]
-              },
-              {
-                "kind": "Var",
-                "name": "prng",
-                "printedName": "prng",
-                "children": [
-                  {
-                    "kind": "TypeNominal",
-                    "name": "Xoshiro256",
-                    "printedName": "ExhaustCore.Xoshiro256",
-                    "usr": "s:11ExhaustCore10Xoshiro256V"
-                  }
-                ],
-                "declKind": "Var",
-                "usr": "s:11ExhaustCore29ValueAndChoiceTreeInterpreterV7ContextC4prngAA10Xoshiro256Vvp",
-                "mangledName": "$s11ExhaustCore29ValueAndChoiceTreeInterpreterV7ContextC4prngAA10Xoshiro256Vvp",
-                "moduleName": "ExhaustCore",
-                "declAttributes": [
-                  "Final",
-                  "HasStorage"
-                ],
-                "fixedbinaryorder": 8,
-                "spi_group_names": [
-                  "ExhaustInternal"
-                ],
-                "hasStorage": true,
-                "accessors": [
-                  {
-                    "kind": "Accessor",
-                    "name": "Get",
-                    "printedName": "Get()",
-                    "children": [
-                      {
-                        "kind": "TypeNominal",
-                        "name": "Xoshiro256",
-                        "printedName": "ExhaustCore.Xoshiro256",
-                        "usr": "s:11ExhaustCore10Xoshiro256V"
-                      }
-                    ],
-                    "declKind": "Accessor",
-                    "usr": "s:11ExhaustCore29ValueAndChoiceTreeInterpreterV7ContextC4prngAA10Xoshiro256Vvg",
-                    "mangledName": "$s11ExhaustCore29ValueAndChoiceTreeInterpreterV7ContextC4prngAA10Xoshiro256Vvg",
-                    "moduleName": "ExhaustCore",
-                    "genericSig": "<τ_0_0>",
-                    "sugared_genericSig": "<FinalOutput>",
-                    "implicit": true,
-                    "declAttributes": [
-                      "Transparent",
-                      "Final"
-                    ],
-                    "spi_group_names": [
-                      "ExhaustInternal"
-                    ],
-                    "accessorKind": "get"
-                  },
-                  {
-                    "kind": "Accessor",
-                    "name": "Set",
-                    "printedName": "Set()",
-                    "children": [
-                      {
-                        "kind": "TypeNominal",
-                        "name": "Void",
-                        "printedName": "()"
-                      },
-                      {
-                        "kind": "TypeNominal",
-                        "name": "Xoshiro256",
-                        "printedName": "ExhaustCore.Xoshiro256",
-                        "usr": "s:11ExhaustCore10Xoshiro256V"
-                      }
-                    ],
-                    "declKind": "Accessor",
-                    "usr": "s:11ExhaustCore29ValueAndChoiceTreeInterpreterV7ContextC4prngAA10Xoshiro256Vvs",
-                    "mangledName": "$s11ExhaustCore29ValueAndChoiceTreeInterpreterV7ContextC4prngAA10Xoshiro256Vvs",
-                    "moduleName": "ExhaustCore",
-                    "genericSig": "<τ_0_0>",
-                    "sugared_genericSig": "<FinalOutput>",
-                    "implicit": true,
-                    "declAttributes": [
-                      "Transparent",
-                      "Final"
-                    ],
-                    "spi_group_names": [
-                      "ExhaustInternal"
-                    ],
-                    "accessorKind": "set"
-                  },
-                  {
-                    "kind": "Accessor",
-                    "name": "Modify",
-                    "printedName": "Modify()",
-                    "children": [
-                      {
-                        "kind": "TypeNominal",
-                        "name": "Void",
-                        "printedName": "()"
-                      }
-                    ],
-                    "declKind": "Accessor",
-                    "usr": "s:11ExhaustCore29ValueAndChoiceTreeInterpreterV7ContextC4prngAA10Xoshiro256VvM",
-                    "mangledName": "$s11ExhaustCore29ValueAndChoiceTreeInterpreterV7ContextC4prngAA10Xoshiro256VvM",
-                    "moduleName": "ExhaustCore",
-                    "genericSig": "<τ_0_0>",
-                    "sugared_genericSig": "<FinalOutput>",
-                    "implicit": true,
-                    "declAttributes": [
-                      "Transparent",
-                      "Final"
-                    ],
-                    "spi_group_names": [
-                      "ExhaustInternal"
-                    ],
-                    "accessorKind": "_modify"
-                  }
-                ]
-              },
-              {
-                "kind": "Var",
-                "name": "tunedFilterCache",
-                "printedName": "tunedFilterCache",
-                "children": [
-                  {
-                    "kind": "TypeNominal",
-                    "name": "Dictionary",
-                    "printedName": "[Swift.UInt64 : ExhaustCore.FreerMonad<ExhaustCore.ReflectiveOperation, Any>]",
-                    "children": [
-                      {
-                        "kind": "TypeNominal",
-                        "name": "UInt64",
-                        "printedName": "Swift.UInt64",
-                        "usr": "s:s6UInt64V"
-                      },
-                      {
-                        "kind": "TypeNominal",
-                        "name": "FreerMonad",
-                        "printedName": "ExhaustCore.FreerMonad<ExhaustCore.ReflectiveOperation, Any>",
-                        "children": [
-                          {
-                            "kind": "TypeNominal",
-                            "name": "ReflectiveOperation",
-                            "printedName": "ExhaustCore.ReflectiveOperation",
-                            "usr": "s:11ExhaustCore19ReflectiveOperationO"
-                          },
-                          {
-                            "kind": "TypeNominal",
-                            "name": "ProtocolComposition",
-                            "printedName": "Any"
-                          }
-                        ],
-                        "usr": "s:11ExhaustCore10FreerMonadO"
-                      }
-                    ],
-                    "usr": "s:SD"
-                  }
-                ],
-                "declKind": "Var",
-                "usr": "s:11ExhaustCore29ValueAndChoiceTreeInterpreterV7ContextC16tunedFilterCacheSDys6UInt64VAA10FreerMonadOyAA19ReflectiveOperationOypGGvp",
-                "mangledName": "$s11ExhaustCore29ValueAndChoiceTreeInterpreterV7ContextC16tunedFilterCacheSDys6UInt64VAA10FreerMonadOyAA19ReflectiveOperationOypGGvp",
-                "moduleName": "ExhaustCore",
-                "declAttributes": [
-                  "HasInitialValue",
-                  "Final",
-                  "HasStorage",
-                  "RawDocComment"
-                ],
-                "fixedbinaryorder": 9,
-                "spi_group_names": [
-                  "ExhaustInternal"
-                ],
-                "hasStorage": true,
-                "accessors": [
-                  {
-                    "kind": "Accessor",
-                    "name": "Get",
-                    "printedName": "Get()",
-                    "children": [
-                      {
-                        "kind": "TypeNominal",
-                        "name": "Dictionary",
-                        "printedName": "[Swift.UInt64 : ExhaustCore.FreerMonad<ExhaustCore.ReflectiveOperation, Any>]",
-                        "children": [
-                          {
-                            "kind": "TypeNominal",
-                            "name": "UInt64",
-                            "printedName": "Swift.UInt64",
-                            "usr": "s:s6UInt64V"
-                          },
-                          {
-                            "kind": "TypeNominal",
-                            "name": "FreerMonad",
-                            "printedName": "ExhaustCore.FreerMonad<ExhaustCore.ReflectiveOperation, Any>",
-                            "children": [
-                              {
-                                "kind": "TypeNominal",
-                                "name": "ReflectiveOperation",
-                                "printedName": "ExhaustCore.ReflectiveOperation",
-                                "usr": "s:11ExhaustCore19ReflectiveOperationO"
-                              },
-                              {
-                                "kind": "TypeNominal",
-                                "name": "ProtocolComposition",
-                                "printedName": "Any"
-                              }
-                            ],
-                            "usr": "s:11ExhaustCore10FreerMonadO"
-                          }
-                        ],
-                        "usr": "s:SD"
-                      }
-                    ],
-                    "declKind": "Accessor",
-                    "usr": "s:11ExhaustCore29ValueAndChoiceTreeInterpreterV7ContextC16tunedFilterCacheSDys6UInt64VAA10FreerMonadOyAA19ReflectiveOperationOypGGvg",
-                    "mangledName": "$s11ExhaustCore29ValueAndChoiceTreeInterpreterV7ContextC16tunedFilterCacheSDys6UInt64VAA10FreerMonadOyAA19ReflectiveOperationOypGGvg",
-                    "moduleName": "ExhaustCore",
-                    "genericSig": "<τ_0_0>",
-                    "sugared_genericSig": "<FinalOutput>",
-                    "implicit": true,
-                    "declAttributes": [
-                      "Transparent",
-                      "Final"
-                    ],
-                    "spi_group_names": [
-                      "ExhaustInternal"
-                    ],
-                    "accessorKind": "get"
-                  },
-                  {
-                    "kind": "Accessor",
-                    "name": "Set",
-                    "printedName": "Set()",
-                    "children": [
-                      {
-                        "kind": "TypeNominal",
-                        "name": "Void",
-                        "printedName": "()"
-                      },
-                      {
-                        "kind": "TypeNominal",
-                        "name": "Dictionary",
-                        "printedName": "[Swift.UInt64 : ExhaustCore.FreerMonad<ExhaustCore.ReflectiveOperation, Any>]",
-                        "children": [
-                          {
-                            "kind": "TypeNominal",
-                            "name": "UInt64",
-                            "printedName": "Swift.UInt64",
-                            "usr": "s:s6UInt64V"
-                          },
-                          {
-                            "kind": "TypeNominal",
-                            "name": "FreerMonad",
-                            "printedName": "ExhaustCore.FreerMonad<ExhaustCore.ReflectiveOperation, Any>",
-                            "children": [
-                              {
-                                "kind": "TypeNominal",
-                                "name": "ReflectiveOperation",
-                                "printedName": "ExhaustCore.ReflectiveOperation",
-                                "usr": "s:11ExhaustCore19ReflectiveOperationO"
-                              },
-                              {
-                                "kind": "TypeNominal",
-                                "name": "ProtocolComposition",
-                                "printedName": "Any"
-                              }
-                            ],
-                            "usr": "s:11ExhaustCore10FreerMonadO"
-                          }
-                        ],
-                        "usr": "s:SD"
-                      }
-                    ],
-                    "declKind": "Accessor",
-                    "usr": "s:11ExhaustCore29ValueAndChoiceTreeInterpreterV7ContextC16tunedFilterCacheSDys6UInt64VAA10FreerMonadOyAA19ReflectiveOperationOypGGvs",
-                    "mangledName": "$s11ExhaustCore29ValueAndChoiceTreeInterpreterV7ContextC16tunedFilterCacheSDys6UInt64VAA10FreerMonadOyAA19ReflectiveOperationOypGGvs",
-                    "moduleName": "ExhaustCore",
-                    "genericSig": "<τ_0_0>",
-                    "sugared_genericSig": "<FinalOutput>",
-                    "implicit": true,
-                    "declAttributes": [
-                      "Transparent",
-                      "Final"
-                    ],
-                    "spi_group_names": [
-                      "ExhaustInternal"
-                    ],
-                    "accessorKind": "set"
-                  },
-                  {
-                    "kind": "Accessor",
-                    "name": "Modify",
-                    "printedName": "Modify()",
-                    "children": [
-                      {
-                        "kind": "TypeNominal",
-                        "name": "Void",
-                        "printedName": "()"
-                      }
-                    ],
-                    "declKind": "Accessor",
-                    "usr": "s:11ExhaustCore29ValueAndChoiceTreeInterpreterV7ContextC16tunedFilterCacheSDys6UInt64VAA10FreerMonadOyAA19ReflectiveOperationOypGGvM",
-                    "mangledName": "$s11ExhaustCore29ValueAndChoiceTreeInterpreterV7ContextC16tunedFilterCacheSDys6UInt64VAA10FreerMonadOyAA19ReflectiveOperationOypGGvM",
-                    "moduleName": "ExhaustCore",
-                    "genericSig": "<τ_0_0>",
-                    "sugared_genericSig": "<FinalOutput>",
-                    "implicit": true,
-                    "declAttributes": [
-                      "Transparent",
-                      "Final"
-                    ],
-                    "spi_group_names": [
-                      "ExhaustInternal"
-                    ],
-                    "accessorKind": "_modify"
-                  }
-                ]
-              },
-              {
-                "kind": "Var",
-                "name": "uniqueSeenKeys",
-                "printedName": "uniqueSeenKeys",
-                "children": [
-                  {
-                    "kind": "TypeNominal",
-                    "name": "Dictionary",
-                    "printedName": "[Swift.UInt64 : Swift.Set<Swift.AnyHashable>]",
-                    "children": [
-                      {
-                        "kind": "TypeNominal",
-                        "name": "UInt64",
-                        "printedName": "Swift.UInt64",
-                        "usr": "s:s6UInt64V"
-                      },
-                      {
-                        "kind": "TypeNominal",
-                        "name": "Set",
-                        "printedName": "Swift.Set<Swift.AnyHashable>",
-                        "children": [
-                          {
-                            "kind": "TypeNominal",
-                            "name": "AnyHashable",
-                            "printedName": "Swift.AnyHashable",
-                            "usr": "s:s11AnyHashableV"
-                          }
-                        ],
-                        "usr": "s:Sh"
-                      }
-                    ],
-                    "usr": "s:SD"
-                  }
-                ],
-                "declKind": "Var",
-                "usr": "s:11ExhaustCore29ValueAndChoiceTreeInterpreterV7ContextC14uniqueSeenKeysSDys6UInt64VShys11AnyHashableVGGvp",
-                "mangledName": "$s11ExhaustCore29ValueAndChoiceTreeInterpreterV7ContextC14uniqueSeenKeysSDys6UInt64VShys11AnyHashableVGGvp",
-                "moduleName": "ExhaustCore",
-                "declAttributes": [
-                  "HasInitialValue",
-                  "Final",
-                  "HasStorage",
-                  "RawDocComment"
-                ],
-                "fixedbinaryorder": 10,
-                "spi_group_names": [
-                  "ExhaustInternal"
-                ],
-                "hasStorage": true,
-                "accessors": [
-                  {
-                    "kind": "Accessor",
-                    "name": "Get",
-                    "printedName": "Get()",
-                    "children": [
-                      {
-                        "kind": "TypeNominal",
-                        "name": "Dictionary",
-                        "printedName": "[Swift.UInt64 : Swift.Set<Swift.AnyHashable>]",
-                        "children": [
-                          {
-                            "kind": "TypeNominal",
-                            "name": "UInt64",
-                            "printedName": "Swift.UInt64",
-                            "usr": "s:s6UInt64V"
-                          },
-                          {
-                            "kind": "TypeNominal",
-                            "name": "Set",
-                            "printedName": "Swift.Set<Swift.AnyHashable>",
-                            "children": [
-                              {
-                                "kind": "TypeNominal",
-                                "name": "AnyHashable",
-                                "printedName": "Swift.AnyHashable",
-                                "usr": "s:s11AnyHashableV"
-                              }
-                            ],
-                            "usr": "s:Sh"
-                          }
-                        ],
-                        "usr": "s:SD"
-                      }
-                    ],
-                    "declKind": "Accessor",
-                    "usr": "s:11ExhaustCore29ValueAndChoiceTreeInterpreterV7ContextC14uniqueSeenKeysSDys6UInt64VShys11AnyHashableVGGvg",
-                    "mangledName": "$s11ExhaustCore29ValueAndChoiceTreeInterpreterV7ContextC14uniqueSeenKeysSDys6UInt64VShys11AnyHashableVGGvg",
-                    "moduleName": "ExhaustCore",
-                    "genericSig": "<τ_0_0>",
-                    "sugared_genericSig": "<FinalOutput>",
-                    "implicit": true,
-                    "declAttributes": [
-                      "Transparent",
-                      "Final"
-                    ],
-                    "spi_group_names": [
-                      "ExhaustInternal"
-                    ],
-                    "accessorKind": "get"
-                  },
-                  {
-                    "kind": "Accessor",
-                    "name": "Set",
-                    "printedName": "Set()",
-                    "children": [
-                      {
-                        "kind": "TypeNominal",
-                        "name": "Void",
-                        "printedName": "()"
-                      },
-                      {
-                        "kind": "TypeNominal",
-                        "name": "Dictionary",
-                        "printedName": "[Swift.UInt64 : Swift.Set<Swift.AnyHashable>]",
-                        "children": [
-                          {
-                            "kind": "TypeNominal",
-                            "name": "UInt64",
-                            "printedName": "Swift.UInt64",
-                            "usr": "s:s6UInt64V"
-                          },
-                          {
-                            "kind": "TypeNominal",
-                            "name": "Set",
-                            "printedName": "Swift.Set<Swift.AnyHashable>",
-                            "children": [
-                              {
-                                "kind": "TypeNominal",
-                                "name": "AnyHashable",
-                                "printedName": "Swift.AnyHashable",
-                                "usr": "s:s11AnyHashableV"
-                              }
-                            ],
-                            "usr": "s:Sh"
-                          }
-                        ],
-                        "usr": "s:SD"
-                      }
-                    ],
-                    "declKind": "Accessor",
-                    "usr": "s:11ExhaustCore29ValueAndChoiceTreeInterpreterV7ContextC14uniqueSeenKeysSDys6UInt64VShys11AnyHashableVGGvs",
-                    "mangledName": "$s11ExhaustCore29ValueAndChoiceTreeInterpreterV7ContextC14uniqueSeenKeysSDys6UInt64VShys11AnyHashableVGGvs",
-                    "moduleName": "ExhaustCore",
-                    "genericSig": "<τ_0_0>",
-                    "sugared_genericSig": "<FinalOutput>",
-                    "implicit": true,
-                    "declAttributes": [
-                      "Transparent",
-                      "Final"
-                    ],
-                    "spi_group_names": [
-                      "ExhaustInternal"
-                    ],
-                    "accessorKind": "set"
-                  },
-                  {
-                    "kind": "Accessor",
-                    "name": "Modify",
-                    "printedName": "Modify()",
-                    "children": [
-                      {
-                        "kind": "TypeNominal",
-                        "name": "Void",
-                        "printedName": "()"
-                      }
-                    ],
-                    "declKind": "Accessor",
-                    "usr": "s:11ExhaustCore29ValueAndChoiceTreeInterpreterV7ContextC14uniqueSeenKeysSDys6UInt64VShys11AnyHashableVGGvM",
-                    "mangledName": "$s11ExhaustCore29ValueAndChoiceTreeInterpreterV7ContextC14uniqueSeenKeysSDys6UInt64VShys11AnyHashableVGGvM",
-                    "moduleName": "ExhaustCore",
-                    "genericSig": "<τ_0_0>",
-                    "sugared_genericSig": "<FinalOutput>",
-                    "implicit": true,
-                    "declAttributes": [
-                      "Transparent",
-                      "Final"
-                    ],
-                    "spi_group_names": [
-                      "ExhaustInternal"
-                    ],
-                    "accessorKind": "_modify"
-                  }
-                ]
-              },
-              {
-                "kind": "Var",
-                "name": "uniqueSeenSequences",
-                "printedName": "uniqueSeenSequences",
-                "children": [
-                  {
-                    "kind": "TypeNominal",
-                    "name": "Dictionary",
-                    "printedName": "[Swift.UInt64 : Swift.Set<Swift.ContiguousArray<ExhaustCore.ChoiceSequenceValue>>]",
-                    "children": [
-                      {
-                        "kind": "TypeNominal",
-                        "name": "UInt64",
-                        "printedName": "Swift.UInt64",
-                        "usr": "s:s6UInt64V"
-                      },
-                      {
-                        "kind": "TypeNominal",
-                        "name": "Set",
-                        "printedName": "Swift.Set<Swift.ContiguousArray<ExhaustCore.ChoiceSequenceValue>>",
-                        "children": [
-                          {
-                            "kind": "TypeNominal",
-                            "name": "ContiguousArray",
-                            "printedName": "Swift.ContiguousArray<ExhaustCore.ChoiceSequenceValue>",
-                            "children": [
-                              {
-                                "kind": "TypeNominal",
-                                "name": "ChoiceSequenceValue",
-                                "printedName": "ExhaustCore.ChoiceSequenceValue",
-                                "usr": "s:11ExhaustCore19ChoiceSequenceValueO"
-                              }
-                            ],
-                            "usr": "s:s15ContiguousArrayV"
-                          }
-                        ],
-                        "usr": "s:Sh"
-                      }
-                    ],
-                    "usr": "s:SD"
-                  }
-                ],
-                "declKind": "Var",
-                "usr": "s:11ExhaustCore29ValueAndChoiceTreeInterpreterV7ContextC19uniqueSeenSequencesSDys6UInt64VShys15ContiguousArrayVyAA0e8SequenceC0OGGGvp",
-                "mangledName": "$s11ExhaustCore29ValueAndChoiceTreeInterpreterV7ContextC19uniqueSeenSequencesSDys6UInt64VShys15ContiguousArrayVyAA0e8SequenceC0OGGGvp",
-                "moduleName": "ExhaustCore",
-                "declAttributes": [
-                  "HasInitialValue",
-                  "Final",
-                  "HasStorage"
-                ],
-                "fixedbinaryorder": 11,
-                "spi_group_names": [
-                  "ExhaustInternal"
-                ],
-                "hasStorage": true,
-                "accessors": [
-                  {
-                    "kind": "Accessor",
-                    "name": "Get",
-                    "printedName": "Get()",
-                    "children": [
-                      {
-                        "kind": "TypeNominal",
-                        "name": "Dictionary",
-                        "printedName": "[Swift.UInt64 : Swift.Set<Swift.ContiguousArray<ExhaustCore.ChoiceSequenceValue>>]",
-                        "children": [
-                          {
-                            "kind": "TypeNominal",
-                            "name": "UInt64",
-                            "printedName": "Swift.UInt64",
-                            "usr": "s:s6UInt64V"
-                          },
-                          {
-                            "kind": "TypeNominal",
-                            "name": "Set",
-                            "printedName": "Swift.Set<Swift.ContiguousArray<ExhaustCore.ChoiceSequenceValue>>",
-                            "children": [
-                              {
-                                "kind": "TypeNominal",
-                                "name": "ContiguousArray",
-                                "printedName": "Swift.ContiguousArray<ExhaustCore.ChoiceSequenceValue>",
-                                "children": [
-                                  {
-                                    "kind": "TypeNominal",
-                                    "name": "ChoiceSequenceValue",
-                                    "printedName": "ExhaustCore.ChoiceSequenceValue",
-                                    "usr": "s:11ExhaustCore19ChoiceSequenceValueO"
-                                  }
-                                ],
-                                "usr": "s:s15ContiguousArrayV"
-                              }
-                            ],
-                            "usr": "s:Sh"
-                          }
-                        ],
-                        "usr": "s:SD"
-                      }
-                    ],
-                    "declKind": "Accessor",
-                    "usr": "s:11ExhaustCore29ValueAndChoiceTreeInterpreterV7ContextC19uniqueSeenSequencesSDys6UInt64VShys15ContiguousArrayVyAA0e8SequenceC0OGGGvg",
-                    "mangledName": "$s11ExhaustCore29ValueAndChoiceTreeInterpreterV7ContextC19uniqueSeenSequencesSDys6UInt64VShys15ContiguousArrayVyAA0e8SequenceC0OGGGvg",
-                    "moduleName": "ExhaustCore",
-                    "genericSig": "<τ_0_0>",
-                    "sugared_genericSig": "<FinalOutput>",
-                    "implicit": true,
-                    "declAttributes": [
-                      "Transparent",
-                      "Final"
-                    ],
-                    "spi_group_names": [
-                      "ExhaustInternal"
-                    ],
-                    "accessorKind": "get"
-                  },
-                  {
-                    "kind": "Accessor",
-                    "name": "Set",
-                    "printedName": "Set()",
-                    "children": [
-                      {
-                        "kind": "TypeNominal",
-                        "name": "Void",
-                        "printedName": "()"
-                      },
-                      {
-                        "kind": "TypeNominal",
-                        "name": "Dictionary",
-                        "printedName": "[Swift.UInt64 : Swift.Set<Swift.ContiguousArray<ExhaustCore.ChoiceSequenceValue>>]",
-                        "children": [
-                          {
-                            "kind": "TypeNominal",
-                            "name": "UInt64",
-                            "printedName": "Swift.UInt64",
-                            "usr": "s:s6UInt64V"
-                          },
-                          {
-                            "kind": "TypeNominal",
-                            "name": "Set",
-                            "printedName": "Swift.Set<Swift.ContiguousArray<ExhaustCore.ChoiceSequenceValue>>",
-                            "children": [
-                              {
-                                "kind": "TypeNominal",
-                                "name": "ContiguousArray",
-                                "printedName": "Swift.ContiguousArray<ExhaustCore.ChoiceSequenceValue>",
-                                "children": [
-                                  {
-                                    "kind": "TypeNominal",
-                                    "name": "ChoiceSequenceValue",
-                                    "printedName": "ExhaustCore.ChoiceSequenceValue",
-                                    "usr": "s:11ExhaustCore19ChoiceSequenceValueO"
-                                  }
-                                ],
-                                "usr": "s:s15ContiguousArrayV"
-                              }
-                            ],
-                            "usr": "s:Sh"
-                          }
-                        ],
-                        "usr": "s:SD"
-                      }
-                    ],
-                    "declKind": "Accessor",
-                    "usr": "s:11ExhaustCore29ValueAndChoiceTreeInterpreterV7ContextC19uniqueSeenSequencesSDys6UInt64VShys15ContiguousArrayVyAA0e8SequenceC0OGGGvs",
-                    "mangledName": "$s11ExhaustCore29ValueAndChoiceTreeInterpreterV7ContextC19uniqueSeenSequencesSDys6UInt64VShys15ContiguousArrayVyAA0e8SequenceC0OGGGvs",
-                    "moduleName": "ExhaustCore",
-                    "genericSig": "<τ_0_0>",
-                    "sugared_genericSig": "<FinalOutput>",
-                    "implicit": true,
-                    "declAttributes": [
-                      "Transparent",
-                      "Final"
-                    ],
-                    "spi_group_names": [
-                      "ExhaustInternal"
-                    ],
-                    "accessorKind": "set"
-                  },
-                  {
-                    "kind": "Accessor",
-                    "name": "Modify",
-                    "printedName": "Modify()",
-                    "children": [
-                      {
-                        "kind": "TypeNominal",
-                        "name": "Void",
-                        "printedName": "()"
-                      }
-                    ],
-                    "declKind": "Accessor",
-                    "usr": "s:11ExhaustCore29ValueAndChoiceTreeInterpreterV7ContextC19uniqueSeenSequencesSDys6UInt64VShys15ContiguousArrayVyAA0e8SequenceC0OGGGvM",
-                    "mangledName": "$s11ExhaustCore29ValueAndChoiceTreeInterpreterV7ContextC19uniqueSeenSequencesSDys6UInt64VShys15ContiguousArrayVyAA0e8SequenceC0OGGGvM",
-                    "moduleName": "ExhaustCore",
-                    "genericSig": "<τ_0_0>",
-                    "sugared_genericSig": "<FinalOutput>",
-                    "implicit": true,
-                    "declAttributes": [
-                      "Transparent",
-                      "Final"
-                    ],
-                    "spi_group_names": [
-                      "ExhaustInternal"
-                    ],
-                    "accessorKind": "_modify"
-                  }
-                ]
-              },
-              {
-                "kind": "Constructor",
-                "name": "init",
-                "printedName": "init(maxRuns:materializePicks:isFixed:size:runs:sizeOverride:classifications:prng:)",
-                "children": [
-                  {
-                    "kind": "TypeNominal",
-                    "name": "Context",
-                    "printedName": "ExhaustCore.ValueAndChoiceTreeInterpreter<τ_0_0>.Context",
-                    "usr": "s:11ExhaustCore29ValueAndChoiceTreeInterpreterV7ContextC"
-                  },
-                  {
-                    "kind": "TypeNominal",
-                    "name": "UInt64",
-                    "printedName": "Swift.UInt64",
-                    "usr": "s:s6UInt64V"
-                  },
-                  {
-                    "kind": "TypeNominal",
-                    "name": "Bool",
-                    "printedName": "Swift.Bool",
-                    "usr": "s:Sb"
-                  },
-                  {
-                    "kind": "TypeNominal",
-                    "name": "Bool",
-                    "printedName": "Swift.Bool",
-                    "usr": "s:Sb"
-                  },
-                  {
-                    "kind": "TypeNominal",
-                    "name": "UInt64",
-                    "printedName": "Swift.UInt64",
-                    "usr": "s:s6UInt64V"
-                  },
-                  {
-                    "kind": "TypeNominal",
-                    "name": "UInt64",
-                    "printedName": "Swift.UInt64",
-                    "usr": "s:s6UInt64V"
-                  },
-                  {
-                    "kind": "TypeNominal",
-                    "name": "Optional",
-                    "printedName": "Swift.UInt64?",
-                    "children": [
-                      {
-                        "kind": "TypeNominal",
-                        "name": "UInt64",
-                        "printedName": "Swift.UInt64",
-                        "usr": "s:s6UInt64V"
-                      }
-                    ],
-                    "hasDefaultArg": true,
-                    "usr": "s:Sq"
-                  },
-                  {
-                    "kind": "TypeNominal",
-                    "name": "Dictionary",
-                    "printedName": "[Swift.UInt64 : [Swift.String : Swift.Set<Swift.UInt64>]]",
-                    "children": [
-                      {
-                        "kind": "TypeNominal",
-                        "name": "UInt64",
-                        "printedName": "Swift.UInt64",
-                        "usr": "s:s6UInt64V"
-                      },
-                      {
-                        "kind": "TypeNominal",
-                        "name": "Dictionary",
-                        "printedName": "[Swift.String : Swift.Set<Swift.UInt64>]",
-                        "children": [
-                          {
-                            "kind": "TypeNominal",
-                            "name": "String",
-                            "printedName": "Swift.String",
-                            "usr": "s:SS"
-                          },
-                          {
-                            "kind": "TypeNominal",
-                            "name": "Set",
-                            "printedName": "Swift.Set<Swift.UInt64>",
-                            "children": [
-                              {
-                                "kind": "TypeNominal",
-                                "name": "UInt64",
-                                "printedName": "Swift.UInt64",
-                                "usr": "s:s6UInt64V"
-                              }
-                            ],
-                            "usr": "s:Sh"
-                          }
-                        ],
-                        "usr": "s:SD"
-                      }
-                    ],
-                    "hasDefaultArg": true,
-                    "usr": "s:SD"
-                  },
-                  {
-                    "kind": "TypeNominal",
-                    "name": "Xoshiro256",
-                    "printedName": "ExhaustCore.Xoshiro256",
-                    "usr": "s:11ExhaustCore10Xoshiro256V"
-                  }
-                ],
-                "declKind": "Constructor",
-                "usr": "s:11ExhaustCore29ValueAndChoiceTreeInterpreterV7ContextC7maxRuns16materializePicks7isFixed4size4runs0O8Override15classifications4prngAEyx_Gs6UInt64V_S2bA3PSgSDyAPSDySSShyAPGGGAA10Xoshiro256Vtcfc",
-                "mangledName": "$s11ExhaustCore29ValueAndChoiceTreeInterpreterV7ContextC7maxRuns16materializePicks7isFixed4size4runs0O8Override15classifications4prngAEyx_Gs6UInt64V_S2bA3PSgSDyAPSDySSShyAPGGGAA10Xoshiro256Vtcfc",
-                "moduleName": "ExhaustCore",
-                "genericSig": "<τ_0_0>",
-                "sugared_genericSig": "<FinalOutput>",
-                "spi_group_names": [
-                  "ExhaustInternal"
-                ],
-                "init_kind": "Designated"
-              },
-              {
-                "kind": "Function",
-                "name": "jump",
-                "printedName": "jump(seed:)",
-                "children": [
-                  {
-                    "kind": "TypeNominal",
-                    "name": "Context",
-                    "printedName": "ExhaustCore.ValueAndChoiceTreeInterpreter<τ_0_0>.Context",
-                    "usr": "s:11ExhaustCore29ValueAndChoiceTreeInterpreterV7ContextC"
-                  },
-                  {
-                    "kind": "TypeNominal",
-                    "name": "UInt64",
-                    "printedName": "Swift.UInt64",
-                    "usr": "s:s6UInt64V"
-                  }
-                ],
-                "declKind": "Func",
-                "usr": "s:11ExhaustCore29ValueAndChoiceTreeInterpreterV7ContextC4jump4seedAEyx_Gs6UInt64V_tF",
-                "mangledName": "$s11ExhaustCore29ValueAndChoiceTreeInterpreterV7ContextC4jump4seedAEyx_Gs6UInt64V_tF",
-                "moduleName": "ExhaustCore",
-                "genericSig": "<τ_0_0>",
-                "sugared_genericSig": "<FinalOutput>",
-                "declAttributes": [
-                  "Final"
-                ],
-                "spi_group_names": [
-                  "ExhaustInternal"
-                ],
-                "funcSelfKind": "NonMutating"
-              },
-              {
-                "kind": "Function",
-                "name": "printClassifications",
-                "printedName": "printClassifications()",
-                "children": [
-                  {
-                    "kind": "TypeNominal",
-                    "name": "Void",
-                    "printedName": "()"
-                  }
-                ],
-                "declKind": "Func",
-                "usr": "s:11ExhaustCore29ValueAndChoiceTreeInterpreterV7ContextC20printClassificationsyyF",
-                "mangledName": "$s11ExhaustCore29ValueAndChoiceTreeInterpreterV7ContextC20printClassificationsyyF",
-                "moduleName": "ExhaustCore",
-                "genericSig": "<τ_0_0>",
-                "sugared_genericSig": "<FinalOutput>",
-                "declAttributes": [
-                  "Final"
-                ],
-                "spi_group_names": [
-                  "ExhaustInternal"
-                ],
-                "funcSelfKind": "NonMutating"
-              }
-            ],
-            "declKind": "Class",
-            "usr": "s:11ExhaustCore29ValueAndChoiceTreeInterpreterV7ContextC",
-            "mangledName": "$s11ExhaustCore29ValueAndChoiceTreeInterpreterV7ContextC",
-            "moduleName": "ExhaustCore",
-            "genericSig": "<τ_0_0>",
-            "sugared_genericSig": "<FinalOutput>",
-            "declAttributes": [
-              "Final",
-              "RawDocComment"
-            ],
-            "spi_group_names": [
-              "ExhaustInternal"
-            ],
-            "conformances": [
-              {
-                "kind": "Conformance",
-                "name": "Copyable",
-                "printedName": "Copyable",
-                "usr": "s:s8CopyableP",
-                "mangledName": "$ss8CopyableP"
-              },
-              {
-                "kind": "Conformance",
-                "name": "Escapable",
-                "printedName": "Escapable",
-                "usr": "s:s9EscapableP",
-                "mangledName": "$ss9EscapableP"
-              }
-            ]
           }
         ],
         "declKind": "Struct",
@@ -9065,7 +9307,8 @@
         "sugared_genericSig": "<FinalOutput>",
         "declAttributes": [
           "AccessControl",
-          "SPIAccessControl"
+          "SPIAccessControl",
+          "RawDocComment"
         ],
         "spi_group_names": [
           "ExhaustInternal"
@@ -12854,9 +13097,56 @@
             ]
           },
           {
+            "kind": "Var",
+            "name": "isRangeExplicit",
+            "printedName": "isRangeExplicit",
+            "children": [
+              {
+                "kind": "TypeNominal",
+                "name": "Bool",
+                "printedName": "Swift.Bool",
+                "usr": "s:Sb"
+              }
+            ],
+            "declKind": "Var",
+            "usr": "s:11ExhaustCore16UnlockProbeInputV15isRangeExplicitSbvp",
+            "mangledName": "$s11ExhaustCore16UnlockProbeInputV15isRangeExplicitSbvp",
+            "moduleName": "ExhaustCore",
+            "declAttributes": [
+              "HasStorage"
+            ],
+            "fixedbinaryorder": 7,
+            "isLet": true,
+            "hasStorage": true,
+            "accessors": [
+              {
+                "kind": "Accessor",
+                "name": "Get",
+                "printedName": "Get()",
+                "children": [
+                  {
+                    "kind": "TypeNominal",
+                    "name": "Bool",
+                    "printedName": "Swift.Bool",
+                    "usr": "s:Sb"
+                  }
+                ],
+                "declKind": "Accessor",
+                "usr": "s:11ExhaustCore16UnlockProbeInputV15isRangeExplicitSbvg",
+                "mangledName": "$s11ExhaustCore16UnlockProbeInputV15isRangeExplicitSbvg",
+                "moduleName": "ExhaustCore",
+                "implicit": true,
+                "declAttributes": [
+                  "Transparent"
+                ],
+                "accessorKind": "get"
+              }
+            ]
+          },
+          {
             "kind": "Constructor",
             "name": "init",
-            "printedName": "init(seqIdx:choiceTag:currentEntry:currentBP:targetBP:semanticTargetBP:validRanges:)",
+            "printedName": "init(seqIdx:choiceTag:currentEntry:currentBP:targetBP:semanticTargetBP:validRanges:isRangeExplicit:)",
             "children": [
               {
                 "kind": "TypeNominal",
@@ -12921,11 +13211,17 @@
                   }
                 ],
                 "usr": "s:Sa"
+              },
+              {
+                "kind": "TypeNominal",
+                "name": "Bool",
+                "printedName": "Swift.Bool",
+                "usr": "s:Sb"
               }
             ],
             "declKind": "Constructor",
-            "usr": "s:11ExhaustCore16UnlockProbeInputV6seqIdx9choiceTag12currentEntry0J2BP06targetL0014semanticTargetL011validRangesACSi_AA04TypeI0OAA19ChoiceSequenceValueOs6UInt64VA2PSaySNyAPGGtcfc",
-            "mangledName": "$s11ExhaustCore16UnlockProbeInputV6seqIdx9choiceTag12currentEntry0J2BP06targetL0014semanticTargetL011validRangesACSi_AA04TypeI0OAA19ChoiceSequenceValueOs6UInt64VA2PSaySNyAPGGtcfc",
+            "usr": "s:11ExhaustCore16UnlockProbeInputV6seqIdx9choiceTag12currentEntry0J2BP06targetL0014semanticTargetL011validRanges15isRangeExplicitACSi_AA04TypeI0OAA19ChoiceSequenceValueOs6UInt64VA2QSaySNyAQGGSbtcfc",
+            "mangledName": "$s11ExhaustCore16UnlockProbeInputV6seqIdx9choiceTag12currentEntry0J2BP06targetL0014semanticTargetL011validRanges15isRangeExplicitACSi_AA04TypeI0OAA19ChoiceSequenceValueOs6UInt64VA2QSaySNyAQGGSbtcfc",
             "moduleName": "ExhaustCore",
             "implicit": true,
             "init_kind": "Designated"
@@ -20406,6 +20702,31 @@
               "ExhaustInternal"
             ],
             "throwing": true,
+            "funcSelfKind": "NonMutating"
+          },
+          {
+            "kind": "Function",
+            "name": "relaxingNonExplicitSequenceLengthRanges",
+            "printedName": "relaxingNonExplicitSequenceLengthRanges()",
+            "children": [
+              {
+                "kind": "TypeNominal",
+                "name": "ChoiceTree",
+                "printedName": "ExhaustCore.ChoiceTree",
+                "usr": "s:11ExhaustCore10ChoiceTreeO"
+              }
+            ],
+            "declKind": "Func",
+            "usr": "s:11ExhaustCore10ChoiceTreeO39relaxingNonExplicitSequenceLengthRangesACyF",
+            "mangledName": "$s11ExhaustCore10ChoiceTreeO39relaxingNonExplicitSequenceLengthRangesACyF",
+            "moduleName": "ExhaustCore",
+            "declAttributes": [
+              "RawDocComment"
+            ],
+            "isFromExtension": true,
+            "spi_group_names": [
+              "ExhaustInternal"
+            ],
             "funcSelfKind": "NonMutating"
           },
           {
@@ -38503,7 +38824,7 @@
           {
             "kind": "Function",
             "name": "flatten",
-            "printedName": "flatten(_:)",
+            "printedName": "flatten(_:includingAllBranches:)",
             "children": [
               {
                 "kind": "TypeNominal",
@@ -38524,11 +38845,18 @@
                 "name": "ChoiceTree",
                 "printedName": "ExhaustCore.ChoiceTree",
                 "usr": "s:11ExhaustCore10ChoiceTreeO"
+              },
+              {
+                "kind": "TypeNominal",
+                "name": "Bool",
+                "printedName": "Swift.Bool",
+                "hasDefaultArg": true,
+                "usr": "s:Sb"
               }
             ],
             "declKind": "Func",
-            "usr": "s:s15ContiguousArrayV11ExhaustCoreAC19ChoiceSequenceValueORszlE7flattenyAByAEGAC0E4TreeOFZ",
-            "mangledName": "$ss15ContiguousArrayV11ExhaustCoreAC19ChoiceSequenceValueORszlE7flattenyAByAEGAC0E4TreeOFZ",
+            "usr": "s:s15ContiguousArrayV11ExhaustCoreAC19ChoiceSequenceValueORszlE7flatten_20includingAllBranchesAByAEGAC0E4TreeO_SbtFZ",
+            "mangledName": "$ss15ContiguousArrayV11ExhaustCoreAC19ChoiceSequenceValueORszlE7flatten_20includingAllBranchesAByAEGAC0E4TreeO_SbtFZ",
             "moduleName": "ExhaustCore",
             "genericSig": "<τ_0_0 where τ_0_0 == ExhaustCore.ChoiceSequenceValue>",
             "sugared_genericSig": "<Element where Element == ExhaustCore.ChoiceSequenceValue>",
@@ -38536,48 +38864,6 @@
             "declAttributes": [
               "AccessControl",
               "SPIAccessControl",
-              "RawDocComment"
-            ],
-            "isFromExtension": true,
-            "spi_group_names": [
-              "ExhaustInternal"
-            ],
-            "funcSelfKind": "NonMutating"
-          },
-          {
-            "kind": "Function",
-            "name": "flattenAll",
-            "printedName": "flattenAll(_:)",
-            "children": [
-              {
-                "kind": "TypeNominal",
-                "name": "ContiguousArray",
-                "printedName": "Swift.ContiguousArray<ExhaustCore.ChoiceSequenceValue>",
-                "children": [
-                  {
-                    "kind": "TypeNominal",
-                    "name": "ChoiceSequenceValue",
-                    "printedName": "ExhaustCore.ChoiceSequenceValue",
-                    "usr": "s:11ExhaustCore19ChoiceSequenceValueO"
-                  }
-                ],
-                "usr": "s:s15ContiguousArrayV"
-              },
-              {
-                "kind": "TypeNominal",
-                "name": "ChoiceTree",
-                "printedName": "ExhaustCore.ChoiceTree",
-                "usr": "s:11ExhaustCore10ChoiceTreeO"
-              }
-            ],
-            "declKind": "Func",
-            "usr": "s:s15ContiguousArrayV11ExhaustCoreAC19ChoiceSequenceValueORszlE10flattenAllyAByAEGAC0E4TreeOFZ",
-            "mangledName": "$ss15ContiguousArrayV11ExhaustCoreAC19ChoiceSequenceValueORszlE10flattenAllyAByAEGAC0E4TreeOFZ",
-            "moduleName": "ExhaustCore",
-            "genericSig": "<τ_0_0 where τ_0_0 == ExhaustCore.ChoiceSequenceValue>",
-            "sugared_genericSig": "<Element where Element == ExhaustCore.ChoiceSequenceValue>",
-            "static": true,
-            "declAttributes": [
               "RawDocComment"
             ],
             "isFromExtension": true,
@@ -40152,144 +40438,81 @@
       "value": "10000"
     },
     {
+      "filePath": "\/Users\/chriskolbu\/Fun\/Exhaust\/Sources\/ExhaustCore\/Interpreters\/Generation\/GenerationContext.swift",
+      "kind": "IntegerLiteral",
+      "offset": 198,
+      "length": 3,
+      "value": "500"
+    },
+    {
+      "filePath": "\/Users\/chriskolbu\/Fun\/Exhaust\/Sources\/ExhaustCore\/Interpreters\/Generation\/GenerationContext.swift",
+      "kind": "Dictionary",
+      "offset": 411,
+      "length": 3,
+      "value": "[]"
+    },
+    {
+      "filePath": "\/Users\/chriskolbu\/Fun\/Exhaust\/Sources\/ExhaustCore\/Interpreters\/Generation\/GenerationContext.swift",
+      "kind": "Dictionary",
+      "offset": 468,
+      "length": 3,
+      "value": "[]"
+    },
+    {
+      "filePath": "\/Users\/chriskolbu\/Fun\/Exhaust\/Sources\/ExhaustCore\/Interpreters\/Generation\/GenerationContext.swift",
+      "kind": "Dictionary",
+      "offset": 533,
+      "length": 3,
+      "value": "[]"
+    },
+    {
+      "filePath": "\/Users\/chriskolbu\/Fun\/Exhaust\/Sources\/ExhaustCore\/Interpreters\/Generation\/GenerationContext.swift",
+      "kind": "BooleanLiteral",
+      "offset": 637,
+      "length": 5,
+      "value": "false"
+    },
+    {
+      "filePath": "\/Users\/chriskolbu\/Fun\/Exhaust\/Sources\/ExhaustCore\/Interpreters\/Generation\/GenerationContext.swift",
+      "kind": "IntegerLiteral",
+      "offset": 666,
+      "length": 1,
+      "value": "0"
+    },
+    {
+      "filePath": "\/Users\/chriskolbu\/Fun\/Exhaust\/Sources\/ExhaustCore\/Interpreters\/Generation\/GenerationContext.swift",
+      "kind": "Dictionary",
+      "offset": 727,
+      "length": 3,
+      "value": "[]"
+    },
+    {
       "filePath": "\/Users\/chriskolbu\/Fun\/Exhaust\/Sources\/ExhaustCore\/Interpreters\/Generation\/OnlineCGSInterpreter.swift",
       "kind": "IntegerLiteral",
-      "offset": 1829,
+      "offset": 1950,
       "length": 2,
       "value": "50"
     },
     {
       "filePath": "\/Users\/chriskolbu\/Fun\/Exhaust\/Sources\/ExhaustCore\/Interpreters\/Generation\/OnlineCGSInterpreter.swift",
       "kind": "BooleanLiteral",
-      "offset": 1866,
+      "offset": 1987,
       "length": 5,
       "value": "false"
-    },
-    {
-      "filePath": "\/Users\/chriskolbu\/Fun\/Exhaust\/Sources\/ExhaustCore\/Interpreters\/Generation\/OnlineCGSInterpreter.swift",
-      "kind": "IntegerLiteral",
-      "offset": 31189,
-      "length": 3,
-      "value": "500"
-    },
-    {
-      "filePath": "\/Users\/chriskolbu\/Fun\/Exhaust\/Sources\/ExhaustCore\/Interpreters\/Generation\/OnlineCGSInterpreter.swift",
-      "kind": "Dictionary",
-      "offset": 31256,
-      "length": 3,
-      "value": "[]"
-    },
-    {
-      "filePath": "\/Users\/chriskolbu\/Fun\/Exhaust\/Sources\/ExhaustCore\/Interpreters\/Generation\/OnlineCGSInterpreter.swift",
-      "kind": "Dictionary",
-      "offset": 31569,
-      "length": 3,
-      "value": "[]"
-    },
-    {
-      "filePath": "\/Users\/chriskolbu\/Fun\/Exhaust\/Sources\/ExhaustCore\/Interpreters\/Generation\/OnlineCGSInterpreter.swift",
-      "kind": "Dictionary",
-      "offset": 31666,
-      "length": 3,
-      "value": "[]"
-    },
-    {
-      "filePath": "\/Users\/chriskolbu\/Fun\/Exhaust\/Sources\/ExhaustCore\/Interpreters\/Generation\/OnlineCGSInterpreter.swift",
-      "kind": "Dictionary",
-      "offset": 31735,
-      "length": 3,
-      "value": "[]"
-    },
-    {
-      "filePath": "\/Users\/chriskolbu\/Fun\/Exhaust\/Sources\/ExhaustCore\/Interpreters\/Generation\/OnlineCGSInterpreter.swift",
-      "kind": "Dictionary",
-      "offset": 32002,
-      "length": 3,
-      "value": "[]"
     },
     {
       "filePath": "\/Users\/chriskolbu\/Fun\/Exhaust\/Sources\/ExhaustCore\/Interpreters\/Generation\/ValueAndChoiceTreeInterpreter.swift",
       "kind": "BooleanLiteral",
-      "offset": 630,
+      "offset": 602,
       "length": 5,
       "value": "false"
     },
     {
-      "filePath": "\/Users\/chriskolbu\/Fun\/Exhaust\/Sources\/ExhaustCore\/Interpreters\/Generation\/ValueAndChoiceTreeInterpreter.swift",
-      "kind": "IntegerLiteral",
-      "offset": 18016,
-      "length": 3,
-      "value": "500"
-    },
-    {
-      "filePath": "\/Users\/chriskolbu\/Fun\/Exhaust\/Sources\/ExhaustCore\/Interpreters\/Generation\/ValueAndChoiceTreeInterpreter.swift",
-      "kind": "Dictionary",
-      "offset": 18198,
-      "length": 3,
-      "value": "[]"
-    },
-    {
-      "filePath": "\/Users\/chriskolbu\/Fun\/Exhaust\/Sources\/ExhaustCore\/Interpreters\/Generation\/ValueAndChoiceTreeInterpreter.swift",
-      "kind": "Dictionary",
-      "offset": 18365,
-      "length": 3,
-      "value": "[]"
-    },
-    {
-      "filePath": "\/Users\/chriskolbu\/Fun\/Exhaust\/Sources\/ExhaustCore\/Interpreters\/Generation\/ValueAndChoiceTreeInterpreter.swift",
-      "kind": "Dictionary",
-      "offset": 18462,
-      "length": 3,
-      "value": "[]"
-    },
-    {
-      "filePath": "\/Users\/chriskolbu\/Fun\/Exhaust\/Sources\/ExhaustCore\/Interpreters\/Generation\/ValueAndChoiceTreeInterpreter.swift",
-      "kind": "Dictionary",
-      "offset": 18531,
-      "length": 3,
-      "value": "[]"
-    },
-    {
-      "filePath": "\/Users\/chriskolbu\/Fun\/Exhaust\/Sources\/ExhaustCore\/Interpreters\/Generation\/ValueAndChoiceTreeInterpreter.swift",
-      "kind": "Dictionary",
-      "offset": 18798,
-      "length": 3,
-      "value": "[]"
-    },
-    {
       "filePath": "\/Users\/chriskolbu\/Fun\/Exhaust\/Sources\/ExhaustCore\/Interpreters\/Generation\/ValueInterpreter.swift",
       "kind": "IntegerLiteral",
-      "offset": 2091,
+      "offset": 2102,
       "length": 1,
       "value": "0"
-    },
-    {
-      "filePath": "\/Users\/chriskolbu\/Fun\/Exhaust\/Sources\/ExhaustCore\/Interpreters\/Generation\/ValueInterpreter.swift",
-      "kind": "IntegerLiteral",
-      "offset": 14310,
-      "length": 3,
-      "value": "500"
-    },
-    {
-      "filePath": "\/Users\/chriskolbu\/Fun\/Exhaust\/Sources\/ExhaustCore\/Interpreters\/Generation\/ValueInterpreter.swift",
-      "kind": "Dictionary",
-      "offset": 14562,
-      "length": 3,
-      "value": "[]"
-    },
-    {
-      "filePath": "\/Users\/chriskolbu\/Fun\/Exhaust\/Sources\/ExhaustCore\/Interpreters\/Generation\/ValueInterpreter.swift",
-      "kind": "Dictionary",
-      "offset": 14659,
-      "length": 3,
-      "value": "[]"
-    },
-    {
-      "filePath": "\/Users\/chriskolbu\/Fun\/Exhaust\/Sources\/ExhaustCore\/Interpreters\/Generation\/ValueInterpreter.swift",
-      "kind": "Dictionary",
-      "offset": 14728,
-      "length": 3,
-      "value": "[]"
     },
     {
       "filePath": "\/Users\/chriskolbu\/Fun\/Exhaust\/Sources\/ExhaustCore\/Interpreters\/Reduction\/ProbeBudget.swift",
@@ -40560,189 +40783,196 @@
     {
       "filePath": "\/Users\/chriskolbu\/Fun\/Exhaust\/Sources\/ExhaustCore\/Interpreters\/Reduction\/Strategies\/ReducerStrategies+RedistributeNumericPairs.swift",
       "kind": "BooleanLiteral",
-      "offset": 7135,
+      "offset": 7164,
       "length": 5,
       "value": "false"
     },
     {
       "filePath": "\/Users\/chriskolbu\/Fun\/Exhaust\/Sources\/ExhaustCore\/Interpreters\/Reduction\/Strategies\/ReducerStrategies+RedistributeNumericPairs.swift",
       "kind": "BooleanLiteral",
-      "offset": 7218,
+      "offset": 7215,
       "length": 5,
       "value": "false"
     },
     {
       "filePath": "\/Users\/chriskolbu\/Fun\/Exhaust\/Sources\/ExhaustCore\/Interpreters\/Reduction\/Strategies\/ReducerStrategies+RedistributeNumericPairs.swift",
       "kind": "BooleanLiteral",
-      "offset": 7293,
+      "offset": 7357,
       "length": 5,
       "value": "false"
     },
     {
       "filePath": "\/Users\/chriskolbu\/Fun\/Exhaust\/Sources\/ExhaustCore\/Interpreters\/Reduction\/Strategies\/ReducerStrategies+RedistributeNumericPairs.swift",
       "kind": "BooleanLiteral",
-      "offset": 9183,
+      "offset": 7408,
       "length": 5,
       "value": "false"
     },
     {
       "filePath": "\/Users\/chriskolbu\/Fun\/Exhaust\/Sources\/ExhaustCore\/Interpreters\/Reduction\/Strategies\/ReducerStrategies+RedistributeNumericPairs.swift",
       "kind": "BooleanLiteral",
-      "offset": 9257,
+      "offset": 9478,
       "length": 5,
       "value": "false"
     },
     {
       "filePath": "\/Users\/chriskolbu\/Fun\/Exhaust\/Sources\/ExhaustCore\/Interpreters\/Reduction\/Strategies\/ReducerStrategies+RedistributeNumericPairs.swift",
       "kind": "BooleanLiteral",
-      "offset": 9309,
+      "offset": 9552,
       "length": 5,
       "value": "false"
     },
     {
       "filePath": "\/Users\/chriskolbu\/Fun\/Exhaust\/Sources\/ExhaustCore\/Interpreters\/Reduction\/Strategies\/ReducerStrategies+RedistributeNumericPairs.swift",
       "kind": "BooleanLiteral",
-      "offset": 9453,
+      "offset": 9604,
+      "length": 5,
+      "value": "false"
+    },
+    {
+      "filePath": "\/Users\/chriskolbu\/Fun\/Exhaust\/Sources\/ExhaustCore\/Interpreters\/Reduction\/Strategies\/ReducerStrategies+RedistributeNumericPairs.swift",
+      "kind": "BooleanLiteral",
+      "offset": 9748,
       "length": 4,
       "value": "true"
     },
     {
       "filePath": "\/Users\/chriskolbu\/Fun\/Exhaust\/Sources\/ExhaustCore\/Interpreters\/Reduction\/Strategies\/ReducerStrategies+RedistributeNumericPairs.swift",
       "kind": "BooleanLiteral",
-      "offset": 9562,
+      "offset": 9857,
       "length": 5,
       "value": "false"
     },
     {
       "filePath": "\/Users\/chriskolbu\/Fun\/Exhaust\/Sources\/ExhaustCore\/Interpreters\/Reduction\/Strategies\/ReducerStrategies+RedistributeNumericPairs.swift",
       "kind": "BooleanLiteral",
-      "offset": 9810,
+      "offset": 10105,
       "length": 5,
       "value": "false"
     },
     {
       "filePath": "\/Users\/chriskolbu\/Fun\/Exhaust\/Sources\/ExhaustCore\/Interpreters\/Reduction\/Strategies\/ReducerStrategies+RedistributeNumericPairs.swift",
       "kind": "BooleanLiteral",
-      "offset": 9908,
+      "offset": 10203,
       "length": 5,
       "value": "false"
     },
     {
       "filePath": "\/Users\/chriskolbu\/Fun\/Exhaust\/Sources\/ExhaustCore\/Interpreters\/Reduction\/Strategies\/ReducerStrategies+RedistributeNumericPairs.swift",
       "kind": "IntegerLiteral",
-      "offset": 11370,
+      "offset": 11665,
       "length": 1,
       "value": "1"
     },
     {
       "filePath": "\/Users\/chriskolbu\/Fun\/Exhaust\/Sources\/ExhaustCore\/Interpreters\/Reduction\/Strategies\/ReducerStrategies+RedistributeNumericPairs.swift",
       "kind": "IntegerLiteral",
-      "offset": 11404,
+      "offset": 11699,
       "length": 1,
       "value": "1"
     },
     {
       "filePath": "\/Users\/chriskolbu\/Fun\/Exhaust\/Sources\/ExhaustCore\/Interpreters\/Reduction\/Strategies\/ReducerStrategies+RedistributeNumericPairs.swift",
       "kind": "IntegerLiteral",
-      "offset": 11459,
+      "offset": 11754,
       "length": 1,
       "value": "1"
     },
     {
       "filePath": "\/Users\/chriskolbu\/Fun\/Exhaust\/Sources\/ExhaustCore\/Interpreters\/Reduction\/Strategies\/ReducerStrategies+RedistributeNumericPairs.swift",
       "kind": "IntegerLiteral",
-      "offset": 11474,
+      "offset": 11769,
       "length": 1,
       "value": "2"
     },
     {
       "filePath": "\/Users\/chriskolbu\/Fun\/Exhaust\/Sources\/ExhaustCore\/Interpreters\/Reduction\/Strategies\/ReducerStrategies+RedistributeNumericPairs.swift",
       "kind": "IntegerLiteral",
-      "offset": 11528,
+      "offset": 11823,
       "length": 1,
       "value": "1"
     },
     {
       "filePath": "\/Users\/chriskolbu\/Fun\/Exhaust\/Sources\/ExhaustCore\/Interpreters\/Reduction\/Strategies\/ReducerStrategies+RedistributeNumericPairs.swift",
       "kind": "IntegerLiteral",
-      "offset": 11543,
+      "offset": 11838,
       "length": 1,
       "value": "4"
     },
     {
       "filePath": "\/Users\/chriskolbu\/Fun\/Exhaust\/Sources\/ExhaustCore\/Interpreters\/Reduction\/Strategies\/ReducerStrategies+RedistributeNumericPairs.swift",
       "kind": "IntegerLiteral",
-      "offset": 11768,
+      "offset": 12063,
       "length": 1,
       "value": "0"
     },
     {
       "filePath": "\/Users\/chriskolbu\/Fun\/Exhaust\/Sources\/ExhaustCore\/Interpreters\/Reduction\/Strategies\/ReducerStrategies+RedistributeNumericPairs.swift",
       "kind": "IntegerLiteral",
-      "offset": 11951,
+      "offset": 12246,
       "length": 1,
       "value": "1"
     },
     {
       "filePath": "\/Users\/chriskolbu\/Fun\/Exhaust\/Sources\/ExhaustCore\/Interpreters\/Reduction\/Strategies\/ReducerStrategies+RedistributeNumericPairs.swift",
       "kind": "IntegerLiteral",
-      "offset": 11981,
+      "offset": 12276,
       "length": 1,
       "value": "1"
     },
     {
       "filePath": "\/Users\/chriskolbu\/Fun\/Exhaust\/Sources\/ExhaustCore\/Interpreters\/Reduction\/Strategies\/ReducerStrategies+RedistributeNumericPairs.swift",
       "kind": "IntegerLiteral",
-      "offset": 12137,
+      "offset": 12432,
       "length": 1,
       "value": "0"
     },
     {
       "filePath": "\/Users\/chriskolbu\/Fun\/Exhaust\/Sources\/ExhaustCore\/Interpreters\/Reduction\/Strategies\/ReducerStrategies+RedistributeNumericPairs.swift",
       "kind": "BooleanLiteral",
-      "offset": 13243,
+      "offset": 13567,
       "length": 5,
       "value": "false"
     },
     {
       "filePath": "\/Users\/chriskolbu\/Fun\/Exhaust\/Sources\/ExhaustCore\/Interpreters\/Reduction\/Strategies\/ReducerStrategies+RedistributeNumericPairs.swift",
       "kind": "BooleanLiteral",
-      "offset": 13330,
+      "offset": 13768,
       "length": 5,
       "value": "false"
     },
     {
       "filePath": "\/Users\/chriskolbu\/Fun\/Exhaust\/Sources\/ExhaustCore\/Interpreters\/Reduction\/Strategies\/ReducerStrategies+RedistributeNumericPairs.swift",
       "kind": "BooleanLiteral",
-      "offset": 15360,
+      "offset": 15962,
       "length": 5,
       "value": "false"
     },
     {
       "filePath": "\/Users\/chriskolbu\/Fun\/Exhaust\/Sources\/ExhaustCore\/Interpreters\/Reduction\/Strategies\/ReducerStrategies+RedistributeNumericPairs.swift",
       "kind": "BooleanLiteral",
-      "offset": 15500,
+      "offset": 16102,
       "length": 4,
       "value": "true"
     },
     {
       "filePath": "\/Users\/chriskolbu\/Fun\/Exhaust\/Sources\/ExhaustCore\/Interpreters\/Reduction\/Strategies\/ReducerStrategies+RedistributeNumericPairs.swift",
       "kind": "BooleanLiteral",
-      "offset": 15968,
+      "offset": 16570,
       "length": 5,
       "value": "false"
     },
     {
       "filePath": "\/Users\/chriskolbu\/Fun\/Exhaust\/Sources\/ExhaustCore\/Interpreters\/Reduction\/Strategies\/ReducerStrategies+RedistributeNumericPairs.swift",
       "kind": "BooleanLiteral",
-      "offset": 18328,
+      "offset": 18930,
       "length": 4,
       "value": "true"
     },
     {
       "filePath": "\/Users\/chriskolbu\/Fun\/Exhaust\/Sources\/ExhaustCore\/Interpreters\/Reduction\/Strategies\/ReducerStrategies+ReduceValues.swift",
       "kind": "BooleanLiteral",
-      "offset": 23447,
+      "offset": 23882,
       "length": 5,
       "value": "false"
     },
@@ -41153,6 +41383,13 @@
       "value": "false"
     },
     {
+      "filePath": "\/Users\/chriskolbu\/Fun\/Exhaust\/Sources\/ExhaustCore\/Interpreters\/Types\/ChoiceSequence.swift",
+      "kind": "BooleanLiteral",
+      "offset": 2054,
+      "length": 5,
+      "value": "false"
+    },
+    {
       "filePath": "\/Users\/chriskolbu\/Fun\/Exhaust\/Sources\/ExhaustCore\/Interpreters\/Types\/ChoiceSequenceValue.swift",
       "kind": "BooleanLiteral",
       "offset": 476,
@@ -41176,7 +41413,7 @@
     {
       "filePath": "\/Users\/chriskolbu\/Fun\/Exhaust\/Sources\/ExhaustCore\/Interpreters\/Types\/ChoiceTree.swift",
       "kind": "BooleanLiteral",
-      "offset": 7052,
+      "offset": 7954,
       "length": 5,
       "value": "false"
     },

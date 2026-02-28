@@ -234,7 +234,7 @@ extension ReducerStrategies {
                 v.value.choice.tag.makeConvertible(bitPattern64: newBP),
                 tag: v.value.choice.tag,
             )
-            result[v.index] = .reduced(.init(choice: newChoice, validRanges: v.value.validRanges))
+            result[v.index] = .reduced(.init(choice: newChoice, validRanges: v.value.validRanges, isRangeExplicit: v.value.isRangeExplicit))
         }
         return result
     }
