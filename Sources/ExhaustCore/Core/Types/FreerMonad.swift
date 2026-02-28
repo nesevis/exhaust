@@ -117,6 +117,18 @@ public extension FreerMonad {
     }
 }
 
+public extension FreerMonad {
+    /// Direct type cast that avoids the `.bind` + `.pure` overhead of `.map { $0 as! NewValue }`.
+    @inlinable
+    func unsafeCast<NewValue>(to _: NewValue.Type) -> FreerMonad<Operation, NewValue> {
+        switch self {
+        case let .pure(value): .pure(value as! NewValue)
+        case let .impure(operation, continuation):
+            .impure(operation: operation) { try continuation($0).unsafeCast(to: NewValue.self) }
+        }
+    }
+}
+
 public extension FreerMonad where Value == Any {
     /// Optimized erasure for computations that are already type-erased.
     ///

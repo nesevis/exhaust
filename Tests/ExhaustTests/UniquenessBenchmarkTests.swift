@@ -177,7 +177,7 @@ struct UniquenessBenchmarkTests {
 
     // MARK: - Main Benchmark
     
-    @Test("Time to 200 BST", .disabled("Slow benchmark"))
+    @Test("Time to 200 BST")
     func bstBenchmark() throws {
 //        Self.targetUnique = 1000
         let onlineCGS = measureOnlineCGS(Self.bstProblem)
@@ -262,7 +262,7 @@ struct UniquenessBenchmarkTests {
         )
 
         let start = ContinuousClock.now
-        while unique.count < Self.targetUnique, let (value, _) = iterator.next() {
+        while unique.count < Self.targetUnique, let value = iterator.next() {
             total += 1
             if problem.predicate(value) {
                 let (inserted, _) = unique.insert(value)
