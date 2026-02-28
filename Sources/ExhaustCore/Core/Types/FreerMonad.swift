@@ -82,7 +82,11 @@ public extension FreerMonad {
     /// - Throws: Rethrows any errors from the transform function
     @inlinable
     func map<NewValue>(_ transform: @escaping (Value) throws -> NewValue) rethrows -> FreerMonad<Operation, NewValue> {
-        try bind { try .pure(transform($0)) }
+        switch self {
+        case let .pure(value): try .pure(transform(value))
+        case let .impure(operation, continuation):
+            .impure(operation: operation) { try continuation($0).map(transform) }
+        }
     }
 
     /// Erases the specific value type to `Any`, enabling type-heterogeneous operations.
