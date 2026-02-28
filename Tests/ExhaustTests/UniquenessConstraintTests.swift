@@ -206,7 +206,7 @@ struct UniquenessConstraintTests {
         let gen = Bool.arbitrary.unique()
         var seen = Set<Bool>()
 
-        try #exhaust(gen, .iterations(100), .seed(42)) { value in
+        try #exhaust(gen, .iterations(100), .replay(42)) { value in
             seen.insert(value)
             return true
         }

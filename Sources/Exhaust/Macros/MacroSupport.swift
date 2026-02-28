@@ -30,7 +30,7 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
             switch setting {
             case let .iterations(n):
                 maxIterations = n
-            case let .seed(s):
+            case let .replay(s):
                 seed = s
             case let .shrinkBudget(config):
                 shrinkConfig = config
@@ -70,7 +70,7 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
                 ExhaustLog.notice(
                     category: .propertyTest,
                     event: "reproduction_hint",
-                    "Reproduce with: .seed(\(actualSeed))",
+                    "Reproduce with: .replay(\(actualSeed))",
                 )
 
                 if let (shrunkSequence, shrunkValue) = try Interpreters.reduce(
