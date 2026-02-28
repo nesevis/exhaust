@@ -283,16 +283,13 @@ import Foundation
             // MARK: - Filter
 
             case let .filter(gen, fingerprint, filterType, filterPredicate):
-                let tunedGen: ReflectiveGenerator<Any>
-                if filterType == .reject {
-                    tunedGen = gen
-                } else if let cached = context.tunedFilterCache[fingerprint] {
-                    tunedGen = cached
-                } else {
-                    let tuned = try? GeneratorTuning.probeAndTune(gen, predicate: filterPredicate)
-                    tunedGen = tuned ?? gen
-                    context.tunedFilterCache[fingerprint] = tunedGen
-                }
+                let tunedGen = ChoiceTreeHandlers.resolveFilterGenerator(
+                    gen: gen,
+                    fingerprint: fingerprint,
+                    filterType: filterType,
+                    predicate: filterPredicate,
+                    context: &context,
+                )
 
                 var attempts = 0 as UInt64
                 while attempts < GenerationContext.maxFilterRuns {
@@ -358,14 +355,13 @@ import Foundation
                         insideSubdividedChooseBits: insideSubdividedChooseBits,
                     ) else { return nil }
 
-                    let isDuplicate: Bool
-                    if let keyExtractor {
-                        let key = keyExtractor(result)
-                        isDuplicate = !context.uniqueSeenKeys[fingerprint, default: []].insert(key).inserted
-                    } else {
-                        let sequence = ChoiceSequence.flatten(tree)
-                        isDuplicate = !context.uniqueSeenSequences[fingerprint, default: []].insert(sequence).inserted
-                    }
+                    let isDuplicate = ChoiceTreeHandlers.checkDuplicate(
+                        result: result,
+                        tree: tree,
+                        fingerprint: fingerprint,
+                        keyExtractor: keyExtractor,
+                        context: &context,
+                    )
 
                     if !isDuplicate {
                         return try runContinuation(

@@ -13,7 +13,7 @@ import Foundation
     @_spi(ExhaustInternal) public typealias Element = (value: FinalOutput, tree: ChoiceTree)
 
     let generator: ReflectiveGenerator<FinalOutput>
-    private var context: GenerationContext
+    private(set) var context: GenerationContext
 
     @_spi(ExhaustInternal) public init(
         _ generator: ReflectiveGenerator<FinalOutput>,
@@ -192,20 +192,13 @@ import Foundation
             // MARK: - Filter
 
             case let .filter(gen, fingerprint, filterType, predicate):
-                // Look up or create a tuned generator for this filter.
-                // The fingerprint is stable per filter site, so identical filters
-                // inside a bind will share the same tuned generator.
-                let filteredGen: ReflectiveGenerator<Any>
-                if filterType == .reject {
-                    // Pure rejection sampling; no tuning required
-                    filteredGen = gen
-                } else if let cached = context.tunedFilterCache[fingerprint] {
-                    filteredGen = cached
-                } else {
-                    let tuned = try? GeneratorTuning.probeAndTune(gen, predicate: predicate)
-                    filteredGen = tuned ?? gen
-                    context.tunedFilterCache[fingerprint] = filteredGen
-                }
+                let filteredGen = ChoiceTreeHandlers.resolveFilterGenerator(
+                    gen: gen,
+                    fingerprint: fingerprint,
+                    filterType: filterType,
+                    predicate: predicate,
+                    context: &context,
+                )
 
                 var attempts = 0 as UInt64
                 while attempts < GenerationContext.maxFilterRuns {
@@ -241,14 +234,13 @@ import Foundation
                 while attempts < GenerationContext.maxFilterRuns {
                     guard let (result, tree) = try Self.generateRecursive(gen, with: inputValue, context: &context) else { return nil }
 
-                    let isDuplicate: Bool
-                    if let keyExtractor {
-                        let key = keyExtractor(result)
-                        isDuplicate = !context.uniqueSeenKeys[fingerprint, default: []].insert(key).inserted
-                    } else {
-                        let sequence = ChoiceSequence.flatten(tree)
-                        isDuplicate = !context.uniqueSeenSequences[fingerprint, default: []].insert(sequence).inserted
-                    }
+                    let isDuplicate = ChoiceTreeHandlers.checkDuplicate(
+                        result: result,
+                        tree: tree,
+                        fingerprint: fingerprint,
+                        keyExtractor: keyExtractor,
+                        context: &context,
+                    )
 
                     if !isDuplicate {
                         return try runContinuation(

@@ -166,16 +166,13 @@ import Foundation
                 )
 
             case let .filter(gen, fingerprint, filterType, predicate):
-                let tunedGen: ReflectiveGenerator<Any>
-                if filterType == .reject {
-                    tunedGen = gen
-                } else if let cached = context.tunedFilterCache[fingerprint] {
-                    tunedGen = cached
-                } else {
-                    let tuned = try? GeneratorTuning.probeAndTune(gen, predicate: predicate)
-                    tunedGen = tuned ?? gen
-                    context.tunedFilterCache[fingerprint] = tunedGen
-                }
+                let tunedGen = ChoiceTreeHandlers.resolveFilterGenerator(
+                    gen: gen,
+                    fingerprint: fingerprint,
+                    filterType: filterType,
+                    predicate: predicate,
+                    context: &context,
+                )
 
                 var attempts = 0 as UInt64
                 while attempts < GenerationContext.maxFilterRuns {
