@@ -50,8 +50,11 @@
         self = Self.flatten(tree)
     }
 
-    /// Flattens the tree structure of ``ChoiceTree`` to a flat list for mutation/shrinking purposes
-    @_spi(ExhaustInternal) public static func flatten(_ tree: ChoiceTree) -> ChoiceSequence {
+    /// Flattens the tree structure of ``ChoiceTree`` to a flat list for mutation/shrinking purposes.
+    ///
+    /// - Parameter includingAllBranches: When `true`, includes all branches at pick sites
+    ///   (not just the selected branch). Used for complexity comparison in shrink passes.
+    @_spi(ExhaustInternal) public static func flatten(_ tree: ChoiceTree, includingAllBranches: Bool = false) -> ChoiceSequence {
         switch tree {
         case let .choice(value, meta):
             return [.value(.init(choice: value, validRanges: meta.validRanges, isRangeExplicit: meta.isRangeExplicit))]
@@ -59,11 +62,10 @@
             return []
         case let .sequence(_, elements, meta):
             return [.sequence(true, isLengthExplicit: meta.isRangeExplicit)]
-                + elements.flatMap(flatten)
+                + elements.flatMap { flatten($0, includingAllBranches: includingAllBranches) }
                 + [.sequence(false)]
-        // Do we only do the selected branch?
         case let .branch(_, _, _, _, gen):
-            return flatten(gen)
+            return flatten(gen, includingAllBranches: includingAllBranches)
         case let .group(array):
             if array.allSatisfy({ $0.isBranch || $0.isSelected }),
                case let .selected(.branch(_, _, id, branchIDs, choice)) = array.first(where: \.isSelected),
@@ -73,62 +75,22 @@
                     id: id,
                     validIDs: branchIDs,
                 ))
+                let children = includingAllBranches ? array : [choice]
                 return [.group(true), value]
-                    + flatten(choice)
+                    + children.flatMap { flatten($0, includingAllBranches: includingAllBranches) }
                     + [.group(false)]
             }
             return [.group(true)]
-                + array.flatMap(flatten)
+                + array.flatMap { flatten($0, includingAllBranches: includingAllBranches) }
                 + [.group(false)]
         case .getSize:
             return []
         case let .resize(_, choices):
             return [.group(true)]
-                + choices.flatMap(flatten)
+                + choices.flatMap { flatten($0, includingAllBranches: includingAllBranches) }
                 + [.group(false)]
         case let .selected(tree):
-            return flatten(tree)
-        }
-    }
-
-    /// Flattens the tree like ``flatten(_:)`` but includes ALL branches in pick-site groups,
-    /// not just the selected branch. Used for complexity comparison in shrink passes.
-    static func flattenAll(_ tree: ChoiceTree) -> ChoiceSequence {
-        switch tree {
-        case let .choice(value, meta):
-            return [.value(.init(choice: value, validRanges: meta.validRanges, isRangeExplicit: meta.isRangeExplicit))]
-        case .just:
-            return []
-        case let .sequence(_, elements, meta):
-            return [.sequence(true, isLengthExplicit: meta.isRangeExplicit)]
-                + elements.flatMap(flattenAll)
-                + [.sequence(false)]
-        case let .branch(_, _, _, _, gen):
-            return flattenAll(gen)
-        case let .group(array):
-            if array.allSatisfy({ $0.isBranch || $0.isSelected }),
-               case let .selected(.branch(_, _, id, branchIDs, choice)) = array.first(where: \.isSelected),
-               choice.isCharacterChoice == false
-            {
-                let value = ChoiceSequenceValue.branch(.init(
-                    id: id,
-                    validIDs: branchIDs,
-                ))
-                return [.group(true), value]
-                    + array.flatMap(flattenAll)
-                    + [.group(false)]
-            }
-            return [.group(true)]
-                + array.flatMap(flattenAll)
-                + [.group(false)]
-        case .getSize:
-            return []
-        case let .resize(_, choices):
-            return [.group(true)]
-                + choices.flatMap(flattenAll)
-                + [.group(false)]
-        case let .selected(tree):
-            return flattenAll(tree)
+            return flatten(tree, includingAllBranches: includingAllBranches)
         }
     }
 

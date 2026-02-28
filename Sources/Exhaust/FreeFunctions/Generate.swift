@@ -7,6 +7,8 @@
 
 @_spi(ExhaustInternal) import ExhaustCore
 
+enum PropertyTest {}
+
 extension PropertyTest {
     /// This is it. This parameter pack + closure will let us enforce applicative generator construction by sheer force of user laziness.
     static func generate<each T, R>(

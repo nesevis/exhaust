@@ -282,7 +282,7 @@ struct ReducerReduceValuesTests {
             // Concatenating; irreversible
             .map { $0 + $1 + $2 }
 
-        let bla = try PropertyTest.test(.double(in: 1 ... 10)) { int in
+        let bla = try #exhaust(.double(in: 1 ... 10)) { int in
             int == 1.0
         }
 

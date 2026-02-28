@@ -201,7 +201,19 @@
     }
 
     @_spi(ExhaustInternal) public static func == (lhs: Self, rhs: Self) -> Bool {
-        lhs.hashValue == rhs.hashValue
+        guard lhs.tag == rhs.tag else { return false }
+        return switch (lhs, rhs) {
+        case let (.unsigned(lhsValue, _), .unsigned(rhsValue, _)):
+            lhsValue == rhsValue
+        case let (.signed(_, lhsBits, _), .signed(_, rhsBits, _)):
+            lhsBits == rhsBits
+        case let (.floating(_, lhsBits, _), .floating(_, rhsBits, _)):
+            lhsBits == rhsBits
+        case let (.character(lhsChar), .character(rhsChar)):
+            lhsChar == rhsChar
+        default:
+            false
+        }
     }
 
     @_spi(ExhaustInternal) public static func < (lhs: Self, rhs: Self) -> Bool {

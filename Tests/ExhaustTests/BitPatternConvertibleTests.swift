@@ -98,7 +98,7 @@ struct BitPatternConvertibleTests {
             #expect(reconstructed == value, "Round-trip failed for Float(\(value)): got \(reconstructed)")
         }
 
-        try PropertyTest.test(Float.arbitrary) { val in
+        try #exhaust(Float.arbitrary) { val in
             Float(bitPattern64: val.bitPattern64) == val
         }
     }
@@ -129,7 +129,7 @@ struct BitPatternConvertibleTests {
             Gen.choose(in: -Float.greatestFiniteMagnitude ... 0),
             Gen.choose(in: 1 ... Float.greatestFiniteMagnitude.nextDown),
         )
-        try PropertyTest.test(gen) { low, high in
+        try #exhaust(gen) { low, high in
             low.bitPattern64 < high.bitPattern64
         }
     }
@@ -149,7 +149,7 @@ struct BitPatternConvertibleTests {
             -Double.leastNormalMagnitude,
         ]
 
-        try PropertyTest.test(Double.arbitrary) { val in
+        try #exhaust(Double.arbitrary) { val in
             Double(bitPattern64: val.bitPattern64) == val
         }
 
@@ -186,7 +186,7 @@ struct BitPatternConvertibleTests {
             Gen.choose(in: -Double.greatestFiniteMagnitude ... 0),
             Gen.choose(in: 1 ... Double.greatestFiniteMagnitude.nextDown),
         )
-        try PropertyTest.test(gen) { low, high in
+        try #exhaust(gen) { low, high in
             low.bitPattern64 < high.bitPattern64
         }
     }
@@ -204,7 +204,7 @@ struct BitPatternConvertibleTests {
             UInt64(UInt32.max),
         ]
 
-        try PropertyTest.test(UInt64.arbitrary) { val in
+        try #exhaust(UInt64.arbitrary) { val in
             UInt64(bitPattern64: val.bitPattern64) == val
         }
 
@@ -241,7 +241,7 @@ struct BitPatternConvertibleTests {
     func int8BitPatternRoundTrip() throws {
         let testValues: [Int8] = [Int8.min, -1, 0, 1, Int8.max]
 
-        try PropertyTest.test(Int8.arbitrary) { val in
+        try #exhaust(Int8.arbitrary) { val in
             Int8(bitPattern64: val.bitPattern64) == val
         }
 
@@ -256,7 +256,7 @@ struct BitPatternConvertibleTests {
     func int16BitPatternRoundTrip() throws {
         let testValues: [Int16] = [Int16.min, -1000, -1, 0, 1, 1000, Int16.max]
 
-        try PropertyTest.test(Int16.arbitrary) { val in
+        try #exhaust(Int16.arbitrary) { val in
             Int16(bitPattern64: val.bitPattern64) == val
         }
 
@@ -271,7 +271,7 @@ struct BitPatternConvertibleTests {
     func int32BitPatternRoundTrip() throws {
         let testValues: [Int32] = [Int32.min, -100_000, -1, 0, 1, 100_000, Int32.max]
 
-        try PropertyTest.test(Int32.arbitrary) { val in
+        try #exhaust(Int32.arbitrary) { val in
             Int32(bitPattern64: val.bitPattern64) == val
         }
 
@@ -286,7 +286,7 @@ struct BitPatternConvertibleTests {
     func int64BitPatternRoundTrip() throws {
         let testValues: [Int64] = [Int64.min, -1_000_000_000, -1, 0, 1, 1_000_000_000, Int64.max]
 
-        try PropertyTest.test(Int64.arbitrary) { val in
+        try #exhaust(Int64.arbitrary) { val in
             Int64(bitPattern64: val.bitPattern64) == val
         }
 
@@ -303,7 +303,7 @@ struct BitPatternConvertibleTests {
             Gen.choose(in: Int64.min ... 0),
             Gen.choose(in: 1 ... Int64.max),
         )
-        try PropertyTest.test(gen) { low, high in
+        try #exhaust(gen) { low, high in
             low.bitPattern64 < high.bitPattern64
         }
     }

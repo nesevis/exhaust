@@ -30,7 +30,7 @@ extension ReducerStrategies {
             // Build alternatives sorted by shortlex complexity (simplest first)
             let alternatives = elements.enumerated()
                 .filter { $0.offset != selectedIndex }
-                .map { (index: $0.offset, complexity: ChoiceSequence.flattenAll($0.element)) }
+                .map { (index: $0.offset, complexity: ChoiceSequence.flatten($0.element, includingAllBranches: true)) }
                 .sorted { lhs, rhs in lhs.complexity.shortLexPrecedes(rhs.complexity) }
 
             guard !alternatives.isEmpty else { continue }

@@ -25,10 +25,10 @@ extension ReducerStrategies {
         }
 
         // Sort branches by shortlex complexity of their flattened sequences (simplest first)
-        // Use flattenAll so the complexity metric accounts for all branches,
-        // not just the selected one (which is all flatten includes).
+        // Include all branches so the complexity metric accounts for all alternatives,
+        // not just the selected one.
         let sorted = branches
-            .map { branch in (branch: branch, sequence: ChoiceSequence.flattenAll(branch.node)) }
+            .map { branch in (branch: branch, sequence: ChoiceSequence.flatten(branch.node, includingAllBranches: true)) }
             .sorted { lhs, rhs in lhs.sequence.shortLexPrecedes(rhs.sequence) }
 
         // Try replacing complex branches with simpler ones.

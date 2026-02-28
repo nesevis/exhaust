@@ -5,7 +5,7 @@ import CompilerPluginSupport
 import Foundation
 import PackageDescription
 
-let usePrecompiled = ProcessInfo.processInfo.environment["EXHAUST_RELEASE"] != nil || true
+let usePrecompiled = ProcessInfo.processInfo.environment["EXHAUST_RELEASE"] != nil
 
 let coreTarget: Target = usePrecompiled
     ? .binaryTarget(name: "ExhaustCore", path: "Frameworks/ExhaustCore.xcframework")
