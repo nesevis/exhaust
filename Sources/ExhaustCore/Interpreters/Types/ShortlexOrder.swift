@@ -6,6 +6,6 @@
 //
 
 /// Lightweight three-way comparison result without Foundation dependency.
-package enum ShortlexOrder: Equatable, Hashable {
+@_spi(ExhaustInternal) public enum ShortlexOrder: Equatable, Hashable {
     case lt, eq, gt
 }

@@ -12,7 +12,7 @@ import Foundation
 ///
 /// These two algorithms form the backbone of every shrink pass. Their cost is logarithmic
 /// in the size of the *output* (or the error of the guess), not the size of the input range.
-package enum AdaptiveProbe {
+@_spi(ExhaustInternal) public enum AdaptiveProbe {
     /// Discovers the **largest** `k` for which `predicate(k)` holds, in O(log k) time.
     ///
     /// `predicate(0)` is assumed true and is not checked. The predicate must be monotonic:
@@ -25,7 +25,7 @@ package enum AdaptiveProbe {
     /// - Returns: The largest `k >= 0` for which `predicate(k)` holds.
     @inlinable
     @inline(__always)
-    package static func findInteger<T: BinaryInteger>(_ predicate: (T) -> Bool) -> T {
+    @_spi(ExhaustInternal) public static func findInteger<T: BinaryInteger>(_ predicate: (T) -> Bool) -> T {
         // Step 1: Linear scan for small answers.
         // Keep this bounded and avoid probing the same value again in step 2.
         var probe: T = 1
@@ -78,7 +78,7 @@ package enum AdaptiveProbe {
     /// - Returns: The largest value in `low...high` for which `predicate` holds.
     @inlinable
     @inline(__always)
-    package static func binarySearchWithGuess<T: BinaryInteger>(_ predicate: (T) -> Bool, low: T, high: T, guess: T? = nil) -> T {
+    @_spi(ExhaustInternal) public static func binarySearchWithGuess<T: BinaryInteger>(_ predicate: (T) -> Bool, low: T, high: T, guess: T? = nil) -> T {
         let guess = guess ?? low
         precondition(low <= guess && guess < high)
         let good = predicate(low)

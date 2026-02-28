@@ -5,7 +5,7 @@ import CompilerPluginSupport
 import Foundation
 import PackageDescription
 
-let usePrecompiled = ProcessInfo.processInfo.environment["EXHAUST_RELEASE"] != nil
+let usePrecompiled = ProcessInfo.processInfo.environment["EXHAUST_RELEASE"] != nil || true
 
 let coreTarget: Target = usePrecompiled
     ? .binaryTarget(name: "ExhaustCore", path: "Frameworks/ExhaustCore.xcframework")
@@ -32,7 +32,11 @@ let package = Package(
         .library(
             name: "Exhaust",
             targets: ["Exhaust"]
-        )
+        ),
+        .library(
+            name: "ExhaustCore",
+            targets: ["ExhaustCore"]
+        ),
     ],
     dependencies: [
         .package(url: "https://github.com/google/swift-benchmark", from: "0.1.2"),

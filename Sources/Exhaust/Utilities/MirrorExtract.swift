@@ -2,7 +2,7 @@
 ///
 /// Runtime support for the `#gen` macro's backward mapping.
 /// Not intended for direct use.
-import ExhaustCore
+@_spi(ExhaustInternal) import ExhaustCore
 
 @inline(__always)
 public func _mirrorExtract(_ value: Any, label: String) -> Any {

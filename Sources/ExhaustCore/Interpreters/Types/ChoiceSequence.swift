@@ -5,25 +5,25 @@
 //  Created by Chris Kolbu on 8/2/2026.
 //
 
-package struct ChoiceSpan: CustomDebugStringConvertible {
-    package init(kind: ChoiceSequenceValue, range: ClosedRange<Int>, depth: Int) {
+@_spi(ExhaustInternal) public struct ChoiceSpan: CustomDebugStringConvertible {
+    @_spi(ExhaustInternal) public init(kind: ChoiceSequenceValue, range: ClosedRange<Int>, depth: Int) {
         self.kind = kind
         self.range = range
         self.depth = depth
     }
 
-    package let kind: ChoiceSequenceValue
-    package let range: ClosedRange<Int>
-    package let depth: Int
+    @_spi(ExhaustInternal) public let kind: ChoiceSequenceValue
+    @_spi(ExhaustInternal) public let range: ClosedRange<Int>
+    @_spi(ExhaustInternal) public let depth: Int
 
-    package var debugDescription: String {
+    @_spi(ExhaustInternal) public var debugDescription: String {
         "<\(kind.shortString)> \(range.lowerBound)...\(range.upperBound) @ \(depth)"
     }
 }
 
-package typealias ChoiceSequence = ContiguousArray<ChoiceSequenceValue>
+@_spi(ExhaustInternal) public typealias ChoiceSequence = ContiguousArray<ChoiceSequenceValue>
 
-package extension Collection<ChoiceSequenceValue> {
+@_spi(ExhaustInternal) public extension Collection<ChoiceSequenceValue> {
     var shortString: String {
         map(\.shortString).joined()
     }
@@ -31,10 +31,10 @@ package extension Collection<ChoiceSequenceValue> {
 
 // MARK: - Helper functions
 
-extension ChoiceSequence {
+@_spi(ExhaustInternal) extension ChoiceSequence {
     /// Returns two independent hash values for use in a k-hash bloom filter.
     /// Uses the double-hashing scheme: index_i = (h1 + i * h2) % size.
-    package var bloomHashes: (Int, Int) {
+    @_spi(ExhaustInternal) public var bloomHashes: (Int, Int) {
         var h1 = Hasher()
         var h2 = Hasher()
         h2.combine(0) // discriminator for independence
@@ -46,12 +46,12 @@ extension ChoiceSequence {
     }
 
     /// Creates a projection of a `ChoiceTree` to a flat list
-    package init(_ tree: ChoiceTree) {
+    @_spi(ExhaustInternal) public init(_ tree: ChoiceTree) {
         self = Self.flatten(tree)
     }
 
     /// Flattens the tree structure of ``ChoiceTree`` to a flat list for mutation/shrinking purposes
-    package static func flatten(_ tree: ChoiceTree) -> ChoiceSequence {
+    @_spi(ExhaustInternal) public static func flatten(_ tree: ChoiceTree) -> ChoiceSequence {
         switch tree {
         case let .choice(value, meta):
             return [.value(.init(choice: value, validRanges: meta.validRanges, isRangeExplicit: meta.isRangeExplicit))]
@@ -152,7 +152,7 @@ extension ChoiceSequence {
         return sequenceCount == 0 && groupCount == 0
     }
 
-    package static func extractContainerSpans(from sequence: ChoiceSequence) -> [ChoiceSpan] {
+    @_spi(ExhaustInternal) public static func extractContainerSpans(from sequence: ChoiceSequence) -> [ChoiceSpan] {
         var spans: [ChoiceSpan] = []
         var stack: [(kind: ChoiceSequenceValue, start: Int)] = []
         // Maps stack depth to the span indices of children
@@ -210,7 +210,7 @@ extension ChoiceSequence {
     }
 
     /// Returns balanced group spans strictly contained within `range`, sorted longest-first.
-    package static func extractDescendantGroupSpans(
+    @_spi(ExhaustInternal) public static func extractDescendantGroupSpans(
         from sequence: ChoiceSequence,
         in range: ClosedRange<Int>,
     ) -> [ChoiceSpan] {
@@ -259,7 +259,7 @@ extension ChoiceSequence {
     /// Returns spans representing `][` boundaries (`.sequence(false)` followed by `.sequence(true)`)
     /// that occur while nested inside an outer sequence (sequence depth > 1).
     /// Removing such a boundary merges two adjacent inner sequences into one.
-    package static func extractSequenceBoundarySpans(from sequence: ChoiceSequence) -> [ChoiceSpan] {
+    @_spi(ExhaustInternal) public static func extractSequenceBoundarySpans(from sequence: ChoiceSequence) -> [ChoiceSpan] {
         var spans: [ChoiceSpan] = []
         var sequenceDepth = 0
 
@@ -288,7 +288,7 @@ extension ChoiceSequence {
         return spans
     }
 
-    package static func extractAllValueSpans(from sequence: ChoiceSequence) -> [ChoiceSpan] {
+    @_spi(ExhaustInternal) public static func extractAllValueSpans(from sequence: ChoiceSequence) -> [ChoiceSpan] {
         var spans: [ChoiceSpan] = []
         var depth = 0
 
@@ -308,7 +308,7 @@ extension ChoiceSequence {
     }
 
     /// Returns the spans of values not inside groups
-    package static func extractFreeStandingValueSpans(from sequence: ChoiceSequence) -> [ChoiceSpan] {
+    @_spi(ExhaustInternal) public static func extractFreeStandingValueSpans(from sequence: ChoiceSequence) -> [ChoiceSpan] {
         var spans: [ChoiceSpan] = []
         // Maps stack depth to the span indices of children
         // collected while that frame was open

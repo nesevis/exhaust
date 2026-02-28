@@ -4,6 +4,12 @@
       "id" : "04888FA0-457D-4F78-8597-43EF42BD6566",
       "name" : "Test Scheme Action",
       "options" : {
+        "environmentVariableEntries" : [
+          {
+            "key" : "EXHAUST_RELEASE",
+            "value" : "1"
+          }
+        ],
         "testExecutionOrdering" : "random"
       }
     }

@@ -7,14 +7,14 @@
 
 import Foundation
 
-package struct ValueAndChoiceTreeInterpreter<FinalOutput>: IteratorProtocol, Sequence {
-    package typealias Element = (value: FinalOutput, tree: ChoiceTree)
+@_spi(ExhaustInternal) public struct ValueAndChoiceTreeInterpreter<FinalOutput>: IteratorProtocol, Sequence {
+    @_spi(ExhaustInternal) public typealias Element = (value: FinalOutput, tree: ChoiceTree)
     typealias RunContinuation<Output> = (Any, ChoiceTree) throws -> (Output, ChoiceTree)?
 
     let generator: ReflectiveGenerator<FinalOutput>
     private var context: Context
 
-    package init(
+    @_spi(ExhaustInternal) public init(
         _ generator: ReflectiveGenerator<FinalOutput>,
         materializePicks: Bool = false,
         seed: UInt64? = nil,
@@ -33,7 +33,7 @@ package struct ValueAndChoiceTreeInterpreter<FinalOutput>: IteratorProtocol, Seq
 
     // MARK: - Iterator
 
-    package mutating func next() -> Element? {
+    @_spi(ExhaustInternal) public mutating func next() -> Element? {
         guard context.runs < context.maxRuns else {
             context.printClassifications()
             return nil

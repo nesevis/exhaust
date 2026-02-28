@@ -7,7 +7,7 @@
 
 import Foundation
 
-package enum ChoiceSequenceValue: Hashable, Equatable, Sendable {
+@_spi(ExhaustInternal) public enum ChoiceSequenceValue: Hashable, Equatable, Sendable {
     /// The elements within the `true`---`false` range are logically grouped
     case group(Bool)
     /// Values that repeat within a sequence
@@ -35,7 +35,7 @@ package enum ChoiceSequenceValue: Hashable, Equatable, Sendable {
 
     // MARK: - Shortlex
 
-    package func shortLexCompare(_ other: ChoiceSequenceValue) -> ShortlexOrder {
+    @_spi(ExhaustInternal) public func shortLexCompare(_ other: ChoiceSequenceValue) -> ShortlexOrder {
         switch (self, other) {
         case (.group(true), .group(true)), (.sequence(true, isLengthExplicit: _), .sequence(true, isLengthExplicit: _)):
             return .eq
@@ -89,11 +89,11 @@ package enum ChoiceSequenceValue: Hashable, Equatable, Sendable {
 
     // MARK: - Inner type
 
-    package struct Branch: Hashable, Equatable, Sendable {
+    @_spi(ExhaustInternal) public struct Branch: Hashable, Equatable, Sendable {
         let id: UInt64
         let validIDs: [UInt64]
 
-        package init(id: UInt64, validIDs: [UInt64]) {
+        @_spi(ExhaustInternal) public init(id: UInt64, validIDs: [UInt64]) {
             self.id = id
             self.validIDs = validIDs
         }
@@ -113,12 +113,12 @@ package enum ChoiceSequenceValue: Hashable, Equatable, Sendable {
         }
     }
 
-    package struct Value: Hashable, Equatable, Sendable {
+    @_spi(ExhaustInternal) public struct Value: Hashable, Equatable, Sendable {
         let choice: ChoiceValue
         let validRanges: [ClosedRange<UInt64>]
         let isRangeExplicit: Bool
 
-        package init(choice: ChoiceValue, validRanges: [ClosedRange<UInt64>], isRangeExplicit: Bool = false) {
+        @_spi(ExhaustInternal) public init(choice: ChoiceValue, validRanges: [ClosedRange<UInt64>], isRangeExplicit: Bool = false) {
             self.choice = choice
             self.validRanges = validRanges
             self.isRangeExplicit = isRangeExplicit
@@ -132,7 +132,7 @@ package enum ChoiceSequenceValue: Hashable, Equatable, Sendable {
             return .eq
         }
 
-        package func hash(into hasher: inout Hasher) {
+        @_spi(ExhaustInternal) public func hash(into hasher: inout Hasher) {
             hasher.combine(choice)
         }
     }

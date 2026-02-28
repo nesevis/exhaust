@@ -2,7 +2,7 @@
 ///
 /// The `__` prefix follows Swift Testing's convention (`Testing.__check`, `Testing.__Expression`)
 /// to signal that this is macro infrastructure, not public API.
-import ExhaustCore
+@_spi(ExhaustInternal) import ExhaustCore
 
 public enum __ExhaustRuntime { // swiftlint:disable:this type_name
     /// Runs a property test with the given generator, settings, and property.

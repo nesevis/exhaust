@@ -1,4 +1,4 @@
-import ExhaustCore
+@_spi(ExhaustInternal) import ExhaustCore
 
 public extension ReflectiveGenerator where Operation == ReflectiveOperation {
     /// Creates a bidirectional transformation of this generator using forward and backward functions.

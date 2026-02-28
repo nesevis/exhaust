@@ -6,7 +6,7 @@
 ///     person.age >= 0
 /// }
 /// ```
-import ExhaustCore
+@_spi(ExhaustInternal) import ExhaustCore
 
 public enum ExhaustSettings {
     /// The maximum number of test iterations to run.

@@ -8,7 +8,7 @@
 
 import Testing
 @testable import Exhaust
-@testable import ExhaustCore
+@_spi(ExhaustInternal) @testable import ExhaustCore
 
 private enum AdvancedCoupledFixtures {
     enum StackAction: Equatable {

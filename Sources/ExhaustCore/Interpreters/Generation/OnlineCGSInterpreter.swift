@@ -20,8 +20,8 @@ import Foundation
 ///
 /// The interpreter produces `(value, ChoiceTree)` pairs identical in structure to
 /// `ValueAndChoiceTreeInterpreter`, ensuring full compatibility with shrinking and replay.
-package struct OnlineCGSInterpreter<FinalOutput>: IteratorProtocol, Sequence {
-    package typealias Element = (value: FinalOutput, tree: ChoiceTree)
+@_spi(ExhaustInternal) public struct OnlineCGSInterpreter<FinalOutput>: IteratorProtocol, Sequence {
+    @_spi(ExhaustInternal) public typealias Element = (value: FinalOutput, tree: ChoiceTree)
     typealias RunContinuation<Output> = (Any, ChoiceTree) throws -> (Output, ChoiceTree)?
 
     /// A function that composes a local sub-generator with all outer continuations
@@ -32,7 +32,7 @@ package struct OnlineCGSInterpreter<FinalOutput>: IteratorProtocol, Sequence {
     let generator: ReflectiveGenerator<FinalOutput>
     private var context: Context
 
-    package init(
+    @_spi(ExhaustInternal) public init(
         _ generator: ReflectiveGenerator<FinalOutput>,
         predicate: @escaping (FinalOutput) -> Bool,
         sampleCount: UInt64 = 50,
@@ -56,7 +56,7 @@ package struct OnlineCGSInterpreter<FinalOutput>: IteratorProtocol, Sequence {
 
     // MARK: - Iterator
 
-    package mutating func next() -> Element? {
+    @_spi(ExhaustInternal) public mutating func next() -> Element? {
         guard context.runs < context.maxRuns else {
             context.printClassifications()
             return nil

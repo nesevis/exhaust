@@ -1,5 +1,5 @@
 import Foundation
-import ExhaustCore
+@_spi(ExhaustInternal) import ExhaustCore
 
 /// Statistical analyzer for Tyche reporting data
 struct TycheAnalyzer {

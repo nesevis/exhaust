@@ -21,8 +21,7 @@ extension Equatable {
         return self == other
     }
 
-    @usableFromInline
-    package func isEqualToAny(_ other: Any) -> Bool {
+    public func isEqualToAny(_ other: Any) -> Bool {
         guard let other = other as? any Equatable else {
             return false
         }

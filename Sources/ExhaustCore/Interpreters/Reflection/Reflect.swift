@@ -10,7 +10,7 @@ import Foundation
 public enum Interpreters {
     // MARK: - Public-Facing Reflect Function (Unchanged, but now correct)
 
-    package static func reflect<Output>(
+    @_spi(ExhaustInternal) public static func reflect<Output>(
         _ gen: ReflectiveGenerator<Output>,
         with outputValue: Output,
         // Optional validation check

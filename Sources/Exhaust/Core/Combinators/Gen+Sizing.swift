@@ -1,6 +1,6 @@
 /// Operations for controlling and accessing the size parameter in generators.
 /// The size parameter is used to control the complexity and scale of generated values.
-import ExhaustCore
+@_spi(ExhaustInternal) import ExhaustCore
 
 public extension Gen {
     /// Retrieves the current size parameter controlling generator complexity.

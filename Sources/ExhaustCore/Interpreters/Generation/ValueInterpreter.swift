@@ -7,11 +7,11 @@
 
 import Foundation
 
-package struct ValueInterpreter<Element>: IteratorProtocol, Sequence {
+@_spi(ExhaustInternal) public struct ValueInterpreter<Element>: IteratorProtocol, Sequence {
     let generator: ReflectiveGenerator<Element>
     private var context: Context
 
-    package init(
+    @_spi(ExhaustInternal) public init(
         _ generator: ReflectiveGenerator<Element>,
         seed: UInt64? = nil,
         maxRuns: UInt64? = nil,
@@ -25,7 +25,7 @@ package struct ValueInterpreter<Element>: IteratorProtocol, Sequence {
         )
     }
 
-    package mutating func next() -> Element? {
+    @_spi(ExhaustInternal) public mutating func next() -> Element? {
         guard context.size < context.maxRuns else {
             return nil
         }
@@ -378,7 +378,7 @@ package struct ValueInterpreter<Element>: IteratorProtocol, Sequence {
 
     // MARK: - Hashable
 
-    package func hash(into hasher: inout Hasher) {
+    @_spi(ExhaustInternal) public func hash(into hasher: inout Hasher) {
         hasher.combine(context.prng.seed)
     }
 

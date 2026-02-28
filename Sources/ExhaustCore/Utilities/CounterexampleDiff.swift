@@ -5,13 +5,13 @@
 //  Created by Chris Kolbu on 23/2/2026.
 //
 
-package enum CounterexampleDiff {
+@_spi(ExhaustInternal) public enum CounterexampleDiff {
     /// Formats a human-readable diff between an original failing value and its shrunk counterpart.
     ///
     /// For structs/classes with labeled children, produces a property-level diff showing only
     /// changed fields with dotted paths for nested structs. Falls back to showing both values
     /// on separate lines for unlabeled or mismatched types.
-    package static func format<Output>(
+    @_spi(ExhaustInternal) public static func format<Output>(
         original: Output,
         shrunk: Output,
     ) -> String {

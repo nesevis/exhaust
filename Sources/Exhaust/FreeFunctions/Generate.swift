@@ -5,7 +5,7 @@
 //  Created by Chris Kolbu on 22/2/2026.
 //
 
-import ExhaustCore
+@_spi(ExhaustInternal) import ExhaustCore
 
 extension PropertyTest {
     /// This is it. This parameter pack + closure will let us enforce applicative generator construction by sheer force of user laziness.

@@ -6,11 +6,10 @@
 //
 
 /// The magical 3-in-1 PRNG
-@usableFromInline
-package struct Xoshiro256: RandomNumberGenerator {
-    package typealias StateType = (UInt64, UInt64, UInt64, UInt64)
+@_spi(ExhaustInternal) public struct Xoshiro256: RandomNumberGenerator {
+    @_spi(ExhaustInternal) public typealias StateType = (UInt64, UInt64, UInt64, UInt64)
 
-    package let seed: UInt64
+    @_spi(ExhaustInternal) public let seed: UInt64
     private var state: StateType
 
     /// Jump polynomial for 2^128 steps
@@ -25,13 +24,12 @@ package struct Xoshiro256: RandomNumberGenerator {
         0x7771_0069_854E_E241, 0x3910_9BB0_2ACB_E635,
     ]
 
-    @usableFromInline
-    package init() {
+    @_spi(ExhaustInternal) public init() {
         var rng = SystemRandomNumberGenerator()
         self.init(seed: rng.next())
     }
 
-    package init(seed: UInt64) {
+    @_spi(ExhaustInternal) public init(seed: UInt64) {
         self.seed = seed
         // SplitMix64 guarantees we won't get all zeros
         var splitmix = SplitMix64(seed: seed)
@@ -43,8 +41,7 @@ package struct Xoshiro256: RandomNumberGenerator {
         )
     }
 
-    @usableFromInline
-    package mutating func next() -> UInt64 {
+    @_spi(ExhaustInternal) public mutating func next() -> UInt64 {
         let result = rotateLeft(state.1 &* 5, 7) &* 9
         let t = state.1 &<< 17
 
@@ -63,7 +60,7 @@ package struct Xoshiro256: RandomNumberGenerator {
     /// Uses multiply-high with rejection sampling to avoid modulo bias.
     /// This follows Lemire's approach and avoids `%` on the hot path.
     @inline(__always)
-    package mutating func next(upperBound: UInt64) -> UInt64 {
+    @_spi(ExhaustInternal) public mutating func next(upperBound: UInt64) -> UInt64 {
         precondition(upperBound > 0, "upperBound must be > 0")
 
         // Power-of-two bounds can be sampled with a single mask.
@@ -86,7 +83,7 @@ package struct Xoshiro256: RandomNumberGenerator {
     /// This is intentionally separate from `next(upperBound:)` so callers can
     /// choose between stdlib range behavior and fast bounded sampling.
     @inline(__always)
-    package mutating func next(in range: ClosedRange<UInt64>) -> UInt64 {
+    @_spi(ExhaustInternal) public mutating func next(in range: ClosedRange<UInt64>) -> UInt64 {
         UInt64.random(in: range, using: &self)
     }
 
@@ -96,7 +93,7 @@ package struct Xoshiro256: RandomNumberGenerator {
     }
 
     /// Jump ahead 2^128 steps for parallel streams
-    package mutating func jump() {
+    @_spi(ExhaustInternal) public mutating func jump() {
         var s0: UInt64 = 0
         var s1: UInt64 = 0
         var s2: UInt64 = 0
@@ -118,7 +115,7 @@ package struct Xoshiro256: RandomNumberGenerator {
     }
 
     /// Create an independent stream
-    package func spawned(streamID: UInt64) -> Xoshiro256 {
+    @_spi(ExhaustInternal) public func spawned(streamID: UInt64) -> Xoshiro256 {
         var newGen = self
         // Use streamID to determine number of jumps
         for _ in 0 ..< (streamID & 0xFF) {

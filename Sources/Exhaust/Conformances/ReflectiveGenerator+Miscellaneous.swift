@@ -5,7 +5,7 @@
 //  Created by Chris Kolbu on 24/2/2026.
 //
 
-import ExhaustCore
+@_spi(ExhaustInternal) import ExhaustCore
 
 public extension ReflectiveGenerator {
     static func bool() -> ReflectiveGenerator<Bool> {

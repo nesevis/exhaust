@@ -8,7 +8,7 @@
 import Foundation
 import Testing
 @testable import Exhaust
-@testable import ExhaustCore
+@_spi(ExhaustInternal) @testable import ExhaustCore
 
 @Suite("Experimental Challenge: Strictly Increasing Run")
 struct StrictlyIncreasingRunChallenge {

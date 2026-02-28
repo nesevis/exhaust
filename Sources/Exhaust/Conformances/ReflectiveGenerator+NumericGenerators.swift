@@ -5,7 +5,7 @@
 //  Created by Chris Kolbu on 22/2/2026.
 //
 
-import ExhaustCore
+@_spi(ExhaustInternal) import ExhaustCore
 
 public extension ReflectiveGenerator {
     static func double(in range: ClosedRange<Double>? = nil) -> ReflectiveGenerator<Double> {

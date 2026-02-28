@@ -1,5 +1,5 @@
 import Foundation
-import ExhaustCore
+@_spi(ExhaustInternal) import ExhaustCore
 
 /// Thread-safe context for collecting Tyche reporting data
 public final class TycheReportContext {

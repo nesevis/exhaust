@@ -5,7 +5,7 @@
 //  Created by Chris Kolbu on 20/7/2025.
 //
 
-package enum ChoiceValue: Comparable, Hashable, Equatable, Sendable {
+@_spi(ExhaustInternal) public enum ChoiceValue: Comparable, Hashable, Equatable, Sendable {
     case unsigned(UInt64, any BitPatternConvertible.Type)
     /// The UInt64 represents its hashable behaviour
     case signed(Int64, UInt64, any BitPatternConvertible.Type)
@@ -179,14 +179,14 @@ package enum ChoiceValue: Comparable, Hashable, Equatable, Sendable {
         }
     }
 
-    package var convertible: any BitPatternConvertible {
+    @_spi(ExhaustInternal) public var convertible: any BitPatternConvertible {
         if case let .character(value) = self {
             return value
         }
         return convertibleType.init(bitPattern64: bitPattern64)
     }
 
-    package func hash(into hasher: inout Hasher) {
+    @_spi(ExhaustInternal) public func hash(into hasher: inout Hasher) {
         switch self {
         case let .unsigned(uInt64, _):
             hasher.combine(uInt64)
@@ -200,11 +200,11 @@ package enum ChoiceValue: Comparable, Hashable, Equatable, Sendable {
         hasher.combine(tag)
     }
 
-    package static func == (lhs: Self, rhs: Self) -> Bool {
+    @_spi(ExhaustInternal) public static func == (lhs: Self, rhs: Self) -> Bool {
         lhs.hashValue == rhs.hashValue
     }
 
-    package static func < (lhs: Self, rhs: Self) -> Bool {
+    @_spi(ExhaustInternal) public static func < (lhs: Self, rhs: Self) -> Bool {
         switch (lhs, rhs) {
         case (.unsigned, .unsigned):
             lhs.bitPattern64 < rhs.bitPattern64

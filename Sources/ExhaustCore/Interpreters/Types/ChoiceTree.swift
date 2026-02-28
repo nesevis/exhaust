@@ -7,7 +7,7 @@
 
 import Foundation
 
-package enum ChoiceTree: Hashable, Equatable, Sendable {
+@_spi(ExhaustInternal) public enum ChoiceTree: Hashable, Equatable, Sendable {
     /// A primitive choice, typically a number or a high-level semantic label.
     case choice(ChoiceValue, ChoiceMetadata)
 
@@ -189,7 +189,7 @@ extension ChoiceTree: CustomDebugStringConvertible {
         NSString(string: debugDescription)
     }
 
-    package var debugDescription: String {
+    @_spi(ExhaustInternal) public var debugDescription: String {
         treeDescription(prefix: "", isLast: true)
     }
 

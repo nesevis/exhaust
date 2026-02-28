@@ -119,7 +119,7 @@ public extension Interpreters {
         }
     }
 
-    package static func reduce<Output>(
+    @_spi(ExhaustInternal) public static func reduce<Output>(
         gen: ReflectiveGenerator<Output>,
         tree: ChoiceTree,
         config: ShrinkConfiguration,

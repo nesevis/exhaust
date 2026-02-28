@@ -7,7 +7,7 @@
 
 // MARK: - Unsigned Integers
 
-import ExhaustCore
+@_spi(ExhaustInternal) import ExhaustCore
 
 public extension UInt {
     static var arbitrary: ReflectiveGenerator<Self> {

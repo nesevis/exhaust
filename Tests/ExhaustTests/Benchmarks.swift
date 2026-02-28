@@ -8,7 +8,7 @@
 import OSLog
 import Testing
 @testable import Exhaust
-@testable import ExhaustCore
+@_spi(ExhaustInternal) @testable import ExhaustCore
 
 let signposter = OSSignposter(
     subsystem: "com.example.apple-samplecode.MyBinarySearch",

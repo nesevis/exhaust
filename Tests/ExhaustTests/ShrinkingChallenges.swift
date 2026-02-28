@@ -6,7 +6,7 @@
 ////
 //
 // @testable import Exhaust
-@testable import ExhaustCore
+@_spi(ExhaustInternal) @testable import ExhaustCore
 // import Testing
 //
 // @Suite("Shrinking challenges")

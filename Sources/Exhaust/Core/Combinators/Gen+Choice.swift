@@ -1,5 +1,5 @@
 import Foundation
-import ExhaustCore
+@_spi(ExhaustInternal) import ExhaustCore
 
 /// Operations for making choices and generating random values within ranges.
 /// These combinators handle weighted selection and bounded value generation.
@@ -16,7 +16,6 @@ public extension Gen {
     /// - Parameter choices: An array of (weight, generator) pairs. Must not be empty.
     /// - Returns: A generator that produces values from one of the provided generators
     /// - Precondition: At least one choice must be provided
-    @inlinable
     static func pick<Output>(
         choices: [(weight: UInt64, generator: ReflectiveGenerator<Output>)],
     ) -> ReflectiveGenerator<Output> {

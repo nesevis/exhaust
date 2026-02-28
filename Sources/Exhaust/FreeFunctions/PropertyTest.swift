@@ -5,7 +5,7 @@
 //  Created by Chris Kolbu on 30/7/2025.
 //
 
-import ExhaustCore
+@_spi(ExhaustInternal) import ExhaustCore
 
 enum PropertyTest {
     @discardableResult

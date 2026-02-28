@@ -9,12 +9,12 @@
 ///
 /// Each step in the path is a child index at the corresponding depth.
 /// For example, `[1, 0]` means "second child of root, then first child of that node".
-package struct Fingerprint: Hashable, Sendable {
+@_spi(ExhaustInternal) public struct Fingerprint: Hashable, Sendable {
     private(set) var steps: [Int]
 
-    package static let root = Fingerprint(steps: [])
+    @_spi(ExhaustInternal) public static let root = Fingerprint(steps: [])
 
-    package func appending(_ childIndex: Int) -> Fingerprint {
+    @_spi(ExhaustInternal) public func appending(_ childIndex: Int) -> Fingerprint {
         var copy = self
         copy.steps.append(childIndex)
         return copy
@@ -22,7 +22,7 @@ package struct Fingerprint: Hashable, Sendable {
 
     /// Returns `true` when `self` is a strict ancestor of `other`
     /// (i.e. `other.steps` starts with `self.steps` and is longer).
-    package func isAncestor(of other: Fingerprint) -> Bool {
+    @_spi(ExhaustInternal) public func isAncestor(of other: Fingerprint) -> Bool {
         steps.count < other.steps.count && other.steps.starts(with: steps)
     }
 }
@@ -79,19 +79,19 @@ extension ChoiceTree {
 
 /// A depth-first iterator that yields `(Fingerprint, ChoiceTree)` pairs
 /// for every node in a tree.
-package struct ChoiceTreeWalker: IteratorProtocol, Sequence {
-    package struct Element {
-        package let fingerprint: Fingerprint
-        package let node: ChoiceTree
+@_spi(ExhaustInternal) public struct ChoiceTreeWalker: IteratorProtocol, Sequence {
+    @_spi(ExhaustInternal) public struct Element {
+        @_spi(ExhaustInternal) public let fingerprint: Fingerprint
+        @_spi(ExhaustInternal) public let node: ChoiceTree
     }
 
     private var stack: [(Fingerprint, ChoiceTree)]
 
-    package init(_ tree: ChoiceTree) {
+    @_spi(ExhaustInternal) public init(_ tree: ChoiceTree) {
         stack = [(.root, tree)]
     }
 
-    package mutating func next() -> Element? {
+    @_spi(ExhaustInternal) public mutating func next() -> Element? {
         guard let (fingerprint, node) = stack.popLast() else {
             return nil
         }
@@ -106,7 +106,7 @@ package struct ChoiceTreeWalker: IteratorProtocol, Sequence {
 
 // MARK: - Subscript
 
-package extension ChoiceTree {
+@_spi(ExhaustInternal) public extension ChoiceTree {
     /// Access a node at the given fingerprint for reading or writing.
     ///
     /// The getter walks down the tree following the fingerprint's steps.
