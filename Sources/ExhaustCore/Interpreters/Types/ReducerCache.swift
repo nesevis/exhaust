@@ -5,14 +5,16 @@
 //  Created by Chris Kolbu on 17/2/2026.
 //
 
-struct ReducerCache {
+@_spi(ExhaustInternal) public struct ReducerCache {
     private var set = Set<ChoiceSequence>(minimumCapacity: 1000)
 
-    func contains(_ value: ChoiceSequence) -> Bool {
+    @_spi(ExhaustInternal) public init() {}
+
+    @_spi(ExhaustInternal) public func contains(_ value: ChoiceSequence) -> Bool {
         set.contains(value)
     }
 
-    mutating func insert(_ value: ChoiceSequence) {
+    @_spi(ExhaustInternal) public mutating func insert(_ value: ChoiceSequence) {
         set.insert(value)
     }
 }

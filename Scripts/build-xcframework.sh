@@ -6,7 +6,7 @@ PACKAGE_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 BUILD_DIR="${PACKAGE_DIR}/.build/xcframework-staging"
 OUTPUT_DIR="${PACKAGE_DIR}/Frameworks"
 
-EVOLUTION_FLAGS=(-Xswiftc -enable-library-evolution -Xswiftc -emit-module-interface -Xswiftc -enable-testing)
+EVOLUTION_FLAGS=(-Xswiftc -enable-library-evolution -Xswiftc -emit-module-interface)
 IOS_SIM_SDK="$(xcrun --sdk iphonesimulator --show-sdk-path)"
 IOS_DEPLOYMENT_TARGET="18.0"
 

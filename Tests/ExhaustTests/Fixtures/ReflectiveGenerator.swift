@@ -7,7 +7,7 @@
 
 import Testing
 @testable import Exhaust
-@_spi(ExhaustInternal) @testable import ExhaustCore
+@_spi(ExhaustInternal) import ExhaustCore
 
 @discardableResult
 func validateGenerator<Output: Equatable>(_ gen: ReflectiveGenerator<Output>) throws -> (recipe: ChoiceTree, instance: Output) {

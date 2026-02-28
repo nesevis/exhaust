@@ -8,7 +8,7 @@
 import Foundation
 import Testing
 @testable import Exhaust
-@_spi(ExhaustInternal) @testable import ExhaustCore
+@_spi(ExhaustInternal) import ExhaustCore
 
 // MARK: - BST Definition (self-contained for test independence)
 

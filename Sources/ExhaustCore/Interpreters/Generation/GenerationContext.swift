@@ -5,7 +5,7 @@
 //  Created by Chris Kolbu on 28/2/2026.
 //
 
-struct GenerationContext {
+@_spi(ExhaustInternal) public struct GenerationContext {
     // Constants
     let maxRuns: UInt64
     let baseSeed: UInt64
@@ -64,13 +64,13 @@ struct GenerationContext {
 
     // MARK: - Cycling size (1–100, independent of maxRuns)
 
-    static func scaledSize(forRun runIndex: UInt64) -> UInt64 {
+    @_spi(ExhaustInternal) public static func scaledSize(forRun runIndex: UInt64) -> UInt64 {
         (runIndex % 100) + 1
     }
 
     // MARK: - Per-run seed derivation (SplitMix64 mixing)
 
-    static func runSeed(base: UInt64, runIndex: UInt64) -> UInt64 {
+    @_spi(ExhaustInternal) public static func runSeed(base: UInt64, runIndex: UInt64) -> UInt64 {
         var z = base &+ runIndex &* 0x9E37_79B9_7F4A_7C15
         z = (z ^ (z &>> 30)) &* 0xBF58_476D_1CE4_E5B9
         z = (z ^ (z &>> 27)) &* 0x94D0_49BB_1331_11EB

@@ -6,7 +6,7 @@
 //
 
 extension ChoiceValue {
-    var bitPattern64: UInt64 {
+    @_spi(ExhaustInternal) public var bitPattern64: UInt64 {
         switch self {
         case let .unsigned(uint, _):
             uint
@@ -23,7 +23,7 @@ extension ChoiceValue {
     /// - Signed integers: absolute value (0 → 0, ±1 → 1, ±2 → 2, ...)
     /// - Floating point: absolute value's raw IEEE 754 bit pattern (0.0 → 0, ±small → small, ±large → large)
     /// - Unsigned integers and characters: identical to `bitPattern64`
-    var shortlexKey: UInt64 {
+    @_spi(ExhaustInternal) public var shortlexKey: UInt64 {
         switch self {
         case let .unsigned(uint, _):
             uint
@@ -39,7 +39,7 @@ extension ChoiceValue {
     /// The bit pattern of the ideal shrink target for this value type.
     /// - Unsigned/Character: lowest valid bit pattern (smallest value)
     /// - Signed/Float: 0's bit pattern if in range, else the range bound closest to 0's bit pattern
-    func reductionTarget(in ranges: [ClosedRange<UInt64>]) -> UInt64 {
+    @_spi(ExhaustInternal) public func reductionTarget(in ranges: [ClosedRange<UInt64>]) -> UInt64 {
         let target = semanticSimplest.bitPattern64
         if fits(in: ranges, bitPattern: target) {
             return target

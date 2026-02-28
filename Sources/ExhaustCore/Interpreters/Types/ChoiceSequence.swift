@@ -94,7 +94,7 @@
         }
     }
 
-    static func validate(_ sequence: ChoiceSequence) -> Bool {
+    @_spi(ExhaustInternal) public static func validate(_ sequence: ChoiceSequence) -> Bool {
         var sequenceCount = 0
         var groupCount = 0
         for element in sequence {
@@ -309,7 +309,7 @@
     /// the immediate children of a sequence or group container, where all children are
     /// the same kind (all bare values or all containers of the same type).
     /// Only groups with >= 2 siblings are returned.
-    static func extractSiblingGroups(from sequence: ChoiceSequence) -> [SiblingGroup] {
+    @_spi(ExhaustInternal) public static func extractSiblingGroups(from sequence: ChoiceSequence) -> [SiblingGroup] {
         var result: [SiblingGroup] = []
         var stack: [SiblingFrame] = []
 
@@ -452,7 +452,7 @@
         return keys
     }
 
-    func shortLexPrecedes(_ other: ChoiceSequence) -> Bool {
+    @_spi(ExhaustInternal) public func shortLexPrecedes(_ other: ChoiceSequence) -> Bool {
         // Shorter sequences are always better
         if count != other.count {
             return count < other.count

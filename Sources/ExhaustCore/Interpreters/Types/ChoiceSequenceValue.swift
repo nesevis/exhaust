@@ -90,8 +90,8 @@ import Foundation
     // MARK: - Inner type
 
     @_spi(ExhaustInternal) public struct Branch: Hashable, Equatable, Sendable {
-        let id: UInt64
-        let validIDs: [UInt64]
+        @_spi(ExhaustInternal) public let id: UInt64
+        @_spi(ExhaustInternal) public let validIDs: [UInt64]
 
         @_spi(ExhaustInternal) public init(id: UInt64, validIDs: [UInt64]) {
             self.id = id
@@ -114,9 +114,9 @@ import Foundation
     }
 
     @_spi(ExhaustInternal) public struct Value: Hashable, Equatable, Sendable {
-        let choice: ChoiceValue
-        let validRanges: [ClosedRange<UInt64>]
-        let isRangeExplicit: Bool
+        @_spi(ExhaustInternal) public let choice: ChoiceValue
+        @_spi(ExhaustInternal) public let validRanges: [ClosedRange<UInt64>]
+        @_spi(ExhaustInternal) public let isRangeExplicit: Bool
 
         @_spi(ExhaustInternal) public init(choice: ChoiceValue, validRanges: [ClosedRange<UInt64>], isRangeExplicit: Bool = false) {
             self.choice = choice
