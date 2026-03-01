@@ -285,7 +285,7 @@ struct ReducerReduceValuesTests {
             // Concatenating; irreversible
             .map { $0 + $1 + $2 }
 
-        let bla = try #exhaust(.double(in: 1 ... 10)) { int in
+        let bla = try #exhaust(.double(in: 1 ... 10), .suppressIssueReporting) { int in
             int == 1.0
         }
 
@@ -295,7 +295,7 @@ struct ReducerReduceValuesTests {
         // https://hedgehogqa.github.io/fsharp-hedgehog/articles/ranges.html?tabs=fsharp
         let interpreter = Array(ValueInterpreter(Int.arbitrary))
 
-        let counterExample = try #exhaust(gen) { str in
+        let counterExample = try #exhaust(gen, .suppressIssueReporting) { str in
             str.contains("@") == false
         }
 
