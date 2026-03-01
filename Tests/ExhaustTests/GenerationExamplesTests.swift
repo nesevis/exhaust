@@ -38,11 +38,11 @@ struct GenerationExamplesTests {
             }
         }
 
-        @Test("Test Gen subset")
-        func genSubset() {
+        @Test("Test Gen slice")
+        func genSlice() {
             let collection = "What in the devil is the purpose of this?"
 //            let stringCollection = String(collection)
-            let generator = Gen.subset(of: collection)
+            let generator = Gen.slice(of: collection)
             var iterator = ValueAndChoiceTreeInterpreter(generator, seed: 2, maxRuns: 100)
             var max = 0
             while let (value, _) = iterator.next() {
@@ -130,8 +130,8 @@ struct GenerationExamplesTests {
 
     @Suite("Debug Tests")
     struct DebugTests {
-        @Test("Debug proliferate step by step")
-        func debugProliferateStepByStep() throws {
+        @Test("Debug array step by step")
+        func debugArrayStepByStep() throws {
             // 1. Test String.arbitrary alone
             let stringGen = String.arbitrary
             for i in 0 ..< 3 {
@@ -148,13 +148,13 @@ struct GenerationExamplesTests {
                 }
             }
 
-            // 2. Test proliferate alone (without map)
-            let proliferateGen = String.arbitrary.proliferate(with: 1 ... 3)
+            // 2. Test array alone (without map)
+            let arrayGen = String.arbitrary.array(length: 1 ... 3)
             for i in 0 ..< 3 {
-                var iterator = ValueInterpreter(proliferateGen)
+                var iterator = ValueInterpreter(arrayGen)
                 let generated = iterator.next()!
-                if let recipe = try Interpreters.reflect(proliferateGen, with: generated) {
-                    if let replayed = try Interpreters.replay(proliferateGen, using: recipe) {
+                if let recipe = try Interpreters.reflect(arrayGen, with: generated) {
+                    if let replayed = try Interpreters.replay(arrayGen, using: recipe) {
                         // Round-trip successful
                     } else {
                         #expect(false, "Replay failed")

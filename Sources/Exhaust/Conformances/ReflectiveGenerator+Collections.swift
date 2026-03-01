@@ -66,23 +66,18 @@ public extension ReflectiveGenerator {
         Gen.dictionaryOf(keyGen, valueGen)
     }
 
-    static func sub<C: Collection>(
+    static func slice<C: Collection>(
         _ gen: ReflectiveGenerator<C>,
     ) -> ReflectiveGenerator<C.SubSequence> where Value == C.SubSequence {
-        Gen.sub(gen)
+        Gen.slice(gen)
     }
 
-    static func shuffle(
+    static func shuffled(
         _ gen: ReflectiveGenerator<Value>,
     ) -> ReflectiveGenerator<[Value.Element]> where Value: Collection {
-        Gen.shuffle(gen)
+        Gen.shuffled(gen)
     }
 
-    static func element<C: Collection>(
-        _ collection: C,
-    ) -> ReflectiveGenerator<C.Element> where C.Index == Int {
-        Gen.choose(from: collection)
-    }
 }
 
 // MARK: - Instance methods for chaining
@@ -114,13 +109,7 @@ public extension ReflectiveGenerator where Operation == ReflectiveOperation {
         Gen.setOf(self, exactly: count)
     }
 
-    func shuffle() -> ReflectiveGenerator<[Value.Element]> where Value: Collection {
-        Gen.shuffle(self)
-    }
-}
-
-public extension ReflectiveGenerator where Value: CaseIterable, Value.AllCases.Index == Int {
-    static func cases(_ type: Value.Type) -> ReflectiveGenerator<Value> {
-        Gen.choose(from: type.allCases)
+    func shuffled() -> ReflectiveGenerator<[Value.Element]> where Value: Collection {
+        Gen.shuffled(self)
     }
 }

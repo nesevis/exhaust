@@ -27,7 +27,7 @@ struct ConstraintViolationTests {
 
     @Test("Array size constraints never violated")
     func arraySizeConstraintsNeverViolated() {
-        let gen = Int.arbitrary.proliferate(with: 3 ... 7)
+        let gen = Int.arbitrary.array(length: 3 ... 7)
         var iterator = ValueInterpreter(gen)
 
         // Generate many arrays
@@ -112,7 +112,7 @@ struct ConstraintViolationTests {
     func zippedGeneratorConstraints() {
         let positiveGen = Gen.choose(in: 1 ... 100)
         let evenGen = Gen.choose(in: 0 ... 50).map { $0 * 2 }
-        let shortArrayGen = String.arbitrary.proliferate(with: 1 ... 3)
+        let shortArrayGen = String.arbitrary.array(length: 1 ... 3)
 
         let combinedGen = Gen.zip(positiveGen, evenGen, shortArrayGen)
 

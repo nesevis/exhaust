@@ -149,7 +149,7 @@ struct MaterializeTests {
 
     @Test("Materialize variable-length array")
     func materializeVariableArray() throws {
-        let gen = UInt64.arbitrary.proliferate(with: 2 ... 8)
+        let gen = UInt64.arbitrary.array(length: 2 ... 8)
         let (original, materialized) = try roundTrip(gen)
         #expect(original == materialized)
     }
@@ -228,8 +228,8 @@ struct MaterializeTests {
     @Test("Materialize zip containing arrays")
     func materializeZipWithArrays() throws {
         let gen = Gen.zip(
-            Gen.choose(in: UInt64(0) ... 100).proliferate(with: 1 ... 5),
-            Gen.choose(in: UInt64(0) ... 100).proliferate(with: 1 ... 5),
+            Gen.choose(in: UInt64(0) ... 100).array(length: 1 ... 5),
+            Gen.choose(in: UInt64(0) ... 100).array(length: 1 ... 5),
         )
         let (original, materialized) = try roundTripUntyped(gen)
         #expect(original.0 == materialized.0)
@@ -480,7 +480,7 @@ struct MaterializeTests {
     func materializeResizeThroughGroup() throws {
         // resize is exercised via proliferate (variable-length array)
         let gen = Gen.zip(
-            UInt64.arbitrary.proliferate(with: 2 ... 4),
+            UInt64.arbitrary.array(length: 2 ... 4),
             Gen.choose(in: UInt64(0) ... 100),
         )
         let (original, materialized) = try roundTripUntyped(gen)

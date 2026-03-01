@@ -47,9 +47,9 @@ struct OneOfTests {
 
     @Test("Weighted oneOf produces values from all branches")
     func weightedProducesVariety() {
-        let gen: ReflectiveGenerator<String> = .oneOf(
+        let gen: ReflectiveGenerator<String> = .oneOf(weighted:
             (1, Gen.just("rare")),
-            (5, Gen.just("common")),
+            (5, Gen.just("common"))
         )
         var seen: Set<String> = []
         var iterator = ValueInterpreter(gen)
@@ -75,10 +75,10 @@ struct OneOfTests {
 
     @Test("Weighted oneOf round-trips through choice tree and materialize")
     func weightedRoundTrip() throws {
-        let gen: ReflectiveGenerator<String> = .oneOf(
+        let gen: ReflectiveGenerator<String> = .oneOf(weighted:
             (1, Gen.just("rare")),
             (3, Gen.just("medium")),
-            (5, Gen.just("common")),
+            (5, Gen.just("common"))
         )
         for seed in [UInt64(1), 7, 42, 100, 999] {
             let (original, materialized) = try roundTrip(gen, seed: seed)

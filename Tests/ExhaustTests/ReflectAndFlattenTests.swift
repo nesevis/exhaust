@@ -123,8 +123,8 @@ struct ReflectAndFlattenTests {
     @Test("Reflect and flatten tuple of arrays")
     func reflectAndFlattenTupleOfArrays() throws {
         let gen = Gen.zip(
-            Gen.choose(in: UInt64(0) ... 101).proliferate(with: 1 ... 10),
-            Gen.choose(in: UInt64(0) ... 101).proliferate(with: 1 ... 20),
+            Gen.choose(in: UInt64(0) ... 101).array(length: 1 ... 10),
+            Gen.choose(in: UInt64(0) ... 101).array(length: 1 ... 20),
         )
         let value: ([UInt64], [UInt64]) = ([42], [99, 100, 101])
 

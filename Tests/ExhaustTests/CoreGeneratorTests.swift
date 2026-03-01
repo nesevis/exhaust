@@ -175,7 +175,7 @@ struct CoreGeneratorTests {
         @Test("Expect failure")
         func opaqueMapReplayFailure() {
             let gen = String.arbitrary
-                .proliferate(with: 2 ... 5)
+                .array(length: 2 ... 5)
                 .map { $0.joined() } // Using mapped here wouldn't be possible; we don't know what the string boundaries were
             var iterator = ValueInterpreter(gen)
 

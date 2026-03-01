@@ -106,9 +106,9 @@ struct CompositionTests {
             }
         }
 
-        @Test("Arbitrary.proliferate creates arrays")
-        func arbitraryProliferate() {
-            let gen = Int.arbitrary.proliferate(with: 3 ... 7)
+        @Test("Arbitrary .array(length:) creates arrays")
+        func arbitraryArray() {
+            let gen = Int.arbitrary.array(length: 3 ... 7)
 
             for _ in 0 ..< 20 {
                 var iterator = ValueInterpreter(gen)
@@ -117,11 +117,11 @@ struct CompositionTests {
             }
         }
 
-        @Test("Nested proliferate creates nested arrays")
-        func nestedProliferate() {
+        @Test("Nested .array(length:) creates nested arrays")
+        func nestedArray() {
             let gen = String.arbitrary
-                .proliferate(with: 2 ... 4) // Inner arrays of 2-4 strings
-                .proliferate(with: 2 ... 3) // Outer array of 2-3 inner arrays
+                .array(length: 2 ... 4) // Inner arrays of 2-4 strings
+                .array(length: 2 ... 3) // Outer array of 2-3 inner arrays
 
             for _ in 0 ..< 10 {
                 var iterator = ValueInterpreter(gen)
@@ -136,7 +136,7 @@ struct CompositionTests {
 
         @Test("Very large arrays")
         func largeArrays() throws {
-            let gen = UInt8.arbitrary.proliferate(with: 1000 ... 1000)
+            let gen = UInt8.arbitrary.array(length: 1000 ... 1000)
 
             var iterator = ValueInterpreter(gen)
             let largeArray = iterator.next()!
@@ -158,9 +158,9 @@ struct CompositionTests {
         func deeplyNestedStructures() throws {
             // Create a generator for arrays of arrays of arrays
             let gen = Int.arbitrary
-                .proliferate(with: 2 ... 3) // [Int]
-                .proliferate(with: 2 ... 3) // [[Int]]
-                .proliferate(with: 2 ... 3) // [[[Int]]]
+                .array(length: 2 ... 3) // [Int]
+                .array(length: 2 ... 3) // [[Int]]
+                .array(length: 2 ... 3) // [[[Int]]]
 
             var iterator = ValueInterpreter(gen)
             let nested = iterator.next()!
@@ -260,7 +260,7 @@ struct CompositionTests {
 
             let companyGen = Gen.lens(extract: \TestCompany.name, Gen.just("Microsoft"))
                 .bind { name in
-                    Gen.lens(extract: \TestCompany.employees, personGen.proliferate(with: 5 ... 20))
+                    Gen.lens(extract: \TestCompany.employees, personGen.array(length: 5 ... 20))
                         .bind { employees in
                             Gen.lens(extract: \TestCompany.founded, Gen.choose(in: 1900 ... 2023))
                                 .map { founded in
@@ -288,8 +288,8 @@ struct CompositionTests {
         func complexGeneratorStability() throws {
             // Build a very complex generator with multiple composition patterns
             let baseGen = Gen.choose(in: 1 ... 100)
-            let arrayGen = baseGen.proliferate(with: 1 ... 10)
-            let nestedGen = arrayGen.proliferate(with: 1 ... 5)
+            let arrayGen = baseGen.array(length: 1 ... 10)
+            let nestedGen = arrayGen.array(length: 1 ... 5)
             let pickedGen = Gen.pick(choices: [
                 (weight: UInt64(1), generator: nestedGen),
                 (weight: UInt64(1), generator: nestedGen.map { $0.reversed() }),

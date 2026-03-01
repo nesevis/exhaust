@@ -82,6 +82,7 @@ public extension ReflectiveGenerator where Operation == ReflectiveOperation {
     /// extracts the wrapped value for the underlying generator to reflect on.
     ///
     /// - Returns: A generator that produces optional versions of the original values
+    @_spi(ExhaustInternal)
     @inlinable
     func asOptional() -> ReflectiveGenerator<Value?> {
         let description = String(describing: Value.self)
@@ -98,29 +99,6 @@ public extension ReflectiveGenerator where Operation == ReflectiveOperation {
         )) { result in
             .pure(result as? Value)
         }
-    }
-
-    /// Creates an array generator with length constrained to the specified range.
-    ///
-    /// This is a convenience method that transforms a single-value generator into an array generator
-    /// where the array length is randomly chosen from the given range. It provides a clean interface
-    /// for generating collections without manually composing `Gen.arrayOf` calls.
-    ///
-    /// **Forward pass**: Generates a random length within range, then generates that many elements
-    /// **Backward pass**: Decomposes target array and reflects on both length and individual elements
-    /// **Replay pass**: Uses recorded length and element choices to recreate the exact array
-    ///
-    /// The method name "proliferate" suggests the multiplication of a single generator into many
-    /// instances, which is exactly what array generation accomplishes while maintaining the
-    /// bidirectional properties essential for reflection and replay.
-    ///
-    /// - Parameters:
-    ///   - range: The allowed range for the resulting array length
-    ///   - scaling: The distribution strategy for the length. Defaults to `.linear`
-    /// - Returns: A generator that produces arrays with length in the specified range
-    @inlinable
-    func proliferate(with range: ClosedRange<UInt64>, scaling: SizeScaling<UInt64> = .linear) -> ReflectiveGenerator<[Value]> {
-        Gen.arrayOf(self, within: range, scaling: scaling)
     }
 
     /// Creates a filtered generator that only produces values satisfying a predicate.
@@ -239,8 +217,4 @@ public extension ReflectiveGenerator where Operation == ReflectiveOperation {
         )
     }
 
-    @inlinable
-    func compose<OtherValue>(with other: ReflectiveGenerator<OtherValue>) -> ReflectiveGenerator<(Value, OtherValue)> {
-        Gen.zip(self, other)
-    }
 }

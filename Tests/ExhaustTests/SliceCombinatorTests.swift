@@ -2,11 +2,11 @@ import Testing
 @testable import Exhaust
 @_spi(ExhaustInternal) import ExhaustCore
 
-@Suite("Gen.sub Combinator")
-struct SubCombinatorTests {
-    @Test("Gen.sub generates valid subranges of arrays")
-    func subGeneratesValidArraySubranges() {
-        let gen = Gen.sub(Gen.arrayOf(Gen.choose(in: 0 ... 100)))
+@Suite("Gen.slice Combinator")
+struct SliceCombinatorTests {
+    @Test("Gen.slice generates valid subranges of arrays")
+    func sliceGeneratesValidArraySubranges() {
+        let gen = Gen.slice(Gen.arrayOf(Gen.choose(in: 0 ... 100)))
         var iterator = ValueInterpreter(gen, seed: 42)
 
         var generated = 0
@@ -21,12 +21,12 @@ struct SubCombinatorTests {
         #expect(generated > 0)
     }
 
-    @Test("Gen.sub result is a proper subsequence of the source")
-    func subIsProperSubsequence() {
-        // Generate a fixed-length array, then take a sub of it
+    @Test("Gen.slice result is a proper subsequence of the source")
+    func sliceIsProperSubsequence() {
+        // Generate a fixed-length array, then take a slice of it
         let arrayGen = Gen.arrayOf(Gen.choose(in: 0 ... 50), exactly: 10)
         let gen = arrayGen.bind { array in
-            Gen.subset(of: array).map { sub in
+            Gen.slice(of: array).map { sub in
                 (array, Array(sub))
             }
         }
@@ -49,9 +49,9 @@ struct SubCombinatorTests {
         #expect(checked > 0)
     }
 
-    @Test("Public API .sub works via ReflectiveGenerator extension")
-    func publicAPISub() {
-        let gen: ReflectiveGenerator<ArraySlice<Int>> = .sub(.array(.int()))
+    @Test("Public API .slice works via ReflectiveGenerator extension")
+    func publicAPISlice() {
+        let gen: ReflectiveGenerator<ArraySlice<Int>> = .slice(.array(.int()))
         var iterator = ValueInterpreter(gen, seed: 7)
 
         var generated = 0

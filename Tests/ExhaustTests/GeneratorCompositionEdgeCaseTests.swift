@@ -112,9 +112,9 @@ struct GeneratorCompositionEdgeCaseTests {
         #expect(generated == replayed)
     }
 
-    @Test("Composition with array proliferation")
-    func arrayProlifirationComposition() {
-        let arrayGen = Int.arbitrary.proliferate(with: 0 ... 5)
+    @Test("Composition with array generation")
+    func arrayComposition() {
+        let arrayGen = Int.arbitrary.array(length: 0 ... 5)
         let scalarGen = String.arbitrary
 
         let composed = Gen.zip(arrayGen, scalarGen)
@@ -130,9 +130,9 @@ struct GeneratorCompositionEdgeCaseTests {
     @Test("Deeply nested array composition")
     func deeplyNestedArrayComposition() {
         let nestedGen = Int.arbitrary
-            .proliferate(with: 1 ... 3)
-            .proliferate(with: 1 ... 2)
-            .proliferate(with: 1 ... 2)
+            .array(length: 1 ... 3)
+            .array(length: 1 ... 2)
+            .array(length: 1 ... 2)
 
         let composed = Gen.zip(nestedGen, String.arbitrary)
 

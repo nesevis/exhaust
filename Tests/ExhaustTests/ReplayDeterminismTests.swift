@@ -62,7 +62,7 @@ struct ReplayDeterminismTests {
         let personGen = Gen.lens(extract: \Person.name, String.arbitrary)
             .bind { name in
                 Gen.lens(extract: \Person.age, UInt.arbitrary).bind { age in
-                    Gen.lens(extract: \Person.scores, Int.arbitrary.proliferate(with: 1 ... 5)).map { scores in
+                    Gen.lens(extract: \Person.scores, Int.arbitrary.array(length: 1 ... 5)).map { scores in
                         Person(name: name, age: age, scores: scores)
                     }
                 }
@@ -81,7 +81,7 @@ struct ReplayDeterminismTests {
 
     @Test("Arrays replay with exact element order")
     func arrayReplayOrder() throws {
-        let gen = String.arbitrary.proliferate(with: 3 ... 7)
+        let gen = String.arbitrary.array(length: 3 ... 7)
 
         let array = ["hello", "world", "test", "array"]
         let recipe = try #require(try Interpreters.reflect(gen, with: array))

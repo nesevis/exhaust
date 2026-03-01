@@ -277,7 +277,7 @@ struct ReducerReduceValuesTests {
     @Test("Non-reflectable generator shrinks correctly")
     func nonReflectableGeneratorShrinksCorrectly() throws {
         let stringGen = Gen.chooseCharacter()
-            .proliferate(with: 0 ... 20)
+            .array(length: 0 ... 20)
             // Reversible, but only accidentally ([Character] is more or less equal to String)
             .map { String($0) }
 

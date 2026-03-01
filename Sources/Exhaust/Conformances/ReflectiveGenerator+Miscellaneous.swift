@@ -25,8 +25,15 @@ public extension ReflectiveGenerator {
     }
 
     /// Creates a generator that randomly selects from weighted generators.
-    static func oneOf(_ choices: (Int, ReflectiveGenerator<Value>)...) -> ReflectiveGenerator<Value> {
+    static func oneOf(weighted choices: (Int, ReflectiveGenerator<Value>)...) -> ReflectiveGenerator<Value> {
         Gen.pick(choices: choices.map { ($0.0, $0.1) })
+    }
+}
+
+public extension ReflectiveGenerator where Value: CaseIterable, Value.AllCases.Index == Int {
+    /// Creates a generator that randomly selects from all cases of a `CaseIterable` type.
+    static func oneOf(_ type: Value.Type) -> ReflectiveGenerator<Value> {
+        Gen.choose(from: type.allCases)
     }
 }
 

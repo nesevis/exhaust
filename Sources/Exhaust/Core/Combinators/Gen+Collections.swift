@@ -199,7 +199,7 @@ public extension Gen {
     /// - Parameter gen: An array generator whose output should be shuffled
     /// - Returns: A generator that produces a randomly permuted array
     @inlinable
-    static func shuffle<Element>(
+    static func shuffled<Element>(
         _ gen: ReflectiveGenerator<some Collection<Element>>,
     ) -> ReflectiveGenerator<[Element]> {
         gen.bind { array in
@@ -242,7 +242,7 @@ public extension Gen {
     }
 
     @inlinable
-    static func subset<AnyCollection: Collection>(
+    static func slice<AnyCollection: Collection>(
         of collection: AnyCollection,
     ) -> ReflectiveGenerator<AnyCollection.SubSequence> {
         getSize().bind { size in
@@ -282,19 +282,19 @@ public extension Gen {
 
     /// Creates a generator for a contiguous subrange of a generated collection.
     ///
-    /// Composes the input generator with `subset(of:)` via `bind`, producing
-    /// the collection's `SubSequence` type. Shrinking comes for free: `subset(of:)`
+    /// Composes the input generator with `slice(of:)` via `bind`, producing
+    /// the collection's `SubSequence` type. Shrinking comes for free: `slice(of:)`
     /// already shrinks toward shorter subranges and earlier start positions, and
     /// the inner generator shrinks its elements independently.
     ///
     /// - Parameter gen: A generator that produces a collection
     /// - Returns: A generator that produces a contiguous subrange of the generated collection
     @inlinable
-    static func sub<C: Collection>(
+    static func slice<C: Collection>(
         _ gen: ReflectiveGenerator<C>,
     ) -> ReflectiveGenerator<C.SubSequence> {
         gen.bind { collection in
-            subset(of: collection)
+            slice(of: collection)
         }
     }
 

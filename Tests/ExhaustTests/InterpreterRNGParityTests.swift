@@ -187,7 +187,7 @@ struct InterpreterRNGParityTests {
 
     @Test("Variable length array parity")
     func variableLengthArrayParity() {
-        let gen = Int.arbitrary.proliferate(with: 2 ... 5)
+        let gen = Int.arbitrary.array(length: 2 ... 5)
         let seed: UInt64 = 2222
 
         var vi = ValueInterpreter(gen, seed: seed, maxRuns: 5)

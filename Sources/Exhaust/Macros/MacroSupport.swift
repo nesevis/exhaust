@@ -24,11 +24,11 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
     ) throws -> Output? {
         var maxIterations: UInt64 = 100
         var seed: UInt64?
-        var shrinkConfig: Interpreters.ShrinkConfiguration = .fast
+        var shrinkConfig: ShrinkBudget = .fast
 
         for setting in settings {
             switch setting {
-            case let .iterations(n):
+            case let .maxIterations(n):
                 maxIterations = n
             case let .replay(s):
                 seed = s

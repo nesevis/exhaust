@@ -48,7 +48,7 @@ struct AdvancedFeatureTests {
                     // Internal node with children
                     let valueGen = Gen.lens(extract: \TestTree<Int>.value, Gen.choose(in: 1 ... 100))
                     let childrenGen = Gen.lens(extract: \TestTree<Int>.children,
-                                               treeGen(depth: depth - 1).proliferate(with: 0 ... 3))
+                                               treeGen(depth: depth - 1).array(length: 0 ... 3))
 
                     return valueGen.bind { value in
                         childrenGen.map { children in
@@ -97,14 +97,14 @@ struct AdvancedFeatureTests {
 
             // This works
             let innerGen = Gen.lens(extract: \Inner.id, Gen.choose(type: UInt.self))
-                .proliferate(with: 1 ... 1)
+                .array(length: 1 ... 1)
                 // Casting to the type needs to be the last thing in the chain
                 .map { ints in ints.map { Inner(id: $0) }}
 
             // This crashes
             let innerGen2 = Gen.lens(extract: \Inner.id, Gen.choose(type: UInt.self))
                 .map { Inner(id: $0) }
-                .proliferate(with: 1 ... 1)
+                .array(length: 1 ... 1)
 
             // Test the two type-safe approaches
             for (index, gen) in [innerGen, innerGen2].enumerated() {
@@ -161,9 +161,9 @@ struct AdvancedFeatureTests {
                         }
                 }
 
-            let graphGen = Gen.lens(extract: \TestGraph.nodes, nodeGen.proliferate(with: 5 ... 10))
+            let graphGen = Gen.lens(extract: \TestGraph.nodes, nodeGen.array(length: 5 ... 10))
                 .bind { nodes in
-                    Gen.lens(extract: \TestGraph.edges, edgeGen.proliferate(with: 3 ... 15)).map { edges in
+                    Gen.lens(extract: \TestGraph.edges, edgeGen.array(length: 3 ... 15)).map { edges in
                         // Filter edges to only include those referencing existing nodes
                         let nodeIds = Set(nodes.map(\.id))
                         let validEdges = edges.filter { edge in
@@ -236,9 +236,9 @@ struct AdvancedFeatureTests {
         func largeNestedStructures() throws {
             // Generate structures with significant nesting but reasonable memory usage
             let largeNestedGen = Int.arbitrary
-                .proliferate(with: 50 ... 50) // 50 elements
-                .proliferate(with: 10 ... 10) // 10 inner arrays
-                .proliferate(with: 2 ... 2) // 2 outer arrays
+                .array(length: 50 ... 50) // 50 elements
+                .array(length: 10 ... 10) // 10 inner arrays
+                .array(length: 2 ... 2) // 2 outer arrays
 
             var iterator = ValueInterpreter(largeNestedGen)
             let large = iterator.next()!
