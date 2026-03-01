@@ -17,4 +17,11 @@ public enum ExhaustSettings {
 
     /// The shrink configuration to use when a counterexample is found.
     case shrinkBudget(ShrinkBudget)
+
+    /// Suppresses test-framework issue reporting (`reportIssue`) on failure.
+    ///
+    /// Use this when the property test is *expected* to find a counterexample and
+    /// the test asserts on the returned value rather than relying on the framework
+    /// to record the failure.
+    case suppressIssueReporting
 }

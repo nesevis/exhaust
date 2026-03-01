@@ -22,6 +22,10 @@ struct ExhaustMacroTests {
                 personGen,
                 settings: [],
                 sourceCode: "person.age >= 0",
+                fileID: #fileID,
+                filePath: #filePath,
+                line: #line,
+                column: #column,
                 property: { person in
                 person.age >= 0
             }
@@ -44,6 +48,10 @@ struct ExhaustMacroTests {
                 personGen,
                 settings: [.maxIterations(1000), .replay(42)],
                 sourceCode: "person.age >= 0",
+                fileID: #fileID,
+                filePath: #filePath,
+                line: #line,
+                column: #column,
                 property: { person in
                 person.age >= 0
             }
@@ -64,6 +72,10 @@ struct ExhaustMacroTests {
                 personGen,
                 settings: [],
                 sourceCode: nil,
+                fileID: #fileID,
+                filePath: #filePath,
+                line: #line,
+                column: #column,
                 property: isValid
             )
             """,
@@ -82,6 +94,10 @@ struct ExhaustMacroTests {
                 personGen,
                 settings: [.maxIterations(500)],
                 sourceCode: nil,
+                fileID: #fileID,
+                filePath: #filePath,
+                line: #line,
+                column: #column,
                 property: isValid
             )
             """,

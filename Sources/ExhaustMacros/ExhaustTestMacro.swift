@@ -42,6 +42,10 @@ public struct ExhaustTestMacro: ExpressionMacro {
                 \(raw: generatorExpr),
                 settings: \(raw: settingsArray),
                 sourceCode: "\(raw: sourceCode)",
+                fileID: #fileID,
+                filePath: #filePath,
+                line: #line,
+                column: #column,
                 property: \(raw: closureText)
             )
             """
@@ -75,6 +79,10 @@ public struct ExhaustTestMacro: ExpressionMacro {
                 \(raw: generatorExpr),
                 settings: \(raw: settingsArray),
                 sourceCode: nil,
+                fileID: #fileID,
+                filePath: #filePath,
+                line: #line,
+                column: #column,
                 property: \(raw: propertyExpr)
             )
             """

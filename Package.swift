@@ -44,6 +44,8 @@ let package = Package(
         .package(url: "https://github.com/SimplyDanny/SwiftLintPlugins", from: "0.57.1"),
         .package(url: "https://github.com/swiftlang/swift-docc-plugin", from: "1.4.6"),
         .package(url: "https://github.com/swiftlang/swift-syntax.git", from: "600.0.1"),
+        .package(url: "https://github.com/pointfreeco/xctest-dynamic-overlay", from: "1.0.0"),
+        .package(url: "https://github.com/pointfreeco/swift-custom-dump", from: "1.0.0"),
     ],
     targets: [
         coreTarget,
@@ -52,6 +54,8 @@ let package = Package(
             dependencies: [
                 "ExhaustCore",
                 "ExhaustMacros",
+                .product(name: "IssueReporting", package: "xctest-dynamic-overlay"),
+                .product(name: "CustomDump", package: "swift-custom-dump"),
             ],
             plugins: [
                 .plugin(name: "SwiftLintBuildToolPlugin", package: "SwiftLintPlugins")
