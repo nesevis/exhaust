@@ -8,7 +8,7 @@
 import Foundation
 import Testing
 @testable import Exhaust
-@_spi(ExhaustInternal) @testable import ExhaustCore
+@_spi(ExhaustInternal) import ExhaustCore
 
 @Suite("Shrinking Challenge: Distinct")
 struct DistinctShrinkingChallenge {
@@ -37,7 +37,7 @@ struct DistinctShrinkingChallenge {
         let iterator = ValueAndChoiceTreeInterpreter(gen, materializePicks: true, seed: 1337)
         let (_, tree) = try #require(Array(iterator.prefix(40)).last) // 13 values
         let (_, output) = try #require(try Interpreters.reduce(gen: gen, tree: tree, config: .fast, property: property))
-        #expect(count == 94)
+        #expect(count == 86)
         #expect(output == [-1, 0, 1])
     }
 }

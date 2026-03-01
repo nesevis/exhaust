@@ -12,7 +12,7 @@
 ///
 /// ## Function reference (no source capture)
 /// ```swift
-/// let counterexample = #exhaust(personGen, .seed(42), property: isValid)
+/// let counterexample = #exhaust(personGen, .replay(42), property: isValid)
 /// ```
 ///
 /// - Returns: The shrunk counterexample if the property fails, or `nil` if all iterations pass.

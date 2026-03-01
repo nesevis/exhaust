@@ -12,7 +12,7 @@
     case floating(Double, UInt64, any BitPatternConvertible.Type)
     case character(Character)
 
-    init(_ value: any BitPatternConvertible, tag: TypeTag) {
+    @_spi(ExhaustInternal) public init(_ value: any BitPatternConvertible, tag: TypeTag) {
         switch tag {
         case .uint:
             self = .unsigned(value.bitPattern64, UInt.self)
@@ -52,7 +52,7 @@
     /// - Signed integers: 0
     /// - Floating point: 0.0
     /// - Characters: "a"
-    var semanticSimplest: ChoiceValue {
+    @_spi(ExhaustInternal) public var semanticSimplest: ChoiceValue {
         switch self {
         case let .unsigned(_, type):
             return .init(type.init(bitPattern64: 0), tag: tag)

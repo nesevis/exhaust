@@ -7,7 +7,7 @@
 
 import Testing
 @testable import Exhaust
-@_spi(ExhaustInternal) @testable import ExhaustCore
+@_spi(ExhaustInternal) import ExhaustCore
 
 @Test("Test Xoshiro against reference implementation")
 func xoshiroAgainstReference() {

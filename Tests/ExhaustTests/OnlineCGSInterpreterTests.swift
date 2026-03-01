@@ -8,7 +8,7 @@
 import Foundation
 import Testing
 @testable import Exhaust
-@_spi(ExhaustInternal) @testable import ExhaustCore
+@_spi(ExhaustInternal) import ExhaustCore
 
 // MARK: - BST Definition
 
@@ -79,7 +79,7 @@ struct OnlineCGSInterpreterTests {
         )
 
         var validTrees = [BST]()
-        while let (value, _) = iterator.next() {
+        while let value = iterator.next() {
             if isValidNonLeafBST(value) {
                 validTrees.append(value)
             }
@@ -95,78 +95,6 @@ struct OnlineCGSInterpreterTests {
         let tallTreeCount = validTrees.count { $0.height >= 2 }
         #expect(tallTreeCount > 0, "Online CGS should produce BSTs at height >= 2, got heights: \(heights)")
         #expect(uniqueTrees.count > 20, "Should produce diverse valid BSTs, got \(uniqueTrees.count) unique")
-    }
-
-    // MARK: - Choice Tree Replay
-
-    @Test("Choice tree replay reproduces the same value")
-    func choiceTreeReplay() throws {
-        let gen = Gen.pick(choices: [
-            (weight: UInt64(1), generator: Gen.choose(in: 1 ... 100)),
-            (weight: UInt64(1), generator: Gen.choose(in: 101 ... 200)),
-        ])
-        let predicate: (Int) -> Bool = { $0 <= 100 }
-
-        var iterator = OnlineCGSInterpreter(
-            gen,
-            predicate: predicate,
-            sampleCount: 30,
-            materializePicks: true,
-            seed: 42,
-            maxRuns: 10,
-        )
-
-        for _ in 0 ..< 10 {
-            guard let (value, tree) = iterator.next() else { break }
-            let sequence = ChoiceSequence.flatten(tree)
-            let replayed = try Interpreters.materialize(gen, with: tree, using: sequence)
-            #expect(replayed == value, "Replayed value \(String(describing: replayed)) should match generated value \(value)")
-        }
-    }
-
-    // MARK: - Shrinking Integration
-
-    @Test("Shrinking integration: CGS counterexample can be reduced")
-    func shrinkingIntegration() throws {
-        let gen = Gen.pick(choices: [
-            (weight: UInt64(1), generator: Gen.choose(in: 1 ... 50)),
-            (weight: UInt64(1), generator: Gen.choose(in: 51 ... 100)),
-        ])
-
-        // Property: all values should be <= 50 (branch 2 will fail)
-        let property: (Int) -> Bool = { $0 <= 50 }
-
-        var iterator = OnlineCGSInterpreter(
-            gen,
-            predicate: { _ in true }, // Predicate for generation guidance (accept all)
-            sampleCount: 20,
-            materializePicks: true,
-            seed: 42,
-            maxRuns: 100,
-        )
-
-        // Find a counterexample
-        var counterexample: (value: Int, tree: ChoiceTree)?
-        while let (value, tree) = iterator.next() {
-            if !property(value) {
-                counterexample = (value, tree)
-                break
-            }
-        }
-
-        let ce = try #require(counterexample, "Should find a counterexample")
-        #expect(ce.value > 50)
-
-        // Shrink the counterexample
-        let reduced = try Interpreters.reduce(
-            gen: gen,
-            tree: ce.tree,
-            config: .fast,
-            property: property,
-        )
-
-        let (_, shrunk) = try #require(reduced, "Shrinking should produce a result")
-        #expect(shrunk == 51, "Minimal counterexample should be 51, got \(shrunk)")
     }
 
     // MARK: - Simple Pick Guidance
@@ -187,7 +115,7 @@ struct OnlineCGSInterpreterTests {
                 seed: 42,
                 maxRuns: 200,
             ),
-        ).map(\.value)
+        )
 
         let cgsHitRate = Double(cgsValues.count(where: predicate)) / Double(cgsValues.count)
 
@@ -220,7 +148,7 @@ struct OnlineCGSInterpreterTests {
                 seed: 42,
                 maxRuns: 50,
             ),
-        ).map(\.value)
+        )
 
         let values2 = Array(
             OnlineCGSInterpreter(
@@ -230,7 +158,7 @@ struct OnlineCGSInterpreterTests {
                 seed: 42,
                 maxRuns: 50,
             ),
-        ).map(\.value)
+        )
 
         #expect(values1 == values2, "Same seed should produce identical output sequences")
     }
@@ -253,7 +181,7 @@ struct OnlineCGSInterpreterTests {
                 seed: 42,
                 maxRuns: 200,
             ),
-        ).map(\.value)
+        )
 
         let cgsHitRate = Double(cgsValues.count(where: predicate)) / Double(cgsValues.count)
 
@@ -282,7 +210,7 @@ struct OnlineCGSInterpreterTests {
                 seed: 42,
                 maxRuns: 200,
             ),
-        ).map(\.value)
+        )
 
         let hitRate = Double(cgsValues.count(where: predicate)) / Double(cgsValues.count)
 
@@ -350,7 +278,7 @@ struct OnlineCGSInterpreterTests {
                 seed: 42,
                 maxRuns: 50,
             ),
-        ).map(\.value)
+        )
 
         // Should still produce values (not crash)
         #expect(!values.isEmpty, "All-zero fallback should still produce values")

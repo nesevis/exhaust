@@ -30,7 +30,7 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
             switch setting {
             case let .iterations(n):
                 maxIterations = n
-            case let .seed(s):
+            case let .replay(s):
                 seed = s
             case let .shrinkBudget(config):
                 shrinkConfig = config
@@ -43,6 +43,7 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
             seed: seed,
             maxRuns: maxIterations,
         )
+        let actualSeed = generator.baseSeed
 
         while let (next, tree) = generator.next() {
             iterations += 1
@@ -51,6 +52,7 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
                 var failMetadata = [
                     "iteration": "\(iterations)",
                     "max_iterations": "\(maxIterations)",
+                    "seed": "\(actualSeed)",
                 ]
                 if let sourceCode {
                     failMetadata["source"] = sourceCode
@@ -64,6 +66,11 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
                     category: .propertyTest,
                     event: "counterexample",
                     "\(next)",
+                )
+                ExhaustLog.notice(
+                    category: .propertyTest,
+                    event: "reproduction_hint",
+                    "Reproduce with: .replay(\(actualSeed))",
                 )
 
                 if let (shrunkSequence, shrunkValue) = try Interpreters.reduce(

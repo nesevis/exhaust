@@ -9,7 +9,7 @@
 
 import Testing
 @testable import Exhaust
-@_spi(ExhaustInternal) @testable import ExhaustCore
+@_spi(ExhaustInternal) import ExhaustCore
 
 // MARK: - Helpers
 
@@ -189,13 +189,16 @@ struct ReducerReduceValuesTests {
     func floatReducedNaively() throws {
         let gen = Gen.choose(in: Double(0) ... 1000.0)
 
-        // Try multiple seeds to find one that generates a value > 1.0
+        // Try multiple seeds/runs to find one that generates a value > 1.0
         var foundTree: ChoiceTree?
-        for seed: UInt64 in 0 ... 100 {
-            let (value, tree) = try generate(gen, seed: seed)
-            if value > 1.0 {
-                foundTree = tree
-                break
+        outer: for seed: UInt64 in 0 ... 20 {
+            var iterator = ValueAndChoiceTreeInterpreter(gen, materializePicks: true, seed: seed)
+            for _ in 0 ..< 50 {
+                guard let (value, tree) = iterator.next() else { break }
+                if value > 1.0 {
+                    foundTree = tree
+                    break outer
+                }
             }
         }
         let tree = try #require(foundTree)

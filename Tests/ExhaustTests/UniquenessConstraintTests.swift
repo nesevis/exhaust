@@ -7,7 +7,7 @@
 
 import Testing
 @testable import Exhaust
-@_spi(ExhaustInternal) @testable import ExhaustCore
+@_spi(ExhaustInternal) import ExhaustCore
 
 @Suite("Uniqueness Constraint")
 struct UniquenessConstraintTests {
@@ -15,7 +15,8 @@ struct UniquenessConstraintTests {
 
     @Test("High-cardinality generator produces all maxRuns unique values")
     func highCardinalityProducesAllUnique() {
-        let gen = UInt64.arbitrary.unique()
+        // Use a non-size-scaled generator to avoid collisions from small sizes
+        let gen = Gen.choose(in: UInt64(0) ... UInt64.max).unique()
         let maxRuns: UInt64 = 50
         var iterator = ValueAndChoiceTreeInterpreter(
             gen,
@@ -99,7 +100,8 @@ struct UniquenessConstraintTests {
 
     @Test("ValueInterpreter with unique combinator produces unique values")
     func valueInterpreterUniqueness() {
-        let gen = UInt64.arbitrary.unique()
+        // Use a non-size-scaled generator to avoid collisions from small sizes
+        let gen = Gen.choose(in: UInt64(0) ... UInt64.max).unique()
         let seed: UInt64 = 42
         let maxRuns: UInt64 = 20
 
@@ -179,7 +181,7 @@ struct UniquenessConstraintTests {
             (1, Gen.just(1)),
             (1, Gen.just(2)),
             (1, Gen.just(3)),
-        ]).unique()
+        ]).unique(by: { AnyHashable($0) })
 
         var iterator = OnlineCGSInterpreter(
             gen,
@@ -188,14 +190,13 @@ struct UniquenessConstraintTests {
             maxRuns: 100,
         )
 
-        var sequences = Set<ChoiceSequence>()
-        while let (_, tree) = iterator.next() {
-            let seq = ChoiceSequence.flatten(tree)
-            let (inserted, _) = sequences.insert(seq)
-            #expect(inserted, "Every yielded value should have a unique choice sequence")
+        var values = Set<Int>()
+        while let value = iterator.next() {
+            let (inserted, _) = values.insert(value)
+            #expect(inserted, "Every yielded value should be unique")
         }
 
-        #expect(sequences.count == 3, "3-way pick should produce exactly 3 unique values, got \(sequences.count)")
+        #expect(values.count == 3, "3-way pick should produce exactly 3 unique values, got \(values.count)")
     }
 
     // MARK: - PropertyTest with unique combinator
@@ -205,7 +206,7 @@ struct UniquenessConstraintTests {
         let gen = Bool.arbitrary.unique()
         var seen = Set<Bool>()
 
-        try #exhaust(gen, .iterations(100), .seed(42)) { value in
+        try #exhaust(gen, .iterations(100), .replay(42)) { value in
             seen.insert(value)
             return true
         }

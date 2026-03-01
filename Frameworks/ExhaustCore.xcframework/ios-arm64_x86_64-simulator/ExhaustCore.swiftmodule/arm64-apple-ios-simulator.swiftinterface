@@ -278,7 +278,11 @@ extension ExhaustCore.FreerMonad {
         }
     }
   @inlinable public func map<NewValue>(_ transform: @escaping (Value) throws -> NewValue) rethrows -> ExhaustCore.FreerMonad<Operation, NewValue> {
-        try bind { try .pure(transform($0)) }
+        switch self {
+        case let .pure(value): try .pure(transform(value))
+        case let .impure(operation, continuation):
+            .impure(operation: operation) { try continuation($0).map(transform) }
+        }
     }
   @inlinable public func erase() -> ExhaustCore.FreerMonad<Operation, Any> {
         switch self {
@@ -286,6 +290,15 @@ extension ExhaustCore.FreerMonad {
             .pure(value as Any)
         case let .impure(operation, continuation):
             .impure(operation: operation) { try continuation($0).erase() }
+        }
+    }
+}
+extension ExhaustCore.FreerMonad {
+  @inlinable public func unsafeCast<NewValue>(to _: NewValue.Type) -> ExhaustCore.FreerMonad<Operation, NewValue> {
+        switch self {
+        case let .pure(value): .pure(value as! NewValue)
+        case let .impure(operation, continuation):
+            .impure(operation: operation) { try continuation($0).unsafeCast(to: NewValue.self) }
         }
     }
 }

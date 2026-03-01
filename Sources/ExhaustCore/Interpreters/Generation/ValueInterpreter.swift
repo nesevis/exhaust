@@ -17,19 +17,28 @@ import Foundation
         maxRuns: UInt64? = nil,
     ) {
         self.generator = generator
+        let prng = seed.map { Xoshiro256(seed: $0) } ?? Xoshiro256()
         context = .init(
             maxRuns: maxRuns ?? 100,
+            baseSeed: prng.seed,
             isFixed: false,
             size: 0,
-            prng: seed.map { Xoshiro256(seed: $0) } ?? Xoshiro256(),
+            prng: prng,
         )
     }
 
     @_spi(ExhaustInternal) public mutating func next() -> Element? {
-        guard context.size < context.maxRuns else {
+        guard context.runs < context.maxRuns else {
             return nil
         }
-        defer { context.size += context.isFixed ? 0 : 1 }
+
+        // Per-run seed derivation: each run gets an independent PRNG
+        if !context.isFixed {
+            let runSeed = GenerationContext.runSeed(base: context.baseSeed, runIndex: context.runs)
+            context.prng = Xoshiro256(seed: runSeed)
+        }
+
+        defer { context.runs += 1 }
         do {
             return try Self.generateRecursive(generator, with: (), context: &context)
         } catch GeneratorError.uniqueBudgetExhausted {
@@ -37,11 +46,11 @@ import Foundation
                 category: .generation,
                 event: "uniqueness_budget_exhausted",
                 metadata: [
-                    "unique_count": "\(context.size)",
+                    "unique_count": "\(context.runs)",
                     "requested": "\(context.maxRuns)",
                 ],
             )
-            context.size = context.maxRuns
+            context.runs = context.maxRuns
             return nil
         } catch {
             fatalError(error.localizedDescription)
@@ -53,11 +62,11 @@ import Foundation
     func fixedAtSize() -> ValueInterpreter<Element> {
         var fixed = ValueInterpreter(
             generator,
-            seed: context.prng.seed,
+            seed: context.baseSeed,
             maxRuns: context.maxRuns,
         )
         fixed.context.isFixed = true
-        fixed.context.size = context.size
+        fixed.context.runs = context.runs
         return fixed
     }
 
@@ -71,9 +80,11 @@ import Foundation
     ) throws -> Output? {
         var context = GenerationContext(
             maxRuns: maxRuns,
+            baseSeed: rng.seed,
             isFixed: false,
             size: initialSize,
             prng: rng,
+            runs: initialSize,
         )
         let result = try generateRecursive(gen, with: (), context: &context)
         rng = context.prng
@@ -152,7 +163,7 @@ import Foundation
                 return try runContinuation(value, &context)
 
             case .getSize:
-                let size = context.sizeOverride ?? GenerationContext.scaledSize(context.maxRuns, context.size)
+                let size = context.sizeOverride ?? GenerationContext.scaledSize(forRun: context.runs)
                 context.sizeOverride = nil // getSize consumes the `sizeOverride`
                 return try runContinuation(size, &context)
 
@@ -208,9 +219,11 @@ import Foundation
                         // Choice-sequence-based: need the tree to compute the sequence
                         var vactiContext = GenerationContext(
                             maxRuns: context.maxRuns,
+                            baseSeed: context.baseSeed,
                             isFixed: context.isFixed,
                             size: context.size,
                             prng: context.prng,
+                            runs: context.runs,
                         )
                         guard let (result, tree) = try ValueAndChoiceTreeInterpreter<Any>.generateRecursive(
                             gen, with: inputValue, context: &vactiContext,
@@ -359,6 +372,6 @@ import Foundation
     // MARK: - Hashable
 
     @_spi(ExhaustInternal) public func hash(into hasher: inout Hasher) {
-        hasher.combine(context.prng.seed)
+        hasher.combine(context.baseSeed)
     }
 }

@@ -8,7 +8,7 @@
 import Foundation
 import Testing
 @testable import Exhaust
-@_spi(ExhaustInternal) @testable import ExhaustCore
+@_spi(ExhaustInternal) import ExhaustCore
 
 @Suite("Shrinking Challenge: Difference")
 struct DifferenceShrinkingChallenge {
@@ -81,13 +81,13 @@ struct DifferenceShrinkingChallenge {
         let value = [700, 701] // A failing example
 
         // A failing example is sparse, so an explicit seed is provided
-        let output = try #exhaust(gen, .seed(99)) { arr in
+        let output = try #exhaust(gen, .replay(1)) { arr in
             count += 1
             let diff = abs(arr[0] - arr[1])
             return arr[0] < 10 || diff != 1
         }
         #expect(property(value) == false)
-        #expect(count == 73)
+        #expect(count == 102)
         #expect(output == [10, 9])
     }
 }

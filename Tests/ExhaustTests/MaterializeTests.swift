@@ -7,7 +7,7 @@
 
 import Testing
 @testable import Exhaust
-@_spi(ExhaustInternal) @testable import ExhaustCore
+@_spi(ExhaustInternal) import ExhaustCore
 
 @Suite("Materialize")
 struct MaterializeTests {

@@ -7,4 +7,4 @@
 
 /// Namespace for individual reducer strategy functions.
 /// Each strategy is defined in its own extension file.
-enum ReducerStrategies {}
+@_spi(ExhaustInternal) public enum ReducerStrategies {}

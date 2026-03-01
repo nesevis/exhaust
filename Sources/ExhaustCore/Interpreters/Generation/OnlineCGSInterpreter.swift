@@ -9,7 +9,7 @@ import Foundation
 
 // swiftlint:disable function_parameter_count
 
-/// Online Choice Gradient Sampling interpreter that generates values with choice trees.
+/// Online Choice Gradient Sampling interpreter that generates values directly.
 ///
 /// Unlike the eager `GeneratorTuning` tuner (which pre-computes all pick weights
 /// in a single top-down pass), this interpreter implements the paper's **online, per-value**
@@ -19,11 +19,8 @@ import Foundation
 ///
 /// This avoids diversity collapse on recursive generators because each derivative has
 /// already fixed all choices above it, making deeper sampling tractable.
-///
-/// The interpreter produces `(value, ChoiceTree)` pairs identical in structure to
-/// `ValueAndChoiceTreeInterpreter`, ensuring full compatibility with shrinking and replay.
 @_spi(ExhaustInternal) public struct OnlineCGSInterpreter<FinalOutput>: IteratorProtocol, Sequence {
-    @_spi(ExhaustInternal) public typealias Element = (value: FinalOutput, tree: ChoiceTree)
+    @_spi(ExhaustInternal) public typealias Element = FinalOutput
 
     /// A function that composes a local sub-generator with all outer continuations
     /// to produce a `FinalOutput`. This is the key mechanism for computing derivatives
@@ -36,26 +33,32 @@ import Foundation
     // CGS-specific fields
     private let predicate: (FinalOutput) -> Bool
     private let sampleCount: UInt64
-    private var samplingPRNG: Xoshiro256
+    private var cgsState: CGSState
+
+    private struct CGSState {
+        var samplingPRNG: Xoshiro256
+    }
 
     @_spi(ExhaustInternal) public init(
         _ generator: ReflectiveGenerator<FinalOutput>,
         predicate: @escaping (FinalOutput) -> Bool,
         sampleCount: UInt64 = 50,
-        materializePicks: Bool = false,
         seed: UInt64? = nil,
         maxRuns: UInt64? = nil,
     ) {
         self.generator = generator
         self.predicate = predicate
         self.sampleCount = sampleCount
-        self.samplingPRNG = seed.map { Xoshiro256(seed: $0 &+ 1) } ?? Xoshiro256()
+        let prng = seed.map { Xoshiro256(seed: $0) } ?? Xoshiro256()
+        var samplingPRNG = prng
+        samplingPRNG.jump()
+        cgsState = CGSState(samplingPRNG: samplingPRNG)
         context = .init(
             maxRuns: maxRuns ?? 100,
+            baseSeed: prng.seed,
             isFixed: false,
             size: 0,
-            prng: seed.map { Xoshiro256(seed: $0) } ?? Xoshiro256(),
-            materializePicks: materializePicks,
+            prng: prng,
         )
     }
 
@@ -67,12 +70,19 @@ import Foundation
             return nil
         }
 
-        let wrapper: DerivativeWrapper = { $0.map { $0 as! FinalOutput } }
+        // Per-run seed derivation: each run gets an independent PRNG
+        let runSeed = GenerationContext.runSeed(base: context.baseSeed, runIndex: context.runs)
+        context.prng = Xoshiro256(seed: runSeed)
+        var samplingPRNG = context.prng
+        samplingPRNG.jump()
+        cgsState.samplingPRNG = samplingPRNG
+
+        let wrapper: DerivativeWrapper = { $0.unsafeCast(to: FinalOutput.self) }
 
         defer {
-            context.size += context.isFixed ? 0 : 1
             context.runs += 1
         }
+
         do {
             return try Self.generateRecursive(
                 generator,
@@ -80,7 +90,7 @@ import Foundation
                 context: &context,
                 predicate: predicate,
                 sampleCount: sampleCount,
-                samplingPRNG: &samplingPRNG,
+                cgsState: &cgsState,
                 wrapper: wrapper,
                 insideSubdividedChooseBits: false,
             )
@@ -108,27 +118,37 @@ import Foundation
         context: inout GenerationContext,
         predicate: @escaping (FinalOutput) -> Bool,
         sampleCount: UInt64,
-        samplingPRNG: inout Xoshiro256,
+        cgsState: inout CGSState,
         wrapper: @escaping DerivativeWrapper,
         insideSubdividedChooseBits: Bool,
-    ) throws -> (Output, ChoiceTree)? {
+    ) throws -> Output? {
         switch gen {
         case let .pure(value):
-            return (value, ChoiceTree.just(String(String(describing: value).prefix(50))))
+            return value
 
         case let .impure(operation, continuation):
             switch operation {
             // MARK: - Contramap
 
             case let .contramap(_, nextGen):
-                return try handleContramap(
+                guard let result = try generateRecursive(
                     nextGen,
+                    with: inputValue,
+                    context: &context,
+                    predicate: predicate,
+                    sampleCount: sampleCount,
+                    cgsState: &cgsState,
+                    wrapper: wrapper,
+                    insideSubdividedChooseBits: insideSubdividedChooseBits,
+                ) else { return nil }
+                return try runContinuation(
+                    result: result,
                     continuation: continuation,
                     inputValue: inputValue,
                     context: &context,
                     predicate: predicate,
                     sampleCount: sampleCount,
-                    samplingPRNG: &samplingPRNG,
+                    cgsState: &cgsState,
                     wrapper: wrapper,
                     insideSubdividedChooseBits: insideSubdividedChooseBits,
                 )
@@ -136,19 +156,32 @@ import Foundation
             // MARK: - Prune
 
             case let .prune(nextGen):
-                return try handlePrune(
+                guard let wrappedValue = InterpreterWrapperHandlers.unwrapPruneInput(inputValue) else {
+                    return nil
+                }
+                guard let result = try generateRecursive(
                     nextGen,
+                    with: wrappedValue,
+                    context: &context,
+                    predicate: predicate,
+                    sampleCount: sampleCount,
+                    cgsState: &cgsState,
+                    wrapper: wrapper,
+                    insideSubdividedChooseBits: insideSubdividedChooseBits,
+                ) else { return nil }
+                return try runContinuation(
+                    result: result,
                     continuation: continuation,
                     inputValue: inputValue,
                     context: &context,
                     predicate: predicate,
                     sampleCount: sampleCount,
-                    samplingPRNG: &samplingPRNG,
+                    cgsState: &cgsState,
                     wrapper: wrapper,
                     insideSubdividedChooseBits: insideSubdividedChooseBits,
                 )
 
-            // MARK: - Pick
+            // MARK: - Pick (CGS Core)
 
             case let .pick(choices):
                 return try handlePick(
@@ -158,7 +191,7 @@ import Foundation
                     context: &context,
                     predicate: predicate,
                     sampleCount: sampleCount,
-                    samplingPRNG: &samplingPRNG,
+                    cgsState: &cgsState,
                     wrapper: wrapper,
                     insideSubdividedChooseBits: insideSubdividedChooseBits,
                 )
@@ -179,22 +212,20 @@ import Foundation
                             context: &context,
                             predicate: predicate,
                             sampleCount: sampleCount,
-                            samplingPRNG: &samplingPRNG,
+                            cgsState: &cgsState,
                             wrapper: wrapper,
                         )
                     }
                 }
-                return try handleChooseBits(
-                    min: min,
-                    max: max,
-                    tag: tag,
-                    isRangeExplicit: isRangeExplicit,
+                let randomBits = context.prng.next(in: min ... max)
+                return try runContinuation(
+                    result: randomBits,
                     continuation: continuation,
                     inputValue: inputValue,
                     context: &context,
                     predicate: predicate,
                     sampleCount: sampleCount,
-                    samplingPRNG: &samplingPRNG,
+                    cgsState: &cgsState,
                     wrapper: wrapper,
                     insideSubdividedChooseBits: insideSubdividedChooseBits,
                 )
@@ -202,15 +233,46 @@ import Foundation
             // MARK: - Sequence
 
             case let .sequence(lengthGen, elementGen):
-                return try handleSequence(
-                    lengthGen: lengthGen,
-                    elementGen: elementGen,
+                guard let length = try generateRecursive(
+                    lengthGen,
+                    with: inputValue,
+                    context: &context,
+                    predicate: predicate,
+                    sampleCount: sampleCount,
+                    cgsState: &cgsState,
+                    wrapper: wrapper,
+                    insideSubdividedChooseBits: insideSubdividedChooseBits,
+                ) else {
+                    return nil
+                }
+
+                var results: [Any] = []
+                results.reserveCapacity(Int(length))
+                let didSucceed = try SequenceExecutionKernel.run(count: length) {
+                    guard let result = try generateRecursive(
+                        elementGen,
+                        with: inputValue,
+                        context: &context,
+                        predicate: predicate,
+                        sampleCount: sampleCount,
+                        cgsState: &cgsState,
+                        wrapper: wrapper,
+                        insideSubdividedChooseBits: insideSubdividedChooseBits,
+                    ) else {
+                        return false
+                    }
+                    results.append(result)
+                    return true
+                }
+                guard didSucceed else { return nil }
+                return try runContinuation(
+                    result: results,
                     continuation: continuation,
                     inputValue: inputValue,
                     context: &context,
                     predicate: predicate,
                     sampleCount: sampleCount,
-                    samplingPRNG: &samplingPRNG,
+                    cgsState: &cgsState,
                     wrapper: wrapper,
                     insideSubdividedChooseBits: insideSubdividedChooseBits,
                 )
@@ -225,7 +287,7 @@ import Foundation
                     context: &context,
                     predicate: predicate,
                     sampleCount: sampleCount,
-                    samplingPRNG: &samplingPRNG,
+                    cgsState: &cgsState,
                     wrapper: wrapper,
                     insideSubdividedChooseBits: insideSubdividedChooseBits,
                 )
@@ -235,13 +297,12 @@ import Foundation
             case let .just(value):
                 return try runContinuation(
                     result: value,
-                    calleeChoiceTree: .just("\(value)"),
                     continuation: continuation,
                     inputValue: inputValue,
                     context: &context,
                     predicate: predicate,
                     sampleCount: sampleCount,
-                    samplingPRNG: &samplingPRNG,
+                    cgsState: &cgsState,
                     wrapper: wrapper,
                     insideSubdividedChooseBits: insideSubdividedChooseBits,
                 )
@@ -249,17 +310,16 @@ import Foundation
             // MARK: - GetSize
 
             case .getSize:
-                let size = context.sizeOverride ?? GenerationContext.scaledSize(context.maxRuns, context.runs)
+                let size = context.sizeOverride ?? GenerationContext.scaledSize(forRun: context.runs)
                 context.sizeOverride = nil
                 return try runContinuation(
                     result: size,
-                    calleeChoiceTree: .getSize(size),
                     continuation: continuation,
                     inputValue: inputValue,
                     context: &context,
                     predicate: predicate,
                     sampleCount: sampleCount,
-                    samplingPRNG: &samplingPRNG,
+                    cgsState: &cgsState,
                     wrapper: wrapper,
                     insideSubdividedChooseBits: insideSubdividedChooseBits,
                 )
@@ -267,15 +327,25 @@ import Foundation
             // MARK: - Resize
 
             case let .resize(newSize, gen):
-                return try handleResize(
-                    newSize: newSize,
-                    gen: gen,
+                context.sizeOverride = newSize
+                guard let result = try generateRecursive(
+                    gen,
+                    with: inputValue,
+                    context: &context,
+                    predicate: predicate,
+                    sampleCount: sampleCount,
+                    cgsState: &cgsState,
+                    wrapper: wrapper,
+                    insideSubdividedChooseBits: insideSubdividedChooseBits,
+                ) else { return nil }
+                return try runContinuation(
+                    result: result,
                     continuation: continuation,
                     inputValue: inputValue,
                     context: &context,
                     predicate: predicate,
                     sampleCount: sampleCount,
-                    samplingPRNG: &samplingPRNG,
+                    cgsState: &cgsState,
                     wrapper: wrapper,
                     insideSubdividedChooseBits: insideSubdividedChooseBits,
                 )
@@ -293,13 +363,13 @@ import Foundation
 
                 var attempts = 0 as UInt64
                 while attempts < GenerationContext.maxFilterRuns {
-                    guard let (result, tree) = try Self.generateRecursive(
+                    guard let result = try generateRecursive(
                         tunedGen,
                         with: inputValue,
                         context: &context,
                         predicate: predicate,
                         sampleCount: sampleCount,
-                        samplingPRNG: &samplingPRNG,
+                        cgsState: &cgsState,
                         wrapper: wrapper,
                         insideSubdividedChooseBits: insideSubdividedChooseBits,
                     ) else { return nil }
@@ -307,13 +377,12 @@ import Foundation
                     if filterPredicate(result) {
                         return try runContinuation(
                             result: result,
-                            calleeChoiceTree: tree,
                             continuation: continuation,
                             inputValue: inputValue,
                             context: &context,
                             predicate: predicate,
                             sampleCount: sampleCount,
-                            samplingPRNG: &samplingPRNG,
+                            cgsState: &cgsState,
                             wrapper: wrapper,
                             insideSubdividedChooseBits: insideSubdividedChooseBits,
                         )
@@ -325,16 +394,27 @@ import Foundation
             // MARK: - Classify
 
             case let .classify(gen, fingerprint, classifiers):
-                return try handleClassify(
+                guard let result = try generateRecursive(
                     gen,
-                    fingerprint: fingerprint,
-                    classifiers: classifiers,
+                    with: inputValue,
+                    context: &context,
+                    predicate: predicate,
+                    sampleCount: sampleCount,
+                    cgsState: &cgsState,
+                    wrapper: wrapper,
+                    insideSubdividedChooseBits: insideSubdividedChooseBits,
+                ) else { return nil }
+                for (label, classifier) in classifiers where classifier(result) {
+                    context.classifications[fingerprint, default: [:]][label, default: []].insert(context.runs)
+                }
+                return try runContinuation(
+                    result: result,
                     continuation: continuation,
                     inputValue: inputValue,
                     context: &context,
                     predicate: predicate,
                     sampleCount: sampleCount,
-                    samplingPRNG: &samplingPRNG,
+                    cgsState: &cgsState,
                     wrapper: wrapper,
                     insideSubdividedChooseBits: insideSubdividedChooseBits,
                 )
@@ -344,35 +424,36 @@ import Foundation
             case let .unique(gen, fingerprint, keyExtractor):
                 var attempts = 0 as UInt64
                 while attempts < GenerationContext.maxFilterRuns {
-                    guard let (result, tree) = try Self.generateRecursive(
+                    guard let result = try generateRecursive(
                         gen,
                         with: inputValue,
                         context: &context,
                         predicate: predicate,
                         sampleCount: sampleCount,
-                        samplingPRNG: &samplingPRNG,
+                        cgsState: &cgsState,
                         wrapper: wrapper,
                         insideSubdividedChooseBits: insideSubdividedChooseBits,
                     ) else { return nil }
 
-                    let isDuplicate = ChoiceTreeHandlers.checkDuplicate(
-                        result: result,
-                        tree: tree,
-                        fingerprint: fingerprint,
-                        keyExtractor: keyExtractor,
-                        context: &context,
-                    )
+                    let isDuplicate: Bool
+                    if let keyExtractor {
+                        let key = keyExtractor(result)
+                        isDuplicate = !context.uniqueSeenKeys[fingerprint, default: []].insert(key).inserted
+                    } else {
+                        // Without a key extractor, try AnyHashable-based dedup
+                        let key = result as? AnyHashable ?? AnyHashable(ObjectIdentifier(type(of: result)))
+                        isDuplicate = !context.uniqueSeenKeys[fingerprint, default: []].insert(key).inserted
+                    }
 
                     if !isDuplicate {
                         return try runContinuation(
                             result: result,
-                            calleeChoiceTree: tree,
                             continuation: continuation,
                             inputValue: inputValue,
                             context: &context,
                             predicate: predicate,
                             sampleCount: sampleCount,
-                            samplingPRNG: &samplingPRNG,
+                            cgsState: &cgsState,
                             wrapper: wrapper,
                             insideSubdividedChooseBits: insideSubdividedChooseBits,
                         )
@@ -389,114 +470,23 @@ import Foundation
     @inline(__always)
     private static func runContinuation<Output>(
         result: Any,
-        calleeChoiceTree: ChoiceTree,
         continuation: (Any) throws -> ReflectiveGenerator<Output>,
         inputValue: some Any,
         context: inout GenerationContext,
         predicate: @escaping (FinalOutput) -> Bool,
         sampleCount: UInt64,
-        samplingPRNG: inout Xoshiro256,
+        cgsState: inout CGSState,
         wrapper: @escaping DerivativeWrapper,
         insideSubdividedChooseBits: Bool,
-    ) throws -> (Output, ChoiceTree)? {
+    ) throws -> Output? {
         let nextGen = try continuation(result)
-
-        if calleeChoiceTree.isChoice, case let .pure(value) = nextGen {
-            return (value, calleeChoiceTree)
-        }
-        if let (continuationResult, innerChoiceTree) = try generateRecursive(
+        return try generateRecursive(
             nextGen,
             with: inputValue,
             context: &context,
             predicate: predicate,
             sampleCount: sampleCount,
-            samplingPRNG: &samplingPRNG,
-            wrapper: wrapper,
-            insideSubdividedChooseBits: insideSubdividedChooseBits,
-        ) {
-            if nextGen.isPure {
-                return (continuationResult, calleeChoiceTree)
-            } else {
-                return (continuationResult, .group([calleeChoiceTree, innerChoiceTree]))
-            }
-        }
-        return nil
-    }
-
-    // MARK: - Contramap
-
-    @inline(__always)
-    private static func handleContramap<Output>(
-        _ nextGen: ReflectiveGenerator<Any>,
-        continuation: (Any) throws -> ReflectiveGenerator<Output>,
-        inputValue: some Any,
-        context: inout GenerationContext,
-        predicate: @escaping (FinalOutput) -> Bool,
-        sampleCount: UInt64,
-        samplingPRNG: inout Xoshiro256,
-        wrapper: @escaping DerivativeWrapper,
-        insideSubdividedChooseBits: Bool,
-    ) throws -> (Output, ChoiceTree)? {
-        guard let (result, tree) = try generateRecursive(
-            nextGen,
-            with: inputValue,
-            context: &context,
-            predicate: predicate,
-            sampleCount: sampleCount,
-            samplingPRNG: &samplingPRNG,
-            wrapper: wrapper,
-            insideSubdividedChooseBits: insideSubdividedChooseBits,
-        ) else { return nil }
-        return try runContinuation(
-            result: result,
-            calleeChoiceTree: tree,
-            continuation: continuation,
-            inputValue: inputValue,
-            context: &context,
-            predicate: predicate,
-            sampleCount: sampleCount,
-            samplingPRNG: &samplingPRNG,
-            wrapper: wrapper,
-            insideSubdividedChooseBits: insideSubdividedChooseBits,
-        )
-    }
-
-    // MARK: - Prune
-
-    @inline(__always)
-    private static func handlePrune<Output>(
-        _ nextGen: ReflectiveGenerator<Any>,
-        continuation: (Any) throws -> ReflectiveGenerator<Output>,
-        inputValue: some Any,
-        context: inout GenerationContext,
-        predicate: @escaping (FinalOutput) -> Bool,
-        sampleCount: UInt64,
-        samplingPRNG: inout Xoshiro256,
-        wrapper: @escaping DerivativeWrapper,
-        insideSubdividedChooseBits: Bool,
-    ) throws -> (Output, ChoiceTree)? {
-        guard let wrappedValue = InterpreterWrapperHandlers.unwrapPruneInput(inputValue) else {
-            return nil
-        }
-        guard let (result, tree) = try Self.generateRecursive(
-            nextGen,
-            with: wrappedValue,
-            context: &context,
-            predicate: predicate,
-            sampleCount: sampleCount,
-            samplingPRNG: &samplingPRNG,
-            wrapper: wrapper,
-            insideSubdividedChooseBits: insideSubdividedChooseBits,
-        ) else { return nil }
-        return try runContinuation(
-            result: result,
-            calleeChoiceTree: tree,
-            continuation: continuation,
-            inputValue: inputValue,
-            context: &context,
-            predicate: predicate,
-            sampleCount: sampleCount,
-            samplingPRNG: &samplingPRNG,
+            cgsState: &cgsState,
             wrapper: wrapper,
             insideSubdividedChooseBits: insideSubdividedChooseBits,
         )
@@ -512,34 +502,32 @@ import Foundation
         context: inout GenerationContext,
         predicate: @escaping (FinalOutput) -> Bool,
         sampleCount: UInt64,
-        samplingPRNG: inout Xoshiro256,
+        cgsState: inout CGSState,
         wrapper: @escaping DerivativeWrapper,
         insideSubdividedChooseBits: Bool,
-    ) throws -> (Output, ChoiceTree)? {
+    ) throws -> Output? {
         // 1. Compute fitness for each choice via derivative sampling
+        let currentSize = context.sizeOverride ?? GenerationContext.scaledSize(forRun: context.runs)
         var fitnesses = ContiguousArray<UInt64>()
         fitnesses.reserveCapacity(choices.count)
 
         for choice in choices {
-            // The full derivative: compose choice's generator through continuation and outer wrapper
             let derivative = try choice.generator.bind { innerValue in
                 try continuation(innerValue).erase()
             }
             let fullDerivative: ReflectiveGenerator<FinalOutput> = try wrapper(derivative)
 
-            // Sample N times and count predicate successes.
-            // Errors during sampling (e.g., type casting failures in continuations)
-            // are treated as failed samples — not propagated.
             var successCount: UInt64 = 0
             for _ in 0 ..< sampleCount {
                 do {
-                    let result = try ValueInterpreter<FinalOutput>.generate(
+                    let result = try LightweightSampler.sample(
                         fullDerivative,
-                        maxRuns: 1,
-                        using: &samplingPRNG,
+                        using: &cgsState.samplingPRNG,
+                        size: currentSize,
                     )
                     if let value = result, predicate(value) {
                         successCount += 1
+
                     }
                 } catch {
                     // Sampling failed — count as unsuccessful
@@ -566,114 +554,39 @@ import Foundation
             return nil
         }
 
-        // Consume a PRNG value to keep parity with ValueAndChoiceTreeInterpreter
-        let jumpSeed = context.prng.next()
+        // Consume a PRNG value to keep parity with other interpreters
+        _ = context.prng.next()
 
-        // 4. Generate with CGS recursion — update wrapper for the selected branch
+        // 4. Update wrapper for the selected branch
         let branchWrapper: DerivativeWrapper = { gen in
             try wrapper(gen.bind { innerValue in
                 try continuation(innerValue).erase()
             })
         }
 
-        var branches = [ChoiceTree]()
-        branches.reserveCapacity(choices.count)
-        var finalValue: Output?
-        let branchIDs = choices.map(\.id)
-
-        for choice in choices {
-            let isSelected = choice.id == selectedChoice.id
-            var value: Output?
-            var branch: ChoiceTree?
-
-            if isSelected || context.materializePicks {
-                var branchContext = isSelected ? context : context.jump(seed: jumpSeed)
-                if let result = try generateRecursive(
-                    choice.generator,
-                    with: inputValue,
-                    context: &branchContext,
-                    predicate: predicate,
-                    sampleCount: sampleCount,
-                    samplingPRNG: &samplingPRNG,
-                    wrapper: branchWrapper,
-                    insideSubdividedChooseBits: insideSubdividedChooseBits,
-                ),
-                    let final = try runContinuation(
-                        result: result.0,
-                        calleeChoiceTree: result.1,
-                        continuation: continuation,
-                        inputValue: inputValue,
-                        context: &branchContext,
-                        predicate: predicate,
-                        sampleCount: sampleCount,
-                        samplingPRNG: &samplingPRNG,
-                        wrapper: branchWrapper,
-                        insideSubdividedChooseBits: insideSubdividedChooseBits,
-                    )
-                {
-                    value = final.0
-                    branch = ChoiceTree.branch(
-                        siteID: choice.siteID,
-                        weight: choice.weight,
-                        id: choice.id,
-                        branchIDs: branchIDs,
-                        choice: final.1,
-                    )
-                }
-                if isSelected {
-                    context = branchContext
-                }
-            }
-
-            if isSelected, let branch {
-                finalValue = value
-                branches.append(.selected(branch))
-                if context.materializePicks == false {
-                    break
-                }
-            } else if let branch {
-                branches.append(branch)
-            }
+        // 5. Recurse on selected choice's generator
+        guard let result = try generateRecursive(
+            selectedChoice.generator,
+            with: inputValue,
+            context: &context,
+            predicate: predicate,
+            sampleCount: sampleCount,
+            cgsState: &cgsState,
+            wrapper: branchWrapper,
+            insideSubdividedChooseBits: insideSubdividedChooseBits,
+        ) else {
+            return nil
         }
 
-        guard let value = finalValue else {
-            throw GeneratorError.couldNotGenerateConcomitantChoiceTree
-        }
-
-        return (value, .group(branches))
-    }
-
-    // MARK: - ChooseBits
-
-    @inline(__always)
-    private static func handleChooseBits<Output>(
-        min: UInt64,
-        max: UInt64,
-        tag: TypeTag,
-        isRangeExplicit: Bool,
-        continuation: (Any) throws -> ReflectiveGenerator<Output>,
-        inputValue: some Any,
-        context: inout GenerationContext,
-        predicate: @escaping (FinalOutput) -> Bool,
-        sampleCount: UInt64,
-        samplingPRNG: inout Xoshiro256,
-        wrapper: @escaping DerivativeWrapper,
-        insideSubdividedChooseBits: Bool,
-    ) throws -> (Output, ChoiceTree)? {
-        let randomBits = context.prng.next(in: min ... max)
-        let choiceTree = ChoiceTree.choice(
-            ChoiceValue(randomBits, tag: tag),
-            .init(validRanges: [min ... max], isRangeExplicit: isRangeExplicit),
-        )
+        // 6. Apply continuation
         return try runContinuation(
-            result: randomBits,
-            calleeChoiceTree: choiceTree,
+            result: result,
             continuation: continuation,
             inputValue: inputValue,
             context: &context,
             predicate: predicate,
             sampleCount: sampleCount,
-            samplingPRNG: &samplingPRNG,
+            cgsState: &cgsState,
             wrapper: wrapper,
             insideSubdividedChooseBits: insideSubdividedChooseBits,
         )
@@ -683,8 +596,7 @@ import Foundation
 
     /// Subdivides a `chooseBits` range into subranges, uses CGS derivative sampling
     /// to select a subrange weighted by fitness, then generates a random value within
-    /// the selected subrange. The choice tree produced is a normal `ChoiceTree.choice(...)`
-    /// with the original full range, ensuring replay compatibility with the original generator.
+    /// the selected subrange.
     private static func handleChooseBitsSubdivision<Output>(
         min: UInt64,
         max: UInt64,
@@ -695,12 +607,13 @@ import Foundation
         context: inout GenerationContext,
         predicate: @escaping (FinalOutput) -> Bool,
         sampleCount: UInt64,
-        samplingPRNG: inout Xoshiro256,
+        cgsState: inout CGSState,
         wrapper: @escaping DerivativeWrapper,
-    ) throws -> (Output, ChoiceTree)? {
+    ) throws -> Output? {
         let rangeSize = max - min + 1
         let subrangeCount = Swift.min(4, Int(Swift.min(rangeSize, UInt64(Int.max))))
         let subranges = (min ... max).split(into: subrangeCount)
+        let currentSize = context.sizeOverride ?? GenerationContext.scaledSize(forRun: context.runs)
 
         // Compute fitness for each subrange via derivative sampling
         var fitnesses = [UInt64]()
@@ -716,7 +629,6 @@ import Foundation
                 ),
                 continuation: { .pure($0) },
             )
-            // Full derivative: subrange chooseBits → continuation → outer wrapper
             let derivative = try subGen.bind { innerValue in
                 try continuation(innerValue).erase()
             }
@@ -725,13 +637,14 @@ import Foundation
             var successCount: UInt64 = 0
             for _ in 0 ..< sampleCount {
                 do {
-                    let result = try ValueInterpreter<FinalOutput>.generate(
+                    let result = try LightweightSampler.sample(
                         fullDerivative,
-                        maxRuns: 1,
-                        using: &samplingPRNG,
+                        using: &cgsState.samplingPRNG,
+                        size: currentSize,
                     )
                     if let value = result, predicate(value) {
                         successCount += 1
+
                     }
                 } catch {
                     // Sampling failed — count as unsuccessful
@@ -749,7 +662,7 @@ import Foundation
                 siteID: 0,
                 id: UInt64(i),
                 weight: allZero ? 1 : fitnesses[i],
-                generator: .pure(subrange.lowerBound), // Placeholder — only weight and id matter
+                generator: .pure(subrange.lowerBound),
             ))
         }
 
@@ -758,104 +671,19 @@ import Foundation
         }
         let selectedSubrange = subranges[Int(selected.id)]
 
-        // Generate a random value within the selected subrange
         let randomBits = context.prng.next(in: selectedSubrange)
-
-        // Produce a choice tree with the ORIGINAL full range for replay compatibility
-        let choiceTree = ChoiceTree.choice(
-            ChoiceValue(randomBits, tag: tag),
-            .init(validRanges: [min ... max], isRangeExplicit: isRangeExplicit),
-        )
 
         return try runContinuation(
             result: randomBits,
-            calleeChoiceTree: choiceTree,
             continuation: continuation,
             inputValue: inputValue,
             context: &context,
             predicate: predicate,
             sampleCount: sampleCount,
-            samplingPRNG: &samplingPRNG,
+            cgsState: &cgsState,
             wrapper: wrapper,
             insideSubdividedChooseBits: false,
         )
-    }
-
-    // MARK: - Sequence
-
-    @inline(__always)
-    private static func handleSequence<Output>(
-        lengthGen: ReflectiveGenerator<UInt64>,
-        elementGen: ReflectiveGenerator<Any>,
-        continuation: (Any) throws -> ReflectiveGenerator<Output>,
-        inputValue: some Any,
-        context: inout GenerationContext,
-        predicate: @escaping (FinalOutput) -> Bool,
-        sampleCount: UInt64,
-        samplingPRNG: inout Xoshiro256,
-        wrapper: @escaping DerivativeWrapper,
-        insideSubdividedChooseBits: Bool,
-    ) throws -> (Output, ChoiceTree)? {
-        guard let (length, lengthTrees) = try generateRecursive(
-            lengthGen,
-            with: inputValue,
-            context: &context,
-            predicate: predicate,
-            sampleCount: sampleCount,
-            samplingPRNG: &samplingPRNG,
-            wrapper: wrapper,
-            insideSubdividedChooseBits: insideSubdividedChooseBits,
-        ) else {
-            return nil
-        }
-
-        var results: [Any] = []
-        var elements: [ChoiceTree] = []
-        results.reserveCapacity(Int(length))
-        elements.reserveCapacity(Int(length))
-
-        let didSucceed = try SequenceExecutionKernel.run(count: length) {
-            guard let (result, element) = try generateRecursive(
-                elementGen,
-                with: inputValue,
-                context: &context,
-                predicate: predicate,
-                sampleCount: sampleCount,
-                samplingPRNG: &samplingPRNG,
-                wrapper: wrapper,
-                insideSubdividedChooseBits: insideSubdividedChooseBits,
-            ) else {
-                return false
-            }
-            results.append(result)
-            elements.append(element)
-            return true
-        }
-        guard didSucceed else {
-            return nil
-        }
-
-        let choiceTree = ChoiceTree.sequence(
-            length: length,
-            elements: elements,
-            lengthTrees.metadata,
-        )
-
-        if let (result, _) = try runContinuation(
-            result: results,
-            calleeChoiceTree: choiceTree,
-            continuation: continuation,
-            inputValue: inputValue,
-            context: &context,
-            predicate: predicate,
-            sampleCount: sampleCount,
-            samplingPRNG: &samplingPRNG,
-            wrapper: wrapper,
-            insideSubdividedChooseBits: insideSubdividedChooseBits,
-        ) {
-            return (result, choiceTree)
-        }
-        return nil
     }
 
     // MARK: - Zip
@@ -868,18 +696,14 @@ import Foundation
         context: inout GenerationContext,
         predicate: @escaping (FinalOutput) -> Bool,
         sampleCount: UInt64,
-        samplingPRNG: inout Xoshiro256,
+        cgsState: inout CGSState,
         wrapper: @escaping DerivativeWrapper,
         insideSubdividedChooseBits: Bool,
-    ) throws -> (Output, ChoiceTree)? {
+    ) throws -> Output? {
         var results = [Any]()
         results.reserveCapacity(generators.count)
-        var choiceTrees = [ChoiceTree]()
-        choiceTrees.reserveCapacity(generators.count)
 
         for (i, gen) in generators.enumerated() {
-            // Build wrapper for this component: fixes previously generated components,
-            // leaves later components as-is for random sampling through the derivative.
             let previousResults = results
             let componentWrapper: DerivativeWrapper = { componentGen in
                 let zipGen: ReflectiveGenerator<Any> = componentGen.bind { componentResult in
@@ -904,115 +728,28 @@ import Foundation
                 })
             }
 
-            guard let (result, tree) = try generateRecursive(
+            guard let result = try generateRecursive(
                 gen,
                 with: inputValue,
                 context: &context,
                 predicate: predicate,
                 sampleCount: sampleCount,
-                samplingPRNG: &samplingPRNG,
+                cgsState: &cgsState,
                 wrapper: componentWrapper,
                 insideSubdividedChooseBits: insideSubdividedChooseBits,
             ) else {
                 throw GeneratorError.couldNotGenerateConcomitantChoiceTree
             }
             results.append(result)
-            choiceTrees.append(tree)
         }
         return try runContinuation(
             result: results,
-            calleeChoiceTree: .group(choiceTrees),
             continuation: continuation,
             inputValue: inputValue,
             context: &context,
             predicate: predicate,
             sampleCount: sampleCount,
-            samplingPRNG: &samplingPRNG,
-            wrapper: wrapper,
-            insideSubdividedChooseBits: insideSubdividedChooseBits,
-        )
-    }
-
-    // MARK: - Resize
-
-    @inline(__always)
-    private static func handleResize<Output>(
-        newSize: UInt64,
-        gen: ReflectiveGenerator<Any>,
-        continuation: (Any) throws -> ReflectiveGenerator<Output>,
-        inputValue: some Any,
-        context: inout GenerationContext,
-        predicate: @escaping (FinalOutput) -> Bool,
-        sampleCount: UInt64,
-        samplingPRNG: inout Xoshiro256,
-        wrapper: @escaping DerivativeWrapper,
-        insideSubdividedChooseBits: Bool,
-    ) throws -> (Output, ChoiceTree)? {
-        context.sizeOverride = newSize
-        guard let result = try generateRecursive(
-            gen,
-            with: inputValue,
-            context: &context,
-            predicate: predicate,
-            sampleCount: sampleCount,
-            samplingPRNG: &samplingPRNG,
-            wrapper: wrapper,
-            insideSubdividedChooseBits: insideSubdividedChooseBits,
-        ) else {
-            return nil
-        }
-        return try runContinuation(
-            result: result.0,
-            calleeChoiceTree: .resize(newSize: newSize, choices: [result.1]),
-            continuation: continuation,
-            inputValue: inputValue,
-            context: &context,
-            predicate: predicate,
-            sampleCount: sampleCount,
-            samplingPRNG: &samplingPRNG,
-            wrapper: wrapper,
-            insideSubdividedChooseBits: insideSubdividedChooseBits,
-        )
-    }
-
-    // MARK: - Classify
-
-    @inline(__always)
-    private static func handleClassify<Output>(
-        _ gen: ReflectiveGenerator<Any>,
-        fingerprint: UInt64,
-        classifiers: [(label: String, predicate: (Any) -> Bool)],
-        continuation: (Any) throws -> ReflectiveGenerator<Output>,
-        inputValue: some Any,
-        context: inout GenerationContext,
-        predicate: @escaping (FinalOutput) -> Bool,
-        sampleCount: UInt64,
-        samplingPRNG: inout Xoshiro256,
-        wrapper: @escaping DerivativeWrapper,
-        insideSubdividedChooseBits: Bool,
-    ) throws -> (Output, ChoiceTree)? {
-        guard let (result, tree) = try generateRecursive(
-            gen,
-            with: inputValue,
-            context: &context,
-            predicate: predicate,
-            sampleCount: sampleCount,
-            samplingPRNG: &samplingPRNG,
-            wrapper: wrapper,
-            insideSubdividedChooseBits: insideSubdividedChooseBits,
-        ) else { return nil }
-        for (label, classifier) in classifiers where classifier(result) {
-            context.classifications[fingerprint, default: [:]][label, default: []].insert(context.runs)
-        }
-        return try runContinuation(
-            result: result,
-            calleeChoiceTree: tree,
-            continuation: continuation,
-            inputValue: inputValue,
-            context: &context,
-            predicate: predicate,
-            sampleCount: sampleCount,
-            samplingPRNG: &samplingPRNG,
+            cgsState: &cgsState,
             wrapper: wrapper,
             insideSubdividedChooseBits: insideSubdividedChooseBits,
         )

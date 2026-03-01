@@ -63,7 +63,7 @@ extension ChoiceTree {
         return false
     }
 
-    var isSelected: Bool {
+    @_spi(ExhaustInternal) public var isSelected: Bool {
         if case .selected = self {
             return true
         }
@@ -86,7 +86,7 @@ extension ChoiceTree {
 
     /// Whether this tree contains any pick sites (`.branch` nodes).
     /// Short-circuits on the first pick found.
-    var containsPicks: Bool {
+    @_spi(ExhaustInternal) public var containsPicks: Bool {
         switch self {
         case .branch:
             true
@@ -330,7 +330,7 @@ extension ChoiceTree: CustomDebugStringConvertible {
     }
 
     /// Recursively unwraps wrapper nodes (selected, important) to get to the core content
-    var unwrapped: ChoiceTree {
+    @_spi(ExhaustInternal) public var unwrapped: ChoiceTree {
         switch self {
         case let .selected(inner):
             inner.unwrapped

@@ -278,7 +278,11 @@ extension ExhaustCore.FreerMonad {
         }
     }
   @inlinable public func map<NewValue>(_ transform: @escaping (Value) throws -> NewValue) rethrows -> ExhaustCore.FreerMonad<Operation, NewValue> {
-        try bind { try .pure(transform($0)) }
+        switch self {
+        case let .pure(value): try .pure(transform(value))
+        case let .impure(operation, continuation):
+            .impure(operation: operation) { try continuation($0).map(transform) }
+        }
     }
   @inlinable public func erase() -> ExhaustCore.FreerMonad<Operation, Any> {
         switch self {
@@ -286,6 +290,15 @@ extension ExhaustCore.FreerMonad {
             .pure(value as Any)
         case let .impure(operation, continuation):
             .impure(operation: operation) { try continuation($0).erase() }
+        }
+    }
+}
+extension ExhaustCore.FreerMonad {
+  @inlinable public func unsafeCast<NewValue>(to _: NewValue.Type) -> ExhaustCore.FreerMonad<Operation, NewValue> {
+        switch self {
+        case let .pure(value): .pure(value as! NewValue)
+        case let .impure(operation, continuation):
+            .impure(operation: operation) { try continuation($0).unsafeCast(to: NewValue.self) }
         }
     }
 }
@@ -420,6 +433,15 @@ extension ExhaustCore.TypeTag : Swift.CustomStringConvertible {
   }
   @_spi(ExhaustInternal) public func walk() -> ExhaustCore.ChoiceTreeWalker
 }
+@_spi(ExhaustInternal) extension ExhaustCore.ChoiceValue {
+  @_spi(ExhaustInternal) public var bitPattern64: Swift.UInt64 {
+    @_spi(ExhaustInternal) get
+  }
+  @_spi(ExhaustInternal) public var shortlexKey: Swift.UInt64 {
+    @_spi(ExhaustInternal) get
+  }
+  @_spi(ExhaustInternal) public func reductionTarget(in ranges: [Swift.ClosedRange<Swift.UInt64>]) -> Swift.UInt64
+}
 @_spi(ExhaustInternal) extension Swift.ClosedRange where Bound : Swift.Strideable {
   @_spi(ExhaustInternal) public var asRange: Swift.Range<Bound> {
     @_spi(ExhaustInternal) get
@@ -445,10 +467,48 @@ extension Swift.Sequence {
   }
   #endif
 }
-@_spi(ExhaustInternal) public struct OnlineCGSInterpreter<FinalOutput> : Swift.IteratorProtocol, Swift.Sequence {
-  @_spi(ExhaustInternal) public typealias Element = (value: FinalOutput, tree: ExhaustCore.ChoiceTree)
+@_spi(ExhaustInternal) public enum GeneratorTuning {
   #if compiler(>=5.3) && $NonescapableTypes
-  @_spi(ExhaustInternal) public init(_ generator: ExhaustCore.ReflectiveGenerator<FinalOutput>, predicate: @escaping (FinalOutput) -> Swift.Bool, sampleCount: Swift.UInt64 = 50, materializePicks: Swift.Bool = false, seed: Swift.UInt64? = nil, maxRuns: Swift.UInt64? = nil)
+  @_spi(ExhaustInternal) public static func probeAndTune<Output>(_ generator: ExhaustCore.ReflectiveGenerator<Output>, probeSeed: Swift.UInt64 = 0, probeRuns: Swift.UInt64 = 10, minPerChoice: Swift.UInt64 = 30, maxSamples: Swift.UInt64 = 5000, maxRuns: Swift.UInt64? = nil, maxSize: Swift.UInt64 = 100, seed: Swift.UInt64? = nil, predicate: @escaping (Output) -> Swift.Bool) throws -> ExhaustCore.ReflectiveGenerator<Output>
+  #endif
+  #if compiler(>=5.3) && $NonescapableTypes
+  @_spi(ExhaustInternal) public static func tune<Output>(_ generator: ExhaustCore.ReflectiveGenerator<Output>, samples: Swift.UInt64 = 100, maxSize: Swift.UInt64 = 100, seed: Swift.UInt64? = nil, predicate: @escaping (Output) -> Swift.Bool) throws -> ExhaustCore.ReflectiveGenerator<Output>
+  #endif
+  @_spi(ExhaustInternal) public static func smooth<Output>(_ generator: ExhaustCore.ReflectiveGenerator<Output>, epsilon: Swift.Double = 1.0, temperature: Swift.Double = 2.0) -> ExhaustCore.ReflectiveGenerator<Output>
+  @_spi(ExhaustInternal) public struct SiteStats : Swift.CustomStringConvertible {
+    @_spi(ExhaustInternal) public let siteID: Swift.UInt64
+    @_spi(ExhaustInternal) public let depth: Swift.Int
+    @_spi(ExhaustInternal) public let branchCount: Swift.Int
+    @_spi(ExhaustInternal) public let weights: [Swift.UInt64]
+    @_spi(ExhaustInternal) public let entropy: Swift.Double
+    @_spi(ExhaustInternal) public let maxEntropy: Swift.Double
+    @_spi(ExhaustInternal) public let entropyRatio: Swift.Double
+    @_spi(ExhaustInternal) public let selectionCounts: [Swift.UInt64 : Swift.Int]?
+    @_spi(ExhaustInternal) public let validityCounts: [Swift.UInt64 : (selected: Swift.Int, valid: Swift.Int)]?
+    @_spi(ExhaustInternal) public var description: Swift.String {
+      @_spi(ExhaustInternal) get
+    }
+  }
+  @_spi(ExhaustInternal) public struct PickSiteProfile : Swift.CustomStringConvertible {
+    @_spi(ExhaustInternal) public let sites: [ExhaustCore.GeneratorTuning.SiteStats]
+    @_spi(ExhaustInternal) public var description: Swift.String {
+      @_spi(ExhaustInternal) get
+    }
+  }
+  @_spi(ExhaustInternal) public static func profile(_ generator: ExhaustCore.ReflectiveGenerator<some Any>) -> ExhaustCore.GeneratorTuning.PickSiteProfile
+  #if compiler(>=5.3) && $NonescapableTypes
+  @_spi(ExhaustInternal) public static func profile<Output>(_ generator: ExhaustCore.ReflectiveGenerator<Output>, predicate: @escaping (Output) -> Swift.Bool, samples: Swift.UInt64 = 1000, seed: Swift.UInt64? = nil) -> ExhaustCore.GeneratorTuning.PickSiteProfile
+  #endif
+  @_spi(ExhaustInternal) public static func smoothAdaptively<Output>(_ generator: ExhaustCore.ReflectiveGenerator<Output>, epsilon: Swift.Double = 1.0, baseTemperature: Swift.Double = 1.0, maxTemperature: Swift.Double = 4.0) -> ExhaustCore.ReflectiveGenerator<Output>
+}
+@_spi(ExhaustInternal) public struct GenerationContext {
+  @_spi(ExhaustInternal) public static func scaledSize(forRun runIndex: Swift.UInt64) -> Swift.UInt64
+  @_spi(ExhaustInternal) public static func runSeed(base: Swift.UInt64, runIndex: Swift.UInt64) -> Swift.UInt64
+}
+@_spi(ExhaustInternal) public struct OnlineCGSInterpreter<FinalOutput> : Swift.IteratorProtocol, Swift.Sequence {
+  @_spi(ExhaustInternal) public typealias Element = FinalOutput
+  #if compiler(>=5.3) && $NonescapableTypes
+  @_spi(ExhaustInternal) public init(_ generator: ExhaustCore.ReflectiveGenerator<FinalOutput>, predicate: @escaping (FinalOutput) -> Swift.Bool, sampleCount: Swift.UInt64 = 50, seed: Swift.UInt64? = nil, maxRuns: Swift.UInt64? = nil)
   #endif
   #if compiler(>=5.3) && $NonescapableTypes
   @_spi(ExhaustInternal) public mutating func next() -> ExhaustCore.OnlineCGSInterpreter<FinalOutput>.Element?
@@ -460,6 +520,9 @@ extension Swift.Sequence {
   #if compiler(>=5.3) && $NonescapableTypes
   @_spi(ExhaustInternal) public init(_ generator: ExhaustCore.ReflectiveGenerator<FinalOutput>, materializePicks: Swift.Bool = false, seed: Swift.UInt64? = nil, maxRuns: Swift.UInt64? = nil)
   #endif
+  @_spi(ExhaustInternal) public var baseSeed: Swift.UInt64 {
+    @_spi(ExhaustInternal) get
+  }
   #if compiler(>=5.3) && $NonescapableTypes
   @_spi(ExhaustInternal) public mutating func next() -> ExhaustCore.ValueAndChoiceTreeInterpreter<FinalOutput>.Element?
   #endif
@@ -488,6 +551,18 @@ extension ExhaustCore.Interpreters {
   #if compiler(>=5.3) && $NonescapableTypes
   @_spi(ExhaustInternal) public static func reduce<Output>(gen: ExhaustCore.ReflectiveGenerator<Output>, tree: ExhaustCore.ChoiceTree, config: ExhaustCore.Interpreters.ShrinkConfiguration, property: (Output) -> Swift.Bool) throws -> (ExhaustCore.ChoiceSequence, Output)?
   #endif
+}
+@_spi(ExhaustInternal) extension ExhaustCore.ReducerStrategies {
+  #if compiler(>=5.3) && $NonescapableTypes
+  @_spi(ExhaustInternal) public static func pivotBranches<Output>(_ gen: ExhaustCore.ReflectiveGenerator<Output>, tree: ExhaustCore.ChoiceTree, property: (Output) -> Swift.Bool, sequence: ExhaustCore.ChoiceSequence, rejectCache: inout ExhaustCore.ReducerCache) throws -> (ExhaustCore.ChoiceTree, ExhaustCore.ChoiceSequence, Output)?
+  #endif
+}
+@_spi(ExhaustInternal) extension ExhaustCore.ReducerStrategies {
+  #if compiler(>=5.3) && $NonescapableTypes
+  @_spi(ExhaustInternal) public static func promoteBranches<Output>(_ gen: ExhaustCore.ReflectiveGenerator<Output>, tree: ExhaustCore.ChoiceTree, property: (Output) -> Swift.Bool, sequence: ExhaustCore.ChoiceSequence, rejectCache: inout ExhaustCore.ReducerCache) throws -> (ExhaustCore.ChoiceTree, ExhaustCore.ChoiceSequence, Output)?
+  #endif
+}
+@_spi(ExhaustInternal) public enum ReducerStrategies {
 }
 public enum Interpreters {
   #if compiler(>=5.3) && $NonescapableTypes
@@ -621,11 +696,14 @@ extension ExhaustCore.Interpreters {
   }
   @_spi(ExhaustInternal) public init(_ tree: ExhaustCore.ChoiceTree)
   @_spi(ExhaustInternal) public static func flatten(_ tree: ExhaustCore.ChoiceTree, includingAllBranches: Swift.Bool = false) -> ExhaustCore.ChoiceSequence
+  @_spi(ExhaustInternal) public static func validate(_ sequence: ExhaustCore.ChoiceSequence) -> Swift.Bool
   @_spi(ExhaustInternal) public static func extractContainerSpans(from sequence: ExhaustCore.ChoiceSequence) -> [ExhaustCore.ChoiceSpan]
   @_spi(ExhaustInternal) public static func extractDescendantGroupSpans(from sequence: ExhaustCore.ChoiceSequence, in range: Swift.ClosedRange<Swift.Int>) -> [ExhaustCore.ChoiceSpan]
   @_spi(ExhaustInternal) public static func extractSequenceBoundarySpans(from sequence: ExhaustCore.ChoiceSequence) -> [ExhaustCore.ChoiceSpan]
   @_spi(ExhaustInternal) public static func extractAllValueSpans(from sequence: ExhaustCore.ChoiceSequence) -> [ExhaustCore.ChoiceSpan]
   @_spi(ExhaustInternal) public static func extractFreeStandingValueSpans(from sequence: ExhaustCore.ChoiceSequence) -> [ExhaustCore.ChoiceSpan]
+  @_spi(ExhaustInternal) public static func extractSiblingGroups(from sequence: ExhaustCore.ChoiceSequence) -> [ExhaustCore.SiblingGroup]
+  @_spi(ExhaustInternal) public func shortLexPrecedes(_ other: ExhaustCore.ChoiceSequence) -> Swift.Bool
 }
 @_spi(ExhaustInternal) public enum ChoiceSequenceValue : Swift.Hashable, Swift.Equatable, Swift.Sendable {
   @_spi(ExhaustInternal) case group(Swift.Bool)
@@ -635,6 +713,8 @@ extension ExhaustCore.Interpreters {
   @_spi(ExhaustInternal) case reduced(ExhaustCore.ChoiceSequenceValue.Value)
   @_spi(ExhaustInternal) public func shortLexCompare(_ other: ExhaustCore.ChoiceSequenceValue) -> ExhaustCore.ShortlexOrder
   @_spi(ExhaustInternal) public struct Branch : Swift.Hashable, Swift.Equatable, Swift.Sendable {
+    @_spi(ExhaustInternal) public let id: Swift.UInt64
+    @_spi(ExhaustInternal) public let validIDs: [Swift.UInt64]
     @_spi(ExhaustInternal) public init(id: Swift.UInt64, validIDs: [Swift.UInt64])
     @_spi(ExhaustInternal) public static func == (a: ExhaustCore.ChoiceSequenceValue.Branch, b: ExhaustCore.ChoiceSequenceValue.Branch) -> Swift.Bool
     @_spi(ExhaustInternal) public func hash(into hasher: inout Swift.Hasher)
@@ -643,6 +723,9 @@ extension ExhaustCore.Interpreters {
     }
   }
   @_spi(ExhaustInternal) public struct Value : Swift.Hashable, Swift.Equatable, Swift.Sendable {
+    @_spi(ExhaustInternal) public let choice: ExhaustCore.ChoiceValue
+    @_spi(ExhaustInternal) public let validRanges: [Swift.ClosedRange<Swift.UInt64>]
+    @_spi(ExhaustInternal) public let isRangeExplicit: Swift.Bool
     @_spi(ExhaustInternal) public init(choice: ExhaustCore.ChoiceValue, validRanges: [Swift.ClosedRange<Swift.UInt64>], isRangeExplicit: Swift.Bool = false)
     @_spi(ExhaustInternal) public func hash(into hasher: inout Swift.Hasher)
     @_spi(ExhaustInternal) public static func == (a: ExhaustCore.ChoiceSequenceValue.Value, b: ExhaustCore.ChoiceSequenceValue.Value) -> Swift.Bool
@@ -671,8 +754,19 @@ extension ExhaustCore.Interpreters {
     @_spi(ExhaustInternal) get
   }
 }
+@_spi(ExhaustInternal) extension ExhaustCore.ChoiceTree {
+  @_spi(ExhaustInternal) public var isSelected: Swift.Bool {
+    @_spi(ExhaustInternal) get
+  }
+  @_spi(ExhaustInternal) public var containsPicks: Swift.Bool {
+    @_spi(ExhaustInternal) get
+  }
+}
 @_spi(ExhaustInternal) extension ExhaustCore.ChoiceTree : Swift.CustomDebugStringConvertible {
   @_spi(ExhaustInternal) public var debugDescription: Swift.String {
+    @_spi(ExhaustInternal) get
+  }
+  @_spi(ExhaustInternal) public var unwrapped: ExhaustCore.ChoiceTree {
     @_spi(ExhaustInternal) get
   }
 }
@@ -681,6 +775,10 @@ extension ExhaustCore.Interpreters {
   @_spi(ExhaustInternal) case signed(Swift.Int64, Swift.UInt64, any ExhaustCore.BitPatternConvertible.Type)
   @_spi(ExhaustInternal) case floating(Swift.Double, Swift.UInt64, any ExhaustCore.BitPatternConvertible.Type)
   @_spi(ExhaustInternal) case character(Swift.Character)
+  @_spi(ExhaustInternal) public init(_ value: any ExhaustCore.BitPatternConvertible, tag: ExhaustCore.TypeTag)
+  @_spi(ExhaustInternal) public var semanticSimplest: ExhaustCore.ChoiceValue {
+    @_spi(ExhaustInternal) get
+  }
   @_spi(ExhaustInternal) public var convertible: any ExhaustCore.BitPatternConvertible {
     @_spi(ExhaustInternal) get
   }
@@ -808,9 +906,30 @@ public enum GeneratorError : Foundation.LocalizedError {
   case sparseValidityCondition
   case uniqueBudgetExhausted
 }
+@_spi(ExhaustInternal) public struct ReducerCache {
+  @_spi(ExhaustInternal) public init()
+  @_spi(ExhaustInternal) public func contains(_ value: ExhaustCore.ChoiceSequence) -> Swift.Bool
+  @_spi(ExhaustInternal) public mutating func insert(_ value: ExhaustCore.ChoiceSequence)
+}
 @_spi(ExhaustInternal) public enum ShortlexOrder : Swift.Equatable, Swift.Hashable {
   @_spi(ExhaustInternal) case lt, eq, gt
   @_spi(ExhaustInternal) public static func == (a: ExhaustCore.ShortlexOrder, b: ExhaustCore.ShortlexOrder) -> Swift.Bool
+  @_spi(ExhaustInternal) public func hash(into hasher: inout Swift.Hasher)
+  @_spi(ExhaustInternal) public var hashValue: Swift.Int {
+    @_spi(ExhaustInternal) get
+  }
+}
+@_spi(ExhaustInternal) public struct SiblingGroup : Swift.Equatable {
+  @_spi(ExhaustInternal) public let ranges: [Swift.ClosedRange<Swift.Int>]
+  @_spi(ExhaustInternal) public let depth: Swift.Int
+  @_spi(ExhaustInternal) public let kind: ExhaustCore.SiblingChildKind
+  @_spi(ExhaustInternal) public static func == (a: ExhaustCore.SiblingGroup, b: ExhaustCore.SiblingGroup) -> Swift.Bool
+}
+@_spi(ExhaustInternal) public enum SiblingChildKind : Swift.Equatable {
+  @_spi(ExhaustInternal) case bareValue
+  @_spi(ExhaustInternal) case sequence
+  @_spi(ExhaustInternal) case group
+  @_spi(ExhaustInternal) public static func == (a: ExhaustCore.SiblingChildKind, b: ExhaustCore.SiblingChildKind) -> Swift.Bool
   @_spi(ExhaustInternal) public func hash(into hasher: inout Swift.Hasher)
   @_spi(ExhaustInternal) public var hashValue: Swift.Int {
     @_spi(ExhaustInternal) get
@@ -912,6 +1031,7 @@ public enum ExhaustLog {
 extension ExhaustCore.Interpreters.ShrinkConfiguration : Swift.Equatable {}
 extension ExhaustCore.Interpreters.ShrinkConfiguration : Swift.Hashable {}
 @_spi(ExhaustInternal) extension ExhaustCore.Interpreters.Strictness : Swift.Hashable {}
+@_spi(ExhaustInternal) extension ExhaustCore.SiblingChildKind : Swift.Hashable {}
 extension ExhaustCore.ExhaustLog.Level : Swift.Hashable {}
 extension ExhaustCore.ExhaustLog.Level : Swift.RawRepresentable {}
 extension ExhaustCore.ExhaustLog.Category : Swift.RawRepresentable {}

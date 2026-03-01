@@ -35,14 +35,14 @@ struct ExhaustMacroTests {
     func exhaustWithSettings() {
         assertMacroExpansion(
             """
-            #exhaust(personGen, .iterations(1000), .seed(42)) { person in
+            #exhaust(personGen, .iterations(1000), .replay(42)) { person in
                 person.age >= 0
             }
             """,
             expandedSource: """
             __ExhaustRuntime.__exhaust(
                 personGen,
-                settings: [.iterations(1000), .seed(42)],
+                settings: [.iterations(1000), .replay(42)],
                 sourceCode: "person.age >= 0",
                 property: { person in
                 person.age >= 0
