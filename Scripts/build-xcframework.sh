@@ -142,3 +142,21 @@ echo "==> Done: ${OUTPUT_DIR}/ExhaustCore.xcframework"
 echo ""
 echo "Contents:"
 find "${OUTPUT_DIR}/ExhaustCore.xcframework" -type f | sort | sed "s|${OUTPUT_DIR}/||"
+
+# ---------- Zip & checksum for SPM distribution ----------
+
+ZIP_PATH="${OUTPUT_DIR}/ExhaustCore.xcframework.zip"
+echo ""
+echo "==> Creating zip archive for SPM distribution"
+rm -f "${ZIP_PATH}"
+(cd "${OUTPUT_DIR}" && zip -r -q "ExhaustCore.xcframework.zip" "ExhaustCore.xcframework")
+
+CHECKSUM=$(swift package compute-checksum "${ZIP_PATH}")
+echo "==> Checksum: ${CHECKSUM}"
+echo ""
+echo "SPM binary target:"
+echo "  .binaryTarget("
+echo "      name: \"ExhaustCore\","
+echo "      url: \"<RELEASE_URL>/ExhaustCore.xcframework.zip\","
+echo "      checksum: \"${CHECKSUM}\""
+echo "  )"
