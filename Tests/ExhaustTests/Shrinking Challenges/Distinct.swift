@@ -29,6 +29,6 @@ struct DistinctShrinkingChallenge {
         let value = try #exhaust(gen, .suppressIssueReporting) {
             Set($0).count < 3
         }
-        #expect(value == [-1, 0, 1])
+        #expect(value == [0, -1, 1])
     }
 }

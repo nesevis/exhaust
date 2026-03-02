@@ -82,8 +82,9 @@ struct ReducerReorderTests {
 
         // Property must still fail
         #expect(property(result.1) == false)
-        // Result should be sorted (reordering normalizes)
-        #expect(result.1 == result.1.sorted())
+        // Result should be sorted by shortlex key (values closer to zero first: 0, -1, 1, -2, 2, ...)
+        let keys = result.1.map { ChoiceValue($0, tag: .int64).shortlexKey }
+        #expect(keys == keys.sorted())
     }
 
     @Test("Already-sorted sequence is not changed by reorder pass")
@@ -206,7 +207,8 @@ struct ReducerReorderTests {
 
         // Property must still fail
         #expect(property(result.1) == false)
-        // Result should be sorted by Double ordering
-        #expect(result.1 == result.1.sorted(), "Expected \(result.1) to be sorted")
+        // Result should be sorted by shortlex key (values closer to zero first)
+        let keys = result.1.map { ChoiceValue($0, tag: .double).shortlexKey }
+        #expect(keys == keys.sorted(), "Expected \(result.1) to be sorted by shortlex key")
     }
 }

@@ -34,7 +34,7 @@ struct LargeUnionListShrinkingChallenge {
         let iterator = ValueAndChoiceTreeInterpreter(Self.gen, materializePicks: true, seed: 1337)
         let (_, tree) = try #require(Array(iterator.prefix(93)).last)
         let (_, output) = try #require(try Interpreters.reduce(gen: Self.gen, tree: tree, config: .fast, property: Self.property))
-        #expect(output.flatMap(\.self) == [-1, 0, 1, 2, 3])
+        #expect(output.flatMap(\.self) == [0, -1, 1, -2, 2])
     }
 
     @Test("Large Union List, Pathological single")
@@ -47,7 +47,7 @@ struct LargeUnionListShrinkingChallenge {
         let tree = try #require(try Interpreters.reflect(Self.gen, with: value))
         print()
         let (_, output) = try #require(try Interpreters.reduce(gen: Self.gen, tree: tree, config: .fast, property: Self.property))
-        #expect(output.flatMap(\.self) == [-1, 0, 1, 2, 3])
+        #expect(output.flatMap(\.self) == [0, -1, 1, -2, 2])
     }
 
     @Test("Large Union List, Pathological single 2")
@@ -56,7 +56,7 @@ struct LargeUnionListShrinkingChallenge {
         let tree = try #require(try Interpreters.reflect(Self.gen, with: value))
         print()
         let (_, output) = try #require(try Interpreters.reduce(gen: Self.gen, tree: tree, config: .fast, property: Self.property))
-        #expect(output.flatMap(\.self) == [-1, 0, 1, 2, 3])
+        #expect(output.flatMap(\.self) == [0, -1, 1, -2, 2])
     }
     
     @Test("Large Union List, Pathological single 3")
@@ -64,7 +64,7 @@ struct LargeUnionListShrinkingChallenge {
         let value = [[76132], [-61180, -48610, 71763], [-25593]]
         let tree = try #require(try Interpreters.reflect(Self.gen, with: value))
         let (_, output) = try #require(try Interpreters.reduce(gen: Self.gen, tree: tree, config: .fast, property: Self.property))
-        #expect(output.flatMap(\.self) == [-1, 0, 1, 2, 3])
+        #expect(output.flatMap(\.self) == [0, -1, 1, -2, 2])
     }
 
     @Test("Large Union List, 50")
@@ -80,8 +80,10 @@ struct LargeUnionListShrinkingChallenge {
         for (index, output) in outputs.enumerated() {
             let (value, output) = output
             let flat = output.flatMap(\.self)
+            // Shortlex-minimal 5 distinct integers: [0, -1, 1, -2, 2] (keys [0, 1, 2, 3, 4])
+            let keys = flat.map { ChoiceValue(Int64($0), tag: .int64).shortlexKey }
             let pass = output.count == 1 && flat.count == 5
-                && zip(flat, flat.dropFirst()).allSatisfy { $1 - $0 == 1 }
+                && Set(flat).count == 5 && keys == keys.sorted()
 
             // Expect there to be one nested array
             #expect(output.count == 1)
@@ -89,12 +91,9 @@ struct LargeUnionListShrinkingChallenge {
             let array = try #require(output.first)
             #expect(array.count == 5)
 
-            // Expect the values to increase by one
-            var steps = Set<Int>()
-            for (index, value) in array.enumerated().dropFirst() {
-                steps.insert(value - array[index - 1])
-            }
-            #expect(steps == [1])
+            // Expect the values to be in shortlex order (closest to zero first)
+            let arrayKeys = array.map { ChoiceValue(Int64($0), tag: .int64).shortlexKey }
+            #expect(arrayKeys == arrayKeys.sorted())
             
             if !pass {
                 print("Fail on original [\(index)] \(value) shrunk \(output)")
