@@ -245,7 +245,7 @@ public enum Interpreters {
         }
 
         let metadata = ChoiceMetadata(validRanges: reflectedRanges, isRangeExplicit: isRangeExplicit)
-        return [(value: finalOutput, path: [.choice(.init(convertibleValue, tag: tag), metadata)])]
+        return [(value: convertibleValue, path: [.choice(.init(convertibleValue, tag: tag), metadata)])]
     }
 
     @inline(__always)

@@ -261,22 +261,13 @@ public extension Gen {
         let tag = Output.tag
 
         return .impure(operation: .chooseBits(min: minBits, max: maxBits, tag: tag, isRangeExplicit: isRangeExplicit)) { result in
-            switch tag {
-            case .uint64:
-                // This catches [Character] and String
-                if let sequence = result as? any Sequence {
-                    return .pure(UInt64(sequence.underestimatedCount) as! Output)
-                }
-                fallthrough
-            default:
-                guard let convertible = result as? any BitPatternConvertible else {
-                    throw GeneratorError.typeMismatch(
-                        expected: "any BitPatternConvertible",
-                        actual: String(describing: Swift.type(of: result)),
-                    )
-                }
-                return .pure(Output(bitPattern64: convertible.bitPattern64))
+            guard let convertible = result as? any BitPatternConvertible else {
+                throw GeneratorError.typeMismatch(
+                    expected: "any BitPatternConvertible",
+                    actual: String(describing: Swift.type(of: result)),
+                )
             }
+            return .pure(Output(bitPattern64: convertible.bitPattern64))
         }
     }
 }
