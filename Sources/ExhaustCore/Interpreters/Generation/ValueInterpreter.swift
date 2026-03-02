@@ -15,6 +15,7 @@ import Foundation
         _ generator: ReflectiveGenerator<Element>,
         seed: UInt64? = nil,
         maxRuns: UInt64? = nil,
+        sizeOverride: UInt64? = nil,
     ) {
         self.generator = generator
         let prng = seed.map { Xoshiro256(seed: $0) } ?? Xoshiro256()
@@ -25,6 +26,7 @@ import Foundation
             size: 0,
             prng: prng,
         )
+        context.sizeOverride = sizeOverride
     }
 
     @_spi(ExhaustInternal) public mutating func next() -> Element? {

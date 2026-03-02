@@ -6,5 +6,6 @@ struct ExhaustMacrosPlugin: CompilerPlugin {
     let providingMacros: [Macro.Type] = [
         GenerateMacro.self,
         ExhaustTestMacro.self,
+        SampleMacro.self,
     ]
 }

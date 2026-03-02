@@ -10,6 +10,7 @@ enum ExhaustMacroDiagnostic: String, DiagnosticMessage {
     case noGeneratorArguments = "#gen requires at least one generator argument"
     case exhaustMissingProperty = "#exhaust requires a property (trailing closure or 'property:' argument)"
     case exhaustMissingGenerator = "#exhaust requires a generator as its first argument"
+    case sampleMissingGenerator = "#sample requires a generator as its first argument"
 
     var message: String {
         rawValue
@@ -30,7 +31,8 @@ enum ExhaustMacroDiagnostic: String, DiagnosticMessage {
             .warning
         case .noGeneratorArguments,
              .exhaustMissingProperty,
-             .exhaustMissingGenerator:
+             .exhaustMissingGenerator,
+             .sampleMissingGenerator:
             .error
         }
     }
