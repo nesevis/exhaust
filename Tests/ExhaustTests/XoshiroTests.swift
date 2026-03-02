@@ -19,10 +19,9 @@ func xoshiroAgainstReference() {
 
 @Test("Test seed stability", .disabled("Size scaling changed from logarithmic to linear"))
 func xoshiroSeedStability() {
-    let iterator = ValueInterpreter(Int64.arbitrary, seed: 0)
-    let ten = Array(iterator.prefix(10))
-    let expected: [Int64] = [0, 16238, -6_660_220, -179_123_592, 8_005_708_369, 274_739_608_301, -684_234_672_488, 2_508_988_163_057, 100_069_181_990_740, 943_184_394_974_117]
-    #expect(ten == expected)
+    let digits = #sample(.int64(), count: 10)
+    let expectedDigits: [Int64] = [0, 16238, -6_660_220, -179_123_592, 8_005_708_369, 274_739_608_301, -684_234_672_488, 2_508_988_163_057, 100_069_181_990_740, 943_184_394_974_117]
+    #expect(digits == expectedDigits)
 }
 
 @Test("Reflect on getSize")

@@ -2,6 +2,7 @@
 
 public extension ReflectiveGenerator where Operation == ReflectiveOperation {
     /// Creates a bidirectional transformation of this generator using forward and backward functions.
+    /// Note that ``#gen`` with a closure will attempt to synthesize the backward mapping during macro expansion.
     ///
     /// This is the fundamental operation for adapting generators to work with different types
     /// while preserving the bidirectional capability. Both directions must be provided:
@@ -99,6 +100,39 @@ public extension ReflectiveGenerator where Operation == ReflectiveOperation {
         )) { result in
             .pure(result as? Value)
         }
+    }
+
+    /// Categorizes generated values for statistical analysis.
+    ///
+    /// Wraps this generator with classification predicates that track how frequently
+    /// different types of test data are generated.
+    ///
+    /// ```swift
+    /// let classified = #gen(.int(in: 0...100)).classify(
+    ///     ("small", { $0 < 10 }),
+    ///     ("large", { $0 > 90 })
+    /// )
+    /// ```
+    @inlinable
+    func classify(
+        _ classifiers: (String, (Value) -> Bool)...,
+    ) -> ReflectiveGenerator<Value> {
+        .impure(operation:
+            .classify(
+                gen: erase(),
+                fingerprint: 0,
+                classifiers: classifiers.map { pair in (pair.0, { pair.1($0 as! Value) }) },
+            )) { .pure($0 as! Value) }
+    }
+
+    /// Runs this generator with a temporarily modified size parameter.
+    ///
+    /// ```swift
+    /// let small = #gen(.int().array()).resize(10)
+    /// ```
+    @inlinable
+    func resize(_ newSize: UInt64) -> ReflectiveGenerator<Value> {
+        Gen.liftF(.resize(newSize: newSize, next: erase()))
     }
 
     /// Creates a filtered generator that only produces values satisfying a predicate.

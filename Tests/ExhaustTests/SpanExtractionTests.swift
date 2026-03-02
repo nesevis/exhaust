@@ -762,64 +762,6 @@ struct ExtractSequenceBoundarySpansTests {
 
 @Suite("Sibling group extraction tests")
 struct ExtractSiblingGroupsTests {
-    @Test("Test nested arrays mixing value with reduced works", .disabled("FIXME"))
-    func nestedArraysMixingReducedAndValue() {
-        // [[(V)(_)(_)(_)(_)(_)(_)][(V)(V)(V)(V)]]
-        // [[(V)(V)(V)(V)][(V)(_)(_)(_)(_)(_)(_)]]
-        let seq: ChoiceSequence = [
-            seqOpen,
-            seqOpen,
-            grpOpen,
-            val(3),
-            grpClose,
-            grpOpen,
-            val(3),
-            grpClose,
-            grpOpen,
-            val(3),
-            grpClose,
-            grpOpen,
-            val(3),
-            grpClose,
-            seqClose,
-            seqOpen,
-            grpOpen,
-            val(3),
-            grpClose,
-            grpOpen,
-            reduced(3),
-            grpClose,
-            grpOpen,
-            reduced(3),
-            grpClose,
-            grpOpen,
-            reduced(3),
-            grpClose,
-            grpOpen,
-            reduced(3),
-            grpClose,
-            grpOpen,
-            reduced(3),
-            grpClose,
-            grpOpen,
-            reduced(3),
-            grpClose,
-            seqClose,
-            seqClose,
-        ]
-        #expect(seq.shortString == "[[(V)(V)(V)(V)][(V)(_)(_)(_)(_)(_)(_)]] ")
-        let groups = ChoiceSequence.extractSiblingGroups(from: seq)
-        for group in groups {
-            for range in group.ranges {
-                print("\(range): \(ContiguousArray(seq[range]).shortString)")
-            }
-        }
-        print()
-
-        #expect(groups.count == 1)
-        #expect(groups[0].ranges == [1 ... 1, 2 ... 2, 3 ... 3])
-        #expect(groups[0].depth == 0)
-    }
 
     @Test("Bare values inside sequence produce one group")
     func bareValuesInSequence() {

@@ -47,6 +47,11 @@ public struct GenerateMacro: ExpressionMacro {
                 closure: trailingClosure,
                 result: result,
             )
+        case .scalarConversion:
+            return buildScalarConversionExpansion(
+                generatorArg: generatorArgs[0],
+                closure: trailingClosure,
+            )
         case .forwardOnly:
             return buildForwardOnlyExpansion(
                 generatorArgs: generatorArgs,
@@ -170,6 +175,21 @@ public struct GenerateMacro: ExpressionMacro {
             paramToArgIndex[paramRef] = argIndex
         }
         return result.parameterNames.map { paramToArgIndex[$0]! }
+    }
+
+    /// Builds the expansion for a single-generator, unlabeled-argument closure
+    /// (e.g. `#gen(.uint64()) { Int($0) }`).
+    ///
+    /// Emits `Gen._macroMapScalar(gen, forward: closure)` which has constrained overloads
+    /// for `BinaryInteger` and `BinaryFloatingPoint` that synthesize the backward pass
+    /// at compile time, with an unconstrained fallback that is forward-only.
+    private static func buildScalarConversionExpansion(
+        generatorArg: LabeledExprListSyntax.Element,
+        closure: ClosureExprSyntax,
+    ) -> ExprSyntax {
+        let genExpr = generatorArg.expression.trimmedDescription
+        let closureText = closure.trimmedDescription
+        return "Gen._macroMapScalar(\(raw: genExpr), forward: \(raw: closureText))"
     }
 
     /// Builds the expansion for the no-closure overload: pass through or zip.

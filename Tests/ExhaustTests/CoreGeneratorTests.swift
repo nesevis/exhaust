@@ -55,17 +55,6 @@ struct CoreGeneratorTests {
             }
         }
 
-        @Test("Flatzip", .disabled("Won't work, known limitation"))
-        func reflectionHashStability() throws {
-            let gen = Gen.zip(Int.arbitrary, Double.arbitrary)
-            var iterator = ValueAndChoiceTreeInterpreter(gen)
-            while let (next, choiceTree) = iterator.next() {
-                let reflected = try Interpreters.reflect(gen, with: next)
-                // FIXME: Beyond the first result, the hash values go out of whack because reflection has no knowledge of the getSize parameter
-                #expect(choiceTree == reflected)
-            }
-        }
-
         @Test("Gen.choose with type produces valid values")
         func genChooseType() {
             let gen = Gen.choose(type: UInt32.self)

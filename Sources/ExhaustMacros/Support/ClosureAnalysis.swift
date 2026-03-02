@@ -15,6 +15,11 @@ enum ClosureAnalysisOutcome {
     /// that correspond 1:1 with closure parameters, enabling backward mapping.
     case bidirectional(BidirectionalResult)
 
+    /// The closure body is a single-argument, unlabeled type conversion (e.g. `Int($0)`).
+    /// The backward pass is generated via constrained overloads at the expansion site
+    /// rather than Mirror extraction.
+    case scalarConversion
+
     /// The closure body cannot be automatically reversed. The associated diagnostic
     /// explains why.
     case forwardOnly(ExhaustMacroDiagnostic)
@@ -132,6 +137,15 @@ private func analyzeShorthandClosure(
         return .forwardOnly(.forwardOnlyShorthandParams)
     }
 
+    // Unlabeled arguments can't be extracted via Mirror (which uses property names),
+    // unless this is an enum case (which uses pattern matching instead).
+    if caseName == nil, originalArgumentLabels.contains(where: { $0 == nil }) {
+        if generatorCount == 1 {
+            return .scalarConversion
+        }
+        return .forwardOnly(.forwardOnlyUnlabeledArguments)
+    }
+
     // Parameter names in ascending index order (matching generator order)
     let parameterNames = (0 ..< generatorCount).map { "$\($0)" }
 
@@ -189,6 +203,15 @@ private func analyzeFunctionCall(
           parameterNames.count == generatorCount
     else {
         return .forwardOnly(.forwardOnlyParamMismatch)
+    }
+
+    // Unlabeled arguments can't be extracted via Mirror (which uses property names),
+    // unless this is an enum case (which uses pattern matching instead).
+    if caseName == nil, originalArgumentLabels.contains(where: { $0 == nil }) {
+        if generatorCount == 1 {
+            return .scalarConversion
+        }
+        return .forwardOnly(.forwardOnlyUnlabeledArguments)
     }
 
     return .bidirectional(BidirectionalResult(

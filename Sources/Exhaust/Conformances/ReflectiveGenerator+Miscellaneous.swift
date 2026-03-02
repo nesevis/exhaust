@@ -8,6 +8,11 @@
 @_spi(ExhaustInternal) import ExhaustCore
 
 public extension ReflectiveGenerator {
+    /// Creates a generator that always produces the same constant value.
+    static func just(_ value: Value) -> ReflectiveGenerator<Value> {
+        Gen.just(value)
+    }
+
     static func bool() -> ReflectiveGenerator<Bool> {
         Gen.choose(from: [true, false])
     }

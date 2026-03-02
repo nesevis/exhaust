@@ -531,43 +531,6 @@ struct ReflectAndFlattenTests {
         #expect(materialized == Character("@").bitPattern64)
     }
 
-    @Test("Materialising works for complex generators", .disabled("Array out of bounds"))
-    func materializationWithComplexGenerator() throws {
-        struct Person: Equatable {
-            let age: UInt64
-            let name: String
-        }
-        let ageGen = Gen.pick(choices: [
-            (1, Gen.choose(in: 0 ... 10, type: UInt64.self)),
-            (1, Gen.choose(in: 11 ... 84, type: UInt64.self)),
-        ])
-        let nameGen = String.arbitrary
-        let gen = Gen.zip(ageGen, nameGen)
-            .mapped(
-                forward: { Person(age: $0.0, name: $0.1) },
-                backward: { ($0.age, $0.name) },
-            )
-
-        // Reflect the generator with the value
-        // For now it does not work with `materializePicks`
-        // 1. If it is enabled, the flattened sequence contains N values
-        // 2. The materializer will only use the `.selected` branch and leave the other values unconsumed.
-        let (value, tree) = try #require(Array(ValueAndChoiceTreeInterpreter(gen, materializePicks: false, seed: 1337).prefix(2)).last)
-
-        // Flatten the reflected tree
-        var flattened = ChoiceSequence.flatten(tree)
-
-        // Mess with it by setting the age to 123 and
-        // removing the equivalent of the two leading characters in the name
-        flattened[3] = .value(.init(choice: .unsigned(123, UInt64.self), validRanges: []))
-        flattened.removeSubrange(6 ... 15)
-
-        let materialized = try Interpreters.materialize(gen, with: tree, using: flattened)
-
-        #expect(materialized?.age == 123)
-        #expect(materialized?.name == String(value.name.dropFirst(2)))
-    }
-
     @Test("Shrinking by setting all values of type to something works")
     func sequenceShrinkingWorks() throws {
         struct Person: Equatable {
