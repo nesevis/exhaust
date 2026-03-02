@@ -79,11 +79,16 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
             iterations += 1
             let passed = property(next)
             if passed == false {
+                var oracleCallCount = 0
+                let countingProperty: (Output) -> Bool = { value in
+                    oracleCallCount += 1
+                    return property(value)
+                }
                 if let (shrunkSequence, shrunkValue) = try Interpreters.reduce(
                     gen: gen,
                     tree: tree,
                     config: shrinkConfig,
-                    property: property,
+                    property: countingProperty,
                 ) {
                     let failure = PropertyTestFailure(
                         counterexample: shrunkValue,
@@ -93,6 +98,7 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
                         iteration: iterations,
                         maxIterations: maxIterations,
                         blueprint: shrunkSequence.shortString,
+                        oracleCalls: oracleCallCount,
                     )
                     let rendered = failure.render(format: ExhaustLog.configuration.format)
                     ExhaustLog.error(
@@ -126,6 +132,7 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
                     iteration: iterations,
                     maxIterations: maxIterations,
                     blueprint: nil,
+                    oracleCalls: oracleCallCount,
                 )
                 let rendered = failure.render(format: ExhaustLog.configuration.format)
                 ExhaustLog.error(
@@ -209,11 +216,16 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
             return nil
         }
 
+        var oracleCallCount = 0
+        let countingProperty: (Output) -> Bool = { value in
+            oracleCallCount += 1
+            return property(value)
+        }
         if let (shrunkSequence, shrunkValue) = try Interpreters.reduce(
             gen: gen,
             tree: tree,
             config: shrinkConfig,
-            property: property,
+            property: countingProperty,
         ) {
             let failure = PropertyTestFailure(
                 counterexample: shrunkValue,
@@ -223,6 +235,7 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
                 iteration: 1,
                 maxIterations: 1,
                 blueprint: shrunkSequence.shortString,
+                oracleCalls: oracleCallCount,
             )
             let rendered = failure.render(format: ExhaustLog.configuration.format)
             ExhaustLog.error(
@@ -251,6 +264,7 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
             iteration: 1,
             maxIterations: 1,
             blueprint: nil,
+            oracleCalls: oracleCallCount,
         )
         let rendered = failure.render(format: ExhaustLog.configuration.format)
         ExhaustLog.error(
