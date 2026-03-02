@@ -81,7 +81,7 @@ struct DifferenceShrinkingChallenge {
         let value = [700, 701] // A failing example
 
         // A failing example is sparse, so an explicit seed is provided
-        let output = try #exhaust(gen, .replay(1), .suppressIssueReporting) { arr in
+        let output = #exhaust(gen, .replay(1), .suppressIssueReporting) { arr in
             count += 1
             let diff = abs(arr[0] - arr[1])
             return arr[0] < 10 || diff != 1

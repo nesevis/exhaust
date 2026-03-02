@@ -30,7 +30,7 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
         line: UInt = #line,
         column: UInt = #column,
         property: (Output) -> Bool,
-    ) throws -> Output? {
+    ) -> Output? {
         var maxIterations: UInt64 = 100
         var seed: UInt64?
         var shrinkConfig: ShrinkBudget = .fast
@@ -53,18 +53,29 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
         }
 
         if let reflectingValue {
-            return try __reduceReflected(
-                gen,
-                value: reflectingValue,
-                shrinkConfig: shrinkConfig,
-                suppressIssueReporting: suppressIssueReporting,
-                sourceCode: sourceCode,
-                fileID: fileID,
-                filePath: filePath,
-                line: line,
-                column: column,
-                property: property,
-            )
+            do {
+                return try __reduceReflected(
+                    gen,
+                    value: reflectingValue,
+                    shrinkConfig: shrinkConfig,
+                    suppressIssueReporting: suppressIssueReporting,
+                    sourceCode: sourceCode,
+                    fileID: fileID,
+                    filePath: filePath,
+                    line: line,
+                    column: column,
+                    property: property,
+                )
+            } catch {
+                reportIssue(
+                    "\(error)",
+                    fileID: fileID,
+                    filePath: filePath,
+                    line: line,
+                    column: column,
+                )
+                return reflectingValue
+            }
         }
 
         var iterations = 0
@@ -84,43 +95,54 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
                     oracleCallCount += 1
                     return property(value)
                 }
-                if let (shrunkSequence, shrunkValue) = try Interpreters.reduce(
-                    gen: gen,
-                    tree: tree,
-                    config: shrinkConfig,
-                    property: countingProperty,
-                ) {
-                    let failure = PropertyTestFailure(
-                        counterexample: shrunkValue,
-                        original: next,
-                        sourceCode: sourceCode,
-                        seed: actualSeed,
-                        iteration: iterations,
-                        maxIterations: maxIterations,
-                        blueprint: shrunkSequence.shortString,
-                        oracleCalls: oracleCallCount,
-                    )
-                    let rendered = failure.render(format: ExhaustLog.configuration.format)
-                    ExhaustLog.error(
-                        category: .propertyTest,
-                        event: "property_failed",
-                        rendered,
-                    )
-                    ExhaustLog.debug(
-                        category: .propertyTest,
-                        event: "shrunk_blueprint",
-                        "\(shrunkSequence.shortString)",
-                    )
-                    if !suppressIssueReporting {
-                        reportIssue(
-                            rendered,
-                            fileID: fileID,
-                            filePath: filePath,
-                            line: line,
-                            column: column,
+                do {
+                    if let (shrunkSequence, shrunkValue) = try Interpreters.reduce(
+                        gen: gen,
+                        tree: tree,
+                        config: shrinkConfig,
+                        property: countingProperty,
+                    ) {
+                        let failure = PropertyTestFailure(
+                            counterexample: shrunkValue,
+                            original: next,
+                            sourceCode: sourceCode,
+                            seed: actualSeed,
+                            iteration: iterations,
+                            maxIterations: maxIterations,
+                            blueprint: shrunkSequence.shortString,
+                            oracleCalls: oracleCallCount,
                         )
+                        let rendered = failure.render(format: ExhaustLog.configuration.format)
+                        ExhaustLog.error(
+                            category: .propertyTest,
+                            event: "property_failed",
+                            rendered,
+                        )
+                        ExhaustLog.debug(
+                            category: .propertyTest,
+                            event: "shrunk_blueprint",
+                            "\(shrunkSequence.shortString)",
+                        )
+                        if !suppressIssueReporting {
+                            reportIssue(
+                                rendered,
+                                fileID: fileID,
+                                filePath: filePath,
+                                line: line,
+                                column: column,
+                            )
+                        }
+                        return shrunkValue
                     }
-                    return shrunkValue
+                } catch {
+                    reportIssue(
+                        "\(error)",
+                        fileID: fileID,
+                        filePath: filePath,
+                        line: line,
+                        column: column,
+                    )
+                    return next
                 }
 
                 // Shrinking failed — report the original counterexample
@@ -161,6 +183,34 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
             metadata: passMetadata,
         )
         return nil
+    }
+
+    // MARK: - Sampling
+
+    /// Generates a single value from a generator. Runtime target of `#sample` expansion.
+    public static func __sample<Output>(
+        _ gen: ReflectiveGenerator<Output>,
+        seed: UInt64?,
+    ) -> Output {
+        var interpreter = ValueInterpreter(gen, seed: seed, maxRuns: 1, sizeOverride: 50)
+        guard let value = interpreter.next() else {
+            fatalError("#sample: generator produced no values")
+        }
+        return value
+    }
+
+    /// Generates an array of values from a generator. Runtime target of `#sample` expansion.
+    public static func __sampleArray<Output>(
+        _ gen: ReflectiveGenerator<Output>,
+        count: UInt64,
+        seed: UInt64?,
+    ) -> [Output] {
+        var interpreter = ValueInterpreter(gen, seed: seed, maxRuns: count)
+        var results: [Output] = []
+        while let value = interpreter.next() {
+            results.append(value)
+        }
+        return results
     }
 
     // MARK: - Reflecting
