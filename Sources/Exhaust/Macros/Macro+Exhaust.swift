@@ -22,6 +22,6 @@
 @discardableResult
 public macro exhaust<T>(
     _ gen: ReflectiveGenerator<T>,
-    _ settings: ExhaustSettings...,
+    _ settings: ExhaustSettings<T>...,
     property: (T) throws -> Bool,
 ) -> T? = #externalMacro(module: "ExhaustMacros", type: "ExhaustTestMacro")

@@ -23,7 +23,7 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
     @discardableResult
     public static func __exhaust<Output>(
         _ gen: ReflectiveGenerator<Output>,
-        settings: [ExhaustSettings],
+        settings: [ExhaustSettings<Output>],
         sourceCode: String?,
         fileID: StaticString = #fileID,
         filePath: StaticString = #filePath,
@@ -35,6 +35,7 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
         var seed: UInt64?
         var shrinkConfig: ShrinkBudget = .fast
         var suppressIssueReporting = false
+        var reflectingValue: Output?
 
         for setting in settings {
             switch setting {
@@ -46,7 +47,24 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
                 shrinkConfig = config
             case .suppressIssueReporting:
                 suppressIssueReporting = true
+            case let .reflecting(value):
+                reflectingValue = value
             }
+        }
+
+        if let reflectingValue {
+            return try __reduceReflected(
+                gen,
+                value: reflectingValue,
+                shrinkConfig: shrinkConfig,
+                suppressIssueReporting: suppressIssueReporting,
+                sourceCode: sourceCode,
+                fileID: fileID,
+                filePath: filePath,
+                line: line,
+                column: column,
+                property: property,
+            )
         }
 
         var iterations = 0
@@ -136,5 +154,119 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
             metadata: passMetadata,
         )
         return nil
+    }
+
+    // MARK: - Reflecting
+
+    // swiftlint:disable:next function_parameter_count
+    private static func __reduceReflected<Output>(
+        _ gen: ReflectiveGenerator<Output>,
+        value: Output,
+        shrinkConfig: ShrinkBudget,
+        suppressIssueReporting: Bool,
+        sourceCode: String?,
+        fileID: StaticString,
+        filePath: StaticString,
+        line: UInt,
+        column: UInt,
+        property: (Output) -> Bool,
+    ) throws -> Output? {
+        guard property(value) == false else {
+            let message = "reflecting: value passes the property — reduction requires a failing value"
+            ExhaustLog.error(
+                category: .propertyTest,
+                event: "reflecting_value_passes",
+                message,
+            )
+            if !suppressIssueReporting {
+                reportIssue(
+                    message,
+                    fileID: fileID,
+                    filePath: filePath,
+                    line: line,
+                    column: column,
+                )
+            }
+            return nil
+        }
+
+        guard let tree = try Interpreters.reflect(gen, with: value) else {
+            let message = "reflecting: could not reflect value into choice tree"
+            ExhaustLog.error(
+                category: .propertyTest,
+                event: "reflecting_failed",
+                message,
+            )
+            if !suppressIssueReporting {
+                reportIssue(
+                    message,
+                    fileID: fileID,
+                    filePath: filePath,
+                    line: line,
+                    column: column,
+                )
+            }
+            return nil
+        }
+
+        if let (shrunkSequence, shrunkValue) = try Interpreters.reduce(
+            gen: gen,
+            tree: tree,
+            config: shrinkConfig,
+            property: property,
+        ) {
+            let failure = PropertyTestFailure(
+                counterexample: shrunkValue,
+                original: value,
+                sourceCode: sourceCode,
+                seed: nil,
+                iteration: 1,
+                maxIterations: 1,
+                blueprint: shrunkSequence.shortString,
+            )
+            let rendered = failure.render(format: ExhaustLog.configuration.format)
+            ExhaustLog.error(
+                category: .propertyTest,
+                event: "reflecting_reduced",
+                rendered,
+            )
+            if !suppressIssueReporting {
+                reportIssue(
+                    rendered,
+                    fileID: fileID,
+                    filePath: filePath,
+                    line: line,
+                    column: column,
+                )
+            }
+            return shrunkValue
+        }
+
+        // Reflection succeeded but reduction could not improve — return original
+        let failure = PropertyTestFailure(
+            counterexample: value,
+            original: nil as Output?,
+            sourceCode: sourceCode,
+            seed: nil,
+            iteration: 1,
+            maxIterations: 1,
+            blueprint: nil,
+        )
+        let rendered = failure.render(format: ExhaustLog.configuration.format)
+        ExhaustLog.error(
+            category: .propertyTest,
+            event: "reflecting_unreduced",
+            rendered,
+        )
+        if !suppressIssueReporting {
+            reportIssue(
+                rendered,
+                fileID: fileID,
+                filePath: filePath,
+                line: line,
+                column: column,
+            )
+        }
+        return value
     }
 }

@@ -26,9 +26,19 @@ struct DistinctShrinkingChallenge {
     @Test("Distinct, Full")
     func distinct() throws {
         let gen = #gen(.int().array(length: 3...30))
-        let value = try #exhaust(gen, .suppressIssueReporting) {
+        let counterExample = try #exhaust(gen, .suppressIssueReporting) {
             Set($0).count < 3
         }
-        #expect(value == [0, -1, 1])
+        #expect(counterExample == [0, -1, 1])
+    }
+    
+    @Test("Distinct, reflected counterexample")
+    func distinctReflected() throws {
+        let gen = #gen(.int().array(length: 3...30))
+        let value = [1337, 80085, 69, 67]
+        let counterExample = try #exhaust(gen, .suppressIssueReporting, .reflecting(value)) {
+            Set($0).count < 3
+        }
+        #expect(counterExample == [0, -1, 1])
     }
 }

@@ -5,7 +5,7 @@ struct PropertyTestFailure<Output> {
     let counterexample: Output
     let original: Output?
     let sourceCode: String?
-    let seed: UInt64
+    let seed: UInt64?
     let iteration: Int
     let maxIterations: UInt64
     let blueprint: String?
@@ -24,7 +24,11 @@ struct PropertyTestFailure<Output> {
     private func renderHuman() -> String {
         var lines: [String] = []
 
-        lines.append("Property failed (iteration \(iteration)/\(maxIterations), seed \(seed))")
+        if let seed {
+            lines.append("Property failed (iteration \(iteration)/\(maxIterations), seed \(seed))")
+        } else {
+            lines.append("Property failed (reflecting)")
+        }
         if let sourceCode {
             lines.append("  \(sourceCode)")
         }
@@ -47,8 +51,10 @@ struct PropertyTestFailure<Output> {
             }
         }
 
-        lines.append("")
-        lines.append("Reproduce: .replay(\(seed))")
+        if let seed {
+            lines.append("")
+            lines.append("Reproduce: .replay(\(seed))")
+        }
 
         return lines.joined(separator: "\n")
     }
@@ -61,7 +67,9 @@ struct PropertyTestFailure<Output> {
 
         var parts: [String] = []
         parts.append("\"event\":\"property_failed\"")
-        parts.append("\"seed\":\(seed)")
+        if let seed {
+            parts.append("\"seed\":\(seed)")
+        }
         parts.append("\"iteration\":\(iteration)")
         parts.append("\"maxIterations\":\(maxIterations)")
 
@@ -77,7 +85,9 @@ struct PropertyTestFailure<Output> {
             parts.append("\"original\":\"\(escapeJSON(originalDump))\"")
         }
 
-        parts.append("\"replay\":\".replay(\(seed))\"")
+        if let seed {
+            parts.append("\"replay\":\".replay(\(seed))\"")
+        }
 
         return "{\(parts.joined(separator: ","))}"
     }
