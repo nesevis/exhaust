@@ -290,6 +290,41 @@ extension ReducerStrategies {
                 }
             }
 
+            // For signed types, the bit-pattern search can only reach values on the same
+            // side of zero. Probe shortlex keys below the current key to try values on
+            // the opposite side (closer to zero). e.g. shrinking -2 → 1 for the Distinct challenge.
+            var crossZeroImproved = false
+            if case .signed = v.choice {
+                let currentKey = v.choice.shortlexKey
+                if currentKey > 0 {
+                    let maxProbes: UInt64 = 16
+                    let lowerBound = currentKey > maxProbes ? currentKey - maxProbes : 0
+                    var crossZeroProbe = current
+                    var probeKey = currentKey
+                    while probeKey > lowerBound {
+                        probeKey -= 1
+                        let probeChoice = ChoiceValue.fromShortlexKey(probeKey, tag: choiceTag)
+                        if isWithinRecordedRange, probeChoice.fits(in: validRanges) == false { continue }
+                        let probeEntry = ChoiceSequenceValue.reduced(.init(choice: probeChoice, validRanges: validRanges, isRangeExplicit: isRangeExplicit))
+                        guard probeEntry.shortLexCompare(current[seqIdx]) == .lt else { continue }
+                        crossZeroProbe[seqIdx] = probeEntry
+                        guard rejectCache.contains(crossZeroProbe) == false else { continue }
+                        if let output = try? Interpreters.materialize(gen, with: tree, using: crossZeroProbe),
+                           property(output) == false
+                        {
+                            current = crossZeroProbe
+                            latestOutput = output
+                            progress = true
+                            crossZeroImproved = true
+                            break
+                        } else {
+                            rejectCache.insert(crossZeroProbe)
+                        }
+                    }
+                }
+            }
+            if crossZeroImproved { continue }
+
             if bestDelta == 0 {
                 // No reduction was possible here. Let's try
                 // **Local boundary search**: Are there better shrinks just beyond the horizon?

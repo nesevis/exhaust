@@ -20,7 +20,7 @@ extension ChoiceValue {
     }
 
     /// Key for shortlex ordering where values closer to zero are smaller.
-    /// - Signed integers: absolute value (0 → 0, ±1 → 1, ±2 → 2, ...)
+    /// - Signed integers: zigzag encoding (0 → 0, -1 → 1, 1 → 2, -2 → 3, ...)
     /// - Floating point: absolute value's raw IEEE 754 bit pattern (0.0 → 0, ±small → small, ±large → large)
     /// - Unsigned integers and characters: identical to `bitPattern64`
     @_spi(ExhaustInternal) public var shortlexKey: UInt64 {
@@ -33,6 +33,31 @@ extension ChoiceValue {
             FloatShortlex.shortlexKey(for: value)
         case let .character(char):
             char.bitPattern64
+        }
+    }
+
+    /// Constructs a `ChoiceValue` from a shortlex key, reversing `shortlexKey`.
+    ///
+    /// - For signed integers: zigzag decodes the key back to a signed value.
+    /// - For unsigned integers, floats, and characters: the key equals the bit pattern.
+    @_spi(ExhaustInternal) public static func fromShortlexKey(_ key: UInt64, tag: TypeTag) -> ChoiceValue {
+        switch tag {
+        case .int, .int8, .int16, .int32, .int64:
+            // Zigzag decode: inverse of (value << 1) ^ (value >> 63)
+            let decoded = Int64(bitPattern: key >> 1) ^ -Int64(bitPattern: key & 1)
+            // Convert decoded Int64 to the typed value's bit pattern encoding
+            let bp: UInt64
+            switch tag {
+            case .int8:  bp = Int8(truncatingIfNeeded: decoded).bitPattern64
+            case .int16: bp = Int16(truncatingIfNeeded: decoded).bitPattern64
+            case .int32: bp = Int32(truncatingIfNeeded: decoded).bitPattern64
+            case .int:   bp = Int(truncatingIfNeeded: decoded).bitPattern64
+            default:     bp = decoded.bitPattern64 // .int64
+            }
+            return ChoiceValue(tag.makeConvertible(bitPattern64: bp), tag: tag)
+        default:
+            // Unsigned, float, character: shortlexKey == bitPattern64
+            return ChoiceValue(tag.makeConvertible(bitPattern64: key), tag: tag)
         }
     }
 

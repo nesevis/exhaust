@@ -169,8 +169,8 @@ extension ReducerStrategies {
             if a.tag != b.tag {
                 return choiceTagRank(a.tag) < choiceTagRank(b.tag)
             }
-            if a < b { return true }
-            if b < a { return false }
+            if a.shortlexKey < b.shortlexKey { return true }
+            if a.shortlexKey > b.shortlexKey { return false }
         }
         return lhs.count < rhs.count
     }
