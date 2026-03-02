@@ -25,7 +25,7 @@ import Foundation
     /// - Returns: The largest `k >= 0` for which `predicate(k)` holds.
     @inlinable
     @inline(__always)
-    @_spi(ExhaustInternal) public static func findInteger<T: BinaryInteger>(_ predicate: (T) -> Bool) -> T {
+    @_spi(ExhaustInternal) public static func findInteger<T: FixedWidthInteger>(_ predicate: (T) -> Bool) -> T {
         // Step 1: Linear scan for small answers.
         // Keep this bounded and avoid probing the same value again in step 2.
         var probe: T = 1
@@ -42,7 +42,13 @@ import Foundation
         // Step 2: Exponential upward probe
         while predicate(high) {
             low = high
-            high *= 2
+            let (doubled, overflow) = high.multipliedReportingOverflow(by: 2)
+            if overflow {
+                high = T.max
+                if !predicate(high) { break }
+                return high
+            }
+            high = doubled
         }
 
         // Step 3: Binary search between low...high
@@ -78,7 +84,7 @@ import Foundation
     /// - Returns: The largest value in `low...high` for which `predicate` holds.
     @inlinable
     @inline(__always)
-    @_spi(ExhaustInternal) public static func binarySearchWithGuess<T: BinaryInteger>(_ predicate: (T) -> Bool, low: T, high: T, guess: T? = nil) -> T {
+    @_spi(ExhaustInternal) public static func binarySearchWithGuess<T: FixedWidthInteger>(_ predicate: (T) -> Bool, low: T, high: T, guess: T? = nil) -> T {
         let guess = guess ?? low
         precondition(low <= guess && guess < high)
         let good = predicate(low)
