@@ -43,12 +43,8 @@ struct BitPatternConvertibleTests {
 
     @Test("Int BitPatternConvertible round-trip for various values")
     func intBitPatternRoundTrip() {
-        let testValues = [Int.min, Int.min + 1, -1000, -1, 0, 1, 1000, Int.max - 1, Int.max]
-
-        for value in testValues {
-            let bitPattern = value.bitPattern64
-            let reconstructed = Int(bitPattern64: bitPattern)
-            #expect(reconstructed == value, "Round-trip failed for \(value): got \(reconstructed)")
+        #exhaust(#gen(.int())) { value in
+            Int(bitPattern64: value.bitPattern64) == value
         }
     }
 
@@ -59,46 +55,14 @@ struct BitPatternConvertibleTests {
 
     @Test("UInt64 to Int mapping round-trip consistency")
     func uInt64ToIntMappingRoundTrip() {
-        // Test that we can convert any UInt64 to Int and back
-        let testValues: [UInt64] = [
-            UInt64.min,
-            1,
-            UInt64.max / 4,
-            UInt64.max / 2,
-            UInt64.max / 2 + 1,
-            UInt64.max - 1,
-            UInt64.max,
-        ]
-
-        for bitPattern in testValues {
-            let intValue = Int(bitPattern64: bitPattern)
-            let reconstructed = intValue.bitPattern64
-            #expect(reconstructed == bitPattern, "Round-trip failed for UInt64(\(bitPattern)): got \(reconstructed)")
+        #exhaust(#gen(.uint64())) { bitPattern in
+            Int(bitPattern64: bitPattern).bitPattern64 == bitPattern
         }
     }
 
     @Test("Float BitPatternConvertible round-trip for special values")
-    func floatSpecialValuesRoundTrip() throws {
-        let testValues: [Float] = [
-            Float.zero,
-            -Float.zero,
-            1.0,
-            -1.0,
-            Float.pi,
-            -Float.pi,
-            Float.greatestFiniteMagnitude,
-            -Float.greatestFiniteMagnitude,
-            Float.leastNormalMagnitude,
-            -Float.leastNormalMagnitude,
-        ]
-
-        for value in testValues {
-            let bitPattern = value.bitPattern64
-            let reconstructed = Float(bitPattern64: bitPattern)
-            #expect(reconstructed == value, "Round-trip failed for Float(\(value)): got \(reconstructed)")
-        }
-
-        #exhaust(Float.arbitrary) { val in
+    func floatSpecialValuesRoundTrip() {
+        #exhaust(#gen(.float())) { val in
             Float(bitPattern64: val.bitPattern64) == val
         }
     }
@@ -124,10 +88,10 @@ struct BitPatternConvertibleTests {
     }
 
     @Test("Property test Float bit pattern representation is sequential with size")
-    func propertyTestFloatBitPatternSequentiality() throws {
-        let gen = Gen.zip(
-            Gen.choose(in: -Float.greatestFiniteMagnitude ... 0),
-            Gen.choose(in: 1 ... Float.greatestFiniteMagnitude.nextDown),
+    func propertyTestFloatBitPatternSequentiality() {
+        let gen = #gen(
+            .float(in: -Float.greatestFiniteMagnitude ... Float(0)),
+            .float(in: Float(1) ... Float.greatestFiniteMagnitude.nextDown)
         )
         #exhaust(gen) { low, high in
             low.bitPattern64 < high.bitPattern64
@@ -135,28 +99,9 @@ struct BitPatternConvertibleTests {
     }
 
     @Test("Double BitPatternConvertible round-trip for special values")
-    func doubleSpecialValuesRoundTrip() throws {
-        let testValues: [Double] = [
-            Double.zero,
-            -Double.zero,
-            1.0,
-            -1.0,
-            Double.pi,
-            -Double.pi,
-            Double.greatestFiniteMagnitude,
-            -Double.greatestFiniteMagnitude,
-            Double.leastNormalMagnitude,
-            -Double.leastNormalMagnitude,
-        ]
-
-        #exhaust(Double.arbitrary) { val in
+    func doubleSpecialValuesRoundTrip() {
+        #exhaust(#gen(.double())) { val in
             Double(bitPattern64: val.bitPattern64) == val
-        }
-
-        for value in testValues {
-            let bitPattern = value.bitPattern64
-            let reconstructed = Double(bitPattern64: bitPattern)
-            #expect(reconstructed == value, "Round-trip failed for Double(\(value)): got \(reconstructed)")
         }
     }
 
@@ -181,10 +126,10 @@ struct BitPatternConvertibleTests {
     }
 
     @Test("Property test Double bit pattern representation is sequential with size")
-    func propertyTestDoubleBitPatternSequentiality() throws {
-        let gen = Gen.zip(
-            Gen.choose(in: -Double.greatestFiniteMagnitude ... 0),
-            Gen.choose(in: 1 ... Double.greatestFiniteMagnitude.nextDown),
+    func propertyTestDoubleBitPatternSequentiality() {
+        let gen = #gen(
+            .double(in: -Double.greatestFiniteMagnitude ... 0),
+            .double(in: 1 ... Double.greatestFiniteMagnitude.nextDown)
         )
         #exhaust(gen) { low, high in
             low.bitPattern64 < high.bitPattern64
@@ -192,117 +137,52 @@ struct BitPatternConvertibleTests {
     }
 
     @Test("UInt64 to Float mapping round-trip consistency")
-    func uInt64ToFloatMappingRoundTrip() throws {
-        // Test that we can convert any UInt64 within Float range to Float and back
-        let testValues: [UInt64] = [
-            0,
-            1,
-            UInt64(UInt32.max) / 4,
-            UInt64(UInt32.max) / 2,
-            UInt64(UInt32.max) / 2 + 1,
-            UInt64(UInt32.max) - 1,
-            UInt64(UInt32.max),
-        ]
-
-        #exhaust(UInt64.arbitrary) { val in
-            UInt64(bitPattern64: val.bitPattern64) == val
-        }
-
-        for bitPattern in testValues {
-            let floatValue = Float(bitPattern64: bitPattern)
-            let reconstructed = floatValue.bitPattern64
-            #expect(reconstructed == bitPattern, "Round-trip failed for UInt64(\(bitPattern)): got \(reconstructed)")
+    func uInt64ToFloatMappingRoundTrip() {
+        #exhaust(#gen(.uint64(in: UInt64(0) ... UInt64(UInt32.max)))) { bitPattern in
+            Float(bitPattern64: bitPattern).bitPattern64 == bitPattern
         }
     }
 
     @Test("UInt64 to Double mapping round-trip consistency")
     func uInt64ToDoubleMappingRoundTrip() {
-        // Test that we can convert any UInt64 to Double and back
-        let testValues: [UInt64] = [
-            UInt64.min,
-            1,
-            UInt64.max / 4,
-            UInt64.max / 2,
-            UInt64.max / 2 + 1,
-            UInt64.max - 1,
-            UInt64.max,
-        ]
-
-        for bitPattern in testValues {
-            let doubleValue = Double(bitPattern64: bitPattern)
-            let reconstructed = doubleValue.bitPattern64
-            #expect(reconstructed == bitPattern, "Round-trip failed for UInt64(\(bitPattern)): got \(reconstructed)")
+        #exhaust(#gen(.uint64())) { bitPattern in
+            Double(bitPattern64: bitPattern).bitPattern64 == bitPattern
         }
     }
 
     // MARK: - Signed Integer Tests
 
     @Test("Int8 BitPatternConvertible round-trip")
-    func int8BitPatternRoundTrip() throws {
-        let testValues: [Int8] = [Int8.min, -1, 0, 1, Int8.max]
-
-        #exhaust(Int8.arbitrary) { val in
+    func int8BitPatternRoundTrip() {
+        #exhaust(#gen(.int8())) { val in
             Int8(bitPattern64: val.bitPattern64) == val
-        }
-
-        for value in testValues {
-            let bitPattern = value.bitPattern64
-            let reconstructed = Int8(bitPattern64: bitPattern)
-            #expect(reconstructed == value, "Round-trip failed for Int8(\(value)): got \(reconstructed)")
         }
     }
 
     @Test("Int16 BitPatternConvertible round-trip")
-    func int16BitPatternRoundTrip() throws {
-        let testValues: [Int16] = [Int16.min, -1000, -1, 0, 1, 1000, Int16.max]
-
-        #exhaust(Int16.arbitrary) { val in
+    func int16BitPatternRoundTrip() {
+        #exhaust(#gen(.int16())) { val in
             Int16(bitPattern64: val.bitPattern64) == val
-        }
-
-        for value in testValues {
-            let bitPattern = value.bitPattern64
-            let reconstructed = Int16(bitPattern64: bitPattern)
-            #expect(reconstructed == value, "Round-trip failed for Int16(\(value)): got \(reconstructed)")
         }
     }
 
     @Test("Int32 BitPatternConvertible round-trip")
-    func int32BitPatternRoundTrip() throws {
-        let testValues: [Int32] = [Int32.min, -100_000, -1, 0, 1, 100_000, Int32.max]
-
-        #exhaust(Int32.arbitrary) { val in
+    func int32BitPatternRoundTrip() {
+        #exhaust(#gen(.int32())) { val in
             Int32(bitPattern64: val.bitPattern64) == val
-        }
-
-        for value in testValues {
-            let bitPattern = value.bitPattern64
-            let reconstructed = Int32(bitPattern64: bitPattern)
-            #expect(reconstructed == value, "Round-trip failed for Int32(\(value)): got \(reconstructed)")
         }
     }
 
     @Test("Int64 BitPatternConvertible round-trip")
-    func int64BitPatternRoundTrip() throws {
-        let testValues: [Int64] = [Int64.min, -1_000_000_000, -1, 0, 1, 1_000_000_000, Int64.max]
-
-        #exhaust(Int64.arbitrary) { val in
+    func int64BitPatternRoundTrip() {
+        #exhaust(#gen(.int64())) { val in
             Int64(bitPattern64: val.bitPattern64) == val
-        }
-
-        for value in testValues {
-            let bitPattern = value.bitPattern64
-            let reconstructed = Int64(bitPattern64: bitPattern)
-            #expect(reconstructed == value, "Round-trip failed for Int64(\(value)): got \(reconstructed)")
         }
     }
 
     @Test("Property test Int64 bit pattern representation is sequential with size")
-    func propertyTestSignedIntegerBitPatternSequentiality() throws {
-        let gen = Gen.zip(
-            Gen.choose(in: Int64.min ... 0),
-            Gen.choose(in: 1 ... Int64.max),
-        )
+    func propertyTestSignedIntegerBitPatternSequentiality() {
+        let gen = #gen(.int64(in: Int64.min ... Int64(0)), .int64(in: Int64(1) ... Int64.max))
         #exhaust(gen) { low, high in
             low.bitPattern64 < high.bitPattern64
         }
@@ -312,56 +192,36 @@ struct BitPatternConvertibleTests {
 
     @Test("UInt8 BitPatternConvertible round-trip")
     func uInt8BitPatternRoundTrip() {
-        let testValues: [UInt8] = [UInt8.min, 1, 127, 128, 255]
-
-        for value in testValues {
-            let bitPattern = value.bitPattern64
-            let reconstructed = UInt8(bitPattern64: bitPattern)
-            #expect(reconstructed == value, "Round-trip failed for UInt8(\(value)): got \(reconstructed)")
+        #exhaust(#gen(.uint8())) { val in
+            UInt8(bitPattern64: val.bitPattern64) == val
         }
     }
 
     @Test("UInt16 BitPatternConvertible round-trip")
     func uInt16BitPatternRoundTrip() {
-        let testValues: [UInt16] = [UInt16.min, 1, 1000, 32767, 32768, UInt16.max]
-
-        for value in testValues {
-            let bitPattern = value.bitPattern64
-            let reconstructed = UInt16(bitPattern64: bitPattern)
-            #expect(reconstructed == value, "Round-trip failed for UInt16(\(value)): got \(reconstructed)")
+        #exhaust(#gen(.uint16())) { val in
+            UInt16(bitPattern64: val.bitPattern64) == val
         }
     }
 
     @Test("UInt32 BitPatternConvertible round-trip")
     func uInt32BitPatternRoundTrip() {
-        let testValues: [UInt32] = [UInt32.min, 1, 100_000, 2_147_483_647, 2_147_483_648, UInt32.max]
-
-        for value in testValues {
-            let bitPattern = value.bitPattern64
-            let reconstructed = UInt32(bitPattern64: bitPattern)
-            #expect(reconstructed == value, "Round-trip failed for UInt32(\(value)): got \(reconstructed)")
+        #exhaust(#gen(.uint32())) { val in
+            UInt32(bitPattern64: val.bitPattern64) == val
         }
     }
 
     @Test("UInt64 BitPatternConvertible round-trip")
     func uInt64BitPatternRoundTrip() {
-        let testValues: [UInt64] = [UInt64.min, 1, 1_000_000_000, UInt64.max / 2, UInt64.max]
-
-        for value in testValues {
-            let bitPattern = value.bitPattern64
-            let reconstructed = UInt64(bitPattern64: bitPattern)
-            #expect(reconstructed == value, "Round-trip failed for UInt64(\(value)): got \(reconstructed)")
+        #exhaust(#gen(.uint64())) { val in
+            UInt64(bitPattern64: val.bitPattern64) == val
         }
     }
 
     @Test("UInt BitPatternConvertible round-trip")
     func uIntBitPatternRoundTrip() {
-        let testValues: [UInt] = [UInt.min, 1, 1_000_000, UInt.max / 2, UInt.max]
-
-        for value in testValues {
-            let bitPattern = value.bitPattern64
-            let reconstructed = UInt(bitPattern64: bitPattern)
-            #expect(reconstructed == value, "Round-trip failed for UInt(\(value)): got \(reconstructed)")
+        #exhaust(#gen(.uint())) { val in
+            UInt(bitPattern64: val.bitPattern64) == val
         }
     }
 }

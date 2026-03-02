@@ -51,12 +51,16 @@ struct ReproducibilityTests {
 
     @Test("scaledSize cycles 1...100 independently of maxRuns")
     func scaledSizeCycling() {
-        #expect(GenerationContext.scaledSize(forRun: 0) == 1)
-        #expect(GenerationContext.scaledSize(forRun: 99) == 100)
-        #expect(GenerationContext.scaledSize(forRun: 100) == 1)
-
+        // All 100 sizes appear in each cycle
         let fullCycle = (0 as UInt64 ..< 100).map { GenerationContext.scaledSize(forRun: $0) }
         #expect(Set(fullCycle) == Set(1 ... 100))
+
+        // Range and periodicity hold for arbitrary run indices
+        #exhaust(#gen(.uint64(in: 0 ... 10000))) { n in
+            let size = GenerationContext.scaledSize(forRun: n)
+            let cycled = GenerationContext.scaledSize(forRun: n + 100)
+            return size >= 1 && size <= 100 && size == cycled
+        }
     }
 
     @Test("runSeed produces distinct seeds for 1000 consecutive runs")

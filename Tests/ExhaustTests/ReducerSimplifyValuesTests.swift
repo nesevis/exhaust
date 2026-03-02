@@ -27,52 +27,36 @@ private func generate<Output>(
 
 @Suite("ChoiceValue.semanticSimplest")
 struct SemanticSimplestTests {
-    @Test("Unsigned simplest is 0")
+    @Test("Unsigned semanticSimplest is always .unsigned(0, ...)")
     func unsignedSimplest() {
-        let value = ChoiceValue.unsigned(42, UInt64.self)
-        let simplest = value.semanticSimplest
-        #expect(simplest == .unsigned(0, UInt64.self))
+        #exhaust(#gen(.uint64(in: 0 ... 100000))) { rawValue in
+            ChoiceValue.unsigned(rawValue, UInt64.self).semanticSimplest == .unsigned(0, UInt64.self)
+        }
     }
 
-    @Test("Unsigned 0 is already simplest")
-    func unsignedAlreadySimplest() {
-        let value = ChoiceValue.unsigned(0, UInt64.self)
-        #expect(value.semanticSimplest == value)
-    }
-
-    @Test("Signed simplest is 0")
+    @Test("Signed semanticSimplest always has value 0")
     func signedSimplest() {
-        let value = ChoiceValue(Int64(42), tag: .int64)
-        let simplest = value.semanticSimplest
-        if case let .signed(int64Val, _, _) = simplest {
-            #expect(int64Val == 0)
-        } else {
-            Issue.record("Expected .signed case")
+        #exhaust(#gen(.int64(in: -50000 ... 50000))) { rawValue in
+            let simplest = ChoiceValue(rawValue, tag: .int64).semanticSimplest
+            guard case let .signed(int64Val, _, _) = simplest else { return false }
+            return int64Val == 0
         }
     }
 
-    @Test("Float simplest is 0.0")
+    @Test("Float semanticSimplest is always 0.0")
     func floatSimplest() {
-        let value = ChoiceValue(3.14, tag: .double)
-        let simplest = value.semanticSimplest
-        if case let .floating(doubleVal, _, _) = simplest {
-            #expect(doubleVal == 0.0)
-        } else {
-            Issue.record("Expected .floating case")
+        #exhaust(#gen(.double(in: -1000.0 ... 1000.0))) { rawValue in
+            let simplest = ChoiceValue(rawValue, tag: .double).semanticSimplest
+            guard case let .floating(doubleVal, _, _) = simplest else { return false }
+            return doubleVal == 0.0
         }
     }
 
-    @Test("Character simplest is ' '")
+    @Test("Character semanticSimplest is always ' '")
     func characterSimplest() {
-        let value = ChoiceValue.character("Z")
-        let simplest = value.semanticSimplest
-        #expect(simplest == .character(" "))
-    }
-
-    @Test("Character ' ' is already simplest")
-    func characterAlreadySimplest() {
-        let value = ChoiceValue.character(" ")
-        #expect(value.semanticSimplest == value)
+        #exhaust(Character.arbitraryAscii) { char in
+            ChoiceValue.character(char).semanticSimplest == .character(" ")
+        }
     }
 }
 

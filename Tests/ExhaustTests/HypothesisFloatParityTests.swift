@@ -271,38 +271,30 @@ struct HypothesisFloatShrinkingParityTests {
 struct HypothesisFloatEncodingParityTests {
     @Test("Integral floats order as integers")
     func integralFloatsOrderAsIntegers() {
-        // Adjustment relative to `test_integral_floats_order_as_integers`:
-        // deterministic representative samples in place of property-driven generation.
-        let values: [Double] = [0, 1, 2, 4, 8, 10, 16, 32, 64, 100, 128, 256, 500, 512, 1000, 1024]
-        for (lhs, rhs) in zip(values, values.dropFirst()) {
-            #expect(FloatShortlex.shortlexKey(for: lhs) < FloatShortlex.shortlexKey(for: rhs))
+        #exhaust(#gen(.uint64(in: 0 ... (1 << 20)), .uint64(in: 0 ... (1 << 20)))) { a, b in
+            guard a < b else { return true }
+            return FloatShortlex.shortlexKey(for: Double(a)) < FloatShortlex.shortlexKey(for: Double(b))
         }
     }
 
     @Test("Fractional floats in (0, 1) are ordered after one")
     func fractionalFloatsWorseThanOne() {
-        // Adjustment relative to `test_fractional_floats_are_worse_than_one`:
-        // deterministic samples in place of property-driven generation.
-        let fractions: [Double] = [Double.ulpOfOne, 0.125, 0.25, 0.5, 0.75, 0.999]
-        for value in fractions {
-            #expect(FloatShortlex.shortlexKey(for: value) > FloatShortlex.shortlexKey(for: 1.0))
+        let gen = #gen(.double(in: Double.leastNonzeroMagnitude ... 1.0.nextDown))
+        #exhaust(gen) { value in
+            FloatShortlex.shortlexKey(for: value) > FloatShortlex.shortlexKey(for: 1.0)
         }
     }
 
     @Test("Non-integral float is ordered after its integral part")
     func nonIntegralWorseThanIntegralPart() {
-        // Adjustment relative to `test_floats_order_worse_than_their_integral_part`:
-        // deterministic positive/negative examples in place of property-driven generation.
-        let positives: [Double] = [1.1, 2.5, 100.75]
-        for value in positives {
-            let integral = floor(value)
-            #expect(FloatShortlex.shortlexKey(for: integral) < FloatShortlex.shortlexKey(for: value))
+        let posGen = #gen(.double(in: 1.0 ... 1000.0)).filter { $0.truncatingRemainder(dividingBy: 1.0) != 0 }
+        #exhaust(posGen) { value in
+            FloatShortlex.shortlexKey(for: floor(value)) < FloatShortlex.shortlexKey(for: value)
         }
 
-        let negatives: [Double] = [-1.1, -2.5, -100.75]
-        for value in negatives {
-            let integral = ceil(value)
-            #expect(FloatShortlex.shortlexKey(for: integral) < FloatShortlex.shortlexKey(for: value))
+        let negGen = #gen(.double(in: -1000.0 ... -1.0)).filter { $0.truncatingRemainder(dividingBy: 1.0) != 0 }
+        #exhaust(negGen) { value in
+            FloatShortlex.shortlexKey(for: ceil(value)) < FloatShortlex.shortlexKey(for: value)
         }
     }
 }
