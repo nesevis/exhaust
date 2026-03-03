@@ -97,7 +97,8 @@ public extension Gen {
         // closure throws and .mapped propagates that via rethrows (from FreerMonad.bind),
         // which would force this function to be marked throws — even though the throw
         // only happens at reflection time, never during construction.
-        Gen.contramap(
+        let count = collection.count
+        return Gen.contramap(
             { (element: C.Element) throws -> Int in
                 guard let index = collection.firstIndex(of: element) else {
                     throw Interpreters.ReflectionError.couldNotReflectOnSequenceElement("Collection does not contain \(element)")
@@ -105,7 +106,8 @@ public extension Gen {
                 return index
             },
             Gen.choose(in: collection.startIndex ... collection.endIndex.advanced(by: -1))
-                .map { collection[$0] },
+                // We're using round-robin indexing here so that the lookup does not fail when shrinking
+                .map { collection[$0 % count] },
         )
     }
 
