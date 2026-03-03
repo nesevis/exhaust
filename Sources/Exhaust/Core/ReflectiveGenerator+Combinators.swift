@@ -72,6 +72,42 @@ public extension ReflectiveGenerator where Operation == ReflectiveOperation {
         return Gen.contramap(erasedBackward, erasedGen)
     }
 
+    /// Creates a bidirectional transformation using a partial path for forward and a function for backward.
+    ///
+    /// This overload uses a `PartialPath` for the forward transformation and a closure for
+    /// the backward direction. The result type is optional because the forward path extraction
+    /// may not match.
+    ///
+    /// - Parameters:
+    ///   - forward: Partial path to transform from original to new type
+    ///   - backward: Function to transform back during reflection
+    /// - Returns: A generator producing optional values of the new type
+    /// - Throws: Errors from path extraction during setup
+    @inlinable
+    func mapped<NewOutput>(
+        forward: some PartialPath<Value, NewOutput>,
+        backward: @escaping (NewOutput) throws -> Value,
+    ) throws -> ReflectiveGenerator<NewOutput?> {
+        let erasedBackward: (Any) throws -> Any = { try backward($0 as! NewOutput) }
+        let erasedGen = try map { try forward.extract(from: $0) }
+
+        return Gen.contramap(erasedBackward, erasedGen)
+    }
+
+    /// Transforms generated values through a partial path, producing optional results.
+    ///
+    /// Applies the partial path's extraction to each generated value. Since extraction
+    /// may fail (e.g. a case path that doesn't match), the result type is optional.
+    ///
+    /// - Parameter path: Partial path to extract the new value from the generated value
+    /// - Returns: A generator producing optional values of the extracted type
+    @inlinable
+    func map<NewOutput>(
+        _ path: some PartialPath<Value, NewOutput>,
+    ) throws -> ReflectiveGenerator<NewOutput?> {
+        try map { try path.extract(from: $0) }
+    }
+
     /// Converts this generator to produce optional values, enabling nil/non-nil choice patterns.
     ///
     /// This transformation is essential for generators that need to handle optional types
