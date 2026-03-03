@@ -43,11 +43,11 @@ public struct ScalarRangeSet: Sendable {
 
     /// Maps a flat index in `0..<scalarCount` to the corresponding `Unicode.Scalar`.
     /// Uses binary search over cumulative range sizes for O(log n) lookup.
+    /// Out-of-range indices are clamped so the shrinker can safely explore candidates.
     public func scalar(at index: Int) -> Unicode.Scalar {
-        precondition(index >= 0 && index < scalarCount, "Index \(index) out of bounds (0..<\(scalarCount))")
-
-        let rangeIndex = rangeIndex(forFlatIndex: index)
-        let offsetInRange = index - cumulativeCounts[rangeIndex]
+        let clamped = min(max(index, 0), scalarCount - 1)
+        let rangeIndex = rangeIndex(forFlatIndex: clamped)
+        let offsetInRange = clamped - cumulativeCounts[rangeIndex]
         let scalarValue = rangesArray[rangeIndex].lowerBound + UInt32(offsetInRange)
         return Unicode.Scalar(scalarValue)!
     }
@@ -114,6 +114,9 @@ extension CharacterSet {
             extractRanges(from: bitmap, byteStart: offset, planeBase: planeIndex &* 0x10000, into: &rangeSet)
             offset += planeSize
         }
+
+        // Surrogates (U+D800–U+DFFF) appear in the BMP bitmap but aren't valid Unicode scalars.
+        rangeSet.remove(contentsOf: 0xD800 ..< 0xE000)
 
         return ScalarRangeSet(rangeSet)
     }
