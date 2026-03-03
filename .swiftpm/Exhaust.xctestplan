@@ -15,9 +15,22 @@
     }
   ],
   "defaultOptions" : {
+    "codeCoverageEnabled" : true,
     "performanceAntipatternCheckerEnabled" : true,
     "testExecutionOrdering" : "random"
   },
+  "codeCoverageTargets" : [
+    {
+      "containerPath" : "container:",
+      "identifier" : "ExhaustCore",
+      "name" : "ExhaustCore"
+    },
+    {
+      "containerPath" : "container:",
+      "identifier" : "Exhaust",
+      "name" : "Exhaust"
+    }
+  ],
   "testTargets" : [
     {
       "parallelizable" : true,
