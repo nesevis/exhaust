@@ -113,9 +113,9 @@ struct AdvancedCoupledScenariosTests {
 
     @Test("2.1 Coupled Integers (fast-check)")
     func coupledIntegersFastCheckStyle() throws {
-        let gen = Gen.zip(
-            Gen.choose(in: Int(0) ... 1_000_000),
-            Gen.choose(in: Int(0) ... 1_000_000),
+        let gen = #gen(
+            .int(in: 0 ... 1_000_000),
+            .int(in: 0 ... 1_000_000)
         )
 
         let property: ((Int, Int)) -> Bool = { pair in
@@ -140,9 +140,9 @@ struct AdvancedCoupledScenariosTests {
 
     @Test("2.2 Stateful Stack Bug (jqwik)")
     func statefulStackBugJqwikStyle() throws {
-        let actionGen: ReflectiveGenerator<AdvancedCoupledFixtures.StackAction> = Gen.zip(
-            Gen.choose(in: Int(0) ... 1),
-            Gen.element(from: ["a", "b", "c"]),
+        let actionGen: ReflectiveGenerator<AdvancedCoupledFixtures.StackAction> = #gen(
+            .int(in: 0 ... 1),
+            Gen.element(from: ["a", "b", "c"])
         )
         .mapped(
             forward: { tag, value in
@@ -158,7 +158,7 @@ struct AdvancedCoupledScenariosTests {
             },
         )
 
-        let gen = Gen.arrayOf(actionGen, within: 1 ... 40)
+        let gen = actionGen.array(length: 1 ... 40)
         let property: ([AdvancedCoupledFixtures.StackAction]) -> Bool = { actions in
             AdvancedCoupledFixtures.stackInvariantHolds(actions: actions)
         }
@@ -175,11 +175,9 @@ struct AdvancedCoupledScenariosTests {
 
     @Test("2.3 Run-Length Encoding Regression (Hypothesis)")
     func runLengthEncodingRegressionHypothesisStyle() throws {
-        let binaryStringGen = Gen.arrayOf(
-            Gen.element(from: Array("01")),
-            within: 0 ... 40,
-        )
-        .mapped(
+        let binaryStringGen = Gen.element(from: Array("01"))
+            .array(length: 0 ... 40)
+            .mapped(
             forward: { chars in String(chars) },
             backward: { string in Array(string) },
         )
@@ -200,9 +198,9 @@ struct AdvancedCoupledScenariosTests {
 
     @Test("2.4 Floating Point Summation (Hypothesis)")
     func floatingPointSummationHypothesisStyle() throws {
-        let gen = Gen.zip(
-            Gen.choose(in: 0.0 ... 1000.0),
-            Gen.choose(in: 0.0 ... 1000.0),
+        let gen = #gen(
+            .double(in: 0.0 ... 1000.0),
+            .double(in: 0.0 ... 1000.0)
         )
 
         let property: ((Double, Double)) -> Bool = { pair in
@@ -223,11 +221,9 @@ struct AdvancedCoupledScenariosTests {
     @Test("2.5 Nasty Strings (Hypothesis)")
     func nastyUnicodeStringsHypothesisStyle() throws {
         let marker = "𝕿𝖍𝖊"
-        let unicodeStringGen = Gen.arrayOf(
-            Gen.element(from: Array("xy The𝕿𝖍𝖊")),
-            within: 0 ... 40,
-        )
-        .mapped(
+        let unicodeStringGen = Gen.element(from: Array("xy The𝕿𝖍𝖊"))
+            .array(length: 0 ... 40)
+            .mapped(
             forward: { chars in String(chars) },
             backward: { string in Array(string) },
         )
@@ -248,9 +244,9 @@ struct AdvancedCoupledScenariosTests {
 
     @Test("2.6 Difference with Gap (CsCheck)")
     func differenceWithGapCsCheckStyle() throws {
-        let gen = Gen.zip(
-            Gen.choose(in: Int(0) ... 1_000_000),
-            Gen.choose(in: Int(0) ... 1_000_000),
+        let gen = #gen(
+            .int(in: 0 ... 1_000_000),
+            .int(in: 0 ... 1_000_000)
         )
 
         let property: ((Int, Int)) -> Bool = { pair in

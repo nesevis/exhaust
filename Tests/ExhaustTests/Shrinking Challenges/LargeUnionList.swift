@@ -21,8 +21,8 @@ struct LargeUnionListShrinkingChallenge {
      */
 
     static let gen: ReflectiveGenerator<[[Int]]> = {
-        let arrGen = Gen.arrayOf(Int.arbitrary, within: 1 ... 10)
-        return Gen.arrayOf(arrGen, within: 1 ... 10)
+        let arrGen = Int.arbitrary.array(length: 1 ... 10)
+        return arrGen.array(length: 1 ... 10)
     }()
 
     static let property: ([[Int]]) -> Bool = { arr in

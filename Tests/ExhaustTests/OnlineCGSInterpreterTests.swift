@@ -22,18 +22,12 @@ private enum BST: Equatable, Hashable {
 
     private static func bstGenerator(maxDepth: Int) -> ReflectiveGenerator<BST> {
         if maxDepth <= 0 {
-            return Gen.just(.leaf)
+            return #gen(.just(.leaf))
         }
-        return Gen.pick(choices: [
-            (weight: 1, Gen.just(.leaf)),
-            (weight: 3, Gen.zip(
-                bstGenerator(maxDepth: maxDepth - 1),
-                Gen.choose(in: UInt(0) ... 9),
-                bstGenerator(maxDepth: maxDepth - 1),
-            ).map { left, value, right in
-                .node(left: left, value: value, right: right)
-            }),
-        ])
+        let nodeBranch = #gen(bstGenerator(maxDepth: maxDepth - 1), .uint(in: 0 ... 9), bstGenerator(maxDepth: maxDepth - 1)).map { left, value, right in
+            BST.node(left: left, value: value, right: right)
+        }
+        return #gen(.oneOf(weighted: (1, .just(.leaf)), (3, nodeBranch)))
     }
 
     func isValidBST() -> Bool {
@@ -101,10 +95,10 @@ struct OnlineCGSInterpreterTests {
 
     @Test("Pick guidance: CGS favours branch matching predicate")
     func simplePickGuidance() {
-        let gen = Gen.pick(choices: [
-            (weight: UInt64(1), generator: Gen.choose(in: 1 ... 100)),
-            (weight: UInt64(1), generator: Gen.choose(in: 901 ... 1000)),
-        ])
+        let gen = #gen(.oneOf(weighted:
+            (1, .int(in: 1 ... 100)),
+            (1, .int(in: 901 ... 1000))
+        ))
         let predicate: (Int) -> Bool = { $0 <= 100 }
 
         let cgsValues = Array(
@@ -134,10 +128,10 @@ struct OnlineCGSInterpreterTests {
 
     @Test("Same seed produces same output sequence")
     func deterministicSeeding() {
-        let gen = Gen.pick(choices: [
-            (weight: UInt64(1), generator: Gen.choose(in: 1 ... 500)),
-            (weight: UInt64(1), generator: Gen.choose(in: 501 ... 1000)),
-        ])
+        let gen = #gen(.oneOf(weighted:
+            (1, .int(in: 1 ... 500)),
+            (1, .int(in: 501 ... 1000))
+        ))
         let predicate: (Int) -> Bool = { $0 <= 250 }
 
         let values1 = Array(
@@ -167,9 +161,9 @@ struct OnlineCGSInterpreterTests {
 
     @Test("Zip: CGS guidance improves joint predicate satisfaction")
     func zipCGSGuidance() {
-        let gen = Gen.zip(
-            Gen.choose(in: 1 ... 20),
-            Gen.choose(in: 1 ... 20),
+        let gen = #gen(
+            .int(in: 1 ... 20),
+            .int(in: 1 ... 20)
         )
         let predicate: ((Int, Int)) -> Bool = { $0.0 + $0.1 < 10 }
 
@@ -199,7 +193,7 @@ struct OnlineCGSInterpreterTests {
 
     @Test("ChooseBits subdivision concentrates output in favoured subrange")
     func chooseBitsSubdivision() {
-        let gen = Gen.choose(in: UInt64(1) ... 1000)
+        let gen = #gen(.uint64(in: 1 ... 1000))
         let predicate: (UInt64) -> Bool = { $0 < 100 }
 
         let cgsValues = Array(
@@ -262,10 +256,10 @@ struct OnlineCGSInterpreterTests {
 
     @Test("All-zero fallback: unsatisfiable predicate falls back to equal weights")
     func allZeroFallback() {
-        let gen = Gen.pick(choices: [
-            (weight: UInt64(1), generator: Gen.choose(in: 1 ... 10)),
-            (weight: UInt64(1), generator: Gen.choose(in: 11 ... 20)),
-        ])
+        let gen = #gen(.oneOf(weighted:
+            (1, .int(in: 1 ... 10)),
+            (1, .int(in: 11 ... 20))
+        ))
 
         // Predicate that nothing can satisfy
         let predicate: (Int) -> Bool = { _ in false }

@@ -97,7 +97,7 @@ public struct GenerateMacro: ExpressionMacro {
         if generatorArgs.count == 1 {
             let genExpr = generatorArgs[0].expression.trimmedDescription
             let label = result.labels[0]
-            return "Gen._macroMap(\(raw: genExpr), label: \"\(raw: label)\", forward: \(raw: closureText))"
+            return "__ExhaustRuntime._macroMap(\(raw: genExpr), label: \"\(raw: label)\", forward: \(raw: closureText))"
         } else {
             let genExprs = generatorArgs.map(\.expression.trimmedDescription)
             let zipArgs = genExprs.joined(separator: ", ")
@@ -105,7 +105,7 @@ public struct GenerateMacro: ExpressionMacro {
             let backwardLabels = buildBackwardLabels(result: result)
             let labelsArray = backwardLabels.map { "\"\($0)\"" }.joined(separator: ", ")
 
-            return "Gen._macroZip(\(raw: zipArgs), labels: [\(raw: labelsArray)], forward: \(raw: closureText))"
+            return "__ExhaustRuntime._macroZip(\(raw: zipArgs), labels: [\(raw: labelsArray)], forward: \(raw: closureText))"
         }
     }
 
@@ -150,7 +150,7 @@ public struct GenerateMacro: ExpressionMacro {
         if generatorArgs.count == 1 {
             let genExpr = generatorArgs[0].expression.trimmedDescription
             let backward = "{ guard case let \(casePattern) = $0 else { return nil }; return v0 }"
-            return "Gen._macroMap(\(raw: genExpr), backward: \(raw: backward), forward: \(raw: closureText))"
+            return "__ExhaustRuntime._macroMap(\(raw: genExpr), backward: \(raw: backward), forward: \(raw: closureText))"
         } else {
             let genExprs = generatorArgs.map(\.expression.trimmedDescription)
             let zipArgs = genExprs.joined(separator: ", ")
@@ -160,7 +160,7 @@ public struct GenerateMacro: ExpressionMacro {
             let returnValues = paramOrder.map { "v\($0) as Any" }.joined(separator: ", ")
 
             let backward = "{ guard case let \(casePattern) = $0 else { return nil }; return [\(returnValues)] }"
-            return "Gen._macroZip(\(raw: zipArgs), backward: \(raw: backward), forward: \(raw: closureText))"
+            return "__ExhaustRuntime._macroZip(\(raw: zipArgs), backward: \(raw: backward), forward: \(raw: closureText))"
         }
     }
 
@@ -180,7 +180,7 @@ public struct GenerateMacro: ExpressionMacro {
     /// Builds the expansion for a single-generator, unlabeled-argument closure
     /// (e.g. `#gen(.uint64()) { Int($0) }`).
     ///
-    /// Emits `Gen._macroMapScalar(gen, forward: closure)` which has constrained overloads
+    /// Emits `__ExhaustRuntime._macroMapScalar(gen, forward: closure)` which has constrained overloads
     /// for `BinaryInteger` and `BinaryFloatingPoint` that synthesize the backward pass
     /// at compile time, with an unconstrained fallback that is forward-only.
     private static func buildScalarConversionExpansion(
@@ -189,7 +189,7 @@ public struct GenerateMacro: ExpressionMacro {
     ) -> ExprSyntax {
         let genExpr = generatorArg.expression.trimmedDescription
         let closureText = closure.trimmedDescription
-        return "Gen._macroMapScalar(\(raw: genExpr), forward: \(raw: closureText))"
+        return "__ExhaustRuntime._macroMapScalar(\(raw: genExpr), forward: \(raw: closureText))"
     }
 
     /// Builds the expansion for the no-closure overload: pass through or zip.
@@ -202,7 +202,7 @@ public struct GenerateMacro: ExpressionMacro {
         } else {
             let genExprs = generatorArgs.map(\.expression.trimmedDescription)
             let zipArgs = genExprs.joined(separator: ", ")
-            return "Gen.zip(\(raw: zipArgs))"
+            return "__ExhaustRuntime.__zip(\(raw: zipArgs))"
         }
     }
 
@@ -219,7 +219,7 @@ public struct GenerateMacro: ExpressionMacro {
         } else {
             let genExprs = generatorArgs.map(\.expression.trimmedDescription)
             let zipArgs = genExprs.joined(separator: ", ")
-            return "Gen.zip(\(raw: zipArgs)).map \(raw: closureText)"
+            return "__ExhaustRuntime.__zip(\(raw: zipArgs)).map \(raw: closureText)"
         }
     }
 }

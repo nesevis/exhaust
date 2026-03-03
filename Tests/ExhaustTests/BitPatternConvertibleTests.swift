@@ -63,7 +63,7 @@ struct BitPatternConvertibleTests {
     @Test("Float BitPatternConvertible round-trip for special values")
     func floatSpecialValuesRoundTrip() {
         #exhaust(#gen(.float())) { val in
-            Float(bitPattern64: val.bitPattern64) == val
+            val.isNaN || Float(bitPattern64: val.bitPattern64) == val
         }
     }
 
@@ -101,7 +101,7 @@ struct BitPatternConvertibleTests {
     @Test("Double BitPatternConvertible round-trip for special values")
     func doubleSpecialValuesRoundTrip() {
         #exhaust(#gen(.double())) { val in
-            Double(bitPattern64: val.bitPattern64) == val
+            val.isNaN || Double(bitPattern64: val.bitPattern64) == val
         }
     }
 

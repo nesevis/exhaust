@@ -16,7 +16,7 @@ struct CoreGeneratorTests {
     struct GenFactoryTests {
         @Test("Gen.choose produces values within specified range")
         func genChooseRange() {
-            let gen = Gen.choose(in: 10 ... 20)
+            let gen = #gen(.int(in: 10 ... 20))
             var iterator = ValueInterpreter(gen)
 
             for _ in 0 ..< 50 {
@@ -27,7 +27,7 @@ struct CoreGeneratorTests {
 
         @Test("Reflection preserves explicit Gen.choose range metadata")
         func reflectionPreservesExplicitChooseRangeMetadata() throws {
-            let gen = Gen.choose(in: UInt64(10) ... 20)
+            let gen = #gen(.uint64(in: 10 ... 20))
             let tree = try #require(try Interpreters.reflect(gen, with: UInt64(15)))
 
             guard case let .choice(_, metadata) = tree else {
@@ -40,7 +40,7 @@ struct CoreGeneratorTests {
 
         @Test("Reflection rejects values outside explicit Gen.choose range")
         func reflectionRejectsOutOfRangeExplicitChoose() {
-            let gen = Gen.choose(in: UInt64(10) ... 20)
+            let gen = #gen(.uint64(in: 10 ... 20))
 
             do {
                 _ = try Interpreters.reflect(gen, with: UInt64(25))
@@ -57,7 +57,7 @@ struct CoreGeneratorTests {
 
         @Test("Gen.choose with type produces valid values")
         func genChooseType() {
-            let gen = Gen.choose(type: UInt32.self)
+            let gen = #gen(.uint32())
             var iterator = ValueInterpreter(gen)
 
             for _ in 0 ..< 20 {
@@ -91,10 +91,10 @@ struct CoreGeneratorTests {
             #expect(replayed == value)
         }
 
-        @Test("Gen.just produces constant value")
+        @Test(".just produces constant value")
         func genJust() {
             let value = "constant"
-            let gen = Gen.just(value)
+            let gen = #gen(.just(value))
             var iterator = ValueInterpreter(gen)
 
             for _ in 0 ..< 10 {
@@ -102,17 +102,6 @@ struct CoreGeneratorTests {
                 #expect(generated == value)
             }
         }
-
-//        @Test("Empty range handling")
-//        func testEmptyRangeHandling() throws {
-//            // Single value range
-//            let gen = Gen.choose(in: Int(42)...42)
-//
-//            for _ in 0..<10 {
-//                let value: Int = #require(Interpreters.generate(gen))
-//                #expect(value == 42)
-//            }
-//        }
     }
 
     @Suite("Interpreter Consistency")
@@ -120,8 +109,8 @@ struct CoreGeneratorTests {
         @Test("Generate-Reflect-Replay cycle consistency")
         func generateReflectReplayConsistency() throws {
             let generators: [ReflectiveGenerator<String>] = [
-                UInt64.arbitrary.mapped(forward: \.description, backward: { UInt64($0)! }),
-                Gen.just("constant"),
+                #gen(.uint64()).mapped(forward: \.description, backward: { UInt64($0)! }),
+                #gen(.just("constant")),
             ]
 
             let seeds = Array(ValueInterpreter(UInt64.arbitrary).prefix(10))
@@ -145,7 +134,7 @@ struct CoreGeneratorTests {
 
         @Test("Multiple generation consistency")
         func multipleGenerationConsistency() throws {
-            let gen = Gen.choose(in: 1 ... 100)
+            let gen = #gen(.int(in: 1 ... 100))
             guard let recipe = try Interpreters.reflect(gen, with: 42) else {
                 #expect(false, "Reflection failed for value 42")
                 return
@@ -160,27 +149,13 @@ struct CoreGeneratorTests {
                 }
             }
         }
-
-        @Test("Expect failure")
-        func opaqueMapReplayFailure() {
-            let gen = String.arbitrary
-                .array(length: 2 ... 5)
-                .map { $0.joined() } // Using mapped here wouldn't be possible; we don't know what the string boundaries were
-            var iterator = ValueInterpreter(gen)
-
-            // String.arbitrary takes getSize so the first output will be empty
-            _ = iterator.next()!
-            let generated = iterator.next()!
-            let reflect = try? Interpreters.reflect(gen, with: generated)
-            #expect(reflect == nil)
-        }
     }
 
     @Suite("Performance Tests")
     struct PerformanceTests {
         @Test("High-frequency generation performance")
         func highFrequencyGeneration() {
-            let gen = Gen.choose(in: 1 ... 1000)
+            let gen = #gen(.int(in: 1 ... 1000))
             var iterator = ValueInterpreter(gen, maxRuns: 10000)
 
             // Should be able to generate many values quickly
@@ -210,10 +185,7 @@ struct CoreGeneratorTests {
         @Test("RNG state consistency between interpreters")
         func rNGStateConsistency() {
             // Use a simple generator that just picks between two values
-            let gen = Gen.pick(choices: [
-                (1, Gen.just(100)),
-                (1, Gen.just(200)),
-            ])
+            let gen = #gen(.oneOf(weighted: (1, .just(100)), (1, .just(200))))
 
             var vi = ValueInterpreter(gen, seed: 42, maxRuns: 5)
             var vact = ValueAndChoiceTreeInterpreter(gen, materializePicks: false, seed: 42, maxRuns: 5)

@@ -112,4 +112,24 @@ public extension ReflectiveGenerator where Operation == ReflectiveOperation {
     func shuffled() -> ReflectiveGenerator<[Value.Element]> where Value: Collection {
         Gen.shuffled(self)
     }
+
+    /// Picks a random element from the generated collection.
+    ///
+    /// Generates a collection, then selects one element uniformly at random.
+    /// The backward pass finds the element's index for reflection.
+    ///
+    /// ```swift
+    /// let randomLetter = #gen(.asciiString(length: 1...10)).element()
+    /// ```
+    func element() -> ReflectiveGenerator<Value.Element> where Value: Collection, Value.Element: Equatable, Value.Index == Int {
+        bind { Gen.choose(from: $0) }
+    }
+
+    /// Picks a random element from the generated collection (non-Equatable variant).
+    ///
+    /// Same as ``element()`` but for collections whose elements don't conform to `Equatable`.
+    /// The backward pass is best-effort since elements can't be compared by value.
+    func element() -> ReflectiveGenerator<Value.Element> where Value: Collection, Value.Index == Int {
+        bind { Gen.choose(from: $0) }
+    }
 }

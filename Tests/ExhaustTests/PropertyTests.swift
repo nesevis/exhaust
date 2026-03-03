@@ -345,7 +345,7 @@ struct GeneratorContractPropertyTests {
 
     @Test("Gen.just always produces its constant value")
     func justConstancy() {
-        let gen = Gen.just(42)
+        let gen = #gen(.just(42))
         #exhaust(gen) { value in
             value == 42
         }

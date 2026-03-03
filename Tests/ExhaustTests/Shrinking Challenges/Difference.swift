@@ -34,7 +34,7 @@ struct DifferenceShrinkingChallenge {
      */
     @Test("Difference must not be zero")
     func differenceTest1() throws {
-        let gen = Gen.arrayOf(Gen.choose(in: Int(1) ... 1000), exactly: 2)
+        let gen = #gen(.int(in: 1 ... 1000)).array(length: 2)
 
         var count = 0
         let property: ([Int]) -> Bool = { arr in
@@ -52,7 +52,7 @@ struct DifferenceShrinkingChallenge {
 
     @Test("Difference must not be small")
     func differenceTest2() throws {
-        let gen = Gen.arrayOf(Gen.choose(in: Int(1) ... 1000), exactly: 2)
+        let gen = #gen(.int(in: 1 ... 1000)).array(length: 2)
 
         var count = 0
         let property: ([Int]) -> Bool = { arr in
@@ -70,7 +70,7 @@ struct DifferenceShrinkingChallenge {
 
     @Test("Difference must not be one")
     func differenceTest3() throws {
-        let gen = Gen.arrayOf(Gen.choose(in: Int(1) ... 1000), exactly: 2)
+        let gen = #gen(.int(in: 1 ... 1000)).array(length: 2)
 
         var count = 0
         let property: ([Int]) -> Bool = { arr in

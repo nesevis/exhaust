@@ -1,5 +1,4 @@
 import Foundation
-@_spi(ExhaustInternal) import ExhaustCore
 
 /// Operations for making choices and generating random values within ranges.
 /// These combinators handle weighted selection and bounded value generation.
@@ -258,9 +257,8 @@ public extension Gen {
     ) -> ReflectiveGenerator<Output> {
         let minBits = range?.lowerBound.bitPattern64 ?? Output.bitPatternRanges[0].lowerBound
         let maxBits = range?.upperBound.bitPattern64 ?? Output.bitPatternRanges[0].upperBound
-        let tag = Output.tag
 
-        return .impure(operation: .chooseBits(min: minBits, max: maxBits, tag: tag, isRangeExplicit: isRangeExplicit)) { result in
+        return .impure(operation: .chooseBits(min: minBits, max: maxBits, tag: Output.tag, isRangeExplicit: isRangeExplicit)) { result in
             guard let convertible = result as? any BitPatternConvertible else {
                 throw GeneratorError.typeMismatch(
                     expected: "any BitPatternConvertible",

@@ -27,8 +27,8 @@ struct DeletionShrinkingChallenge {
      */
     @Test("Deletion, Full")
     func deletionFull() throws {
-        let numberGen = Gen.choose(in: 0 ... 20)
-        let gen = Gen.zip(Gen.arrayOf(numberGen, within: 2 ... 20), numberGen).filter { $0.contains($1) }
+        let numberGen = #gen(.int(in: 0 ... 20))
+        let gen = #gen(numberGen.array(length: 2 ... 20), numberGen).filter { $0.contains($1) }
 
         var count = 0
         let property: ([Int], Int) -> Bool = { xs, x in

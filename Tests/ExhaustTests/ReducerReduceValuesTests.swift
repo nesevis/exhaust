@@ -76,7 +76,7 @@ struct ReductionTargetTests {
 struct ReducerReduceValuesTests {
     @Test("Unsigned value reduced to minimum failing value")
     func unsignedReducedToMinimum() throws {
-        let gen = Gen.choose(in: UInt64(0) ... 1000)
+        let gen = #gen(.uint64(in: 0 ... 1000))
 
         let (value, tree) = try generate(gen)
         try #require(value > 5)
@@ -93,7 +93,7 @@ struct ReducerReduceValuesTests {
 
     @Test("Unsigned value in range not containing 0")
     func unsignedInRestrictedRange() throws {
-        let gen = Gen.choose(in: UInt64(10) ... 1000)
+        let gen = #gen(.uint64(in: 10 ... 1000))
 
         let (value, tree) = try generate(gen)
         try #require(value >= 50)
@@ -110,7 +110,7 @@ struct ReducerReduceValuesTests {
 
     @Test("Signed value reduced toward 0")
     func signedReducedTowardZero() throws {
-        let gen = Gen.choose(in: Int64(-1000) ... -1)
+        let gen = #gen(.int64(in: -1000 ... -1))
 
         let (value, tree) = try generate(gen)
         try #require(value < -5)
@@ -127,7 +127,7 @@ struct ReducerReduceValuesTests {
 
     @Test("Value already at target is unchanged")
     func alreadyAtTarget() throws {
-        let gen = Gen.choose(in: UInt64(0) ... 100)
+        let gen = #gen(.uint64(in: 0 ... 100))
 
         let (_, tree) = try generate(gen)
         let originalSequence = ChoiceSequence.flatten(tree)
@@ -144,7 +144,7 @@ struct ReducerReduceValuesTests {
 
     @Test("Reduction preserves property failure")
     func reductionPreservesFailure() throws {
-        let gen = Gen.choose(in: UInt64(0) ... 1000)
+        let gen = #gen(.uint64(in: 0 ... 1000))
 
         let (value, tree) = try generate(gen)
         try #require(value > 10)
@@ -162,7 +162,7 @@ struct ReducerReduceValuesTests {
 
     @Test("Character value reduced within its range")
     func characterReduced() throws {
-        let gen = Gen.choose(in: Character("a") ... Character("z"))
+        let gen = #gen(.character(in: "a" ... "z"))
 
         // Try multiple seeds to find one that generates a character > "e"
         var foundTree: ChoiceTree?
@@ -187,7 +187,7 @@ struct ReducerReduceValuesTests {
 
     @Test("Float value reduced naively via bit pattern search")
     func floatReducedNaively() throws {
-        let gen = Gen.choose(in: Double(0) ... 1000.0)
+        let gen = #gen(.double(in: 0 ... 1000.0))
 
         // Try multiple seeds/runs to find one that generates a value > 1.0
         var foundTree: ChoiceTree?
@@ -216,7 +216,7 @@ struct ReducerReduceValuesTests {
 
     @Test("Pass 3 + Pass 5 work together")
     func passThreeAndFiveIntegration() throws {
-        let gen = Gen.arrayOf(Gen.choose(in: UInt64(0) ... 1000), exactly: 3)
+        let gen = #gen(.uint64(in: 0 ... 1000)).array(length: 3)
 
         let (_, tree) = try generate(gen)
 
@@ -242,13 +242,9 @@ struct ReducerReduceValuesTests {
     @Test("Dynamic child ranges from bind do not block value shrinking")
     func dynamicRangesDoNotBlockValueShrinking() throws {
         // Child values are constrained by the chosen parent value.
-        let gen = Gen.choose(in: UInt64(0) ... 100)
+        let gen = #gen(.uint64(in: 0 ... 100))
             .bind { parent in
-                Gen.zip(
-                    Gen.just(parent),
-                    Gen.choose(in: parent ... 100),
-                    Gen.choose(in: parent ... 100),
-                )
+                Gen.zip(Gen.just(parent), Gen.choose(in: parent ... 100), Gen.choose(in: parent ... 100))
             }
 
         // Fails when left child is strictly less than right child.
@@ -276,12 +272,12 @@ struct ReducerReduceValuesTests {
 
     @Test("Non-reflectable generator shrinks correctly")
     func nonReflectableGeneratorShrinksCorrectly() throws {
-        let stringGen = Gen.chooseCharacter()
+        let stringGen = Character.arbitrary
             .array(length: 0 ... 20)
             // Reversible, but only accidentally ([Character] is more or less equal to String)
             .map { String($0) }
 
-        let gen = Gen.zip(stringGen, stringGen, stringGen)
+        let gen = #gen(stringGen, stringGen, stringGen)
             // Concatenating; irreversible
             .map { $0 + $1 + $2 }
 

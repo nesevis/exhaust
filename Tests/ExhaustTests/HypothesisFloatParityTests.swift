@@ -98,9 +98,9 @@ private enum HypothesisFloatParityHelpers {
         where condition: (Double) -> Bool,
     ) throws -> Double {
         let gen: ReflectiveGenerator<Double> = if let range {
-            Gen.choose(in: range)
+            #gen(.double(in: range))
         } else {
-            Gen.choose()
+            Double.arbitrary
         }
 
         return try reduce(gen, startingAt: start) { value in
@@ -147,8 +147,7 @@ struct HypothesisFloatShrinkingParityTests {
         // property explicitly pins length (`value.count == n`) so reducer passes
         // that delete sequence elements cannot satisfy the property by shrinking length.
         for n in [1, 2, 3, 8, 10] {
-            let length = UInt64(n)
-            let gen = Gen.arrayOf(Gen.choose() as ReflectiveGenerator<Double>, within: length ... length)
+            let gen = Double.arbitrary.array(length: UInt64(n))
             let start = Array(repeating: 2.0, count: n)
 
             let output = try HypothesisFloatParityHelpers.reduce(
@@ -187,7 +186,7 @@ struct HypothesisFloatShrinkingParityTests {
         let upper = 9_007_199_254_740_992.0 // 2^53
         for b in [1, 2, 3, 8, 10] {
             let lower = Double(b)
-            let gen = Gen.choose(in: lower ... upper)
+            let gen = #gen(.double(in: lower ... upper))
                 .filter { value in
                     value > lower && value < upper && value.rounded(.towardZero) != value
                 }
@@ -311,7 +310,7 @@ struct HypothesisFloatRangeAndSubnormalParityTests {
         ]
 
         for range in ranges {
-            let values = HypothesisFloatParityHelpers.sample(Gen.choose(in: range))
+            let values = HypothesisFloatParityHelpers.sample(#gen(.double(in: range)))
             #expect(values.allSatisfy { range.contains($0) })
         }
     }
@@ -321,7 +320,7 @@ struct HypothesisFloatRangeAndSubnormalParityTests {
         // Adjustment relative to `test_can_generate_both_zeros_when_in_interval`:
         // covers one canonical interval because Exhaust has no unconstrained float strategy
         // that includes NaN/Inf and Hypothesis-style assumptions.
-        let values = HypothesisFloatParityHelpers.sample(Gen.choose(in: -0.0 ... 0.0), count: 128)
+        let values = HypothesisFloatParityHelpers.sample(#gen(.double(in: -0.0 ... 0.0)), count: 128)
         #expect(values.contains(where: { $0 == 0.0 && $0.sign == .plus }))
         #expect(values.contains(where: { $0 == 0.0 && $0.sign == .minus }))
     }
@@ -329,14 +328,14 @@ struct HypothesisFloatRangeAndSubnormalParityTests {
     @Test("Does not generate negative values when lower bound is +0.0")
     func nonNegativeRangeDoesNotGenerateNegativeSigns() {
         // Direct parity with `test_does_not_generate_negative_if_right_boundary_is_positive`.
-        let values = HypothesisFloatParityHelpers.sample(Gen.choose(in: 0.0 ... 1.0))
+        let values = HypothesisFloatParityHelpers.sample(#gen(.double(in: 0.0 ... 1.0)))
         #expect(values.allSatisfy { $0.sign == .plus })
     }
 
     @Test("Does not generate positive values when upper bound is -0.0")
     func nonPositiveRangeDoesNotGeneratePositiveSigns() {
         // Direct parity with `test_does_not_generate_positive_if_right_boundary_is_negative`.
-        let values = HypothesisFloatParityHelpers.sample(Gen.choose(in: -1.0 ... -0.0))
+        let values = HypothesisFloatParityHelpers.sample(#gen(.double(in: -1.0 ... -0.0)))
         #expect(values.allSatisfy { $0.sign == .minus })
     }
 
@@ -350,7 +349,7 @@ struct HypothesisFloatRangeAndSubnormalParityTests {
         }
         #expect(lowerBound < upperBound)
 
-        let values = HypothesisFloatParityHelpers.sample(Gen.choose(in: lowerBound ... upperBound))
+        let values = HypothesisFloatParityHelpers.sample(#gen(.double(in: lowerBound ... upperBound)))
         #expect(values.allSatisfy { lowerBound <= $0 && $0 <= upperBound })
     }
 
@@ -362,10 +361,10 @@ struct HypothesisFloatRangeAndSubnormalParityTests {
         let largestSubnormal = smallestNormal.nextDown
         let smallestSubnormal = Double.leastNonzeroMagnitude
 
-        let positives = HypothesisFloatParityHelpers.sample(Gen.choose(in: smallestSubnormal ... largestSubnormal))
+        let positives = HypothesisFloatParityHelpers.sample(#gen(.double(in: smallestSubnormal ... largestSubnormal)))
         #expect(positives.allSatisfy { $0 > 0 && $0 < smallestNormal })
 
-        let negatives = HypothesisFloatParityHelpers.sample(Gen.choose(in: -largestSubnormal ... -smallestSubnormal))
+        let negatives = HypothesisFloatParityHelpers.sample(#gen(.double(in: -largestSubnormal ... -smallestSubnormal)))
         #expect(negatives.allSatisfy { $0 < 0 && $0 > -smallestNormal })
     }
 
@@ -377,10 +376,10 @@ struct HypothesisFloatRangeAndSubnormalParityTests {
         let largestSubnormal = smallestNormal.nextDown
         let smallestSubnormal = Float.leastNonzeroMagnitude
 
-        let positives = HypothesisFloatParityHelpers.sample(Gen.choose(in: smallestSubnormal ... largestSubnormal))
+        let positives = HypothesisFloatParityHelpers.sample(#gen(.float(in: smallestSubnormal ... largestSubnormal)))
         #expect(positives.allSatisfy { $0 > 0 && $0 < smallestNormal })
 
-        let negatives = HypothesisFloatParityHelpers.sample(Gen.choose(in: -largestSubnormal ... -smallestSubnormal))
+        let negatives = HypothesisFloatParityHelpers.sample(#gen(.float(in: -largestSubnormal ... -smallestSubnormal)))
         #expect(negatives.allSatisfy { $0 < 0 && $0 > -smallestNormal })
     }
 }

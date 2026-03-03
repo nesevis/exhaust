@@ -42,18 +42,13 @@ struct AdvancedFeatureTests {
             func treeGen(depth: Int) -> ReflectiveGenerator<TestTree<Int>> {
                 if depth <= 0 {
                     // Leaf node
-                    return Gen.lens(extract: \TestTree<Int>.value, Gen.choose(in: 1 ... 100))
-                        .map { value in TestTree(value: value, children: []) }
+                    return #gen(.int(in: 1 ... 100)) { value in
+                        TestTree(value: value, children: [])
+                    }
                 } else {
                     // Internal node with children
-                    let valueGen = Gen.lens(extract: \TestTree<Int>.value, Gen.choose(in: 1 ... 100))
-                    let childrenGen = Gen.lens(extract: \TestTree<Int>.children,
-                                               treeGen(depth: depth - 1).array(length: 0 ... 3))
-
-                    return valueGen.bind { value in
-                        childrenGen.map { children in
-                            TestTree(value: value, children: children)
-                        }
+                    return #gen(.int(in: 1 ... 100), treeGen(depth: depth - 1).array(length: 0 ... 3)) { value, children in
+                        TestTree(value: value, children: children)
                     }
                 }
             }
@@ -96,27 +91,21 @@ struct AdvancedFeatureTests {
             }
 
             // This works
-            let innerGen = Gen.lens(extract: \Inner.id, Gen.choose(type: UInt.self))
+            let innerGen = #gen(.uint())
                 .array(length: 1 ... 1)
-                // Casting to the type needs to be the last thing in the chain
-                .map { ints in ints.map { Inner(id: $0) }}
+                .mapped(
+                    forward: { ints in ints.map { Inner(id: $0) } },
+                    backward: { inners in inners.map(\.id) }
+                )
 
-            // This crashes
-            let innerGen2 = Gen.lens(extract: \Inner.id, Gen.choose(type: UInt.self))
-                .map { Inner(id: $0) }
+            let innerGen2 = #gen(.uint()) { Inner(id: $0) }
                 .array(length: 1 ... 1)
 
             // Test the two type-safe approaches
             for (index, gen) in [innerGen, innerGen2].enumerated() {
                 // Test the outer generator with each inner generator
-                let outerGen = Gen.lens(
-                    extract: \Outer.inners,
-                    gen,
-                )
-                .bind { inners in
-                    Gen.lens(extract: \Outer.id, Gen.choose(type: UInt.self)).map { id in
-                        Outer(inners: inners, id: id)
-                    }
+                let outerGen = #gen(gen, .uint()) { inners, id in
+                    Outer(inners: inners, id: id)
                 }
 
                 var iterator = ValueInterpreter(outerGen)
@@ -143,35 +132,25 @@ struct AdvancedFeatureTests {
     struct GraphTests {
         @Test("Connected graph generation with constraints")
         func connectedGraphGeneration() throws {
-            let nodeGen = Gen.lens(extract: \TestNode.id, Gen.choose(in: 0 ... 9))
-                .bind { id in
-                    Gen.lens(extract: \TestNode.label, String.arbitrary).map { label in
-                        TestNode(id: id, label: label)
-                    }
-                }
+            let nodeGen = #gen(.int(in: 0 ... 9), String.arbitrary) { id, label in
+                TestNode(id: id, label: label)
+            }
 
-            // Use a fixed range that matches the node generation range
-            let edgeGen = Gen.lens(extract: \TestEdge.from, Gen.choose(in: 0 ... 9))
-                .bind { from in
-                    Gen.lens(extract: \TestEdge.to, Gen.choose(in: 0 ... 9))
-                        .bind { to in
-                            Gen.lens(extract: \TestEdge.weight, Gen.choose(in: 0.1 ... 10.0)).map { weight in
-                                TestEdge(from: from, to: to, weight: weight)
-                            }
-                        }
-                }
+            let edgeGen = #gen(.int(in: 0 ... 9), .int(in: 0 ... 9), .double(in: 0.1 ... 10.0)) { from, to, weight in
+                TestEdge(from: from, to: to, weight: weight)
+            }
 
-            let graphGen = Gen.lens(extract: \TestGraph.nodes, nodeGen.array(length: 5 ... 10))
-                .bind { nodes in
-                    Gen.lens(extract: \TestGraph.edges, edgeGen.array(length: 3 ... 15)).map { edges in
-                        // Filter edges to only include those referencing existing nodes
-                        let nodeIds = Set(nodes.map(\.id))
-                        let validEdges = edges.filter { edge in
-                            nodeIds.contains(edge.from) && nodeIds.contains(edge.to)
-                        }
-                        return TestGraph(nodes: nodes, edges: validEdges)
+            let graphGen = #gen(nodeGen.array(length: 5 ... 10), edgeGen.array(length: 3 ... 15)).mapped(
+                forward: { nodes, edges in
+                    // Filter edges to only include those referencing existing nodes
+                    let nodeIds = Set(nodes.map(\.id))
+                    let validEdges = edges.filter { edge in
+                        nodeIds.contains(edge.from) && nodeIds.contains(edge.to)
                     }
-                }
+                    return TestGraph(nodes: nodes, edges: validEdges)
+                },
+                backward: { ($0.nodes, $0.edges) }
+            )
 
             for _ in 0 ..< 10 {
                 var iterator = ValueInterpreter(graphGen)
@@ -207,10 +186,10 @@ struct AdvancedFeatureTests {
         @Test("Generator robustness with extreme values")
         func extremeValueHandling() throws {
             let extremeGenerators: [ReflectiveGenerator<Int>] = [
-                Gen.choose(in: Int.min ... Int.min), // Minimum value
-                Gen.choose(in: Int.max ... Int.max), // Maximum value
-                Gen.choose(in: -1 ... 1), // Small range around zero
-                Gen.choose(in: 0 ... 0), // Single value
+                #gen(.int(in: Int.min ... Int.min)), // Minimum value
+                #gen(.int(in: Int.max ... Int.max)), // Maximum value
+                #gen(.int(in: -1 ... 1)), // Small range around zero
+                #gen(.int(in: 0 ... 0)), // Single value
             ]
 
             for (index, gen) in extremeGenerators.enumerated() {

@@ -41,7 +41,7 @@ struct StringAnagramChallenge {
     func stringAnagram() throws {
         let charGen = String.arbitraryAscii
             .filter { $0.count >= 2 }
-        let gen = Gen.zip(charGen, charGen)
+        let gen = #gen(charGen, charGen)
 
         let property: (String, String) -> Bool = { a, b in
             guard a != b, a.count == b.count else { return true }

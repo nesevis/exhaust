@@ -104,13 +104,13 @@ struct BinaryHeapShrinkingChallenge {
     /// `ValueAndChoiceTreeInterpreter` provides the ChoiceTree directly.
     static func heapGen(min: Int = 0, depth: UInt64) -> ReflectiveGenerator<Heap<Int>> {
         let maxVal = 100
-        let emptyGen: ReflectiveGenerator<Heap<Int>> = Gen.just(.empty)
+        let emptyGen: ReflectiveGenerator<Heap<Int>> = #gen(.just(.empty))
 
         guard depth > 0, min <= maxVal else {
             return emptyGen
         }
 
-        let nodeGen = Gen.choose(in: min ... maxVal)
+        let nodeGen = #gen(.int(in: min ... maxVal))
             .bind { value in
                 Gen.zip(
                     heapGen(min: value, depth: depth / 2),
@@ -127,10 +127,10 @@ struct BinaryHeapShrinkingChallenge {
                 )
             }
 
-        return Gen.pick(choices: [
+        return #gen(.oneOf(weighted:
             (1, emptyGen),
-            (7, nodeGen),
-        ])
+            (7, nodeGen)
+        ))
     }
 
     static let gen = heapGen(depth: 6)

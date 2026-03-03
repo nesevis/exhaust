@@ -21,7 +21,7 @@ struct LengthListShrinkingChallenge {
      ** https://clojure.github.io/test.check/growth-and-shrinking.html#unnecessary-bind
      */
 
-    static let gen: ReflectiveGenerator<[UInt]> = Gen.arrayOf(Gen.choose(in: UInt(0) ... 1000), within: 1 ... 100)
+    static let gen: ReflectiveGenerator<[UInt]> = #gen(.uint(in: 0 ... 1000)).array(length: 1 ... 100)
 
     static let property: ([UInt]) -> Bool = { arr in
         arr.max() ?? 0 < 900

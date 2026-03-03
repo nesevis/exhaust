@@ -14,10 +14,10 @@ import Testing
 struct GeneratorCompositionEdgeCaseTests {
     @Test("Single value generator composition")
     func singleValueGeneratorComposition() {
-        let constantGen = Gen.just(42)
+        let constantGen = #gen(.just(42))
         let normalGen = String.arbitrary
 
-        let composed = Gen.zip(constantGen, normalGen)
+        let composed = #gen(constantGen, normalGen)
 
         // Generate multiple values
         for _ in 0 ..< 10 {
@@ -30,12 +30,12 @@ struct GeneratorCompositionEdgeCaseTests {
 
     @Test("Zipping many generators maintains correctness")
     func largeZipComposition() {
-        let gen = Gen.zip(
+        let gen = #gen(
             Int.arbitrary,
             String.arbitrary,
             UInt.arbitrary,
             Double.arbitrary,
-            Gen.choose(in: 1 ... 100),
+            .int(in: 1 ... 100),
         )
 
         // Verify all components are generated correctly
@@ -51,9 +51,9 @@ struct GeneratorCompositionEdgeCaseTests {
 
     @Test("Nested composition with multiple levels")
     func nestedCompositionLevels() {
-        let innerGen = Gen.zip(Int.arbitrary, String.arbitrary)
-        let middleGen = Gen.zip(innerGen, Bool.arbitrary)
-        let outerGen = Gen.zip(middleGen, UInt.arbitrary)
+        let innerGen = #gen(Int.arbitrary, String.arbitrary)
+        let middleGen = #gen(innerGen, Bool.arbitrary)
+        let outerGen = #gen(middleGen, UInt.arbitrary)
 
         var iterator = ValueInterpreter(outerGen)
         let nestedTuple = iterator.next()!
@@ -65,10 +65,10 @@ struct GeneratorCompositionEdgeCaseTests {
 
     @Test("Empty array generator in composition")
     func emptyArrayGeneratorComposition() {
-        let emptyArrayGen = Gen.just([Int]())
+        let emptyArrayGen = #gen(.just([Int]()))
         let normalGen = String.arbitrary
 
-        let composed = Gen.zip(emptyArrayGen, normalGen)
+        let composed = #gen(emptyArrayGen, normalGen)
 
         for _ in 0 ..< 10 {
             var iterator = ValueInterpreter(composed)
@@ -86,7 +86,7 @@ struct GeneratorCompositionEdgeCaseTests {
         }
 
         let independentGen = String.arbitrary
-        let composed = Gen.zip(dependentGen, independentGen)
+        let composed = #gen(dependentGen, independentGen)
 
         for _ in 0 ..< 20 {
             var iterator = ValueInterpreter(composed)
@@ -98,8 +98,8 @@ struct GeneratorCompositionEdgeCaseTests {
 
     @Test("Composition preserves replay behavior")
     func compositionReplayBehavior() throws {
-        let gen = Gen.zip(
-            Gen.choose(in: 1 ... 100),
+        let gen = #gen(
+            .int(in: 1 ... 100),
             String.arbitrary,
             Bool.arbitrary,
         )
@@ -117,7 +117,7 @@ struct GeneratorCompositionEdgeCaseTests {
         let arrayGen = Int.arbitrary.array(length: 0 ... 5)
         let scalarGen = String.arbitrary
 
-        let composed = Gen.zip(arrayGen, scalarGen)
+        let composed = #gen(arrayGen, scalarGen)
 
         for _ in 0 ..< 20 {
             var iterator = ValueInterpreter(composed)
@@ -134,7 +134,7 @@ struct GeneratorCompositionEdgeCaseTests {
             .array(length: 1 ... 2)
             .array(length: 1 ... 2)
 
-        let composed = Gen.zip(nestedGen, String.arbitrary)
+        let composed = #gen(nestedGen, String.arbitrary)
 
         for _ in 0 ..< 10 {
             var iterator = ValueInterpreter(composed)

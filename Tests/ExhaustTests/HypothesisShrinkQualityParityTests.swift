@@ -40,9 +40,9 @@ struct HypothesisShrinkQualityParityTests {
 
     @Test("Hypothesis::test_sum_of_pair_mixed", .disabled("Known parity gap: mixed numeric pairs are not yet jointly minimized to Hypothesis target"))
     func sumOfPairMixed() throws {
-        let floatIntGen = Gen.zip(
-            Gen.choose(in: 0.0 ... 1000.0),
-            Gen.choose(in: Int(0) ... 1000),
+        let floatIntGen = #gen(
+            .double(in: 0.0 ... 1000.0),
+            .int(in: 0 ... 1000)
         )
         let floatIntProperty: ((Double, Int)) -> Bool = { pair in
             guard pair.0 >= 0.0, pair.0 <= 1000.0,
@@ -60,9 +60,9 @@ struct HypothesisShrinkQualityParityTests {
         #expect(floatIntProperty(floatIntOutput) == false)
         #expect(floatIntOutput == (1.0, 1000))
 
-        let intFloatGen = Gen.zip(
-            Gen.choose(in: Int(0) ... 1000),
-            Gen.choose(in: 0.0 ... 1000.0),
+        let intFloatGen = #gen(
+            .int(in: 0 ... 1000),
+            .double(in: 0.0 ... 1000.0)
         )
         let intFloatProperty: ((Int, Double)) -> Bool = { pair in
             guard pair.0 >= 0, pair.0 <= 1000,
@@ -83,12 +83,12 @@ struct HypothesisShrinkQualityParityTests {
 
     @Test("Hypothesis::test_sum_of_pair_separated_int")
     func sumOfPairSeparatedInt() throws {
-        let separatedIntGen = Gen.zip(
-            Gen.choose(in: Int(0) ... 1000),
+        let separatedIntGen = #gen(
+            .int(in: 0 ... 1000),
             String.arbitraryAscii,
             Bool.arbitrary,
             Int.arbitrary,
-            Gen.choose(in: Int(0) ... 1000),
+            .int(in: 0 ... 1000)
         )
         .mapped(
             forward: { tuple in
@@ -119,12 +119,12 @@ struct HypothesisShrinkQualityParityTests {
 
     @Test("Hypothesis::test_sum_of_pair_separated_float")
     func sumOfPairSeparatedFloat() throws {
-        let separatedFloatGen = Gen.zip(
-            Gen.choose(in: 0.0 ... 1000.0),
+        let separatedFloatGen = #gen(
+            .double(in: 0.0 ... 1000.0),
             String.arbitraryAscii,
             Bool.arbitrary,
             Int.arbitrary,
-            Gen.choose(in: 0.0 ... 1000.0),
+            .double(in: 0.0 ... 1000.0)
         )
         .mapped(
             forward: { tuple in
@@ -150,7 +150,7 @@ struct HypothesisShrinkQualityParityTests {
 
     @Test("Hypothesis::test_perfectly_shrinks_integers")
     func perfectlyShrinksIntegers() throws {
-        let gen: ReflectiveGenerator<Int> = Gen.choose(in: Int.min ... Int.max)
+        let gen = #gen(.int())
         let cases: [Int] = [
             -(1 << 32), -(1 << 20), -1, 0, 1, 1 << 20, 1 << 32,
         ]
@@ -179,9 +179,9 @@ struct HypothesisShrinkQualityParityTests {
 
     @Test("Hypothesis::test_lowering_together_positive", .disabled("Known parity gap: pair lowering stalls one step above Hypothesis target near distance-1 windows"))
     func loweringTogetherPositive() throws {
-        let gen = Gen.zip(
-            Gen.choose(in: Int(0) ... 20),
-            Gen.choose(in: Int(0) ... 20),
+        let gen = #gen(
+            .int(in: 0 ... 20),
+            .int(in: 0 ... 20)
         )
         for gap in 0 ... 20 {
             let start = startPair(range: 0 ... 20, gap: gap)
@@ -196,9 +196,9 @@ struct HypothesisShrinkQualityParityTests {
 
     @Test("Hypothesis::test_lowering_together_negative")
     func loweringTogetherNegative() throws {
-        let gen = Gen.zip(
-            Gen.choose(in: Int(-20) ... 0),
-            Gen.choose(in: Int(-20) ... 0),
+        let gen = #gen(
+            .int(in: -20 ... 0),
+            .int(in: -20 ... 0)
         )
         for gap in -20 ... 0 {
             let start = startPair(range: -20 ... 0, gap: gap)
@@ -213,9 +213,9 @@ struct HypothesisShrinkQualityParityTests {
 
     @Test("Hypothesis::test_lowering_together_mixed", .disabled("Known parity gap: mixed-sign pair lowering stalls one step above Hypothesis target near distance-1 windows"))
     func loweringTogetherMixed() throws {
-        let gen = Gen.zip(
-            Gen.choose(in: Int(-10) ... 10),
-            Gen.choose(in: Int(-10) ... 10),
+        let gen = #gen(
+            .int(in: -10 ... 10),
+            .int(in: -10 ... 10)
         )
         for gap in -10 ... 10 {
             let start = startPair(range: -10 ... 10, gap: gap)
@@ -230,11 +230,11 @@ struct HypothesisShrinkQualityParityTests {
 
     @Test("Hypothesis::test_lowering_together_with_gap", .disabled("Known parity gap: separated-value tandem lowering across unrelated draws"))
     func loweringTogetherWithGap() throws {
-        let gen = Gen.zip(
-            Gen.choose(in: Int(-10) ... 10),
+        let gen = #gen(
+            .int(in: -10 ... 10),
             String.arbitraryAscii,
-            Gen.choose(in: -1000.0 ... 1000.0),
-            Gen.choose(in: Int(-10) ... 10),
+            .double(in: -1000.0 ... 1000.0),
+            .int(in: -10 ... 10)
         )
 
         for gap in -10 ... 10 {

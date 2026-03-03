@@ -31,7 +31,7 @@ struct ReducerReorderTests {
     @Test("Unsorted array is reordered to sorted")
     func unsortedArrayReordered() throws {
         // Generate [UInt64] with values that will likely be out of order
-        let gen = Gen.arrayOf(Gen.choose(in: UInt64(0) ... 100), exactly: 3)
+        let gen = #gen(.uint64(in: 0 ... 100)).array(length: 3)
 
         // Try seeds until we find one that produces an unsorted array
         var foundResult: (value: [UInt64], tree: ChoiceTree)?
@@ -58,7 +58,7 @@ struct ReducerReorderTests {
 
     @Test("Signed values are reordered correctly")
     func signedValuesReordered() throws {
-        let gen = Gen.arrayOf(Gen.choose(in: Int64(-50) ... 50), exactly: 3)
+        let gen = #gen(.int64(in: -50 ... 50)).array(length: 3)
 
         var foundResult: (value: [Int64], tree: ChoiceTree)?
         for seed: UInt64 in 0 ... 200 {
@@ -89,7 +89,7 @@ struct ReducerReorderTests {
 
     @Test("Already-sorted sequence is not changed by reorder pass")
     func alreadySortedNoChange() throws {
-        let gen = Gen.arrayOf(Gen.choose(in: UInt64(0) ... 100), exactly: 3)
+        let gen = #gen(.uint64(in: 0 ... 100)).array(length: 3)
 
         // Find a seed that produces an already-sorted array
         var foundResult: (value: [UInt64], tree: ChoiceTree)?
@@ -116,7 +116,7 @@ struct ReducerReorderTests {
 
     @Test("Reordering that would cause property to pass is not accepted")
     func reorderingRejectedWhenPropertyPasses() throws {
-        let gen = Gen.arrayOf(Gen.choose(in: UInt64(0) ... 100), exactly: 3)
+        let gen = #gen(.uint64(in: 0 ... 100)).array(length: 3)
 
         var foundResult: (value: [UInt64], tree: ChoiceTree)?
         for seed: UInt64 in 0 ... 100 {
@@ -146,7 +146,7 @@ struct ReducerReorderTests {
 
     @Test("Reduced sequence from reorder pass has balanced brackets")
     func reducedSequenceBalanced() throws {
-        let gen = Gen.arrayOf(Gen.choose(in: UInt64(0) ... 1000), exactly: 5)
+        let gen = #gen(.uint64(in: 0 ... 1000)).array(length: 5)
 
         let (_, tree) = try generate(gen, seed: 7, iteration: 5)
 
@@ -161,7 +161,7 @@ struct ReducerReorderTests {
 
     @Test("Materialized output from reordered sequence matches stored output")
     func materializedMatchesStored() throws {
-        let gen = Gen.arrayOf(Gen.choose(in: UInt64(0) ... 100), exactly: 4)
+        let gen = #gen(.uint64(in: 0 ... 100)).array(length: 4)
 
         let (_, tree) = try generate(gen, seed: 13, iteration: 5)
 
@@ -180,7 +180,7 @@ struct ReducerReorderTests {
 
     @Test("Double array is reordered to sorted by value")
     func doubleArrayReordered() throws {
-        let gen = Gen.arrayOf(Gen.choose(in: Double(-100) ... 100), exactly: 5)
+        let gen = #gen(.double(in: -100 ... 100)).array(length: 5)
 
         // Find a seed that produces an unsorted array with mixed signs
         var foundResult: (value: [Double], tree: ChoiceTree)?

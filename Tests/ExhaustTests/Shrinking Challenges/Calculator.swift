@@ -59,7 +59,7 @@ struct CalculatorShrinkingChallenge {
     }
 
     static func expression(depth: UInt64) -> ReflectiveGenerator<Expr> {
-        let leaf = Gen.choose(in: Int(-10) ... 10)
+        let leaf = #gen(.int(in: -10 ... 10))
             .mapped(forward: { Expr.value($0) }, backward: { $0.value ?? 0 })
 
         guard depth > 0 else {
@@ -68,7 +68,7 @@ struct CalculatorShrinkingChallenge {
 
         let child = expression(depth: depth - 1)
 
-        let add = Gen.zip(child, leaf)
+        let add = #gen(child, leaf)
             .mapped(
                 forward: { lhs, rhs in Expr.add(lhs, rhs) },
                 backward: { value in
@@ -80,7 +80,7 @@ struct CalculatorShrinkingChallenge {
                     }
                 },
             )
-        let div = Gen.zip(leaf, child)
+        let div = #gen(leaf, child)
             .mapped(
                 forward: { lhs, rhs in Expr.div(lhs, rhs) },
                 backward: { value in
@@ -93,11 +93,11 @@ struct CalculatorShrinkingChallenge {
                 },
             )
 
-        return Gen.pick(choices: [
+        return #gen(.oneOf(weighted:
             (3, leaf),
             (3, add),
-            (3, div),
-        ])
+            (3, div)
+        ))
     }
 
     static let gen: ReflectiveGenerator<Expr> = expression(depth: 4)

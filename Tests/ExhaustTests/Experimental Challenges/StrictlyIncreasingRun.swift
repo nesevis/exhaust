@@ -32,7 +32,7 @@ struct StrictlyIncreasingRunChallenge {
 
     @Test("Strictly increasing run")
     func strictlyIncreasingRun() throws {
-        let gen = Gen.arrayOf(Gen.choose(in: UInt64(0) ... 10000), within: 1 ... 50)
+        let gen = #gen(.uint64(in: 0 ... 10000)).array(length: 1 ... 50)
 
         let property: ([UInt64]) -> Bool = { arr in
             guard arr.count >= 3 else { return true }

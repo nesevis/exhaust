@@ -251,4 +251,17 @@ public extension ReflectiveGenerator where Operation == ReflectiveOperation {
         )
     }
 
+    /// Retrieves the current size parameter controlling generator complexity.
+    ///
+    /// The size parameter ranges from 1–100 and controls how complex generated values
+    /// should be. Use this to build generators that adapt to the testing phase.
+    ///
+    /// ```swift
+    /// let adaptiveArray = ReflectiveGenerator.getSize().bind { size in
+    ///     .int(in: 0...Int(size)).array(length: 0...Int(size))
+    /// }
+    /// ```
+    static func getSize() -> ReflectiveGenerator<UInt64> {
+        Gen.getSize()
+    }
 }

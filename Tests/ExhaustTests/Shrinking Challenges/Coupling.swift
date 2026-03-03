@@ -21,7 +21,7 @@ struct CouplingShrinkingChallenge {
      */
 
     // This generator is not reflective due to the bind
-    static let gen: ReflectiveGenerator<[Int]> = Gen.choose(in: Int(0) ... 100)
+    static let gen: ReflectiveGenerator<[Int]> = #gen(.int(in: 0 ... 100))
         .bind { n in
             Gen.arrayOf(Gen.choose(in: 0 ... n), within: 2 ... max(2, UInt64(n) + 1))
         }

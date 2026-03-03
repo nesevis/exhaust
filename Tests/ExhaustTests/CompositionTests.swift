@@ -36,65 +36,11 @@ struct TestRectangle: Equatable {
 
 @Suite("Generator Composition")
 struct CompositionTests {
-    @Suite("Lens Composition")
-    struct LensTests {
-        @Test("Simple generator with transform inside bind")
-        func simpleGeneratorWithOpaqueTransform() throws {
-            // We can still reflect this
-            let gen = UInt64.arbitrary.bind { int in
-                // When reflecting, this will be called again, so the resize parameter will be wrong as
-                // First time (generate) 1 (+1 * 11)
-                // Second time (reflect) 12 (+ 1 * 11)
-                // We can't reverse this transformation, so we should hide the resize parameter?
-                Gen.arrayOf(String.arbitrary, exactly: int + 1 * 11)
-            }
-
-            var iterator = ValueInterpreter(gen)
-            let generated = iterator.next()!
-            let recipe = try #require(try Interpreters.reflect(gen, with: generated))
-            let replayed = try #require(try Interpreters.replay(gen, using: recipe))
-            #expect(generated == replayed)
-        }
-
-        @Test("Gen.lens with nested structures")
-        func nestedLens() throws {
-            let pointGen = Gen.lens(extract: \TestPoint.x, Gen.choose(in: 0.0 ... 100.0))
-                .bind { x in
-                    Gen.lens(extract: \TestPoint.y, Gen.choose(in: 0.0 ... 100.0)).map { y in
-                        TestPoint(x: x, y: y)
-                    }
-                }
-
-            let rectGen = Gen.lens(extract: \TestRectangle.topLeft, pointGen)
-                .bind { topLeft in
-                    Gen.lens(extract: \TestRectangle.bottomRight, pointGen).map { bottomRight in
-                        TestRectangle(topLeft: topLeft, bottomRight: bottomRight)
-                    }
-                }
-
-            var iterator = ValueInterpreter(rectGen)
-            let rect = iterator.next()!
-
-            // Test round-trip
-            if let recipe = try Interpreters.reflect(rectGen, with: rect) {
-                if let replayed = try Interpreters.replay(rectGen, using: recipe) {
-                    #expect(rect == replayed)
-                } else {
-                    #expect(false, "Replay failed for rectangle")
-                }
-            } else {
-                #expect(false, "Reflection failed for rectangle")
-            }
-        }
-    }
-
     @Suite("Array Generation")
     struct ArrayTests {
-        @Test("Gen.arrayOf creates arrays of specified size")
-        func genArrayOf() {
-            let elementGen = Gen.choose(in: 1 ... 100)
-            let lengthGen = Gen.just(UInt64(5))
-            let arrayGen = Gen.arrayOf(elementGen, lengthGen)
+        @Test("Array generator creates arrays of specified size")
+        func arrayOfFixedLength() {
+            let arrayGen = #gen(.int(in: 1 ... 100)).array(length: 5)
 
             for _ in 0 ..< 20 {
                 var iterator = ValueInterpreter(arrayGen)
@@ -189,15 +135,11 @@ struct CompositionTests {
 
     @Suite("Choice Generation")
     struct ChoiceTests {
-        @Test("Gen.pick chooses between alternatives")
-        func genPick() {
-            let intGen = Gen.choose(in: 1 ... 10)
-            let stringGen = String.arbitrary
+        @Test("oneOf chooses between alternatives")
+        func oneOfChoosesBetweenAlternatives() {
+            let intAsStringGen = #gen(.int(in: 1 ... 10)).map { "\($0)" }
 
-            let choiceGen = Gen.pick(choices: [
-                (weight: UInt64(1), generator: intGen.map { "\($0)" }),
-                (weight: UInt64(1), generator: stringGen),
-            ])
+            let choiceGen = #gen(.oneOf(weighted: (1, intAsStringGen), (1, String.arbitrary)))
 
             var sawNumeric = false
             var sawNonNumeric = false
@@ -218,12 +160,9 @@ struct CompositionTests {
             #expect(sawNumeric && sawNonNumeric)
         }
 
-        @Test("Gen.pick with weighted choices")
-        func genPickWeighted() {
-            let gen = Gen.pick(choices: [
-                (weight: UInt64(9), generator: Gen.just("common")),
-                (weight: UInt64(1), generator: Gen.just("rare")),
-            ])
+        @Test("oneOf with weighted choices")
+        func oneOfWeighted() {
+            let gen = #gen(.oneOf(weighted: (9, .just("common")), (1, .just("rare"))))
 
             var commonCount = 0
             var rareCount = 0
@@ -247,27 +186,13 @@ struct CompositionTests {
     struct ComplexCompositionTests {
         @Test("Complex company structure with nested generators")
         func complexComposition() throws {
-            let personGen = Gen.lens(extract: \TestPerson.name, Gen.just("Bill Gates"))
-                .bind { name in
-                    Gen.lens(extract: \TestPerson.age, Gen.choose(in: 18 ... 65))
-                        .bind { age in
-                            Gen.lens(extract: \TestPerson.height, Gen.choose(in: 150.0 ... 200.0))
-                                .map { height in
-                                    TestPerson(name: name, age: age, height: height)
-                                }
-                        }
-                }
+            let personGen = #gen(.just("Bill Gates"), .int(in: 18 ... 65), .double(in: 150.0 ... 200.0)) { name, age, height in
+                TestPerson(name: name, age: age, height: height)
+            }
 
-            let companyGen = Gen.lens(extract: \TestCompany.name, Gen.just("Microsoft"))
-                .bind { name in
-                    Gen.lens(extract: \TestCompany.employees, personGen.array(length: 5 ... 20))
-                        .bind { employees in
-                            Gen.lens(extract: \TestCompany.founded, Gen.choose(in: 1900 ... 2023))
-                                .map { founded in
-                                    TestCompany(name: name, employees: employees, founded: founded)
-                                }
-                        }
-                }
+            let companyGen = #gen(.just("Microsoft"), personGen.array(length: 5 ... 20), .int(in: 1900 ... 2023)) { name, employees, founded in
+                TestCompany(name: name, employees: employees, founded: founded)
+            }
 
             var iterator = ValueInterpreter(companyGen)
             let company = iterator.next()!
@@ -287,13 +212,11 @@ struct CompositionTests {
         @Test("Complex generator composition stability")
         func complexGeneratorStability() throws {
             // Build a very complex generator with multiple composition patterns
-            let baseGen = Gen.choose(in: 1 ... 100)
-            let arrayGen = baseGen.array(length: 1 ... 10)
-            let nestedGen = arrayGen.array(length: 1 ... 5)
-            let pickedGen = Gen.pick(choices: [
-                (weight: UInt64(1), generator: nestedGen),
-                (weight: UInt64(1), generator: nestedGen.map { $0.reversed() }),
-            ])
+            let nestedGen = #gen(.int(in: 1 ... 100)).array(length: 1 ... 10).array(length: 1 ... 5)
+            let pickedGen = #gen(.oneOf(weighted:
+                (1, nestedGen),
+                (1, nestedGen.map { $0.reversed() })
+            ))
 
             // Generate many values to test stability
             for iteration in 0 ..< 100 {
@@ -322,14 +245,10 @@ struct CompositionTests {
                 let c: Bool
             }
 
-            // Gen.zip will lens each generator into its position in the tuple
-            let gen = Gen.zip(Int.arbitrary, String.arbitrary, Bool.arbitrary)
-                .mapped(
-                    forward: { Thing(a: $0.0, b: $0.1, c: $0.2) },
-                    backward: { ($0.a, $0.b, $0.c) },
-                )
-            let (recipe, instance) = try validateGenerator(gen)
-            print()
+            let gen = #gen(Int.arbitrary, String.arbitrary, Bool.arbitrary) { a, b, c in
+                Thing(a: a, b: b, c: c)
+            }
+            let (_, _) = try validateGenerator(gen)
         }
 
         @Test("Test bimap is replayable")

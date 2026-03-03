@@ -7,7 +7,7 @@
 //
 // import Testing
 // @testable import Exhaust
-@_spi(ExhaustInternal) import ExhaustCore
+// @_spi(ExhaustInternal) import ExhaustCore
 //
 // @Suite("Pick Selection Tests")
 // struct PickSelectionTests {

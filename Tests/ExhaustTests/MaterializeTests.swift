@@ -268,7 +268,7 @@ struct MaterializeTests {
     @Test("Materialize empty array via sequence removal")
     func materializeEmptySequence() throws {
         // Use a variable-length generator so element deletion is valid
-        let gen = Gen.arrayOf(Gen.choose(in: UInt64(0) ... 10), within: 0 ... 10)
+        let gen = #gen(.uint64(in: 0 ... 10)).array(length: 0 ... 10)
         let (_, tree) = try #require(
             Array(ValueAndChoiceTreeInterpreter(gen, materializePicks: false, seed: 42).prefix(1)).first,
         )
@@ -297,7 +297,7 @@ struct MaterializeTests {
     @Test("Materialize sequence with shrunk elements", .disabled("Size scaling changed from logarithmic to linear"))
     func materializeSequenceShrunk() throws {
         // Use a variable-length generator so element deletion is valid
-        let gen = Gen.arrayOf(Gen.choose(in: UInt64(0) ... 10), within: 0 ... 10)
+        let gen = #gen(.uint64(in: 0 ... 10)).array(length: 0 ... 10)
         let (_, tree) = try #require(
             Array(ValueAndChoiceTreeInterpreter(gen, materializePicks: false, seed: 42).prefix(2)).last,
         )
@@ -311,7 +311,7 @@ struct MaterializeTests {
 
     @Test("Materialize with modified values reproduces modified output")
     func materializeModifiedValues() throws {
-        let gen = Gen.choose(in: UInt64(0) ... 1000)
+        let gen = #gen(.uint64(in: 0 ... 1000))
         let (_, tree) = try #require(
             Array(ValueAndChoiceTreeInterpreter(gen, materializePicks: false, seed: 42).prefix(1)).first,
         )
@@ -323,7 +323,7 @@ struct MaterializeTests {
 
     @Test("Materialize array with values set to minimum")
     func materializeArrayMinimized() throws {
-        let gen = Gen.arrayOf(Gen.choose(in: UInt64(0) ... 100), exactly: 5)
+        let gen = #gen(.uint64(in: 0 ... 100)).array(length: 5)
         let (_, tree) = try #require(
             Array(ValueAndChoiceTreeInterpreter(gen, materializePicks: false, seed: 42).prefix(1)).first,
         )

@@ -1,6 +1,5 @@
 /// Operations for generating collections like arrays and dictionaries.
 /// These combinators handle the complexities of generating structured data with proper shrinking behavior.
-@_spi(ExhaustInternal) import ExhaustCore
 
 public extension Gen {
     /// Creates a generator for an array of random values.
@@ -108,20 +107,23 @@ public extension Gen {
         _ keyGenerator: ReflectiveGenerator<KeyOutput>,
         _ valueGenerator: ReflectiveGenerator<ValueOutput>,
     ) -> ReflectiveGenerator<[KeyOutput: ValueOutput]> {
-        Gen.zip(
+        let zipped = Gen.zip(
             // These arrays use `getSize()` under the hood and will be the same length
             Gen.arrayOf(keyGenerator),
             Gen.arrayOf(valueGenerator),
         )
-        .mapped(
-            forward: {
+
+        return Gen.contramap(
+            { (dict: [KeyOutput: ValueOutput]) -> ([KeyOutput], [ValueOutput]) in
+                // This will be out of order, but is that ok?
+                (Array(dict.keys), Array(dict.values))
+            },
+            zipped.map { keys, values in
                 Dictionary(
-                    Swift.zip($0.0, $0.1).map { ($0.0, $0.1) },
+                    Swift.zip(keys, values).map { ($0.0, $0.1) },
                     uniquingKeysWith: { key, _ in key },
                 )
             },
-            // This will be out of order, but is that ok?
-            backward: { (Array($0.keys), Array($0.values)) },
         )
     }
 
@@ -140,12 +142,7 @@ public extension Gen {
         _ elementGenerator: ReflectiveGenerator<Element>,
         _ length: ReflectiveGenerator<UInt64>? = nil,
     ) -> ReflectiveGenerator<Set<Element>> {
-        arrayOf(elementGenerator, length)
-            .filter { Set($0).count == $0.count }
-            .mapped(
-                forward: { Set($0) },
-                backward: { Array($0) },
-            )
+        _setOfArray(arrayOf(elementGenerator, length))
     }
 
     /// Creates a generator for a set with size constrained to a specific range.
@@ -161,12 +158,7 @@ public extension Gen {
         within range: ClosedRange<UInt64>,
         scaling: SizeScaling<UInt64> = .linear,
     ) -> ReflectiveGenerator<Set<Element>> {
-        arrayOf(elementGenerator, within: range, scaling: scaling)
-            .filter { Set($0).count == $0.count }
-            .mapped(
-                forward: { Set($0) },
-                backward: { Array($0) },
-            )
+        _setOfArray(arrayOf(elementGenerator, within: range, scaling: scaling))
     }
 
     /// Creates a generator for a set with exactly the specified number of elements.
@@ -180,12 +172,7 @@ public extension Gen {
         _ elementGenerator: ReflectiveGenerator<Element>,
         exactly: UInt64,
     ) -> ReflectiveGenerator<Set<Element>> {
-        arrayOf(elementGenerator, exactly: exactly)
-            .filter { Set($0).count == $0.count }
-            .mapped(
-                forward: { Set($0) },
-                backward: { Array($0) },
-            )
+        _setOfArray(arrayOf(elementGenerator, exactly: exactly))
     }
 
     /// Shuffles the output of an array generator into a random permutation.
@@ -257,24 +244,35 @@ public extension Gen {
                 return .pure(collection[collection.startIndex ..< collection.startIndex])
             }
 
-            return Gen.zip(
+            let zipped = Gen.zip(
                 Gen.chooseDerived(in: 1 ... maxLength), // subset length
                 Gen.chooseDerived(in: 0 ... (count - 1)), // start position index
             )
-            .filter { length, startIndexPos in
-                startIndexPos + length <= count
-            }
-            .mapped(
-                forward: { length, startIndexPos in
+
+            let filtered: ReflectiveGenerator<(Int, Int)> = .impure(
+                operation: .filter(
+                    gen: zipped.erase(),
+                    fingerprint: 0,
+                    filterType: .auto,
+                    predicate: { value in
+                        let (length, startIndexPos) = value as! (Int, Int)
+                        return startIndexPos + length <= count
+                    }
+                ),
+                continuation: { .pure($0 as! (Int, Int)) }
+            )
+
+            return Gen.contramap(
+                { (subset: AnyCollection.SubSequence) -> (Int, Int) in
+                    // Find the position of start index in the indices array
+                    let startPos = indices.firstIndex(of: subset.startIndex) ?? 0
+                    return (subset.count, startPos)
+                },
+                filtered.map { (length: Int, startIndexPos: Int) -> AnyCollection.SubSequence in
                     let startIndex = indices[startIndexPos]
                     let endIndexPos = min(startIndexPos + length, indices.count)
                     let endIndex = endIndexPos < indices.count ? indices[endIndexPos] : collection.endIndex
                     return collection[startIndex ..< endIndex]
-                },
-                backward: { subset in
-                    // Find the position of start index in the indices array
-                    let startPos = indices.firstIndex(of: subset.startIndex) ?? 0
-                    return (subset.count, startPos)
                 },
             )
         }
@@ -314,20 +312,19 @@ public extension Gen {
         let dict = Dictionary(grouping: collection.enumerated(), by: \.offset)
             .mapValues { $0[0].element }
 
-        return Gen.choose(in: 0 ... (count - 1))
-            .mapped(
-                forward: { dict[$0]! },
-                backward: { element in
-                    // Find the first index where this element appears
-                    // This is best-effort since elements might recur
-                    if let element = element as? any Equatable {
-                        if let (index, _) = dict.first(where: { element.isEqualToAny($0.value) }) {
-                            return index
-                        }
+        return Gen.contramap(
+            { (element: AnyCollection.Element) -> Int in
+                // Find the first index where this element appears
+                // This is best-effort since elements might recur
+                if let element = element as? any Equatable {
+                    if let (index, _) = dict.first(where: { element.isEqualToAny($0.value) }) {
+                        return index
                     }
-                    return 0
-                },
-            )
+                }
+                return 0
+            },
+            Gen.choose(in: 0 ... (count - 1)).map { dict[$0]! },
+        )
     }
 
     /// Creates a generator that picks a random element from a collection.
@@ -348,10 +345,36 @@ public extension Gen {
         let intDict = Dictionary(grouping: enumerated, by: \.offset)
             .mapValues { $0[0].element }
 
-        return Gen.choose(in: 0 ... (collection.count - 1))
-            .mapped(
-                forward: { intDict[$0]! },
-                backward: { elementDict[$0]! },
-            )
+        return Gen.contramap(
+            { (element: AnyCollection.Element) -> Int in elementDict[element]! },
+            Gen.choose(in: 0 ... (collection.count - 1)).map { intDict[$0]! },
+        )
+    }
+}
+
+// MARK: - Internal helpers
+
+extension Gen {
+    /// Shared implementation for all `setOf` overloads: filter for unique elements, then convert to Set.
+    @usableFromInline
+    internal static func _setOfArray<Element: Hashable>(
+        _ arrayGen: ReflectiveGenerator<[Element]>,
+    ) -> ReflectiveGenerator<Set<Element>> {
+        let filtered: ReflectiveGenerator<[Element]> = .impure(
+            operation: .filter(
+                gen: arrayGen.erase(),
+                fingerprint: 0,
+                filterType: .auto,
+                predicate: { value in
+                    let array = value as! [Element]
+                    return Set(array).count == array.count
+                }
+            ),
+            continuation: { .pure($0 as! [Element]) }
+        )
+        return Gen.contramap(
+            { (set: Set<Element>) -> [Element] in Array(set) },
+            filtered.map { Set($0) },
+        )
     }
 }

@@ -14,7 +14,7 @@ import Testing
 struct ReflectAndFlattenTests {
     @Test("Reflect and flatten simple integer")
     func reflectAndFlattenSimpleInteger() throws {
-        let gen = Gen.choose(in: UInt64(0) ... 100)
+        let gen = #gen(.uint64(in: 0 ... 100))
         let value: UInt64 = 42
 
         // Reflect the generator with the value
@@ -44,7 +44,7 @@ struct ReflectAndFlattenTests {
 
     @Test("Reflect and flatten array")
     func reflectAndFlattenArray() throws {
-        let gen = Gen.arrayOf(Gen.choose(in: UInt64(0) ... 10), exactly: 3)
+        let gen = #gen(.uint64(in: 0 ... 10)).array(length: 3)
         let value: [UInt64] = [1, 5, 9]
 
         // Reflect the generator with the value
@@ -83,10 +83,7 @@ struct ReflectAndFlattenTests {
 
     @Test("Reflect and flatten tuple")
     func reflectAndFlattenTuple() throws {
-        let gen = Gen.zip(
-            Gen.choose(in: UInt64(0) ... 100),
-            Gen.choose(in: UInt64(0) ... 100),
-        )
+        let gen = #gen(.uint64(in: 0 ... 100), .uint64(in: 0 ... 100))
         let value: (UInt64, UInt64) = (42, 99)
 
         // Reflect the generator with the value
@@ -122,9 +119,9 @@ struct ReflectAndFlattenTests {
 
     @Test("Reflect and flatten tuple of arrays")
     func reflectAndFlattenTupleOfArrays() throws {
-        let gen = Gen.zip(
-            Gen.choose(in: UInt64(0) ... 101).array(length: 1 ... 10),
-            Gen.choose(in: UInt64(0) ... 101).array(length: 1 ... 20),
+        let gen = #gen(
+            #gen(.uint64(in: 0 ... 101)).array(length: 1 ... 10),
+            #gen(.uint64(in: 0 ... 101)).array(length: 1 ... 20)
         )
         let value: ([UInt64], [UInt64]) = ([42], [99, 100, 101])
 
@@ -145,11 +142,7 @@ struct ReflectAndFlattenTests {
 
     @Test("Reflect and flatten pick/branch")
     func reflectAndFlattenPick() throws {
-        let gen = Gen.pick(choices: [
-            (1, Gen.just("first")),
-            (1, Gen.just("second")),
-            (1, Gen.just("third")),
-        ])
+        let gen = #gen(.oneOf(.just("first"), .just("second"), .just("third")))
 
         let value = "second"
 
@@ -177,9 +170,9 @@ struct ReflectAndFlattenTests {
 
     @Test("Reflect and flatten nested structure")
     func reflectAndFlattenNestedStructure() throws {
-        let gen = Gen.zip(
-            Gen.choose(in: UInt64(1) ... 10),
-            Gen.arrayOf(Gen.choose(in: UInt64(0) ... 100), exactly: 2),
+        let gen = #gen(
+            .uint64(in: 1 ... 10),
+            #gen(.uint64(in: 0 ... 100)).array(length: 2)
         )
 
         let value: (UInt64, [UInt64]) = (5, [20, 80])
@@ -218,7 +211,7 @@ struct ReflectAndFlattenTests {
 
     @Test("Reflect and flatten with mapped")
     func reflectAndFlattenWithMapped() throws {
-        let gen = Gen.choose(in: UInt64(0) ... 100).mapped(
+        let gen = #gen(.uint64(in: 0 ... 100)).mapped(
             forward: { $0 * 2 },
             backward: { $0 / 2 },
         )
@@ -274,7 +267,7 @@ struct ReflectAndFlattenTests {
 
     @Test("Reflect and flatten String")
     func reflectAndFlattenString() throws {
-        let gen = Gen.resize(3, String.arbitrary)
+        let gen = String.arbitrary.resize(3)
         let value = "abc"
 
         // Reflect the generator with the value
@@ -311,7 +304,7 @@ struct ReflectAndFlattenTests {
 
     @Test("Reflect and flatten preserves metadata")
     func reflectAndFlattenPreservesMetadata() throws {
-        let gen = Gen.choose(in: UInt64(10) ... 50)
+        let gen = #gen(.uint64(in: 10 ... 50))
         let value: UInt64 = 25
 
         // Reflect the generator with the value
@@ -346,7 +339,7 @@ struct ReflectAndFlattenTests {
 
     @Test("Reflect and flatten empty array")
     func reflectAndFlattenEmptyArray() throws {
-        let gen = Gen.arrayOf(Gen.choose(in: UInt64(0) ... 10), exactly: 0)
+        let gen = #gen(.uint64(in: 0 ... 10)).array(length: 0)
         let value: [UInt64] = []
 
         // Reflect the generator with the value
@@ -364,11 +357,11 @@ struct ReflectAndFlattenTests {
 
     @Test("Reflect and flatten complex nested pick")
     func reflectAndFlattenComplexPick() throws {
-        let gen = Gen.pick(choices: [
-            (1, Gen.zip(Gen.just(1), Gen.just("a"))),
-            (1, Gen.zip(Gen.just(2), Gen.just("b"))),
-            (1, Gen.zip(Gen.just(3), Gen.just("c"))),
-        ])
+        let gen = #gen(.oneOf(weighted:
+            (1, #gen(.just(1), .just("a"))),
+            (1, #gen(.just(2), .just("b"))),
+            (1, #gen(.just(3), .just("c")))
+        ))
 
         let value = (2, "b")
 
@@ -402,11 +395,7 @@ struct ReflectAndFlattenTests {
 
     @Test("Reflect and flatten with different types")
     func reflectAndFlattenMixedTypes() throws {
-        let gen = Gen.zip(
-            Gen.choose(in: UInt64(0) ... 100),
-            Gen.choose(in: Int64(-50) ... 50),
-            Gen.choose(in: 0.0 ... 1.0),
-        )
+        let gen = #gen(.uint64(in: 0 ... 100), .int64(in: -50 ... 50), .double(in: 0.0 ... 1.0))
 
         let value: (UInt64, Int64, Double) = (42, -10, 0.5)
 
@@ -453,7 +442,7 @@ struct ReflectAndFlattenTests {
 
     @Test("Flatten count matches reflection complexity")
     func flattenCountMatchesReflection() throws {
-        let gen = Gen.arrayOf(Gen.choose(in: UInt64(0) ... 10), exactly: 5)
+        let gen = #gen(.uint64(in: 0 ... 10)).array(length: 5)
         let value: [UInt64] = [1, 2, 3, 4, 5]
 
         // Reflect the generator with the value
@@ -486,7 +475,7 @@ struct ReflectAndFlattenTests {
     @Test("Materialising works for sequences")
     func materializationWithSequence() throws {
         // Use a variable-length generator so element deletion is valid
-        let gen = Gen.arrayOf(Gen.choose(in: UInt64(0) ... 10), within: 0 ... 10)
+        let gen = #gen(.uint64(in: 0 ... 10)).array(length: 0 ... 10)
         let value: [UInt64] = [1, 2, 3, 4, 5]
 
         // Reflect the generator with the value
@@ -509,10 +498,10 @@ struct ReflectAndFlattenTests {
 
     @Test("Materialising works for picks")
     func materializationWithPick() throws {
-        let gen = Gen.pick(choices: [
-            (1, Gen.choose(in: 0 ... 10, type: UInt64.self)),
-            (1, Gen.choose(in: 11 ... 12, type: UInt64.self)),
-        ])
+        let gen = #gen(.oneOf(weighted:
+            (1, .uint64(in: 0 ... 10)),
+            (1, .uint64(in: 11 ... 12))
+        ))
 
         // Reflect the generator with the value
         // For now it does not work with `materializePicks`
@@ -537,16 +526,13 @@ struct ReflectAndFlattenTests {
             let age: UInt64
             let name: String
         }
-        let ageGen = Gen.pick(choices: [
-            (1, Gen.choose(in: 0 ... 10, type: UInt64.self)),
-            (1, Gen.choose(in: 11 ... 84, type: UInt64.self)),
-        ])
-        let nameGen = String.arbitrary
-        let gen = Gen.zip(ageGen, nameGen)
-            .mapped(
-                forward: { Person(age: $0.0, name: $0.1) },
-                backward: { ($0.age, $0.name) },
-            )
+        let ageGen = #gen(.oneOf(weighted:
+            (1, .uint64(in: 0 ... 10)),
+            (1, .uint64(in: 11 ... 84))
+        ))
+        let gen = #gen(ageGen, String.arbitrary) { age, name in
+            Person(age: age, name: name)
+        }
 
         // Reflect the generator with the value
         // For now it does not work with `materializePicks`

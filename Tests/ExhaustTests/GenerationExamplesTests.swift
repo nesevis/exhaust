@@ -27,11 +27,12 @@ struct GenerationExamplesTests {
 
         @Test("Test Gen filtering")
         func genFiltering() {
-            let generator = Gen.classify(
-                UInt.arbitrary.filter { $0.isMultiple(of: 3) },
-                ("even", { n in n % 2 == 0 }),
-                ("odd", { n in n % 2 != 0 }),
-            )
+            let generator = UInt.arbitrary
+                .filter { $0.isMultiple(of: 3) }
+                .classify(
+                    ("even", { n in n % 2 == 0 }),
+                    ("odd", { n in n % 2 != 0 })
+                )
             var iterator = ValueAndChoiceTreeInterpreter(generator, seed: 1, maxRuns: 100)
             while let (value, _) = iterator.next() {
                 #expect(value.isMultiple(of: 3))
@@ -82,7 +83,7 @@ struct GenerationExamplesTests {
 
         @Test
         func example2() throws {
-            let gen = Gen.choose(in: 1 ... 5)
+            let gen = #gen(.int(in: 1 ... 5))
             var iterator = ValueInterpreter(gen)
             let results = iterator.next()
             let nonNilResults = try #require(results)
@@ -92,7 +93,7 @@ struct GenerationExamplesTests {
 
         @Test("Test Gen.dictionaryof")
         func genDictionaryOf() throws {
-            let gen = Gen.dictionaryOf(String.arbitrary, Int.arbitrary)
+            let gen = #gen(.dictionary(String.arbitrary, Int.arbitrary))
             let iterator = ValueInterpreter(gen)
             let result = try #require(Array(iterator.prefix(2)).last) // Skip the first length=0 response
             let reflection = try #require(try Interpreters.reflect(gen, with: result))
@@ -106,12 +107,8 @@ struct GenerationExamplesTests {
                 let age: Int
                 let height: Double
             }
-            let lensedAge = Gen.lens(extract: \Person.age, Gen.choose(in: 0 ... 150))
-            let lensedHeight = Gen.lens(extract: \Person.height, Gen.choose(in: Double(120) ... 180))
-            let zipped = lensedAge.bind { age in
-                lensedHeight.map { height in
-                    Person(age: age, height: height)
-                }
+            let zipped = #gen(.int(in: 0 ... 150), .double(in: 120.0 ... 180.0)) { age, height in
+                Person(age: age, height: height)
             }
             var iterator = ValueInterpreter(zipped)
             let result = iterator.next()!
