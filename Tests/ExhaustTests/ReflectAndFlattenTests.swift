@@ -249,7 +249,7 @@ struct ReflectAndFlattenTests {
 
     @Test("Reflect and flatten Bool")
     func reflectAndFlattenBool() throws {
-        let gen = Bool.arbitrary
+        let gen = #gen(.bool())
         let value = true
 
         // Reflect the generator with the value

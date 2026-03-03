@@ -43,11 +43,7 @@ benchmark("String generation with choiceTree") {
 // There's no functional difference here between calling next() repeatedly and creating an array from the prefix
 
 benchmark("Double generation with choiceTree materialised") {
-    let generator = Gen.pick(choices: [
-        (UInt64(1), Double.arbitrary),
-        (UInt64(2), Double.arbitrary),
-        (UInt64(4), Double.arbitrary),
-    ])
+    let generator = #gen(.oneOf(weighted: (1, .double()), (2, .double()), (4, .double())))
     var iterator = ValueAndChoiceTreeInterpreter(generator, materializePicks: true, seed: 1, maxRuns: 100)
     while let (value, tree) = iterator.next() {
         let value = value
@@ -71,7 +67,7 @@ private struct Person {
 }
 
 benchmark("Zipped person") {
-    let generator = Gen.zip(#gen(.asciiString()), UInt8.arbitrary, Double.arbitrary)
+    let generator = #gen(.asciiString(), .uint8(), .double())
         .mapped(forward: { Person(name: $0.0, age: $0.1, height: $0.2) }, backward: { ($0.name, $0.age, $0.height) })
     var iterator = ValueInterpreter(generator, seed: 1, maxRuns: 100)
     while let next = iterator.next() {
@@ -80,7 +76,7 @@ benchmark("Zipped person") {
 }
 
 benchmark("Zipped person with reflection") {
-    let generator = Gen.zip(#gen(.asciiString()), UInt8.arbitrary, Double.arbitrary)
+    let generator = #gen(.asciiString(), .uint8(), .double())
         .mapped(forward: { Person(name: $0.0, age: $0.1, height: $0.2) }, backward: { ($0.name, $0.age, $0.height) })
     var iterator = ValueInterpreter(generator, seed: 1, maxRuns: 100)
     while let next = iterator.next() {
@@ -89,10 +85,10 @@ benchmark("Zipped person with reflection") {
 }
 
 benchmark("Zipped person with ChoiceTree") {
-    let generator = Gen.zip(
-        #gen(.asciiString()),
-        UInt8.arbitrary,
-        Double.arbitrary,
+    let generator = #gen(
+        .asciiString(),
+        .uint8(),
+        .double(),
     )
     .mapped(forward: { Person(name: $0.0, age: $0.1, height: $0.2) }, backward: { ($0.name, $0.age, $0.height) })
     var iterator = ValueAndChoiceTreeInterpreter(generator, materializePicks: true, seed: 1, maxRuns: 100)
@@ -183,7 +179,7 @@ benchmark("Bound5, 50 iterations") {
 //        .filter { $0.isEmpty || $0.dropFirst().reduce($0[0], &+) < 256 }
 //    let gen = #gen(arrGen, arrGen, arrGen, arrGen, arrGen)
 
-    let arrGen = Gen.arrayOf(Int16.arbitrary, within: 0 ... 10)
+    let arrGen = #gen(.int16()).array(length: 0 ... 10)
         .filter { $0.isEmpty || $0.dropFirst().reduce($0[0], &+) < 256 }
     let gen = Gen.zip(arrGen, arrGen, arrGen, arrGen, arrGen)
 

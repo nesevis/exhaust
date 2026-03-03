@@ -214,7 +214,7 @@ struct AdvancedFeatureTests {
         @Test("Large nested structure generation and memory efficiency")
         func largeNestedStructures() throws {
             // Generate structures with significant nesting but reasonable memory usage
-            let largeNestedGen = Int.arbitrary
+            let largeNestedGen = #gen(.int())
                 .array(length: 50 ... 50) // 50 elements
                 .array(length: 10 ... 10) // 10 inner arrays
                 .array(length: 2 ... 2) // 2 outer arrays

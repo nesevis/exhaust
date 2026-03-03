@@ -11,18 +11,26 @@
 
 public extension ReflectiveGenerator {
     static func double(in range: ClosedRange<Double>? = nil, scaling: SizeScaling<Double>? = nil) -> ReflectiveGenerator<Double> {
-        if let scaling, let range {
-            Gen.choose(in: range, scaling: scaling)
+        if let range {
+            if let scaling {
+                Gen.choose(in: range, scaling: scaling)
+            } else {
+                Gen.choose(in: range)
+            }
         } else {
-            Gen.choose(in: range)
+            Gen.choose(in: -Double.greatestFiniteMagnitude ... Double.greatestFiniteMagnitude, scaling: scaling ?? Double.defaultScaling)
         }
     }
 
     static func float(in range: ClosedRange<Float>? = nil, scaling: SizeScaling<Float>? = nil) -> ReflectiveGenerator<Float> {
-        if let scaling, let range {
-            Gen.choose(in: range, scaling: scaling)
+        if let range {
+            if let scaling {
+                Gen.choose(in: range, scaling: scaling)
+            } else {
+                Gen.choose(in: range)
+            }
         } else {
-            Gen.choose(in: range)
+            Gen.choose(in: -Float.greatestFiniteMagnitude ... Float.greatestFiniteMagnitude, scaling: scaling ?? Float.defaultScaling)
         }
     }
 
@@ -36,10 +44,14 @@ public extension ReflectiveGenerator {
 
 public extension ReflectiveGenerator {
     static func uint8(in range: ClosedRange<UInt8>? = nil, scaling: SizeScaling<UInt8>? = nil) -> ReflectiveGenerator<UInt8> {
-        if let scaling, let range {
-            Gen.choose(in: range, scaling: scaling)
+        if let range {
+            if let scaling {
+                Gen.choose(in: range, scaling: scaling)
+            } else {
+                Gen.choose(in: range)
+            }
         } else {
-            Gen.choose(in: range)
+            Gen.choose(in: UInt8.min ... UInt8.max, scaling: scaling ?? UInt8.defaultScaling)
         }
     }
 
@@ -52,10 +64,14 @@ public extension ReflectiveGenerator {
     }
 
     static func uint16(in range: ClosedRange<UInt16>? = nil, scaling: SizeScaling<UInt16>? = nil) -> ReflectiveGenerator<UInt16> {
-        if let scaling, let range {
-            Gen.choose(in: range, scaling: scaling)
+        if let range {
+            if let scaling {
+                Gen.choose(in: range, scaling: scaling)
+            } else {
+                Gen.choose(in: range)
+            }
         } else {
-            Gen.choose(in: range)
+            Gen.choose(in: UInt16.min ... UInt16.max, scaling: scaling ?? UInt16.defaultScaling)
         }
     }
 
@@ -68,10 +84,14 @@ public extension ReflectiveGenerator {
     }
 
     static func uint32(in range: ClosedRange<UInt32>? = nil, scaling: SizeScaling<UInt32>? = nil) -> ReflectiveGenerator<UInt32> {
-        if let scaling, let range {
-            Gen.choose(in: range, scaling: scaling)
+        if let range {
+            if let scaling {
+                Gen.choose(in: range, scaling: scaling)
+            } else {
+                Gen.choose(in: range)
+            }
         } else {
-            Gen.choose(in: range)
+            Gen.choose(in: UInt32.min ... UInt32.max, scaling: scaling ?? UInt32.defaultScaling)
         }
     }
 
@@ -84,10 +104,14 @@ public extension ReflectiveGenerator {
     }
 
     static func uint64(in range: ClosedRange<UInt64>? = nil, scaling: SizeScaling<UInt64>? = nil) -> ReflectiveGenerator<UInt64> {
-        if let scaling, let range {
-            Gen.choose(in: range, scaling: scaling)
+        if let range {
+            if let scaling {
+                Gen.choose(in: range, scaling: scaling)
+            } else {
+                Gen.choose(in: range)
+            }
         } else {
-            Gen.choose(in: range)
+            Gen.choose(in: UInt64.min ... UInt64.max, scaling: scaling ?? UInt64.defaultScaling)
         }
     }
 
@@ -100,10 +124,14 @@ public extension ReflectiveGenerator {
     }
 
     static func uint(in range: ClosedRange<UInt>? = nil, scaling: SizeScaling<UInt>? = nil) -> ReflectiveGenerator<UInt> {
-        if let scaling, let range {
-            Gen.choose(in: range, scaling: scaling)
+        if let range {
+            if let scaling {
+                Gen.choose(in: range, scaling: scaling)
+            } else {
+                Gen.choose(in: range)
+            }
         } else {
-            Gen.choose(in: range)
+            Gen.choose(in: UInt.min ... UInt.max, scaling: scaling ?? UInt.defaultScaling)
         }
     }
 
@@ -120,10 +148,14 @@ public extension ReflectiveGenerator {
 
 public extension ReflectiveGenerator {
     static func int8(in range: ClosedRange<Int8>? = nil, scaling: SizeScaling<Int8>? = nil) -> ReflectiveGenerator<Int8> {
-        if let scaling, let range {
-            Gen.choose(in: range, scaling: scaling)
+        if let range {
+            if let scaling {
+                Gen.choose(in: range, scaling: scaling)
+            } else {
+                Gen.choose(in: range)
+            }
         } else {
-            Gen.choose(in: range)
+            Gen.choose(in: Int8.min ... Int8.max, scaling: scaling ?? Int8.defaultScaling)
         }
     }
 
@@ -136,10 +168,14 @@ public extension ReflectiveGenerator {
     }
 
     static func int16(in range: ClosedRange<Int16>? = nil, scaling: SizeScaling<Int16>? = nil) -> ReflectiveGenerator<Int16> {
-        if let scaling, let range {
-            Gen.choose(in: range, scaling: scaling)
+        if let range {
+            if let scaling {
+                Gen.choose(in: range, scaling: scaling)
+            } else {
+                Gen.choose(in: range)
+            }
         } else {
-            Gen.choose(in: range)
+            Gen.choose(in: Int16.min ... Int16.max, scaling: scaling ?? Int16.defaultScaling)
         }
     }
 
@@ -152,10 +188,14 @@ public extension ReflectiveGenerator {
     }
 
     static func int32(in range: ClosedRange<Int32>? = nil, scaling: SizeScaling<Int32>? = nil) -> ReflectiveGenerator<Int32> {
-        if let scaling, let range {
-            Gen.choose(in: range, scaling: scaling)
+        if let range {
+            if let scaling {
+                Gen.choose(in: range, scaling: scaling)
+            } else {
+                Gen.choose(in: range)
+            }
         } else {
-            Gen.choose(in: range)
+            Gen.choose(in: Int32.min ... Int32.max, scaling: scaling ?? Int32.defaultScaling)
         }
     }
 
@@ -168,10 +208,14 @@ public extension ReflectiveGenerator {
     }
 
     static func int64(in range: ClosedRange<Int64>? = nil, scaling: SizeScaling<Int64>? = nil) -> ReflectiveGenerator<Int64> {
-        if let scaling, let range {
-            Gen.choose(in: range, scaling: scaling)
+        if let range {
+            if let scaling {
+                Gen.choose(in: range, scaling: scaling)
+            } else {
+                Gen.choose(in: range)
+            }
         } else {
-            Gen.choose(in: range)
+            Gen.choose(in: Int64.min ... Int64.max, scaling: scaling ?? Int64.defaultScaling)
         }
     }
 
@@ -181,10 +225,14 @@ public extension ReflectiveGenerator {
     }
 
     static func int(in range: ClosedRange<Int>? = nil, scaling: SizeScaling<Int>? = nil) -> ReflectiveGenerator<Int> {
-        if let scaling, let range {
-            Gen.choose(in: range, scaling: scaling)
+        if let range {
+            if let scaling {
+                Gen.choose(in: range, scaling: scaling)
+            } else {
+                Gen.choose(in: range)
+            }
         } else {
-            Gen.choose(in: range)
+            Gen.choose(in: Int.min ... Int.max, scaling: scaling ?? Int.defaultScaling)
         }
     }
 }

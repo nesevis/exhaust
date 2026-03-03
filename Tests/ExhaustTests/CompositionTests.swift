@@ -54,7 +54,7 @@ struct CompositionTests {
 
         @Test("Arbitrary .array(length:) creates arrays")
         func arbitraryArray() {
-            let gen = Int.arbitrary.array(length: 3 ... 7)
+            let gen = #gen(.int()).array(length: 3 ... 7)
 
             for _ in 0 ..< 20 {
                 var iterator = ValueInterpreter(gen)
@@ -82,7 +82,7 @@ struct CompositionTests {
 
         @Test("Very large arrays")
         func largeArrays() throws {
-            let gen = UInt8.arbitrary.array(length: 1000 ... 1000)
+            let gen = #gen(.uint8()).array(length: 1000 ... 1000)
 
             var iterator = ValueInterpreter(gen)
             let largeArray = iterator.next()!
@@ -103,7 +103,7 @@ struct CompositionTests {
         @Test("Deeply nested structures")
         func deeplyNestedStructures() throws {
             // Create a generator for arrays of arrays of arrays
-            let gen = Int.arbitrary
+            let gen = #gen(.int())
                 .array(length: 2 ... 3) // [Int]
                 .array(length: 2 ... 3) // [[Int]]
                 .array(length: 2 ... 3) // [[[Int]]]
@@ -244,7 +244,7 @@ struct CompositionTests {
                 let c: Bool
             }
 
-            let gen = #gen(Int.arbitrary, .string(), Bool.arbitrary) { a, b, c in
+            let gen = #gen(.int(), .string(), .bool()) { a, b, c in
                 Thing(a: a, b: b, c: c)
             }
             _ = try validateGenerator(gen)
@@ -252,7 +252,7 @@ struct CompositionTests {
 
         @Test("Test bimap is replayable")
         func bimapIsReplayable() throws {
-            let gen = Int.arbitrary.mapped(
+            let gen = #gen(.int()).mapped(
                 forward: { $0.bitPattern64 },
                 backward: { Int(bitPattern64: $0) },
             )

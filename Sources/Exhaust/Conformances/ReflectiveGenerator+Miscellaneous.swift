@@ -14,7 +14,10 @@ public extension ReflectiveGenerator {
     }
 
     static func bool() -> ReflectiveGenerator<Bool> {
-        Gen.choose(from: [true, false])
+        Gen.pick(choices: [
+            (1, Gen.just(true)),
+            (1, Gen.just(false)),
+        ])
     }
 
     static func optional(_ gen: ReflectiveGenerator<Value>) -> ReflectiveGenerator<Value?> {

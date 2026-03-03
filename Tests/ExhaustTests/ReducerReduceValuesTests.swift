@@ -284,7 +284,7 @@ struct ReducerReduceValuesTests {
 //            true
 //        }
         // https://hedgehogqa.github.io/fsharp-hedgehog/articles/ranges.html?tabs=fsharp
-        let interpreter = Array(ValueInterpreter(Int.arbitrary))
+        let interpreter = Array(ValueInterpreter(#gen(.int())))
 
         let counterExample = #exhaust(gen, .suppressIssueReporting) { str in
             str.contains("5") == false

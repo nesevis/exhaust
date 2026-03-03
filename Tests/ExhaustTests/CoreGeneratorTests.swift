@@ -113,7 +113,7 @@ struct CoreGeneratorTests {
                 #gen(.just("constant")),
             ]
 
-            let seeds = Array(ValueInterpreter(UInt64.arbitrary).prefix(10))
+            let seeds = Array(ValueInterpreter(#gen(.uint64())).prefix(10))
 
             for (index, gen) in generators.enumerated() {
                 var iterator = ValueInterpreter(gen, seed: seeds.randomElement()!)
@@ -172,7 +172,7 @@ struct CoreGeneratorTests {
     struct ChoiceTreeGeneratorTests {
         @Test("Simple integer test for RNG consistency")
         func simpleIntegerRNGConsistency() {
-            let gen = Int.arbitrary
+            let gen = #gen(.int())
             var iterator = ValueInterpreter(gen, seed: 42)
             let output1 = iterator.next()!
 

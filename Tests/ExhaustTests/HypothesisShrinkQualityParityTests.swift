@@ -86,8 +86,8 @@ struct HypothesisShrinkQualityParityTests {
         let separatedIntGen = #gen(
             .int(in: 0 ... 1000),
             .asciiString(),
-            Bool.arbitrary,
-            Int.arbitrary,
+            .bool(),
+            .int(),
             .int(in: 0 ... 1000),
         )
         .mapped(
@@ -122,8 +122,8 @@ struct HypothesisShrinkQualityParityTests {
         let separatedFloatGen = #gen(
             .double(in: 0.0 ... 1000.0),
             .asciiString(),
-            Bool.arbitrary,
-            Int.arbitrary,
+            .bool(),
+            .int(),
             .double(in: 0.0 ... 1000.0),
         )
         .mapped(

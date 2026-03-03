@@ -16,7 +16,7 @@ struct InterpreterRNGParityTests {
 
     @Test("Int generation parity")
     func intGenerationParity() {
-        let gen = Int.arbitrary
+        let gen = #gen(.int())
         let seed: UInt64 = 42
 
         var vi = ValueInterpreter(gen, seed: seed, maxRuns: 10)
@@ -31,7 +31,7 @@ struct InterpreterRNGParityTests {
 
     @Test("UInt64 generation parity")
     func uInt64GenerationParity() {
-        let gen = UInt64.arbitrary
+        let gen = #gen(.uint64())
         let seed: UInt64 = 12345
 
         var vi = ValueInterpreter(gen, seed: seed, maxRuns: 10)
@@ -46,7 +46,7 @@ struct InterpreterRNGParityTests {
 
     @Test("Bool generation parity")
     func boolGenerationParity() {
-        let gen = Bool.arbitrary
+        let gen = #gen(.bool())
         let seed: UInt64 = 999
 
         var vi = ValueInterpreter(gen, seed: seed, maxRuns: 20)
@@ -61,7 +61,7 @@ struct InterpreterRNGParityTests {
 
     @Test("Float generation parity")
     func floatGenerationParity() {
-        let gen = Float.arbitrary
+        let gen = #gen(.float())
         let seed: UInt64 = 7777
 
         var vi = ValueInterpreter(gen, seed: seed, maxRuns: 10)
@@ -76,7 +76,7 @@ struct InterpreterRNGParityTests {
 
     @Test("Double generation parity")
     func doubleGenerationParity() {
-        let gen = Double.arbitrary
+        let gen = #gen(.double())
         let seed: UInt64 = 8888
 
         var vi = ValueInterpreter(gen, seed: seed, maxRuns: 10)
@@ -129,8 +129,8 @@ struct InterpreterRNGParityTests {
     @Test("Pick parity with generated values")
     func pickWithGeneratedValuesParity() {
         let gen = #gen(.oneOf(weighted:
-            (1, UInt64.arbitrary),
-            (1, UInt64.arbitrary)))
+            (1, .uint64()),
+            (1, .uint64())))
         let seed: UInt64 = 4
 
         var vi = ValueInterpreter(gen, seed: seed, maxRuns: 15)
@@ -167,7 +167,7 @@ struct InterpreterRNGParityTests {
 
     @Test("Array generation parity")
     func arrayGenerationParity() {
-        let gen = UInt64.arbitrary.array(length: 5)
+        let gen = #gen(.uint64()).array(length: 5)
         let seed: UInt64 = 1111
 
         var vi = ValueInterpreter(gen, seed: seed, maxRuns: 5)
@@ -182,7 +182,7 @@ struct InterpreterRNGParityTests {
 
     @Test("Variable length array parity")
     func variableLengthArrayParity() {
-        let gen = Int.arbitrary.array(length: 2 ... 5)
+        let gen = #gen(.int()).array(length: 2 ... 5)
         let seed: UInt64 = 2222
 
         var vi = ValueInterpreter(gen, seed: seed, maxRuns: 5)
@@ -199,7 +199,7 @@ struct InterpreterRNGParityTests {
 
     @Test("Zip two generators parity")
     func zipTwoParity() {
-        let gen = #gen(UInt64.arbitrary, Int.arbitrary)
+        let gen = #gen(.uint64(), .int())
         let seed: UInt64 = 3333
 
         var vi = ValueInterpreter(gen, seed: seed, maxRuns: 10)
@@ -214,7 +214,7 @@ struct InterpreterRNGParityTests {
 
     @Test("Zip three generators parity")
     func zipThreeParity() {
-        let gen = #gen(UInt64.arbitrary, Int.arbitrary, Bool.arbitrary)
+        let gen = #gen(.uint64(), .int(), .bool())
         let seed: UInt64 = 4444
 
         var vi = ValueInterpreter(gen, seed: seed, maxRuns: 10)
@@ -231,7 +231,7 @@ struct InterpreterRNGParityTests {
 
     @Test("Mapped generator parity")
     func mappedGeneratorParity() {
-        let gen = UInt64.arbitrary.map { $0 % 100 }
+        let gen = #gen(.uint64()).map { $0 % 100 }
         let seed: UInt64 = 5555
 
         var vi = ValueInterpreter(gen, seed: seed, maxRuns: 10)
@@ -247,7 +247,7 @@ struct InterpreterRNGParityTests {
     @Test("FlatMapped generator parity")
     func flatMappedGeneratorParity() {
         let gen = #gen(.int(in: 1 ... 10)).bind { size in
-            UInt64.arbitrary.array(length: UInt64(size))
+            #gen(.uint64()).array(length: UInt64(size))
         }
         let seed: UInt64 = 6666
 
@@ -267,9 +267,9 @@ struct InterpreterRNGParityTests {
     func complexCompositionParity() {
         let gen = #gen(
             #gen(.oneOf(weighted:
-                (2, UInt64.arbitrary),
+                (2, .uint64()),
                 (1, .just(999)))),
-            Bool.arbitrary.array(length: 3),
+            #gen(.bool()).array(length: 3),
             .int(in: 0 ... 100),
         )
         let seed: UInt64 = 9999
@@ -288,7 +288,7 @@ struct InterpreterRNGParityTests {
 
     @Test("Deeply nested composition parity")
     func deeplyNestedCompositionParity() {
-        let innerGen = #gen(UInt64.arbitrary, Bool.arbitrary)
+        let innerGen = #gen(.uint64(), .bool())
         let middleGen = #gen(.oneOf(weighted:
             (1, innerGen.map { ($0.0, $0.1, 1) }),
             (1, innerGen.map { ($0.0, $0.1, 2) })))
@@ -330,7 +330,7 @@ struct InterpreterRNGParityTests {
 
     @Test("Empty array generation parity")
     func emptyArrayParity() {
-        let gen = UInt64.arbitrary.array(length: 0)
+        let gen = #gen(.uint64()).array(length: 0)
         let seed: UInt64 = 54321
 
         var vi = ValueInterpreter(gen, seed: seed, maxRuns: 5)
@@ -345,7 +345,7 @@ struct InterpreterRNGParityTests {
 
     @Test("Many iterations parity stress test")
     func manyIterationsParity() {
-        let gen = #gen(UInt64.arbitrary, Bool.arbitrary, Int.arbitrary)
+        let gen = #gen(.uint64(), .bool(), .int())
         let seed: UInt64 = 99999
 
         var vi = ValueInterpreter(gen, seed: seed, maxRuns: 100)

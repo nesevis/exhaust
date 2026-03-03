@@ -54,7 +54,7 @@ struct UniquenessConstraintTests {
 
     @Test("Bool generator produces exactly 2 unique values")
     func boolProducesExactlyTwo() {
-        let gen = Bool.arbitrary.unique()
+        let gen = #gen(.bool()).unique()
         var iterator = ValueAndChoiceTreeInterpreter(
             gen,
             seed: 42,
@@ -73,7 +73,7 @@ struct UniquenessConstraintTests {
 
     @Test("Determinism: same seed produces identical unique results")
     func determinism() {
-        let gen = UInt64.arbitrary.unique()
+        let gen = #gen(.uint64()).unique()
         let seed: UInt64 = 99
         let maxRuns: UInt64 = 20
 
@@ -123,7 +123,7 @@ struct UniquenessConstraintTests {
         // Generate pairs where first element varies but second is bounded (0-4)
         let secondGen = #gen(.uint64(in: 0 ... 4))
         let pairGen = #gen(
-            UInt64.arbitrary,
+            .uint64(),
             secondGen,
         ).unique(by: \.1)
 
@@ -152,7 +152,7 @@ struct UniquenessConstraintTests {
     @Test("unique(by:) deduplicates by transform function")
     func uniqueByTransform() {
         // Generate values and deduplicate by modulo 5
-        let gen = UInt64.arbitrary
+        let gen = #gen(.uint64())
             .unique(by: { $0 % 5 })
 
         var iterator = ValueAndChoiceTreeInterpreter(
@@ -202,7 +202,7 @@ struct UniquenessConstraintTests {
 
     @Test("PropertyTest with unique combinator passes through")
     func propertyTestPassthrough() {
-        let gen = Bool.arbitrary.unique()
+        let gen = #gen(.bool()).unique()
         var seen = Set<Bool>()
 
         #exhaust(gen, .maxIterations(100), .replay(42)) { value in

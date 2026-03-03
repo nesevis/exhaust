@@ -40,7 +40,7 @@ struct ReducerFloatShrinkingTests {
 
     @Test("Double special-values phase shrinks NaN to max finite")
     func doubleSpecialValuesPhase() throws {
-        let gen = Double.arbitrary
+        let gen = #gen(.double())
         let property: (Double) -> Bool = { value in
             !(value.isNaN || value == Double.greatestFiniteMagnitude)
         }
@@ -95,7 +95,7 @@ struct ReducerFloatShrinkingTests {
 
     @Test("Double shrinking reaches semantic minimum when all values fail")
     func doubleShrinksToSemanticMinimumWhenAlwaysFailing() throws {
-        let gen = Double.arbitrary
+        let gen = #gen(.double())
         let property: (Double) -> Bool = { _ in
             false
         }
@@ -108,7 +108,7 @@ struct ReducerFloatShrinkingTests {
 
     @Test("Float shrinking reaches semantic minimum when all values fail")
     func floatShrinksToSemanticMinimumWhenAlwaysFailing() throws {
-        let gen = Float.arbitrary
+        let gen = #gen(.float())
         let property: (Float) -> Bool = { _ in
             false
         }

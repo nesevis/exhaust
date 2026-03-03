@@ -101,7 +101,7 @@ struct GeneratorCompositionEdgeCaseTests {
         let gen = #gen(
             .int(in: 1 ... 100),
             .string(),
-            Bool.arbitrary,
+            .bool(),
         )
 
         var iterator = ValueInterpreter(gen)

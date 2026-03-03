@@ -14,7 +14,7 @@ import Testing
 struct ReplayDeterminismTests {
     @Test("Replay produces identical results with same recipe")
     func replayDeterminism() throws {
-        let gen = #gen(.string(), UInt.arbitrary, Int.arbitrary)
+        let gen = #gen(.string(), .uint(), .int())
 
         // Generate initial value
         var iterator = ValueInterpreter(gen)
@@ -59,7 +59,7 @@ struct ReplayDeterminismTests {
             let scores: [Int]
         }
 
-        let personGen = #gen(.string(), UInt.arbitrary, Int.arbitrary.array(length: 1 ... 5)) { name, age, scores in
+        let personGen = #gen(.string(), .uint(), .int().array(length: 1 ... 5)) { name, age, scores in
             Person(name: name, age: age, scores: scores)
         }
 

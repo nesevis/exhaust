@@ -100,7 +100,7 @@ private enum HypothesisFloatParityHelpers {
         let gen: ReflectiveGenerator<Double> = if let range {
             #gen(.double(in: range))
         } else {
-            Double.arbitrary
+            #gen(.double())
         }
 
         return try reduce(gen, startingAt: start) { value in
@@ -147,7 +147,7 @@ struct HypothesisFloatShrinkingParityTests {
         // property explicitly pins length (`value.count == n`) so reducer passes
         // that delete sequence elements cannot satisfy the property by shrinking length.
         for n in [1, 2, 3, 8, 10] {
-            let gen = Double.arbitrary.array(length: UInt64(n))
+            let gen = #gen(.double()).array(length: UInt64(n))
             let start = Array(repeating: 2.0, count: n)
 
             let output = try HypothesisFloatParityHelpers.reduce(

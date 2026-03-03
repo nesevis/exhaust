@@ -27,7 +27,7 @@ struct GenerationExamplesTests {
 
         @Test("Test Gen filtering")
         func genFiltering() {
-            let generator = UInt.arbitrary
+            let generator = #gen(.uint())
                 .filter { $0.isMultiple(of: 3) }
                 .classify(
                     ("even", { n in n % 2 == 0 }),
@@ -70,7 +70,7 @@ struct GenerationExamplesTests {
 
         @Test("ValueAndChoiceTreeGeneratorDoesntSwallowMaps")
         func vACTGdoesntswallomaps() {
-            let gen = UInt.arbitrary.map(\.self).map { second in
+            let gen = #gen(.uint()).map(\.self).map { second in
                 second.description
             }
 //            let filtered = Gen.filter(gen, { $0.contains("@") })
@@ -93,7 +93,7 @@ struct GenerationExamplesTests {
 
         @Test("Test Gen.dictionaryof")
         func genDictionaryOf() throws {
-            let gen = #gen(.dictionary(.string(), Int.arbitrary))
+            let gen = #gen(.dictionary(.string(), .int()))
             let iterator = ValueInterpreter(gen)
             let result = try #require(Array(iterator.prefix(2)).last) // Skip the first length=0 response
             let reflection = try #require(try Interpreters.reflect(gen, with: result))
