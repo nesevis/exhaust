@@ -1,5 +1,7 @@
 import Benchmark
 import Exhaust
+import Foundation
+
 @_spi(ExhaustInternal) import ExhaustCore
 
 // swiftlint:disable force_try
@@ -208,6 +210,28 @@ benchmark("Bound5, 50 iterations") {
     } catch {
         print(error)
     }
+}
+
+benchmark("ScalarRangeSet.scalar(at:)") {
+    let chars = CharacterSet.illegalCharacters.inverted.subtracting(.controlCharacters)
+    let srs = chars.scalarRangeSet()
+    var f: Unicode.Scalar?
+    for n in 1...10_000 {
+        f = srs.scalar(at: n)
+    }
+    precondition(f != nil)
+}
+
+benchmark("ScalarRangeSet.index(of:)") {
+    let chars = CharacterSet.illegalCharacters.inverted.subtracting(.controlCharacters)
+    let srs = chars.scalarRangeSet()
+    let count = min(srs.scalarCount, 10_000)
+    let scalars = (0 ..< count).map { srs.scalar(at: $0) }
+    var result = 0
+    for scalar in scalars {
+        result = srs.index(of: scalar)
+    }
+    precondition(result >= 0)
 }
 
 Benchmark.main()
