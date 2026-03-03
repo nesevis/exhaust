@@ -135,7 +135,7 @@ public extension Interpreters {
             return nil
         }
         var numberOfImprovements = 0
-        var oracleCalls = [ShrinkPass: Int]()
+        var propertyInvocations = [ShrinkPass: Int]()
         var stallBudget = config.maxStalls
         let probeBudgets = config.probeBudgets
         let alignedDeletionBeamTuning = config.alignedDeletionBeamSearchTuning
@@ -170,10 +170,10 @@ public extension Interpreters {
                 // The order of shrink passes to take next turn
                 var passImproved = false
 
-                let oracle = isInstrumented == false
+                let property = isInstrumented == false
                     ? property
                     : { v in
-                        oracleCalls[pass, default: 0] += 1
+                        propertyInvocations[pass, default: 0] += 1
                         return property(v)
                     }
                 switch pass {
@@ -182,7 +182,7 @@ public extension Interpreters {
                         continue
                     }
                     let valueSpans = ChoiceSequence.extractAllValueSpans(from: currentSequence)
-                    if valueSpans.isEmpty == false, let (newSequence, output) = try ReducerStrategies.naiveSimplifyValues(gen, tree: currentTree, property: oracle, sequence: currentSequence, valueSpans: valueSpans, rejectCache: &rejectCache) {
+                    if valueSpans.isEmpty == false, let (newSequence, output) = try ReducerStrategies.naiveSimplifyValues(gen, tree: currentTree, property: property, sequence: currentSequence, valueSpans: valueSpans, rejectCache: &rejectCache) {
                         currentSequence = newSequence
                         currentOutput = output
                     }
@@ -192,7 +192,7 @@ public extension Interpreters {
                     if let (newTree, newSequence, output) = try ReducerStrategies.promoteBranches(
                         gen,
                         tree: currentTree,
-                        property: oracle,
+                        property: property,
                         sequence: currentSequence,
                         rejectCache: &rejectCache,
                     ) {
@@ -205,7 +205,7 @@ public extension Interpreters {
                     if let (newTree, newSequence, output) = try ReducerStrategies.pivotBranches(
                         gen,
                         tree: currentTree,
-                        property: oracle,
+                        property: property,
                         sequence: currentSequence,
                         rejectCache: &rejectCache,
                     ) {
@@ -217,7 +217,7 @@ public extension Interpreters {
                 case .deleteContainerSpans:
                     // Adaptive container span deletion, ie the […] and (…) spans in [(V)(V)]
                     let containerSpans = ChoiceSequence.extractContainerSpans(from: currentSequence)
-                    if containerSpans.isEmpty == false, let (newSequence, output) = try ReducerStrategies.adaptiveDeleteSpans(gen, tree: currentTree, property: oracle, sequence: currentSequence, spans: containerSpans, rejectCache: &rejectCache) {
+                    if containerSpans.isEmpty == false, let (newSequence, output) = try ReducerStrategies.adaptiveDeleteSpans(gen, tree: currentTree, property: property, sequence: currentSequence, spans: containerSpans, rejectCache: &rejectCache) {
                         currentSequence = newSequence
                         currentOutput = output
                         passImproved = true
@@ -225,7 +225,7 @@ public extension Interpreters {
                 case .deleteSequenceBoundaries:
                     // Pass 2a: Collapse sequence boundaries, i.e [[V][V][V]] -> [[VVV]]
                     let boundarySpans = ChoiceSequence.extractSequenceBoundarySpans(from: currentSequence)
-                    if boundarySpans.isEmpty == false, let (newSequence, output) = try ReducerStrategies.adaptiveDeleteSpans(gen, tree: currentTree, property: oracle, sequence: currentSequence, spans: boundarySpans, rejectCache: &rejectCache, strictness: .relaxed) {
+                    if boundarySpans.isEmpty == false, let (newSequence, output) = try ReducerStrategies.adaptiveDeleteSpans(gen, tree: currentTree, property: property, sequence: currentSequence, spans: boundarySpans, rejectCache: &rejectCache, strictness: .relaxed) {
                         currentSequence = newSequence
                         currentOutput = output
                         passImproved = true
@@ -237,7 +237,7 @@ public extension Interpreters {
                 case .deleteFreeStandingValues:
                     // Pass 2b: Sequence element deletion, i.e the individual Vs in [VVVVV]
                     let freeStandingValueSpans = ChoiceSequence.extractFreeStandingValueSpans(from: currentSequence)
-                    if freeStandingValueSpans.isEmpty == false, let (newSequence, output) = try ReducerStrategies.adaptiveDeleteSpans(gen, tree: currentTree, property: oracle, sequence: currentSequence, spans: freeStandingValueSpans, rejectCache: &rejectCache, strictness: .relaxed) {
+                    if freeStandingValueSpans.isEmpty == false, let (newSequence, output) = try ReducerStrategies.adaptiveDeleteSpans(gen, tree: currentTree, property: property, sequence: currentSequence, spans: freeStandingValueSpans, rejectCache: &rejectCache, strictness: .relaxed) {
                         currentSequence = newSequence
                         currentOutput = output
                         passImproved = true
@@ -248,7 +248,7 @@ public extension Interpreters {
                        let (newSequence, output) = try ReducerStrategies.deleteAlignedSiblingWindows(
                            gen,
                            tree: currentTree,
-                           property: oracle,
+                           property: property,
                            sequence: currentSequence,
                            siblingGroups: siblingGroups,
                            rejectCache: &rejectCache,
@@ -263,14 +263,14 @@ public extension Interpreters {
                     }
                 case .simplifyValuesToSemanticSimplest:
                     let valueSpans = ChoiceSequence.extractAllValueSpans(from: currentSequence)
-                    if valueSpans.isEmpty == false, let (newSequence, output) = try ReducerStrategies.simplifyValues(gen, tree: currentTree, property: oracle, sequence: currentSequence, valueSpans: valueSpans, rejectCache: &rejectCache) {
+                    if valueSpans.isEmpty == false, let (newSequence, output) = try ReducerStrategies.simplifyValues(gen, tree: currentTree, property: property, sequence: currentSequence, valueSpans: valueSpans, rejectCache: &rejectCache) {
                         currentSequence = newSequence
                         currentOutput = output
                         passImproved = true
                     }
                 case .reduceValues:
                     let valueSpans = ChoiceSequence.extractAllValueSpans(from: currentSequence)
-                    if valueSpans.isEmpty == false, let (newSequence, output) = try ReducerStrategies.reduceValues(gen, tree: currentTree, property: oracle, sequence: currentSequence, valueSpans: valueSpans, rejectCache: &rejectCache) {
+                    if valueSpans.isEmpty == false, let (newSequence, output) = try ReducerStrategies.reduceValues(gen, tree: currentTree, property: property, sequence: currentSequence, valueSpans: valueSpans, rejectCache: &rejectCache) {
                         currentSequence = newSequence
                         currentOutput = output
                         passImproved = true
@@ -281,7 +281,7 @@ public extension Interpreters {
                        let (newSequence, output) = try ReducerStrategies.redistributeNumericPairs(
                            gen,
                            tree: currentTree,
-                           property: oracle,
+                           property: property,
                            sequence: currentSequence,
                            rejectCache: &rejectCache,
                            probeBudget: probeBudgets.redistributeNumericPairs,
@@ -297,7 +297,7 @@ public extension Interpreters {
                     let containerSpans = ChoiceSequence.extractContainerSpans(from: currentSequence)
                     let deletableSpans = freeValueSpans + containerSpans
                     if !deletableSpans.isEmpty,
-                       let (newSequence, output) = try ReducerStrategies.speculativeDeleteAndRepair(gen, tree: currentTree, property: oracle, sequence: currentSequence, spans: deletableSpans, rejectCache: &rejectCache)
+                       let (newSequence, output) = try ReducerStrategies.speculativeDeleteAndRepair(gen, tree: currentTree, property: property, sequence: currentSequence, spans: deletableSpans, rejectCache: &rejectCache)
                     {
                         currentSequence = newSequence
                         currentOutput = output
@@ -310,7 +310,7 @@ public extension Interpreters {
                        let (newSequence, output) = try ReducerStrategies.reduceValuesInTandem(
                            gen,
                            tree: currentTree,
-                           property: oracle,
+                           property: property,
                            sequence: currentSequence,
                            siblingGroups: siblingGroups,
                            rejectCache: &rejectCache,
@@ -325,7 +325,7 @@ public extension Interpreters {
                 case .normaliseSiblingOrder:
                     let siblingGroups = ChoiceSequence.extractSiblingGroups(from: currentSequence)
                     if siblingGroups.isEmpty == false,
-                       let (newSequence, output) = try ReducerStrategies.reorderSiblings(gen, tree: currentTree, property: oracle, sequence: currentSequence, siblingGroups: siblingGroups, rejectCache: &rejectCache)
+                       let (newSequence, output) = try ReducerStrategies.reorderSiblings(gen, tree: currentTree, property: property, sequence: currentSequence, siblingGroups: siblingGroups, rejectCache: &rejectCache)
                     {
                         currentSequence = newSequence
                         currentOutput = output
@@ -339,7 +339,7 @@ public extension Interpreters {
                             event: "pass_succeeded",
                             metadata: [
                                 "pass": pass.rawValue,
-                                "oracle_calls": "\(oracleCalls[pass, default: 0])",
+                                "property_invocations": "\(propertyInvocations[pass, default: 0])",
                                 "output": "\(currentOutput)",
                             ],
                         )
@@ -353,7 +353,7 @@ public extension Interpreters {
                             event: "pass_failed",
                             metadata: [
                                 "pass": pass.rawValue,
-                                "oracle_calls": "\(oracleCalls[pass, default: 0])",
+                                "property_invocations": "\(propertyInvocations[pass, default: 0])",
                             ],
                         )
                     }
@@ -400,13 +400,13 @@ public extension Interpreters {
                     "improvements": "\(numberOfImprovements)",
                 ],
             )
-            oracleCalls
+            propertyInvocations
                 .map { ($0.key, $0.value) }
                 .sorted(by: { $0.0 < $1.0 })
                 .forEach { key, value in
                     ExhaustLog.debug(
                         category: .reducer,
-                        event: "oracle_call_count",
+                        event: "property_invocation_count",
                         metadata: [
                             "pass": key.rawValue,
                             "calls": "\(value)",
@@ -415,9 +415,9 @@ public extension Interpreters {
                 }
             ExhaustLog.notice(
                 category: .reducer,
-                event: "oracle_call_total",
+                event: "property_invocation_count_total",
                 metadata: [
-                    "total": "\(oracleCalls.values.reduce(0, +))",
+                    "total": "\(propertyInvocations.values.reduce(0, +))",
                 ],
             )
         }

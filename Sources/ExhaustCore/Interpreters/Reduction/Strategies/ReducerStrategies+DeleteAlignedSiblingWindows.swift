@@ -98,7 +98,7 @@ extension ReducerStrategies {
     /// so containers do not need identical child counts.
     ///
     /// - Complexity: O(*g* · *c* · *n* · log *n* · *M*), where *g* is sibling group count, *c* is
-    ///   cohorts per group, *n* is child count per cohort, and *M* is one oracle call.
+    ///   cohorts per group, *n* is child count per cohort, and *M* is one property invocation.
     static func deleteAlignedSiblingWindows<Output>(
         _ gen: ReflectiveGenerator<Output>,
         tree: ChoiceTree,

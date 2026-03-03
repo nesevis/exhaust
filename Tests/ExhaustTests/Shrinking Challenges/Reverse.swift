@@ -28,7 +28,7 @@ struct ReverseShrinkingChallenge {
         let iterator = ValueAndChoiceTreeInterpreter(arrGen, materializePicks: true, seed: 1337)
         let (value, tree) = try #require(Array(iterator.prefix(4)).last) // 36 values
         let (_, output) = try #require(try Interpreters.reduce(gen: arrGen, tree: tree, config: .fast, property: property))
-        #expect(count == 20) // Oracle/property calls
+        #expect(count == 20) // Property invocations
         #expect(value.count > output.count)
         #expect(output == [0, 1])
     }

@@ -9,7 +9,7 @@ struct PropertyTestFailure<Output> {
     let iteration: Int
     let maxIterations: UInt64
     let blueprint: String?
-    let oracleCalls: Int?
+    let propertyInvocations: Int?
 
     func render(format: ExhaustLog.Format) -> String {
         switch format {
@@ -52,9 +52,9 @@ struct PropertyTestFailure<Output> {
             }
         }
 
-        if let oracleCalls {
+        if let propertyInvocations {
             lines.append("")
-            lines.append("Oracle calls: \(oracleCalls)")
+            lines.append("Property invoked: \(propertyInvocations) times")
         }
 
         if let seed {
@@ -91,8 +91,8 @@ struct PropertyTestFailure<Output> {
             parts.append("\"original\":\"\(escapeJSON(originalDump))\"")
         }
 
-        if let oracleCalls {
-            parts.append("\"oracleCalls\":\(oracleCalls)")
+        if let propertyInvocations {
+            parts.append("\"propertyInvocations\":\(propertyInvocations)")
         }
 
         if let seed {

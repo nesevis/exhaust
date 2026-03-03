@@ -27,7 +27,7 @@ extension ReducerStrategies {
     ///
     /// - Complexity: O(*g* · *w* · log *d* · *M*), where *g* is the number of sibling groups,
     ///   *w* is the number of tandem windows explored per group, *d* is the maximum bit-pattern
-    ///   distance between a value and its reduction target, and *M* is the cost of a single oracle call.
+    ///   distance between a value and its reduction target, and *M* is the cost of a single property invocation.
     static func reduceValuesInTandem<Output>(
         _ gen: ReflectiveGenerator<Output>,
         tree: ChoiceTree,

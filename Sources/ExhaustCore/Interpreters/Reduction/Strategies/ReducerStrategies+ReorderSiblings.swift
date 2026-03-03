@@ -11,8 +11,8 @@ extension ReducerStrategies {
     /// Falls back to adjacent swaps (bubble-sort style) if the full sort is rejected.
     ///
     /// - Complexity: O(*g* · *r*² · *M*), where *g* is the number of sibling groups, *r* is the
-    ///   maximum number of siblings in a group, and *M* is the cost of a single oracle call. Each
-    ///   group first attempts a full sort (1 oracle call), then falls back to bubble-sort with up to
+    ///   maximum number of siblings in a group, and *M* is the cost of a single property invocation. Each
+    ///   group first attempts a full sort (1 property invocation), then falls back to bubble-sort with up to
     ///   O(*r*²) swap attempts. Successful swaps trigger group re-extraction in O(*s*).
     static func reorderSiblings<Output>(
         _ gen: ReflectiveGenerator<Output>,
@@ -109,7 +109,7 @@ extension ReducerStrategies {
     /// materializes, and tests the property.
     ///
     /// - Complexity: O(*s* + *M*), where *s* is the sequence length and *M* is the cost of a
-    ///   single oracle call. Reconstructs the permuted sequence in O(*s*), then makes one oracle call.
+    ///   single property invocation. Reconstructs the permuted sequence in O(*s*), then makes one property invocation.
     static func applySiblingPermutation<Output>(
         _ gen: ReflectiveGenerator<Output>,
         tree: ChoiceTree,

@@ -16,8 +16,7 @@ extension ReducerStrategies {
     ///
     /// - Complexity: O(*n* · log *d* · *M*), where *n* is the number of value spans, *d* is the
     ///   maximum bit-pattern distance between a value and its reduction target, and *M* is the cost
-    ///   of a single oracle call. The binary search with guess for each value makes O(log *d*) oracle
-    ///   calls; the constant-size boundary probe (5 offsets) is dominated.
+    ///   of a single property invocation. The binary search with guess for each value makes O(log *d*) property invocations; the constant-size boundary probe (5 offsets) is dominated.
     static func reduceValues<Output>(
         _ gen: ReflectiveGenerator<Output>,
         tree: ChoiceTree,
@@ -420,13 +419,10 @@ extension ReducerStrategies {
     /// updated parent, and subsequent loops continue to `0`, yielding the expected minimal counterexample.
     /// 2. Bind-dependent generator:
     /// `Gen.choose(0...100).bind { p in Gen.choose(p...100) }`.
-    /// After `p` shrinks, children may still have metadata from the old `p`. Recorded-range search can
-    /// reject candidates that replay now accepts. One-step unlock re-enters a valid shrinking path.
+    /// After `p` shrinks, children may still have metadata from the old `p`. Recorded-range search can reject candidates that replay now accepts. One-step unlock re-enters a valid shrinking path.
     ///
     /// Why only one step:
-    /// We deliberately avoid globally disabling range guidance. A one-step probe keeps oracle cost low,
-    /// preserves the fast path for well-formed metadata, and only activates when pass 5 has no in-range
-    /// improvement left.
+    /// We deliberately avoid globally disabling range guidance. A one-step probe keeps property invocation cost low, preserves the fast path for well-formed metadata, and only activates when pass 5 has no in-range improvement left.
     ///
     /// - Returns: `true` if the unlock candidate was accepted and `currentSequence` was updated.
     private static func tryUnlockBoundary<Output>(

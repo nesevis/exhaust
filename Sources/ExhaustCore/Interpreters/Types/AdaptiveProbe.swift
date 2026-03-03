@@ -74,7 +74,7 @@ import Foundation
     /// binary search — a bounded downside for a potentially large upside.
     ///
     /// The empirical centroid from value metadata provides the guess during value minimisation,
-    /// encoding distributional knowledge into reduced oracle calls.
+    /// encoding distributional knowledge into reduced property invocations.
     ///
     /// - Parameters:
     ///   - low: Lower bound (inclusive). `predicate(low)` is assumed true.

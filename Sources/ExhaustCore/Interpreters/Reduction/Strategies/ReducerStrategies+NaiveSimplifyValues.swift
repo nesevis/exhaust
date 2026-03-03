@@ -9,7 +9,7 @@ extension ReducerStrategies {
     /// Pass 0: Try setting values to their semantically simplest form.
     ///
     /// - Complexity: O(*n* + *M*), where *n* is the number of value spans and *M* is the cost
-    ///   of a single oracle call (materialize + property evaluation). Always makes at most one oracle call.
+    ///   of a single property invocation (materialize + property evaluation). Always makes at most one property invocation.
     static func naiveSimplifyValues<Output>(
         _ gen: ReflectiveGenerator<Output>,
         tree: ChoiceTree,

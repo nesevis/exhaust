@@ -10,8 +10,8 @@ extension ReducerStrategies {
     /// Uses `find_integer` to batch consecutive simplifications.
     ///
     /// - Complexity: O(*n* · log *n* · *M*), where *n* is the number of simplifiable value spans
-    ///   and *M* is the cost of a single oracle call. Each of the up to *n* positions invokes
-    ///   `findInteger`, which makes O(log *n*) oracle calls.
+    ///   and *M* is the cost of a single property invocation. Each of the up to *n* positions invokes
+    ///   `findInteger`, which makes O(log *n*) property invocations.
     static func simplifyValues<Output>(
         _ gen: ReflectiveGenerator<Output>,
         tree: ChoiceTree,

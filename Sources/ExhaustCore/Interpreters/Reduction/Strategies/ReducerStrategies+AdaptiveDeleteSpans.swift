@@ -10,8 +10,8 @@ extension ReducerStrategies {
     /// spans that can be deleted while preserving the property failure.
     ///
     /// - Complexity: O(*n* · log *n* · *M*), where *n* is the number of spans and *M* is the cost
-    ///   of a single oracle call. Iterates over up to *n* positions; at each, `findInteger` makes
-    ///   O(log *n*) oracle calls. Returns on first successful deletion.
+    ///   of a single property invocation. Iterates over up to *n* positions; at each, `findInteger` makes
+    ///   O(log *n*) property invocations. Returns on first successful deletion.
     static func adaptiveDeleteSpans<Output>(
         _ gen: ReflectiveGenerator<Output>,
         tree: ChoiceTree,

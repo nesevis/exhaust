@@ -112,7 +112,7 @@ extension ReducerStrategies {
     ///
     /// - Complexity: O(*s* + log *d* · *M*), where *s* is the shortened sequence length,
     ///   *d* is the maximum bit-pattern distance among remaining values, and *M* is the cost of
-    ///   a single oracle call. The coarse sweep makes at most 16 probes, followed by a binary
+    ///   a single property invocation. The coarse sweep makes at most 16 probes, followed by a binary
     ///   search refinement of O(log *d*) probes. Each probe calls `applyUniformRepair` in O(*v*).
     static func repairAfterDeletion<Output>(
         _ gen: ReflectiveGenerator<Output>,

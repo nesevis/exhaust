@@ -21,8 +21,8 @@ extension ReducerStrategies {
     ///
     /// - Complexity: O(*s* + *v*² · log *d* · *M*), where *s* is the sequence length,
     ///   *v* is the number of numeric values (bounded to ≤ 16 by the caller), *d* is the maximum
-    ///   bit-pattern distance, and *M* is the cost of a single oracle call. Iterates over O(*v*²)
-    ///   cross-container pairs, each invoking `findInteger` with O(log *d*) oracle calls.
+    ///   bit-pattern distance, and *M* is the cost of a single property invocation. Iterates over O(*v*²)
+    ///   cross-container pairs, each invoking `findInteger` with O(log *d*) property invocations.
     static func redistributeNumericPairs<Output>(
         _ gen: ReflectiveGenerator<Output>,
         tree: ChoiceTree,
