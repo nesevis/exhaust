@@ -10,30 +10,18 @@ import Foundation
 
 public extension ReflectiveGenerator {
     static func character(in range: ClosedRange<Character>? = nil) -> ReflectiveGenerator<Character> {
-        if let range {
-            let charMin = range.lowerBound.unicodeScalars.min()?.value ?? 0
-            let charMax = range.upperBound.unicodeScalars.max()?.value ?? 0
-            return Gen.chooseCharacter(in: charMin.bitPattern64 ... charMax.bitPattern64)
-        }
-        return Gen.chooseCharacter()
+        guard let range else { return .character(from: defaultCharacterSet) }
+        let lower = range.lowerBound.unicodeScalars.min()!
+        let upper = range.upperBound.unicodeScalars.max()!
+        return .character(from: CharacterSet(charactersIn: lower...upper))
     }
 
     static func string(length: ClosedRange<UInt64>? = nil, scaling: SizeScaling<UInt64> = .linear) -> ReflectiveGenerator<String> {
-        if let length {
-            return Gen.arrayOf(.character(), within: length, scaling: scaling)
-                .mapped(forward: { String($0) }, backward: { Array($0) })
-        }
-        return Gen.arrayOf(.character())
-            .mapped(forward: { String($0) }, backward: { Array($0) })
+        .string(from: defaultCharacterSet, length: length, scaling: scaling)
     }
 
     static func asciiString(length: ClosedRange<UInt64>? = nil, scaling: SizeScaling<UInt64> = .linear) -> ReflectiveGenerator<String> {
-        if let length {
-            return Gen.arrayOf(Gen.chooseCharacter(in: Character.bitPatternRanges[0]), within: length, scaling: scaling)
-                .mapped(forward: { String($0) }, backward: { Array($0) })
-        }
-        return Gen.arrayOf(Gen.chooseCharacter(in: Character.bitPatternRanges[0]))
-            .mapped(forward: { String($0) }, backward: { Array($0) })
+        .string(from: asciiCharacterSet, length: length, scaling: scaling)
     }
 
     static func string(length: ClosedRange<Int>, scaling: SizeScaling<UInt64> = .linear) -> ReflectiveGenerator<String> {
@@ -84,9 +72,19 @@ public extension ReflectiveGenerator {
         let charGen: ReflectiveGenerator<Character> = .character(from: characterSet)
         if let length {
             return Gen.arrayOf(charGen, within: length, scaling: scaling)
-                .mapped(forward: { String($0) }, backward: { Array($0) })
+                .mapped(forward: { String($0) }, backward: { $0.unicodeScalars.map { Character($0) } })
         }
         return Gen.arrayOf(charGen)
-            .mapped(forward: { String($0) }, backward: { Array($0) })
+            .mapped(forward: { String($0) }, backward: { $0.unicodeScalars.map { Character($0) } })
     }
 }
+
+// MARK: - Default CharacterSets
+
+/// All assigned Unicode scalars minus control characters and illegals.
+/// First scalar is U+0020 (space) — shrinking produces readable counterexamples.
+private let defaultCharacterSet: CharacterSet =
+    CharacterSet.illegalCharacters.inverted.subtracting(.controlCharacters)
+
+/// Printable ASCII (U+0020–U+007E).
+private let asciiCharacterSet = CharacterSet(charactersIn: Unicode.Scalar(0x0020)!...Unicode.Scalar(0x007E)!)
