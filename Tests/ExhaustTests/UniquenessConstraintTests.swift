@@ -16,7 +16,7 @@ struct UniquenessConstraintTests {
     @Test("High-cardinality generator produces all maxRuns unique values")
     func highCardinalityProducesAllUnique() {
         // Use a non-size-scaled generator to avoid collisions from small sizes
-        let gen = Gen.choose(in: UInt64(0) ... UInt64.max).unique()
+        let gen = #gen(.uint64(in: 0 ... UInt64.max)).unique()
         let maxRuns: UInt64 = 50
         var iterator = ValueAndChoiceTreeInterpreter(
             gen,
@@ -101,7 +101,7 @@ struct UniquenessConstraintTests {
     @Test("ValueInterpreter with unique combinator produces unique values")
     func valueInterpreterUniqueness() {
         // Use a non-size-scaled generator to avoid collisions from small sizes
-        let gen = Gen.choose(in: UInt64(0) ... UInt64.max).unique()
+        let gen = #gen(.uint64(in: 0 ... UInt64.max)).unique()
         let seed: UInt64 = 42
         let maxRuns: UInt64 = 20
 
@@ -121,8 +121,8 @@ struct UniquenessConstraintTests {
     @Test("unique(by:) deduplicates by key path")
     func uniqueByKeyPath() {
         // Generate pairs where first element varies but second is bounded (0-4)
-        let secondGen: ReflectiveGenerator<UInt64> = Gen.choose(in: 0 ... 4)
-        let pairGen: ReflectiveGenerator<(UInt64, UInt64)> = Gen.zip(
+        let secondGen = #gen(.uint64(in: 0 ... 4))
+        let pairGen = #gen(
             UInt64.arbitrary,
             secondGen,
         ).unique(by: \.1)
@@ -177,11 +177,10 @@ struct UniquenessConstraintTests {
 
     @Test("CGS interpreter with unique combinator produces unique values")
     func cgsUniqueness() {
-        let gen = Gen.pick(choices: [
-            (1, Gen.just(1)),
-            (1, Gen.just(2)),
-            (1, Gen.just(3)),
-        ]).unique(by: { AnyHashable($0) })
+        let gen = #gen(.oneOf(weighted:
+            (1, .just(1)),
+            (1, .just(2)),
+            (1, .just(3)))).unique(by: { AnyHashable($0) })
 
         var iterator = OnlineCGSInterpreter(
             gen,
@@ -202,7 +201,7 @@ struct UniquenessConstraintTests {
     // MARK: - PropertyTest with unique combinator
 
     @Test("PropertyTest with unique combinator passes through")
-    func propertyTestPassthrough() throws {
+    func propertyTestPassthrough() {
         let gen = Bool.arbitrary.unique()
         var seen = Set<Bool>()
 

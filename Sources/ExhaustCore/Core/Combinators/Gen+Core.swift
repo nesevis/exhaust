@@ -1,8 +1,9 @@
-/// Core fundamental operations for the generator combinators.
-/// These operations form the building blocks for more complex generator behavior.
-@_spi(ExhaustInternal) import ExhaustCore
+// Core fundamental operations for the generator combinators.
+// These operations form the building blocks for more complex generator behavior.
 
-public enum Gen {
+public enum Gen {}
+
+public extension Gen {
     /// Lifts a reflective operation into a generator with type-safe result handling.
     ///
     /// This is the fundamental operation that bridges between raw reflective operations

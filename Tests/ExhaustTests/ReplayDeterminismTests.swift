@@ -14,7 +14,7 @@ import Testing
 struct ReplayDeterminismTests {
     @Test("Replay produces identical results with same recipe")
     func replayDeterminism() throws {
-        let gen = Gen.zip(String.arbitrary, UInt.arbitrary, Int.arbitrary)
+        let gen = #gen(.string(), UInt.arbitrary, Int.arbitrary)
 
         // Generate initial value
         var iterator = ValueInterpreter(gen)
@@ -35,7 +35,7 @@ struct ReplayDeterminismTests {
 
     @Test("Recipe serialization preserves determinism")
     func recipeSerializationDeterminism() throws {
-        let gen = Gen.choose(in: 1 ... 1000)
+        let gen = #gen(.int(in: 1 ... 1000))
 
         let value = 742
         let recipe = try #require(try Interpreters.reflect(gen, with: value))
@@ -59,14 +59,9 @@ struct ReplayDeterminismTests {
             let scores: [Int]
         }
 
-        let personGen = Gen.lens(extract: \Person.name, String.arbitrary)
-            .bind { name in
-                Gen.lens(extract: \Person.age, UInt.arbitrary).bind { age in
-                    Gen.lens(extract: \Person.scores, Int.arbitrary.array(length: 1 ... 5)).map { scores in
-                        Person(name: name, age: age, scores: scores)
-                    }
-                }
-            }
+        let personGen = #gen(.string(), UInt.arbitrary, Int.arbitrary.array(length: 1 ... 5)) { name, age, scores in
+            Person(name: name, age: age, scores: scores)
+        }
 
         let person = Person(name: "Alice", age: 25, scores: [90, 85, 92])
         let recipe = try #require(try Interpreters.reflect(personGen, with: person))
@@ -81,7 +76,7 @@ struct ReplayDeterminismTests {
 
     @Test("Arrays replay with exact element order")
     func arrayReplayOrder() throws {
-        let gen = String.arbitrary.array(length: 3 ... 7)
+        let gen = #gen(.string()).array(length: 3 ... 7)
 
         let array = ["hello", "world", "test", "array"]
         let recipe = try #require(try Interpreters.reflect(gen, with: array))

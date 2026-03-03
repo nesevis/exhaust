@@ -30,9 +30,9 @@ struct OneOfTests {
     @Test("Equal-weight oneOf produces values from all branches")
     func equalWeightProducesVariety() {
         let gen: ReflectiveGenerator<String> = .oneOf(
-            Gen.just("alpha"),
-            Gen.just("beta"),
-            Gen.just("gamma"),
+            .just("alpha"),
+            .just("beta"),
+            .just("gamma"),
         )
         var seen: Set<String> = []
         var iterator = ValueInterpreter(gen)
@@ -48,9 +48,8 @@ struct OneOfTests {
     @Test("Weighted oneOf produces values from all branches")
     func weightedProducesVariety() {
         let gen: ReflectiveGenerator<String> = .oneOf(weighted:
-            (1, Gen.just("rare")),
-            (5, Gen.just("common"))
-        )
+            (1, .just("rare")),
+            (5, .just("common")))
         var seen: Set<String> = []
         var iterator = ValueInterpreter(gen)
         for _ in 0 ..< 200 {
@@ -65,9 +64,9 @@ struct OneOfTests {
     @Test("oneOf round-trips through choice tree and materialize", arguments: [UInt64(1), 7, 42, 100, 999, 12345])
     func roundTripAcrossSeeds(seed: UInt64) throws {
         let gen: ReflectiveGenerator<String> = .oneOf(
-            Gen.just("alpha"),
-            Gen.just("beta"),
-            Gen.just("gamma"),
+            .just("alpha"),
+            .just("beta"),
+            .just("gamma"),
         )
         let (original, materialized) = try roundTrip(gen, seed: seed)
         #expect(original == materialized)
@@ -76,10 +75,9 @@ struct OneOfTests {
     @Test("Weighted oneOf round-trips through choice tree and materialize")
     func weightedRoundTrip() throws {
         let gen: ReflectiveGenerator<String> = .oneOf(weighted:
-            (1, Gen.just("rare")),
-            (3, Gen.just("medium")),
-            (5, Gen.just("common"))
-        )
+            (1, .just("rare")),
+            (3, .just("medium")),
+            (5, .just("common")))
         for seed in [UInt64(1), 7, 42, 100, 999] {
             let (original, materialized) = try roundTrip(gen, seed: seed)
             #expect(original == materialized)
@@ -90,7 +88,7 @@ struct OneOfTests {
 
     @Test("oneOf works inside #gen macro")
     func worksInsideGenMacro() {
-        let gen = #gen(.oneOf(Gen.just(1), Gen.just(2), Gen.just(3))) { $0 * 10 }
+        let gen = #gen(.oneOf(.just(1), .just(2), .just(3))) { $0 * 10 }
         var iterator = ValueInterpreter(gen)
         let value = iterator.next()
         #expect(value == 10 || value == 20 || value == 30)

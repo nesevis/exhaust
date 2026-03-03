@@ -18,7 +18,7 @@ struct GenerateMacroTests {
             }
             """,
             expandedSource: """
-            Gen._macroMap(nameGen, label: "name", forward: { name in
+            __ExhaustRuntime._macroMap(nameGen, label: "name", forward: { name in
                 Person(name: name)
             })
             """,
@@ -35,7 +35,7 @@ struct GenerateMacroTests {
             }
             """,
             expandedSource: """
-            Gen._macroZip(nameGen, ageGen, labels: ["name", "age"], forward: { name, age in
+            __ExhaustRuntime._macroZip(nameGen, ageGen, labels: ["name", "age"], forward: { name, age in
                 Person(name: name, age: age)
             })
             """,
@@ -52,7 +52,7 @@ struct GenerateMacroTests {
             }
             """,
             expandedSource: """
-            Gen._macroZip(ageGen, nameGen, labels: ["age", "name"], forward: { age, name in
+            __ExhaustRuntime._macroZip(ageGen, nameGen, labels: ["age", "name"], forward: { age, name in
                 Person(name: name, age: age)
             })
             """,
@@ -80,7 +80,7 @@ struct GenerateMacroTests {
             #gen(nameGen) { Person(name: $0) }
             """,
             expandedSource: """
-            Gen._macroMap(nameGen, label: "name", forward: { Person(name: $0) })
+            __ExhaustRuntime._macroMap(nameGen, label: "name", forward: { Person(name: $0) })
             """,
             macros: testMacros,
         )
@@ -93,7 +93,7 @@ struct GenerateMacroTests {
             #gen(nameGen, ageGen) { Person(name: $0, age: $1) }
             """,
             expandedSource: """
-            Gen._macroZip(nameGen, ageGen, labels: ["name", "age"], forward: { Person(name: $0, age: $1) })
+            __ExhaustRuntime._macroZip(nameGen, ageGen, labels: ["name", "age"], forward: { Person(name: $0, age: $1) })
             """,
             macros: testMacros,
         )
@@ -106,7 +106,7 @@ struct GenerateMacroTests {
             #gen(ageGen, nameGen) { Person(name: $1, age: $0) }
             """,
             expandedSource: """
-            Gen._macroZip(ageGen, nameGen, labels: ["age", "name"], forward: { Person(name: $1, age: $0) })
+            __ExhaustRuntime._macroZip(ageGen, nameGen, labels: ["age", "name"], forward: { Person(name: $1, age: $0) })
             """,
             macros: testMacros,
         )
@@ -185,7 +185,7 @@ struct GenerateMacroTests {
             #gen(intGen, stringGen)
             """,
             expandedSource: """
-            Gen.zip(intGen, stringGen)
+            __ExhaustRuntime.__zip(intGen, stringGen)
             """,
             macros: testMacros,
         )
@@ -200,7 +200,7 @@ struct GenerateMacroTests {
             }
             """,
             expandedSource: """
-            Gen._macroZip(nameGen, ageGen, emailGen, labels: ["name", "age", "email"], forward: { name, age, email in
+            __ExhaustRuntime._macroZip(nameGen, ageGen, emailGen, labels: ["name", "age", "email"], forward: { name, age, email in
                 User(name: name, age: age, email: email)
             })
             """,
@@ -217,7 +217,7 @@ struct GenerateMacroTests {
             }
             """,
             expandedSource: """
-            Gen._macroMap(nameGen, label: "name", forward: { name in
+            __ExhaustRuntime._macroMap(nameGen, label: "name", forward: { name in
                 return Person(name: name)
             })
             """,
@@ -234,7 +234,7 @@ struct GenerateMacroTests {
             }
             """,
             expandedSource: """
-            Gen._macroMap(intGen, label: ".0", forward: { x in
+            __ExhaustRuntime._macroMap(intGen, label: ".0", forward: { x in
                 Wrapper(x)
             })
             """,
@@ -251,7 +251,7 @@ struct GenerateMacroTests {
             }
             """,
             expandedSource: """
-            Gen._macroZip(intGen, strGen, labels: [".0", ".1"], forward: { x, y in
+            __ExhaustRuntime._macroZip(intGen, strGen, labels: [".0", ".1"], forward: { x, y in
                 Pair(x, y)
             })
             """,
@@ -266,7 +266,7 @@ struct GenerateMacroTests {
             #gen(intGen) { Wrapper($0) }
             """,
             expandedSource: """
-            Gen._macroMap(intGen, label: ".0", forward: { Wrapper($0) })
+            __ExhaustRuntime._macroMap(intGen, label: ".0", forward: { Wrapper($0) })
             """,
             macros: testMacros,
         )
@@ -283,7 +283,7 @@ struct GenerateMacroTests {
             }
             """,
             expandedSource: """
-            Gen._macroMap(intGen, backward: { guard case let .cat(v0) = $0 else { return nil }; return v0 }, forward: { age in
+            __ExhaustRuntime._macroMap(intGen, backward: { guard case let .cat(v0) = $0 else { return nil }; return v0 }, forward: { age in
                 Pet.cat(age)
             })
             """,
@@ -300,7 +300,7 @@ struct GenerateMacroTests {
             }
             """,
             expandedSource: """
-            Gen._macroZip(intGen, strGen, backward: { guard case let .dog(v0, v1) = $0 else { return nil }; return [v0 as Any, v1 as Any] }, forward: { age, name in
+            __ExhaustRuntime._macroZip(intGen, strGen, backward: { guard case let .dog(v0, v1) = $0 else { return nil }; return [v0 as Any, v1 as Any] }, forward: { age, name in
                 Pet.dog(age, name)
             })
             """,
@@ -317,7 +317,7 @@ struct GenerateMacroTests {
             }
             """,
             expandedSource: """
-            Gen._macroMap(intGen, backward: { guard case let .cat(age: v0) = $0 else { return nil }; return v0 }, forward: { age in
+            __ExhaustRuntime._macroMap(intGen, backward: { guard case let .cat(age: v0) = $0 else { return nil }; return v0 }, forward: { age in
                 Pet.cat(age: age)
             })
             """,
@@ -332,7 +332,7 @@ struct GenerateMacroTests {
             #gen(intGen) { Pet.cat($0) }
             """,
             expandedSource: """
-            Gen._macroMap(intGen, backward: { guard case let .cat(v0) = $0 else { return nil }; return v0 }, forward: { Pet.cat($0) })
+            __ExhaustRuntime._macroMap(intGen, backward: { guard case let .cat(v0) = $0 else { return nil }; return v0 }, forward: { Pet.cat($0) })
             """,
             macros: testMacros,
         )
@@ -347,7 +347,7 @@ struct GenerateMacroTests {
             }
             """,
             expandedSource: """
-            Gen._macroZip(nameGen, ageGen, backward: { guard case let .dog(v0, v1) = $0 else { return nil }; return [v1 as Any, v0 as Any] }, forward: { name, age in
+            __ExhaustRuntime._macroZip(nameGen, ageGen, backward: { guard case let .dog(v0, v1) = $0 else { return nil }; return [v1 as Any, v0 as Any] }, forward: { name, age in
                 Pet.dog(age, name)
             })
             """,

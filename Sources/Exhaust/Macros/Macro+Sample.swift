@@ -1,18 +1,18 @@
-/// Generates a single value from a generator without running a property test.
-///
-/// The generated value uses a fixed size of 50 (midway on the 1–100 scale)
-/// so that size-dependent generators (arrays, strings, etc.) produce
-/// moderately complex output rather than minimal values.
-///
-/// ```swift
-/// let person = #sample(personGen)
-/// let person = #sample(personGen, seed: 42)
-/// ```
-///
-/// - Parameters:
-///   - gen: The generator to sample from.
-///   - seed: Optional seed for deterministic replay.
-/// - Returns: A single generated value.
+// Generates a single value from a generator without running a property test.
+//
+// The generated value uses a fixed size of 50 (midway on the 1–100 scale)
+// so that size-dependent generators (arrays, strings, etc.) produce
+// moderately complex output rather than minimal values.
+//
+// ```swift
+// let person = #sample(personGen)
+// let person = #sample(personGen, seed: 42)
+// ```
+//
+// - Parameters:
+//   - gen: The generator to sample from.
+//   - seed: Optional seed for deterministic replay.
+// - Returns: A single generated value.
 @_spi(ExhaustInternal) import ExhaustCore
 
 @freestanding(expression)

@@ -1,5 +1,7 @@
 import Benchmark
 import Exhaust
+import Foundation
+
 @_spi(ExhaustInternal) import ExhaustCore
 
 // swiftlint:disable force_try
@@ -14,7 +16,7 @@ benchmark("Int Generation") {
 }
 
 benchmark("String generation") {
-    let generator = String.arbitrary
+    let generator = #gen(.string())
     var iterator = ValueInterpreter(generator, seed: 1, maxRuns: 100)
     while let next = iterator.next() {
         let next = next
@@ -22,7 +24,7 @@ benchmark("String generation") {
 }
 
 benchmark("String generation with reflection") {
-    let generator = String.arbitrary
+    let generator = #gen(.string())
     var iterator = ValueInterpreter(generator, seed: 1, maxRuns: 100)
     while let next = iterator.next() {
         let reflection = try Interpreters.reflect(generator, with: next)
@@ -30,7 +32,7 @@ benchmark("String generation with reflection") {
 }
 
 benchmark("String generation with choiceTree") {
-    let generator = String.arbitrary
+    let generator = #gen(.string())
     var iterator = ValueAndChoiceTreeInterpreter(generator, seed: 1, maxRuns: 100)
     while let (value, tree) = iterator.next() {
         let value = value
@@ -54,7 +56,7 @@ benchmark("Double generation with choiceTree materialised") {
 }
 
 benchmark("String generation with choiceTree materialised") {
-    let generator = String.arbitrary
+    let generator = #gen(.string())
     var iterator = ValueAndChoiceTreeInterpreter(generator, materializePicks: true, seed: 1, maxRuns: 100)
     while let (value, tree) = iterator.next() {
 //        let value = value
@@ -69,7 +71,7 @@ private struct Person {
 }
 
 benchmark("Zipped person") {
-    let generator = Gen.zip(String.arbitraryAscii, UInt8.arbitrary, Double.arbitrary)
+    let generator = Gen.zip(#gen(.asciiString()), UInt8.arbitrary, Double.arbitrary)
         .mapped(forward: { Person(name: $0.0, age: $0.1, height: $0.2) }, backward: { ($0.name, $0.age, $0.height) })
     var iterator = ValueInterpreter(generator, seed: 1, maxRuns: 100)
     while let next = iterator.next() {
@@ -78,7 +80,7 @@ benchmark("Zipped person") {
 }
 
 benchmark("Zipped person with reflection") {
-    let generator = Gen.zip(String.arbitraryAscii, UInt8.arbitrary, Double.arbitrary)
+    let generator = Gen.zip(#gen(.asciiString()), UInt8.arbitrary, Double.arbitrary)
         .mapped(forward: { Person(name: $0.0, age: $0.1, height: $0.2) }, backward: { ($0.name, $0.age, $0.height) })
     var iterator = ValueInterpreter(generator, seed: 1, maxRuns: 100)
     while let next = iterator.next() {
@@ -88,7 +90,7 @@ benchmark("Zipped person with reflection") {
 
 benchmark("Zipped person with ChoiceTree") {
     let generator = Gen.zip(
-        String.arbitraryAscii,
+        #gen(.asciiString()),
         UInt8.arbitrary,
         Double.arbitrary,
     )
@@ -125,9 +127,9 @@ benchmark("Bound5, pathological 2") {
         b: [29251, 31661],
         c: [-18678],
         d: [-2824, 15387, -15932, -23458, -6124, 3327, -21001, 16059, -21211, -27710],
-        e: [16775, -32275, 813, 11044]
+        e: [16775, -32275, 813, 11044],
     )
-    
+
     // Takes about 3.7ms, 20ms in a Swift Testing test. So shrinking is 5 times faster
     if let tree = try? Interpreters.reflect(gen, with: value) {
         _ = try? Interpreters.reduce(gen: gen, tree: tree, config: .fast, property: property)
@@ -142,8 +144,11 @@ benchmark("Bound5, 50 iterations, reflective") {
         let d: [Int16]
         let e: [Int16]
     }
-    let arrGen = Gen.arrayOf(Int16.arbitrary, within: 0 ... 10)
+    let arrGen = #gen(.int16().array(length: 0 ... 10))
         .filter { $0.isEmpty || $0.dropFirst().reduce($0[0], &+) < 256 }
+    let gen = #gen(arrGen, arrGen, arrGen, arrGen, arrGen) { a, b, c, d, e in
+        Bound5(a: a, b: b, c: c, d: d, e: e)
+    }
 
     let property: (Bound5) -> Bool = { b5 in
         let arr = b5.a + b5.b + b5.c + b5.d + b5.e
@@ -154,9 +159,6 @@ benchmark("Bound5, 50 iterations, reflective") {
     }
 
     do {
-        let gen = #gen(arrGen, arrGen, arrGen, arrGen, arrGen) { a, b, c, d, e in
-            Bound5(a: a, b: b, c: c, d: d, e: e)
-        }
         let iterator = ValueAndChoiceTreeInterpreter(gen, seed: 1337, maxRuns: 1000)
         var count = 0
         for (value, tree) in iterator where property(value) == false {
@@ -173,6 +175,13 @@ benchmark("Bound5, 50 iterations, reflective") {
 
 benchmark("Bound5, 50 iterations") {
     typealias Bound5 = ([Int16], [Int16], [Int16], [Int16], [Int16])
+    // #gen syntax is 4x faster
+//    running Bound5, 50 iterations, reflective... done! (627.41 ms)
+//    running Bound5, 50 iterations... done! (2361.57 ms)
+    
+//    let arrGen = #gen(.int16().array(length: 0 ... 10))
+//        .filter { $0.isEmpty || $0.dropFirst().reduce($0[0], &+) < 256 }
+//    let gen = #gen(arrGen, arrGen, arrGen, arrGen, arrGen)
 
     let arrGen = Gen.arrayOf(Int16.arbitrary, within: 0 ... 10)
         .filter { $0.isEmpty || $0.dropFirst().reduce($0[0], &+) < 256 }
@@ -201,6 +210,28 @@ benchmark("Bound5, 50 iterations") {
     } catch {
         print(error)
     }
+}
+
+benchmark("ScalarRangeSet.scalar(at:)") {
+    let chars = CharacterSet.illegalCharacters.inverted.subtracting(.controlCharacters)
+    let srs = chars.scalarRangeSet()
+    var f: Unicode.Scalar?
+    for n in 1...10_000 {
+        f = srs.scalar(at: n)
+    }
+    precondition(f != nil)
+}
+
+benchmark("ScalarRangeSet.index(of:)") {
+    let chars = CharacterSet.illegalCharacters.inverted.subtracting(.controlCharacters)
+    let srs = chars.scalarRangeSet()
+    let count = min(srs.scalarCount, 10_000)
+    let scalars = (0 ..< count).map { srs.scalar(at: $0) }
+    var result = 0
+    for scalar in scalars {
+        result = srs.index(of: scalar)
+    }
+    precondition(result >= 0)
 }
 
 Benchmark.main()

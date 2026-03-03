@@ -25,18 +25,12 @@ private enum BST: Equatable, Hashable, CustomStringConvertible {
 
     private static func bstGenerator(maxDepth: Int) -> ReflectiveGenerator<BST> {
         if maxDepth <= 0 {
-            return Gen.just(.leaf)
+            return #gen(.just(.leaf))
         }
-        return Gen.pick(choices: [
-            (weight: 1, Gen.just(.leaf)),
-            (weight: 3, Gen.zip(
-                bstGenerator(maxDepth: maxDepth - 1),
-                Gen.choose(in: UInt(0) ... 9),
-                bstGenerator(maxDepth: maxDepth - 1),
-            ).map { left, value, right in
-                .node(left: left, value: value, right: right)
-            }),
-        ])
+        let nodeBranch = #gen(bstGenerator(maxDepth: maxDepth - 1), .uint(in: 0 ... 9), bstGenerator(maxDepth: maxDepth - 1)).map { left, value, right in
+            BST.node(left: left, value: value, right: right)
+        }
+        return #gen(.oneOf(weighted: (1, .just(.leaf)), (3, nodeBranch)))
     }
 
     func isValidBST() -> Bool {
@@ -137,7 +131,7 @@ struct UniquenessBenchmarkTests {
     private static var sortedProblem: BenchmarkProblem<[UInt]> {
         BenchmarkProblem(
             name: "SORTED(\(sortedLength))",
-            generator: Gen.arrayOf(Gen.choose(in: UInt(0) ... 9), exactly: sortedLength),
+            generator: #gen(.uint(in: 0 ... 9)).array(length: sortedLength),
             predicate: { list in
                 guard list.count == sortedLength else { return false }
                 return zip(list, list.dropFirst()).allSatisfy { $0 <= $1 }
@@ -176,14 +170,13 @@ struct UniquenessBenchmarkTests {
     }
 
     // MARK: - Main Benchmark
-    
+
     @Test("Time to 200 BST", .disabled("Takes 246 seconds at 1000"))
     func bstBenchmark() throws {
 //        Self.targetUnique = 1000
         let onlineCGS = measureOnlineCGS(Self.bstProblem)
         let adaptive = try measureAdaptivelySmoothed(Self.bstProblem)
         printProblemResults(Self.bstProblem, results: [onlineCGS, adaptive])
-        
     }
 
     @Test("Time to 100 unique valid values: BST / SORTED / AVL x 4 strategies", .disabled("Slow benchmark"))

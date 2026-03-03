@@ -77,7 +77,7 @@ import Foundation
         samplingPRNG.jump()
         cgsState.samplingPRNG = samplingPRNG
 
-        let wrapper: DerivativeWrapper = { $0.unsafeCast(to: FinalOutput.self) }
+        let wrapper: DerivativeWrapper = { $0.map { $0 as! FinalOutput } }
 
         defer {
             context.runs += 1
@@ -527,7 +527,6 @@ import Foundation
                     )
                     if let value = result, predicate(value) {
                         successCount += 1
-
                     }
                 } catch {
                     // Sampling failed — count as unsuccessful
@@ -644,7 +643,6 @@ import Foundation
                     )
                     if let value = result, predicate(value) {
                         successCount += 1
-
                     }
                 } catch {
                     // Sampling failed — count as unsuccessful

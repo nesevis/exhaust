@@ -27,12 +27,12 @@ struct ReproducibilityTests {
         let short = Array(
             ValueAndChoiceTreeInterpreter(gen, seed: 42, maxRuns: 50)
                 .prefix(30)
-                .map(\.value)
+                .map(\.value),
         )
         let long = Array(
             ValueAndChoiceTreeInterpreter(gen, seed: 42, maxRuns: 200)
                 .prefix(30)
-                .map(\.value)
+                .map(\.value),
         )
         #expect(short == long)
     }

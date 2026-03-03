@@ -27,8 +27,8 @@ struct GenerateMacroIntegrationTests {
 
     @Test("Two-generator #gen can be reflected")
     func twoGeneratorReflection() throws {
-        let nameGen = String.arbitrary
-        let ageGen = Gen.choose(in: Int(0) ... 120)
+        let nameGen = #gen(.string())
+        let ageGen = #gen(.int(in: 0 ... 120))
         let personGen = #gen(nameGen, ageGen) { name, age in
             Person(name: name, age: age)
         }
@@ -51,7 +51,7 @@ struct GenerateMacroIntegrationTests {
         }
         let catGen = #gen(.int()) { Pet.cat($0) }
         let dogGen = #gen(.int(), .asciiString()) { Pet.dog($0, $1) }
-        let petGen = Gen.pick(choices: [(1, catGen), (1, dogGen)])
+        let petGen = #gen(.oneOf(weighted: (1, catGen), (1, dogGen)))
         let target = Pet.dog(13, "Buddy")
 
         let tree = try #require(try Interpreters.reflect(petGen, with: target))
@@ -63,9 +63,9 @@ struct GenerateMacroIntegrationTests {
 
     @Test("Three-generator #gen can be reflected")
     func threeGeneratorReflection() throws {
-        let xGen = Gen.choose(in: Int(-100) ... 100)
-        let yGen = Gen.choose(in: Int(-100) ... 100)
-        let zGen = Gen.choose(in: Int(-100) ... 100)
+        let xGen = #gen(.int(in: -100 ... 100))
+        let yGen = #gen(.int(in: -100 ... 100))
+        let zGen = #gen(.int(in: -100 ... 100))
         let coordGen = #gen(xGen, yGen, zGen) { x, y, z in
             Coordinate(x: x, y: y, z: z)
         }
@@ -84,8 +84,8 @@ struct GenerateMacroIntegrationTests {
 
     @Test("Generated values round-trip through reflection")
     func generationReflectionRoundTrip() throws {
-        let nameGen = String.arbitrary
-        let ageGen = Gen.choose(in: Int(0) ... 120)
+        let nameGen = #gen(.string())
+        let ageGen = #gen(.int(in: 0 ... 120))
         let personGen = #gen(nameGen, ageGen) { name, age in
             Person(name: name, age: age)
         }
@@ -105,8 +105,8 @@ struct GenerateMacroIntegrationTests {
 
     @Test("Shorthand parameters round-trip through reflection")
     func shorthandParametersRoundTrip() throws {
-        let nameGen = String.arbitrary
-        let ageGen = Gen.choose(in: Int(0) ... 120)
+        let nameGen = #gen(.string())
+        let ageGen = #gen(.int(in: 0 ... 120))
         let personGen = #gen(nameGen, ageGen) { Person(name: $0, age: $1) }
 
         let target = Person(name: "Bob", age: 25)
@@ -123,8 +123,8 @@ struct GenerateMacroIntegrationTests {
 
     @Test("#gen'd generator supports reflect then shrink")
     func reflectThenShrink() throws {
-        let nameGen = String.arbitrary
-        let ageGen = Gen.choose(in: Int(0) ... 1000)
+        let nameGen = #gen(.string())
+        let ageGen = #gen(.int(in: 0 ... 1000))
         let personGen = #gen(nameGen, ageGen) { name, age in
             Person(name: name, age: age)
         }

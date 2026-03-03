@@ -54,8 +54,6 @@ extension ReducerStrategies {
                 switch v.choice {
                 case .unsigned, .signed, .floating:
                     candidatesByTag[v.choice.tag, default: []].append((i, v))
-                case .character:
-                    break
                 }
             default:
                 break

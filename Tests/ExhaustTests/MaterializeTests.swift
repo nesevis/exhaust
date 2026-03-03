@@ -5,6 +5,7 @@
 //  Created by Chris Kolbu on 12/2/2026.
 //
 
+import Foundation
 import Testing
 @testable import Exhaust
 @_spi(ExhaustInternal) import ExhaustCore
@@ -16,7 +17,7 @@ struct MaterializeTests {
     /// Reflects a value into a choice tree, flattens it, and materializes back.
     private func materializeViaReflection<Output>(
         _ gen: ReflectiveGenerator<Output>,
-        _ value: Output
+        _ value: Output,
     ) -> Output? {
         guard let tree = try? Interpreters.reflect(gen, with: value) else { return nil }
         let sequence = ChoiceSequence.flatten(tree)
@@ -42,7 +43,7 @@ struct MaterializeTests {
             materializeViaReflection(boolGen, value) == value
         }
 
-        let charGen = Character.arbitrary
+        let charGen = #gen(.character(from: .decimalDigits))
         #exhaust(charGen) { value in
             materializeViaReflection(charGen, value) == value
         }
@@ -56,7 +57,6 @@ struct MaterializeTests {
         #exhaust(justStrGen, .maxIterations(10)) { value in
             materializeViaReflection(justStrGen, value) == value
         }
-
     }
 
     @Test("Branching generators round-trip through materialize")
@@ -77,7 +77,6 @@ struct MaterializeTests {
         #exhaust(withSubGen) { value in
             materializeViaReflection(withSubGen, value) == value
         }
-
     }
 
     @Test("Collection generators round-trip through materialize")
@@ -168,7 +167,6 @@ struct MaterializeTests {
             guard let mat = materializeViaReflection(zipPickGen, value) else { return false }
             return mat.0 == value.0 && mat.1 == value.1
         }
-
     }
 
     @Test("Mapped generators round-trip through materialize")
@@ -211,7 +209,7 @@ struct MaterializeTests {
             materializeViaReflection(personGen, value) == value
         }
     }
-    
+
     @Test("Mapped-through-macro-expansion generators round-trip through materialize")
     func implicitlyMappedRoundtrip() {
         let mappedGen = #gen(.uint64(in: 0 ... 10000)) { Int($0) }
@@ -268,7 +266,7 @@ struct MaterializeTests {
     @Test("Materialize empty array via sequence removal")
     func materializeEmptySequence() throws {
         // Use a variable-length generator so element deletion is valid
-        let gen = Gen.arrayOf(Gen.choose(in: UInt64(0) ... 10), within: 0 ... 10)
+        let gen = #gen(.uint64(in: 0 ... 10)).array(length: 0 ... 10)
         let (_, tree) = try #require(
             Array(ValueAndChoiceTreeInterpreter(gen, materializePicks: false, seed: 42).prefix(1)).first,
         )
@@ -297,7 +295,7 @@ struct MaterializeTests {
     @Test("Materialize sequence with shrunk elements", .disabled("Size scaling changed from logarithmic to linear"))
     func materializeSequenceShrunk() throws {
         // Use a variable-length generator so element deletion is valid
-        let gen = Gen.arrayOf(Gen.choose(in: UInt64(0) ... 10), within: 0 ... 10)
+        let gen = #gen(.uint64(in: 0 ... 10)).array(length: 0 ... 10)
         let (_, tree) = try #require(
             Array(ValueAndChoiceTreeInterpreter(gen, materializePicks: false, seed: 42).prefix(2)).last,
         )
@@ -311,7 +309,7 @@ struct MaterializeTests {
 
     @Test("Materialize with modified values reproduces modified output")
     func materializeModifiedValues() throws {
-        let gen = Gen.choose(in: UInt64(0) ... 1000)
+        let gen = #gen(.uint64(in: 0 ... 1000))
         let (_, tree) = try #require(
             Array(ValueAndChoiceTreeInterpreter(gen, materializePicks: false, seed: 42).prefix(1)).first,
         )
@@ -323,7 +321,7 @@ struct MaterializeTests {
 
     @Test("Materialize array with values set to minimum")
     func materializeArrayMinimized() throws {
-        let gen = Gen.arrayOf(Gen.choose(in: UInt64(0) ... 100), exactly: 5)
+        let gen = #gen(.uint64(in: 0 ... 100)).array(length: 5)
         let (_, tree) = try #require(
             Array(ValueAndChoiceTreeInterpreter(gen, materializePicks: false, seed: 42).prefix(1)).first,
         )

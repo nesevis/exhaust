@@ -29,7 +29,7 @@ private func generate<Output>(
 struct SemanticSimplestTests {
     @Test("Unsigned semanticSimplest is always .unsigned(0, ...)")
     func unsignedSimplest() {
-        #exhaust(#gen(.uint64(in: 0 ... 100000))) { rawValue in
+        #exhaust(#gen(.uint64(in: 0 ... 100_000))) { rawValue in
             ChoiceValue.unsigned(rawValue, UInt64.self).semanticSimplest == .unsigned(0, UInt64.self)
         }
     }
@@ -52,12 +52,6 @@ struct SemanticSimplestTests {
         }
     }
 
-    @Test("Character semanticSimplest is always ' '")
-    func characterSimplest() {
-        #exhaust(Character.arbitraryAscii) { char in
-            ChoiceValue.character(char).semanticSimplest == .character(" ")
-        }
-    }
 }
 
 // MARK: - ShortlexKey
@@ -185,7 +179,7 @@ struct ShortlexKeyTests {
 struct ReducerSimplifyValuesTests {
     @Test("Values are simplified when property fails for 3-element arrays")
     func valuesSimplifiedWhenAlwaysFailing() throws {
-        let gen = Gen.arrayOf(Gen.choose(in: UInt64(0) ... 100), exactly: 3)
+        let gen = #gen(.uint64(in: 0 ... 100)).array(length: 3)
 
         let (_, tree) = try generate(gen)
 
@@ -208,7 +202,7 @@ struct ReducerSimplifyValuesTests {
 
     @Test("Adaptive probe batches simplification around a load-bearing value")
     func adaptiveProbeBatchesAroundLoadBearing() throws {
-        let gen = Gen.arrayOf(Gen.choose(in: UInt64(0) ... 100), exactly: 5)
+        let gen = #gen(.uint64(in: 0 ... 100)).array(length: 5)
 
         let (_, tree) = try generate(gen)
 
@@ -238,7 +232,7 @@ struct ReducerSimplifyValuesTests {
 
     @Test("Reduced sequence is shortlex-smaller after simplification")
     func reducedSequenceIsSmaller() throws {
-        let gen = Gen.choose(in: UInt64(0) ... 1000)
+        let gen = #gen(.uint64(in: 0 ... 1000))
 
         let (value, tree) = try generate(gen)
         // Only test if the generated value is not already 0
@@ -259,7 +253,7 @@ struct ReducerSimplifyValuesTests {
 
     @Test("Simplification preserves property failure")
     func simplificationPreservesFailure() throws {
-        let gen = Gen.arrayOf(Gen.choose(in: UInt64(0) ... 100), exactly: 5)
+        let gen = #gen(.uint64(in: 0 ... 100)).array(length: 5)
 
         let (_, tree) = try generate(gen)
 
@@ -278,7 +272,7 @@ struct ReducerSimplifyValuesTests {
 
     @Test("Values already at simplest are not changed")
     func alreadySimplestUnchanged() throws {
-        let gen = Gen.choose(in: UInt64(0) ... 100)
+        let gen = #gen(.uint64(in: 0 ... 100))
 
         let (_, tree) = try generate(gen)
         let originalSequence = ChoiceSequence.flatten(tree)
@@ -296,7 +290,7 @@ struct ReducerSimplifyValuesTests {
     @Test("Simplification works with positive signed integers")
     func signedIntegerSimplification() throws {
         // Use a positive-only range so 0 is shortlex-smaller than generated values
-        let gen = Gen.choose(in: Int64(0) ... 100)
+        let gen = #gen(.int64(in: 0 ... 100))
 
         let (value, tree) = try generate(gen)
         try #require(value > 0)
@@ -314,7 +308,7 @@ struct ReducerSimplifyValuesTests {
 
     @Test("Signed values in range containing zero simplify to 0")
     func signedValuesSimplifyToZero() throws {
-        let gen = Gen.choose(in: Int64(-100) ... 100)
+        let gen = #gen(.int64(in: -100 ... 100))
 
         let (value, tree) = try generate(gen)
         try #require(value != 0)
@@ -330,7 +324,7 @@ struct ReducerSimplifyValuesTests {
 
     @Test("Simplification works with characters")
     func characterSimplification() throws {
-        let gen = Gen.arrayOf(Gen.choose(in: Character(" ") ... Character("z")), exactly: 3)
+        let gen = #gen(.character(in: " " ... "z")).array(length: 3)
 
         let (_, tree) = try generate(gen)
 
@@ -347,7 +341,7 @@ struct ReducerSimplifyValuesTests {
 
     @Test("Partial simplification when some values are failure-relevant")
     func partialSimplification() throws {
-        let gen = Gen.arrayOf(Gen.choose(in: UInt64(0) ... 100), exactly: 3)
+        let gen = #gen(.uint64(in: 0 ... 100)).array(length: 3)
 
         let (_, tree) = try generate(gen)
         let originalSequence = ChoiceSequence.flatten(tree)
@@ -369,7 +363,7 @@ struct ReducerSimplifyValuesTests {
 
     @Test("Reduced sequence has balanced brackets after simplification")
     func balancedBracketsAfterSimplification() throws {
-        let gen = Gen.arrayOf(Gen.choose(in: UInt64(0) ... 100), exactly: 4)
+        let gen = #gen(.uint64(in: 0 ... 100)).array(length: 4)
 
         let (_, tree) = try generate(gen)
 
@@ -384,7 +378,7 @@ struct ReducerSimplifyValuesTests {
 
     @Test("Materialized output matches reduced sequence")
     func materializedOutputMatches() throws {
-        let gen = Gen.arrayOf(Gen.choose(in: UInt64(0) ... 100), exactly: 3)
+        let gen = #gen(.uint64(in: 0 ... 100)).array(length: 3)
 
         let (_, tree) = try generate(gen)
 

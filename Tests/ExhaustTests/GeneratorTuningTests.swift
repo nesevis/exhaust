@@ -22,18 +22,12 @@ private enum BST: Equatable, Hashable {
 
     private static func bstGenerator(maxDepth: Int) -> ReflectiveGenerator<BST> {
         if maxDepth <= 0 {
-            return Gen.just(.leaf)
+            return #gen(.just(.leaf))
         }
-        return Gen.pick(choices: [
-            (weight: 1, Gen.just(.leaf)),
-            (weight: 3, Gen.zip(
-                bstGenerator(maxDepth: maxDepth - 1),
-                Gen.choose(in: UInt(0) ... 9),
-                bstGenerator(maxDepth: maxDepth - 1),
-            ).map { left, value, right in
-                .node(left: left, value: value, right: right)
-            }),
-        ])
+        let nodeBranch = #gen(bstGenerator(maxDepth: maxDepth - 1), .uint(in: 0 ... 9), bstGenerator(maxDepth: maxDepth - 1)).map { left, value, right in
+            BST.node(left: left, value: value, right: right)
+        }
+        return #gen(.oneOf(weighted: (1, .just(.leaf)), (3, nodeBranch)))
     }
 
     func isValidBST() -> Bool {
@@ -75,10 +69,9 @@ struct GeneratorTuningTests {
 
     @Test("Pick adaptation produces only valid output via .tune")
     func pickAdaptationWeightsByPredicate() {
-        let gen = Gen.pick(choices: [
-            (weight: UInt64(1), generator: Gen.choose(in: 1 ... 100)),
-            (weight: UInt64(1), generator: Gen.choose(in: 901 ... 1000)),
-        ]).filter(.tune) { $0 <= 100 }
+        let gen = #gen(.oneOf(weighted:
+            (1, .int(in: 1 ... 100)),
+            (1, .int(in: 901 ... 1000)))).filter(.tune) { $0 <= 100 }
 
         let values = Array(ValueInterpreter(gen, seed: 123, maxRuns: 200))
 
@@ -88,10 +81,9 @@ struct GeneratorTuningTests {
 
     @Test(".tune produces more valid output than raw generation")
     func tuneOutperformsRawGeneration() {
-        let gen = Gen.pick(choices: [
-            (weight: UInt64(1), generator: Gen.choose(in: 1 ... 500)),
-            (weight: UInt64(1), generator: Gen.choose(in: 501 ... 1000)),
-        ])
+        let gen = #gen(.oneOf(weighted:
+            (1, .int(in: 1 ... 500)),
+            (1, .int(in: 501 ... 1000))))
         let predicate: (Int) -> Bool = { $0 <= 250 }
 
         // Raw generator: only ~25% of output satisfies the predicate
@@ -110,7 +102,7 @@ struct GeneratorTuningTests {
 
     @Test("ChooseBits subdivision concentrates output in favoured subrange")
     func chooseBitsSubdivision() {
-        let gen = Gen.choose(in: UInt64(1) ... 1000)
+        let gen = #gen(.uint64(in: 1 ... 1000))
             .filter(.tune) { $0 < 100 }
 
         let values = Array(ValueInterpreter(gen, seed: 123, maxRuns: 200))
@@ -123,8 +115,8 @@ struct GeneratorTuningTests {
 
     @Test("Sequence length adaptation favours short arrays")
     func sequenceLengthAdaptation() {
-        let lengthGen: ReflectiveGenerator<UInt64> = Gen.choose(in: 1 ... 50)
-        let elementGen = Gen.choose(in: 1 ... 10)
+        let lengthGen = #gen(.uint64(in: 1 ... 50))
+        let elementGen = #gen(.int(in: 1 ... 10))
         let gen = ReflectiveGenerator<[Int]>.impure(
             operation: .sequence(length: lengthGen, gen: elementGen.erase()),
         ) { result in
@@ -141,7 +133,7 @@ struct GeneratorTuningTests {
 
     @Test("Filter adaptation uses the filter's own predicate to adapt inner generator")
     func filterAdaptation() throws {
-        let innerGen = Gen.choose(in: 1 ... 1000)
+        let innerGen = #gen(.int(in: 1 ... 1000))
         let gen = innerGen.filter { ($0 as! Int) < 200 }
 
         // The outer predicate is irrelevant — filter's predicate should drive adaptation
@@ -177,10 +169,9 @@ struct GeneratorTuningTests {
     @Test("Zero-weight branches are preserved in tuned structure")
     func zeroWeightBranchesPreserved() throws {
         // One branch always satisfies, one never does
-        let gen = Gen.pick(choices: [
-            (weight: UInt64(1), generator: Gen.choose(in: 1 ... 10)),
-            (weight: UInt64(1), generator: Gen.choose(in: 901 ... 1000)),
-        ])
+        let gen = #gen(.oneOf(weighted:
+            (1, .int(in: 1 ... 10)),
+            (1, .int(in: 901 ... 1000))))
 
         let predicate: (Int) -> Bool = { $0 <= 10 }
 
@@ -203,10 +194,9 @@ struct GeneratorTuningTests {
     @Test("All-zero fallback restores weight 1")
     func allZeroFallback() throws {
         // Predicate that nothing can satisfy
-        let gen = Gen.pick(choices: [
-            (weight: UInt64(1), generator: Gen.choose(in: 1 ... 10)),
-            (weight: UInt64(1), generator: Gen.choose(in: 11 ... 20)),
-        ])
+        let gen = #gen(.oneOf(weighted:
+            (1, .int(in: 1 ... 10)),
+            (1, .int(in: 11 ... 20))))
 
         let predicate: (Int) -> Bool = { _ in false }
 
@@ -231,10 +221,9 @@ struct GeneratorTuningTests {
 
     @Test("Same seed produces same tuned structure")
     func deterministicSeeding() throws {
-        let gen = Gen.pick(choices: [
-            (weight: UInt64(1), generator: Gen.choose(in: 1 ... 500)),
-            (weight: UInt64(1), generator: Gen.choose(in: 501 ... 1000)),
-        ])
+        let gen = #gen(.oneOf(weighted:
+            (1, .int(in: 1 ... 500)),
+            (1, .int(in: 501 ... 1000))))
         let predicate: (Int) -> Bool = { $0 <= 250 }
 
         let tuned1 = try GeneratorTuning.tune(
@@ -258,10 +247,9 @@ struct GeneratorTuningTests {
         // A pick where one branch trivially satisfies and the other never does.
         // Convergence should stabilize quickly — a high sample cap shouldn't
         // change the weights compared to a moderate one.
-        let gen = Gen.pick(choices: [
-            (weight: UInt64(1), generator: Gen.choose(in: 1 ... 50)),
-            (weight: UInt64(1), generator: Gen.choose(in: 501 ... 1000)),
-        ])
+        let gen = #gen(.oneOf(weighted:
+            (1, .int(in: 1 ... 50)),
+            (1, .int(in: 501 ... 1000))))
 
         let predicate: (Int) -> Bool = { $0 <= 50 }
 
@@ -310,12 +298,11 @@ struct GeneratorTuningTests {
     @Test("Deeply nested generators do not explode in sample count")
     func depthBudget() {
         // Create a deeply nested pick structure
-        var gen: ReflectiveGenerator<Int> = Gen.choose(in: 1 ... 10)
+        var gen: ReflectiveGenerator<Int> = #gen(.int(in: 1 ... 10))
         for _ in 0 ..< 10 {
-            gen = Gen.pick(choices: [
-                (weight: UInt64(1), generator: gen),
-                (weight: UInt64(1), generator: Gen.choose(in: 1 ... 10)),
-            ])
+            gen = #gen(.oneOf(weighted:
+                (1, gen),
+                (1, .int(in: 1 ... 10))))
         }
 
         let filtered = gen.filter(.tune) { $0 <= 5 }

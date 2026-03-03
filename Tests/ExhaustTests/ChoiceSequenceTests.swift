@@ -243,13 +243,12 @@ struct ChoiceSequenceTests {
             .choice(.unsigned(42, UInt64.self), ChoiceMetadata(validRanges: [0 ... 100])),
             .choice(.signed(-10, Int64(-10).bitPattern64, Int64.self), ChoiceMetadata(validRanges: [0 ... 100])),
             .choice(.floating(3.14, Double(3.14).bitPattern64, Double.self), ChoiceMetadata(validRanges: [0 ... 100])),
-            .choice(.character("A"), ChoiceMetadata(validRanges: [0 ... 100])),
         ])
 
         let flattened = ChoiceSequence.flatten(tree)
 
-        // Should be: group(true), value(42), value(-10), value(3.14), value('A'), group(false)
-        #expect(flattened.count == 6)
+        // Should be: group(true), value(42), value(-10), value(3.14), group(false)
+        #expect(flattened.count == 5)
 
         guard case .group(true) = flattened[0] else {
             Issue.record("Expected opening group marker")
@@ -277,14 +276,7 @@ struct ChoiceSequenceTests {
             return
         }
 
-        guard case let .value(value4) = flattened[4],
-              case .character("A") = value4.choice
-        else {
-            Issue.record("Expected character value")
-            return
-        }
-
-        guard case .group(false) = flattened[5] else {
+        guard case .group(false) = flattened[4] else {
             Issue.record("Expected closing group marker")
             return
         }

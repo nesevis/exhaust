@@ -26,7 +26,7 @@ struct ReducerFloatShrinkingTests {
 
     @Test("Double truncation finds coarse fractional boundary")
     func doubleTruncationBoundary() throws {
-        let gen = Gen.choose(in: 0.0 ... 10.0)
+        let gen = #gen(.double(in: 0.0 ... 10.0))
         let property: (Double) -> Bool = { value in
             // Failing window starts at a dyadic fraction that truncation can discover.
             !(value >= 3.125 && value < 3.2)
@@ -40,7 +40,7 @@ struct ReducerFloatShrinkingTests {
 
     @Test("Double special-values phase shrinks NaN to max finite")
     func doubleSpecialValuesPhase() throws {
-        let gen: ReflectiveGenerator<Double> = Gen.choose()
+        let gen = Double.arbitrary
         let property: (Double) -> Bool = { value in
             !(value.isNaN || value == Double.greatestFiniteMagnitude)
         }
@@ -53,7 +53,7 @@ struct ReducerFloatShrinkingTests {
 
     @Test("Double as_integer_ratio phase reduces integer part while preserving fraction")
     func doubleAsIntegerRatioPhase() throws {
-        let gen = Gen.choose(in: 0.0 ... 10.0)
+        let gen = #gen(.double(in: 0.0 ... 10.0))
         let property: (Double) -> Bool = { value in
             let fraction = value.truncatingRemainder(dividingBy: 1.0)
             return !(value >= 0.75 && fraction == 0.75)
@@ -67,7 +67,7 @@ struct ReducerFloatShrinkingTests {
 
     @Test("Float as_integer_ratio phase reduces integer part while preserving fraction")
     func floatAsIntegerRatioPhase() throws {
-        let gen = Gen.choose(in: Float(0) ... Float(10))
+        let gen = #gen(.float(in: 0 ... 10))
         let property: (Float) -> Bool = { value in
             let fraction = value.truncatingRemainder(dividingBy: 1)
             return !(value >= 0.75 && fraction == 0.75)
@@ -81,7 +81,7 @@ struct ReducerFloatShrinkingTests {
 
     @Test("Already-minimal Double half-ULP cancellation value is preserved")
     func alreadyMinimalHalfULPCancellationBoundaryIsStable() throws {
-        let gen = Gen.choose(in: 1.0 ... 1e16)
+        let gen = #gen(.double(in: 1.0 ... 1e16))
         let property: (Double) -> Bool = { a in
             (a + 0.5) - a == 0.5
         }
@@ -95,7 +95,7 @@ struct ReducerFloatShrinkingTests {
 
     @Test("Double shrinking reaches semantic minimum when all values fail")
     func doubleShrinksToSemanticMinimumWhenAlwaysFailing() throws {
-        let gen: ReflectiveGenerator<Double> = Gen.choose()
+        let gen = Double.arbitrary
         let property: (Double) -> Bool = { _ in
             false
         }
@@ -108,7 +108,7 @@ struct ReducerFloatShrinkingTests {
 
     @Test("Float shrinking reaches semantic minimum when all values fail")
     func floatShrinksToSemanticMinimumWhenAlwaysFailing() throws {
-        let gen: ReflectiveGenerator<Float> = Gen.choose()
+        let gen = Float.arbitrary
         let property: (Float) -> Bool = { _ in
             false
         }

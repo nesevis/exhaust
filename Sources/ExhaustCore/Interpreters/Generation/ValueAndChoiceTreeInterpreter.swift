@@ -97,7 +97,7 @@ import Foundation
         switch gen {
         case let .pure(value):
             // The ChoiceTree value will be discarded from the caller if it's coming
-            // from .chooseBits or .chooseCharacter
+            // from .chooseBits
             return (value, ChoiceTree.just(String(String(describing: value).prefix(50))))
 
         case let .impure(operation, continuation):

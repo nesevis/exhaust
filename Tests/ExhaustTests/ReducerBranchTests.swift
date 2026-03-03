@@ -42,22 +42,21 @@ private enum Tagged: Equatable, CustomDebugStringConvertible {
 /// Branch 0 (weight 1): `small(Int)` — one value
 /// Branch 1 (weight 1): `big(Int, Int)` — two values (structurally more complex)
 private func makeTaggedGen() -> ReflectiveGenerator<Tagged> {
-    Gen.pick(choices: [
-        (1, Gen.choose(in: Int(0) ... 100).mapped(
-            forward: { Tagged.small($0) },
-            backward: {
-                if case let .small(a) = $0 { return a }
-                return 0
-            },
-        )),
-        (1, Gen.zip(Gen.choose(in: Int(0) ... 100), Gen.choose(in: Int(0) ... 100)).mapped(
-            forward: { Tagged.big($0, $1) },
-            backward: {
-                if case let .big(a, b) = $0 { return (a, b) }
-                return (0, 0)
-            },
-        )),
-    ])
+    let smallBranch = #gen(.int(in: 0 ... 100)).mapped(
+        forward: { Tagged.small($0) },
+        backward: {
+            if case let .small(a) = $0 { return a }
+            return 0
+        },
+    )
+    let bigBranch = #gen(.int(in: 0 ... 100), .int(in: 0 ... 100)).mapped(
+        forward: { Tagged.big($0, $1) },
+        backward: {
+            if case let .big(a, b) = $0 { return (a, b) }
+            return (0, 0)
+        },
+    )
+    return #gen(.oneOf(weighted: (1, smallBranch), (1, bigBranch)))
 }
 
 /// A three-branch pick with varying complexity.
@@ -65,14 +64,11 @@ private func makeTaggedGen() -> ReflectiveGenerator<Tagged> {
 /// Branch 1: single int
 /// Branch 2: pair of ints — most complex
 private func makeThreeWayGen() -> ReflectiveGenerator<Int> {
-    Gen.pick(choices: [
-        (1, Gen.choose(in: Int(0) ... 0)),
-        (1, Gen.choose(in: Int(1) ... 100)),
-        (1, Gen.zip(Gen.choose(in: Int(1) ... 50), Gen.choose(in: Int(1) ... 50)).mapped(
-            forward: { $0 + $1 },
-            backward: { ($0 / 2, $0 - $0 / 2) },
-        )),
-    ])
+    let pairBranch = #gen(.int(in: 1 ... 50), .int(in: 1 ... 50)).mapped(
+        forward: { $0 + $1 },
+        backward: { ($0 / 2, $0 - $0 / 2) },
+    )
+    return #gen(.oneOf(weighted: (1, .int(in: 0 ... 0)), (1, .int(in: 1 ... 100)), (1, pairBranch)))
 }
 
 // MARK: - promoteBranches
@@ -84,7 +80,7 @@ struct PromoteBranchesTests {
 
     @Test("Returns nil when tree has no branches")
     func noBranches() throws {
-        let gen = Gen.arrayOf(Gen.choose(in: UInt(0) ... 10), within: 1 ... 5)
+        let gen = #gen(.uint(in: 0 ... 10)).array(length: 1 ... 5)
         let (_, tree) = try generate(gen, seed: 7)
         var cache = ReducerCache()
         let sequence = ChoiceSequence(tree)
@@ -111,7 +107,7 @@ struct PromoteBranchesTests {
     @Test("Replaces complex branch subtree with simpler one from another site")
     func replacesComplexWithSimpler() throws {
         // A generator with two independent pick sites — the tuple gives us two branch groups
-        let pairGen = Gen.zip(taggedGen, taggedGen)
+        let pairGen = #gen(taggedGen, taggedGen)
 
         // Search for a seed/iteration that gives us two different branch selections
         // so we have branch groups of different complexity
@@ -141,7 +137,7 @@ struct PromoteBranchesTests {
 
     @Test("Does not produce a result that fails shortlex check")
     func respectsShortlex() throws {
-        let pairGen = Gen.zip(taggedGen, taggedGen)
+        let pairGen = #gen(taggedGen, taggedGen)
 
         for seed in UInt64(0) ... 50 {
             for iteration in 0 ... 3 {
@@ -164,7 +160,7 @@ struct PromoteBranchesTests {
 
     @Test("Skips candidates already in the reject cache")
     func respectsRejectCache() throws {
-        let pairGen = Gen.zip(taggedGen, taggedGen)
+        let pairGen = #gen(taggedGen, taggedGen)
 
         for seed in UInt64(0) ... 100 {
             for iteration in 0 ... 5 {
@@ -199,7 +195,7 @@ struct PromoteBranchesTests {
 
     @Test("Does not return a result when the property passes for all candidates")
     func propertyPassingBlocksResult() throws {
-        let pairGen = Gen.zip(taggedGen, taggedGen)
+        let pairGen = #gen(taggedGen, taggedGen)
 
         for seed in UInt64(0) ... 50 {
             for iteration in 0 ... 3 {
@@ -220,7 +216,7 @@ struct PromoteBranchesTests {
 
     @Test("Candidate materialises to a valid value")
     func candidateMaterialises() throws {
-        let pairGen = Gen.zip(taggedGen, taggedGen)
+        let pairGen = #gen(taggedGen, taggedGen)
 
         for seed in UInt64(0) ... 100 {
             for iteration in 0 ... 5 {
@@ -256,7 +252,7 @@ struct PivotBranchesTests {
 
     @Test("Returns nil when tree has no pick sites")
     func noPickSites() throws {
-        let gen = Gen.arrayOf(Gen.choose(in: UInt(0) ... 10), within: 1 ... 5)
+        let gen = #gen(.uint(in: 0 ... 10)).array(length: 1 ... 5)
         let (_, tree) = try generate(gen, seed: 7)
         var cache = ReducerCache()
         let sequence = ChoiceSequence(tree)
@@ -426,7 +422,7 @@ struct PivotBranchesTests {
     @Test("Pivot within nested pick sites")
     func nestedPickSites() throws {
         // Two independent pick sites via zip — both should be pivotable
-        let pairGen = Gen.zip(taggedGen, taggedGen)
+        let pairGen = #gen(taggedGen, taggedGen)
 
         var pivotCount = 0
         for seed in UInt64(0) ... 200 {

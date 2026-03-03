@@ -63,7 +63,7 @@ struct BitPatternConvertibleTests {
     @Test("Float BitPatternConvertible round-trip for special values")
     func floatSpecialValuesRoundTrip() {
         #exhaust(#gen(.float())) { val in
-            Float(bitPattern64: val.bitPattern64) == val
+            val.isNaN || Float(bitPattern64: val.bitPattern64) == val
         }
     }
 
@@ -91,7 +91,7 @@ struct BitPatternConvertibleTests {
     func propertyTestFloatBitPatternSequentiality() {
         let gen = #gen(
             .float(in: -Float.greatestFiniteMagnitude ... Float(0)),
-            .float(in: Float(1) ... Float.greatestFiniteMagnitude.nextDown)
+            .float(in: Float(1) ... Float.greatestFiniteMagnitude.nextDown),
         )
         #exhaust(gen) { low, high in
             low.bitPattern64 < high.bitPattern64
@@ -101,7 +101,7 @@ struct BitPatternConvertibleTests {
     @Test("Double BitPatternConvertible round-trip for special values")
     func doubleSpecialValuesRoundTrip() {
         #exhaust(#gen(.double())) { val in
-            Double(bitPattern64: val.bitPattern64) == val
+            val.isNaN || Double(bitPattern64: val.bitPattern64) == val
         }
     }
 
@@ -129,7 +129,7 @@ struct BitPatternConvertibleTests {
     func propertyTestDoubleBitPatternSequentiality() {
         let gen = #gen(
             .double(in: -Double.greatestFiniteMagnitude ... 0),
-            .double(in: 1 ... Double.greatestFiniteMagnitude.nextDown)
+            .double(in: 1 ... Double.greatestFiniteMagnitude.nextDown),
         )
         #exhaust(gen) { low, high in
             low.bitPattern64 < high.bitPattern64

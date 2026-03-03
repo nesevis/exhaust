@@ -24,7 +24,7 @@ struct Bound5ShrinkingChallenge {
     typealias Bound5 = ([Int16], [Int16], [Int16], [Int16], [Int16])
 
     private static let gen: ReflectiveGenerator<Bound5> = {
-        let arr = #gen(.int16().array(length: 0...10))
+        let arr = #gen(.int16().array(length: 0 ... 10))
             .filter { $0.isEmpty || $0.dropFirst().reduce($0[0], &+) < 256 }
         return #gen(arr, arr, arr, arr, arr)
     }()
@@ -43,7 +43,7 @@ struct Bound5ShrinkingChallenge {
         let iterator = ValueAndChoiceTreeInterpreter(Self.gen, materializePicks: true, seed: 1337)
         let (_, tree) = try #require(Array(iterator.prefix(80)).last)
         let sequence = ChoiceSequence.flatten(tree)
-        let _ = try #require(try Interpreters.materialize(Self.gen, with: tree, using: sequence))
+        _ = try #require(try Interpreters.materialize(Self.gen, with: tree, using: sequence))
         let (_, output) = try #require(try Interpreters.reduce(gen: Self.gen, tree: tree, config: .fast, property: Self.property))
 
         // ([-1], [-32768], [], [], [])
@@ -102,8 +102,8 @@ struct Bound5ShrinkingChallenge {
             let d: [Int16]
             let e: [Int16]
         }
-        let arrGen = Gen.arrayOf(Int16.arbitrary, within: 0 ... 10)
-        let gen = Gen.zip(arrGen, arrGen, arrGen, arrGen, arrGen)
+        let arrGen = #gen(.int16().array(length: 0 ... 10))
+        let gen = #gen(arrGen, arrGen, arrGen, arrGen, arrGen)
             .map(Bound5.init)
 
         let property: (Bound5) -> Bool = { b5 in

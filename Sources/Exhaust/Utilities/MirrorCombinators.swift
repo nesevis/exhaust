@@ -1,6 +1,6 @@
 @_spi(ExhaustInternal) import ExhaustCore
 
-public extension Gen {
+public extension __ExhaustRuntime {
     /// Maps a single generator with a forward transform and Mirror-based backward extraction.
     ///
     /// This is **macro infrastructure** — it exists solely as an expansion target for the
@@ -63,7 +63,8 @@ public extension Gen {
 
     /// Zips multiple generators with a forward transform and Mirror-based backward extraction.
     ///
-    /// This is **macro infrastructure** — it exists solely as an expansion target for the `#gen` macro when multiple generators are combined with a labeled initializer call.
+    /// This is **macro infrastructure** — it exists solely as an expansion target for the
+    /// `#gen` macro when multiple generators are combined with a labeled initializer call.
     /// It must be `public` because macro expansions emit code at the call site (in the
     /// user's module), but it is not intended for direct use.
     ///
@@ -198,5 +199,15 @@ public extension Gen {
         forward: @escaping (Input) -> Output,
     ) -> ReflectiveGenerator<Output> {
         generator.map(forward)
+    }
+
+    // MARK: - Zip forwarding
+
+    /// Forwarding wrapper for `Gen.zip`, used by macro expansion for the no-closure
+    /// multi-generator overload (e.g. `#gen(a, b)` with no trailing closure).
+    static func __zip<each T>(
+        _ generators: repeat ReflectiveGenerator<each T>,
+    ) -> ReflectiveGenerator<(repeat each T)> {
+        Gen.zip(repeat each generators)
     }
 }

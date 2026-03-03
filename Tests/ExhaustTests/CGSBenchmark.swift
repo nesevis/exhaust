@@ -21,18 +21,12 @@ private enum BenchBST: Equatable, Hashable {
 
     private static func bstGenerator(maxDepth: Int) -> ReflectiveGenerator<BenchBST> {
         if maxDepth <= 0 {
-            return Gen.just(.leaf)
+            return #gen(.just(.leaf))
         }
-        return Gen.pick(choices: [
-            (weight: 1, Gen.just(.leaf)),
-            (weight: 3, Gen.zip(
-                bstGenerator(maxDepth: maxDepth - 1),
-                Gen.choose(in: UInt(0) ... 9),
-                bstGenerator(maxDepth: maxDepth - 1),
-            ).map { left, value, right in
-                .node(left: left, value: value, right: right)
-            }),
-        ])
+        let nodeBranch = #gen(bstGenerator(maxDepth: maxDepth - 1), .uint(in: 0 ... 9), bstGenerator(maxDepth: maxDepth - 1)).map { left, value, right in
+            BenchBST.node(left: left, value: value, right: right)
+        }
+        return #gen(.oneOf(weighted: (1, .just(.leaf)), (3, nodeBranch)))
     }
 
     func isValidBST() -> Bool {

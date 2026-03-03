@@ -762,7 +762,6 @@ struct ExtractSequenceBoundarySpansTests {
 
 @Suite("Sibling group extraction tests")
 struct ExtractSiblingGroupsTests {
-
     @Test("Bare values inside sequence produce one group")
     func bareValuesInSequence() {
         // [V V V]

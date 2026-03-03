@@ -18,7 +18,6 @@ public enum TypeTag: Equatable, Hashable {
     case int8
     case double
     case float
-    case character
 
     @inlinable
     public init<T>(type: T) {
@@ -48,9 +47,6 @@ public enum TypeTag: Equatable, Hashable {
             .uint16
         case is UInt8.Type:
             .uint8
-        // This case is explicitly handled by `chooseCharacter`, so is unlikely to be used here
-        case is Character.Type:
-            .character
         default:
             fatalError("Unexpected type passed to \(#function): \(T.self)")
         }
@@ -73,7 +69,6 @@ extension TypeTag {
         case .int8: Int8(bitPattern64: bitPattern64)
         case .double: Double(bitPattern64: bitPattern64)
         case .float: Float(bitPattern64: bitPattern64)
-        case .character: Character(bitPattern64: bitPattern64)
         }
     }
 }
@@ -93,7 +88,6 @@ extension TypeTag: CustomStringConvertible {
         case .int8: "Int8"
         case .double: "Double"
         case .float: "Float"
-        case .character: "Character"
         }
     }
 }

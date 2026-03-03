@@ -414,8 +414,6 @@ extension ReducerStrategies {
         switch tag {
         case .int, .int64, .int32, .int16, .int8, .uint, .uint64, .uint32, .uint16, .uint8, .double, .float:
             true
-        case .character:
-            false
         }
     }
 
