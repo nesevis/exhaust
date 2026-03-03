@@ -19,4 +19,9 @@ public enum FilterType: Equatable, Hashable, CaseIterable {
     /// predicate satisfaction rates, then biases weights toward valid outputs before
     /// generation begins.
     case tune
+
+    /// Uses online CGS derivative sampling to condition pick weights on upstream choices.
+    /// Produces better-quality outputs than ``tune`` for recursive generators (e.g. BSTs)
+    /// at the cost of a short warmup pass.
+    case choiceGradient
 }

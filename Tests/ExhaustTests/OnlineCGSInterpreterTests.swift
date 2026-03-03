@@ -432,3 +432,110 @@ struct OnlineCGSInterpreterTests {
                 "Adaptive smooth validity rate (\(adaptiveRate)) should not be dramatically worse than global (\(globalRate))")
     }
 }
+
+// MARK: - DerivativeContext Tests
+
+@Suite("DerivativeContext")
+struct DerivativeContextTests {
+    typealias Interpreter = OnlineCGSInterpreter<Int>
+    typealias Context = Interpreter.DerivativeContext
+    typealias Frame = Interpreter.DerivativeFrame
+
+    private func sampleApplied(_ context: Context, gen: ReflectiveGenerator<Any>) throws -> Int {
+        let result = try context.apply(gen)
+        var iterator = ValueInterpreter(result, seed: 1, maxRuns: 1)
+        let value = iterator.next()
+        return try #require(value)
+    }
+
+    @Test("Empty context applies identity transform")
+    func emptyContextIsIdentity() throws {
+        let context = Context()
+        let gen: ReflectiveGenerator<Any> = .pure(42)
+        let value = try sampleApplied(context, gen: gen)
+        #expect(value == 42)
+    }
+
+    @Test("Depth tracks pushed frames")
+    func depthCounting() {
+        var context = Context()
+        #expect(context.depth == 0)
+
+        context.push(Frame.bind(continuation: { .pure($0) }))
+        #expect(context.depth == 1)
+
+        context.push(Frame.bind(continuation: { .pure($0) }))
+        #expect(context.depth == 2)
+    }
+
+    @Test("Single bind frame composes correctly")
+    func singleBind() throws {
+        var context = Context()
+        context.push(Frame.bind(continuation: { value in
+            let n = value as! Int
+            return .pure(n * 10 as Any)
+        }))
+
+        // gen produces 5, bind should transform to 50, map casts to Int
+        let gen: ReflectiveGenerator<Any> = .pure(5)
+        let value = try sampleApplied(context, gen: gen)
+        #expect(value == 50)
+    }
+
+    @Test("Multiple bind frames compose innermost-first")
+    func multipleBinds() throws {
+        var context = Context()
+        // First pushed (outer): multiply by 10
+        context.push(Frame.bind(continuation: { value in
+            let n = value as! Int
+            return .pure(n * 10 as Any)
+        }))
+        // Second pushed (inner): add 1
+        context.push(Frame.bind(continuation: { value in
+            let n = value as! Int
+            return .pure(n + 1 as Any)
+        }))
+
+        // gen produces 5 → inner: 5+1=6 → outer: 6*10=60
+        let gen: ReflectiveGenerator<Any> = .pure(5)
+        let value = try sampleApplied(context, gen: gen)
+        #expect(value == 60)
+    }
+
+    @Test("zipComponent frame reconstructs zip correctly")
+    func zipComponentFrame() throws {
+        let g0: ReflectiveGenerator<Any> = .pure(10)
+        let g1: ReflectiveGenerator<Any> = .pure(20)
+        let generators = ContiguousArray([g0, g1])
+
+        var context = Context()
+        context.push(Frame.zipComponent(
+            index: 0,
+            completed: [],
+            allGenerators: generators,
+            continuation: { zipResult in
+                let arr = zipResult as! [Any]
+                let sum = (arr[0] as! Int) + (arr[1] as! Int)
+                return .pure(sum as Any)
+            }
+        ))
+
+        // Component gen produces 100 (replacing g0 at index 0)
+        // → zip([.pure(100), .pure(20)]) → [100, 20] → continuation sums → 120
+        let gen: ReflectiveGenerator<Any> = .pure(100)
+        let value = try sampleApplied(context, gen: gen)
+        #expect(value == 120)
+    }
+
+    @Test("Copy semantics: push on copy does not affect original")
+    func copySemantics() {
+        var original = Context()
+        original.push(Frame.bind(continuation: { .pure($0) }))
+
+        var copy = original
+        copy.push(Frame.bind(continuation: { .pure($0) }))
+
+        #expect(original.depth == 1)
+        #expect(copy.depth == 2)
+    }
+}

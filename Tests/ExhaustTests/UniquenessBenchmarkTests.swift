@@ -108,7 +108,7 @@ private struct BenchmarkResult {
 
 @Suite("Uniqueness Benchmark")
 struct UniquenessBenchmarkTests {
-    private static let targetUnique = 1000
+    private static let targetUnique = 100
     private static let seed: UInt64 = 42
     private static let budget: UInt64 = 500_000
 
@@ -151,6 +151,18 @@ struct UniquenessBenchmarkTests {
         )
     }
 
+    private static var boundedSumProblem: BenchmarkProblem<[Int16]> {
+        let gen = #gen(.int16(scaling: .linear).array(length: 0 ... 10))
+            .filter { $0.isEmpty || $0.dropFirst().reduce($0[0], &+) < 256 }
+        return BenchmarkProblem(
+            name: "BOUND-SUM",
+            generator: gen,
+            predicate: { $0.isEmpty || $0.dropFirst().reduce($0[0], &+) < 256 },
+            qualityBucket: \.count,
+            bucketLabel: "length",
+        )
+    }
+
     // MARK: - Structural Probe
 
     @Test("Structural probe detects picks vs chooseBits-only generators")
@@ -171,15 +183,25 @@ struct UniquenessBenchmarkTests {
 
     // MARK: - Main Benchmark
 
-    @Test("Time to 200 BST", .disabled("Takes 246 seconds at 1000"))
+    // Kolbu
+    @Test("Time to 500 BST")
     func bstBenchmark() throws {
-//        Self.targetUnique = 1000
-        let onlineCGS = measureOnlineCGS(Self.bstProblem)
+//        let onlineCGS = measureOnlineCGS(Self.bstProblem)
+//        let rejection = measureRejection(Self.bstProblem)
         let adaptive = try measureAdaptivelySmoothed(Self.bstProblem)
-        printProblemResults(Self.bstProblem, results: [onlineCGS, adaptive])
+        let cgsTuned = try measureOnlineInformedTuning(Self.bstProblem)
+        printProblemResults(Self.bstProblem, results: [adaptive, cgsTuned])
     }
 
-    @Test("Time to 100 unique valid values: BST / SORTED / AVL x 4 strategies", .disabled("Slow benchmark"))
+    @Test("Bounded sum: Adaptive vs CGS-Tuned")
+    func boundedSumBenchmark() throws {
+        let rejection = measureRejection(Self.boundedSumProblem)
+        let adaptive = try measureAdaptivelySmoothed(Self.boundedSumProblem)
+        let cgsTuned = try measureOnlineInformedTuning(Self.boundedSumProblem)
+        printProblemResults(Self.boundedSumProblem, results: [rejection, adaptive, cgsTuned])
+    }
+
+    @Test("Time to 100 unique valid values: BST / SORTED / AVL x 4 strategies", .disabled("Slow"))
     func fullBenchmark() throws {
         let bstResults = try runAllStrategies(Self.bstProblem)
         let sortedResults = try runAllStrategies(Self.sortedProblem)
@@ -206,7 +228,8 @@ struct UniquenessBenchmarkTests {
         let onlineCGS = measureOnlineCGS(problem)
         let adaptive = try measureAdaptivelySmoothed(problem)
         let auto = try measureAutoAdapted(problem)
-        return [rejection, onlineCGS, smoothed, adaptive, auto]
+        let cgsTuned = try measureOnlineInformedTuning(problem)
+        return [rejection, onlineCGS, smoothed, adaptive, auto, cgsTuned]
     }
 
     // MARK: - Strategy Implementations
@@ -385,6 +408,51 @@ struct UniquenessBenchmarkTests {
 
         return BenchmarkResult(
             strategyName: "Auto",
+            uniqueCount: unique.count,
+            totalGenerated: total,
+            elapsed: elapsed,
+            qualityDistribution: quality,
+        )
+    }
+
+    // Kolbu
+    private func measureOnlineInformedTuning<Value: Hashable>(
+        _ problem: BenchmarkProblem<Value>,
+    ) throws -> BenchmarkResult {
+        let start = ContinuousClock.now
+
+        let tuned = try OnlineCGSInterpreter.tune(
+            problem.generator,
+            predicate: problem.predicate,
+            warmupRuns: 100,
+            sampleCount: 10,
+            seed: 12345,
+        )
+
+        let warmupElapsed = ContinuousClock.now - start
+        let genStart = ContinuousClock.now
+
+        var unique = Set<Value>()
+        var total = 0
+        var quality = [Int: Int]()
+        var iterator = ValueAndChoiceTreeInterpreter(tuned, seed: Self.seed, maxRuns: Self.budget)
+
+        while unique.count < Self.targetUnique, let (value, _) = iterator.next() {
+            total += 1
+            if problem.predicate(value) {
+                let (inserted, _) = unique.insert(value)
+                if inserted {
+                    quality[problem.qualityBucket(value), default: 0] += 1
+                }
+            }
+        }
+        let genElapsed = ContinuousClock.now - genStart
+        let elapsed = ContinuousClock.now - start
+
+        print("  CGS-Tuned: warmup \(warmupElapsed), generation \(genElapsed), total generated \(total)")
+
+        return BenchmarkResult(
+            strategyName: "CGS-Tuned",
             uniqueCount: unique.count,
             totalGenerated: total,
             elapsed: elapsed,
