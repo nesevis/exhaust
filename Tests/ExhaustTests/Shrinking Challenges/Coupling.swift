@@ -20,7 +20,7 @@ struct CouplingShrinkingChallenge {
      The expected smallest falsified sample is [1, 0].
      */
 
-    // This generator is not reflective due to the bind
+    /// This generator is not reflective due to the bind
     static let gen: ReflectiveGenerator<[Int]> = #gen(.int(in: 0 ... 100))
         .bind { n in
             Gen.arrayOf(Gen.choose(in: 0 ... n), within: 2 ... max(2, UInt64(n) + 1))

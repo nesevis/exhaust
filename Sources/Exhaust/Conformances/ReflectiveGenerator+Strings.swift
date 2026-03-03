@@ -13,7 +13,7 @@ public extension ReflectiveGenerator {
         guard let range else { return .character(from: defaultCharacterSet) }
         let lower = range.lowerBound.unicodeScalars.min()!
         let upper = range.upperBound.unicodeScalars.max()!
-        return .character(from: CharacterSet(charactersIn: lower...upper))
+        return .character(from: CharacterSet(charactersIn: lower ... upper))
     }
 
     static func string(length: ClosedRange<UInt64>? = nil, scaling: SizeScaling<UInt64> = .linear) -> ReflectiveGenerator<String> {
@@ -47,13 +47,13 @@ public extension ReflectiveGenerator {
             { (char: Character) throws -> Int in
                 guard let scalar = char.unicodeScalars.first else {
                     throw Interpreters.ReflectionError.couldNotReflectOnSequenceElement(
-                        "Character has no scalars"
+                        "Character has no scalars",
                     )
                 }
                 return srs.index(of: scalar)
             },
             Gen.choose(in: 0 ... srs.scalarCount - 1)
-                .map { Character(srs.scalar(at: $0)) }
+                .map { Character(srs.scalar(at: $0)) },
         )
     }
 
@@ -67,15 +67,22 @@ public extension ReflectiveGenerator {
     static func string(
         from characterSet: CharacterSet,
         length: ClosedRange<UInt64>? = nil,
-        scaling: SizeScaling<UInt64> = .linear
+        scaling: SizeScaling<UInt64> = .linear,
     ) -> ReflectiveGenerator<String> {
         let charGen: ReflectiveGenerator<Character> = .character(from: characterSet)
         if let length {
             return Gen.arrayOf(charGen, within: length, scaling: scaling)
-                .mapped(forward: { String($0) }, backward: { $0.unicodeScalars.map { Character($0) } })
+                .mapped(
+                    forward: { String($0) },
+                    // String <-> [Character] isn't bijective when the CharacterSet includes combining marks. The generator produces single-scalar characters, but Array(string) splits by grapheme clusters — so if "e" followed by U+0301 (combining accent) were generated as two characters, the String merges them into "é", and Array(...) returns one Character instead of two.
+                    backward: { $0.unicodeScalars.map { Character($0) } },
+                )
         }
         return Gen.arrayOf(charGen)
-            .mapped(forward: { String($0) }, backward: { $0.unicodeScalars.map { Character($0) } })
+            .mapped(
+                forward: { String($0) },
+                backward: { $0.unicodeScalars.map { Character($0) } },
+            )
     }
 }
 
@@ -84,7 +91,7 @@ public extension ReflectiveGenerator {
 /// All assigned Unicode scalars minus control characters and illegals.
 /// First scalar is U+0020 (space) — shrinking produces readable counterexamples.
 private let defaultCharacterSet: CharacterSet =
-    CharacterSet.illegalCharacters.inverted.subtracting(.controlCharacters)
+    .illegalCharacters.inverted.subtracting(.controlCharacters)
 
 /// Printable ASCII (U+0020–U+007E).
-private let asciiCharacterSet = CharacterSet(charactersIn: Unicode.Scalar(0x0020)!...Unicode.Scalar(0x007E)!)
+private let asciiCharacterSet = CharacterSet(charactersIn: Unicode.Scalar(0x0020)! ... Unicode.Scalar(0x007E)!)

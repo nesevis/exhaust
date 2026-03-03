@@ -1,7 +1,7 @@
-/// Runtime support for macro-expanded code. Not intended for direct use.
-///
-/// The `__` prefix follows Swift Testing's convention (`Testing.__check`, `Testing.__Expression`)
-/// to signal that this is macro infrastructure, not public API.
+// Runtime support for macro-expanded code. Not intended for direct use.
+//
+// The `__` prefix follows Swift Testing's convention (`Testing.__check`, `Testing.__Expression`)
+// to signal that this is macro infrastructure, not public API.
 @_spi(ExhaustInternal) import ExhaustCore
 import IssueReporting
 

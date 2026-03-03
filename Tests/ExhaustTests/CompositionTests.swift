@@ -215,8 +215,7 @@ struct CompositionTests {
             let nestedGen = #gen(.int(in: 1 ... 100)).array(length: 1 ... 10).array(length: 1 ... 5)
             let pickedGen = #gen(.oneOf(weighted:
                 (1, nestedGen),
-                (1, nestedGen.map { $0.reversed() })
-            ))
+                (1, nestedGen.map { $0.reversed() })))
 
             // Generate many values to test stability
             for iteration in 0 ..< 100 {
@@ -248,7 +247,7 @@ struct CompositionTests {
             let gen = #gen(Int.arbitrary, .string(), Bool.arbitrary) { a, b, c in
                 Thing(a: a, b: b, c: c)
             }
-            let (_, _) = try validateGenerator(gen)
+            _ = try validateGenerator(gen)
         }
 
         @Test("Test bimap is replayable")

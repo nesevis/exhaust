@@ -129,8 +129,7 @@ struct BinaryHeapShrinkingChallenge {
 
         return #gen(.oneOf(weighted:
             (1, emptyGen),
-            (7, nodeGen)
-        ))
+            (7, nodeGen)))
     }
 
     static let gen = heapGen(depth: 6)
@@ -146,15 +145,15 @@ struct BinaryHeapShrinkingChallenge {
 
     // MARK: - Tests
 
-    // Per-run seeding changed which initial counterexample seed 1337 finds.
-    // The shrinker gets stuck in a local minimum:
-    //   (0, (0, (0, None, None), None), (1, None, None))
-    // which is shortlex-larger than the expected global minimum:
-    //   (0, None, (0, (1, None, None), (0, None, None)))
-    // The assertion is correct — it specifies the global shortlex-minimal 4-node
-    // heap. The shrinker should reach it from any starting counterexample but
-    // doesn't. This is a shrinking quality issue, not a seeding issue; finding a
-    // different seed would only be a workaround.
+    /// Per-run seeding changed which initial counterexample seed 1337 finds.
+    /// The shrinker gets stuck in a local minimum:
+    ///   (0, (0, (0, None, None), None), (1, None, None))
+    /// which is shortlex-larger than the expected global minimum:
+    ///   (0, None, (0, (1, None, None), (0, None, None)))
+    /// The assertion is correct — it specifies the global shortlex-minimal 4-node
+    /// heap. The shrinker should reach it from any starting counterexample but
+    /// doesn't. This is a shrinking quality issue, not a seeding issue; finding a
+    /// different seed would only be a workaround.
     @Test("Binary heap, Full", .disabled("TODO: Ensure consistency, ideally [0, 0, 1, 0]"))
     func binaryHeapFull() throws {
         let value = try #require(#exhaust(Self.gen, .suppressIssueReporting, property: Self.property))

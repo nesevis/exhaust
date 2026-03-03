@@ -49,8 +49,7 @@ struct OneOfTests {
     func weightedProducesVariety() {
         let gen: ReflectiveGenerator<String> = .oneOf(weighted:
             (1, .just("rare")),
-            (5, .just("common"))
-        )
+            (5, .just("common")))
         var seen: Set<String> = []
         var iterator = ValueInterpreter(gen)
         for _ in 0 ..< 200 {
@@ -78,8 +77,7 @@ struct OneOfTests {
         let gen: ReflectiveGenerator<String> = .oneOf(weighted:
             (1, .just("rare")),
             (3, .just("medium")),
-            (5, .just("common"))
-        )
+            (5, .just("common")))
         for seed in [UInt64(1), 7, 42, 100, 999] {
             let (original, materialized) = try roundTrip(gen, seed: seed)
             #expect(original == materialized)

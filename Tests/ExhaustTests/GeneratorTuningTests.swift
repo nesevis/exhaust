@@ -71,8 +71,7 @@ struct GeneratorTuningTests {
     func pickAdaptationWeightsByPredicate() {
         let gen = #gen(.oneOf(weighted:
             (1, .int(in: 1 ... 100)),
-            (1, .int(in: 901 ... 1000))
-        )).filter(.tune) { $0 <= 100 }
+            (1, .int(in: 901 ... 1000)))).filter(.tune) { $0 <= 100 }
 
         let values = Array(ValueInterpreter(gen, seed: 123, maxRuns: 200))
 
@@ -84,8 +83,7 @@ struct GeneratorTuningTests {
     func tuneOutperformsRawGeneration() {
         let gen = #gen(.oneOf(weighted:
             (1, .int(in: 1 ... 500)),
-            (1, .int(in: 501 ... 1000))
-        ))
+            (1, .int(in: 501 ... 1000))))
         let predicate: (Int) -> Bool = { $0 <= 250 }
 
         // Raw generator: only ~25% of output satisfies the predicate
@@ -173,8 +171,7 @@ struct GeneratorTuningTests {
         // One branch always satisfies, one never does
         let gen = #gen(.oneOf(weighted:
             (1, .int(in: 1 ... 10)),
-            (1, .int(in: 901 ... 1000))
-        ))
+            (1, .int(in: 901 ... 1000))))
 
         let predicate: (Int) -> Bool = { $0 <= 10 }
 
@@ -199,8 +196,7 @@ struct GeneratorTuningTests {
         // Predicate that nothing can satisfy
         let gen = #gen(.oneOf(weighted:
             (1, .int(in: 1 ... 10)),
-            (1, .int(in: 11 ... 20))
-        ))
+            (1, .int(in: 11 ... 20))))
 
         let predicate: (Int) -> Bool = { _ in false }
 
@@ -227,8 +223,7 @@ struct GeneratorTuningTests {
     func deterministicSeeding() throws {
         let gen = #gen(.oneOf(weighted:
             (1, .int(in: 1 ... 500)),
-            (1, .int(in: 501 ... 1000))
-        ))
+            (1, .int(in: 501 ... 1000))))
         let predicate: (Int) -> Bool = { $0 <= 250 }
 
         let tuned1 = try GeneratorTuning.tune(
@@ -254,8 +249,7 @@ struct GeneratorTuningTests {
         // change the weights compared to a moderate one.
         let gen = #gen(.oneOf(weighted:
             (1, .int(in: 1 ... 50)),
-            (1, .int(in: 501 ... 1000))
-        ))
+            (1, .int(in: 501 ... 1000))))
 
         let predicate: (Int) -> Bool = { $0 <= 50 }
 
@@ -308,8 +302,7 @@ struct GeneratorTuningTests {
         for _ in 0 ..< 10 {
             gen = #gen(.oneOf(weighted:
                 (1, gen),
-                (1, .int(in: 1 ... 10))
-            ))
+                (1, .int(in: 1 ... 10))))
         }
 
         let filtered = gen.filter(.tune) { $0 <= 5 }

@@ -1,5 +1,5 @@
-/// Operations for generating specific constant and validated values.
-/// These combinators handle scenarios where exact values or validation are required.
+// Operations for generating specific constant and validated values.
+// These combinators handle scenarios where exact values or validation are required.
 
 public extension Gen {
     /// Creates a generator that always produces the same constant value.

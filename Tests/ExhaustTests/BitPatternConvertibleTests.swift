@@ -91,7 +91,7 @@ struct BitPatternConvertibleTests {
     func propertyTestFloatBitPatternSequentiality() {
         let gen = #gen(
             .float(in: -Float.greatestFiniteMagnitude ... Float(0)),
-            .float(in: Float(1) ... Float.greatestFiniteMagnitude.nextDown)
+            .float(in: Float(1) ... Float.greatestFiniteMagnitude.nextDown),
         )
         #exhaust(gen) { low, high in
             low.bitPattern64 < high.bitPattern64
@@ -129,7 +129,7 @@ struct BitPatternConvertibleTests {
     func propertyTestDoubleBitPatternSequentiality() {
         let gen = #gen(
             .double(in: -Double.greatestFiniteMagnitude ... 0),
-            .double(in: 1 ... Double.greatestFiniteMagnitude.nextDown)
+            .double(in: 1 ... Double.greatestFiniteMagnitude.nextDown),
         )
         #exhaust(gen) { low, high in
             low.bitPattern64 < high.bitPattern64

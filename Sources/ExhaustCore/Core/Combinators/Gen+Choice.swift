@@ -81,9 +81,9 @@ public extension Gen {
 
         return Gen.getSize().bind { size in
             Gen.pick(choices: [
-                (200, chooseCharacterFromRange(Character.bitPatternRanges[0])),     // Standard ASCII
-                (size, chooseCharacterFromRange(Character.bitPatternRanges[1])),     // Control characters
-                (size, chooseCharacterFromRange(Character.bitPatternRanges[2])),     // BMP minus ASCII
+                (200, chooseCharacterFromRange(Character.bitPatternRanges[0])), // Standard ASCII
+                (size, chooseCharacterFromRange(Character.bitPatternRanges[1])), // Control characters
+                (size, chooseCharacterFromRange(Character.bitPatternRanges[2])), // BMP minus ASCII
                 (size / 2, chooseCharacterFromRange(Character.bitPatternRanges[3])), // Extended Unicode
             ])
         }

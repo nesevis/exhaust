@@ -77,7 +77,6 @@ public extension ReflectiveGenerator {
     ) -> ReflectiveGenerator<[Value.Element]> where Value: Collection {
         Gen.shuffled(gen)
     }
-
 }
 
 // MARK: - Instance methods for chaining

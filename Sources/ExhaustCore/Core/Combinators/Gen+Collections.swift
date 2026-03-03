@@ -1,5 +1,5 @@
-/// Operations for generating collections like arrays and dictionaries.
-/// These combinators handle the complexities of generating structured data with proper shrinking behavior.
+// Operations for generating collections like arrays and dictionaries.
+// These combinators handle the complexities of generating structured data with proper shrinking behavior.
 
 public extension Gen {
     /// Creates a generator for an array of random values.
@@ -257,9 +257,9 @@ public extension Gen {
                     predicate: { value in
                         let (length, startIndexPos) = value as! (Int, Int)
                         return startIndexPos + length <= count
-                    }
+                    },
                 ),
-                continuation: { .pure($0 as! (Int, Int)) }
+                continuation: { .pure($0 as! (Int, Int)) },
             )
 
             return Gen.contramap(
@@ -357,7 +357,7 @@ public extension Gen {
 extension Gen {
     /// Shared implementation for all `setOf` overloads: filter for unique elements, then convert to Set.
     @usableFromInline
-    internal static func _setOfArray<Element: Hashable>(
+    static func _setOfArray<Element: Hashable>(
         _ arrayGen: ReflectiveGenerator<[Element]>,
     ) -> ReflectiveGenerator<Set<Element>> {
         let filtered: ReflectiveGenerator<[Element]> = .impure(
@@ -368,9 +368,9 @@ extension Gen {
                 predicate: { value in
                     let array = value as! [Element]
                     return Set(array).count == array.count
-                }
+                },
             ),
-            continuation: { .pure($0 as! [Element]) }
+            continuation: { .pure($0 as! [Element]) },
         )
         return Gen.contramap(
             { (set: Set<Element>) -> [Element] in Array(set) },

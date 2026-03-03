@@ -69,7 +69,7 @@ struct DifferenceShrinkingChallenge {
     }
 
     @Test("Difference must not be one")
-    func differenceTest3() throws {
+    func differenceTest3() {
         let gen = #gen(.int(in: 1 ... 1000)).array(length: 2)
 
         var count = 0

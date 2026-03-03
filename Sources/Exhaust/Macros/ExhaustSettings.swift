@@ -1,11 +1,11 @@
-/// Configuration options for `#exhaust` property tests.
-///
-/// Pass these as variadic arguments to `#exhaust` to control test behavior:
-/// ```swift
-/// #exhaust(personGen, .maxIterations(1000), .replay(42)) { person in
-///     person.age >= 0
-/// }
-/// ```
+// Configuration options for `#exhaust` property tests.
+//
+// Pass these as variadic arguments to `#exhaust` to control test behavior:
+// ```swift
+// #exhaust(personGen, .maxIterations(1000), .replay(42)) { person in
+//     person.age >= 0
+// }
+// ```
 @_spi(ExhaustInternal) import ExhaustCore
 
 public enum ExhaustSettings<Output> {

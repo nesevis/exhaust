@@ -47,14 +47,14 @@ private func makeTaggedGen() -> ReflectiveGenerator<Tagged> {
         backward: {
             if case let .small(a) = $0 { return a }
             return 0
-        }
+        },
     )
     let bigBranch = #gen(.int(in: 0 ... 100), .int(in: 0 ... 100)).mapped(
         forward: { Tagged.big($0, $1) },
         backward: {
             if case let .big(a, b) = $0 { return (a, b) }
             return (0, 0)
-        }
+        },
     )
     return #gen(.oneOf(weighted: (1, smallBranch), (1, bigBranch)))
 }
@@ -66,7 +66,7 @@ private func makeTaggedGen() -> ReflectiveGenerator<Tagged> {
 private func makeThreeWayGen() -> ReflectiveGenerator<Int> {
     let pairBranch = #gen(.int(in: 1 ... 50), .int(in: 1 ... 50)).mapped(
         forward: { $0 + $1 },
-        backward: { ($0 / 2, $0 - $0 / 2) }
+        backward: { ($0 / 2, $0 - $0 / 2) },
     )
     return #gen(.oneOf(weighted: (1, .int(in: 0 ... 0)), (1, .int(in: 1 ... 100)), (1, pairBranch)))
 }

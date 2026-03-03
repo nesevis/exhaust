@@ -271,7 +271,7 @@ struct ReducerReduceValuesTests {
     //        ExhaustLog.setConfiguration(.init(isEnabled: true, minimumLevel: .info, categoryMinimumLevels: [.reducer: .debug], format: .human))
 
     @Test("Non-reflectable generator shrinks correctly")
-    func nonReflectableGeneratorShrinksCorrectly() throws {
+    func nonReflectableGeneratorShrinksCorrectly() {
         let stringGen = Gen.chooseCharacter()
             .array(length: 0 ... 20)
             // Reversible, but only accidentally ([Character] is more or less equal to String)

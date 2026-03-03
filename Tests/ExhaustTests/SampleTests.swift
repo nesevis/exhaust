@@ -1,5 +1,6 @@
 import Testing
 @testable import Exhaust
+
 // SPI import removed — no internal ExhaustCore types needed
 
 @Suite("#sample runtime tests")

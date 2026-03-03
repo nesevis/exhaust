@@ -8,6 +8,7 @@
 // import Testing
 // @testable import Exhaust
 @_spi(ExhaustInternal) import ExhaustCore
+
 //
 // @Suite("Hierarchical shrinking iterator")
 // struct HierarchicalTieredShrinkerTests {

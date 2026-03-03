@@ -95,8 +95,7 @@ struct InterpreterRNGParityTests {
     func simplePickParity() {
         let gen = #gen(.oneOf(weighted:
             (1, .just(100)),
-            (1, .just(200))
-        ))
+            (1, .just(200))))
         let seed: UInt64 = 42
 
         var vi = ValueInterpreter(gen, seed: seed, maxRuns: 20)
@@ -114,8 +113,7 @@ struct InterpreterRNGParityTests {
         let gen = #gen(.oneOf(weighted:
             (3, .just("A")),
             (1, .just("B")),
-            (2, .just("C"))
-        ))
+            (2, .just("C"))))
         let seed: UInt64 = 555
 
         var vi = ValueInterpreter(gen, seed: seed, maxRuns: 30)
@@ -132,8 +130,7 @@ struct InterpreterRNGParityTests {
     func pickWithGeneratedValuesParity() {
         let gen = #gen(.oneOf(weighted:
             (1, UInt64.arbitrary),
-            (1, UInt64.arbitrary)
-        ))
+            (1, UInt64.arbitrary)))
         let seed: UInt64 = 4
 
         var vi = ValueInterpreter(gen, seed: seed, maxRuns: 15)
@@ -150,12 +147,10 @@ struct InterpreterRNGParityTests {
     func nestedPickParity() {
         let innerPick = #gen(.oneOf(weighted:
             (1, .just(1)),
-            (1, .just(2))
-        ))
+            (1, .just(2))))
         let outerPick = #gen(.oneOf(weighted:
             (1, innerPick),
-            (1, .just(10))
-        ))
+            (1, .just(10))))
         let seed: UInt64 = 333
 
         var vi = ValueInterpreter(outerPick, seed: seed, maxRuns: 20)
@@ -273,10 +268,9 @@ struct InterpreterRNGParityTests {
         let gen = #gen(
             #gen(.oneOf(weighted:
                 (2, UInt64.arbitrary),
-                (1, .just(999))
-            )),
+                (1, .just(999)))),
             Bool.arbitrary.array(length: 3),
-            .int(in: 0 ... 100)
+            .int(in: 0 ... 100),
         )
         let seed: UInt64 = 9999
 
@@ -297,8 +291,7 @@ struct InterpreterRNGParityTests {
         let innerGen = #gen(UInt64.arbitrary, Bool.arbitrary)
         let middleGen = #gen(.oneOf(weighted:
             (1, innerGen.map { ($0.0, $0.1, 1) }),
-            (1, innerGen.map { ($0.0, $0.1, 2) })
-        ))
+            (1, innerGen.map { ($0.0, $0.1, 2) })))
         let outerGen = middleGen.array(length: 3)
         let seed: UInt64 = 11111
 
@@ -322,8 +315,7 @@ struct InterpreterRNGParityTests {
     @Test("Single element pick parity")
     func singleElementPickParity() {
         let gen = #gen(.oneOf(weighted:
-            (1, .just(42))
-        ))
+            (1, .just(42))))
         let seed: UInt64 = 12345
 
         var vi = ValueInterpreter(gen, seed: seed, maxRuns: 5)

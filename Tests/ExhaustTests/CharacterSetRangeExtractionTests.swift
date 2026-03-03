@@ -10,7 +10,6 @@ import Testing
 
 @Suite("CharacterSet Range Extraction")
 struct CharacterSetRangeExtractionTests {
-
     @Test("Alphanumerics round-trip")
     func alphanumerics() {
         verifyRoundTrip(.alphanumerics, name: "alphanumerics")
@@ -63,7 +62,7 @@ struct CharacterSetRangeExtractionTests {
 
     @Test("Custom a...z round-trip")
     func customLowercaseAZ() {
-        let range: ClosedRange<Unicode.Scalar> = "a"..."z"
+        let range: ClosedRange<Unicode.Scalar> = "a" ... "z"
         verifyRoundTrip(CharacterSet(charactersIn: range), name: "a...z")
     }
 
@@ -71,7 +70,7 @@ struct CharacterSetRangeExtractionTests {
     func compositeAlphanumericsPunctuation() {
         verifyRoundTrip(
             CharacterSet.alphanumerics.union(.punctuationCharacters),
-            name: "alphanumerics ∪ punctuation"
+            name: "alphanumerics ∪ punctuation",
         )
     }
 
@@ -133,7 +132,7 @@ struct CharacterSetRangeExtractionTests {
             let srs = characterSet.scalarRangeSet()
             #expect(
                 srs.rangeCount > 0,
-                "Expected positive range count for \(name)"
+                "Expected positive range count for \(name)",
             )
         }
     }
@@ -142,7 +141,7 @@ struct CharacterSetRangeExtractionTests {
     func scalarAtIndexCoversFullSpace() {
         let srs = CharacterSet.decimalDigits.scalarRangeSet()
         var rebuilt = CharacterSet()
-        for i in 0..<srs.scalarCount {
+        for i in 0 ..< srs.scalarCount {
             rebuilt.insert(srs.scalar(at: i))
         }
         #expect(rebuilt == CharacterSet.decimalDigits)
@@ -150,7 +149,7 @@ struct CharacterSetRangeExtractionTests {
 
     @Test("ScalarRangeSet scalar(at:) boundary values for a...z")
     func scalarAtIndexBoundaries() {
-        let range: ClosedRange<Unicode.Scalar> = "a"..."z"
+        let range: ClosedRange<Unicode.Scalar> = "a" ... "z"
         let srs = CharacterSet(charactersIn: range).scalarRangeSet()
         #expect(srs.scalarCount == 26)
         #expect(srs.rangeCount == 1)
@@ -169,7 +168,7 @@ struct CharacterSetRangeExtractionTests {
     @Test("ScalarRangeSet index(of:) round-trips with scalar(at:) for decimal digits")
     func scalarRangeSetIndexOfRoundTrip() {
         let srs = CharacterSet.decimalDigits.scalarRangeSet()
-        for i in 0..<srs.scalarCount {
+        for i in 0 ..< srs.scalarCount {
             let scalar = srs.scalar(at: i)
             #expect(srs.index(of: scalar) == i)
         }
@@ -214,7 +213,7 @@ struct CharacterSetRangeExtractionTests {
         while let (value, tree) = iterator.next() {
             guard !property(value) else { continue }
             guard let (_, shrunk) = try Interpreters.reduce(
-                gen: gen, tree: tree, config: .fast, property: property
+                gen: gen, tree: tree, config: .fast, property: property,
             ) else { continue }
             // Shrunk value should be '5' (the smallest digit failing the property)
             #expect(shrunk == "5", "Expected shrunk digit to be '5', got '\(shrunk)'")
@@ -241,7 +240,8 @@ struct CharacterSetRangeExtractionTests {
         var unionIterator = ValueAndChoiceTreeInterpreter(unionGen, seed: 42, maxRuns: 200)
 
         while let (variadicValue, _) = variadicIterator.next(),
-              let (unionValue, _) = unionIterator.next() {
+              let (unionValue, _) = unionIterator.next()
+        {
             #expect(variadicValue == unionValue, "Variadic and union generators should produce identical values with same seed")
         }
     }
@@ -261,7 +261,7 @@ private func verifyRoundTrip(_ characterSet: CharacterSet, name: String) {
             Issue.record("Invalid scalar values in range \(range) for \(name)")
             continue
         }
-        rebuilt.insert(charactersIn: lower...upper)
+        rebuilt.insert(charactersIn: lower ... upper)
     }
 
     #expect(rebuilt == characterSet, "Round-trip failed for \(name)")
@@ -279,7 +279,7 @@ private let allSets: [(CharacterSet, String)] = [
     (.controlCharacters, "controlCharacters"),
     (.whitespaces, "whitespaces"),
     (.whitespacesAndNewlines, "whitespacesAndNewlines"),
-    (CharacterSet(charactersIn: ("a" as Unicode.Scalar)...("z" as Unicode.Scalar)), "a...z"),
+    (CharacterSet(charactersIn: ("a" as Unicode.Scalar) ... ("z" as Unicode.Scalar)), "a...z"),
     (.alphanumerics.union(.punctuationCharacters), "alphanumerics ∪ punctuation"),
 ]
 
@@ -293,7 +293,7 @@ private func closedRanges(from characterSet: CharacterSet) -> [ClosedRange<UInt6
 
 private func gapsBetween(_ ranges: [ClosedRange<UInt64>]) -> [UInt64] {
     guard ranges.count > 1 else { return [] }
-    return (1..<ranges.count).map { i in
+    return (1 ..< ranges.count).map { i in
         ranges[i].lowerBound - ranges[i - 1].upperBound - 1
     }
 }
@@ -310,7 +310,7 @@ private func verifyScalarRangeSetRoundTrip(_ characterSet: CharacterSet, name: S
             Issue.record("Invalid scalar values in range \(range) for \(name)")
             continue
         }
-        rebuilt.insert(charactersIn: lower...upper)
+        rebuilt.insert(charactersIn: lower ... upper)
     }
 
     #expect(rebuilt == characterSet, "ScalarRangeSet round-trip failed for \(name)")

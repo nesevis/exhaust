@@ -97,8 +97,7 @@ struct OnlineCGSInterpreterTests {
     func simplePickGuidance() {
         let gen = #gen(.oneOf(weighted:
             (1, .int(in: 1 ... 100)),
-            (1, .int(in: 901 ... 1000))
-        ))
+            (1, .int(in: 901 ... 1000))))
         let predicate: (Int) -> Bool = { $0 <= 100 }
 
         let cgsValues = Array(
@@ -130,8 +129,7 @@ struct OnlineCGSInterpreterTests {
     func deterministicSeeding() {
         let gen = #gen(.oneOf(weighted:
             (1, .int(in: 1 ... 500)),
-            (1, .int(in: 501 ... 1000))
-        ))
+            (1, .int(in: 501 ... 1000))))
         let predicate: (Int) -> Bool = { $0 <= 250 }
 
         let values1 = Array(
@@ -163,7 +161,7 @@ struct OnlineCGSInterpreterTests {
     func zipCGSGuidance() {
         let gen = #gen(
             .int(in: 1 ... 20),
-            .int(in: 1 ... 20)
+            .int(in: 1 ... 20),
         )
         let predicate: ((Int, Int)) -> Bool = { $0.0 + $0.1 < 10 }
 
@@ -258,8 +256,7 @@ struct OnlineCGSInterpreterTests {
     func allZeroFallback() {
         let gen = #gen(.oneOf(weighted:
             (1, .int(in: 1 ... 10)),
-            (1, .int(in: 11 ... 20))
-        ))
+            (1, .int(in: 11 ... 20))))
 
         // Predicate that nothing can satisfy
         let predicate: (Int) -> Bool = { _ in false }

@@ -125,9 +125,9 @@ benchmark("Bound5, pathological 2") {
         b: [29251, 31661],
         c: [-18678],
         d: [-2824, 15387, -15932, -23458, -6124, 3327, -21001, 16059, -21211, -27710],
-        e: [16775, -32275, 813, 11044]
+        e: [16775, -32275, 813, 11044],
     )
-    
+
     // Takes about 3.7ms, 20ms in a Swift Testing test. So shrinking is 5 times faster
     if let tree = try? Interpreters.reflect(gen, with: value) {
         _ = try? Interpreters.reduce(gen: gen, tree: tree, config: .fast, property: property)

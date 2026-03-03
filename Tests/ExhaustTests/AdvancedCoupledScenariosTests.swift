@@ -115,7 +115,7 @@ struct AdvancedCoupledScenariosTests {
     func coupledIntegersFastCheckStyle() throws {
         let gen = #gen(
             .int(in: 0 ... 1_000_000),
-            .int(in: 0 ... 1_000_000)
+            .int(in: 0 ... 1_000_000),
         )
 
         let property: ((Int, Int)) -> Bool = { pair in
@@ -142,7 +142,7 @@ struct AdvancedCoupledScenariosTests {
     func statefulStackBugJqwikStyle() throws {
         let actionGen: ReflectiveGenerator<AdvancedCoupledFixtures.StackAction> = #gen(
             .int(in: 0 ... 1),
-            Gen.element(from: ["a", "b", "c"])
+            Gen.element(from: ["a", "b", "c"]),
         )
         .mapped(
             forward: { tag, value in
@@ -178,9 +178,9 @@ struct AdvancedCoupledScenariosTests {
         let binaryStringGen = Gen.element(from: Array("01"))
             .array(length: 0 ... 40)
             .mapped(
-            forward: { chars in String(chars) },
-            backward: { string in Array(string) },
-        )
+                forward: { chars in String(chars) },
+                backward: { string in Array(string) },
+            )
 
         let property: (String) -> Bool = { s in
             AdvancedCoupledFixtures.rleDecode(AdvancedCoupledFixtures.buggyRLEEncode(s)) == s
@@ -200,7 +200,7 @@ struct AdvancedCoupledScenariosTests {
     func floatingPointSummationHypothesisStyle() throws {
         let gen = #gen(
             .double(in: 0.0 ... 1000.0),
-            .double(in: 0.0 ... 1000.0)
+            .double(in: 0.0 ... 1000.0),
         )
 
         let property: ((Double, Double)) -> Bool = { pair in
@@ -224,9 +224,9 @@ struct AdvancedCoupledScenariosTests {
         let unicodeStringGen = Gen.element(from: Array("xy The𝕿𝖍𝖊"))
             .array(length: 0 ... 40)
             .mapped(
-            forward: { chars in String(chars) },
-            backward: { string in Array(string) },
-        )
+                forward: { chars in String(chars) },
+                backward: { string in Array(string) },
+            )
 
         let property: (String) -> Bool = { s in
             s.contains(marker) == false
@@ -246,7 +246,7 @@ struct AdvancedCoupledScenariosTests {
     func differenceWithGapCsCheckStyle() throws {
         let gen = #gen(
             .int(in: 0 ... 1_000_000),
-            .int(in: 0 ... 1_000_000)
+            .int(in: 0 ... 1_000_000),
         )
 
         let property: ((Int, Int)) -> Bool = { pair in

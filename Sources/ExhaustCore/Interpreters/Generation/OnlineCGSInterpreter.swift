@@ -527,7 +527,6 @@ import Foundation
                     )
                     if let value = result, predicate(value) {
                         successCount += 1
-
                     }
                 } catch {
                     // Sampling failed — count as unsuccessful
@@ -644,7 +643,6 @@ import Foundation
                     )
                     if let value = result, predicate(value) {
                         successCount += 1
-
                     }
                 } catch {
                     // Sampling failed — count as unsuccessful

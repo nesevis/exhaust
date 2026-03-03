@@ -96,8 +96,7 @@ struct CalculatorShrinkingChallenge {
         return #gen(.oneOf(weighted:
             (3, leaf),
             (3, add),
-            (3, div)
-        ))
+            (3, div)))
     }
 
     static let gen: ReflectiveGenerator<Expr> = expression(depth: 4)

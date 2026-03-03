@@ -46,13 +46,12 @@ extension ChoiceValue {
             // Zigzag decode: inverse of (value << 1) ^ (value >> 63)
             let decoded = Int64(bitPattern: key >> 1) ^ -Int64(bitPattern: key & 1)
             // Convert decoded Int64 to the typed value's bit pattern encoding
-            let bp: UInt64
-            switch tag {
-            case .int8:  bp = Int8(truncatingIfNeeded: decoded).bitPattern64
-            case .int16: bp = Int16(truncatingIfNeeded: decoded).bitPattern64
-            case .int32: bp = Int32(truncatingIfNeeded: decoded).bitPattern64
-            case .int:   bp = Int(truncatingIfNeeded: decoded).bitPattern64
-            default:     bp = decoded.bitPattern64 // .int64
+            let bp: UInt64 = switch tag {
+            case .int8: Int8(truncatingIfNeeded: decoded).bitPattern64
+            case .int16: Int16(truncatingIfNeeded: decoded).bitPattern64
+            case .int32: Int32(truncatingIfNeeded: decoded).bitPattern64
+            case .int: Int(truncatingIfNeeded: decoded).bitPattern64
+            default: decoded.bitPattern64 // .int64
             }
             return ChoiceValue(tag.makeConvertible(bitPattern64: bp), tag: tag)
         default:

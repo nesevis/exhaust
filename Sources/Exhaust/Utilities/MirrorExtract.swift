@@ -1,7 +1,7 @@
-/// Extracts a child value from a Mirror by label.
-///
-/// Runtime support for the `#gen` macro's backward mapping.
-/// Not intended for direct use.
+// Extracts a child value from a Mirror by label.
+//
+// Runtime support for the `#gen` macro's backward mapping.
+// Not intended for direct use.
 @_spi(ExhaustInternal) import ExhaustCore
 
 @inline(__always)

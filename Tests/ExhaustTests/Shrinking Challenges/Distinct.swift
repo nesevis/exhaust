@@ -24,17 +24,17 @@ struct DistinctShrinkingChallenge {
      The expected smallest falsified sample is [0, 1, -1] or [0, 1, 2].
      */
     @Test("Distinct, Full")
-    func distinct() throws {
-        let gen = #gen(.int().array(length: 3...30))
+    func distinct() {
+        let gen = #gen(.int().array(length: 3 ... 30))
         let counterExample = #exhaust(gen, .suppressIssueReporting) {
             Set($0).count < 3
         }
         #expect(counterExample == [0, -1, 1])
     }
-    
+
     @Test("Distinct, reflected counterexample")
-    func distinctReflected() throws {
-        let gen = #gen(.int().array(length: 3...30))
+    func distinctReflected() {
+        let gen = #gen(.int().array(length: 3 ... 30))
         let value = [1337, 80085, 69, 67]
         let counterExample = #exhaust(gen, .suppressIssueReporting, .reflecting(value)) {
             Set($0).count < 3

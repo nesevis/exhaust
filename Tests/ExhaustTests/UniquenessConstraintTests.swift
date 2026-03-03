@@ -180,8 +180,7 @@ struct UniquenessConstraintTests {
         let gen = #gen(.oneOf(weighted:
             (1, .just(1)),
             (1, .just(2)),
-            (1, .just(3))
-        )).unique(by: { AnyHashable($0) })
+            (1, .just(3)))).unique(by: { AnyHashable($0) })
 
         var iterator = OnlineCGSInterpreter(
             gen,
@@ -202,7 +201,7 @@ struct UniquenessConstraintTests {
     // MARK: - PropertyTest with unique combinator
 
     @Test("PropertyTest with unique combinator passes through")
-    func propertyTestPassthrough() throws {
+    func propertyTestPassthrough() {
         let gen = Bool.arbitrary.unique()
         var seen = Set<Bool>()
 

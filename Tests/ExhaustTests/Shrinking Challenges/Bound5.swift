@@ -24,7 +24,7 @@ struct Bound5ShrinkingChallenge {
     typealias Bound5 = ([Int16], [Int16], [Int16], [Int16], [Int16])
 
     private static let gen: ReflectiveGenerator<Bound5> = {
-        let arr = #gen(.int16().array(length: 0...10))
+        let arr = #gen(.int16().array(length: 0 ... 10))
             .filter { $0.isEmpty || $0.dropFirst().reduce($0[0], &+) < 256 }
         return #gen(arr, arr, arr, arr, arr)
     }()
@@ -43,7 +43,7 @@ struct Bound5ShrinkingChallenge {
         let iterator = ValueAndChoiceTreeInterpreter(Self.gen, materializePicks: true, seed: 1337)
         let (_, tree) = try #require(Array(iterator.prefix(80)).last)
         let sequence = ChoiceSequence.flatten(tree)
-        let _ = try #require(try Interpreters.materialize(Self.gen, with: tree, using: sequence))
+        _ = try #require(try Interpreters.materialize(Self.gen, with: tree, using: sequence))
         let (_, output) = try #require(try Interpreters.reduce(gen: Self.gen, tree: tree, config: .fast, property: Self.property))
 
         // ([-1], [-32768], [], [], [])

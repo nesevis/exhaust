@@ -29,7 +29,7 @@ private func generate<Output>(
 struct SemanticSimplestTests {
     @Test("Unsigned semanticSimplest is always .unsigned(0, ...)")
     func unsignedSimplest() {
-        #exhaust(#gen(.uint64(in: 0 ... 100000))) { rawValue in
+        #exhaust(#gen(.uint64(in: 0 ... 100_000))) { rawValue in
             ChoiceValue.unsigned(rawValue, UInt64.self).semanticSimplest == .unsigned(0, UInt64.self)
         }
     }

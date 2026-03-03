@@ -89,7 +89,7 @@ struct RoundtripPropertyTests {
         // oneOf
         let oneOfGen: ReflectiveGenerator<Int> = .oneOf(
             .int(in: 0 ... 50),
-            .int(in: 100 ... 200)
+            .int(in: 100 ... 200),
         )
         #exhaust(oneOfGen) { value in
             guard let tree = try? Interpreters.reflect(oneOfGen, with: value),
@@ -161,7 +161,7 @@ struct SizeScalingPropertyTests {
         }
 
         // Result is always <= distance
-        #exhaust(#gen(.uint64(in: 0 ... 100000), .uint64(in: 0 ... 100))) { distance, fRaw in
+        #exhaust(#gen(.uint64(in: 0 ... 100_000), .uint64(in: 0 ... 100))) { distance, fRaw in
             let fraction = Double(fRaw) / 100.0
             let linear = Gen.scaledDistance(distance, fraction: fraction, isExponential: false)
             let exponential = Gen.scaledDistance(distance, fraction: fraction, isExponential: true)
@@ -227,7 +227,7 @@ struct ChoiceValuePropertyTests {
     @Test("semanticSimplest always has complexity <= the original value")
     func semanticSimplestMinimalComplexity() {
         // Unsigned
-        #exhaust(#gen(.uint64(in: 0 ... 100000))) { rawValue in
+        #exhaust(#gen(.uint64(in: 0 ... 100_000))) { rawValue in
             let value = ChoiceValue.unsigned(rawValue, UInt64.self)
             return value.semanticSimplest.complexity <= value.complexity
         }
@@ -247,7 +247,7 @@ struct ChoiceValuePropertyTests {
 
     @Test("Unsigned ChoiceValue complexity strictly increases with value")
     func unsignedComplexityMonotonicity() {
-        #exhaust(#gen(.uint64(in: 0 ... 100000), .uint64(in: 0 ... 100000))) { a, b in
+        #exhaust(#gen(.uint64(in: 0 ... 100_000), .uint64(in: 0 ... 100_000))) { a, b in
             guard a < b else { return true }
             let va = ChoiceValue.unsigned(a, UInt64.self)
             let vb = ChoiceValue.unsigned(b, UInt64.self)
@@ -365,7 +365,7 @@ struct ShrinkingPropertyTests {
         while let (value, tree) = iterator.next() {
             guard !property(value) else { continue }
             guard let (_, shrunk) = try Interpreters.reduce(
-                gen: gen, tree: tree, config: .fast, property: property
+                gen: gen, tree: tree, config: .fast, property: property,
             ) else { continue }
             #expect(!property(shrunk), "Shrunk value \(shrunk) no longer fails the property")
         }
@@ -381,11 +381,11 @@ struct ShrinkingPropertyTests {
             guard !property(value) else { continue }
             let originalSequence = ChoiceSequence.flatten(tree)
             guard let (shrunkSequence, _) = try Interpreters.reduce(
-                gen: gen, tree: tree, config: .fast, property: property
+                gen: gen, tree: tree, config: .fast, property: property,
             ) else { continue }
             #expect(
                 shrunkSequence.shortLexPrecedes(originalSequence) || shrunkSequence == originalSequence,
-                "Shrunk sequence is not simpler than the original"
+                "Shrunk sequence is not simpler than the original",
             )
         }
     }
@@ -397,7 +397,7 @@ struct ShrinkingPropertyTests {
 struct ChoiceValueComparablePropertyTests {
     @Test("Unsigned ChoiceValue ordering agrees with natural UInt64 ordering")
     func unsignedComparableConsistency() {
-        #exhaust(#gen(.uint64(in: 0 ... 100000), .uint64(in: 0 ... 100000))) { a, b in
+        #exhaust(#gen(.uint64(in: 0 ... 100_000), .uint64(in: 0 ... 100_000))) { a, b in
             let va = ChoiceValue.unsigned(a, UInt64.self)
             let vb = ChoiceValue.unsigned(b, UInt64.self)
             if a < b { return va < vb }

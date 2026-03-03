@@ -31,10 +31,10 @@
 
 // MARK: - Helper functions
 
-@_spi(ExhaustInternal) extension ChoiceSequence {
+@_spi(ExhaustInternal) public extension ChoiceSequence {
     /// Returns two independent hash values for use in a k-hash bloom filter.
     /// Uses the double-hashing scheme: index_i = (h1 + i * h2) % size.
-    @_spi(ExhaustInternal) public var bloomHashes: (Int, Int) {
+    @_spi(ExhaustInternal) var bloomHashes: (Int, Int) {
         var h1 = Hasher()
         var h2 = Hasher()
         h2.combine(0) // discriminator for independence
@@ -46,7 +46,7 @@
     }
 
     /// Creates a projection of a `ChoiceTree` to a flat list
-    @_spi(ExhaustInternal) public init(_ tree: ChoiceTree) {
+    @_spi(ExhaustInternal) init(_ tree: ChoiceTree) {
         self = Self.flatten(tree)
     }
 
@@ -54,7 +54,7 @@
     ///
     /// - Parameter includingAllBranches: When `true`, includes all branches at pick sites
     ///   (not just the selected branch). Used for complexity comparison in shrink passes.
-    @_spi(ExhaustInternal) public static func flatten(_ tree: ChoiceTree, includingAllBranches: Bool = false) -> ChoiceSequence {
+    @_spi(ExhaustInternal) static func flatten(_ tree: ChoiceTree, includingAllBranches: Bool = false) -> ChoiceSequence {
         switch tree {
         case let .choice(value, meta):
             return [.value(.init(choice: value, validRanges: meta.validRanges, isRangeExplicit: meta.isRangeExplicit))]
@@ -94,7 +94,7 @@
         }
     }
 
-    @_spi(ExhaustInternal) public static func validate(_ sequence: ChoiceSequence) -> Bool {
+    @_spi(ExhaustInternal) static func validate(_ sequence: ChoiceSequence) -> Bool {
         var sequenceCount = 0
         var groupCount = 0
         for element in sequence {
@@ -114,7 +114,7 @@
         return sequenceCount == 0 && groupCount == 0
     }
 
-    @_spi(ExhaustInternal) public static func extractContainerSpans(from sequence: ChoiceSequence) -> [ChoiceSpan] {
+    @_spi(ExhaustInternal) static func extractContainerSpans(from sequence: ChoiceSequence) -> [ChoiceSpan] {
         var spans: [ChoiceSpan] = []
         var stack: [(kind: ChoiceSequenceValue, start: Int)] = []
         // Maps stack depth to the span indices of children
@@ -172,7 +172,7 @@
     }
 
     /// Returns balanced group spans strictly contained within `range`, sorted longest-first.
-    @_spi(ExhaustInternal) public static func extractDescendantGroupSpans(
+    @_spi(ExhaustInternal) static func extractDescendantGroupSpans(
         from sequence: ChoiceSequence,
         in range: ClosedRange<Int>,
     ) -> [ChoiceSpan] {
@@ -221,7 +221,7 @@
     /// Returns spans representing `][` boundaries (`.sequence(false)` followed by `.sequence(true)`)
     /// that occur while nested inside an outer sequence (sequence depth > 1).
     /// Removing such a boundary merges two adjacent inner sequences into one.
-    @_spi(ExhaustInternal) public static func extractSequenceBoundarySpans(from sequence: ChoiceSequence) -> [ChoiceSpan] {
+    @_spi(ExhaustInternal) static func extractSequenceBoundarySpans(from sequence: ChoiceSequence) -> [ChoiceSpan] {
         var spans: [ChoiceSpan] = []
         var sequenceDepth = 0
 
@@ -250,7 +250,7 @@
         return spans
     }
 
-    @_spi(ExhaustInternal) public static func extractAllValueSpans(from sequence: ChoiceSequence) -> [ChoiceSpan] {
+    @_spi(ExhaustInternal) static func extractAllValueSpans(from sequence: ChoiceSequence) -> [ChoiceSpan] {
         var spans: [ChoiceSpan] = []
         var depth = 0
 
@@ -270,7 +270,7 @@
     }
 
     /// Returns the spans of values not inside groups
-    @_spi(ExhaustInternal) public static func extractFreeStandingValueSpans(from sequence: ChoiceSequence) -> [ChoiceSpan] {
+    @_spi(ExhaustInternal) static func extractFreeStandingValueSpans(from sequence: ChoiceSequence) -> [ChoiceSpan] {
         var spans: [ChoiceSpan] = []
         // Maps stack depth to the span indices of children
         // collected while that frame was open
@@ -298,7 +298,7 @@
         return spans.reversed()
     }
 
-    mutating func removeSubranges(_ ranges: [ClosedRange<Int>]) {
+    internal mutating func removeSubranges(_ ranges: [ClosedRange<Int>]) {
         let set = RangeSet(ranges.map(\.asRange))
         removeSubranges(set)
     }
@@ -309,7 +309,7 @@
     /// the immediate children of a sequence or group container, where all children are
     /// the same kind (all bare values or all containers of the same type).
     /// Only groups with >= 2 siblings are returned.
-    @_spi(ExhaustInternal) public static func extractSiblingGroups(from sequence: ChoiceSequence) -> [SiblingGroup] {
+    @_spi(ExhaustInternal) static func extractSiblingGroups(from sequence: ChoiceSequence) -> [SiblingGroup] {
         var result: [SiblingGroup] = []
         var stack: [SiblingFrame] = []
 
@@ -363,7 +363,7 @@
 
     /// Extracts immediate children of a single container range.
     /// Children are returned in-order and include bare values and immediate nested containers.
-    static func extractImmediateChildren(
+    internal static func extractImmediateChildren(
         from sequence: ChoiceSequence,
         in containerRange: ClosedRange<Int>,
     ) -> [(range: ClosedRange<Int>, kind: SiblingChildKind)] {
@@ -373,11 +373,10 @@
         let open = sequence[containerRange.lowerBound]
         let close = sequence[containerRange.upperBound]
         let isGroupContainer = open == .group(true) && close == .group(false)
-        let isSequenceContainer: Bool
-        if case .sequence(true, isLengthExplicit: _) = open, case .sequence(false, isLengthExplicit: _) = close {
-            isSequenceContainer = true
+        let isSequenceContainer = if case .sequence(true, isLengthExplicit: _) = open, case .sequence(false, isLengthExplicit: _) = close {
+            true
         } else {
-            isSequenceContainer = false
+            false
         }
         guard isGroupContainer || isSequenceContainer else { return [] }
 
@@ -393,8 +392,7 @@
             case .group(true), .sequence(true, isLengthExplicit: _):
                 let isGroupChild = sequence[index] == .group(true)
                 let openEntry = sequence[index]
-                let isSequenceEntry: Bool
-                if case .sequence(true, isLengthExplicit: _) = openEntry { isSequenceEntry = true } else { isSequenceEntry = false }
+                let isSequenceEntry = if case .sequence(true, isLengthExplicit: _) = openEntry { true } else { false }
                 let start = index
                 var depth = 1
                 index += 1
@@ -436,7 +434,7 @@
 
     /// Returns the flattened `ChoiceValue`s within the given range, ignoring structural markers.
     /// Used as a lexicographic comparison key for sibling reordering.
-    static func siblingComparisonKey(
+    internal static func siblingComparisonKey(
         from sequence: ChoiceSequence,
         range: ClosedRange<Int>,
     ) -> [ChoiceValue] {
@@ -452,7 +450,7 @@
         return keys
     }
 
-    @_spi(ExhaustInternal) public func shortLexPrecedes(_ other: ChoiceSequence) -> Bool {
+    @_spi(ExhaustInternal) func shortLexPrecedes(_ other: ChoiceSequence) -> Bool {
         // Shorter sequences are always better
         if count != other.count {
             return count < other.count

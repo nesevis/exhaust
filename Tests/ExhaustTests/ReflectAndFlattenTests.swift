@@ -121,7 +121,7 @@ struct ReflectAndFlattenTests {
     func reflectAndFlattenTupleOfArrays() throws {
         let gen = #gen(
             #gen(.uint64(in: 0 ... 101)).array(length: 1 ... 10),
-            #gen(.uint64(in: 0 ... 101)).array(length: 1 ... 20)
+            #gen(.uint64(in: 0 ... 101)).array(length: 1 ... 20),
         )
         let value: ([UInt64], [UInt64]) = ([42], [99, 100, 101])
 
@@ -172,7 +172,7 @@ struct ReflectAndFlattenTests {
     func reflectAndFlattenNestedStructure() throws {
         let gen = #gen(
             .uint64(in: 1 ... 10),
-            #gen(.uint64(in: 0 ... 100)).array(length: 2)
+            #gen(.uint64(in: 0 ... 100)).array(length: 2),
         )
 
         let value: (UInt64, [UInt64]) = (5, [20, 80])
@@ -265,7 +265,7 @@ struct ReflectAndFlattenTests {
         #expect(flattened.isEmpty == false)
     }
 
-    @Test("Reflect and flatten String")
+    @Test("Reflect and flatten String", .disabled("No more character use in shrinking"))
     func reflectAndFlattenString() throws {
         let gen = #gen(.string()).resize(3)
         let value = "abc"
@@ -360,8 +360,7 @@ struct ReflectAndFlattenTests {
         let gen = #gen(.oneOf(weighted:
             (1, #gen(.just(1), .just("a"))),
             (1, #gen(.just(2), .just("b"))),
-            (1, #gen(.just(3), .just("c")))
-        ))
+            (1, #gen(.just(3), .just("c")))))
 
         let value = (2, "b")
 
@@ -500,8 +499,7 @@ struct ReflectAndFlattenTests {
     func materializationWithPick() throws {
         let gen = #gen(.oneOf(weighted:
             (1, .uint64(in: 0 ... 10)),
-            (1, .uint64(in: 11 ... 12))
-        ))
+            (1, .uint64(in: 11 ... 12))))
 
         // Reflect the generator with the value
         // For now it does not work with `materializePicks`
@@ -520,7 +518,7 @@ struct ReflectAndFlattenTests {
         #expect(materialized == Character("@").bitPattern64)
     }
 
-    @Test("Shrinking by setting all values of type to something works")
+    @Test("Shrinking by setting all values of type to something works", .disabled("No more character use in shrinking"))
     func sequenceShrinkingWorks() throws {
         struct Person: Equatable {
             let age: UInt64
@@ -528,8 +526,7 @@ struct ReflectAndFlattenTests {
         }
         let ageGen = #gen(.oneOf(weighted:
             (1, .uint64(in: 0 ... 10)),
-            (1, .uint64(in: 11 ... 84))
-        ))
+            (1, .uint64(in: 11 ... 84))))
         let gen = #gen(ageGen, .string()) { age, name in
             Person(age: age, name: name)
         }

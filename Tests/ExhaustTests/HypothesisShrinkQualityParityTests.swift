@@ -42,7 +42,7 @@ struct HypothesisShrinkQualityParityTests {
     func sumOfPairMixed() throws {
         let floatIntGen = #gen(
             .double(in: 0.0 ... 1000.0),
-            .int(in: 0 ... 1000)
+            .int(in: 0 ... 1000),
         )
         let floatIntProperty: ((Double, Int)) -> Bool = { pair in
             guard pair.0 >= 0.0, pair.0 <= 1000.0,
@@ -62,7 +62,7 @@ struct HypothesisShrinkQualityParityTests {
 
         let intFloatGen = #gen(
             .int(in: 0 ... 1000),
-            .double(in: 0.0 ... 1000.0)
+            .double(in: 0.0 ... 1000.0),
         )
         let intFloatProperty: ((Int, Double)) -> Bool = { pair in
             guard pair.0 >= 0, pair.0 <= 1000,
@@ -88,7 +88,7 @@ struct HypothesisShrinkQualityParityTests {
             .asciiString(),
             Bool.arbitrary,
             Int.arbitrary,
-            .int(in: 0 ... 1000)
+            .int(in: 0 ... 1000),
         )
         .mapped(
             forward: { tuple in
@@ -124,7 +124,7 @@ struct HypothesisShrinkQualityParityTests {
             .asciiString(),
             Bool.arbitrary,
             Int.arbitrary,
-            .double(in: 0.0 ... 1000.0)
+            .double(in: 0.0 ... 1000.0),
         )
         .mapped(
             forward: { tuple in
@@ -181,7 +181,7 @@ struct HypothesisShrinkQualityParityTests {
     func loweringTogetherPositive() throws {
         let gen = #gen(
             .int(in: 0 ... 20),
-            .int(in: 0 ... 20)
+            .int(in: 0 ... 20),
         )
         for gap in 0 ... 20 {
             let start = startPair(range: 0 ... 20, gap: gap)
@@ -198,7 +198,7 @@ struct HypothesisShrinkQualityParityTests {
     func loweringTogetherNegative() throws {
         let gen = #gen(
             .int(in: -20 ... 0),
-            .int(in: -20 ... 0)
+            .int(in: -20 ... 0),
         )
         for gap in -20 ... 0 {
             let start = startPair(range: -20 ... 0, gap: gap)
@@ -215,7 +215,7 @@ struct HypothesisShrinkQualityParityTests {
     func loweringTogetherMixed() throws {
         let gen = #gen(
             .int(in: -10 ... 10),
-            .int(in: -10 ... 10)
+            .int(in: -10 ... 10),
         )
         for gap in -10 ... 10 {
             let start = startPair(range: -10 ... 10, gap: gap)
@@ -234,7 +234,7 @@ struct HypothesisShrinkQualityParityTests {
             .int(in: -10 ... 10),
             .asciiString(),
             .double(in: -1000.0 ... 1000.0),
-            .int(in: -10 ... 10)
+            .int(in: -10 ... 10),
         )
 
         for gap in -10 ... 10 {

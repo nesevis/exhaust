@@ -17,7 +17,9 @@ public struct ScalarRangeSet: Sendable {
     private let rangesArray: [Range<UInt32>]
 
     /// Number of distinct ranges after coalescing.
-    public var rangeCount: Int { rangesArray.count }
+    public var rangeCount: Int {
+        rangesArray.count
+    }
 
     /// Total number of scalar values across all ranges.
     public let scalarCount: Int
@@ -29,7 +31,7 @@ public struct ScalarRangeSet: Sendable {
     public init(_ rangeSet: RangeSet<UInt32>) {
         precondition(!rangeSet.isEmpty, "ScalarRangeSet requires a non-empty RangeSet")
         self.rangeSet = rangeSet
-        self.rangesArray = Array(rangeSet.ranges)
+        rangesArray = Array(rangeSet.ranges)
         var cumulative: [Int] = []
         cumulative.reserveCapacity(rangesArray.count)
         var total = 0
@@ -37,8 +39,8 @@ public struct ScalarRangeSet: Sendable {
             cumulative.append(total)
             total += range.count
         }
-        self.scalarCount = total
-        self.cumulativeCounts = cumulative
+        scalarCount = total
+        cumulativeCounts = cumulative
     }
 
     /// Maps a flat index in `0..<scalarCount` to the corresponding `Unicode.Scalar`.
@@ -127,12 +129,12 @@ extension CharacterSet {
         from bitmap: Data,
         byteStart: Int,
         planeBase: UInt32,
-        into rangeSet: inout RangeSet<UInt32>
+        into rangeSet: inout RangeSet<UInt32>,
     ) {
         var rangeStart: UInt32?
         var rangeEnd: UInt32 = 0
 
-        for byteIndex in 0..<8192 {
+        for byteIndex in 0 ..< 8192 {
             let byte = bitmap[byteStart + byteIndex]
             let scalarBase = planeBase + UInt32(byteIndex) * 8
 
@@ -166,5 +168,4 @@ extension CharacterSet {
             rangeSet.insert(contentsOf: start ..< rangeEnd + 1)
         }
     }
-
 }

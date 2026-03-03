@@ -1,5 +1,5 @@
-/// Core fundamental operations for the generator combinators.
-/// These operations form the building blocks for more complex generator behavior.
+// Core fundamental operations for the generator combinators.
+// These operations form the building blocks for more complex generator behavior.
 
 public enum Gen {}
 

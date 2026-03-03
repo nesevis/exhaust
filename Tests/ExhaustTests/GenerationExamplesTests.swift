@@ -31,7 +31,7 @@ struct GenerationExamplesTests {
                 .filter { $0.isMultiple(of: 3) }
                 .classify(
                     ("even", { n in n % 2 == 0 }),
-                    ("odd", { n in n % 2 != 0 })
+                    ("odd", { n in n % 2 != 0 }),
                 )
             var iterator = ValueAndChoiceTreeInterpreter(generator, seed: 1, maxRuns: 100)
             while let (value, _) = iterator.next() {

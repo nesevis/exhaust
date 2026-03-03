@@ -20,10 +20,7 @@ struct LargeUnionListShrinkingChallenge {
      In particular, a shrinker cannot hope to normalise this unless it is able to either split or join elements of the larger list. For example, it would have to be able to transform one of [[0, 1, -1, 2, -2]] and [[0], [1], [-1], [2], [-2]] into the other.
      */
 
-    static let gen: ReflectiveGenerator<[[Int]]> = {
-        let arrGen = Int.arbitrary.array(length: 1 ... 10)
-        return arrGen.array(length: 1 ... 10)
-    }()
+    static let gen: ReflectiveGenerator<[[Int]]> = #gen(.int().array(length: 1 ... 10).array(length: 1 ... 10))
 
     static let property: ([[Int]]) -> Bool = { arr in
         Set(arr.flatMap(\.self)).count <= 4
@@ -58,7 +55,7 @@ struct LargeUnionListShrinkingChallenge {
         let (_, output) = try #require(try Interpreters.reduce(gen: Self.gen, tree: tree, config: .fast, property: Self.property))
         #expect(output.flatMap(\.self) == [0, -1, 1, -2, 2])
     }
-    
+
     @Test("Large Union List, Pathological single 3")
     func largeUnionListPathological3() throws {
         let value = [[76132], [-61180, -48610, 71763], [-25593]]
@@ -94,7 +91,7 @@ struct LargeUnionListShrinkingChallenge {
             // Expect the values to be in shortlex order (closest to zero first)
             let arrayKeys = array.map { ChoiceValue(Int64($0), tag: .int64).shortlexKey }
             #expect(arrayKeys == arrayKeys.sorted())
-            
+
             if !pass {
                 print("Fail on original [\(index)] \(value) shrunk \(output)")
                 break

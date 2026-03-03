@@ -9,6 +9,7 @@
 // import Testing
 // @testable import Exhaust
 @_spi(ExhaustInternal) import ExhaustCore
+
 //
 // @Suite("Shrinking Termination Laws")
 // struct ShrinkingTerminationTests {
