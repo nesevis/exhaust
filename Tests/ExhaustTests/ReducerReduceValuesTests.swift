@@ -267,24 +267,15 @@ struct ReducerReduceValuesTests {
 
     @Test("Non-reflectable generator shrinks correctly")
     func nonReflectableGeneratorShrinksCorrectly() {
-        let stringGen = #gen(.character(from: .decimalDigits))
+        let stringGen = #gen(.character(in: "0" ... "9"))
             .array(length: 0 ... 20)
             // Reversible, but only accidentally ([Character] is more or less equal to String)
             .map { String($0) }
 
-        let gen = #gen(stringGen, stringGen, stringGen)
+        let gen = #gen(stringGen, stringGen, stringGen) {
             // Concatenating; irreversible
-            .map { $0 + $1 + $2 }
-
-        let bla = #exhaust(.double(in: 1 ... 10), .suppressIssueReporting) { int in
-            int == 1.0
+            $0 + $1 + $2
         }
-
-//        let genny = PropertyTest.generate(Int.arbitrary) { n in
-//            true
-//        }
-        // https://hedgehogqa.github.io/fsharp-hedgehog/articles/ranges.html?tabs=fsharp
-        let interpreter = Array(ValueInterpreter(#gen(.int())))
 
         let counterExample = #exhaust(gen, .suppressIssueReporting) { str in
             str.contains("5") == false

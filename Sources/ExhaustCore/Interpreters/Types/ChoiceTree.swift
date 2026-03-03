@@ -40,15 +40,6 @@ import Foundation
 extension ChoiceTree {
     static let emptyJust = Self.just("")
 
-    var isSizing: Bool {
-        switch self {
-        case .getSize, .resize:
-            true
-        default:
-            false
-        }
-    }
-
     var isChoice: Bool {
         if case .choice = self {
             return true

@@ -24,7 +24,7 @@ struct Bound5ShrinkingChallenge {
     typealias Bound5 = ([Int16], [Int16], [Int16], [Int16], [Int16])
 
     private static let gen: ReflectiveGenerator<Bound5> = {
-        let arr = #gen(.int16().array(length: 0 ... 10))
+        let arr = #gen(.int16(scaling: .linear).array(length: 0 ... 10))
             .filter { $0.isEmpty || $0.dropFirst().reduce($0[0], &+) < 256 }
         return #gen(arr, arr, arr, arr, arr)
     }()

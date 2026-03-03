@@ -24,22 +24,6 @@ public extension Gen {
         }
     }
 
-    // Legacy function for extracting values using partial paths.
-    //
-    // - Warning: This function is marked for removal in favor of `.mapped`
-    // - Parameters:
-    //   - path: A partial path describing how to extract the input from a larger structure
-    //   - next: The generator to apply to the extracted input
-    // - Returns: A generator that operates on the extracted input
-    #warning("Remove this in favour of `.mapped`")
-    @inlinable
-    static func lens<Input>(
-        extract path: some PartialPath<some Any, Input>,
-        _ next: ReflectiveGenerator<Input>,
-    ) -> ReflectiveGenerator<Input> {
-        comap(path.extract(from:), next)
-    }
-
     /// Applies a pruning operation to a generator.
     ///
     /// Pruning is used during shrinking to eliminate branches that don't contribute
