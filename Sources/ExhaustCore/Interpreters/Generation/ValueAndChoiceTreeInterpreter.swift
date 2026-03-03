@@ -67,6 +67,15 @@ import Foundation
             )
             context.runs = context.maxRuns
             return nil
+        } catch GeneratorError.sparseValidityCondition {
+            ExhaustLog.warning(
+                category: .generation,
+                event: "sparse_validity_condition",
+                metadata: [
+                    "run": "\(context.runs)",
+                ],
+            )
+            return nil
         } catch {
             fatalError(error.localizedDescription)
         }
