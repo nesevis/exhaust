@@ -317,12 +317,10 @@ struct ReflectAndFlattenTests {
 
         // Check that valid ranges are preserved
         let firstChoice = valueChoices[0]
-        #expect(!firstChoice.validRanges.isEmpty)
+        #expect(firstChoice.validRange != nil)
 
-        // The value should fit in its valid ranges
-        let fits = firstChoice.validRanges.contains { range in
-            range.contains(firstChoice.choice.bitPattern64)
-        }
+        // The value should fit in its valid range
+        let fits = firstChoice.validRange?.contains(firstChoice.choice.bitPattern64) ?? false
         #expect(fits)
     }
 
@@ -500,7 +498,7 @@ struct ReflectAndFlattenTests {
         var flattened = ChoiceSequence.flatten(tree)
 
         // Mess with it
-        flattened[2] = .value(.init(choice: .unsigned(64, UInt64.self), validRanges: []))
+        flattened[2] = .value(.init(choice: .unsigned(64, UInt64.self), validRange: nil))
 
         let materialized = try Interpreters.materialize(gen, with: tree, using: flattened)
 

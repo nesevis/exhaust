@@ -235,16 +235,15 @@ public enum Interpreters {
             throw ReflectionError.inputWasOutOfGeneratorRange(convertibleValue, min ... max)
         }
 
-        let reflectedRanges: [ClosedRange<UInt64>]
+        let reflectedRange: ClosedRange<UInt64>
         if isRangeExplicit {
-            reflectedRanges = [min ... max]
+            reflectedRange = min ... max
         } else {
-            let fallbackRange = type(of: convertibleValue).bitPatternRanges
+            reflectedRange = type(of: convertibleValue).bitPatternRanges
                 .first(where: { $0.contains(bitPattern) }) ?? (UInt64.min ... UInt64.max)
-            reflectedRanges = [fallbackRange]
         }
 
-        let metadata = ChoiceMetadata(validRanges: reflectedRanges, isRangeExplicit: isRangeExplicit)
+        let metadata = ChoiceMetadata(validRange: reflectedRange, isRangeExplicit: isRangeExplicit)
         return [(value: convertibleValue, path: [.choice(.init(convertibleValue, tag: tag), metadata)])]
     }
 
@@ -272,15 +271,14 @@ public enum Interpreters {
         var combinedPath: [ChoiceTree] = []
         var combinedResults: [Any] = []
 
-        let validRanges: [ClosedRange<UInt64>]
+        let validRange: ClosedRange<UInt64>
         let isLengthRangeExplicit = lengthGen.associatedRange != nil
         if let lengthRange = lengthGen.associatedRange {
-            validRanges = [lengthRange]
+            validRange = lengthRange
         } else {
             let lengthReflection = try reflectRecursive(lengthGen, onFinalOutput: finalOutput)
-            let range = lengthReflection.firstNonNil { $0.path.firstNonNil { $0.metadata.validRanges.first } }
+            validRange = lengthReflection.firstNonNil { $0.path.firstNonNil { $0.metadata.validRange } }
                 ?? UInt64.bitPatternRanges[0]
-            validRanges = [range]
         }
 
         for elementTarget in targetArray {
@@ -294,7 +292,7 @@ public enum Interpreters {
         let finalTree = ChoiceTree.sequence(
             length: UInt64(targetArray.underestimatedCount),
             elements: combinedPath,
-            ChoiceMetadata(validRanges: validRanges, isRangeExplicit: isLengthRangeExplicit),
+            ChoiceMetadata(validRange: validRange, isRangeExplicit: isLengthRangeExplicit),
         )
         return [(value: combinedResults, path: [finalTree])]
     }

@@ -35,7 +35,7 @@ struct CoreGeneratorTests {
                 return
             }
 
-            #expect(metadata.validRanges == [UInt64(10) ... 20])
+            #expect(metadata.validRange == UInt64(10) ... 20)
         }
 
         @Test("Reflection rejects values outside explicit Gen.choose range")

@@ -461,7 +461,7 @@ extension Interpreters {
             elementScript: elements.first,
             context: &context,
             requireElements: false,
-            validLengthRanges: lengthMeta.validRanges,
+            validLengthRange: lengthMeta.validRange,
             isLengthRangeExplicit: lengthMeta.isRangeExplicit,
         ) else {
             return nil
@@ -522,26 +522,25 @@ extension Interpreters {
     /// Materializes a sequence of elements by consuming sequence open/close markers
     /// and looping over elements until the sequence end marker is reached.
     ///
-    /// When `validLengthRanges` is non-empty, the materialized element count must fall
-    /// within one of the ranges — otherwise the candidate is rejected. This enforces
+    /// When `validLengthRange` is non-nil, the materialized element count must fall
+    /// within the range — otherwise the candidate is rejected. This enforces
     /// constraints from the sequence's length generator (e.g. `exactly: 10`).
     private static func materializeSequenceElements(
         using elementGenerator: ReflectiveGenerator<Any>,
         elementScript: ChoiceTree?,
         context: inout Context,
         requireElements: Bool,
-        validLengthRanges: [ClosedRange<UInt64>] = [],
+        validLengthRange: ClosedRange<UInt64>? = nil,
         isLengthRangeExplicit: Bool = false,
     ) throws -> [Any]? {
         try context.consumeSequence(true)
 
         var accumulatedValues: [Any] = []
-        if validLengthRanges.count == 1,
-           let firstRange = validLengthRanges.first,
-           firstRange.lowerBound == firstRange.upperBound,
-           firstRange.lowerBound <= UInt64(Int.max)
+        if let validLengthRange,
+           validLengthRange.lowerBound == validLengthRange.upperBound,
+           validLengthRange.lowerBound <= UInt64(Int.max)
         {
-            accumulatedValues.reserveCapacity(Int(firstRange.lowerBound))
+            accumulatedValues.reserveCapacity(Int(validLengthRange.lowerBound))
         }
 
         if let elementScript {
@@ -561,20 +560,20 @@ extension Interpreters {
 
         try context.consumeSequence(false)
 
-        if validLengthRanges.isEmpty == false {
+        if let validLengthRange {
             let count = UInt64(accumulatedValues.count)
-            if validLengthRanges.contains(where: { $0.contains(count) }) == false {
+            if validLengthRange.contains(count) == false {
                 switch context.strictness {
                 case .normal:
                     throw MaterializeError.generatorConstraintViolated(
                         actualLength: count,
-                        validRanges: validLengthRanges,
+                        validRange: validLengthRange,
                     )
                 case .relaxed:
                     if isLengthRangeExplicit {
                         throw MaterializeError.generatorConstraintViolated(
                             actualLength: count,
-                            validRanges: validLengthRanges,
+                            validRange: validLengthRange,
                         )
                     }
                 }
@@ -807,7 +806,7 @@ extension Interpreters {
             elementScript: elements.first,
             context: &context,
             requireElements: true,
-            validLengthRanges: lengthMeta.validRanges,
+            validLengthRange: lengthMeta.validRange,
             isLengthRangeExplicit: lengthMeta.isRangeExplicit,
         ) else {
             return nil
@@ -1083,6 +1082,6 @@ extension Interpreters {
         case groupNotClosed
         case sequenceNotOpen
         case sequenceNotClosed
-        case generatorConstraintViolated(actualLength: UInt64, validRanges: [ClosedRange<UInt64>])
+        case generatorConstraintViolated(actualLength: UInt64, validRange: ClosedRange<UInt64>)
     }
 }

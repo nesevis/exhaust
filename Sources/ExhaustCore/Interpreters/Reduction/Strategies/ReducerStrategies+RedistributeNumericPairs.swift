@@ -86,7 +86,7 @@ extension ReducerStrategies {
                               let fresh2 = current[idx2].value else { continue }
 
                         let bp1 = fresh1.choice.bitPattern64
-                        let target1 = fresh1.choice.reductionTarget(in: fresh1.validRanges)
+                        let target1 = fresh1.choice.reductionTarget(in: fresh1.validRange)
                         let floatContext = makeFloatRedistributionContext(
                             lhs: fresh1.choice,
                             rhs: fresh2.choice,
@@ -148,10 +148,10 @@ extension ReducerStrategies {
                                 return false
                             }
                             if floatContext != nil {
-                                if fresh1.isRangeExplicit, newChoice1.fits(in: fresh1.validRanges) == false {
+                                if fresh1.isRangeExplicit, newChoice1.fits(in: fresh1.validRange) == false {
                                     return false
                                 }
-                                if fresh2.isRangeExplicit, newChoice2.fits(in: fresh2.validRanges) == false {
+                                if fresh2.isRangeExplicit, newChoice2.fits(in: fresh2.validRange) == false {
                                     return false
                                 }
                             }
@@ -160,12 +160,12 @@ extension ReducerStrategies {
                             // structural/value edits. Let replay/materialization be the source of truth.
                             let probeEntry1 = ChoiceSequenceValue.reduced(.init(
                                 choice: newChoice1,
-                                validRanges: fresh1.validRanges,
+                                validRange: fresh1.validRange,
                                 isRangeExplicit: fresh1.isRangeExplicit,
                             ))
                             let probeEntry2 = ChoiceSequenceValue.value(.init(
                                 choice: newChoice2,
-                                validRanges: fresh2.validRanges,
+                                validRange: fresh2.validRange,
                                 isRangeExplicit: fresh2.isRangeExplicit,
                             ))
                             let probeNonSemanticCount = semanticStats.nonSemanticCount(
@@ -259,22 +259,22 @@ extension ReducerStrategies {
                                     continue
                                 }
                                 if floatContext != nil {
-                                    if fresh1.isRangeExplicit, newChoice1.fits(in: fresh1.validRanges) == false {
+                                    if fresh1.isRangeExplicit, newChoice1.fits(in: fresh1.validRange) == false {
                                         continue
                                     }
-                                    if fresh2.isRangeExplicit, newChoice2.fits(in: fresh2.validRanges) == false {
+                                    if fresh2.isRangeExplicit, newChoice2.fits(in: fresh2.validRange) == false {
                                         continue
                                     }
                                 }
 
                                 let probeEntry1 = ChoiceSequenceValue.reduced(.init(
                                     choice: newChoice1,
-                                    validRanges: fresh1.validRanges,
+                                    validRange: fresh1.validRange,
                                     isRangeExplicit: fresh1.isRangeExplicit,
                                 ))
                                 let probeEntry2 = ChoiceSequenceValue.value(.init(
                                     choice: newChoice2,
-                                    validRanges: fresh2.validRanges,
+                                    validRange: fresh2.validRange,
                                     isRangeExplicit: fresh2.isRangeExplicit,
                                 ))
 

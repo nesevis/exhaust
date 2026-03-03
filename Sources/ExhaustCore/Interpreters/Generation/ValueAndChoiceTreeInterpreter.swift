@@ -422,7 +422,7 @@ import Foundation
         let randomBits = context.prng.next(in: min ... max)
         let choiceTree = ChoiceTree.choice(
             ChoiceValue(randomBits, tag: tag),
-            .init(validRanges: [min ... max], isRangeExplicit: isRangeExplicit),
+            .init(validRange: min ... max, isRangeExplicit: isRangeExplicit),
         )
         return try runContinuation(
             result: randomBits,

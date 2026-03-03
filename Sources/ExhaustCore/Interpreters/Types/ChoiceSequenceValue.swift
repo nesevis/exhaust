@@ -115,12 +115,12 @@ import Foundation
 
     @_spi(ExhaustInternal) public struct Value: Hashable, Equatable, Sendable {
         @_spi(ExhaustInternal) public let choice: ChoiceValue
-        @_spi(ExhaustInternal) public let validRanges: [ClosedRange<UInt64>]
+        @_spi(ExhaustInternal) public let validRange: ClosedRange<UInt64>?
         @_spi(ExhaustInternal) public let isRangeExplicit: Bool
 
-        @_spi(ExhaustInternal) public init(choice: ChoiceValue, validRanges: [ClosedRange<UInt64>], isRangeExplicit: Bool = false) {
+        @_spi(ExhaustInternal) public init(choice: ChoiceValue, validRange: ClosedRange<UInt64>?, isRangeExplicit: Bool = false) {
             self.choice = choice
-            self.validRanges = validRanges
+            self.validRange = validRange
             self.isRangeExplicit = isRangeExplicit
         }
 

@@ -34,14 +34,14 @@ extension ReducerStrategies {
             let seqIdx = span.range.lowerBound
             guard let v = current[seqIdx].value else { continue }
 
-            let validRanges = v.validRanges
+            let validRange = v.validRange
             let isRangeExplicit = v.isRangeExplicit
             let choiceTag = v.choice.tag
             let currentBP = v.choice.bitPattern64
             let semanticTargetBP = v.choice.semanticSimplest.bitPattern64
-            let isWithinRecordedRange = v.isRangeExplicit && v.choice.fits(in: validRanges)
+            let isWithinRecordedRange = v.isRangeExplicit && v.choice.fits(in: validRange)
             let targetBP = isWithinRecordedRange
-                ? v.choice.reductionTarget(in: validRanges)
+                ? v.choice.reductionTarget(in: validRange)
                 : semanticTargetBP
             let currentEntry = current[seqIdx]
 
@@ -57,7 +57,7 @@ extension ReducerStrategies {
                             currentBP: currentBP,
                             targetBP: targetBP,
                             semanticTargetBP: semanticTargetBP,
-                            validRanges: validRanges,
+                            validRange: validRange,
                             isRangeExplicit: isRangeExplicit,
                         ),
                         gen: gen,
@@ -78,14 +78,14 @@ extension ReducerStrategies {
                 : currentBP - targetBP
             let fastMaxDelta: UInt64? = {
                 guard isWithinRecordedRange,
-                      validRanges.count == 1,
-                      let containingRange = validRanges.first(where: { $0.contains(currentBP) })
+                      let validRange,
+                      validRange.contains(currentBP)
                 else {
                     return nil
                 }
                 return searchUpward
-                    ? (containingRange.upperBound - currentBP)
-                    : (currentBP - containingRange.lowerBound)
+                    ? (validRange.upperBound - currentBP)
+                    : (currentBP - validRange.lowerBound)
             }()
 
             // Try target directly
@@ -93,7 +93,7 @@ extension ReducerStrategies {
                 choiceTag.makeConvertible(bitPattern64: targetBP),
                 tag: choiceTag,
             )
-            let targetEntry = ChoiceSequenceValue.reduced(.init(choice: targetChoice, validRanges: validRanges, isRangeExplicit: isRangeExplicit))
+            let targetEntry = ChoiceSequenceValue.reduced(.init(choice: targetChoice, validRange: validRange, isRangeExplicit: isRangeExplicit))
             var candidate = current
             candidate[seqIdx] = targetEntry
             if targetEntry.shortLexCompare(current[seqIdx]) == .lt, rejectCache.contains(candidate) == false {
@@ -196,7 +196,7 @@ extension ReducerStrategies {
                             currentBP: currentBP,
                             targetBP: targetBP,
                             semanticTargetBP: semanticTargetBP,
-                            validRanges: validRanges,
+                            validRange: validRange,
                             isRangeExplicit: isRangeExplicit,
                         ),
                         gen: gen,
@@ -230,10 +230,10 @@ extension ReducerStrategies {
                         choiceTag.makeConvertible(bitPattern64: newBP),
                         tag: choiceTag,
                     )
-                    if isWithinRecordedRange, newChoice.fits(in: validRanges) == false {
+                    if isWithinRecordedRange, newChoice.fits(in: validRange) == false {
                         return false
                     }
-                    let probeEntry = ChoiceSequenceValue.reduced(.init(choice: newChoice, validRanges: validRanges, isRangeExplicit: isRangeExplicit))
+                    let probeEntry = ChoiceSequenceValue.reduced(.init(choice: newChoice, validRange: validRange, isRangeExplicit: isRangeExplicit))
                     guard probeEntry.shortLexCompare(originalEntry) == .lt else {
                         return false
                     }
@@ -276,7 +276,7 @@ extension ReducerStrategies {
                     choiceTag.makeConvertible(bitPattern64: newBP),
                     tag: choiceTag,
                 )
-                let candidateEntry = ChoiceSequenceValue.reduced(.init(choice: newChoice, validRanges: validRanges, isRangeExplicit: isRangeExplicit))
+                let candidateEntry = ChoiceSequenceValue.reduced(.init(choice: newChoice, validRange: validRange, isRangeExplicit: isRangeExplicit))
                 var candidate = current
                 candidate[seqIdx] = candidateEntry
                 if candidateEntry.shortLexCompare(current[seqIdx]) == .lt,
@@ -304,8 +304,8 @@ extension ReducerStrategies {
                     while probeKey > lowerBound {
                         probeKey -= 1
                         let probeChoice = ChoiceValue.fromShortlexKey(probeKey, tag: choiceTag)
-                        if isWithinRecordedRange, probeChoice.fits(in: validRanges) == false { continue }
-                        let probeEntry = ChoiceSequenceValue.reduced(.init(choice: probeChoice, validRanges: validRanges, isRangeExplicit: isRangeExplicit))
+                        if isWithinRecordedRange, probeChoice.fits(in: validRange) == false { continue }
+                        let probeEntry = ChoiceSequenceValue.reduced(.init(choice: probeChoice, validRange: validRange, isRangeExplicit: isRangeExplicit))
                         guard probeEntry.shortLexCompare(current[seqIdx]) == .lt else { continue }
                         crossZeroProbe[seqIdx] = probeEntry
                         guard rejectCache.contains(crossZeroProbe) == false else { continue }
@@ -341,10 +341,10 @@ extension ReducerStrategies {
                         choiceTag.makeConvertible(bitPattern64: testBP),
                         tag: choiceTag,
                     )
-                    if isWithinRecordedRange, boundaryChoice.fits(in: validRanges) == false {
+                    if isWithinRecordedRange, boundaryChoice.fits(in: validRange) == false {
                         continue
                     }
-                    let boundaryEntry = ChoiceSequenceValue.value(.init(choice: boundaryChoice, validRanges: validRanges, isRangeExplicit: isRangeExplicit))
+                    let boundaryEntry = ChoiceSequenceValue.value(.init(choice: boundaryChoice, validRange: validRange, isRangeExplicit: isRangeExplicit))
                     guard boundaryEntry.shortLexCompare(current[seqIdx]) == .lt else { continue }
                     boundary[seqIdx] = boundaryEntry
 
@@ -377,7 +377,7 @@ extension ReducerStrategies {
                             currentBP: currentBP,
                             targetBP: targetBP,
                             semanticTargetBP: semanticTargetBP,
-                            validRanges: validRanges,
+                            validRange: validRange,
                             isRangeExplicit: isRangeExplicit,
                         ),
                         gen: gen,
@@ -403,7 +403,7 @@ extension ReducerStrategies {
     /// Probes exactly one bit-pattern step past a recorded boundary when `reduceValues` appears range-locked.
     ///
     /// Motivation:
-    /// `ChoiceSequenceValue.Value.validRanges` are recorded from the tree *at the time the value was
+    /// `ChoiceSequenceValue.Value.validRange` is recorded from the tree *at the time the value was
     /// generated*. During reduction, earlier successful edits can change parent decisions (especially
     /// through `bind` and branch pivots), which in turn changes the runtime-valid range for descendants.
     /// The recorded range can then be stale.
@@ -458,7 +458,7 @@ extension ReducerStrategies {
             input.choiceTag.makeConvertible(bitPattern64: unlockBP),
             tag: input.choiceTag,
         )
-        let unlockEntry = ChoiceSequenceValue.reduced(.init(choice: unlockChoice, validRanges: input.validRanges, isRangeExplicit: input.isRangeExplicit))
+        let unlockEntry = ChoiceSequenceValue.reduced(.init(choice: unlockChoice, validRange: input.validRange, isRangeExplicit: input.isRangeExplicit))
         var unlockCandidate = currentSequence
         unlockCandidate[input.seqIdx] = unlockEntry
         guard unlockEntry.shortLexCompare(input.currentEntry) == .lt,
@@ -620,13 +620,13 @@ extension ReducerStrategies {
         guard candidateChoice.bitPattern64 != currentValue.choice.bitPattern64 else {
             return false
         }
-        if isWithinRecordedRange, candidateChoice.fits(in: currentValue.validRanges) == false {
+        if isWithinRecordedRange, candidateChoice.fits(in: currentValue.validRange) == false {
             return false
         }
 
         let candidateEntry = ChoiceSequenceValue.reduced(.init(
             choice: candidateChoice,
-            validRanges: currentValue.validRanges,
+            validRange: currentValue.validRange,
             isRangeExplicit: currentValue.isRangeExplicit,
         ))
         guard candidateEntry.shortLexCompare(currentSequence[seqIdx]) == .lt else {
@@ -723,10 +723,10 @@ extension ReducerStrategies {
                 }
                 let candidateEntry = ChoiceSequenceValue.reduced(.init(
                     choice: candidateChoice,
-                    validRanges: value.validRanges,
+                    validRange: value.validRange,
                     isRangeExplicit: value.isRangeExplicit,
                 ))
-                if isWithinRecordedRange, candidateChoice.fits(in: value.validRanges) == false {
+                if isWithinRecordedRange, candidateChoice.fits(in: value.validRange) == false {
                     return false
                 }
                 guard candidateEntry.shortLexCompare(currentSequence[seqIdx]) == .lt else { return false }
@@ -834,10 +834,10 @@ extension ReducerStrategies {
                 }
                 let candidateEntry = ChoiceSequenceValue.reduced(.init(
                     choice: candidateChoice,
-                    validRanges: value.validRanges,
+                    validRange: value.validRange,
                     isRangeExplicit: value.isRangeExplicit,
                 ))
-                if isWithinRecordedRange, candidateChoice.fits(in: value.validRanges) == false {
+                if isWithinRecordedRange, candidateChoice.fits(in: value.validRange) == false {
                     return false
                 }
                 guard candidateEntry.shortLexCompare(currentSequence[seqIdx]) == .lt else {

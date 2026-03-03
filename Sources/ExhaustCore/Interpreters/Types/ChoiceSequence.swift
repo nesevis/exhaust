@@ -57,7 +57,7 @@
     @_spi(ExhaustInternal) static func flatten(_ tree: ChoiceTree, includingAllBranches: Bool = false) -> ChoiceSequence {
         switch tree {
         case let .choice(value, meta):
-            return [.value(.init(choice: value, validRanges: meta.validRanges, isRangeExplicit: meta.isRangeExplicit))]
+            return [.value(.init(choice: value, validRange: meta.validRange, isRangeExplicit: meta.isRangeExplicit))]
         case .just:
             return []
         case let .sequence(_, elements, meta):

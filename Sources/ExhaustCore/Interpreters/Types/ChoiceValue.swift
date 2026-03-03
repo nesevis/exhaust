@@ -118,11 +118,9 @@
         }
     }
 
-    func fits(in ranges: [ClosedRange<UInt64>]) -> Bool {
-        for range in ranges where range.contains(bitPattern64) {
-            return true
-        }
-        return false
+    func fits(in range: ClosedRange<UInt64>?) -> Bool {
+        guard let range else { return true }
+        return range.contains(bitPattern64)
     }
 
     func displayRange(_ range: ClosedRange<UInt64>) -> String {

@@ -59,41 +59,43 @@ extension ChoiceValue {
     /// The bit pattern of the ideal shrink target for this value type.
     /// - Unsigned: lowest valid bit pattern (smallest value)
     /// - Signed/Float: 0's bit pattern if in range, else the range bound closest to 0's bit pattern
-    @_spi(ExhaustInternal) public func reductionTarget(in ranges: [ClosedRange<UInt64>]) -> UInt64 {
+    @_spi(ExhaustInternal) public func reductionTarget(in range: ClosedRange<UInt64>?) -> UInt64 {
         let target = semanticSimplest.bitPattern64
-        if fits(in: ranges, bitPattern: target) {
+        if fits(in: range, bitPattern: target) {
             return target
         }
 
         if case let .floating(_, _, type) = self,
-           let floatingTarget = floatingReductionTarget(in: ranges, type: type)
+           let floatingTarget = floatingReductionTarget(in: range, type: type)
         {
             return floatingTarget
         }
 
+        guard let range else { return target }
+
         // Find the range bound closest to the target
-        var bestBound = ranges[0].lowerBound
+        var bestBound = range.lowerBound
         var bestDistance = target > bestBound
             ? target - bestBound
             : bestBound - target
-        for range in ranges {
-            for bound in [range.lowerBound, range.upperBound] {
-                let distance = target > bound
-                    ? target - bound
-                    : bound - target
-                if distance < bestDistance {
-                    bestDistance = distance
-                    bestBound = bound
-                }
+        for bound in [range.lowerBound, range.upperBound] {
+            let distance = target > bound
+                ? target - bound
+                : bound - target
+            if distance < bestDistance {
+                bestDistance = distance
+                bestBound = bound
             }
         }
         return bestBound
     }
 
     private func floatingReductionTarget(
-        in ranges: [ClosedRange<UInt64>],
+        in range: ClosedRange<UInt64>?,
         type: any BitPatternConvertible.Type,
     ) -> UInt64? {
+        guard let range else { return nil }
+
         var best: (key: UInt64, bitPattern: UInt64)?
         func consider(_ bitPattern: UInt64) {
             guard let value = floatingValue(for: bitPattern, type: type) else {
@@ -106,18 +108,14 @@ extension ChoiceValue {
             best = (key, bitPattern)
         }
 
-        for range in ranges {
-            consider(range.lowerBound)
-            consider(range.upperBound)
+        consider(range.lowerBound)
+        consider(range.upperBound)
 
-            guard let lower = floatingValue(for: range.lowerBound, type: type),
-                  let upper = floatingValue(for: range.upperBound, type: type),
-                  lower.isFinite,
-                  upper.isFinite
-            else {
-                continue
-            }
-
+        if let lower = floatingValue(for: range.lowerBound, type: type),
+           let upper = floatingValue(for: range.upperBound, type: type),
+           lower.isFinite,
+           upper.isFinite
+        {
             // Hypothesis-style ordering prefers simple non-negative integers when available.
             let simpleUpper = FloatShortlex.simpleIntegerUpperBound
 
@@ -173,11 +171,9 @@ extension ChoiceValue {
         return nil
     }
 
-    private func fits(in ranges: [ClosedRange<UInt64>], bitPattern: UInt64) -> Bool {
-        for range in ranges where range.contains(bitPattern) {
-            return true
-        }
-        return false
+    private func fits(in range: ClosedRange<UInt64>?, bitPattern: UInt64) -> Bool {
+        guard let range else { return true }
+        return range.contains(bitPattern)
     }
 
     var fundamentalValues: [ChoiceValue] {

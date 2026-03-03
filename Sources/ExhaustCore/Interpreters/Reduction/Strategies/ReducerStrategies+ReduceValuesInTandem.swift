@@ -225,7 +225,7 @@ extension ReducerStrategies {
         }
 
         let currentBP = firstValue.choice.bitPattern64
-        let targetBP = firstValue.choice.reductionTarget(in: firstValue.validRanges)
+        let targetBP = firstValue.choice.reductionTarget(in: firstValue.validRange)
         guard currentBP != targetBP else { return nil }
 
         let usesFloatingSteps = tag == .double || tag == .float
@@ -325,7 +325,7 @@ extension ReducerStrategies {
                     tag: plan.tag,
                 )
             }
-            guard !value.isRangeExplicit || newChoice.fits(in: value.validRanges) else {
+            guard !value.isRangeExplicit || newChoice.fits(in: value.validRange) else {
                 continue
             }
             if plan.disallowAwayMoves {
@@ -338,7 +338,7 @@ extension ReducerStrategies {
 
             let newEntry = ChoiceSequenceValue.value(.init(
                 choice: newChoice,
-                validRanges: value.validRanges,
+                validRange: value.validRange,
                 isRangeExplicit: value.isRangeExplicit,
             ))
             let order = newEntry.shortLexCompare(originalEntry)

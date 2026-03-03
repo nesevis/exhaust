@@ -127,7 +127,7 @@ extension ReducerStrategies {
         for (i, entry) in shortened.enumerated() {
             guard let v = entry.value else { continue }
             let bp = v.choice.bitPattern64
-            let target = v.choice.reductionTarget(in: v.validRanges)
+            let target = v.choice.reductionTarget(in: v.validRange)
             guard bp != target else { continue }
             let upward = target > bp
             let distance = upward ? target - bp : bp - target
@@ -234,7 +234,7 @@ extension ReducerStrategies {
                 v.value.choice.tag.makeConvertible(bitPattern64: newBP),
                 tag: v.value.choice.tag,
             )
-            result[v.index] = .reduced(.init(choice: newChoice, validRanges: v.value.validRanges, isRangeExplicit: v.value.isRangeExplicit))
+            result[v.index] = .reduced(.init(choice: newChoice, validRange: v.value.validRange, isRangeExplicit: v.value.isRangeExplicit))
         }
         return result
     }

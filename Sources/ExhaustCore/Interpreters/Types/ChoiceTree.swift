@@ -170,7 +170,7 @@ extension ChoiceTree {
             return .sequence(
                 length: length,
                 elements: elements,
-                ChoiceMetadata(validRanges: [0 ... UInt64.max], isRangeExplicit: false),
+                ChoiceMetadata(validRange: 0 ... UInt64.max, isRangeExplicit: false),
             )
         }
     }
@@ -214,7 +214,7 @@ extension ChoiceTree: CustomDebugStringConvertible {
 
         switch self {
         case let .choice(value, meta):
-            let displayRange = value.displayRange(meta.validRanges[0])
+            let displayRange = value.displayRange(meta.validRange!)
             switch value {
             case let .unsigned(uint, _):
                 return prefix + connector + "choice(unsigned:\(uint)) \(displayRange)"
@@ -228,7 +228,7 @@ extension ChoiceTree: CustomDebugStringConvertible {
             return prefix + connector + "just(\(type))"
 
         case let .sequence(length, elements, meta):
-            var result = prefix + connector + "sequence(length: \(length)) \(meta.validRanges[0])"
+            var result = prefix + connector + "sequence(length: \(length)) \(meta.validRange!)"
             for (index, element) in elements.enumerated() {
                 let isLastElement = index == elements.count - 1
                 result += "\n" + element.treeDescription(prefix: childPrefix, isLast: isLastElement)

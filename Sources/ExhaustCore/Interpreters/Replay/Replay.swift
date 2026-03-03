@@ -464,7 +464,7 @@ extension Interpreters {
         }
 
         let lengthMetadata = ChoiceMetadata(
-            validRanges: [lengthGen.associatedRange ?? length ... length],
+            validRange: lengthGen.associatedRange ?? length ... length,
             isRangeExplicit: lengthGen.associatedRange != nil,
         )
         guard try replayRecursive(lengthGen, with: .choice(.unsigned(length, UInt64.self), lengthMetadata)) != nil else {
