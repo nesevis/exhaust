@@ -54,7 +54,7 @@ struct SemanticSimplestTests {
 
     @Test("Character semanticSimplest is always ' '")
     func characterSimplest() {
-        #exhaust(Character.arbitraryAscii) { char in
+        #exhaust(Gen.chooseCharacter(in: Character.bitPatternRanges[0])) { char in
             ChoiceValue.character(char).semanticSimplest == .character(" ")
         }
     }

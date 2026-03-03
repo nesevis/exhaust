@@ -65,7 +65,7 @@ struct CompositionTests {
 
         @Test("Nested .array(length:) creates nested arrays")
         func nestedArray() {
-            let gen = String.arbitrary
+            let gen = #gen(.string())
                 .array(length: 2 ... 4) // Inner arrays of 2-4 strings
                 .array(length: 2 ... 3) // Outer array of 2-3 inner arrays
 
@@ -139,7 +139,7 @@ struct CompositionTests {
         func oneOfChoosesBetweenAlternatives() {
             let intAsStringGen = #gen(.int(in: 1 ... 10)).map { "\($0)" }
 
-            let choiceGen = #gen(.oneOf(weighted: (1, intAsStringGen), (1, String.arbitrary)))
+            let choiceGen = #gen(.oneOf(weighted: (1, intAsStringGen), (1, .string())))
 
             var sawNumeric = false
             var sawNonNumeric = false
@@ -245,7 +245,7 @@ struct CompositionTests {
                 let c: Bool
             }
 
-            let gen = #gen(Int.arbitrary, String.arbitrary, Bool.arbitrary) { a, b, c in
+            let gen = #gen(Int.arbitrary, .string(), Bool.arbitrary) { a, b, c in
                 Thing(a: a, b: b, c: c)
             }
             let (_, _) = try validateGenerator(gen)

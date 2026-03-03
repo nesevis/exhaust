@@ -48,7 +48,7 @@ struct RoundtripPropertyTests {
             return replayed == value
         }
 
-        let charGen = Character.arbitraryAscii
+        let charGen = Gen.chooseCharacter(in: Character.bitPatternRanges[0])
         #exhaust(charGen) { value in
             guard let tree = try? Interpreters.reflect(charGen, with: value),
                   let replayed = try? Interpreters.replay(charGen, using: tree)

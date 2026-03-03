@@ -267,7 +267,7 @@ struct ReflectAndFlattenTests {
 
     @Test("Reflect and flatten String")
     func reflectAndFlattenString() throws {
-        let gen = String.arbitrary.resize(3)
+        let gen = #gen(.string()).resize(3)
         let value = "abc"
 
         // Reflect the generator with the value
@@ -530,7 +530,7 @@ struct ReflectAndFlattenTests {
             (1, .uint64(in: 0 ... 10)),
             (1, .uint64(in: 11 ... 84))
         ))
-        let gen = #gen(ageGen, String.arbitrary) { age, name in
+        let gen = #gen(ageGen, .string()) { age, name in
             Person(age: age, name: name)
         }
 

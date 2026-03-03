@@ -39,7 +39,7 @@ struct StringAnagramChallenge {
 
     @Test("String anagram")
     func stringAnagram() throws {
-        let charGen = String.arbitraryAscii
+        let charGen = #gen(.asciiString())
             .filter { $0.count >= 2 }
         let gen = #gen(charGen, charGen)
 

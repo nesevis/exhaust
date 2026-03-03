@@ -15,7 +15,7 @@ struct GeneratorCompositionEdgeCaseTests {
     @Test("Single value generator composition")
     func singleValueGeneratorComposition() {
         let constantGen = #gen(.just(42))
-        let normalGen = String.arbitrary
+        let normalGen = #gen(.string())
 
         let composed = #gen(constantGen, normalGen)
 
@@ -32,7 +32,7 @@ struct GeneratorCompositionEdgeCaseTests {
     func largeZipComposition() {
         let gen = #gen(
             Int.arbitrary,
-            String.arbitrary,
+            .string(),
             UInt.arbitrary,
             Double.arbitrary,
             .int(in: 1 ... 100),
@@ -51,7 +51,7 @@ struct GeneratorCompositionEdgeCaseTests {
 
     @Test("Nested composition with multiple levels")
     func nestedCompositionLevels() {
-        let innerGen = #gen(Int.arbitrary, String.arbitrary)
+        let innerGen = #gen(Int.arbitrary, .string())
         let middleGen = #gen(innerGen, Bool.arbitrary)
         let outerGen = #gen(middleGen, UInt.arbitrary)
 
@@ -66,7 +66,7 @@ struct GeneratorCompositionEdgeCaseTests {
     @Test("Empty array generator in composition")
     func emptyArrayGeneratorComposition() {
         let emptyArrayGen = #gen(.just([Int]()))
-        let normalGen = String.arbitrary
+        let normalGen = #gen(.string())
 
         let composed = #gen(emptyArrayGen, normalGen)
 
@@ -85,7 +85,7 @@ struct GeneratorCompositionEdgeCaseTests {
             }
         }
 
-        let independentGen = String.arbitrary
+        let independentGen = #gen(.string())
         let composed = #gen(dependentGen, independentGen)
 
         for _ in 0 ..< 20 {
@@ -100,7 +100,7 @@ struct GeneratorCompositionEdgeCaseTests {
     func compositionReplayBehavior() throws {
         let gen = #gen(
             .int(in: 1 ... 100),
-            String.arbitrary,
+            .string(),
             Bool.arbitrary,
         )
 
@@ -115,7 +115,7 @@ struct GeneratorCompositionEdgeCaseTests {
     @Test("Composition with array generation")
     func arrayComposition() {
         let arrayGen = Int.arbitrary.array(length: 0 ... 5)
-        let scalarGen = String.arbitrary
+        let scalarGen = #gen(.string())
 
         let composed = #gen(arrayGen, scalarGen)
 
@@ -134,7 +134,7 @@ struct GeneratorCompositionEdgeCaseTests {
             .array(length: 1 ... 2)
             .array(length: 1 ... 2)
 
-        let composed = #gen(nestedGen, String.arbitrary)
+        let composed = #gen(nestedGen, .string())
 
         for _ in 0 ..< 10 {
             var iterator = ValueInterpreter(composed)

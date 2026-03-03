@@ -85,7 +85,7 @@ struct HypothesisShrinkQualityParityTests {
     func sumOfPairSeparatedInt() throws {
         let separatedIntGen = #gen(
             .int(in: 0 ... 1000),
-            String.arbitraryAscii,
+            .asciiString(),
             Bool.arbitrary,
             Int.arbitrary,
             .int(in: 0 ... 1000)
@@ -121,7 +121,7 @@ struct HypothesisShrinkQualityParityTests {
     func sumOfPairSeparatedFloat() throws {
         let separatedFloatGen = #gen(
             .double(in: 0.0 ... 1000.0),
-            String.arbitraryAscii,
+            .asciiString(),
             Bool.arbitrary,
             Int.arbitrary,
             .double(in: 0.0 ... 1000.0)
@@ -232,7 +232,7 @@ struct HypothesisShrinkQualityParityTests {
     func loweringTogetherWithGap() throws {
         let gen = #gen(
             .int(in: -10 ... 10),
-            String.arbitraryAscii,
+            .asciiString(),
             .double(in: -1000.0 ... 1000.0),
             .int(in: -10 ... 10)
         )

@@ -206,7 +206,7 @@ struct CoreGeneratorTests {
 
         @Test("ValueInterpreter output for seed should match with and without materializePicks")
         func materializePicksDoesNotChangeSeedOutput() throws {
-            let gen = String.arbitrary // Gen.pick(choices: [(UInt64(1), UInt64.arbitrary), (UInt64(1), UInt64.arbitrary)])
+            let gen = #gen(.string()) // Gen.pick(choices: [(UInt64(1), UInt64.arbitrary), (UInt64(1), UInt64.arbitrary)])
             var iterator = ValueInterpreter(gen, seed: 4)
             _ = iterator.next()
             _ = iterator.next()

@@ -132,7 +132,7 @@ struct AdvancedFeatureTests {
     struct GraphTests {
         @Test("Connected graph generation with constraints")
         func connectedGraphGeneration() throws {
-            let nodeGen = #gen(.int(in: 0 ... 9), String.arbitrary) { id, label in
+            let nodeGen = #gen(.int(in: 0 ... 9), .string()) { id, label in
                 TestNode(id: id, label: label)
             }
 

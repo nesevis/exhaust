@@ -14,7 +14,7 @@ benchmark("Int Generation") {
 }
 
 benchmark("String generation") {
-    let generator = String.arbitrary
+    let generator = #gen(.string())
     var iterator = ValueInterpreter(generator, seed: 1, maxRuns: 100)
     while let next = iterator.next() {
         let next = next
@@ -22,7 +22,7 @@ benchmark("String generation") {
 }
 
 benchmark("String generation with reflection") {
-    let generator = String.arbitrary
+    let generator = #gen(.string())
     var iterator = ValueInterpreter(generator, seed: 1, maxRuns: 100)
     while let next = iterator.next() {
         let reflection = try Interpreters.reflect(generator, with: next)
@@ -30,7 +30,7 @@ benchmark("String generation with reflection") {
 }
 
 benchmark("String generation with choiceTree") {
-    let generator = String.arbitrary
+    let generator = #gen(.string())
     var iterator = ValueAndChoiceTreeInterpreter(generator, seed: 1, maxRuns: 100)
     while let (value, tree) = iterator.next() {
         let value = value
@@ -54,7 +54,7 @@ benchmark("Double generation with choiceTree materialised") {
 }
 
 benchmark("String generation with choiceTree materialised") {
-    let generator = String.arbitrary
+    let generator = #gen(.string())
     var iterator = ValueAndChoiceTreeInterpreter(generator, materializePicks: true, seed: 1, maxRuns: 100)
     while let (value, tree) = iterator.next() {
 //        let value = value
@@ -69,7 +69,7 @@ private struct Person {
 }
 
 benchmark("Zipped person") {
-    let generator = Gen.zip(String.arbitraryAscii, UInt8.arbitrary, Double.arbitrary)
+    let generator = Gen.zip(#gen(.asciiString()), UInt8.arbitrary, Double.arbitrary)
         .mapped(forward: { Person(name: $0.0, age: $0.1, height: $0.2) }, backward: { ($0.name, $0.age, $0.height) })
     var iterator = ValueInterpreter(generator, seed: 1, maxRuns: 100)
     while let next = iterator.next() {
@@ -78,7 +78,7 @@ benchmark("Zipped person") {
 }
 
 benchmark("Zipped person with reflection") {
-    let generator = Gen.zip(String.arbitraryAscii, UInt8.arbitrary, Double.arbitrary)
+    let generator = Gen.zip(#gen(.asciiString()), UInt8.arbitrary, Double.arbitrary)
         .mapped(forward: { Person(name: $0.0, age: $0.1, height: $0.2) }, backward: { ($0.name, $0.age, $0.height) })
     var iterator = ValueInterpreter(generator, seed: 1, maxRuns: 100)
     while let next = iterator.next() {
@@ -88,7 +88,7 @@ benchmark("Zipped person with reflection") {
 
 benchmark("Zipped person with ChoiceTree") {
     let generator = Gen.zip(
-        String.arbitraryAscii,
+        #gen(.asciiString()),
         UInt8.arbitrary,
         Double.arbitrary,
     )

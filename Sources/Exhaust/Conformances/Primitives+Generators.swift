@@ -102,40 +102,6 @@ public extension Bool {
     }
 }
 
-// MARK: - Strings and Characters
-
-extension Character {
-    public static var arbitrary: ReflectiveGenerator<Character> {
-        // This is nearly ten times slower than `arbitraryAscii`.
-        Gen.getSize().bind { size in
-            Gen.pick(choices: [
-                (200, Gen.chooseCharacter(in: self.bitPatternRanges[0])), // Standard ascii
-                (size, Gen.chooseCharacter(in: self.bitPatternRanges[1])), // Control characters
-                (size, Gen.chooseCharacter(in: self.bitPatternRanges[2])), // First bit of unicode minus ascii
-                (size / 2, Gen.chooseCharacter(in: self.bitPatternRanges[3])), // Second bit of unicode
-            ])
-        }
-    }
-
-    // We need to use `chooseCharacter`, as the Character constructor isn't bijective with UInt32
-    // FIXME: Does SwiftCheck handle this in any way?
-    static var arbitraryAscii: ReflectiveGenerator<Character> {
-        Gen.chooseCharacter(in: bitPatternRanges[0])
-    }
-}
-
-public extension String {
-    static var arbitrary: ReflectiveGenerator<String> {
-        Gen.arrayOf(Character.arbitrary)
-            .mapped(forward: { String($0) }, backward: { Array($0) })
-    }
-
-    static var arbitraryAscii: ReflectiveGenerator<String> {
-        Gen.arrayOf(Character.arbitraryAscii)
-            .mapped(forward: { String($0) }, backward: { Array($0) })
-    }
-}
-
 // MARK: - AnyIndex
 
 public extension AnyIndex {

@@ -15,7 +15,7 @@ struct GenerationExamplesTests {
     struct BasicExampleTests {
         @Test("Profile memory allocations")
         func profileMemAlloc() {
-            let generator = String.arbitrary
+            let generator = #gen(.string())
             var iterator = ValueAndChoiceTreeInterpreter(generator, materializePicks: true, seed: 1, maxRuns: 100)
             while let (value, tree) = iterator.next() {
                 let value = value
@@ -93,7 +93,7 @@ struct GenerationExamplesTests {
 
         @Test("Test Gen.dictionaryof")
         func genDictionaryOf() throws {
-            let gen = #gen(.dictionary(String.arbitrary, Int.arbitrary))
+            let gen = #gen(.dictionary(.string(), Int.arbitrary))
             let iterator = ValueInterpreter(gen)
             let result = try #require(Array(iterator.prefix(2)).last) // Skip the first length=0 response
             let reflection = try #require(try Interpreters.reflect(gen, with: result))
@@ -129,8 +129,8 @@ struct GenerationExamplesTests {
     struct DebugTests {
         @Test("Debug array step by step")
         func debugArrayStepByStep() throws {
-            // 1. Test String.arbitrary alone
-            let stringGen = String.arbitrary
+            // 1. Test #gen(.string()) alone
+            let stringGen = #gen(.string())
             for i in 0 ..< 3 {
                 var iterator = ValueInterpreter(stringGen)
                 let generated = iterator.next()!
@@ -146,7 +146,7 @@ struct GenerationExamplesTests {
             }
 
             // 2. Test array alone (without map)
-            let arrayGen = String.arbitrary.array(length: 1 ... 3)
+            let arrayGen = #gen(.string()).array(length: 1 ... 3)
             for i in 0 ..< 3 {
                 var iterator = ValueInterpreter(arrayGen)
                 let generated = iterator.next()!

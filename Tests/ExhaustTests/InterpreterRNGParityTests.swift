@@ -369,7 +369,7 @@ struct InterpreterRNGParityTests {
 
     @Test("Multiple seeds produce different but consistent results")
     func multipleSeedsParity() {
-        let gen = String.arbitrary
+        let gen = #gen(.string())
         let seeds: [UInt64] = [1, 42, 100, 999, 12345]
 
         for seed in seeds {

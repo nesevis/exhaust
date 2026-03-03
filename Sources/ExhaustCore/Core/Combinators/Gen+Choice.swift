@@ -67,15 +67,33 @@ public extension Gen {
     /// to valid Unicode characters. This approach ensures uniform distribution across
     /// the character space while respecting Unicode validity constraints.
     ///
-    /// - Parameter range: The bit pattern range to generate from. Defaults to the first range in Character.bitPatternRanges
+    /// When no range is provided, generates from all Unicode ranges with size-dependent
+    /// weighting that favors ASCII at small sizes and introduces control characters and
+    /// extended Unicode as size grows.
+    ///
+    /// - Parameter range: The bit pattern range to generate from. When nil, uses a weighted pick over all Character.bitPatternRanges.
     /// - Returns: A generator that produces random characters
     @inlinable
     static func chooseCharacter(in range: ClosedRange<UInt64>? = nil) -> ReflectiveGenerator<Character> {
-        // Default to the lower range
-        let actualRange = range ?? Character.bitPatternRanges[0]
+        if let range {
+            return chooseCharacterFromRange(range)
+        }
+
+        return Gen.getSize().bind { size in
+            Gen.pick(choices: [
+                (200, chooseCharacterFromRange(Character.bitPatternRanges[0])),     // Standard ASCII
+                (size, chooseCharacterFromRange(Character.bitPatternRanges[1])),     // Control characters
+                (size, chooseCharacterFromRange(Character.bitPatternRanges[2])),     // BMP minus ASCII
+                (size / 2, chooseCharacterFromRange(Character.bitPatternRanges[3])), // Extended Unicode
+            ])
+        }
+    }
+
+    @inlinable
+    static func chooseCharacterFromRange(_ range: ClosedRange<UInt64>) -> ReflectiveGenerator<Character> {
         let operation = ReflectiveOperation.chooseBits(
-            min: actualRange.lowerBound,
-            max: actualRange.upperBound,
+            min: range.lowerBound,
+            max: range.upperBound,
             tag: .character,
             isRangeExplicit: true,
         )
@@ -84,7 +102,6 @@ public extension Gen {
             if let character = result as? UInt64 {
                 return .pure(Character(bitPattern64: character))
             } else if let character = result as? Character {
-                // Not sure this is ever hit
                 return .pure(character)
             } else if let optional = result as? Character?, optional == nil {
                 throw Interpreters.ReflectionError.reflectedNil(type: String(describing: Character.self), resultType: String(describing: type(of: result)))

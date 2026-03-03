@@ -42,7 +42,7 @@ struct MaterializeTests {
             materializeViaReflection(boolGen, value) == value
         }
 
-        let charGen = Character.arbitrary
+        let charGen = Gen.chooseCharacter()
         #exhaust(charGen) { value in
             materializeViaReflection(charGen, value) == value
         }

@@ -26,8 +26,8 @@ func xoshiroSeedStability() {
 
 @Test("Reflect on getSize")
 func reflectOnGetsize() throws {
-    // Test String.arbitrary
-    let gen = String.arbitrary
+    // Test #gen(.string())
+    let gen = #gen(.string())
     var iterator = ValueInterpreter(gen, seed: 123)
     _ = iterator.next()
     let generated = iterator.next()!
@@ -41,8 +41,8 @@ func reflectOnGetsize() throws {
 // FIXME: The string generator now varies from N/10...N, not N...N
 // @Test("Reflect on resize")
 // func testReflectOnResize() throws {
-//    // Test String.arbitrary
-//    let gen = Gen.resize(50, String.arbitrary)
+//    // Test #gen(.string())
+//    let gen = Gen.resize(50, #gen(.string()))
 //    var iterator = GeneratorIterator(gen)
 //    let first = iterator.next()!
 //    let second = iterator.next()!

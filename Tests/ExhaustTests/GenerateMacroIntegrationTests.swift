@@ -27,7 +27,7 @@ struct GenerateMacroIntegrationTests {
 
     @Test("Two-generator #gen can be reflected")
     func twoGeneratorReflection() throws {
-        let nameGen = String.arbitrary
+        let nameGen = #gen(.string())
         let ageGen = #gen(.int(in: 0 ... 120))
         let personGen = #gen(nameGen, ageGen) { name, age in
             Person(name: name, age: age)
@@ -84,7 +84,7 @@ struct GenerateMacroIntegrationTests {
 
     @Test("Generated values round-trip through reflection")
     func generationReflectionRoundTrip() throws {
-        let nameGen = String.arbitrary
+        let nameGen = #gen(.string())
         let ageGen = #gen(.int(in: 0 ... 120))
         let personGen = #gen(nameGen, ageGen) { name, age in
             Person(name: name, age: age)
@@ -105,7 +105,7 @@ struct GenerateMacroIntegrationTests {
 
     @Test("Shorthand parameters round-trip through reflection")
     func shorthandParametersRoundTrip() throws {
-        let nameGen = String.arbitrary
+        let nameGen = #gen(.string())
         let ageGen = #gen(.int(in: 0 ... 120))
         let personGen = #gen(nameGen, ageGen) { Person(name: $0, age: $1) }
 
@@ -123,7 +123,7 @@ struct GenerateMacroIntegrationTests {
 
     @Test("#gen'd generator supports reflect then shrink")
     func reflectThenShrink() throws {
-        let nameGen = String.arbitrary
+        let nameGen = #gen(.string())
         let ageGen = #gen(.int(in: 0 ... 1000))
         let personGen = #gen(nameGen, ageGen) { name, age in
             Person(name: name, age: age)
