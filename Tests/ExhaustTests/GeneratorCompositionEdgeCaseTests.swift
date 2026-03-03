@@ -31,10 +31,10 @@ struct GeneratorCompositionEdgeCaseTests {
     @Test("Zipping many generators maintains correctness")
     func largeZipComposition() {
         let gen = #gen(
-            Int.arbitrary,
+            .int(),
             .string(),
-            UInt.arbitrary,
-            Double.arbitrary,
+            .uint(),
+            .double(),
             .int(in: 1 ... 100),
         )
 
@@ -51,9 +51,9 @@ struct GeneratorCompositionEdgeCaseTests {
 
     @Test("Nested composition with multiple levels")
     func nestedCompositionLevels() {
-        let innerGen = #gen(Int.arbitrary, .string())
-        let middleGen = #gen(innerGen, Bool.arbitrary)
-        let outerGen = #gen(middleGen, UInt.arbitrary)
+        let innerGen = #gen(.int(), .string())
+        let middleGen = #gen(innerGen, .bool())
+        let outerGen = #gen(middleGen, .uint())
 
         var iterator = ValueInterpreter(outerGen)
         let nestedTuple = iterator.next()!
@@ -79,7 +79,7 @@ struct GeneratorCompositionEdgeCaseTests {
 
     @Test("Composition with bound generators")
     func boundGeneratorComposition() {
-        let dependentGen = Int.arbitrary.bind { first in
+        let dependentGen = #gen(.int()).bind { first in
             Gen.choose(in: first ... (first + 10)).map { second in
                 (first, second)
             }
@@ -114,7 +114,7 @@ struct GeneratorCompositionEdgeCaseTests {
 
     @Test("Composition with array generation")
     func arrayComposition() {
-        let arrayGen = Int.arbitrary.array(length: 0 ... 5)
+        let arrayGen = #gen(.int()).array(length: 0 ... 5)
         let scalarGen = #gen(.string())
 
         let composed = #gen(arrayGen, scalarGen)
@@ -129,7 +129,7 @@ struct GeneratorCompositionEdgeCaseTests {
 
     @Test("Deeply nested array composition")
     func deeplyNestedArrayComposition() {
-        let nestedGen = Int.arbitrary
+        let nestedGen = #gen(.int())
             .array(length: 1 ... 3)
             .array(length: 1 ... 2)
             .array(length: 1 ... 2)
