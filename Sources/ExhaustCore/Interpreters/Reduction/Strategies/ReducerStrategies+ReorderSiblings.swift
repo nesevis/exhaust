@@ -183,8 +183,6 @@ extension ReducerStrategies {
             1
         case .float, .double:
             2
-        case .character:
-            3
         }
     }
 }

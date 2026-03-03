@@ -56,13 +56,6 @@ extension ChoiceTree {
         return false
     }
 
-    var isCharacterChoice: Bool {
-        if case .choice(.character, _) = self {
-            return true
-        }
-        return false
-    }
-
     @_spi(ExhaustInternal) public var isSelected: Bool {
         if case .selected = self {
             return true
@@ -223,8 +216,6 @@ extension ChoiceTree: CustomDebugStringConvertible {
         case let .choice(value, meta):
             let displayRange = value.displayRange(meta.validRanges[0])
             switch value {
-            case let .character(char):
-                return prefix + connector + "choice(char: \"\(char)\") \(displayRange)"
             case let .unsigned(uint, _):
                 return prefix + connector + "choice(unsigned:\(uint)) \(displayRange)"
             case let .signed(int, _, _):
@@ -238,31 +229,9 @@ extension ChoiceTree: CustomDebugStringConvertible {
 
         case let .sequence(length, elements, meta):
             var result = prefix + connector + "sequence(length: \(length)) \(meta.validRanges[0])"
-            if case let .group(array) = elements.first,
-               // Dropping the first one as it is a getSize
-               case let .group(branches) = array.dropFirst().first,
-               case let .branch(_, _, _, _, gen) = branches.first(where: { $0.isSelected == false }),
-               case .choice = gen
-            {
-                // A special case displaying all the characters in a string inline
-                let characters = elements.dropFirst().compactMap { element in
-                    if case let .group(array) = element,
-                       case let .group(branches) = array.dropFirst().first,
-                       // Why are we getting a nonselected branch?
-                       // FIXME: The assumption that the character value of all branches is identical no longer holds with the Value|ChoiceTree generator, and this special case is broken because reflected generators come back as all being selected now :|
-                       case let .branch(_, _, _, _, gen) = branches.first(where: { $0.isSelected == false }),
-                       case let .choice(.character(char), _) = gen
-                    {
-                        return char
-                    }
-                    return nil
-                }
-                result += "\n\(childPrefix)└── choice([char]: \"\(String(characters))\")"
-            } else {
-                for (index, element) in elements.enumerated() {
-                    let isLastElement = index == elements.count - 1
-                    result += "\n" + element.treeDescription(prefix: childPrefix, isLast: isLastElement)
-                }
+            for (index, element) in elements.enumerated() {
+                let isLastElement = index == elements.count - 1
+                result += "\n" + element.treeDescription(prefix: childPrefix, isLast: isLastElement)
             }
             return result
 
@@ -306,15 +275,10 @@ extension ChoiceTree: CustomDebugStringConvertible {
                 return int.description
             case let .floating(float, _, _):
                 return float.description
-            case let .character(character):
-                return character.description
             }
         case let .just(type):
             return "just(\(type))"
         case let .sequence(_, elements, _):
-            if case .choice(.character, _) = elements.first {
-                return "\"\(elements.map(\.elementDescription).joined())\""
-            }
             return "[" + elements.map(\.elementDescription).joined(separator: ", ") + "]"
         case let .branch(_, weight, id, _, gen):
             return "\(weight),\(id): \(gen.elementDescription)"

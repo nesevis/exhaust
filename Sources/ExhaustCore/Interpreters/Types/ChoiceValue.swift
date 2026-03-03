@@ -10,7 +10,6 @@
     /// The UInt64 represents its hashable behaviour
     case signed(Int64, UInt64, any BitPatternConvertible.Type)
     case floating(Double, UInt64, any BitPatternConvertible.Type)
-    case character(Character)
 
     @_spi(ExhaustInternal) public init(_ value: any BitPatternConvertible, tag: TypeTag) {
         switch tag {
@@ -38,12 +37,6 @@
             self = .floating(Double(bitPattern64: value.bitPattern64), value.bitPattern64, Double.self)
         case .float:
             self = .floating(Double(Float(bitPattern64: value.bitPattern64)), value.bitPattern64, Float.self)
-        case .character:
-            if let character = value as? Character {
-                self = .character(character)
-            } else {
-                self = .character(Character(bitPattern64: value.bitPattern64))
-            }
         }
     }
 
@@ -51,7 +44,6 @@
     /// - Unsigned integers: 0
     /// - Signed integers: 0
     /// - Floating point: 0.0
-    /// - Characters: "a"
     @_spi(ExhaustInternal) public var semanticSimplest: ChoiceValue {
         switch self {
         case let .unsigned(_, type):
@@ -82,9 +74,6 @@
                 return self
             }
             return .floating(0.0, zeroBitPattern, type)
-        case .character:
-            // Space is ascii 32
-            return .character(" ")
         }
     }
 
@@ -96,8 +85,6 @@
             type.tag
         case let .floating(_, _, type):
             type.tag
-        case .character:
-            .character
         }
     }
 
@@ -109,8 +96,6 @@
             type
         case let .floating(_, _, type):
             type
-        case .character:
-            Character.self
         }
     }
 
@@ -130,8 +115,6 @@
                 return UInt64.max
             }
             return UInt64(absValue)
-        case let .character(character):
-            return character.bitPattern64 + 100 // Encourages removing '\0' bits
         }
     }
 
@@ -154,8 +137,6 @@
             let lower = underlyingType.init(bitPattern64: range.lowerBound)
             let upper = underlyingType.init(bitPattern64: range.upperBound)
             return "\(lower)...\(upper)"
-        case .character:
-            return "'\(Character(bitPattern64: range.lowerBound))'...'\(Character(bitPattern64: range.upperBound).description)'"
         }
     }
 
@@ -174,16 +155,11 @@
                 fatalError()
             }
             return Double(this)
-        case let .character(character):
-            return Double(character.bitPattern64)
         }
     }
 
     @_spi(ExhaustInternal) public var convertible: any BitPatternConvertible {
-        if case let .character(value) = self {
-            return value
-        }
-        return convertibleType.init(bitPattern64: bitPattern64)
+        convertibleType.init(bitPattern64: bitPattern64)
     }
 
     @_spi(ExhaustInternal) public func hash(into hasher: inout Hasher) {
@@ -194,8 +170,6 @@
             hasher.combine(uInt64)
         case let .floating(_, uInt64, _):
             hasher.combine(uInt64)
-        case let .character(character):
-            hasher.combine(character)
         }
         hasher.combine(tag)
     }
@@ -209,8 +183,6 @@
             lhsBits == rhsBits
         case let (.floating(_, lhsBits, _), .floating(_, rhsBits, _)):
             lhsBits == rhsBits
-        case let (.character(lhsChar), .character(rhsChar)):
-            lhsChar == rhsChar
         default:
             false
         }
@@ -224,9 +196,6 @@
             lhsInt < rhsInt
         case let (.floating(lhsDouble, _, _), .floating(rhsDouble, _, _)):
             lhsDouble < rhsDouble
-        case (.character, .character):
-            // TODO: If there are multiple unicode components use both?
-            lhs.bitPattern64 < rhs.bitPattern64
         default:
             fatalError("Can't compare two different choice values!")
         }

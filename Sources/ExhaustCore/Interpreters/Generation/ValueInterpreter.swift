@@ -108,7 +108,7 @@ import Foundation
         case let .impure(operation, continuation):
             let runContinuation = { (result: Any, context: inout GenerationContext) -> Output? in
                 let nextGen = try continuation(result)
-                // PERF: Potential early return here if this op is a terminal one (just, chooseBits, chooseCharacter) and the nextGen is pure
+                // PERF: Potential early return here if this op is a terminal one (just, chooseBits) and the nextGen is pure
                 return try generateRecursive(nextGen, with: inputValue, context: &context)
             }
 

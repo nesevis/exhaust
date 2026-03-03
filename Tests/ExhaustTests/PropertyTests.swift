@@ -6,6 +6,7 @@
 //  architecture, shrink ordering, and size-scaling math.
 //
 
+import Foundation
 import Testing
 @testable import Exhaust
 @testable @_spi(ExhaustInternal) import ExhaustCore
@@ -48,7 +49,7 @@ struct RoundtripPropertyTests {
             return replayed == value
         }
 
-        let charGen = Gen.chooseCharacter(in: Character.bitPatternRanges[0])
+        let charGen = #gen(.character(from: .decimalDigits))
         #exhaust(charGen) { value in
             guard let tree = try? Interpreters.reflect(charGen, with: value),
                   let replayed = try? Interpreters.replay(charGen, using: tree)

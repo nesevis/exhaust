@@ -142,8 +142,11 @@ benchmark("Bound5, 50 iterations, reflective") {
         let d: [Int16]
         let e: [Int16]
     }
-    let arrGen = Gen.arrayOf(Int16.arbitrary, within: 0 ... 10)
+    let arrGen = #gen(.int16().array(length: 0 ... 10))
         .filter { $0.isEmpty || $0.dropFirst().reduce($0[0], &+) < 256 }
+    let gen = #gen(arrGen, arrGen, arrGen, arrGen, arrGen) { a, b, c, d, e in
+        Bound5(a: a, b: b, c: c, d: d, e: e)
+    }
 
     let property: (Bound5) -> Bool = { b5 in
         let arr = b5.a + b5.b + b5.c + b5.d + b5.e
@@ -154,9 +157,6 @@ benchmark("Bound5, 50 iterations, reflective") {
     }
 
     do {
-        let gen = #gen(arrGen, arrGen, arrGen, arrGen, arrGen) { a, b, c, d, e in
-            Bound5(a: a, b: b, c: c, d: d, e: e)
-        }
         let iterator = ValueAndChoiceTreeInterpreter(gen, seed: 1337, maxRuns: 1000)
         var count = 0
         for (value, tree) in iterator where property(value) == false {
@@ -173,6 +173,13 @@ benchmark("Bound5, 50 iterations, reflective") {
 
 benchmark("Bound5, 50 iterations") {
     typealias Bound5 = ([Int16], [Int16], [Int16], [Int16], [Int16])
+    // #gen syntax is 4x faster
+//    running Bound5, 50 iterations, reflective... done! (627.41 ms)
+//    running Bound5, 50 iterations... done! (2361.57 ms)
+    
+//    let arrGen = #gen(.int16().array(length: 0 ... 10))
+//        .filter { $0.isEmpty || $0.dropFirst().reduce($0[0], &+) < 256 }
+//    let gen = #gen(arrGen, arrGen, arrGen, arrGen, arrGen)
 
     let arrGen = Gen.arrayOf(Int16.arbitrary, within: 0 ... 10)
         .filter { $0.isEmpty || $0.dropFirst().reduce($0[0], &+) < 256 }

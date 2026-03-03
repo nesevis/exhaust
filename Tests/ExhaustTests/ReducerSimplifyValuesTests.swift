@@ -52,12 +52,6 @@ struct SemanticSimplestTests {
         }
     }
 
-    @Test("Character semanticSimplest is always ' '")
-    func characterSimplest() {
-        #exhaust(Gen.chooseCharacter(in: Character.bitPatternRanges[0])) { char in
-            ChoiceValue.character(char).semanticSimplest == .character(" ")
-        }
-    }
 }
 
 // MARK: - ShortlexKey

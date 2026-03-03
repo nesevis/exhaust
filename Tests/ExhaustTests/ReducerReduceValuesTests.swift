@@ -7,6 +7,7 @@
 //  the minimum failing value when Pass 3's all-or-nothing simplification fails.
 //
 
+import Foundation
 import Testing
 @testable import Exhaust
 @_spi(ExhaustInternal) import ExhaustCore
@@ -62,12 +63,6 @@ struct ReductionTargetTests {
         #expect(target != zeroBP)
     }
 
-    @Test("Character target is 'a' when in range")
-    func characterTargetIsA() {
-        let value = ChoiceValue.character("z")
-        let target = value.reductionTarget(in: [Character("a").bitPattern64 ... Character("z").bitPattern64])
-        #expect(target == Character("a").bitPattern64)
-    }
 }
 
 // MARK: - Reducer Pass 5 Tests
@@ -272,7 +267,7 @@ struct ReducerReduceValuesTests {
 
     @Test("Non-reflectable generator shrinks correctly")
     func nonReflectableGeneratorShrinksCorrectly() {
-        let stringGen = Gen.chooseCharacter()
+        let stringGen = #gen(.character(from: .decimalDigits))
             .array(length: 0 ... 20)
             // Reversible, but only accidentally ([Character] is more or less equal to String)
             .map { String($0) }
@@ -292,10 +287,10 @@ struct ReducerReduceValuesTests {
         let interpreter = Array(ValueInterpreter(Int.arbitrary))
 
         let counterExample = #exhaust(gen, .suppressIssueReporting) { str in
-            str.contains("@") == false
+            str.contains("5") == false
         }
 
-        #expect(counterExample == "@")
+        #expect(counterExample == "5")
     }
 }
 

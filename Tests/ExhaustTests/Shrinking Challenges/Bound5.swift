@@ -102,7 +102,7 @@ struct Bound5ShrinkingChallenge {
             let d: [Int16]
             let e: [Int16]
         }
-        let arrGen = Int16.arbitrary.array(length: 0 ... 10)
+        let arrGen = #gen(.int16().array(length: 0 ... 10))
         let gen = #gen(arrGen, arrGen, arrGen, arrGen, arrGen)
             .map(Bound5.init)
 

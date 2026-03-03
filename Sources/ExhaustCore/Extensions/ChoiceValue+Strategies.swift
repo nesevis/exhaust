@@ -14,15 +14,13 @@ extension ChoiceValue {
             uint
         case let .floating(_, uint, _):
             uint
-        case let .character(char):
-            char.bitPattern64
         }
     }
 
     /// Key for shortlex ordering where values closer to zero are smaller.
     /// - Signed integers: zigzag encoding (0 → 0, -1 → 1, 1 → 2, -2 → 3, ...)
     /// - Floating point: absolute value's raw IEEE 754 bit pattern (0.0 → 0, ±small → small, ±large → large)
-    /// - Unsigned integers and characters: identical to `bitPattern64`
+    /// - Unsigned integers: identical to `bitPattern64`
     @_spi(ExhaustInternal) public var shortlexKey: UInt64 {
         switch self {
         case let .unsigned(uint, _):
@@ -31,15 +29,13 @@ extension ChoiceValue {
             UInt64(bitPattern: (value << 1) ^ (value >> 63))
         case let .floating(value, _, _):
             FloatShortlex.shortlexKey(for: value)
-        case let .character(char):
-            char.bitPattern64
         }
     }
 
     /// Constructs a `ChoiceValue` from a shortlex key, reversing `shortlexKey`.
     ///
     /// - For signed integers: zigzag decodes the key back to a signed value.
-    /// - For unsigned integers, floats, and characters: the key equals the bit pattern.
+    /// - For unsigned integers and floats: the key equals the bit pattern.
     @_spi(ExhaustInternal) public static func fromShortlexKey(_ key: UInt64, tag: TypeTag) -> ChoiceValue {
         switch tag {
         case .int, .int8, .int16, .int32, .int64:
@@ -55,13 +51,13 @@ extension ChoiceValue {
             }
             return ChoiceValue(tag.makeConvertible(bitPattern64: bp), tag: tag)
         default:
-            // Unsigned, float, character: shortlexKey == bitPattern64
+            // Unsigned, float: shortlexKey == bitPattern64
             return ChoiceValue(tag.makeConvertible(bitPattern64: key), tag: tag)
         }
     }
 
     /// The bit pattern of the ideal shrink target for this value type.
-    /// - Unsigned/Character: lowest valid bit pattern (smallest value)
+    /// - Unsigned: lowest valid bit pattern (smallest value)
     /// - Signed/Float: 0's bit pattern if in range, else the range bound closest to 0's bit pattern
     @_spi(ExhaustInternal) public func reductionTarget(in ranges: [ClosedRange<UInt64>]) -> UInt64 {
         let target = semanticSimplest.bitPattern64
@@ -198,11 +194,6 @@ extension ChoiceValue {
             let values: [Double] = [0, -0.1, -0.01, -0.001, -Double.ulpOfOne, -0.0001, Double.ulpOfOne, 0.001, 0.01, 0.1]
             return values
                 .map { ChoiceValue($0, tag: .double) }
-        case .character:
-            // TODO: unicode band, invisible characters, etc (in a second tier?)
-            // [ "a", "b", "c", "A", "B", "C", "1", "2", "3", "\n", " " ]
-            return [" ", "a", "b", "c", "A", "B", "C", "0", "1", "2", "3", "\n", "\0"]
-                .map { ChoiceValue.character($0) }
         }
     }
 }

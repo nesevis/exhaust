@@ -287,19 +287,8 @@ struct ReflectAndFlattenTests {
             return nil
         }
 
-        // Should have values for the characters
+        // Should have values for the characters (now as Int indices via .signed)
         #expect(valueChoices.count >= 3)
-
-        let characterValues = valueChoices.compactMap { choice -> Character? in
-            if case let .character(char) = choice.choice {
-                return char
-            }
-            return nil
-        }
-
-        #expect(characterValues.contains("a"))
-        #expect(characterValues.contains("b"))
-        #expect(characterValues.contains("c"))
     }
 
     @Test("Reflect and flatten preserves metadata")
@@ -511,54 +500,11 @@ struct ReflectAndFlattenTests {
         var flattened = ChoiceSequence.flatten(tree)
 
         // Mess with it
-        flattened[2] = .value(.init(choice: .character("@"), validRanges: []))
+        flattened[2] = .value(.init(choice: .unsigned(64, UInt64.self), validRanges: []))
 
         let materialized = try Interpreters.materialize(gen, with: tree, using: flattened)
 
-        #expect(materialized == Character("@").bitPattern64)
-    }
-
-    @Test("Shrinking by setting all values of type to something works", .disabled("No more character use in shrinking"))
-    func sequenceShrinkingWorks() throws {
-        struct Person: Equatable {
-            let age: UInt64
-            let name: String
-        }
-        let ageGen = #gen(.oneOf(weighted:
-            (1, .uint64(in: 0 ... 10)),
-            (1, .uint64(in: 11 ... 84))))
-        let gen = #gen(ageGen, .string()) { age, name in
-            Person(age: age, name: name)
-        }
-
-        // Reflect the generator with the value
-        // For now it does not work with `materializePicks`
-        // 1. If it is enabled, the flattened sequence contains N values
-        // 2. The materializer will only use the `.selected` branch and leave the other values unconsumed.
-        let (value, tree) = try #require(Array(ValueAndChoiceTreeInterpreter(gen, materializePicks: false, seed: 1337).prefix(2)).last)
-
-        // Flatten the reflected tree
-        // and reduce the values to their most semantically simple form
-        // this is a proto-shrinking step
-        let sequence = ChoiceSequence.flatten(tree)
-            .map { element in
-                guard case let .value(value) = element else {
-                    return element
-                }
-                switch value.choice {
-                case .character:
-                    return .value(.init(choice: .character("A"), validRanges: []))
-                case .unsigned:
-                    return .value(.init(choice: .unsigned(.min, UInt64.self), validRanges: []))
-                default:
-                    return element
-                }
-            }
-
-        print()
-        let materialized = try #require(try Interpreters.materialize(gen, with: tree, using: ContiguousArray(sequence)))
-        #expect(materialized.age == 0)
-        #expect(materialized.name == Array(repeating: "A", count: value.name.count).joined())
+        #expect(materialized == 64)
     }
 
     @Test("Test cross-boundary shrinking")

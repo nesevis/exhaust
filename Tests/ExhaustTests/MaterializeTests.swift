@@ -5,6 +5,7 @@
 //  Created by Chris Kolbu on 12/2/2026.
 //
 
+import Foundation
 import Testing
 @testable import Exhaust
 @_spi(ExhaustInternal) import ExhaustCore
@@ -42,7 +43,7 @@ struct MaterializeTests {
             materializeViaReflection(boolGen, value) == value
         }
 
-        let charGen = Gen.chooseCharacter()
+        let charGen = #gen(.character(from: .decimalDigits))
         #exhaust(charGen) { value in
             materializeViaReflection(charGen, value) == value
         }

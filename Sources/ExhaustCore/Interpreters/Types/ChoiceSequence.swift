@@ -68,8 +68,7 @@
             return flatten(gen, includingAllBranches: includingAllBranches)
         case let .group(array):
             if array.allSatisfy({ $0.isBranch || $0.isSelected }),
-               case let .selected(.branch(_, _, id, branchIDs, choice)) = array.first(where: \.isSelected),
-               choice.isCharacterChoice == false // Do not add this marker for characters
+               case let .selected(.branch(_, _, id, branchIDs, choice)) = array.first(where: \.isSelected)
             {
                 let value = ChoiceSequenceValue.branch(.init(
                     id: id,
