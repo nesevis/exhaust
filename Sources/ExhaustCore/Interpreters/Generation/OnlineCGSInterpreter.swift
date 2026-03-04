@@ -22,10 +22,77 @@ import Foundation
 @_spi(ExhaustInternal) public struct OnlineCGSInterpreter<FinalOutput>: IteratorProtocol, Sequence {
     @_spi(ExhaustInternal) public typealias Element = FinalOutput
 
-    /// A function that composes a local sub-generator with all outer continuations
-    /// to produce a `FinalOutput`. This is the key mechanism for computing derivatives
-    /// at arbitrary depth.
-    typealias DerivativeWrapper = (ReflectiveGenerator<Any>) throws -> ReflectiveGenerator<FinalOutput>
+    // MARK: - Derivative Context
+
+    /// An inspectable data structure representing the composition of all outer continuations
+    /// needed to produce a `FinalOutput` from a local sub-generator. Each `handlePick` or
+    /// `handleZip` call pushes a frame; `apply` composes them to build a full derivative.
+    ///
+    /// This replaces the opaque `DerivativeWrapper` closure chain with a defunctionalized
+    /// representation, matching the paper's treatment of CGS derivatives as syntactic
+    /// transformations on the generator data structure (Goldstein, Ch. 3).
+    @_spi(ExhaustInternal) public struct DerivativeContext {
+        @_spi(ExhaustInternal) public private(set) var frames: [DerivativeFrame] = []
+
+        @_spi(ExhaustInternal) public init() {}
+
+        @_spi(ExhaustInternal) public var depth: Int { frames.count }
+
+        @_spi(ExhaustInternal) public mutating func push(_ frame: DerivativeFrame) {
+            frames.append(frame)
+        }
+
+        /// Compose all frames onto `gen` to produce a full `FinalOutput` generator.
+        ///
+        /// Frames are stored in push order (oldest first). `apply` iterates in reverse
+        /// (newest/innermost first) to match the closure chain's nesting:
+        /// `gen.bind(innerCont).bind(outerCont).map(cast)`.
+        @_spi(ExhaustInternal) public func apply(_ gen: ReflectiveGenerator<Any>) throws -> ReflectiveGenerator<FinalOutput> {
+            var current = gen
+            for frame in frames.reversed() {
+                switch frame {
+                case let .bind(continuation):
+                    current = try current.bind { try continuation($0) }
+
+                case let .zipComponent(index, completed, allGenerators, continuation):
+                    let capturedIndex = index
+                    let capturedCompleted = completed
+                    let capturedGenerators = allGenerators
+                    current = try current.bind { componentResult -> ReflectiveGenerator<Any> in
+                        var gens = ContiguousArray<ReflectiveGenerator<Any>>()
+                        gens.reserveCapacity(capturedGenerators.count)
+                        for (j, g) in capturedGenerators.enumerated() {
+                            if j < capturedIndex {
+                                gens.append(.pure(capturedCompleted[j]))
+                            } else if j == capturedIndex {
+                                gens.append(.pure(componentResult))
+                            } else {
+                                gens.append(g)
+                            }
+                        }
+                        return ReflectiveGenerator<Any>.impure(
+                            operation: .zip(gens),
+                            continuation: { .pure($0) },
+                        )
+                    }.bind { zipResult in
+                        try continuation(zipResult)
+                    }
+
+                }
+            }
+            return current.map { $0 as! FinalOutput }
+        }
+    }
+
+    @_spi(ExhaustInternal) public enum DerivativeFrame {
+        case bind(continuation: (Any) throws -> ReflectiveGenerator<Any>)
+        case zipComponent(
+            index: Int,
+            completed: [Any],
+            allGenerators: ContiguousArray<ReflectiveGenerator<Any>>,
+            continuation: (Any) throws -> ReflectiveGenerator<Any>
+        )
+    }
 
     let generator: ReflectiveGenerator<FinalOutput>
     private var context: GenerationContext
@@ -37,6 +104,7 @@ import Foundation
 
     private struct CGSState {
         var samplingPRNG: Xoshiro256
+        var fitnessAccumulator: FitnessAccumulator?
     }
 
     @_spi(ExhaustInternal) public init(
@@ -45,6 +113,7 @@ import Foundation
         sampleCount: UInt64 = 50,
         seed: UInt64? = nil,
         maxRuns: UInt64? = nil,
+        fitnessAccumulator: FitnessAccumulator? = nil,
     ) {
         self.generator = generator
         self.predicate = predicate
@@ -52,7 +121,7 @@ import Foundation
         let prng = seed.map { Xoshiro256(seed: $0) } ?? Xoshiro256()
         var samplingPRNG = prng
         samplingPRNG.jump()
-        cgsState = CGSState(samplingPRNG: samplingPRNG)
+        cgsState = CGSState(samplingPRNG: samplingPRNG, fitnessAccumulator: fitnessAccumulator)
         context = .init(
             maxRuns: maxRuns ?? 100,
             baseSeed: prng.seed,
@@ -77,7 +146,7 @@ import Foundation
         samplingPRNG.jump()
         cgsState.samplingPRNG = samplingPRNG
 
-        let wrapper: DerivativeWrapper = { $0.map { $0 as! FinalOutput } }
+        let derivativeContext = DerivativeContext()
 
         defer {
             context.runs += 1
@@ -91,8 +160,7 @@ import Foundation
                 predicate: predicate,
                 sampleCount: sampleCount,
                 cgsState: &cgsState,
-                wrapper: wrapper,
-                insideSubdividedChooseBits: false,
+                derivativeContext: derivativeContext,
             )
         } catch GeneratorError.uniqueBudgetExhausted {
             ExhaustLog.warning(
@@ -119,8 +187,7 @@ import Foundation
         predicate: @escaping (FinalOutput) -> Bool,
         sampleCount: UInt64,
         cgsState: inout CGSState,
-        wrapper: @escaping DerivativeWrapper,
-        insideSubdividedChooseBits: Bool,
+        derivativeContext: DerivativeContext,
     ) throws -> Output? {
         switch gen {
         case let .pure(value):
@@ -138,8 +205,7 @@ import Foundation
                     predicate: predicate,
                     sampleCount: sampleCount,
                     cgsState: &cgsState,
-                    wrapper: wrapper,
-                    insideSubdividedChooseBits: insideSubdividedChooseBits,
+                    derivativeContext: derivativeContext,
                 ) else { return nil }
                 return try runContinuation(
                     result: result,
@@ -149,8 +215,7 @@ import Foundation
                     predicate: predicate,
                     sampleCount: sampleCount,
                     cgsState: &cgsState,
-                    wrapper: wrapper,
-                    insideSubdividedChooseBits: insideSubdividedChooseBits,
+                    derivativeContext: derivativeContext,
                 )
 
             // MARK: - Prune
@@ -166,8 +231,7 @@ import Foundation
                     predicate: predicate,
                     sampleCount: sampleCount,
                     cgsState: &cgsState,
-                    wrapper: wrapper,
-                    insideSubdividedChooseBits: insideSubdividedChooseBits,
+                    derivativeContext: derivativeContext,
                 ) else { return nil }
                 return try runContinuation(
                     result: result,
@@ -177,8 +241,7 @@ import Foundation
                     predicate: predicate,
                     sampleCount: sampleCount,
                     cgsState: &cgsState,
-                    wrapper: wrapper,
-                    insideSubdividedChooseBits: insideSubdividedChooseBits,
+                    derivativeContext: derivativeContext,
                 )
 
             // MARK: - Pick (CGS Core)
@@ -192,28 +255,53 @@ import Foundation
                     predicate: predicate,
                     sampleCount: sampleCount,
                     cgsState: &cgsState,
-                    wrapper: wrapper,
-                    insideSubdividedChooseBits: insideSubdividedChooseBits,
+                    derivativeContext: derivativeContext,
                 )
 
             // MARK: - ChooseBits
 
             case let .chooseBits(min, max, tag, isRangeExplicit):
-                if !insideSubdividedChooseBits {
-                    let rangeSize = max - min + 1
+                if derivativeContext.depth < 3, max >= min {
+                    let rangeSize = (max - min) &+ 1
                     if rangeSize >= 1000 {
-                        return try handleChooseBitsSubdivision(
-                            min: min,
-                            max: max,
-                            tag: tag,
-                            isRangeExplicit: isRangeExplicit,
+                        // Synthesize a pick over subranges, matching GeneratorTuning.tuneChooseBits
+                        let subrangeCount = Swift.min(4, Int(Swift.min(rangeSize, UInt64(Int.max))))
+                        let subranges = (min ... max).split(into: subrangeCount)
+
+                        var subrangeChoices = ContiguousArray<ReflectiveOperation.PickTuple>()
+                        subrangeChoices.reserveCapacity(subranges.count)
+
+                        for (i, subrange) in subranges.enumerated() {
+                            let subGen: ReflectiveGenerator<Any> = .impure(
+                                operation: .chooseBits(
+                                    min: subrange.lowerBound,
+                                    max: subrange.upperBound,
+                                    tag: tag,
+                                    isRangeExplicit: isRangeExplicit,
+                                ),
+                                continuation: { .pure($0) },
+                            )
+                            subrangeChoices.append(ReflectiveOperation.PickTuple(
+                                siteID: 0,
+                                id: UInt64(i),
+                                weight: 1,
+                                generator: subGen,
+                            ))
+                        }
+
+                        let synthesisedPick: ReflectiveGenerator<Output> = .impure(
+                            operation: .pick(choices: subrangeChoices),
                             continuation: continuation,
-                            inputValue: inputValue,
+                        )
+
+                        return try generateRecursive(
+                            synthesisedPick,
+                            with: inputValue,
                             context: &context,
                             predicate: predicate,
                             sampleCount: sampleCount,
                             cgsState: &cgsState,
-                            wrapper: wrapper,
+                            derivativeContext: derivativeContext,
                         )
                     }
                 }
@@ -226,8 +314,7 @@ import Foundation
                     predicate: predicate,
                     sampleCount: sampleCount,
                     cgsState: &cgsState,
-                    wrapper: wrapper,
-                    insideSubdividedChooseBits: insideSubdividedChooseBits,
+                    derivativeContext: derivativeContext,
                 )
 
             // MARK: - Sequence
@@ -240,14 +327,21 @@ import Foundation
                     predicate: predicate,
                     sampleCount: sampleCount,
                     cgsState: &cgsState,
-                    wrapper: wrapper,
-                    insideSubdividedChooseBits: insideSubdividedChooseBits,
+                    derivativeContext: derivativeContext,
                 ) else {
                     return nil
                 }
 
                 var results: [Any] = []
                 results.reserveCapacity(Int(length))
+                // Skip derivative evaluation for element-level picks: without
+                // .sequenceElement frames, derivatives can't compose through the
+                // sequence boundary (element values would hit the predicate with
+                // wrong types). Depth >= 4 triggers handlePick's fast path.
+                var elementDerivativeContext = DerivativeContext()
+                for _ in 0 ..< 4 {
+                    elementDerivativeContext.push(.bind(continuation: { .pure($0) }))
+                }
                 let didSucceed = try SequenceExecutionKernel.run(count: length) {
                     guard let result = try generateRecursive(
                         elementGen,
@@ -256,8 +350,7 @@ import Foundation
                         predicate: predicate,
                         sampleCount: sampleCount,
                         cgsState: &cgsState,
-                        wrapper: wrapper,
-                        insideSubdividedChooseBits: insideSubdividedChooseBits,
+                        derivativeContext: elementDerivativeContext,
                     ) else {
                         return false
                     }
@@ -273,8 +366,7 @@ import Foundation
                     predicate: predicate,
                     sampleCount: sampleCount,
                     cgsState: &cgsState,
-                    wrapper: wrapper,
-                    insideSubdividedChooseBits: insideSubdividedChooseBits,
+                    derivativeContext: derivativeContext,
                 )
 
             // MARK: - Zip
@@ -288,8 +380,7 @@ import Foundation
                     predicate: predicate,
                     sampleCount: sampleCount,
                     cgsState: &cgsState,
-                    wrapper: wrapper,
-                    insideSubdividedChooseBits: insideSubdividedChooseBits,
+                    derivativeContext: derivativeContext,
                 )
 
             // MARK: - Just
@@ -303,8 +394,7 @@ import Foundation
                     predicate: predicate,
                     sampleCount: sampleCount,
                     cgsState: &cgsState,
-                    wrapper: wrapper,
-                    insideSubdividedChooseBits: insideSubdividedChooseBits,
+                    derivativeContext: derivativeContext,
                 )
 
             // MARK: - GetSize
@@ -320,8 +410,7 @@ import Foundation
                     predicate: predicate,
                     sampleCount: sampleCount,
                     cgsState: &cgsState,
-                    wrapper: wrapper,
-                    insideSubdividedChooseBits: insideSubdividedChooseBits,
+                    derivativeContext: derivativeContext,
                 )
 
             // MARK: - Resize
@@ -335,8 +424,7 @@ import Foundation
                     predicate: predicate,
                     sampleCount: sampleCount,
                     cgsState: &cgsState,
-                    wrapper: wrapper,
-                    insideSubdividedChooseBits: insideSubdividedChooseBits,
+                    derivativeContext: derivativeContext,
                 ) else { return nil }
                 return try runContinuation(
                     result: result,
@@ -346,8 +434,7 @@ import Foundation
                     predicate: predicate,
                     sampleCount: sampleCount,
                     cgsState: &cgsState,
-                    wrapper: wrapper,
-                    insideSubdividedChooseBits: insideSubdividedChooseBits,
+                    derivativeContext: derivativeContext,
                 )
 
             // MARK: - Filter
@@ -370,8 +457,7 @@ import Foundation
                         predicate: predicate,
                         sampleCount: sampleCount,
                         cgsState: &cgsState,
-                        wrapper: wrapper,
-                        insideSubdividedChooseBits: insideSubdividedChooseBits,
+                        derivativeContext: derivativeContext,
                     ) else { return nil }
 
                     if filterPredicate(result) {
@@ -383,8 +469,7 @@ import Foundation
                             predicate: predicate,
                             sampleCount: sampleCount,
                             cgsState: &cgsState,
-                            wrapper: wrapper,
-                            insideSubdividedChooseBits: insideSubdividedChooseBits,
+                            derivativeContext: derivativeContext,
                         )
                     }
                     attempts += 1
@@ -401,8 +486,7 @@ import Foundation
                     predicate: predicate,
                     sampleCount: sampleCount,
                     cgsState: &cgsState,
-                    wrapper: wrapper,
-                    insideSubdividedChooseBits: insideSubdividedChooseBits,
+                    derivativeContext: derivativeContext,
                 ) else { return nil }
                 for (label, classifier) in classifiers where classifier(result) {
                     context.classifications[fingerprint, default: [:]][label, default: []].insert(context.runs)
@@ -415,8 +499,7 @@ import Foundation
                     predicate: predicate,
                     sampleCount: sampleCount,
                     cgsState: &cgsState,
-                    wrapper: wrapper,
-                    insideSubdividedChooseBits: insideSubdividedChooseBits,
+                    derivativeContext: derivativeContext,
                 )
 
             // MARK: - Unique
@@ -431,8 +514,7 @@ import Foundation
                         predicate: predicate,
                         sampleCount: sampleCount,
                         cgsState: &cgsState,
-                        wrapper: wrapper,
-                        insideSubdividedChooseBits: insideSubdividedChooseBits,
+                        derivativeContext: derivativeContext,
                     ) else { return nil }
 
                     let isDuplicate: Bool
@@ -454,8 +536,7 @@ import Foundation
                             predicate: predicate,
                             sampleCount: sampleCount,
                             cgsState: &cgsState,
-                            wrapper: wrapper,
-                            insideSubdividedChooseBits: insideSubdividedChooseBits,
+                            derivativeContext: derivativeContext,
                         )
                     }
                     attempts += 1
@@ -476,8 +557,7 @@ import Foundation
         predicate: @escaping (FinalOutput) -> Bool,
         sampleCount: UInt64,
         cgsState: inout CGSState,
-        wrapper: @escaping DerivativeWrapper,
-        insideSubdividedChooseBits: Bool,
+        derivativeContext: DerivativeContext,
     ) throws -> Output? {
         let nextGen = try continuation(result)
         return try generateRecursive(
@@ -487,8 +567,7 @@ import Foundation
             predicate: predicate,
             sampleCount: sampleCount,
             cgsState: &cgsState,
-            wrapper: wrapper,
-            insideSubdividedChooseBits: insideSubdividedChooseBits,
+            derivativeContext: derivativeContext,
         )
     }
 
@@ -503,36 +582,115 @@ import Foundation
         predicate: @escaping (FinalOutput) -> Bool,
         sampleCount: UInt64,
         cgsState: inout CGSState,
-        wrapper: @escaping DerivativeWrapper,
-        insideSubdividedChooseBits: Bool,
+        derivativeContext: DerivativeContext,
     ) throws -> Output? {
-        // 1. Compute fitness for each choice via derivative sampling
-        let currentSize = context.sizeOverride ?? GenerationContext.scaledSize(forRun: context.runs)
-        var fitnesses = ContiguousArray<UInt64>()
-        fitnesses.reserveCapacity(choices.count)
+        // Fast path: single choice or deep pick — skip derivative evaluation.
+        // Without .sequenceElement frames, derivative context cannot compose through
+        // sequence boundaries, so deep picks must fall back to weighted selection.
+        let effectiveSampleCount = Swift.max(2, sampleCount >> derivativeContext.depth)
+        if choices.count == 1 || derivativeContext.depth >= 4 {
+            guard let selectedChoice = WeightedPickSelection.draw(from: choices, using: &context.prng) else {
+                return nil
+            }
+            _ = context.prng.next()
 
+            var branchContext = derivativeContext
+            branchContext.push(.bind(continuation: { try continuation($0).erase() }))
+
+            guard let result = try generateRecursive(
+                selectedChoice.generator,
+                with: inputValue,
+                context: &context,
+                predicate: predicate,
+                sampleCount: sampleCount,
+                cgsState: &cgsState,
+                derivativeContext: branchContext,
+            ) else {
+                return nil
+            }
+            return try runContinuation(
+                result: result,
+                continuation: continuation,
+                inputValue: inputValue,
+                context: &context,
+                predicate: predicate,
+                sampleCount: sampleCount,
+                cgsState: &cgsState,
+                derivativeContext: derivativeContext,
+            )
+        }
+
+        // 1. Compute fitness via interleaved derivative sampling
+        //
+        // Build all derivatives upfront, then sample in rounds across all choices.
+        // This allows adaptive stopping when the relative ranking is decided,
+        // rather than exhausting the full budget per choice independently.
+        let currentSize = context.sizeOverride ?? GenerationContext.scaledSize(forRun: context.runs)
+        let choiceCount = choices.count
+
+        var derivatives = ContiguousArray<ReflectiveGenerator<FinalOutput>>()
+        derivatives.reserveCapacity(choiceCount)
         for choice in choices {
             let derivative = try choice.generator.bind { innerValue in
                 try continuation(innerValue).erase()
             }
-            let fullDerivative: ReflectiveGenerator<FinalOutput> = try wrapper(derivative)
+            derivatives.append(try derivativeContext.apply(derivative))
+        }
 
-            var successCount: UInt64 = 0
-            for _ in 0 ..< sampleCount {
+        var fitnesses = ContiguousArray(repeating: UInt64(0), count: choiceCount)
+        let minRounds = Swift.min(UInt64(8), effectiveSampleCount)
+        var completedRounds: UInt64 = 0
+
+        sampling: for round in 0 ..< effectiveSampleCount {
+            completedRounds = round + 1
+            for i in 0 ..< choiceCount {
                 do {
                     let result = try LightweightSampler.sample(
-                        fullDerivative,
+                        derivatives[i],
                         using: &cgsState.samplingPRNG,
                         size: currentSize,
                     )
                     if let value = result, predicate(value) {
-                        successCount += 1
+                        fitnesses[i] += 1
                     }
                 } catch {
                     // Sampling failed — count as unsuccessful
                 }
             }
-            fitnesses.append(successCount)
+
+            // Adaptive stopping: check if ranking is decided after minimum rounds
+            if round + 1 >= minRounds {
+                var best: UInt64 = 0
+                var secondBest: UInt64 = 0
+                var nonZeroCount = 0
+                for f in fitnesses {
+                    if f > 0 { nonZeroCount += 1 }
+                    if f > best {
+                        secondBest = best
+                        best = f
+                    } else if f > secondBest {
+                        secondBest = f
+                    }
+                }
+                // All zero — keep sampling, might still find something
+                guard best > 0 else { continue }
+                // Only one viable choice — ranking is decided
+                if nonZeroCount == 1 { break sampling }
+                // Leader dominates — ranking is unlikely to change
+                if best >= secondBest &* 3 { break sampling }
+            }
+        }
+
+        // 1b. Record fitness data for tuning (purely observational)
+        if let accumulator = cgsState.fitnessAccumulator {
+            for (i, choice) in choices.enumerated() {
+                accumulator.record(
+                    siteID: choice.siteID,
+                    choiceID: choice.id,
+                    fitness: fitnesses[i],
+                    observations: completedRounds,
+                )
+            }
         }
 
         // 2. Build weighted choices — if all zero, fall back to equal weights
@@ -556,12 +714,9 @@ import Foundation
         // Consume a PRNG value to keep parity with other interpreters
         _ = context.prng.next()
 
-        // 4. Update wrapper for the selected branch
-        let branchWrapper: DerivativeWrapper = { gen in
-            try wrapper(gen.bind { innerValue in
-                try continuation(innerValue).erase()
-            })
-        }
+        // 4. Push frame for the selected branch's context
+        var branchContext = derivativeContext
+        branchContext.push(.bind(continuation: { try continuation($0).erase() }))
 
         // 5. Recurse on selected choice's generator
         guard let result = try generateRecursive(
@@ -571,8 +726,7 @@ import Foundation
             predicate: predicate,
             sampleCount: sampleCount,
             cgsState: &cgsState,
-            wrapper: branchWrapper,
-            insideSubdividedChooseBits: insideSubdividedChooseBits,
+            derivativeContext: branchContext,
         ) else {
             return nil
         }
@@ -586,101 +740,7 @@ import Foundation
             predicate: predicate,
             sampleCount: sampleCount,
             cgsState: &cgsState,
-            wrapper: wrapper,
-            insideSubdividedChooseBits: insideSubdividedChooseBits,
-        )
-    }
-
-    // MARK: - ChooseBits Subdivision
-
-    /// Subdivides a `chooseBits` range into subranges, uses CGS derivative sampling
-    /// to select a subrange weighted by fitness, then generates a random value within
-    /// the selected subrange.
-    private static func handleChooseBitsSubdivision<Output>(
-        min: UInt64,
-        max: UInt64,
-        tag: TypeTag,
-        isRangeExplicit: Bool,
-        continuation: @escaping (Any) throws -> ReflectiveGenerator<Output>,
-        inputValue: some Any,
-        context: inout GenerationContext,
-        predicate: @escaping (FinalOutput) -> Bool,
-        sampleCount: UInt64,
-        cgsState: inout CGSState,
-        wrapper: @escaping DerivativeWrapper,
-    ) throws -> Output? {
-        let rangeSize = max - min + 1
-        let subrangeCount = Swift.min(4, Int(Swift.min(rangeSize, UInt64(Int.max))))
-        let subranges = (min ... max).split(into: subrangeCount)
-        let currentSize = context.sizeOverride ?? GenerationContext.scaledSize(forRun: context.runs)
-
-        // Compute fitness for each subrange via derivative sampling
-        var fitnesses = [UInt64]()
-        fitnesses.reserveCapacity(subranges.count)
-
-        for subrange in subranges {
-            let subGen: ReflectiveGenerator<Any> = .impure(
-                operation: .chooseBits(
-                    min: subrange.lowerBound,
-                    max: subrange.upperBound,
-                    tag: tag,
-                    isRangeExplicit: isRangeExplicit,
-                ),
-                continuation: { .pure($0) },
-            )
-            let derivative = try subGen.bind { innerValue in
-                try continuation(innerValue).erase()
-            }
-            let fullDerivative = try wrapper(derivative)
-
-            var successCount: UInt64 = 0
-            for _ in 0 ..< sampleCount {
-                do {
-                    let result = try LightweightSampler.sample(
-                        fullDerivative,
-                        using: &cgsState.samplingPRNG,
-                        size: currentSize,
-                    )
-                    if let value = result, predicate(value) {
-                        successCount += 1
-                    }
-                } catch {
-                    // Sampling failed — count as unsuccessful
-                }
-            }
-            fitnesses.append(successCount)
-        }
-
-        // Select subrange weighted by fitness (fall back to equal weights if all zero)
-        let allZero = fitnesses.allSatisfy { $0 == 0 }
-        var weightedSubranges = ContiguousArray<ReflectiveOperation.PickTuple>()
-        weightedSubranges.reserveCapacity(subranges.count)
-        for (i, subrange) in subranges.enumerated() {
-            weightedSubranges.append(ReflectiveOperation.PickTuple(
-                siteID: 0,
-                id: UInt64(i),
-                weight: allZero ? 1 : fitnesses[i],
-                generator: .pure(subrange.lowerBound),
-            ))
-        }
-
-        guard let selected = WeightedPickSelection.draw(from: weightedSubranges, using: &context.prng) else {
-            return nil
-        }
-        let selectedSubrange = subranges[Int(selected.id)]
-
-        let randomBits = context.prng.next(in: selectedSubrange)
-
-        return try runContinuation(
-            result: randomBits,
-            continuation: continuation,
-            inputValue: inputValue,
-            context: &context,
-            predicate: predicate,
-            sampleCount: sampleCount,
-            cgsState: &cgsState,
-            wrapper: wrapper,
-            insideSubdividedChooseBits: false,
+            derivativeContext: derivativeContext,
         )
     }
 
@@ -695,36 +755,19 @@ import Foundation
         predicate: @escaping (FinalOutput) -> Bool,
         sampleCount: UInt64,
         cgsState: inout CGSState,
-        wrapper: @escaping DerivativeWrapper,
-        insideSubdividedChooseBits: Bool,
+        derivativeContext: DerivativeContext,
     ) throws -> Output? {
         var results = [Any]()
         results.reserveCapacity(generators.count)
 
         for (i, gen) in generators.enumerated() {
-            let previousResults = results
-            let componentWrapper: DerivativeWrapper = { componentGen in
-                let zipGen: ReflectiveGenerator<Any> = componentGen.bind { componentResult in
-                    var gens = ContiguousArray<ReflectiveGenerator<Any>>()
-                    gens.reserveCapacity(generators.count)
-                    for (j, g) in generators.enumerated() {
-                        if j < i {
-                            gens.append(.pure(previousResults[j]))
-                        } else if j == i {
-                            gens.append(.pure(componentResult))
-                        } else {
-                            gens.append(g)
-                        }
-                    }
-                    return ReflectiveGenerator<Any>.impure(
-                        operation: .zip(gens),
-                        continuation: { .pure($0) },
-                    )
-                }
-                return try wrapper(zipGen.bind { zipResult in
-                    try continuation(zipResult).erase()
-                })
-            }
+            var componentContext = derivativeContext
+            componentContext.push(.zipComponent(
+                index: i,
+                completed: results,
+                allGenerators: generators,
+                continuation: { try continuation($0).erase() },
+            ))
 
             guard let result = try generateRecursive(
                 gen,
@@ -733,8 +776,7 @@ import Foundation
                 predicate: predicate,
                 sampleCount: sampleCount,
                 cgsState: &cgsState,
-                wrapper: componentWrapper,
-                insideSubdividedChooseBits: insideSubdividedChooseBits,
+                derivativeContext: componentContext,
             ) else {
                 throw GeneratorError.couldNotGenerateConcomitantChoiceTree
             }
@@ -748,8 +790,8 @@ import Foundation
             predicate: predicate,
             sampleCount: sampleCount,
             cgsState: &cgsState,
-            wrapper: wrapper,
-            insideSubdividedChooseBits: insideSubdividedChooseBits,
+            derivativeContext: derivativeContext,
         )
     }
+
 }

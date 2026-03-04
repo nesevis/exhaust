@@ -821,7 +821,7 @@ import Foundation
         continuation: @escaping (Any) throws -> ReflectiveGenerator<Output>,
         context: TuningContext,
     ) throws -> ReflectiveGenerator<Output> {
-        guard filterType != .reject else {
+        guard filterType != .rejectionSampling else {
             return .impure(
                 operation: .filter(gen: subGen, fingerprint: fingerprint, filterType: filterType, predicate: filterPredicate),
                 continuation: continuation,

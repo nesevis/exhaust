@@ -15,14 +15,28 @@ enum ChoiceTreeHandlers {
         predicate: @escaping (Any) -> Bool,
         context: inout GenerationContext,
     ) -> ReflectiveGenerator<Any> {
-        if filterType == .reject {
+        if filterType == .rejectionSampling {
             return gen
         }
         if let cached = context.tunedFilterCache[fingerprint] {
             return cached
         }
-        let tuned = try? GeneratorTuning.probeAndTune(gen, predicate: predicate)
-        let resolved = tuned ?? gen
+
+        let resolved: ReflectiveGenerator<Any>
+
+        switch filterType {
+        case .rejectionSampling:
+            return gen
+        case .choiceGradientSampling, .auto:
+            // CGS with fitness sharing is faster than probe-tuning at all run
+            // counts for pick-heavy generators (3x on AVL, 2x on BST).
+            let tuned = try? ChoiceGradientTuner<Any>.tune(gen, predicate: predicate, warmupRuns: context.maxRuns)
+            resolved = tuned ?? gen
+        case .probeSampling:
+            let tuned = try? GeneratorTuning.probeAndTune(gen, predicate: predicate)
+            resolved = tuned ?? gen
+        }
+
         context.tunedFilterCache[fingerprint] = resolved
         return resolved
     }

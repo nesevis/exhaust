@@ -122,7 +122,7 @@ public enum ReflectiveOperation {
     /// **Type handling**: The `TypeTag` enables type-specific interpretation:
     /// - `Int`: Bit pattern represents signed integer
     /// - `Float`: Bit pattern represents IEEE 754 floating point
-    /// - `Character`: Bit pattern represents Unicode scalar value
+    /// - `Character`: Bit pattern represents an index into a `CharacterSet`
     /// - `Bool`: Bit pattern 0 = false, 1 = true
     ///
     /// **Uniformity**: The bit-level approach ensures uniform distribution across the

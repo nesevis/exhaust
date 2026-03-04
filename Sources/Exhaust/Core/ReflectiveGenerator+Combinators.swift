@@ -173,32 +173,34 @@ public extension ReflectiveGenerator where Operation == ReflectiveOperation {
 
     /// Creates a filtered generator that only produces values satisfying a predicate.
     ///
-    /// The filter combinator supports two strategies for satisfying the predicate,
-    /// selectable via the `type` parameter:
+    /// The filter combinator supports several strategies for satisfying the
+    /// predicate, selectable via the `type` parameter:
     ///
-    /// - ``FilterType/reject``: Pure rejection sampling — generate values and discard
-    ///   those that fail the predicate. Simple and predictable, but inefficient when
-    ///   valid values are sparse.
-    /// - ``FilterType/tune``: Probes each branching point's choices through the
+    /// - ``FilterType/rejectionSampling``: Pure rejection sampling — generate values
+    ///   and discard those that fail the predicate. Simple and predictable, but
+    ///   inefficient when valid values are sparse.
+    /// - ``FilterType/probeSampling``: Probes each branching point's choices through the
     ///   continuation pipeline to measure predicate satisfaction rates, then biases
-    ///   weights toward valid outputs before generation begins. More expensive upfront,
-    ///   but dramatically reduces rejection attempts for structurally constrained
-    ///   generators.
-    /// - ``FilterType/auto`` (default): Selects a strategy based on generator structure.
-    ///   Uses ``FilterType/tune`` when the generator contains branching points,
-    ///   otherwise falls back to ``FilterType/reject``.
+    ///   weights toward valid outputs before generation begins.
+    /// - ``FilterType/choiceGradientSampling``: Runs a CGS (Choice Gradient Sampling)
+    ///   warmup pass to learn pick weights conditioned on upstream choices, then
+    ///   bakes them with fitness sharing to prevent overcommitting to the dominant
+    ///   cluster. Produces the best balance of validity rate and output diversity
+    ///   for recursive generators like BST/AVL. Incurs a slight penalty for generators
+    ///   with few branching points.
+    /// - ``FilterType/auto`` (default): Uses ``FilterType/choiceGradientSampling``.
     ///
-    /// Both strategies maintain deterministic behaviour — given the same seed, the
+    /// All strategies maintain deterministic behaviour — given the same seed, the
     /// generator will produce the same sequence of values.
     ///
     /// ```swift
-    /// // Auto strategy (default) — tunes if branching points are present
-    /// let balancedBST = BinaryTree.arbitrary
-    ///     .filter { $0.isBalanced && $0.satisfiesBSTProperty }
+    /// // Auto strategy (default) — in this case uses .choiceGradientSampling
+    /// let balancedBST = #gen(myBSTGen)
+    ///     .filter { $0.isValid }
     ///
     /// // Explicit rejection sampling
-    /// let positive = Gen.choose(in: Int.min...Int.max)
-    ///     .filter(.reject) { $0 > 0 }
+    /// let positive = #gen(.int(in: .min ... .max))
+    ///     .filter(.rejectionSampling) { $0 > 0 }
     /// ```
     ///
     /// - Parameters:
@@ -226,6 +228,26 @@ public extension ReflectiveGenerator where Operation == ReflectiveOperation {
     /// choice sequence is encountered, the generator retries (up to `maxFilterRuns`
     /// from the interpreter context). This is useful when the generator's domain is
     /// large but you want to avoid repeating the same random path.
+    ///
+    /// Unlike `.filter`, `.unique` does not trigger
+    /// ``FilterType/choiceGradientSampling`` tuning of the inner generator,
+    /// because the deduplication predicate is stateful (it depends on what has
+    /// been seen so far) and cannot be learned during a warmup pass. If
+    /// `.unique()` is slow or exhausts its retry budget, the inner generator
+    /// likely has a sparse validity condition that should be made explicit.
+    /// Apply `.filter` *before* `.unique` so that the choice-gradient tuner
+    /// can learn the static predicate and bias pick weights toward valid
+    /// outputs:
+    ///
+    /// ```swift
+    /// // Slow — .unique() retries blindly against a sparse validity space
+    /// #gen(.binaryTree()).unique()
+    ///
+    /// // Fast — .filter() triggers .choiceGradientSampling, then .unique() deduplicates
+    /// #gen(.binaryTree())
+    ///     .filter { $0.isValidBST() }
+    ///     .unique()
+    /// ```
     ///
     /// - Parameters:
     ///   - fileID: Source file identifier for fingerprinting (auto-captured).

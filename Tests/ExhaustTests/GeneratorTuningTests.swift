@@ -67,11 +67,11 @@ private enum BST: Equatable, Hashable {
 struct GeneratorTuningTests {
     // MARK: - Pick Adaptation
 
-    @Test("Pick adaptation produces only valid output via .tune")
+    @Test("Pick adaptation produces only valid output via .probeSampling")
     func pickAdaptationWeightsByPredicate() {
         let gen = #gen(.oneOf(weighted:
             (1, .int(in: 1 ... 100)),
-            (1, .int(in: 901 ... 1000)))).filter(.tune) { $0 <= 100 }
+            (1, .int(in: 901 ... 1000)))).filter(.probeSampling) { $0 <= 100 }
 
         let values = Array(ValueInterpreter(gen, seed: 123, maxRuns: 200))
 
@@ -79,7 +79,7 @@ struct GeneratorTuningTests {
         #expect(values.count == 200, "All runs should succeed with tuning")
     }
 
-    @Test(".tune produces more valid output than raw generation")
+    @Test(".probeSampling produces more valid output than raw generation")
     func tuneOutperformsRawGeneration() {
         let gen = #gen(.oneOf(weighted:
             (1, .int(in: 1 ... 500)),
@@ -91,7 +91,7 @@ struct GeneratorTuningTests {
         let rawValidCount = rawValues.count(where: predicate)
 
         // Tuned filter: all output satisfies the predicate
-        let tunedValues = Array(ValueInterpreter(gen.filter(.tune, predicate), seed: 99, maxRuns: 200))
+        let tunedValues = Array(ValueInterpreter(gen.filter(.probeSampling, predicate), seed: 99, maxRuns: 200))
 
         #expect(tunedValues.allSatisfy(predicate))
         #expect(tunedValues.count > rawValidCount,
@@ -103,7 +103,7 @@ struct GeneratorTuningTests {
     @Test("ChooseBits subdivision concentrates output in favoured subrange")
     func chooseBitsSubdivision() {
         let gen = #gen(.uint64(in: 1 ... 1000))
-            .filter(.tune) { $0 < 100 }
+            .filter(.probeSampling) { $0 < 100 }
 
         let values = Array(ValueInterpreter(gen, seed: 123, maxRuns: 200))
 
@@ -121,7 +121,7 @@ struct GeneratorTuningTests {
             operation: .sequence(length: lengthGen, gen: elementGen.erase()),
         ) { result in
             .pure(result as! [Int])
-        }.filter(.tune) { $0.count <= 3 }
+        }.filter(.probeSampling) { $0.count <= 3 }
 
         let values = Array(ValueInterpreter(gen, seed: 123, maxRuns: 100))
 
@@ -305,7 +305,7 @@ struct GeneratorTuningTests {
                 (1, .int(in: 1 ... 10))))
         }
 
-        let filtered = gen.filter(.tune) { $0 <= 5 }
+        let filtered = gen.filter(.probeSampling) { $0 <= 5 }
 
         // This should complete in reasonable time without blowup
         let values = Array(ValueInterpreter(filtered, seed: 123, maxRuns: 20))
@@ -315,8 +315,8 @@ struct GeneratorTuningTests {
 
     // MARK: - Binary Search Tree
 
-    @Test("BST: .tune produces more valid BSTs than raw generation")
-    func bstTuneOutperformsRawGeneration() {
+    @Test("BST: .probeSampling produces more valid BSTs than raw generation")
+    func bstProbeSamplingOutperformsRawGeneration() {
         let isValidNonLeafBST: (BST) -> Bool = { tree in
             tree != .leaf && tree.isValidBST()
         }
@@ -328,7 +328,7 @@ struct GeneratorTuningTests {
         let rawValidCount = rawValues.count(where: isValidNonLeafBST)
 
         // Tuned filter: all output satisfies the predicate
-        let tunedGen = BST.arbitrary.filter(.tune, isValidNonLeafBST)
+        let tunedGen = BST.arbitrary.filter(.probeSampling, isValidNonLeafBST)
         let tunedValues = Array(ValueInterpreter(tunedGen, seed: 42, maxRuns: sampleCount))
 
         #expect(tunedValues.allSatisfy(isValidNonLeafBST))
@@ -336,13 +336,13 @@ struct GeneratorTuningTests {
                 "Tuned filter (\(tunedValues.count) valid) should exceed raw generation (\(rawValidCount) valid)")
     }
 
-    @Test("BST: timed benchmark — .tune vs .reject (paper comparison)", .disabled("Not required"))
+    @Test("BST: timed benchmark — .probeSampling vs .rejectionSampling (paper comparison)", .disabled("Not required"))
     func bstTimedBenchmark() {
         let isValidBST: (BST) -> Bool = { $0.height >= 1 && $0.isValidBST() }
         let duration: TimeInterval = 1
 
-        // --- .reject strategy ---
-        let rejectGen = BST.arbitrary.filter(.reject, isValidBST)
+        // --- .rejectionSampling strategy ---
+        let rejectGen = BST.arbitrary.filter(.rejectionSampling, isValidBST)
         var rejectIterator = ValueInterpreter(rejectGen, seed: 42, maxRuns: .max)
         var rejectValues = [BST]()
 
@@ -354,10 +354,10 @@ struct GeneratorTuningTests {
 
         let rejectUnique = Set(rejectValues)
         print("=== \(duration)-second BST benchmark ===")
-        print(".reject: \(rejectValues.count) valid (\(rejectUnique.count) unique)")
+        print(".rejectionSampling: \(rejectValues.count) valid (\(rejectUnique.count) unique)")
 
-        // --- .tune strategy ---
-        let tuneGen = BST.arbitrary.filter(.tune, isValidBST)
+        // --- .probeSampling strategy ---
+        let tuneGen = BST.arbitrary.filter(.probeSampling, isValidBST)
         var tuneIterator = ValueInterpreter(tuneGen, seed: 42, maxRuns: .max)
         var tuneValues = [BST]()
 
@@ -368,16 +368,16 @@ struct GeneratorTuningTests {
         }
 
         let tuneUnique = Set(tuneValues)
-        print(".tune: \(tuneValues.count) valid (\(tuneUnique.count) unique)")
+        print(".probeSampling: \(tuneValues.count) valid (\(tuneUnique.count) unique)")
     }
 
-    @Test("BST: .tune produces valid non-leaf trees")
-    func bstTunedNonLeaf() {
+    @Test("BST: .probeSampling produces valid non-leaf trees")
+    func bstProbeSamplingNonLeaf() {
         let isValidNonLeafBST: (BST) -> Bool = { tree in
             tree != .leaf && tree.isValidBST()
         }
 
-        let tunedGen = BST.arbitrary.filter(.tune, isValidNonLeafBST)
+        let tunedGen = BST.arbitrary.filter(.probeSampling, isValidNonLeafBST)
         let values = Array(ValueInterpreter(tunedGen, seed: 99, maxRuns: 500))
 
         #expect(values.allSatisfy(isValidNonLeafBST))
