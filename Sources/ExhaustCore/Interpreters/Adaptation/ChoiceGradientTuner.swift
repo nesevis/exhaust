@@ -112,38 +112,52 @@ import Foundation
         let subdivided = try subdivideSequenceLengths(generator, context: subdivisionContext)
 
         // Stage 1: Online CGS warmup — the only expensive phase. Runs the
-        // subdivided generator through OnlineCGSInterpreter, collecting per-site,
-        // per-choice fitness data conditioned on upstream choices. Values are
-        // discarded; only the accumulated fitness data matters.
+        // subdivided generator through OnlineCGSInterpreter in batches,
+        // collecting per-site, per-choice fitness data conditioned on upstream
+        // choices. Values are discarded; only the accumulated fitness data matters.
         //
-        // Convergence detection (ψ-based early stopping): periodically check
-        // if per-site weight shares have stabilized. When the maximum absolute
-        // shift drops below 5%, further runs won't meaningfully change the
-        // baked weights — stop early to save warmup cost.
+        // SMC-style interleaved resampling: after each batch (once past the
+        // minimum warmup), intermediate weights are baked from accumulated
+        // fitness and fed into the next batch's interpreter. Deep picks (depth
+        // >= 4), which fall back to static generator weights, benefit from
+        // progressively improved proposals rather than staying uniform.
+        //
+        // Convergence detection (ψ-based early stopping): after each batch,
+        // check if per-site weight shares have stabilized. When the maximum
+        // absolute shift drops below 5%, further runs won't meaningfully
+        // change the baked weights — stop early to save warmup cost.
         //
         // Adapted from the ψ₀ probability-mass tracking in:
         //   Lipkin et al., "Fast Controlled Generation from Language Models
         //   with Adaptive Weighted Rejection Sampling", COLM 2025.
         //   arXiv:2504.05410
         let accumulator = FitnessAccumulator()
-        var iterator = OnlineCGSInterpreter(
-            subdivided,
-            predicate: predicate,
-            sampleCount: sampleCount,
-            seed: seed,
-            maxRuns: warmupRuns,
-            fitnessAccumulator: accumulator,
-        )
+        let resamplingBatchSize: UInt64 = 20
         let minWarmupRuns: UInt64 = 40
-        let convergenceCheckInterval: UInt64 = 20
         var completedRuns: UInt64 = 0
-        while iterator.next() != nil {
-            completedRuns += 1
-            if completedRuns >= minWarmupRuns,
-               completedRuns.isMultiple(of: convergenceCheckInterval),
-               accumulator.hasConverged(threshold: 0.05)
-            {
-                break
+        var currentGen = subdivided
+        let baseSeed = seed ?? Xoshiro256().seed
+
+        while completedRuns < warmupRuns {
+            let runsThisBatch = min(resamplingBatchSize, warmupRuns - completedRuns)
+            let batchSeed = GenerationContext.runSeed(base: baseSeed, runIndex: completedRuns)
+
+            var iterator = OnlineCGSInterpreter(
+                currentGen,
+                predicate: predicate,
+                sampleCount: sampleCount,
+                seed: batchSeed,
+                maxRuns: runsThisBatch,
+                fitnessAccumulator: accumulator,
+            )
+            while iterator.next() != nil {}
+
+            completedRuns += runsThisBatch
+            guard completedRuns < warmupRuns else { break }
+
+            if completedRuns >= minWarmupRuns {
+                if accumulator.hasConverged(threshold: 0.05) { break }
+                currentGen = bakeWeights(subdivided, from: accumulator, strategy: weightingStrategy)
             }
         }
 
