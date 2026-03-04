@@ -184,7 +184,7 @@ struct UniquenessBenchmarkTests {
     // MARK: - Main Benchmark
 
     // Kolbu
-    @Test("Time to 500 BST")
+    @Test("Time to 500 BST", .disabled("Benchmark"))
     func bstBenchmark() throws {
 //        let onlineCGS = measureOnlineCGS(Self.bstProblem)
         let rejection = measureRejection(Self.bstProblem)
@@ -193,7 +193,7 @@ struct UniquenessBenchmarkTests {
         printProblemResults(Self.bstProblem, results: [rejection, adaptive, cgsTuned])
     }
     
-    @Test("Time to 100 AVL")
+    @Test("Time to 100 AVL", .disabled("Benchmark"))
     func avlBenchmark() throws {
         let adaptive = try measureAdaptivelySmoothed(Self.avlProblem)
         let cgsShared = try measureCGSFitnessSharing(Self.avlProblem)
@@ -209,7 +209,7 @@ struct UniquenessBenchmarkTests {
         printProblemResults(Self.boundedSumProblem, results: [rejection, adaptive, cgsTuned])
     }
 
-    @Test("Time to 100 unique valid values: BST / SORTED / AVL x 4 strategies")
+    @Test("Time to 100 unique valid values: BST / SORTED / AVL x 4 strategies", .disabled("Benchmark"))
     func fullBenchmark() throws {
         let bstResults = try runAllStrategies(Self.bstProblem)
         let sortedResults = try runAllStrategies(Self.sortedProblem)
