@@ -108,7 +108,7 @@ private struct BenchmarkResult {
 
 @Suite("Uniqueness Benchmark")
 struct UniquenessBenchmarkTests {
-    private static let targetUnique = 100
+    private static let targetUnique = 200
     private static let seed: UInt64 = 42
     private static let budget: UInt64 = 500_000
 
@@ -184,16 +184,18 @@ struct UniquenessBenchmarkTests {
     // MARK: - Main Benchmark
 
     // Kolbu
-    @Test("Time to 500 BST", .disabled("Benchmark"))
+    @Test("Time to 500 BST", .disabled())
     func bstBenchmark() throws {
 //        let onlineCGS = measureOnlineCGS(Self.bstProblem)
-        let rejection = measureRejection(Self.bstProblem)
+//        let rejection = measureRejection(Self.bstProblem)
         let adaptive = try measureAdaptivelySmoothed(Self.bstProblem)
         let cgsTuned = try measureOnlineInformedTuning(Self.bstProblem)
-        printProblemResults(Self.bstProblem, results: [rejection, adaptive, cgsTuned])
+        let cgsShared = try measureCGSFitnessSharing(Self.bstProblem)
+        let cgsUCB = try measureCGSUCB(Self.bstProblem)
+        printProblemResults(Self.bstProblem, results: [adaptive, cgsTuned, cgsShared, cgsUCB])
     }
     
-    @Test("Time to 100 AVL", .disabled("Benchmark"))
+    @Test("Time to 100 AVL", .disabled())
     func avlBenchmark() throws {
         let adaptive = try measureAdaptivelySmoothed(Self.avlProblem)
         let cgsShared = try measureCGSFitnessSharing(Self.avlProblem)
@@ -209,7 +211,7 @@ struct UniquenessBenchmarkTests {
         printProblemResults(Self.boundedSumProblem, results: [rejection, adaptive, cgsTuned])
     }
 
-    @Test("Time to 100 unique valid values: BST / SORTED / AVL x 4 strategies", .disabled("Benchmark"))
+    @Test("Time to 100 unique valid values: BST / SORTED / AVL x 4 strategies", .disabled())
     func fullBenchmark() throws {
         let bstResults = try runAllStrategies(Self.bstProblem)
         let sortedResults = try runAllStrategies(Self.sortedProblem)
@@ -488,8 +490,8 @@ struct UniquenessBenchmarkTests {
         let tuned: ReflectiveGenerator<Value> = try ChoiceGradientTuner<Value>.tune(
             problem.generator,
             predicate: problem.predicate,
-            warmupRuns: 200,
-            sampleCount: 5,
+            warmupRuns: 400,
+            sampleCount: 10,
             seed: 12345,
             weightingStrategy: .fitnessSharing,
         )
@@ -592,7 +594,7 @@ struct UniquenessBenchmarkTests {
             let uniqueStr = String(result.uniqueCount).padding(toLength: 4, withPad: " ", startingAt: 0)
             let timeStr = formatDuration(result.elapsed).padding(toLength: 8, withPad: " ", startingAt: 0)
             let rate = result.totalGenerated > 0
-                ? String(format: "%.1f%%", Double(result.uniqueCount) / Double(result.totalGenerated) * 100)
+                ? String(format: "%.2f%%", Double(result.uniqueCount) / Double(result.totalGenerated) * 100)
                 : "N/A"
             let rateStr = rate.padding(toLength: 6, withPad: " ", startingAt: 0)
             let distStr = String(dist.prefix(46)).padding(toLength: 46, withPad: " ", startingAt: 0)
@@ -605,17 +607,17 @@ struct UniquenessBenchmarkTests {
         let allBuckets = Set(results.flatMap(\.qualityDistribution.keys)).sorted()
         guard !allBuckets.isEmpty else { return }
 
-        print()
-        print("  \(name) \(label) distribution:")
-        for result in results {
-            print("    \(result.strategyName.padding(toLength: 11, withPad: " ", startingAt: 0)): ", terminator: "")
-            for bucket in allBuckets {
-                let count = result.qualityDistribution[bucket, default: 0]
-                let bar = String(repeating: "█", count: Swift.min(count, 40))
-                print("\(label[label.startIndex])\(bucket):\(String(count).padding(toLength: 3, withPad: " ", startingAt: 0))\(bar) ", terminator: "")
-            }
-            print()
-        }
+//        print()
+//        print("  \(name) \(label) distribution:")
+//        for result in results {
+//            print("    \(result.strategyName.padding(toLength: 11, withPad: " ", startingAt: 0)): ", terminator: "")
+//            for bucket in allBuckets {
+//                let count = result.qualityDistribution[bucket, default: 0]
+//                let bar = String(repeating: "█", count: Swift.min(count, 40))
+//                print("\(label[label.startIndex])\(bucket):\(String(count).padding(toLength: 3, withPad: " ", startingAt: 0))\(bar) ", terminator: "")
+//            }
+//            print()
+//        }
     }
 
     private func formatDuration(_ d: Duration) -> String {
