@@ -77,14 +77,10 @@ import Foundation
                     }.bind { zipResult in
                         try continuation(zipResult)
                     }
+
                 }
             }
-            return try current.map { value in
-                guard let typed = value as? FinalOutput else {
-                    throw GeneratorError.derivativeTypeMismatch
-                }
-                return typed
-            }
+            return current.map { $0 as! FinalOutput }
         }
     }
 
@@ -105,32 +101,6 @@ import Foundation
     private let predicate: (FinalOutput) -> Bool
     private let sampleCount: UInt64
     private var cgsState: CGSState
-
-    // MARK: - Fitness Accumulator
-
-    /// Collects per-site, per-choice fitness data during tuning runs.
-    /// Reference semantics so the accumulator is shared across recursive calls.
-    @_spi(ExhaustInternal) public final class FitnessAccumulator {
-        @_spi(ExhaustInternal) public struct SiteChoiceKey: Hashable {
-            public let siteID: UInt64
-            public let choiceID: UInt64
-        }
-
-        @_spi(ExhaustInternal) public struct FitnessRecord {
-            public var totalFitness: UInt64 = 0
-            public var observationCount: UInt64 = 0
-        }
-
-        @_spi(ExhaustInternal) public private(set) var records: [SiteChoiceKey: FitnessRecord] = [:]
-
-        @_spi(ExhaustInternal) public init() {}
-
-        func record(siteID: UInt64, choiceID: UInt64, fitness: UInt64, observations: UInt64) {
-            let key = SiteChoiceKey(siteID: siteID, choiceID: choiceID)
-            records[key, default: FitnessRecord()].totalFitness += fitness
-            records[key, default: FitnessRecord()].observationCount += observations
-        }
-    }
 
     private struct CGSState {
         var samplingPRNG: Xoshiro256
@@ -364,6 +334,14 @@ import Foundation
 
                 var results: [Any] = []
                 results.reserveCapacity(Int(length))
+                // Skip derivative evaluation for element-level picks: without
+                // .sequenceElement frames, derivatives can't compose through the
+                // sequence boundary (element values would hit the predicate with
+                // wrong types). Depth >= 4 triggers handlePick's fast path.
+                var elementDerivativeContext = DerivativeContext()
+                for _ in 0 ..< 4 {
+                    elementDerivativeContext.push(.bind(continuation: { .pure($0) }))
+                }
                 let didSucceed = try SequenceExecutionKernel.run(count: length) {
                     guard let result = try generateRecursive(
                         elementGen,
@@ -372,7 +350,7 @@ import Foundation
                         predicate: predicate,
                         sampleCount: sampleCount,
                         cgsState: &cgsState,
-                        derivativeContext: derivativeContext,
+                        derivativeContext: elementDerivativeContext,
                     ) else {
                         return false
                     }
@@ -606,7 +584,10 @@ import Foundation
         cgsState: inout CGSState,
         derivativeContext: DerivativeContext,
     ) throws -> Output? {
-        // Fast path: single choice or deep pick — skip derivative evaluation
+        // Fast path: single choice or deep pick — skip derivative evaluation.
+        // Without .sequenceElement frames, derivative context cannot compose through
+        // sequence boundaries, so deep picks must fall back to weighted selection.
+        let effectiveSampleCount = Swift.max(2, sampleCount >> derivativeContext.depth)
         if choices.count == 1 || derivativeContext.depth >= 4 {
             guard let selectedChoice = WeightedPickSelection.draw(from: choices, using: &context.prng) else {
                 return nil
@@ -657,10 +638,10 @@ import Foundation
         }
 
         var fitnesses = ContiguousArray(repeating: UInt64(0), count: choiceCount)
-        let minRounds = Swift.min(UInt64(8), sampleCount)
+        let minRounds = Swift.min(UInt64(8), effectiveSampleCount)
         var completedRounds: UInt64 = 0
 
-        sampling: for round in 0 ..< sampleCount {
+        sampling: for round in 0 ..< effectiveSampleCount {
             completedRounds = round + 1
             for i in 0 ..< choiceCount {
                 do {
@@ -813,135 +794,4 @@ import Foundation
         )
     }
 
-    // MARK: - Online-Informed Tuning
-
-    /// Runs the online CGS interpreter for `warmupRuns` runs, collecting per-site
-    /// fitness data, then bakes the learned weights into the generator's pick structure.
-    ///
-    /// The result is a statically-tuned generator suitable for the cheap
-    /// `ValueAndChoiceTreeInterpreter`. Unlike `GeneratorTuning.tune()`, the fitness
-    /// data conditions on upstream choices via `DerivativeContext`, producing better
-    /// weights for recursive generators like BST/AVL.
-    @_spi(ExhaustInternal) public static func tune(
-        _ generator: ReflectiveGenerator<FinalOutput>,
-        predicate: @escaping (FinalOutput) -> Bool,
-        warmupRuns: UInt64 = 200,
-        sampleCount: UInt64 = 10,
-        seed: UInt64? = nil,
-    ) throws -> ReflectiveGenerator<FinalOutput> {
-        // 1. Create iterator with accumulator
-        let accumulator = FitnessAccumulator()
-        var iterator = OnlineCGSInterpreter(
-            generator,
-            predicate: predicate,
-            sampleCount: sampleCount,
-            seed: seed,
-            maxRuns: warmupRuns,
-            fitnessAccumulator: accumulator,
-        )
-
-        // 2. Drain all warmup runs (values discarded)
-        while iterator.next() != nil {}
-
-        // 3. Bake accumulated fitness into generator weights
-        let baked = bakeWeights(generator, from: accumulator)
-
-        // 4. Apply adaptive smoothing
-        return GeneratorTuning.smoothAdaptively(baked)
-    }
-
-    /// Recursively walks the generator tree, replacing pick weights with
-    /// accumulated fitness data from the online CGS tuning pass.
-    private static func bakeWeights<Output>(
-        _ gen: ReflectiveGenerator<Output>,
-        from accumulator: FitnessAccumulator,
-    ) -> ReflectiveGenerator<Output> {
-        switch gen {
-        case .pure:
-            return gen
-
-        case let .impure(operation, continuation):
-            switch operation {
-            case let .pick(choices):
-                var baked = ContiguousArray<ReflectiveOperation.PickTuple>()
-                baked.reserveCapacity(choices.count)
-                for choice in choices {
-                    let key = FitnessAccumulator.SiteChoiceKey(siteID: choice.siteID, choiceID: choice.id)
-                    let weight = accumulator.records[key]?.totalFitness ?? choice.weight
-                    baked.append(ReflectiveOperation.PickTuple(
-                        siteID: choice.siteID,
-                        id: choice.id,
-                        weight: Swift.max(1, weight),
-                        generator: bakeWeights(choice.generator, from: accumulator),
-                    ))
-                }
-                return .impure(operation: .pick(choices: baked), continuation: continuation)
-
-            case let .zip(generators):
-                let bakedGens = ContiguousArray(generators.map { bakeWeights($0, from: accumulator) })
-                return .impure(operation: .zip(bakedGens), continuation: continuation)
-
-            case let .sequence(lengthGen, elementGen):
-                return .impure(
-                    operation: .sequence(
-                        length: bakeWeights(lengthGen, from: accumulator),
-                        gen: bakeWeights(elementGen, from: accumulator),
-                    ),
-                    continuation: continuation,
-                )
-
-            case let .contramap(transform, next):
-                return .impure(
-                    operation: .contramap(transform: transform, next: bakeWeights(next, from: accumulator)),
-                    continuation: continuation,
-                )
-
-            case let .prune(next):
-                return .impure(
-                    operation: .prune(next: bakeWeights(next, from: accumulator)),
-                    continuation: continuation,
-                )
-
-            case let .resize(newSize, next):
-                return .impure(
-                    operation: .resize(newSize: newSize, next: bakeWeights(next, from: accumulator)),
-                    continuation: continuation,
-                )
-
-            case let .filter(subGen, fingerprint, filterType, predicate):
-                return .impure(
-                    operation: .filter(
-                        gen: bakeWeights(subGen, from: accumulator),
-                        fingerprint: fingerprint,
-                        filterType: filterType,
-                        predicate: predicate,
-                    ),
-                    continuation: continuation,
-                )
-
-            case let .classify(subGen, fingerprint, classifiers):
-                return .impure(
-                    operation: .classify(
-                        gen: bakeWeights(subGen, from: accumulator),
-                        fingerprint: fingerprint,
-                        classifiers: classifiers,
-                    ),
-                    continuation: continuation,
-                )
-
-            case let .unique(subGen, fingerprint, keyExtractor):
-                return .impure(
-                    operation: .unique(
-                        gen: bakeWeights(subGen, from: accumulator),
-                        fingerprint: fingerprint,
-                        keyExtractor: keyExtractor,
-                    ),
-                    continuation: continuation,
-                )
-
-            case .chooseBits, .just, .getSize:
-                return gen
-            }
-        }
-    }
 }

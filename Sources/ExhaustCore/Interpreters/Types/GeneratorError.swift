@@ -14,7 +14,6 @@ public enum GeneratorError: LocalizedError {
     case typeMismatch(expected: String, actual: String)
     case sparseValidityCondition
     case uniqueBudgetExhausted
-    case derivativeTypeMismatch
 
     var errorDescription: String {
         switch self {
@@ -30,8 +29,6 @@ public enum GeneratorError: LocalizedError {
             "Sparse validity condition"
         case .uniqueBudgetExhausted:
             "Unique combinator exhausted retry budget without finding a new unique value"
-        case .derivativeTypeMismatch:
-            "Derivative produced a value whose type does not match FinalOutput (e.g. element vs collection)"
         }
     }
 }

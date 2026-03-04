@@ -187,13 +187,21 @@ struct UniquenessBenchmarkTests {
     @Test("Time to 500 BST")
     func bstBenchmark() throws {
 //        let onlineCGS = measureOnlineCGS(Self.bstProblem)
-//        let rejection = measureRejection(Self.bstProblem)
+        let rejection = measureRejection(Self.bstProblem)
         let adaptive = try measureAdaptivelySmoothed(Self.bstProblem)
         let cgsTuned = try measureOnlineInformedTuning(Self.bstProblem)
-        printProblemResults(Self.bstProblem, results: [adaptive, cgsTuned])
+        printProblemResults(Self.bstProblem, results: [rejection, adaptive, cgsTuned])
+    }
+    
+    @Test("Time to 100 AVL")
+    func avlBenchmark() throws {
+        let adaptive = try measureAdaptivelySmoothed(Self.avlProblem)
+        let cgsShared = try measureCGSFitnessSharing(Self.avlProblem)
+        let cgsUCB = try measureCGSUCB(Self.avlProblem)
+        printProblemResults(Self.avlProblem, results: [adaptive, cgsShared, cgsUCB])
     }
 
-    @Test("Bounded sum: Adaptive vs CGS-Tuned")
+    @Test("Bounded sum: Adaptive vs CGS-Tuned", .disabled("Benchmark"))
     func boundedSumBenchmark() throws {
         let rejection = measureRejection(Self.boundedSumProblem)
         let adaptive = try measureAdaptivelySmoothed(Self.boundedSumProblem)
@@ -201,7 +209,7 @@ struct UniquenessBenchmarkTests {
         printProblemResults(Self.boundedSumProblem, results: [rejection, adaptive, cgsTuned])
     }
 
-    @Test("Time to 100 unique valid values: BST / SORTED / AVL x 4 strategies", .disabled("Slow"))
+    @Test("Time to 100 unique valid values: BST / SORTED / AVL x 4 strategies")
     func fullBenchmark() throws {
         let bstResults = try runAllStrategies(Self.bstProblem)
         let sortedResults = try runAllStrategies(Self.sortedProblem)
@@ -225,11 +233,14 @@ struct UniquenessBenchmarkTests {
     ) throws -> [BenchmarkResult] {
         let rejection = measureRejection(problem)
         let smoothed = try measureSmoothed(problem)
-        let onlineCGS = measureOnlineCGS(problem)
+//        let onlineCGS = measureOnlineCGS(problem)
         let adaptive = try measureAdaptivelySmoothed(problem)
         let auto = try measureAutoAdapted(problem)
-        let cgsTuned = try measureOnlineInformedTuning(problem)
-        return [rejection, onlineCGS, smoothed, adaptive, auto, cgsTuned]
+        let cgsTuned = try measureOnlineInformedTuning(problem, weightingStrategy: .totalFitness)
+        let cgsTunedValidity = try measureOnlineInformedTuning(problem, weightingStrategy: .validityRate)
+        let cgsShared = try measureCGSFitnessSharing(problem)
+        let cgsUCB = try measureCGSUCB(problem)
+        return [rejection, smoothed, adaptive, auto, cgsTuned, cgsTunedValidity, cgsShared, cgsUCB]
     }
 
     // MARK: - Strategy Implementations
@@ -418,15 +429,24 @@ struct UniquenessBenchmarkTests {
     // Kolbu
     private func measureOnlineInformedTuning<Value: Hashable>(
         _ problem: BenchmarkProblem<Value>,
+        weightingStrategy: ChoiceGradientTuner<Value>.WeightingStrategy = .totalFitness,
     ) throws -> BenchmarkResult {
+        let strategyName = switch weightingStrategy {
+        case .totalFitness: "CGS-Tuned"
+        case .validityRate: "CGS-Rate"
+        case .fitnessSharing: "CGS-Shared"
+        case .ucb: "CGS-UCB"
+        }
+
         let start = ContinuousClock.now
 
-        let tuned = try OnlineCGSInterpreter.tune(
+        let tuned = try ChoiceGradientTuner.tune(
             problem.generator,
             predicate: problem.predicate,
-            warmupRuns: 100,
-            sampleCount: 10,
+            warmupRuns: 200,
+            sampleCount: 5,
             seed: 12345,
+            weightingStrategy: weightingStrategy,
         )
 
         let warmupElapsed = ContinuousClock.now - start
@@ -449,10 +469,100 @@ struct UniquenessBenchmarkTests {
         let genElapsed = ContinuousClock.now - genStart
         let elapsed = ContinuousClock.now - start
 
-        print("  CGS-Tuned: warmup \(warmupElapsed), generation \(genElapsed), total generated \(total)")
+        print("  \(strategyName): warmup \(warmupElapsed), generation \(genElapsed), total generated \(total)")
 
         return BenchmarkResult(
-            strategyName: "CGS-Tuned",
+            strategyName: strategyName,
+            uniqueCount: unique.count,
+            totalGenerated: total,
+            elapsed: elapsed,
+            qualityDistribution: quality,
+        )
+    }
+
+    private func measureCGSFitnessSharing<Value: Hashable>(
+        _ problem: BenchmarkProblem<Value>,
+    ) throws -> BenchmarkResult {
+        let start = ContinuousClock.now
+
+        let tuned: ReflectiveGenerator<Value> = try ChoiceGradientTuner<Value>.tune(
+            problem.generator,
+            predicate: problem.predicate,
+            warmupRuns: 200,
+            sampleCount: 5,
+            seed: 12345,
+            weightingStrategy: .fitnessSharing,
+        )
+
+        let warmupElapsed = ContinuousClock.now - start
+        let genStart = ContinuousClock.now
+
+        var unique = Set<Value>()
+        var total = 0
+        var quality = [Int: Int]()
+        var iterator = ValueAndChoiceTreeInterpreter(tuned, seed: Self.seed, maxRuns: Self.budget)
+
+        while unique.count < Self.targetUnique, let (value, _) = iterator.next() {
+            total += 1
+            if problem.predicate(value) {
+                let (inserted, _) = unique.insert(value)
+                if inserted {
+                    quality[problem.qualityBucket(value), default: 0] += 1
+                }
+            }
+        }
+        let genElapsed = ContinuousClock.now - genStart
+        let elapsed = ContinuousClock.now - start
+
+        print("  CGS-Shared: warmup \(warmupElapsed), generation \(genElapsed), total generated \(total)")
+
+        return BenchmarkResult(
+            strategyName: "CGS-Shared",
+            uniqueCount: unique.count,
+            totalGenerated: total,
+            elapsed: elapsed,
+            qualityDistribution: quality,
+        )
+    }
+
+    private func measureCGSUCB<Value: Hashable>(
+        _ problem: BenchmarkProblem<Value>,
+    ) throws -> BenchmarkResult {
+        let start = ContinuousClock.now
+
+        let tuned: ReflectiveGenerator<Value> = try ChoiceGradientTuner<Value>.tune(
+            problem.generator,
+            predicate: problem.predicate,
+            warmupRuns: 200,
+            sampleCount: 5,
+            seed: 12345,
+            weightingStrategy: .ucb(explorationConstant: 1.4),
+        )
+
+        let warmupElapsed = ContinuousClock.now - start
+        let genStart = ContinuousClock.now
+
+        var unique = Set<Value>()
+        var total = 0
+        var quality = [Int: Int]()
+        var iterator = ValueAndChoiceTreeInterpreter(tuned, seed: Self.seed, maxRuns: Self.budget)
+
+        while unique.count < Self.targetUnique, let (value, _) = iterator.next() {
+            total += 1
+            if problem.predicate(value) {
+                let (inserted, _) = unique.insert(value)
+                if inserted {
+                    quality[problem.qualityBucket(value), default: 0] += 1
+                }
+            }
+        }
+        let genElapsed = ContinuousClock.now - genStart
+        let elapsed = ContinuousClock.now - start
+
+        print("  CGS-UCB: warmup \(warmupElapsed), generation \(genElapsed), total generated \(total)")
+
+        return BenchmarkResult(
+            strategyName: "CGS-UCB",
             uniqueCount: unique.count,
             totalGenerated: total,
             elapsed: elapsed,
@@ -468,11 +578,11 @@ struct UniquenessBenchmarkTests {
         let label = p.problemBucketLabel
 
         print()
-        print("┌──────────────────────────────────────────────────────────────────────────────────┐")
-        print("│  \(name.padding(toLength: 12, withPad: " ", startingAt: 0))Time to \(Self.targetUnique) unique valid values\(String(repeating: " ", count: 33))│")
-        print("├──────────────┬────────┬──────────┬────────────────────────────────────────────────┤")
-        print("│ Strategy     │ Unique │ Time     │ \(label.padding(toLength: 8, withPad: " ", startingAt: 0)) distribution\(String(repeating: " ", count: 27))│")
-        print("├──────────────┼────────┼──────────┼────────────────────────────────────────────────┤")
+        print("┌───────────────────────────────────────────────────────────────────────────────────────────┐")
+        print("│  \(name.padding(toLength: 12, withPad: " ", startingAt: 0))Time to \(Self.targetUnique) unique valid values\(String(repeating: " ", count: 40))│")
+        print("├──────────────┬────────┬──────────┬────────┬────────────────────────────────────────────────┤")
+        print("│ Strategy     │ Unique │ Time     │ Rate   │ \(label.padding(toLength: 8, withPad: " ", startingAt: 0)) distribution\(String(repeating: " ", count: 27))│")
+        print("├──────────────┼────────┼──────────┼────────┼────────────────────────────────────────────────┤")
 
         for result in results {
             let status = result.reachedTarget ? "✓" : "✗"
@@ -481,11 +591,15 @@ struct UniquenessBenchmarkTests {
                 .joined(separator: " ")
             let uniqueStr = String(result.uniqueCount).padding(toLength: 4, withPad: " ", startingAt: 0)
             let timeStr = formatDuration(result.elapsed).padding(toLength: 8, withPad: " ", startingAt: 0)
+            let rate = result.totalGenerated > 0
+                ? String(format: "%.1f%%", Double(result.uniqueCount) / Double(result.totalGenerated) * 100)
+                : "N/A"
+            let rateStr = rate.padding(toLength: 6, withPad: " ", startingAt: 0)
             let distStr = String(dist.prefix(46)).padding(toLength: 46, withPad: " ", startingAt: 0)
-            print("│ \(status) \(result.strategyName.padding(toLength: 11, withPad: " ", startingAt: 0))│ \(uniqueStr)   │ \(timeStr) │ \(distStr) │")
+            print("│ \(status) \(result.strategyName.padding(toLength: 11, withPad: " ", startingAt: 0))│ \(uniqueStr)   │ \(timeStr) │ \(rateStr) │ \(distStr) │")
         }
 
-        print("└──────────────┴────────┴──────────┴────────────────────────────────────────────────┘")
+        print("└──────────────┴────────┴──────────┴────────┴────────────────────────────────────────────────┘")
 
         // Bar chart
         let allBuckets = Set(results.flatMap(\.qualityDistribution.keys)).sorted()
