@@ -620,18 +620,80 @@ import Foundation
             )
         }
 
-        // 1. Compute fitness via interleaved derivative sampling
+        // 0. Vocabulary elimination: skip derivative evaluation for choices
+        // that are historically dead (0 fitness after ≥30 observations).
+        // Once a choice is rejected enough times, remove it from the proposal
+        // distribution to avoid wasting derivative evaluations on known-dead
+        // branches.
         //
-        // Build all derivatives upfront, then sample in rounds across all choices.
-        // This allows adaptive stopping when the relative ranking is decided,
-        // rather than exhausting the full budget per choice independently.
+        // Adapted from the adaptive rejection sampling vocabulary elimination
+        // in: Lipkin et al., "Fast Controlled Generation from Language Models
+        // with Adaptive Weighted Rejection Sampling", COLM 2025.
+        // arXiv:2504.05410
         let currentSize = context.sizeOverride ?? GenerationContext.scaledSize(forRun: context.runs)
         let choiceCount = choices.count
+        let minDeadObservations: UInt64 = 30
 
+        var liveChoiceMap = ContiguousArray<Int>()
+        liveChoiceMap.reserveCapacity(choiceCount)
+        if let accumulator = cgsState.fitnessAccumulator {
+            for (i, choice) in choices.enumerated() {
+                let key = FitnessAccumulator.SiteChoiceKey(siteID: choice.siteID, choiceID: choice.id)
+                if let record = accumulator.records[key],
+                   record.observationCount >= minDeadObservations,
+                   record.totalFitness == 0
+                {
+                    continue
+                }
+                liveChoiceMap.append(i)
+            }
+            if liveChoiceMap.isEmpty {
+                liveChoiceMap = ContiguousArray(0 ..< choiceCount)
+            }
+        } else {
+            liveChoiceMap = ContiguousArray(0 ..< choiceCount)
+        }
+
+        // Single live choice after elimination — skip derivative evaluation
+        if liveChoiceMap.count == 1 {
+            let selectedChoice = choices[liveChoiceMap[0]]
+            _ = context.prng.next()
+
+            var branchContext = derivativeContext
+            branchContext.push(.bind(continuation: { try continuation($0).erase() }))
+
+            guard let result = try generateRecursive(
+                selectedChoice.generator,
+                with: inputValue,
+                context: &context,
+                predicate: predicate,
+                sampleCount: sampleCount,
+                cgsState: &cgsState,
+                derivativeContext: branchContext,
+            ) else {
+                return nil
+            }
+            return try runContinuation(
+                result: result,
+                continuation: continuation,
+                inputValue: inputValue,
+                context: &context,
+                predicate: predicate,
+                sampleCount: sampleCount,
+                cgsState: &cgsState,
+                derivativeContext: derivativeContext,
+            )
+        }
+
+        // 1. Compute fitness via interleaved derivative sampling
+        //
+        // Build derivatives only for live choices, then sample in rounds.
+        // This allows adaptive stopping when the relative ranking is decided,
+        // rather than exhausting the full budget per choice independently.
         var derivatives = ContiguousArray<ReflectiveGenerator<FinalOutput>>()
-        derivatives.reserveCapacity(choiceCount)
-        for choice in choices {
-            let derivative = try choice.generator.bind { innerValue in
+        derivatives.reserveCapacity(liveChoiceMap.count)
+        for i in liveChoiceMap {
+            let derivative = try choices[i].generator.bind { innerValue in
                 try continuation(innerValue).erase()
             }
             derivatives.append(try derivativeContext.apply(derivative))
@@ -643,15 +705,15 @@ import Foundation
 
         sampling: for round in 0 ..< effectiveSampleCount {
             completedRounds = round + 1
-            for i in 0 ..< choiceCount {
+            for (derivIdx, choiceIdx) in liveChoiceMap.enumerated() {
                 do {
                     let result = try LightweightSampler.sample(
-                        derivatives[i],
+                        derivatives[derivIdx],
                         using: &cgsState.samplingPRNG,
                         size: currentSize,
                     )
                     if let value = result, predicate(value) {
-                        fitnesses[i] += 1
+                        fitnesses[choiceIdx] += 1
                     }
                 } catch {
                     // Sampling failed — count as unsuccessful
@@ -681,27 +743,32 @@ import Foundation
             }
         }
 
-        // 1b. Record fitness data for tuning (purely observational)
+        // 1b. Record fitness data for live choices only (dead choices are
+        // not evaluated and should not accumulate phantom observations)
         if let accumulator = cgsState.fitnessAccumulator {
-            for (i, choice) in choices.enumerated() {
+            for choiceIdx in liveChoiceMap {
+                let choice = choices[choiceIdx]
                 accumulator.record(
                     siteID: choice.siteID,
                     choiceID: choice.id,
-                    fitness: fitnesses[i],
+                    fitness: fitnesses[choiceIdx],
                     observations: completedRounds,
                 )
             }
         }
 
-        // 2. Build weighted choices — if all zero, fall back to equal weights
-        let allZero = fitnesses.allSatisfy { $0 == 0 }
+        // 2. Build weighted choices — dead choices get weight 0,
+        // live choices with all-zero fitness fall back to equal weights
+        let allLiveZero = liveChoiceMap.allSatisfy { fitnesses[$0] == 0 }
+        var isLive = ContiguousArray(repeating: false, count: choiceCount)
+        for i in liveChoiceMap { isLive[i] = true }
         var weightedChoices = ContiguousArray<ReflectiveOperation.PickTuple>()
         weightedChoices.reserveCapacity(choices.count)
         for (i, choice) in choices.enumerated() {
             weightedChoices.append(ReflectiveOperation.PickTuple(
                 siteID: choice.siteID,
                 id: choice.id,
-                weight: allZero ? 1 : fitnesses[i],
+                weight: allLiveZero ? (isLive[i] ? 1 : 0) : fitnesses[i],
                 generator: choice.generator,
             ))
         }

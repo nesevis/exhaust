@@ -116,8 +116,10 @@ public extension Gen {
     static func choose<C: Collection>(
         from collection: C,
     ) -> ReflectiveGenerator<C.Element> where C.Index == Int {
-        Gen.choose(in: collection.startIndex ... collection.endIndex.advanced(by: -1))
-            .map { collection[$0] }
+        let count = collection.count
+        return Gen.choose(in: collection.startIndex ... collection.endIndex.advanced(by: -1))
+            // We're using round-robin indexing here so that the lookup does not fail when shrinking
+            .map { collection[$0 % count] }
     }
 
     /// Internal helper for choose ranges derived from runtime context (e.g. `getSize`).
