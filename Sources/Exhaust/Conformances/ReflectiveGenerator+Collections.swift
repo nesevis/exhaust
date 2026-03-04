@@ -121,6 +121,7 @@ public extension ReflectiveGenerator where Operation == ReflectiveOperation {
     /// let randomLetter = #gen(.asciiString(length: 1...10)).element()
     /// ```
     func element() -> ReflectiveGenerator<Value.Element> where Value: Collection, Value.Element: Equatable, Value.Index == Int {
+        // FIXME: This is not reflective
         bind { Gen.choose(from: $0) }
     }
 
@@ -129,6 +130,7 @@ public extension ReflectiveGenerator where Operation == ReflectiveOperation {
     /// Same as ``element()`` but for collections whose elements don't conform to `Equatable`.
     /// The backward pass is best-effort since elements can't be compared by value.
     func element() -> ReflectiveGenerator<Value.Element> where Value: Collection, Value.Index == Int {
+        // FIXME: This is not reflective
         bind { Gen.choose(from: $0) }
     }
 }

@@ -99,8 +99,8 @@ import Foundation
     @_spi(ExhaustInternal) public static func tune(
         _ generator: ReflectiveGenerator<FinalOutput>,
         predicate: @escaping (FinalOutput) -> Bool,
-        warmupRuns: UInt64 = 200,
-        sampleCount: UInt64 = 10,
+        warmupRuns: UInt64 = 400,
+        sampleCount: UInt64 = 20,
         seed: UInt64? = nil,
         weightingStrategy: WeightingStrategy = .fitnessSharing,
     ) throws -> ReflectiveGenerator<FinalOutput> {
@@ -115,6 +115,16 @@ import Foundation
         // subdivided generator through OnlineCGSInterpreter, collecting per-site,
         // per-choice fitness data conditioned on upstream choices. Values are
         // discarded; only the accumulated fitness data matters.
+        //
+        // Convergence detection (ψ-based early stopping): periodically check
+        // if per-site weight shares have stabilized. When the maximum absolute
+        // shift drops below 5%, further runs won't meaningfully change the
+        // baked weights — stop early to save warmup cost.
+        //
+        // Adapted from the ψ₀ probability-mass tracking in:
+        //   Lipkin et al., "Fast Controlled Generation from Language Models
+        //   with Adaptive Weighted Rejection Sampling", COLM 2025.
+        //   arXiv:2504.05410
         let accumulator = FitnessAccumulator()
         var iterator = OnlineCGSInterpreter(
             subdivided,
@@ -124,7 +134,18 @@ import Foundation
             maxRuns: warmupRuns,
             fitnessAccumulator: accumulator,
         )
-        while iterator.next() != nil {}
+        let minWarmupRuns: UInt64 = 40
+        let convergenceCheckInterval: UInt64 = 20
+        var completedRuns: UInt64 = 0
+        while iterator.next() != nil {
+            completedRuns += 1
+            if completedRuns >= minWarmupRuns,
+               completedRuns.isMultiple(of: convergenceCheckInterval),
+               accumulator.hasConverged(threshold: 0.05)
+            {
+                break
+            }
+        }
 
         // Stage 2: Weight baking — convert accumulated fitness into static pick
         // weights using the chosen strategy. The default .fitnessSharing discounts
