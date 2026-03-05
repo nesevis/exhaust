@@ -19,7 +19,7 @@ import Foundation
 ///
 /// This avoids diversity collapse on recursive generators because each derivative has
 /// already fixed all choices above it, making deeper sampling tractable.
-@_spi(ExhaustInternal) public struct OnlineCGSInterpreter<FinalOutput>: IteratorProtocol, Sequence {
+@_spi(ExhaustInternal) public struct OnlineCGSInterpreter<FinalOutput>: ~Copyable, ExhaustIterator {
     @_spi(ExhaustInternal) public typealias Element = FinalOutput
 
     // MARK: - Derivative Context
@@ -102,7 +102,7 @@ import Foundation
     private let sampleCount: UInt64
     private var cgsState: CGSState
 
-    private struct CGSState {
+    private struct CGSState: ~Copyable {
         var samplingPRNG: Xoshiro256
         var fitnessAccumulator: FitnessAccumulator?
     }
@@ -118,16 +118,22 @@ import Foundation
         self.generator = generator
         self.predicate = predicate
         self.sampleCount = sampleCount
-        let prng = seed.map { Xoshiro256(seed: $0) } ?? Xoshiro256()
-        var samplingPRNG = prng
+        let baseSeed: UInt64
+        if let seed {
+            baseSeed = seed
+        } else {
+            var rng = SystemRandomNumberGenerator()
+            baseSeed = rng.next()
+        }
+        var samplingPRNG = Xoshiro256(seed: baseSeed)
         samplingPRNG.jump()
         cgsState = CGSState(samplingPRNG: samplingPRNG, fitnessAccumulator: fitnessAccumulator)
         context = .init(
             maxRuns: maxRuns ?? 100,
-            baseSeed: prng.seed,
+            baseSeed: baseSeed,
             isFixed: false,
             size: 0,
-            prng: prng,
+            prng: Xoshiro256(seed: baseSeed),
         )
     }
 
@@ -142,9 +148,8 @@ import Foundation
         // Per-run seed derivation: each run gets an independent PRNG
         let runSeed = GenerationContext.runSeed(base: context.baseSeed, runIndex: context.runs)
         context.prng = Xoshiro256(seed: runSeed)
-        var samplingPRNG = context.prng
-        samplingPRNG.jump()
-        cgsState.samplingPRNG = samplingPRNG
+        cgsState.samplingPRNG = Xoshiro256(seed: runSeed)
+        cgsState.samplingPRNG.jump()
 
         let derivativeContext = DerivativeContext()
 

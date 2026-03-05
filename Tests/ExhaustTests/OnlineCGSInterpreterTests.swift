@@ -55,20 +55,20 @@ struct OnlineCGSInterpreterTests {
             (1, .int(in: 901 ... 1000))))
         let predicate: (Int) -> Bool = { $0 <= 100 }
 
-        let cgsValues = Array(
-            OnlineCGSInterpreter(
-                gen,
-                predicate: predicate,
-                sampleCount: 50,
-                seed: 42,
-                maxRuns: 200,
-            ),
+        var cgsIterator = OnlineCGSInterpreter(
+            gen,
+            predicate: predicate,
+            sampleCount: 50,
+            seed: 42,
+            maxRuns: 200,
         )
+        let cgsValues = Array(collecting: &cgsIterator)
 
         let cgsHitRate = Double(cgsValues.count(where: predicate)) / Double(cgsValues.count)
 
         // Naive baseline: ~50% since both branches have equal weight
-        let naiveValues = Array(ValueInterpreter(gen, seed: 42, maxRuns: 200))
+        var naiveIterator = ValueInterpreter(gen, seed: 42, maxRuns: 200)
+        let naiveValues = Array(collecting: &naiveIterator)
         let naiveHitRate = Double(naiveValues.count(where: predicate)) / Double(naiveValues.count)
 
         print("Pick guidance — naive: \(String(format: "%.1f%%", naiveHitRate * 100)), CGS: \(String(format: "%.1f%%", cgsHitRate * 100))")
@@ -87,25 +87,23 @@ struct OnlineCGSInterpreterTests {
             (1, .int(in: 501 ... 1000))))
         let predicate: (Int) -> Bool = { $0 <= 250 }
 
-        let values1 = Array(
-            OnlineCGSInterpreter(
-                gen,
-                predicate: predicate,
-                sampleCount: 30,
-                seed: 42,
-                maxRuns: 50,
-            ),
+        var iterator1 = OnlineCGSInterpreter(
+            gen,
+            predicate: predicate,
+            sampleCount: 30,
+            seed: 42,
+            maxRuns: 50,
         )
+        let values1 = Array(collecting: &iterator1)
 
-        let values2 = Array(
-            OnlineCGSInterpreter(
-                gen,
-                predicate: predicate,
-                sampleCount: 30,
-                seed: 42,
-                maxRuns: 50,
-            ),
+        var iterator2 = OnlineCGSInterpreter(
+            gen,
+            predicate: predicate,
+            sampleCount: 30,
+            seed: 42,
+            maxRuns: 50,
         )
+        let values2 = Array(collecting: &iterator2)
 
         #expect(values1 == values2, "Same seed should produce identical output sequences")
     }
@@ -120,20 +118,20 @@ struct OnlineCGSInterpreterTests {
         )
         let predicate: ((Int, Int)) -> Bool = { $0.0 + $0.1 < 10 }
 
-        let cgsValues = Array(
-            OnlineCGSInterpreter(
-                gen,
-                predicate: predicate,
-                sampleCount: 50,
-                seed: 42,
-                maxRuns: 200,
-            ),
+        var cgsZipIterator = OnlineCGSInterpreter(
+            gen,
+            predicate: predicate,
+            sampleCount: 50,
+            seed: 42,
+            maxRuns: 200,
         )
+        let cgsValues = Array(collecting: &cgsZipIterator)
 
         let cgsHitRate = Double(cgsValues.count(where: predicate)) / Double(cgsValues.count)
 
         // Naive baseline
-        let naiveValues = Array(ValueInterpreter(gen, seed: 42, maxRuns: 200))
+        var naiveZipIterator = ValueInterpreter(gen, seed: 42, maxRuns: 200)
+        let naiveValues = Array(collecting: &naiveZipIterator)
         let naiveHitRate = Double(naiveValues.count(where: predicate)) / Double(naiveValues.count)
 
         print("Zip guidance — naive: \(String(format: "%.1f%%", naiveHitRate * 100)), CGS: \(String(format: "%.1f%%", cgsHitRate * 100))")
@@ -149,15 +147,14 @@ struct OnlineCGSInterpreterTests {
         let gen = #gen(.uint64(in: 1 ... 1000))
         let predicate: (UInt64) -> Bool = { $0 < 100 }
 
-        let cgsValues = Array(
-            OnlineCGSInterpreter(
-                gen,
-                predicate: predicate,
-                sampleCount: 50,
-                seed: 42,
-                maxRuns: 200,
-            ),
+        var cgsBitsIterator = OnlineCGSInterpreter(
+            gen,
+            predicate: predicate,
+            sampleCount: 50,
+            seed: 42,
+            maxRuns: 200,
         )
+        let cgsValues = Array(collecting: &cgsBitsIterator)
 
         let hitRate = Double(cgsValues.count(where: predicate)) / Double(cgsValues.count)
 
@@ -216,15 +213,14 @@ struct OnlineCGSInterpreterTests {
         // Predicate that nothing can satisfy
         let predicate: (Int) -> Bool = { _ in false }
 
-        let values = Array(
-            OnlineCGSInterpreter(
-                gen,
-                predicate: predicate,
-                sampleCount: 20,
-                seed: 42,
-                maxRuns: 50,
-            ),
+        var fallbackIterator = OnlineCGSInterpreter(
+            gen,
+            predicate: predicate,
+            sampleCount: 20,
+            seed: 42,
+            maxRuns: 50,
         )
+        let values = Array(collecting: &fallbackIterator)
 
         // Should still produce values (not crash)
         #expect(!values.isEmpty, "All-zero fallback should still produce values")

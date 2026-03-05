@@ -9,7 +9,7 @@ import Foundation
 
 // swiftlint:disable function_parameter_count
 
-@_spi(ExhaustInternal) public struct ValueAndChoiceTreeInterpreter<FinalOutput>: IteratorProtocol, Sequence {
+@_spi(ExhaustInternal) public struct ValueAndChoiceTreeInterpreter<FinalOutput>: ~Copyable, ExhaustIterator {
     @_spi(ExhaustInternal) public typealias Element = (value: FinalOutput, tree: ChoiceTree)
 
     let generator: ReflectiveGenerator<FinalOutput>
@@ -22,13 +22,19 @@ import Foundation
         maxRuns: UInt64? = nil,
     ) {
         self.generator = generator
-        let prng = seed.map { Xoshiro256(seed: $0) } ?? Xoshiro256()
+        let baseSeed: UInt64
+        if let seed {
+            baseSeed = seed
+        } else {
+            var rng = SystemRandomNumberGenerator()
+            baseSeed = rng.next()
+        }
         context = .init(
             maxRuns: maxRuns ?? 100,
-            baseSeed: prng.seed,
+            baseSeed: baseSeed,
             isFixed: false,
             size: 0,
-            prng: prng,
+            prng: Xoshiro256(seed: baseSeed),
             materializePicks: materializePicks,
         )
     }
@@ -371,8 +377,33 @@ import Foundation
             var value: Output?
             var branch: ChoiceTree?
 
-            if isSelected || context.materializePicks {
-                var branchContext = isSelected ? context : context.jump(seed: jumpSeed)
+            if isSelected {
+                // Use context directly for the selected branch (no copy needed)
+                if let result = try generateRecursive(
+                    choice.generator,
+                    with: inputValue,
+                    context: &context,
+                ),
+                    let final = try runContinuation(
+                        result: result.0,
+                        calleeChoiceTree: result.1,
+                        continuation: continuation,
+                        inputValue: inputValue,
+                        context: &context,
+                    )
+                {
+                    value = final.0
+                    branch = ChoiceTree.branch(
+                        siteID: choice.siteID,
+                        weight: choice.weight,
+                        id: choice.id,
+                        branchIDs: branchIDs,
+                        choice: final.1,
+                    )
+                }
+            } else if context.materializePicks {
+                // Use jumped context for non-selected branches
+                var branchContext = context.jump(seed: jumpSeed)
                 if let result = try generateRecursive(
                     choice.generator,
                     with: inputValue,
@@ -394,9 +425,6 @@ import Foundation
                         branchIDs: branchIDs,
                         choice: final.1,
                     )
-                }
-                if isSelected {
-                    context = branchContext
                 }
             }
 

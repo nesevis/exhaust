@@ -7,7 +7,7 @@
 
 import Foundation
 
-@_spi(ExhaustInternal) public struct ValueInterpreter<Element>: IteratorProtocol, Sequence {
+@_spi(ExhaustInternal) public struct ValueInterpreter<Element>: ~Copyable, ExhaustIterator {
     let generator: ReflectiveGenerator<Element>
     private var context: GenerationContext
 
@@ -18,13 +18,19 @@ import Foundation
         sizeOverride: UInt64? = nil,
     ) {
         self.generator = generator
-        let prng = seed.map { Xoshiro256(seed: $0) } ?? Xoshiro256()
+        let baseSeed: UInt64
+        if let seed {
+            baseSeed = seed
+        } else {
+            var rng = SystemRandomNumberGenerator()
+            baseSeed = rng.next()
+        }
         context = .init(
             maxRuns: maxRuns ?? 100,
-            baseSeed: prng.seed,
+            baseSeed: baseSeed,
             isFixed: false,
             size: 0,
-            prng: prng,
+            prng: Xoshiro256(seed: baseSeed),
         )
         context.sizeOverride = sizeOverride
     }
@@ -89,16 +95,18 @@ import Foundation
         maxRuns: UInt64,
         using rng: inout Xoshiro256,
     ) throws -> Output? {
+        let baseSeed = rng.seed
         var context = GenerationContext(
             maxRuns: maxRuns,
-            baseSeed: rng.seed,
+            baseSeed: baseSeed,
             isFixed: false,
             size: initialSize,
-            prng: rng,
+            prng: Xoshiro256(seed: 0),
             runs: initialSize,
         )
+        swap(&rng, &context.prng)
         let result = try generateRecursive(gen, with: (), context: &context)
-        rng = context.prng
+        swap(&rng, &context.prng)
         return result
     }
 
@@ -233,16 +241,17 @@ import Foundation
                             baseSeed: context.baseSeed,
                             isFixed: context.isFixed,
                             size: context.size,
-                            prng: context.prng,
+                            prng: Xoshiro256(seed: 0),
                             runs: context.runs,
                         )
+                        swap(&context.prng, &vactiContext.prng)
                         guard let (result, tree) = try ValueAndChoiceTreeInterpreter<Any>.generateRecursive(
                             gen, with: inputValue, context: &vactiContext,
                         ) else {
-                            context.prng = vactiContext.prng
+                            swap(&context.prng, &vactiContext.prng)
                             return nil
                         }
-                        context.prng = vactiContext.prng
+                        swap(&context.prng, &vactiContext.prng)
 
                         let sequence = ChoiceSequence.flatten(tree)
                         let isDuplicate = !context.uniqueSeenSequences[fingerprint, default: []].insert(sequence).inserted

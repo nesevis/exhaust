@@ -267,9 +267,8 @@ struct MaterializeTests {
     func materializeEmptySequence() throws {
         // Use a variable-length generator so element deletion is valid
         let gen = #gen(.uint64(in: 0 ... 10)).array(length: 0 ... 10)
-        let (_, tree) = try #require(
-            Array(ValueAndChoiceTreeInterpreter(gen, materializePicks: false, seed: 42).prefix(1)).first,
-        )
+        var matIter1 = ValueAndChoiceTreeInterpreter(gen, materializePicks: false, seed: 42)
+        let (_, tree) = try #require(matIter1.prefix(1).last)
         let flattened = ChoiceSequence.flatten(tree)
         // Keep only non-element tokens: strip values inside the sequence
         var emptySequence: ChoiceSequence = []
@@ -296,9 +295,8 @@ struct MaterializeTests {
     func materializeSequenceShrunk() throws {
         // Use a variable-length generator so element deletion is valid
         let gen = #gen(.uint64(in: 0 ... 10)).array(length: 0 ... 10)
-        let (_, tree) = try #require(
-            Array(ValueAndChoiceTreeInterpreter(gen, materializePicks: false, seed: 42).prefix(2)).last,
-        )
+        var matIter2 = ValueAndChoiceTreeInterpreter(gen, materializePicks: false, seed: 42)
+        let (_, tree) = try #require(matIter2.prefix(2).last)
         var flattened = ChoiceSequence.flatten(tree)
         let originalCount = flattened.count
         flattened.remove(at: 2)
@@ -310,9 +308,8 @@ struct MaterializeTests {
     @Test("Materialize with modified values reproduces modified output")
     func materializeModifiedValues() throws {
         let gen = #gen(.uint64(in: 0 ... 1000))
-        let (_, tree) = try #require(
-            Array(ValueAndChoiceTreeInterpreter(gen, materializePicks: false, seed: 42).prefix(1)).first,
-        )
+        var matIter3 = ValueAndChoiceTreeInterpreter(gen, materializePicks: false, seed: 42)
+        let (_, tree) = try #require(matIter3.prefix(1).last)
         let replacement = ChoiceSequenceValue.Value(choice: .unsigned(777, UInt64.self), validRange: 0 ... 1000)
         let modified: ChoiceSequence = [.value(replacement)]
         let materialized = try Interpreters.materialize(gen, with: tree, using: modified)
@@ -322,9 +319,8 @@ struct MaterializeTests {
     @Test("Materialize array with values set to minimum")
     func materializeArrayMinimized() throws {
         let gen = #gen(.uint64(in: 0 ... 100)).array(length: 5)
-        let (_, tree) = try #require(
-            Array(ValueAndChoiceTreeInterpreter(gen, materializePicks: false, seed: 42).prefix(1)).first,
-        )
+        var matIter4 = ValueAndChoiceTreeInterpreter(gen, materializePicks: false, seed: 42)
+        let (_, tree) = try #require(matIter4.prefix(1).last)
         let flattened = ChoiceSequence.flatten(tree)
         let minimized = flattened.map { element -> ChoiceSequenceValue in
             guard case .value = element else { return element }

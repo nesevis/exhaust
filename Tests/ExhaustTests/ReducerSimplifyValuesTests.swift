@@ -18,9 +18,8 @@ private func generate<Output>(
     _ gen: ReflectiveGenerator<Output>,
     seed: UInt64 = 42,
 ) throws -> (value: Output, tree: ChoiceTree) {
-    try #require(
-        Array(ValueAndChoiceTreeInterpreter(gen, materializePicks: true, seed: seed).prefix(1)).first,
-    )
+    var iter = ValueAndChoiceTreeInterpreter(gen, materializePicks: true, seed: seed)
+    return try #require(iter.prefix(1).last)
 }
 
 // MARK: - ChoiceValue.semanticSimplest

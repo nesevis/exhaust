@@ -17,9 +17,8 @@ struct OneOfTests {
         _ gen: ReflectiveGenerator<Output>,
         seed: UInt64 = 42,
     ) throws -> (original: Output, materialized: Output) {
-        let (value, tree) = try #require(
-            Array(ValueAndChoiceTreeInterpreter(gen, materializePicks: false, seed: seed).prefix(1)).first,
-        )
+        var interpreter = ValueAndChoiceTreeInterpreter(gen, materializePicks: false, seed: seed)
+        let (value, tree) = try #require(interpreter.prefix(1).last)
         let flattened = ChoiceSequence.flatten(tree)
         let materialized = try #require(try Interpreters.materialize(gen, with: tree, using: flattened))
         return (value, materialized)

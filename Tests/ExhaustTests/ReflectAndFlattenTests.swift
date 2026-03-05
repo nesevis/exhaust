@@ -492,7 +492,8 @@ struct ReflectAndFlattenTests {
         // For now it does not work with `materializePicks`
         // 1. If it is enabled, the flattened sequence contains N values
         // 2. The materializer will only use the `.selected` branch and leave the other values unconsumed.
-        let (value, tree) = try #require(Array(ValueAndChoiceTreeInterpreter(gen, materializePicks: false, seed: 1337).prefix(1)).first)
+        var rafIter1 = ValueAndChoiceTreeInterpreter(gen, materializePicks: false, seed: 1337)
+        let (value, tree) = try #require(rafIter1.prefix(1).last)
 
         // Flatten the reflected tree
         var flattened = ChoiceSequence.flatten(tree)
@@ -508,7 +509,8 @@ struct ReflectAndFlattenTests {
     @Test("Test cross-boundary shrinking")
     func crossBoundaryShrinkingWorks() throws {
         let gen = #gen(.int(in: 1 ... 10).array(length: 1 ... 10).array(length: 1 ... 10))
-        let (value, tree) = try #require(Array(ValueAndChoiceTreeInterpreter(gen, seed: 1337).prefix(50)).last)
+        var rafIter2 = ValueAndChoiceTreeInterpreter(gen, seed: 1337)
+        let (value, tree) = try #require(rafIter2.prefix(50).last)
 
         var sequence = ChoiceSequence.flatten(tree)
 

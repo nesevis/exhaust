@@ -171,6 +171,6 @@ private func generateWithTree<Output>(
     materializePicks: Bool = false,
     iteration: Int = 0,
 ) -> (value: Output, tree: ChoiceTree) {
-    Array(ValueAndChoiceTreeInterpreter(gen, materializePicks: materializePicks, seed: seed)
-        .prefix(iteration + 1)).last!
+    var iter = ValueAndChoiceTreeInterpreter(gen, materializePicks: materializePicks, seed: seed)
+    return iter.prefix(iteration + 1).last!
 }

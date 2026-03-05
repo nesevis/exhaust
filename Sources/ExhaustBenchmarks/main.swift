@@ -155,9 +155,10 @@ benchmark("Bound5, 50 iterations, reflective") {
     }
 
     do {
-        let iterator = ValueAndChoiceTreeInterpreter(gen, seed: 1337, maxRuns: 1000)
+        var iterator = ValueAndChoiceTreeInterpreter(gen, seed: 1337, maxRuns: 1000)
         var count = 0
-        for (value, tree) in iterator where property(value) == false {
+        while let (value, tree) = iterator.next() {
+            guard property(value) == false else { continue }
             count += 1
             _ = try Interpreters.reduce(gen: gen, tree: tree, config: .fast, property: property)
             if count >= 50 {
@@ -174,7 +175,7 @@ benchmark("Bound5, 50 iterations") {
     // #gen syntax is 4x faster
 //    running Bound5, 50 iterations, reflective... done! (627.41 ms)
 //    running Bound5, 50 iterations... done! (2361.57 ms)
-    
+
 //    let arrGen = #gen(.int16().array(length: 0 ... 10))
 //        .filter { $0.isEmpty || $0.dropFirst().reduce($0[0], &+) < 256 }
 //    let gen = #gen(arrGen, arrGen, arrGen, arrGen, arrGen)
@@ -192,11 +193,12 @@ benchmark("Bound5, 50 iterations") {
         return arr.dropFirst().reduce(arr[0], &+) < 5 * 256
     }
 
-    let iterator = ValueAndChoiceTreeInterpreter(gen, seed: 1337, maxRuns: 1000)
+    var iterator = ValueAndChoiceTreeInterpreter(gen, seed: 1337, maxRuns: 1000)
 
     do {
         var count = 0
-        for (value, tree) in iterator where property(value) == false {
+        while let (value, tree) = iterator.next() {
+            guard property(value) == false else { continue }
             count += 1
             _ = try Interpreters.reduce(gen: gen, tree: tree, config: .fast, property: property)
             if count >= 50 {

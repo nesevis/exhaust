@@ -5,7 +5,7 @@
 //  Created by Chris Kolbu on 28/2/2026.
 //
 
-@_spi(ExhaustInternal) public struct GenerationContext {
+@_spi(ExhaustInternal) public struct GenerationContext: ~Copyable {
     // Constants
     let maxRuns: UInt64
     let baseSeed: UInt64

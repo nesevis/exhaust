@@ -20,7 +20,7 @@
 ///
 /// The runner uses a mandatory `scorer` function to guide hill-climbing: mutations
 /// that increase the scorer output are accepted, and the seed pool ranks by fitness.
-@_spi(ExhaustInternal) public struct ExploreRunner<Output> {
+@_spi(ExhaustInternal) public struct ExploreRunner<Output>: ~Copyable {
     private let gen: ReflectiveGenerator<Output>
     private let property: (Output) -> Bool
     private let maxIterations: UInt64
@@ -54,7 +54,11 @@
         )
         self.tracker = NoveltyTracker()
         self.schedule = LogarithmicSchedule()
-        self.prng = seed.map { Xoshiro256(seed: $0) } ?? Xoshiro256()
+        if let seed {
+            self.prng = Xoshiro256(seed: seed)
+        } else {
+            self.prng = Xoshiro256()
+        }
     }
 
     @_spi(ExhaustInternal) public var baseSeed: UInt64 { prng.seed }

@@ -48,9 +48,8 @@ struct OptionalTests {
     func roundTrip(seed: UInt64) throws {
         let gen = #gen(.int(in: 0 ... 50)).optional()
 
-        let (value, tree) = try #require(
-            Array(ValueAndChoiceTreeInterpreter(gen, materializePicks: false, seed: seed).prefix(1)).first
-        )
+        var optIter = ValueAndChoiceTreeInterpreter(gen, materializePicks: false, seed: seed)
+        let (value, tree) = try #require(optIter.prefix(1).last)
         let flattened = ChoiceSequence.flatten(tree)
         let materialized = try #require(try Interpreters.materialize(gen, with: tree, using: flattened))
         #expect(value == materialized)

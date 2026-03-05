@@ -6,11 +6,14 @@
 //
 
 /// The magical 3-in-1 PRNG
-@_spi(ExhaustInternal) public struct Xoshiro256: RandomNumberGenerator {
+@_spi(ExhaustInternal) public struct Xoshiro256: ~Copyable {
     @_spi(ExhaustInternal) public typealias StateType = (UInt64, UInt64, UInt64, UInt64)
 
     @_spi(ExhaustInternal) public let seed: UInt64
     private var state: StateType
+
+    /// Read-only access to internal state for explicit cloning.
+    @_spi(ExhaustInternal) public var currentState: StateType { state }
 
     /// Jump polynomial for 2^128 steps
     private static let jumpPoly: [UInt64] = [
@@ -39,6 +42,12 @@
             splitmix.next(),
             splitmix.next(),
         )
+    }
+
+    /// Construct from explicit state for deliberate cloning.
+    @_spi(ExhaustInternal) public init(seed: UInt64, state: StateType) {
+        self.seed = seed
+        self.state = state
     }
 
     @_spi(ExhaustInternal) public mutating func next() -> UInt64 {
@@ -78,13 +87,15 @@
         }
     }
 
-    /// Returns a random integer in `range` using Swift's range sampling.
+    /// Returns a random integer in `range`.
     ///
     /// This is intentionally separate from `next(upperBound:)` so callers can
     /// choose between stdlib range behavior and fast bounded sampling.
     @inline(__always)
     @_spi(ExhaustInternal) public mutating func next(in range: ClosedRange<UInt64>) -> UInt64 {
-        UInt64.random(in: range, using: &self)
+        let width = range.upperBound &- range.lowerBound
+        if width == UInt64.max { return next() }
+        return range.lowerBound &+ next(upperBound: width &+ 1)
     }
 
     @inline(__always)
@@ -116,7 +127,7 @@
 
     /// Create an independent stream
     @_spi(ExhaustInternal) public func spawned(streamID: UInt64) -> Xoshiro256 {
-        var newGen = self
+        var newGen = Xoshiro256(seed: seed, state: state)
         // Use streamID to determine number of jumps
         for _ in 0 ..< (streamID & 0xFF) {
             newGen.jump()

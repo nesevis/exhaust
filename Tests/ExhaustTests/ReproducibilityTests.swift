@@ -14,26 +14,20 @@ struct ReproducibilityTests {
     @Test("Same seed produces identical value sequences")
     func seedDeterminism() {
         let gen = #gen(.int())
-        let values1 = ValueAndChoiceTreeInterpreter(gen, seed: 42, maxRuns: 20)
-            .map(\.value)
-        let values2 = ValueAndChoiceTreeInterpreter(gen, seed: 42, maxRuns: 20)
-            .map(\.value)
-        #expect(Array(values1) == Array(values2))
+        var iter1 = ValueAndChoiceTreeInterpreter(gen, seed: 42, maxRuns: 20)
+        let values1 = Array(collecting: &iter1).map(\.value)
+        var iter2 = ValueAndChoiceTreeInterpreter(gen, seed: 42, maxRuns: 20)
+        let values2 = Array(collecting: &iter2).map(\.value)
+        #expect(values1 == values2)
     }
 
     @Test("Different maxRuns with same seed share a common prefix")
     func maxRunsIndependence() {
         let gen = #gen(.int())
-        let short = Array(
-            ValueAndChoiceTreeInterpreter(gen, seed: 42, maxRuns: 50)
-                .prefix(30)
-                .map(\.value),
-        )
-        let long = Array(
-            ValueAndChoiceTreeInterpreter(gen, seed: 42, maxRuns: 200)
-                .prefix(30)
-                .map(\.value),
-        )
+        var shortIter = ValueAndChoiceTreeInterpreter(gen, seed: 42, maxRuns: 50)
+        let short = shortIter.prefix(30).map(\.value)
+        var longIter = ValueAndChoiceTreeInterpreter(gen, seed: 42, maxRuns: 200)
+        let long = longIter.prefix(30).map(\.value)
         #expect(short == long)
     }
 
@@ -42,8 +36,10 @@ struct ReproducibilityTests {
     @Test("ValueInterpreter: same seed produces identical value sequences")
     func valueInterpreterSeedDeterminism() {
         let gen = #gen(.int())
-        let values1 = Array(ValueInterpreter(gen, seed: 42, maxRuns: 20))
-        let values2 = Array(ValueInterpreter(gen, seed: 42, maxRuns: 20))
+        var valIter1 = ValueInterpreter(gen, seed: 42, maxRuns: 20)
+        let values1 = Array(collecting: &valIter1)
+        var valIter2 = ValueInterpreter(gen, seed: 42, maxRuns: 20)
+        let values2 = Array(collecting: &valIter2)
         #expect(values1 == values2)
     }
 

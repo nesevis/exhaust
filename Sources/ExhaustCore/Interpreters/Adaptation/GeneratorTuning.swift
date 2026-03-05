@@ -36,7 +36,7 @@ import Foundation
         var depth: UInt64 = 0
         var rng: Xoshiro256
 
-        init(baseSampleCount: UInt64, maxSize: UInt64, rng: Xoshiro256) {
+        init(baseSampleCount: UInt64, maxSize: UInt64, rng: consuming Xoshiro256) {
             self.baseSampleCount = baseSampleCount
             self.maxSize = maxSize
             self.rng = rng
@@ -148,10 +148,16 @@ import Foundation
         seed: UInt64? = nil,
         predicate: @escaping (Output) -> Bool,
     ) throws -> ReflectiveGenerator<Output> {
+        let rng: Xoshiro256
+        if let seed {
+            rng = Xoshiro256(seed: seed)
+        } else {
+            rng = Xoshiro256()
+        }
         let context = TuningContext(
             baseSampleCount: samples,
             maxSize: maxSize,
-            rng: seed.map(Xoshiro256.init(seed:)) ?? .init(),
+            rng: rng,
         )
         return try tuneRecursive(
             generator,
@@ -287,9 +293,11 @@ import Foundation
 
         // --- Phase 1: Batched sampling of all choices with convergence ---
 
-        // Per-choice state: independent RNG stream, accumulators, cache
-        var choiceRngs = (0 ..< choiceCount).map {
-            context.rng.spawned(streamID: UInt64($0))
+        // Per-choice state: independent RNG stream (stored as seed+state tuples
+        // since ~Copyable Xoshiro256 can't be stored in Array), accumulators, cache
+        var choiceRngStates: [(seed: UInt64, state: Xoshiro256.StateType)] = (0 ..< choiceCount).map {
+            let rng = context.rng.spawned(streamID: UInt64($0))
+            return (rng.seed, rng.currentState)
         }
         var successCounts = Array(repeating: UInt64(0), count: choiceCount)
         var outputFrequencies = Array(repeating: [AnyHashable: UInt64](), count: choiceCount)
@@ -311,16 +319,17 @@ import Foundation
 
             // Sample one batch for every choice
             for choiceIdx in 0 ..< choiceCount {
+                var rng = Xoshiro256(seed: choiceRngStates[choiceIdx].seed, state: choiceRngStates[choiceIdx].state)
                 for _ in totalSampled ..< batchEnd {
                     // Advance RNG to ensure each sample sees a unique state.
                     // Without this, choices with trivial generators (e.g. .just)
                     // leave the RNG frozen — the entire predicate chain may
                     // consist of .pure unwrapping that consumes no randomness,
                     // making all samples identical.
-                    _ = choiceRngs[choiceIdx].next()
+                    _ = rng.next()
 
                     guard let innerValue = try ValueInterpreter<Any>.generate(
-                        choices[choiceIdx].generator, maxRuns: 1, using: &choiceRngs[choiceIdx],
+                        choices[choiceIdx].generator, maxRuns: 1, using: &rng,
                     ) else { continue }
 
                     let success: Bool
@@ -328,7 +337,7 @@ import Foundation
                     do {
                         let nextGen = try continuation(innerValue)
                         output = try ValueInterpreter<Output>.generate(
-                            nextGen, maxRuns: 1, using: &choiceRngs[choiceIdx],
+                            nextGen, maxRuns: 1, using: &rng,
                         )
                         success = output.map(predicate) ?? false
                     } catch {
@@ -345,6 +354,7 @@ import Foundation
                         continuationCaches[choiceIdx][hashable] = success
                     }
                 }
+                choiceRngStates[choiceIdx] = (rng.seed, rng.currentState)
             }
 
             totalSampled = batchEnd
@@ -418,7 +428,7 @@ import Foundation
 
             // The composed predicate checks the cache from Phase 1 first,
             // falling back to full continuation evaluation on cache miss.
-            var composedRng = choiceRngs[choiceIdx]
+            var composedRng = Xoshiro256(seed: choiceRngStates[choiceIdx].seed, state: choiceRngStates[choiceIdx].state)
             let cache = continuationCaches[choiceIdx]
             let composedPredicate: (Any) -> Bool = { innerValue in
                 if let hashable = innerValue as? AnyHashable,
@@ -772,7 +782,7 @@ import Foundation
                         if otherIndex == index {
                             values.append(componentValue)
                         } else {
-                            var rngCopy = context.rng
+                            var rngCopy = Xoshiro256(seed: context.rng.seed, state: context.rng.currentState)
                             guard let otherValue = try ValueInterpreter<Any>.generate(
                                 otherGen,
                                 maxRuns: 1,

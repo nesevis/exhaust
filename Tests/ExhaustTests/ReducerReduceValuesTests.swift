@@ -19,9 +19,8 @@ private func generate<Output>(
     _ gen: ReflectiveGenerator<Output>,
     seed: UInt64 = 42,
 ) throws -> (value: Output, tree: ChoiceTree) {
-    try #require(
-        Array(ValueAndChoiceTreeInterpreter(gen, materializePicks: true, seed: seed).prefix(1)).first,
-    )
+    var iter = ValueAndChoiceTreeInterpreter(gen, materializePicks: true, seed: seed)
+    return try #require(iter.prefix(1).last)
 }
 
 // MARK: - ChoiceValue.reductionTarget
@@ -248,11 +247,16 @@ struct ReducerReduceValuesTests {
         }
 
         // Ensure we start from a non-trivial parent so stale validRanges would matter.
-        let iterator = ValueAndChoiceTreeInterpreter(gen, materializePicks: false, seed: 1337, maxRuns: 500)
-        let (_, tree) = try #require(iterator.first(where: {
-            let value = $0.0
-            return value.0 > 0 && property(value) == false
-        }))
+        var iterator = ValueAndChoiceTreeInterpreter(gen, materializePicks: false, seed: 1337, maxRuns: 500)
+        var found: ((UInt64, UInt64, UInt64), ChoiceTree)?
+        while let pair = iterator.next() {
+            let value = pair.0
+            if value.0 > 0 && property(value) == false {
+                found = pair
+                break
+            }
+        }
+        let (_, tree) = try #require(found)
 
         let result = try #require(
             try Interpreters.reduce(gen: gen, tree: tree, config: .fast, property: property),

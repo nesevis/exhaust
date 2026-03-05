@@ -28,8 +28,8 @@ struct LargeUnionListShrinkingChallenge {
 
     @Test("Large Union List, Single")
     func largeUnionListFull() throws {
-        let iterator = ValueAndChoiceTreeInterpreter(Self.gen, materializePicks: true, seed: 1337)
-        let (_, tree) = try #require(Array(iterator.prefix(93)).last)
+        var iterator = ValueAndChoiceTreeInterpreter(Self.gen, materializePicks: true, seed: 1337)
+        let (_, tree) = try #require(iterator.prefix(93).last)
         let (_, output) = try #require(try Interpreters.reduce(gen: Self.gen, tree: tree, config: .fast, property: Self.property))
         #expect(output.flatMap(\.self) == [0, -1, 1, -2, 2])
     }
@@ -66,10 +66,11 @@ struct LargeUnionListShrinkingChallenge {
 
     @Test("Large Union List, 50")
     func largeUnionListBatch() throws {
-        let iterator = ValueAndChoiceTreeInterpreter(Self.gen, materializePicks: true, seed: 1337, maxRuns: 100)
+        var iterator = ValueAndChoiceTreeInterpreter(Self.gen, materializePicks: true, seed: 1337, maxRuns: 100)
 
         var outputs = [(value: [[Int]], shrunk: [[Int]])]()
-        for (value, tree) in iterator where Self.property(value) == false && outputs.count <= 50 {
+        while let (value, tree) = iterator.next() {
+            guard Self.property(value) == false && outputs.count <= 50 else { continue }
             let (_, output) = try #require(try Interpreters.reduce(gen: Self.gen, tree: tree, config: .fast, property: Self.property))
             outputs.append((value, output))
         }

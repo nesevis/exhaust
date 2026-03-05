@@ -39,7 +39,7 @@ private extension PrefixMaterializer {
     /// Group markers (from `runContinuation` grouping and pick sites) are
     /// transparently skipped. Sequence markers are handled explicitly by
     /// `tryConsumeSequenceOpen()` / `skipSequenceClose()`.
-    struct PrefixCursor {
+    struct PrefixCursor: ~Copyable {
         private let entries: ChoiceSequence
         private(set) var position: Int = 0
         var exhausted: Bool = false
@@ -158,7 +158,7 @@ private extension PrefixMaterializer {
         }
     }
 
-    struct PrefixContext {
+    struct PrefixContext: ~Copyable {
         var cursor: PrefixCursor
         var prng: Xoshiro256
         var size: UInt64

@@ -94,8 +94,8 @@ struct GenerationExamplesTests {
         @Test("Test Gen.dictionaryof")
         func genDictionaryOf() throws {
             let gen = #gen(.dictionary(.string(), .int()))
-            let iterator = ValueInterpreter(gen)
-            let result = try #require(Array(iterator.prefix(2)).last) // Skip the first length=0 response
+            var iterator = ValueInterpreter(gen)
+            let result = try #require(iterator.prefix(2).last) // Skip the first length=0 response
             let reflection = try #require(try Interpreters.reflect(gen, with: result))
             let replay = try #require(try Interpreters.replay(gen, using: reflection))
             #expect(result == replay)

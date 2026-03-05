@@ -113,7 +113,8 @@ private enum HypothesisFloatParityHelpers {
         seed: UInt64 = 42,
         count: Int = 256,
     ) -> [Output] {
-        Array(ValueInterpreter(gen, seed: seed, maxRuns: UInt64(count)).prefix(count))
+        var iter = ValueInterpreter(gen, seed: seed, maxRuns: UInt64(count))
+        return iter.prefix(count)
     }
 }
 

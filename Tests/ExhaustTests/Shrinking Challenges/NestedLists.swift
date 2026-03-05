@@ -30,9 +30,9 @@ struct NestedListsShrinkingChallenge {
             return arr.map(\.count).reduce(0, +) <= 10
         }
 //        ExhaustLog.setConfiguration(.init(isEnabled: true, minimumLevel: .info, categoryMinimumLevels: [.reducer: .debug], format: .human))
-        let iterator = ValueAndChoiceTreeInterpreter(gen, materializePicks: true, seed: 1337)
+        var iterator = ValueAndChoiceTreeInterpreter(gen, materializePicks: true, seed: 1337)
         // Outputs an array of 32 arrays containing 5–33 values each
-        let (_, tree) = try #require(Array(iterator.prefix(37)).last)
+        let (_, tree) = try #require(iterator.prefix(37).last)
         let (_, output) = try #require(try Interpreters.reduce(gen: gen, tree: tree, config: .fast, property: property))
         // How many times the `property` is called, which is a slightly smaller number than the times materialize is called
         print()

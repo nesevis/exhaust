@@ -40,8 +40,8 @@ struct Bound5ShrinkingChallenge {
 
     @Test("Bound5, Single")
     func bound5Single() throws {
-        let iterator = ValueAndChoiceTreeInterpreter(Self.gen, materializePicks: true, seed: 1337)
-        let (_, tree) = try #require(Array(iterator.prefix(80)).last)
+        var iterator = ValueAndChoiceTreeInterpreter(Self.gen, materializePicks: true, seed: 1337)
+        let (_, tree) = try #require(iterator.prefix(80).last)
         let sequence = ChoiceSequence.flatten(tree)
         _ = try #require(try Interpreters.materialize(Self.gen, with: tree, using: sequence))
         let (_, output) = try #require(try Interpreters.reduce(gen: Self.gen, tree: tree, config: .fast, property: Self.property))
@@ -113,10 +113,11 @@ struct Bound5ShrinkingChallenge {
             }
             return arr.dropFirst().reduce(arr[0], &+) < 5 * 256
         }
-        let iterator = ValueAndChoiceTreeInterpreter(gen, materializePicks: true, seed: 1337, maxRuns: 100)
+        var iterator = ValueAndChoiceTreeInterpreter(gen, materializePicks: true, seed: 1337, maxRuns: 100)
 
 //        var values = [(before: Bound5, after: Bound5)]()
-        for (value, tree) in iterator where property(value) == false {
+        while let (value, tree) = iterator.next() {
+            guard property(value) == false else { continue }
             let (_, output) = try #require(try Interpreters.reduce(gen: gen, tree: tree, config: .fast, property: property))
 //            values.append((value, output))
         }
@@ -157,8 +158,9 @@ struct Bound5ShrinkingChallenge {
             return arr.dropFirst().reduce(arr[0], &+) < 5 * 256
         }
 
-        let iterator = ValueAndChoiceTreeInterpreter(gen, seed: 1337, maxRuns: 100)
-        for (value, tree) in iterator where property(value) == false {
+        var iterator = ValueAndChoiceTreeInterpreter(gen, seed: 1337, maxRuns: 100)
+        while let (value, tree) = iterator.next() {
+            guard property(value) == false else { continue }
             _ = try Interpreters.reduce(gen: gen, tree: tree, config: .fast, property: property)
         }
     }

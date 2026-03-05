@@ -113,7 +113,8 @@ struct CoreGeneratorTests {
                 #gen(.just("constant")),
             ]
 
-            let seeds = Array(ValueInterpreter(#gen(.uint64())).prefix(10))
+            var seedIter = ValueInterpreter(#gen(.uint64()))
+            let seeds = seedIter.prefix(10)
 
             for (index, gen) in generators.enumerated() {
                 var iterator = ValueInterpreter(gen, seed: seeds.randomElement()!)

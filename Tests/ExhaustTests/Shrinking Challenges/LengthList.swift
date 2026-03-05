@@ -29,8 +29,8 @@ struct LengthListShrinkingChallenge {
 
     @Test("Length List, Full")
     func lengthListFull() throws {
-        let iterator = ValueAndChoiceTreeInterpreter(Self.gen, materializePicks: true, seed: 1337)
-        let (_, tree) = try #require(Array(iterator.prefix(95)).last)
+        var iterator = ValueAndChoiceTreeInterpreter(Self.gen, materializePicks: true, seed: 1337)
+        let (_, tree) = try #require(iterator.prefix(95).last)
         let (_, output) = try #require(try Interpreters.reduce(gen: Self.gen, tree: tree, config: .fast, property: Self.property))
         #expect(output == [900])
     }

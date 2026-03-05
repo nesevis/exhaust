@@ -129,10 +129,15 @@ struct CalculatorShrinkingChallenge {
      */
     @Test("Calculator, Full")
     func calculatorFull() throws {
-        let iterator = ValueAndChoiceTreeInterpreter(Self.gen, materializePicks: true, seed: 1337, maxRuns: 100)
-        let (value, tree) = try #require(iterator.filter { Self.property($0.0) == false }.last)
+        var iterator = ValueAndChoiceTreeInterpreter(Self.gen, materializePicks: true, seed: 1337, maxRuns: 100)
+        var lastFailing: (CalculatorShrinkingChallenge.Expr, ChoiceTree)?
+        while let pair = iterator.next() {
+            if Self.property(pair.0) == false {
+                lastFailing = pair
+            }
+        }
+        let (value, tree) = try #require(lastFailing)
         let originalSeq = ChoiceSequence.flatten(tree)
-//        print(value)
         print(originalSeq.shortString)
 
         // It fails the materialisation step here. No changes have happened
@@ -142,7 +147,7 @@ struct CalculatorShrinkingChallenge {
         #expect(Self.property(output) == false)
         print("before: \(originalSeq.shortString)")
         print("after: \(seq.shortString)")
-//        print()
+        print(output)
         #expect(output == .div(.value(0), .div(.value(0), .value(1))))
     }
 
@@ -164,7 +169,8 @@ struct CalculatorShrinkingChallenge {
 
     @Test("Test branch replacement")
     func branchReplacement() throws {
-        let exprs = Array(ValueAndChoiceTreeInterpreter(Self.gen, materializePicks: true, seed: 1337, maxRuns: 10)).dropFirst(5)
+        var exprIter = ValueAndChoiceTreeInterpreter(Self.gen, materializePicks: true, seed: 1337, maxRuns: 10)
+        let exprs = Array(collecting: &exprIter).dropFirst(5)
         for (value, tree) in exprs {
             let branches = Self.extractBranches(in: tree)
 //            print(ChoiceSequence.flatten(tree).shortString)

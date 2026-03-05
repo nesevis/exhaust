@@ -19,9 +19,8 @@ private func generate<Output>(
     seed: UInt64 = 42,
     iteration: Int = 0,
 ) throws -> (value: Output, tree: ChoiceTree) {
-    try #require(
-        Array(ValueAndChoiceTreeInterpreter(gen, materializePicks: true, seed: seed).prefix(iteration + 1)).last,
-    )
+    var iter = ValueAndChoiceTreeInterpreter(gen, materializePicks: true, seed: seed)
+    return try #require(iter.prefix(iteration + 1).last)
 }
 
 // MARK: - Tests

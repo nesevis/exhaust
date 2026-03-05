@@ -20,7 +20,8 @@ struct GeneratorTuningTests {
             (1, .int(in: 1 ... 100)),
             (1, .int(in: 901 ... 1000)))).filter(.probeSampling) { $0 <= 100 }
 
-        let values = Array(ValueInterpreter(gen, seed: 123, maxRuns: 200))
+        var valuesIter = ValueInterpreter(gen, seed: 123, maxRuns: 200)
+        let values = Array(collecting: &valuesIter)
 
         #expect(values.allSatisfy { $0 <= 100 })
         #expect(values.count == 200, "All runs should succeed with tuning")
@@ -34,11 +35,13 @@ struct GeneratorTuningTests {
         let predicate: (Int) -> Bool = { $0 <= 250 }
 
         // Raw generator: only ~25% of output satisfies the predicate
-        let rawValues = Array(ValueInterpreter(gen, seed: 99, maxRuns: 200))
+        var rawIter = ValueInterpreter(gen, seed: 99, maxRuns: 200)
+        let rawValues = Array(collecting: &rawIter)
         let rawValidCount = rawValues.count(where: predicate)
 
         // Tuned filter: all output satisfies the predicate
-        let tunedValues = Array(ValueInterpreter(gen.filter(.probeSampling, predicate), seed: 99, maxRuns: 200))
+        var tunedIter = ValueInterpreter(gen.filter(.probeSampling, predicate), seed: 99, maxRuns: 200)
+        let tunedValues = Array(collecting: &tunedIter)
 
         #expect(tunedValues.allSatisfy(predicate))
         #expect(tunedValues.count > rawValidCount,
@@ -52,7 +55,8 @@ struct GeneratorTuningTests {
         let gen = #gen(.uint64(in: 1 ... 1000))
             .filter(.probeSampling) { $0 < 100 }
 
-        let values = Array(ValueInterpreter(gen, seed: 123, maxRuns: 200))
+        var valuesIter = ValueInterpreter(gen, seed: 123, maxRuns: 200)
+        let values = Array(collecting: &valuesIter)
 
         #expect(values.allSatisfy { $0 < 100 })
         #expect(values.count == 200, "All runs should succeed with tuning")
@@ -70,7 +74,8 @@ struct GeneratorTuningTests {
             .pure(result as! [Int])
         }.filter(.probeSampling) { $0.count <= 3 }
 
-        let values = Array(ValueInterpreter(gen, seed: 123, maxRuns: 100))
+        var valuesIter = ValueInterpreter(gen, seed: 123, maxRuns: 100)
+        let values = Array(collecting: &valuesIter)
 
         #expect(values.allSatisfy { $0.count <= 3 })
         #expect(values.count == 100, "All runs should succeed with tuning")
@@ -181,8 +186,10 @@ struct GeneratorTuningTests {
         )
 
         // Generate from both and verify identical output
-        let values1 = Array(ValueInterpreter(tuned1, seed: 99, maxRuns: 50))
-        let values2 = Array(ValueInterpreter(tuned2, seed: 99, maxRuns: 50))
+        var values1Iter = ValueInterpreter(tuned1, seed: 99, maxRuns: 50)
+        let values1 = Array(collecting: &values1Iter)
+        var values2Iter = ValueInterpreter(tuned2, seed: 99, maxRuns: 50)
+        let values2 = Array(collecting: &values2Iter)
 
         #expect(values1 == values2, "Same seed should produce identical tuned generators")
     }
@@ -255,7 +262,8 @@ struct GeneratorTuningTests {
         let filtered = gen.filter(.probeSampling) { $0 <= 5 }
 
         // This should complete in reasonable time without blowup
-        let values = Array(ValueInterpreter(filtered, seed: 123, maxRuns: 20))
+        var valuesIter = ValueInterpreter(filtered, seed: 123, maxRuns: 20)
+        let values = Array(collecting: &valuesIter)
         #expect(!values.isEmpty, "Deeply nested tuned generator should still produce values")
         #expect(values.allSatisfy { $0 <= 5 })
     }
@@ -271,12 +279,14 @@ struct GeneratorTuningTests {
         let sampleCount: UInt64 = 500
 
         // Raw generation: only a fraction of output satisfies the predicate
-        let rawValues = Array(ValueInterpreter(BST.arbitrary(), seed: 42, maxRuns: sampleCount))
+        var rawIter = ValueInterpreter(BST.arbitrary(), seed: 42, maxRuns: sampleCount)
+        let rawValues = Array(collecting: &rawIter)
         let rawValidCount = rawValues.count(where: isValidNonLeafBST)
 
         // Tuned filter: all output satisfies the predicate
         let tunedGen = BST.arbitrary().filter(.probeSampling, isValidNonLeafBST)
-        let tunedValues = Array(ValueInterpreter(tunedGen, seed: 42, maxRuns: sampleCount))
+        var tunedIter = ValueInterpreter(tunedGen, seed: 42, maxRuns: sampleCount)
+        let tunedValues = Array(collecting: &tunedIter)
 
         #expect(tunedValues.allSatisfy(isValidNonLeafBST))
         #expect(tunedValues.count > rawValidCount,
@@ -325,7 +335,8 @@ struct GeneratorTuningTests {
         }
 
         let tunedGen = BST.arbitrary().filter(.probeSampling, isValidNonLeafBST)
-        let values = Array(ValueInterpreter(tunedGen, seed: 99, maxRuns: 500))
+        var valuesIter = ValueInterpreter(tunedGen, seed: 99, maxRuns: 500)
+        let values = Array(collecting: &valuesIter)
 
         #expect(values.allSatisfy(isValidNonLeafBST))
         #expect(!values.isEmpty, "Should produce valid non-leaf BSTs")

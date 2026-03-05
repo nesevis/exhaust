@@ -83,21 +83,20 @@ public enum ExhaustLog {
     }
 
     public static var configuration: Configuration {
-        state.read()
+        _configuration
     }
 
     public static func setConfiguration(_ configuration: Configuration) {
-        state.write(configuration)
+        _configuration = configuration
     }
 
     public static func updateConfiguration(_ update: (inout Configuration) -> Void) {
-        state.update(update)
+        update(&_configuration)
     }
 
     @inline(__always)
     public static func isEnabled(_ level: Level, for category: Category = .core) -> Bool {
-        let configuration = state.read()
-        return shouldLog(level, category: category, configuration: configuration)
+        shouldLog(level, category: category, configuration: _configuration)
     }
 
     public static func log(
@@ -262,7 +261,7 @@ public enum ExhaustLog {
         file: StaticString,
         line: UInt,
     ) {
-        let configuration = state.read()
+        let configuration = _configuration
         guard shouldLog(level, category: category, configuration: configuration) else {
             return
         }
@@ -281,7 +280,7 @@ public enum ExhaustLog {
     }
 
     private static let subsystem = "com.exhaust"
-    private static let state = State()
+    nonisolated(unsafe) private static var _configuration = Configuration()
 
     private static let coreLogger = Logger(subsystem: subsystem, category: Category.core.rawValue)
     private static let extensionsLogger = Logger(subsystem: subsystem, category: Category.extensions.rawValue)
@@ -389,32 +388,3 @@ public enum ExhaustLog {
     }
 }
 
-private final class State: @unchecked Sendable {
-    private let lock = NSLock()
-    private var configuration = ExhaustLog.Configuration()
-
-    func read() -> ExhaustLog.Configuration {
-        lock.withLock { configuration }
-    }
-
-    func write(_ configuration: ExhaustLog.Configuration) {
-        lock.withLock {
-            self.configuration = configuration
-        }
-    }
-
-    func update(_ update: (inout ExhaustLog.Configuration) -> Void) {
-        lock.withLock {
-            update(&configuration)
-        }
-    }
-}
-
-private extension NSLock {
-    @discardableResult
-    func withLock<T>(_ body: () throws -> T) rethrows -> T {
-        lock()
-        defer { unlock() }
-        return try body()
-    }
-}
