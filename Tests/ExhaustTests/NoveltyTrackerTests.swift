@@ -12,7 +12,7 @@ struct NoveltyTrackerTests {
     @Test("First sequence always scores > 0")
     func firstSequenceIsNovel() {
         var tracker = NoveltyTracker()
-        let tree = ChoiceTree.choice(.unsigned(42, UInt64.self), ChoiceMetadata(validRange: 0 ... 100))
+        let tree = ChoiceTree.choice(.unsigned(42, .uint64), ChoiceMetadata(validRange: 0 ... 100))
         let sequence = ChoiceSequence(tree)
         let score = tracker.score(tree: tree, sequence: sequence)
         #expect(score > 0)
@@ -21,7 +21,7 @@ struct NoveltyTrackerTests {
     @Test("Identical sequence scores 0 on second insertion")
     func duplicateSequenceScoresZero() {
         var tracker = NoveltyTracker()
-        let tree = ChoiceTree.choice(.unsigned(42, UInt64.self), ChoiceMetadata(validRange: 0 ... 100))
+        let tree = ChoiceTree.choice(.unsigned(42, .uint64), ChoiceMetadata(validRange: 0 ... 100))
         let sequence = ChoiceSequence(tree)
 
         _ = tracker.score(tree: tree, sequence: sequence)
@@ -34,8 +34,8 @@ struct NoveltyTrackerTests {
         var tracker = NoveltyTracker()
 
         // Two trees with identical structure (no branches) but different values
-        let tree1 = ChoiceTree.choice(.unsigned(10, UInt64.self), ChoiceMetadata(validRange: 0 ... 100))
-        let tree2 = ChoiceTree.choice(.unsigned(20, UInt64.self), ChoiceMetadata(validRange: 0 ... 100))
+        let tree1 = ChoiceTree.choice(.unsigned(10, .uint64), ChoiceMetadata(validRange: 0 ... 100))
+        let tree2 = ChoiceTree.choice(.unsigned(20, .uint64), ChoiceMetadata(validRange: 0 ... 100))
 
         let seq1 = ChoiceSequence(tree1)
         let seq2 = ChoiceSequence(tree2)
@@ -55,13 +55,13 @@ struct NoveltyTrackerTests {
         // Tree selecting branch id=1 (only the selected branch present in the tree)
         let tree1 = ChoiceTree.branch(
             siteID: 1, weight: 1, id: 1, branchIDs: [1, 2],
-            choice: .choice(.unsigned(5, UInt64.self), ChoiceMetadata(validRange: 0 ... 100))
+            choice: .choice(.unsigned(5, .uint64), ChoiceMetadata(validRange: 0 ... 100))
         )
 
         // Tree selecting branch id=2 (different branch chosen)
         let tree2 = ChoiceTree.branch(
             siteID: 1, weight: 1, id: 2, branchIDs: [1, 2],
-            choice: .choice(.unsigned(10, UInt64.self), ChoiceMetadata(validRange: 0 ... 100))
+            choice: .choice(.unsigned(10, .uint64), ChoiceMetadata(validRange: 0 ... 100))
         )
 
         let seq1 = ChoiceSequence(tree1)
@@ -78,8 +78,8 @@ struct NoveltyTrackerTests {
     @Test("Branch-path hash is deterministic")
     func branchPathHashDeterministic() {
         let tree = ChoiceTree.group([
-            .selected(.branch(siteID: 1, weight: 1, id: 1, branchIDs: [1, 2], choice: .choice(.unsigned(5, UInt64.self), ChoiceMetadata(validRange: 0 ... 100)))),
-            .branch(siteID: 1, weight: 1, id: 2, branchIDs: [1, 2], choice: .choice(.unsigned(10, UInt64.self), ChoiceMetadata(validRange: 0 ... 100))),
+            .selected(.branch(siteID: 1, weight: 1, id: 1, branchIDs: [1, 2], choice: .choice(.unsigned(5, .uint64), ChoiceMetadata(validRange: 0 ... 100)))),
+            .branch(siteID: 1, weight: 1, id: 2, branchIDs: [1, 2], choice: .choice(.unsigned(10, .uint64), ChoiceMetadata(validRange: 0 ... 100))),
         ])
 
         let hash1 = NoveltyTracker.branchPathHash(of: tree)
@@ -90,7 +90,7 @@ struct NoveltyTrackerTests {
     @Test("Unseen branch path + unseen sequence gives highest score (1.5)")
     func highestScoreForFullyNovel() {
         var tracker = NoveltyTracker()
-        let tree = ChoiceTree.choice(.unsigned(42, UInt64.self), ChoiceMetadata(validRange: 0 ... 100))
+        let tree = ChoiceTree.choice(.unsigned(42, .uint64), ChoiceMetadata(validRange: 0 ... 100))
         let sequence = ChoiceSequence(tree)
         let score = tracker.score(tree: tree, sequence: sequence)
         #expect(score == 1.5)
@@ -101,7 +101,7 @@ struct NoveltyTrackerTests {
         var tracker = NoveltyTracker()
 
         // First: score a simple value tree
-        let tree1 = ChoiceTree.choice(.unsigned(42, UInt64.self), ChoiceMetadata(validRange: 0 ... 100))
+        let tree1 = ChoiceTree.choice(.unsigned(42, .uint64), ChoiceMetadata(validRange: 0 ... 100))
         let seq1 = ChoiceSequence(tree1)
         _ = tracker.score(tree: tree1, sequence: seq1)
 
@@ -113,7 +113,7 @@ struct NoveltyTrackerTests {
         let tree2 = ChoiceTree.group([
             .selected(.branch(
                 siteID: 99, weight: 1, id: 1, branchIDs: [1],
-                choice: .choice(.unsigned(42, UInt64.self), ChoiceMetadata(validRange: 0 ... 100))
+                choice: .choice(.unsigned(42, .uint64), ChoiceMetadata(validRange: 0 ... 100))
             )),
         ])
         let seq2 = ChoiceSequence(tree2)
@@ -131,7 +131,7 @@ struct NoveltyTrackerTests {
         var tracker = NoveltyTracker()
 
         for i: UInt64 in 0 ..< 500 {
-            let tree = ChoiceTree.choice(.unsigned(i, UInt64.self), ChoiceMetadata(validRange: 0 ... 1000))
+            let tree = ChoiceTree.choice(.unsigned(i, .uint64), ChoiceMetadata(validRange: 0 ... 1000))
             let sequence = ChoiceSequence(tree)
             let score = tracker.score(tree: tree, sequence: sequence)
             #expect(score >= 0)

@@ -5,7 +5,7 @@
 //  Created by Chris Kolbu on 12/8/2025.
 //
 
-public enum TypeTag: Equatable, Hashable {
+public enum TypeTag: Equatable, Hashable, Sendable {
     case uint
     case uint64
     case uint32

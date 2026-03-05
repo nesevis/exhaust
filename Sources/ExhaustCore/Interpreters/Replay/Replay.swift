@@ -467,7 +467,7 @@ extension Interpreters {
             validRange: lengthGen.associatedRange ?? length ... length,
             isRangeExplicit: lengthGen.associatedRange != nil,
         )
-        guard try replayRecursive(lengthGen, with: .choice(.unsigned(length, UInt64.self), lengthMetadata)) != nil else {
+        guard try replayRecursive(lengthGen, with: .choice(.unsigned(length, .uint64), lengthMetadata)) != nil else {
             return nil
         }
 

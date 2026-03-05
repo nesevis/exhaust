@@ -39,7 +39,7 @@ struct ReflectAndFlattenTests {
 
         #expect(valueChoices.count >= 1)
         // The reflected tree contains the value - verify via bit pattern since it could be signed or unsigned
-        #expect(valueChoices[0].choice == .unsigned(42, UInt64.self))
+        #expect(valueChoices[0].choice == .unsigned(42, .uint64))
     }
 
     @Test("Reflect and flatten array")
@@ -499,7 +499,7 @@ struct ReflectAndFlattenTests {
         var flattened = ChoiceSequence.flatten(tree)
 
         // Mess with it
-        flattened[2] = .value(.init(choice: .unsigned(64, UInt64.self), validRange: nil))
+        flattened[2] = .value(.init(choice: .unsigned(64, .uint64), validRange: nil))
 
         let materialized = try Interpreters.materialize(gen, with: tree, using: flattened)
 

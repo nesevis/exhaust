@@ -6,37 +6,37 @@
 //
 
 @_spi(ExhaustInternal) public enum ChoiceValue: Comparable, Hashable, Equatable, Sendable {
-    case unsigned(UInt64, any BitPatternConvertible.Type)
+    case unsigned(UInt64, TypeTag)
     /// The UInt64 represents its hashable behaviour
-    case signed(Int64, UInt64, any BitPatternConvertible.Type)
-    case floating(Double, UInt64, any BitPatternConvertible.Type)
+    case signed(Int64, UInt64, TypeTag)
+    case floating(Double, UInt64, TypeTag)
 
     @_spi(ExhaustInternal) public init(_ value: any BitPatternConvertible, tag: TypeTag) {
         switch tag {
         case .uint:
-            self = .unsigned(value.bitPattern64, UInt.self)
+            self = .unsigned(value.bitPattern64, .uint)
         case .uint64:
-            self = .unsigned(value.bitPattern64, UInt64.self)
+            self = .unsigned(value.bitPattern64, .uint64)
         case .uint32:
-            self = .unsigned(value.bitPattern64, UInt32.self)
+            self = .unsigned(value.bitPattern64, .uint32)
         case .uint16:
-            self = .unsigned(value.bitPattern64, UInt16.self)
+            self = .unsigned(value.bitPattern64, .uint16)
         case .uint8:
-            self = .unsigned(value.bitPattern64, UInt8.self)
+            self = .unsigned(value.bitPattern64, .uint8)
         case .int:
-            self = .signed(Int64(Int(bitPattern64: value.bitPattern64)), value.bitPattern64, Int.self)
+            self = .signed(Int64(Int(bitPattern64: value.bitPattern64)), value.bitPattern64, .int)
         case .int64:
-            self = .signed(Int64(bitPattern64: value.bitPattern64), value.bitPattern64, Int64.self)
+            self = .signed(Int64(bitPattern64: value.bitPattern64), value.bitPattern64, .int64)
         case .int32:
-            self = .signed(Int64(Int32(bitPattern64: value.bitPattern64)), value.bitPattern64, Int32.self)
+            self = .signed(Int64(Int32(bitPattern64: value.bitPattern64)), value.bitPattern64, .int32)
         case .int16:
-            self = .signed(Int64(Int16(bitPattern64: value.bitPattern64)), value.bitPattern64, Int16.self)
+            self = .signed(Int64(Int16(bitPattern64: value.bitPattern64)), value.bitPattern64, .int16)
         case .int8:
-            self = .signed(Int64(Int8(bitPattern64: value.bitPattern64)), value.bitPattern64, Int8.self)
+            self = .signed(Int64(Int8(bitPattern64: value.bitPattern64)), value.bitPattern64, .int8)
         case .double:
-            self = .floating(Double(bitPattern64: value.bitPattern64), value.bitPattern64, Double.self)
+            self = .floating(Double(bitPattern64: value.bitPattern64), value.bitPattern64, .double)
         case .float:
-            self = .floating(Double(Float(bitPattern64: value.bitPattern64)), value.bitPattern64, Float.self)
+            self = .floating(Double(Float(bitPattern64: value.bitPattern64)), value.bitPattern64, .float)
         }
     }
 
@@ -46,56 +46,33 @@
     /// - Floating point: 0.0
     @_spi(ExhaustInternal) public var semanticSimplest: ChoiceValue {
         switch self {
-        case let .unsigned(_, type):
-            return .init(type.init(bitPattern64: 0), tag: tag)
-        case let .signed(_, _, type):
-            let zeroBitPattern: UInt64
-            if type is Int8.Type {
-                zeroBitPattern = Int8(0).bitPattern64
-            } else if type is Int16.Type {
-                zeroBitPattern = Int16(0).bitPattern64
-            } else if type is Int32.Type {
-                zeroBitPattern = Int32(0).bitPattern64
-            } else if type is Int64.Type {
-                zeroBitPattern = Int64(0).bitPattern64
-            } else if type is Int.Type {
-                zeroBitPattern = Int(0).bitPattern64
-            } else {
-                return self
+        case let .unsigned(_, tag):
+            return .unsigned(0, tag)
+        case let .signed(_, _, tag):
+            let zeroBitPattern: UInt64 = switch tag {
+            case .int8: Int8(0).bitPattern64
+            case .int16: Int16(0).bitPattern64
+            case .int32: Int32(0).bitPattern64
+            case .int64: Int64(0).bitPattern64
+            case .int: Int(0).bitPattern64
+            default: fatalError("Unexpected tag \(tag) for signed ChoiceValue")
             }
-            return .signed(0, zeroBitPattern, type)
-        case let .floating(_, _, type):
-            let zeroBitPattern: UInt64
-            if type is Float.Type {
-                zeroBitPattern = Float(0).bitPattern64
-            } else if type is Double.Type {
-                zeroBitPattern = Double(0).bitPattern64
-            } else {
-                return self
+            return .signed(0, zeroBitPattern, tag)
+        case let .floating(_, _, tag):
+            let zeroBitPattern: UInt64 = switch tag {
+            case .float: Float(0).bitPattern64
+            case .double: Double(0).bitPattern64
+            default: fatalError("Unexpected tag \(tag) for floating ChoiceValue")
             }
-            return .floating(0.0, zeroBitPattern, type)
+            return .floating(0.0, zeroBitPattern, tag)
         }
     }
 
     var tag: TypeTag {
         switch self {
-        case let .unsigned(_, type):
-            type.tag
-        case let .signed(_, _, type):
-            type.tag
-        case let .floating(_, _, type):
-            type.tag
-        }
-    }
-
-    var convertibleType: any BitPatternConvertible.Type {
-        switch self {
-        case let .unsigned(_, type):
-            type
-        case let .signed(_, _, type):
-            type
-        case let .floating(_, _, type):
-            type
+        case let .unsigned(_, tag): tag
+        case let .signed(_, _, tag): tag
+        case let .floating(_, _, tag): tag
         }
     }
 
@@ -127,13 +104,13 @@
         switch self {
         case .unsigned:
             return range.description
-        case let .signed(_, _, underlyingType):
-            let lower = underlyingType.init(bitPattern64: range.lowerBound)
-            let upper = underlyingType.init(bitPattern64: range.upperBound)
+        case let .signed(_, _, tag):
+            let lower = tag.makeConvertible(bitPattern64: range.lowerBound)
+            let upper = tag.makeConvertible(bitPattern64: range.upperBound)
             return "\(lower)...\(upper)"
-        case let .floating(_, _, underlyingType):
-            let lower = underlyingType.init(bitPattern64: range.lowerBound)
-            let upper = underlyingType.init(bitPattern64: range.upperBound)
+        case let .floating(_, _, tag):
+            let lower = tag.makeConvertible(bitPattern64: range.lowerBound)
+            let upper = tag.makeConvertible(bitPattern64: range.upperBound)
             return "\(lower)...\(upper)"
         }
     }
@@ -141,23 +118,23 @@
     var doubleValue: Double {
         switch self {
         case .unsigned:
-            // Clamp?
             return Double(bitPattern64)
-        case .signed:
-            guard let this = convertible as? (any FixedWidthInteger) else {
-                fatalError()
+        case let .signed(_, _, tag):
+            switch tag {
+            case .int8: return Double(Int8(bitPattern64: bitPattern64))
+            case .int16: return Double(Int16(bitPattern64: bitPattern64))
+            case .int32: return Double(Int32(bitPattern64: bitPattern64))
+            case .int64: return Double(Int64(bitPattern64: bitPattern64))
+            case .int: return Double(Int(bitPattern64: bitPattern64))
+            default: fatalError("Unexpected tag \(tag) for signed ChoiceValue")
             }
-            return Double(this)
-        case .floating:
-            guard let this = convertible as? (any BinaryFloatingPoint) else {
-                fatalError()
-            }
-            return Double(this)
+        case let .floating(value, _, _):
+            return value
         }
     }
 
     @_spi(ExhaustInternal) public var convertible: any BitPatternConvertible {
-        convertibleType.init(bitPattern64: bitPattern64)
+        tag.makeConvertible(bitPattern64: bitPattern64)
     }
 
     @_spi(ExhaustInternal) public func hash(into hasher: inout Hasher) {

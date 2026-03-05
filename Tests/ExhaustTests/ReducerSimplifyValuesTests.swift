@@ -29,7 +29,7 @@ struct SemanticSimplestTests {
     @Test("Unsigned semanticSimplest is always .unsigned(0, ...)")
     func unsignedSimplest() {
         #exhaust(#gen(.uint64(in: 0 ... 100_000))) { rawValue in
-            ChoiceValue.unsigned(rawValue, UInt64.self).semanticSimplest == .unsigned(0, UInt64.self)
+            ChoiceValue.unsigned(rawValue, .uint64).semanticSimplest == .unsigned(0, .uint64)
         }
     }
 
@@ -76,7 +76,7 @@ struct ShortlexKeyTests {
 
     @Test("Unsigned shortlexKey equals bitPattern64")
     func unsignedKeyEqualsBitPattern() {
-        let value = ChoiceValue.unsigned(42, UInt64.self)
+        let value = ChoiceValue.unsigned(42, .uint64)
         #expect(value.shortlexKey == value.bitPattern64)
     }
 

@@ -190,7 +190,7 @@ struct DefaultSeedPoolTests {
 // MARK: - Helpers
 
 private func makeSeed(value: UInt64, novelty: Double, fitness: Double = 0, generation: UInt64) -> Seed {
-    let tree = ChoiceTree.choice(.unsigned(value, UInt64.self), ChoiceMetadata(validRange: 0 ... 1000))
+    let tree = ChoiceTree.choice(.unsigned(value, .uint64), ChoiceMetadata(validRange: 0 ... 1000))
     let sequence = ChoiceSequence(tree)
     return Seed(
         sequence: sequence,

@@ -139,6 +139,17 @@ benchmark("Bound5, 50 iterations, reflective") {
         let c: [Int16]
         let d: [Int16]
         let e: [Int16]
+        
+        let arr: [Int16]
+        
+        init(a: [Int16], b: [Int16], c: [Int16], d: [Int16], e: [Int16]) {
+            self.a = a
+            self.b = b
+            self.c = c
+            self.d = d
+            self.e = e
+            self.arr = a + b + c + d + e
+        }
     }
     let arrGen = #gen(.int16().array(length: 0 ... 10))
         .filter { $0.isEmpty || $0.dropFirst().reduce($0[0], &+) < 256 }
@@ -147,11 +158,10 @@ benchmark("Bound5, 50 iterations, reflective") {
     }
 
     let property: (Bound5) -> Bool = { b5 in
-        let arr = b5.a + b5.b + b5.c + b5.d + b5.e
-        if arr.isEmpty {
+        if b5.arr.isEmpty {
             return true
         }
-        return arr.dropFirst().reduce(arr[0], &+) < 5 * 256
+        return b5.arr.dropFirst().reduce(b5.arr[0], &+) < 5 * 256
     }
 
     do {

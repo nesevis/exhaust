@@ -229,7 +229,7 @@ struct ChoiceValuePropertyTests {
     func semanticSimplestMinimalComplexity() {
         // Unsigned
         #exhaust(#gen(.uint64(in: 0 ... 100_000))) { rawValue in
-            let value = ChoiceValue.unsigned(rawValue, UInt64.self)
+            let value = ChoiceValue.unsigned(rawValue, .uint64)
             return value.semanticSimplest.complexity <= value.complexity
         }
 
@@ -250,8 +250,8 @@ struct ChoiceValuePropertyTests {
     func unsignedComplexityMonotonicity() {
         #exhaust(#gen(.uint64(in: 0 ... 100_000), .uint64(in: 0 ... 100_000))) { a, b in
             guard a < b else { return true }
-            let va = ChoiceValue.unsigned(a, UInt64.self)
-            let vb = ChoiceValue.unsigned(b, UInt64.self)
+            let va = ChoiceValue.unsigned(a, .uint64)
+            let vb = ChoiceValue.unsigned(b, .uint64)
             return va.complexity < vb.complexity
         }
     }
@@ -399,8 +399,8 @@ struct ChoiceValueComparablePropertyTests {
     @Test("Unsigned ChoiceValue ordering agrees with natural UInt64 ordering")
     func unsignedComparableConsistency() {
         #exhaust(#gen(.uint64(in: 0 ... 100_000), .uint64(in: 0 ... 100_000))) { a, b in
-            let va = ChoiceValue.unsigned(a, UInt64.self)
-            let vb = ChoiceValue.unsigned(b, UInt64.self)
+            let va = ChoiceValue.unsigned(a, .uint64)
+            let vb = ChoiceValue.unsigned(b, .uint64)
             if a < b { return va < vb }
             if a > b { return vb < va }
             return va == vb

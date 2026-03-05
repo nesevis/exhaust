@@ -310,7 +310,7 @@ struct MaterializeTests {
         let gen = #gen(.uint64(in: 0 ... 1000))
         var matIter3 = ValueAndChoiceTreeInterpreter(gen, materializePicks: false, seed: 42)
         let (_, tree) = try #require(matIter3.prefix(1).last)
-        let replacement = ChoiceSequenceValue.Value(choice: .unsigned(777, UInt64.self), validRange: 0 ... 1000)
+        let replacement = ChoiceSequenceValue.Value(choice: .unsigned(777, .uint64), validRange: 0 ... 1000)
         let modified: ChoiceSequence = [.value(replacement)]
         let materialized = try Interpreters.materialize(gen, with: tree, using: modified)
         #expect(materialized == 777)
@@ -324,7 +324,7 @@ struct MaterializeTests {
         let flattened = ChoiceSequence.flatten(tree)
         let minimized = flattened.map { element -> ChoiceSequenceValue in
             guard case .value = element else { return element }
-            return .value(.init(choice: .unsigned(0, UInt64.self), validRange: nil))
+            return .value(.init(choice: .unsigned(0, .uint64), validRange: nil))
         }
         let materialized = try #require(try Interpreters.materialize(gen, with: tree, using: ContiguousArray(minimized)))
         #expect(materialized == [0, 0, 0, 0, 0])

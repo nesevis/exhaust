@@ -11,8 +11,8 @@ import Testing
 struct ChoiceTreeDescendantElevationTests {
     private func makeTree() -> ChoiceTree {
         let meta = ChoiceMetadata(validRange: 0 ... 10)
-        let leaf1 = ChoiceTree.choice(.unsigned(1, UInt64.self), meta)
-        let leaf2 = ChoiceTree.choice(.unsigned(2, UInt64.self), meta)
+        let leaf1 = ChoiceTree.choice(.unsigned(1, .uint64), meta)
+        let leaf2 = ChoiceTree.choice(.unsigned(2, .uint64), meta)
         let deepDescendant = ChoiceTree.group([leaf1, leaf2])
         let nested = ChoiceTree.group([ChoiceTree.just("x"), deepDescendant])
 
@@ -25,9 +25,9 @@ struct ChoiceTreeDescendantElevationTests {
 
     private func makeRecursiveLikeTree() -> ChoiceTree {
         let meta = ChoiceMetadata(validRange: 0 ... 10)
-        let a = ChoiceTree.choice(.unsigned(3, UInt64.self), meta)
-        let b = ChoiceTree.choice(.unsigned(4, UInt64.self), meta)
-        let c = ChoiceTree.choice(.unsigned(5, UInt64.self), meta)
+        let a = ChoiceTree.choice(.unsigned(3, .uint64), meta)
+        let b = ChoiceTree.choice(.unsigned(4, .uint64), meta)
+        let c = ChoiceTree.choice(.unsigned(5, .uint64), meta)
 
         let deepestLeafGroup = ChoiceTree.group([a, b, c])
         let deepSelected = ChoiceTree.selected(.branch(
