@@ -55,41 +55,60 @@
     /// - Parameter includingAllBranches: When `true`, includes all branches at pick sites
     ///   (not just the selected branch). Used for complexity comparison in shrink passes.
     @_spi(ExhaustInternal) static func flatten(_ tree: ChoiceTree, includingAllBranches: Bool = false) -> ChoiceSequence {
+        var result = ChoiceSequence()
+        result.reserveCapacity(64)
+        flatten(tree, includingAllBranches: includingAllBranches, into: &result)
+        return result
+    }
+
+    private static func flatten(
+        _ tree: ChoiceTree,
+        includingAllBranches: Bool,
+        into output: inout ChoiceSequence
+    ) {
         switch tree {
         case let .choice(value, meta):
-            return [.value(.init(choice: value, validRange: meta.validRange, isRangeExplicit: meta.isRangeExplicit))]
-        case .just:
-            return []
+            output.append(.value(.init(
+                choice: value,
+                validRange: meta.validRange,
+                isRangeExplicit: meta.isRangeExplicit
+            )))
+        case .just, .getSize:
+            break
         case let .sequence(_, elements, meta):
-            return [.sequence(true, isLengthExplicit: meta.isRangeExplicit)]
-                + elements.flatMap { flatten($0, includingAllBranches: includingAllBranches) }
-                + [.sequence(false)]
+            output.append(.sequence(true, isLengthExplicit: meta.isRangeExplicit))
+            for element in elements {
+                flatten(element, includingAllBranches: includingAllBranches, into: &output)
+            }
+            output.append(.sequence(false))
         case let .branch(_, _, _, _, gen):
-            return flatten(gen, includingAllBranches: includingAllBranches)
+            flatten(gen, includingAllBranches: includingAllBranches, into: &output)
         case let .group(array):
             if array.allSatisfy({ $0.isBranch || $0.isSelected }),
                case let .selected(.branch(_, _, id, branchIDs, choice)) = array.first(where: \.isSelected)
             {
-                let value = ChoiceSequenceValue.branch(.init(
-                    id: id,
-                    validIDs: branchIDs,
-                ))
+                output.append(.group(true))
+                output.append(.branch(.init(id: id, validIDs: branchIDs)))
                 let children = includingAllBranches ? array : [choice]
-                return [.group(true), value]
-                    + children.flatMap { flatten($0, includingAllBranches: includingAllBranches) }
-                    + [.group(false)]
+                for child in children {
+                    flatten(child, includingAllBranches: includingAllBranches, into: &output)
+                }
+                output.append(.group(false))
+            } else {
+                output.append(.group(true))
+                for child in array {
+                    flatten(child, includingAllBranches: includingAllBranches, into: &output)
+                }
+                output.append(.group(false))
             }
-            return [.group(true)]
-                + array.flatMap { flatten($0, includingAllBranches: includingAllBranches) }
-                + [.group(false)]
-        case .getSize:
-            return []
         case let .resize(_, choices):
-            return [.group(true)]
-                + choices.flatMap { flatten($0, includingAllBranches: includingAllBranches) }
-                + [.group(false)]
+            output.append(.group(true))
+            for choice in choices {
+                flatten(choice, includingAllBranches: includingAllBranches, into: &output)
+            }
+            output.append(.group(false))
         case let .selected(tree):
-            return flatten(tree, includingAllBranches: includingAllBranches)
+            flatten(tree, includingAllBranches: includingAllBranches, into: &output)
         }
     }
 
