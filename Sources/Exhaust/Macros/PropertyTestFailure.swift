@@ -10,6 +10,7 @@ struct PropertyTestFailure<Output> {
     let maxIterations: UInt64
     let blueprint: String?
     let propertyInvocations: Int?
+    var replayHint: String?
 
     func render(format: ExhaustLog.Format) -> String {
         switch format {
@@ -28,7 +29,7 @@ struct PropertyTestFailure<Output> {
         if let seed {
             lines.append("Property failed (iteration \(iteration)/\(maxIterations), seed \(seed))")
         } else {
-            lines.append("Property failed (reflecting)")
+            lines.append("Property failed (iteration \(iteration)/\(maxIterations))")
         }
         if let sourceCode {
             lines.append("  \(sourceCode)")
@@ -60,6 +61,9 @@ struct PropertyTestFailure<Output> {
         if let seed {
             lines.append("")
             lines.append("Reproduce: .replay(\(seed))")
+        } else if let replayHint {
+            lines.append("")
+            lines.append(replayHint)
         }
 
         return lines.joined(separator: "\n")
@@ -97,6 +101,8 @@ struct PropertyTestFailure<Output> {
 
         if let seed {
             parts.append("\"replay\":\".replay(\(seed))\"")
+        } else if let replayHint {
+            parts.append("\"replayHint\":\"\(escapeJSON(replayHint))\"")
         }
 
         return "{\(parts.joined(separator: ","))}"

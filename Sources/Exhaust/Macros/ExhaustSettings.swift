@@ -32,4 +32,19 @@ public enum ExhaustSettings<Output> {
     ///
     /// The value must fail the property — if it passes, an issue is reported.
     case reflecting(Output)
+
+    /// Disables automatic t-way covering array analysis.
+    ///
+    /// By default, `#exhaust` detects generators composed entirely of finite-domain
+    /// elements (booleans, small enums, bounded integral ranges) and uses IPOG covering
+    /// arrays to guarantee that every t-tuple of parameter values is tested. An
+    /// empirical study of real-world software faults found that pairwise (t=2)
+    /// coverage catches ~93% of interaction bugs, and 3-way (t=3) catches ~98%
+    /// (Kuhn, Wallace & Gallo, "Software Fault Interactions and Implications for
+    /// Software Testing", IEEE TSE 2004).
+    ///
+    /// When `.randomOnly` is set, `#exhaust` skips this analysis and proceeds
+    /// directly to random sampling. Useful for benchmarking, comparing coverage
+    /// strategies, or when the analysis overhead is unwanted.
+    case randomOnly
 }
