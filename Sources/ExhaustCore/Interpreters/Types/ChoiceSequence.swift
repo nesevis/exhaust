@@ -240,9 +240,6 @@ extension ChoiceSequence {
 
         return spans.sorted(by: { lhs, rhs in
             if lhs.depth == rhs.depth {
-                if lhs.range.count == rhs.range.count {
-                    return lhs.range.count < rhs.range.count
-                }
                 return lhs.range.lowerBound < rhs.range.lowerBound
             }
             return lhs.depth < rhs.depth
