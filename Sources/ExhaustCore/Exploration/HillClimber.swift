@@ -134,11 +134,7 @@
                             if score > currentScore { improved = true }
                             currentScore = score
                             bestOutput = result.value
-                            if let reflected = try? Interpreters.reflect(gen, with: result.value) {
-                                currentSequence = ChoiceSequence(reflected)
-                            } else {
-                                currentSequence = result.sequence
-                            }
+                            currentSequence = result.sequence
                             currentBP = newBP
                             didAccept = true
                             // Return false to stop findInteger — we've accepted and
@@ -201,11 +197,7 @@
                         if score > currentScore { improved = true }
                         currentScore = score
                         bestOutput = result.value
-                        if let reflected = try? Interpreters.reflect(gen, with: result.value) {
-                            currentSequence = ChoiceSequence(reflected)
-                        } else {
-                            currentSequence = result.sequence
-                        }
+                        currentSequence = result.sequence
                         branchAccepted = true
                         break
                     }
