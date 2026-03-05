@@ -119,6 +119,57 @@ public extension Interpreters {
         }
     }
 
+    private struct SpanCache {
+        private var allValueSpans: [ChoiceSpan]?
+        private var siblingGroups: [SiblingGroup]?
+        private var containerSpans: [ChoiceSpan]?
+        private var freeStandingValueSpans: [ChoiceSpan]?
+        private var sequenceBoundarySpans: [ChoiceSpan]?
+
+        mutating func invalidate() {
+            allValueSpans = nil
+            siblingGroups = nil
+            containerSpans = nil
+            freeStandingValueSpans = nil
+            sequenceBoundarySpans = nil
+        }
+
+        mutating func getAllValueSpans(from sequence: ChoiceSequence) -> [ChoiceSpan] {
+            if let cached = allValueSpans { return cached }
+            let spans = ChoiceSequence.extractAllValueSpans(from: sequence)
+            allValueSpans = spans
+            return spans
+        }
+
+        mutating func getSiblingGroups(from sequence: ChoiceSequence) -> [SiblingGroup] {
+            if let cached = siblingGroups { return cached }
+            let groups = ChoiceSequence.extractSiblingGroups(from: sequence)
+            siblingGroups = groups
+            return groups
+        }
+
+        mutating func getContainerSpans(from sequence: ChoiceSequence) -> [ChoiceSpan] {
+            if let cached = containerSpans { return cached }
+            let spans = ChoiceSequence.extractContainerSpans(from: sequence)
+            containerSpans = spans
+            return spans
+        }
+
+        mutating func getFreeStandingValueSpans(from sequence: ChoiceSequence) -> [ChoiceSpan] {
+            if let cached = freeStandingValueSpans { return cached }
+            let spans = ChoiceSequence.extractFreeStandingValueSpans(from: sequence)
+            freeStandingValueSpans = spans
+            return spans
+        }
+
+        mutating func getSequenceBoundarySpans(from sequence: ChoiceSequence) -> [ChoiceSpan] {
+            if let cached = sequenceBoundarySpans { return cached }
+            let spans = ChoiceSequence.extractSequenceBoundarySpans(from: sequence)
+            sequenceBoundarySpans = spans
+            return spans
+        }
+    }
+
     @_spi(ExhaustInternal) static func reduce<Output>(
         gen: ReflectiveGenerator<Output>,
         tree: ChoiceTree,
@@ -150,6 +201,7 @@ public extension Interpreters {
         var loops = 0
         var passes = ShrinkPass.allCases
         var rejectCache = ReducerCache()
+        var spanCache = SpanCache()
         // Tracks recent loop-end states to detect local oscillation.
         var recentSequences = [currentSequence]
         while stallBudget > 0 {
@@ -181,9 +233,10 @@ public extension Interpreters {
                     guard didNaivelyMinimise == false else {
                         continue
                     }
-                    let valueSpans = ChoiceSequence.extractAllValueSpans(from: currentSequence)
+                    let valueSpans = spanCache.getAllValueSpans(from: currentSequence)
                     if valueSpans.isEmpty == false, let (newSequence, output) = try ReducerStrategies.naiveSimplifyValues(gen, tree: currentTree, property: property, sequence: currentSequence, valueSpans: valueSpans, rejectCache: &rejectCache) {
                         currentSequence = newSequence
+                        spanCache.invalidate()
                         currentOutput = output
                     }
                     // We only run this once
@@ -198,6 +251,7 @@ public extension Interpreters {
                     ) {
                         currentTree = newTree
                         currentSequence = newSequence
+                        spanCache.invalidate()
                         currentOutput = output
                         passImproved = true
                     }
@@ -211,22 +265,25 @@ public extension Interpreters {
                     ) {
                         currentTree = newTree
                         currentSequence = newSequence
+                        spanCache.invalidate()
                         currentOutput = output
                         passImproved = true
                     }
                 case .deleteContainerSpans:
                     // Adaptive container span deletion, ie the […] and (…) spans in [(V)(V)]
-                    let containerSpans = ChoiceSequence.extractContainerSpans(from: currentSequence)
+                    let containerSpans = spanCache.getContainerSpans(from: currentSequence)
                     if containerSpans.isEmpty == false, let (newSequence, output) = try ReducerStrategies.adaptiveDeleteSpans(gen, tree: currentTree, property: property, sequence: currentSequence, spans: containerSpans, rejectCache: &rejectCache) {
                         currentSequence = newSequence
+                        spanCache.invalidate()
                         currentOutput = output
                         passImproved = true
                     }
                 case .deleteSequenceBoundaries:
                     // Pass 2a: Collapse sequence boundaries, i.e [[V][V][V]] -> [[VVV]]
-                    let boundarySpans = ChoiceSequence.extractSequenceBoundarySpans(from: currentSequence)
+                    let boundarySpans = spanCache.getSequenceBoundarySpans(from: currentSequence)
                     if boundarySpans.isEmpty == false, let (newSequence, output) = try ReducerStrategies.adaptiveDeleteSpans(gen, tree: currentTree, property: property, sequence: currentSequence, spans: boundarySpans, rejectCache: &rejectCache, strictness: .relaxed) {
                         currentSequence = newSequence
+                        spanCache.invalidate()
                         currentOutput = output
                         passImproved = true
                         // After merging sequences, inner sequence lengths may exceed the tree's
@@ -236,14 +293,15 @@ public extension Interpreters {
                     }
                 case .deleteFreeStandingValues:
                     // Pass 2b: Sequence element deletion, i.e the individual Vs in [VVVVV]
-                    let freeStandingValueSpans = ChoiceSequence.extractFreeStandingValueSpans(from: currentSequence)
+                    let freeStandingValueSpans = spanCache.getFreeStandingValueSpans(from: currentSequence)
                     if freeStandingValueSpans.isEmpty == false, let (newSequence, output) = try ReducerStrategies.adaptiveDeleteSpans(gen, tree: currentTree, property: property, sequence: currentSequence, spans: freeStandingValueSpans, rejectCache: &rejectCache, strictness: .relaxed) {
                         currentSequence = newSequence
+                        spanCache.invalidate()
                         currentOutput = output
                         passImproved = true
                     }
                 case .deleteAlignedSiblingWindows:
-                    let siblingGroups = ChoiceSequence.extractSiblingGroups(from: currentSequence)
+                    let siblingGroups = spanCache.getSiblingGroups(from: currentSequence)
                     if siblingGroups.isEmpty == false,
                        let (newSequence, output) = try ReducerStrategies.deleteAlignedSiblingWindows(
                            gen,
@@ -258,20 +316,23 @@ public extension Interpreters {
                        )
                     {
                         currentSequence = newSequence
+                        spanCache.invalidate()
                         currentOutput = output
                         passImproved = true
                     }
                 case .simplifyValuesToSemanticSimplest:
-                    let valueSpans = ChoiceSequence.extractAllValueSpans(from: currentSequence)
+                    let valueSpans = spanCache.getAllValueSpans(from: currentSequence)
                     if valueSpans.isEmpty == false, let (newSequence, output) = try ReducerStrategies.simplifyValues(gen, tree: currentTree, property: property, sequence: currentSequence, valueSpans: valueSpans, rejectCache: &rejectCache) {
                         currentSequence = newSequence
+                        spanCache.invalidate()
                         currentOutput = output
                         passImproved = true
                     }
                 case .reduceValues:
-                    let valueSpans = ChoiceSequence.extractAllValueSpans(from: currentSequence)
+                    let valueSpans = spanCache.getAllValueSpans(from: currentSequence)
                     if valueSpans.isEmpty == false, let (newSequence, output) = try ReducerStrategies.reduceValues(gen, tree: currentTree, property: property, sequence: currentSequence, valueSpans: valueSpans, rejectCache: &rejectCache) {
                         currentSequence = newSequence
+                        spanCache.invalidate()
                         currentOutput = output
                         passImproved = true
                     }
@@ -289,23 +350,25 @@ public extension Interpreters {
                        )
                     {
                         currentSequence = newSequence
+                        spanCache.invalidate()
                         currentOutput = output
                         passImproved = true
                     }
                 case .speculativeDeleteAndRepair:
-                    let freeValueSpans = ChoiceSequence.extractFreeStandingValueSpans(from: currentSequence)
-                    let containerSpans = ChoiceSequence.extractContainerSpans(from: currentSequence)
+                    let freeValueSpans = spanCache.getFreeStandingValueSpans(from: currentSequence)
+                    let containerSpans = spanCache.getContainerSpans(from: currentSequence)
                     let deletableSpans = freeValueSpans + containerSpans
                     if !deletableSpans.isEmpty,
                        let (newSequence, output) = try ReducerStrategies.speculativeDeleteAndRepair(gen, tree: currentTree, property: property, sequence: currentSequence, spans: deletableSpans, rejectCache: &rejectCache)
                     {
                         currentSequence = newSequence
+                        spanCache.invalidate()
                         currentOutput = output
                         passImproved = true
                     }
                 case .reduceValuesInTandem:
                     // Reduce individual values in tandem by equal amounts, via binary search
-                    let siblingGroups = ChoiceSequence.extractSiblingGroups(from: currentSequence)
+                    let siblingGroups = spanCache.getSiblingGroups(from: currentSequence)
                     if siblingGroups.isEmpty == false,
                        let (newSequence, output) = try ReducerStrategies.reduceValuesInTandem(
                            gen,
@@ -319,15 +382,17 @@ public extension Interpreters {
                        )
                     {
                         currentSequence = newSequence
+                        spanCache.invalidate()
                         currentOutput = output
                         passImproved = true
                     }
                 case .normaliseSiblingOrder:
-                    let siblingGroups = ChoiceSequence.extractSiblingGroups(from: currentSequence)
+                    let siblingGroups = spanCache.getSiblingGroups(from: currentSequence)
                     if siblingGroups.isEmpty == false,
                        let (newSequence, output) = try ReducerStrategies.reorderSiblings(gen, tree: currentTree, property: property, sequence: currentSequence, siblingGroups: siblingGroups, rejectCache: &rejectCache)
                     {
                         currentSequence = newSequence
+                        spanCache.invalidate()
                         currentOutput = output
                         passImproved = true
                     }
