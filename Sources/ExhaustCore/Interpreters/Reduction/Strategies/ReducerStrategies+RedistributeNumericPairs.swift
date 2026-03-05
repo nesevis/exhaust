@@ -61,6 +61,7 @@ extension ReducerStrategies {
         }
 
         var current = sequence
+        var currentHash = current.zobristHash
         var progress = false
         var latestOutput: Output?
         var semanticStats = SequenceSemanticStats(sequence: current)
@@ -176,6 +177,8 @@ extension ReducerStrategies {
                             var probe = current
                             probe[idx1] = probeEntry1
                             probe[idx2] = probeEntry2
+                            var probeHash = ChoiceSequence.zobristHashUpdating(currentHash, at: idx1, replacing: current[idx1], with: probeEntry1)
+                            probeHash = ChoiceSequence.zobristHashUpdating(probeHash, at: idx2, replacing: current[idx2], with: probeEntry2)
 
                             #if DEBUG
                                 assert(
@@ -190,7 +193,7 @@ extension ReducerStrategies {
                                 || afterPair.lexicographicallyPrecedes(beforePair)
                             guard improvesStructure else { return false }
 
-                            guard rejectCache.contains(probe) == false else {
+                            guard rejectCache.contains(probe, zobristHash: probeHash) == false else {
                                 return false
                             }
                             guard budget.consume() else {
@@ -199,7 +202,7 @@ extension ReducerStrategies {
                                 return false
                             }
                             guard let output = try? Interpreters.materialize(gen, with: tree, using: probe) else {
-                                rejectCache.insert(probe)
+                                rejectCache.insert(probe, zobristHash: probeHash)
                                 return false
                             }
                             let success = property(output) == false
@@ -215,7 +218,7 @@ extension ReducerStrategies {
                                     lastProbeNonSemanticCount = probeNonSemanticCount
                                 }
                             } else {
-                                rejectCache.insert(probe)
+                                rejectCache.insert(probe, zobristHash: probeHash)
                             }
                             return success
                         }
@@ -281,6 +284,8 @@ extension ReducerStrategies {
                                 var probe = current
                                 probe[idx1] = probeEntry1
                                 probe[idx2] = probeEntry2
+                                var probeHash = ChoiceSequence.zobristHashUpdating(currentHash, at: idx1, replacing: current[idx1], with: probeEntry1)
+                                probeHash = ChoiceSequence.zobristHashUpdating(probeHash, at: idx2, replacing: current[idx2], with: probeEntry2)
 
                                 let probeNonSemanticCount = semanticStats.nonSemanticCount(
                                     afterReplacing: (idx1, probeEntry1),
@@ -298,18 +303,18 @@ extension ReducerStrategies {
                                     || afterPair.lexicographicallyPrecedes(beforePair)
                                 guard improvesStructure else { continue }
                                 guard afterPair != beforePair else { continue }
-                                guard rejectCache.contains(probe) == false else { continue }
+                                guard rejectCache.contains(probe, zobristHash: probeHash) == false else { continue }
                                 guard budget.consume() else {
                                     budgetExhausted = true
                                     reportBudgetExhaustionIfNeeded()
                                     break
                                 }
                                 guard let output = try? Interpreters.materialize(gen, with: tree, using: probe) else {
-                                    rejectCache.insert(probe)
+                                    rejectCache.insert(probe, zobristHash: probeHash)
                                     continue
                                 }
                                 guard property(output) == false else {
-                                    rejectCache.insert(probe)
+                                    rejectCache.insert(probe, zobristHash: probeHash)
                                     continue
                                 }
 
@@ -349,6 +354,7 @@ extension ReducerStrategies {
                                 || afterPairSorted.lexicographicallyPrecedes(beforePair)
                             else { continue }
                             current = probe
+                            currentHash = current.zobristHash
                             latestOutput = output
                             progress = true
                             semanticStats.applyReplacements(

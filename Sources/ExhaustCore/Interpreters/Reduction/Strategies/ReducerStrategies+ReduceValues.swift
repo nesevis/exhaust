@@ -26,6 +26,7 @@ extension ReducerStrategies {
         rejectCache: inout ReducerCache,
     ) throws -> (ChoiceSequence, Output)? {
         var current = sequence
+        var currentHash = current.zobristHash
         var progress = false
         var latestOutput: Output?
 
@@ -48,7 +49,7 @@ extension ReducerStrategies {
                 // Already at recorded-range target. If semantic target lies outside that range,
                 // probe one step past the recorded boundary to unlock further shrinking.
                 if isWithinRecordedRange, semanticTargetBP != targetBP {
-                    _ = tryUnlockBoundary(
+                    if tryUnlockBoundary(
                         .init(
                             seqIdx: seqIdx,
                             choiceTag: choiceTag,
@@ -66,7 +67,9 @@ extension ReducerStrategies {
                         latestOutput: &latestOutput,
                         progress: &progress,
                         rejectCache: &rejectCache,
-                    )
+                    ) {
+                        currentHash = current.zobristHash
+                    }
                 }
                 continue
             }
@@ -93,18 +96,20 @@ extension ReducerStrategies {
                 tag: choiceTag,
             )
             let targetEntry = ChoiceSequenceValue.reduced(.init(choice: targetChoice, validRange: validRange, isRangeExplicit: isRangeExplicit))
+            let targetHash = ChoiceSequence.zobristHashUpdating(currentHash, at: seqIdx, replacing: currentEntry, with: targetEntry)
             var candidate = current
             candidate[seqIdx] = targetEntry
-            if targetEntry.shortLexCompare(current[seqIdx]) == .lt, rejectCache.contains(candidate) == false {
+            if targetEntry.shortLexCompare(current[seqIdx]) == .lt, rejectCache.contains(candidate, zobristHash: targetHash) == false {
                 if let output = try? Interpreters.materialize(gen, with: tree, using: candidate),
                    property(output) == false
                 {
                     current = candidate
+                    currentHash = targetHash
                     latestOutput = output
                     progress = true
                     continue
                 } else {
-                    rejectCache.insert(candidate)
+                    rejectCache.insert(candidate, zobristHash: targetHash)
                 }
             }
 
@@ -129,6 +134,7 @@ extension ReducerStrategies {
                     progress: &progress,
                     rejectCache: &rejectCache,
                 ) {
+                    currentHash = current.zobristHash
                     continue
                 }
 
@@ -145,6 +151,7 @@ extension ReducerStrategies {
                     progress: &progress,
                     rejectCache: &rejectCache,
                 ) {
+                    currentHash = current.zobristHash
                     continue
                 }
 
@@ -161,6 +168,7 @@ extension ReducerStrategies {
                     progress: &progress,
                     rejectCache: &rejectCache,
                 ) {
+                    currentHash = current.zobristHash
                     continue
                 }
 
@@ -177,6 +185,7 @@ extension ReducerStrategies {
                     progress: &progress,
                     rejectCache: &rejectCache,
                 ) {
+                    currentHash = current.zobristHash
                     continue
                 }
 
@@ -187,7 +196,7 @@ extension ReducerStrategies {
             // predicate(0) = true (no change), predicate(distance) = false (target was just rejected)
             if distance <= 1 {
                 if isWithinRecordedRange, semanticTargetBP != targetBP {
-                    _ = tryUnlockBoundary(
+                    if tryUnlockBoundary(
                         .init(
                             seqIdx: seqIdx,
                             choiceTag: choiceTag,
@@ -205,7 +214,9 @@ extension ReducerStrategies {
                         latestOutput: &latestOutput,
                         progress: &progress,
                         rejectCache: &rejectCache,
-                    )
+                    ) {
+                        currentHash = current.zobristHash
+                    }
                 }
                 continue
             }
@@ -237,12 +248,13 @@ extension ReducerStrategies {
                         return false
                     }
                     probe[seqIdx] = probeEntry
-                    guard rejectCache.contains(probe) == false
+                    let probeHash = ChoiceSequence.zobristHashUpdating(currentHash, at: seqIdx, replacing: originalEntry, with: probeEntry)
+                    guard rejectCache.contains(probe, zobristHash: probeHash) == false
                     else {
                         return false
                     }
                     guard let output = try? Interpreters.materialize(gen, with: tree, using: probe) else {
-                        rejectCache.insert(probe)
+                        rejectCache.insert(probe, zobristHash: probeHash)
                         return false
                     }
                     let fails = property(output) == false
@@ -253,7 +265,7 @@ extension ReducerStrategies {
                             bestProbeOutput = output
                         }
                     } else {
-                        rejectCache.insert(probe)
+                        rejectCache.insert(probe, zobristHash: probeHash)
                     }
                     return fails
                 },
@@ -264,6 +276,7 @@ extension ReducerStrategies {
             if bestDelta > 0 {
                 if bestProbeDelta == bestDelta, let bestProbeEntry, let bestProbeOutput {
                     current[seqIdx] = bestProbeEntry
+                    currentHash = ChoiceSequence.zobristHashUpdating(currentHash, at: seqIdx, replacing: originalEntry, with: bestProbeEntry)
                     latestOutput = bestProbeOutput
                     progress = true
                     continue
@@ -283,6 +296,7 @@ extension ReducerStrategies {
                    property(output) == false
                 {
                     current = candidate
+                    currentHash = current.zobristHash
                     latestOutput = output
                     progress = true
                     continue
@@ -312,6 +326,7 @@ extension ReducerStrategies {
                            property(output) == false
                         {
                             current = crossZeroProbe
+                            currentHash = current.zobristHash
                             latestOutput = output
                             progress = true
                             crossZeroImproved = true
@@ -353,6 +368,7 @@ extension ReducerStrategies {
                         {
                             latestOutput = output
                             current = boundary
+                            currentHash = current.zobristHash
                             progress = true
                             boundaryImproved = true
                             break
@@ -387,6 +403,7 @@ extension ReducerStrategies {
                         progress: &progress,
                         rejectCache: &rejectCache,
                     ) {
+                        currentHash = current.zobristHash
                         continue
                     }
                 }

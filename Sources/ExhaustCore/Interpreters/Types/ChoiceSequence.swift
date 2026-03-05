@@ -29,21 +29,81 @@
     }
 }
 
+// MARK: - Zobrist hashing
+
+extension ChoiceSequence {
+    /// Computes a Zobrist hash: XOR of position-dependent contributions for each element.
+    /// Enables O(1) incremental updates when single elements change.
+    internal var zobristHash: UInt64 {
+        var hash: UInt64 = 0
+        for (i, element) in self.enumerated() {
+            hash ^= Self.zobristContribution(at: i, element)
+        }
+        return hash
+    }
+
+    /// Position-dependent hash contribution of a single element.
+    /// Uses splitmix64 mixing for good avalanche with XOR combination.
+    internal static func zobristContribution(at position: Int, _ value: ChoiceSequenceValue) -> UInt64 {
+        var bits: UInt64
+        switch value {
+        case let .value(v):
+            bits = v.choice.bitPattern64 ^ (zobristTagBits(v.choice.tag) << 48)
+        case let .reduced(v):
+            bits = v.choice.bitPattern64 ^ (zobristTagBits(v.choice.tag) << 48) ^ 0xFF00FF00FF00FF00
+        case .sequence(true, isLengthExplicit: true):
+            bits = 1
+        case .sequence(true, isLengthExplicit: false):
+            bits = 2
+        case .sequence(false, isLengthExplicit: true):
+            bits = 3
+        case .sequence(false, isLengthExplicit: false):
+            bits = 4
+        case .group(true):
+            bits = 5
+        case .group(false):
+            bits = 6
+        case let .branch(b):
+            bits = b.id ^ 0xDEADBEEFCAFEBABE
+        }
+        bits ^= UInt64(position) &* 0x9E3779B97F4A7C15
+        bits = (bits ^ (bits >> 30)) &* 0xBF58476D1CE4E5B9
+        bits = (bits ^ (bits >> 27)) &* 0x94D049BB133111EB
+        bits ^= bits >> 31
+        return bits
+    }
+
+    /// Updates a Zobrist hash in O(1) after replacing the element at `position`.
+    internal static func zobristHashUpdating(
+        _ hash: UInt64,
+        at position: Int,
+        replacing oldValue: ChoiceSequenceValue,
+        with newValue: ChoiceSequenceValue
+    ) -> UInt64 {
+        hash ^ zobristContribution(at: position, oldValue) ^ zobristContribution(at: position, newValue)
+    }
+
+    private static func zobristTagBits(_ tag: TypeTag) -> UInt64 {
+        switch tag {
+        case .uint: 0
+        case .uint64: 1
+        case .uint32: 2
+        case .uint16: 3
+        case .uint8: 4
+        case .int: 5
+        case .int64: 6
+        case .int32: 7
+        case .int16: 8
+        case .int8: 9
+        case .double: 10
+        case .float: 11
+        }
+    }
+}
+
 // MARK: - Helper functions
 
 @_spi(ExhaustInternal) public extension ChoiceSequence {
-    /// Returns two independent hash values for use in a k-hash bloom filter.
-    /// Uses the double-hashing scheme: index_i = (h1 + i * h2) % size.
-    @_spi(ExhaustInternal) var bloomHashes: (Int, Int) {
-        var h1 = Hasher()
-        var h2 = Hasher()
-        h2.combine(0) // discriminator for independence
-        for element in self {
-            h1.combine(element)
-            h2.combine(element)
-        }
-        return (h1.finalize(), h2.finalize())
-    }
 
     /// Creates a projection of a `ChoiceTree` to a flat list
     @_spi(ExhaustInternal) init(_ tree: ChoiceTree) {

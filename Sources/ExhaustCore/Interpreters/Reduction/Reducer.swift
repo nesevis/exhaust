@@ -359,7 +359,8 @@ public extension Interpreters {
                     }
                     nextPasses.append(pass)
                 }
-            }
+            } // End pass for loop
+
             passes = nextPasses
             if didImprove {
                 let recentWindow = recentSequences.suffix(config.recentCycleWindow)
@@ -385,7 +386,6 @@ public extension Interpreters {
                 stallBudget = config.maxStalls
                 continue
             }
-//            print("Pass ended. Improved? \(didImprove) \np:\(previousSequence!.shortString) (\(previousSequence!.hashValue))\nc:\(currentSequence.shortString) (\(currentSequence.hashValue))")
 
             // No pass improved the sequence — further iterations are deterministic, so stop.
             stallBudget -= 1
