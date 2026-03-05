@@ -10,58 +10,13 @@ import Testing
 @testable import Exhaust
 @_spi(ExhaustInternal) import ExhaustCore
 
-// MARK: - BST Definition
-
-private enum BST: Equatable, Hashable {
-    case leaf
-    indirect case node(left: BST, value: UInt, right: BST)
-
-    static var arbitrary: ReflectiveGenerator<BST> {
-        bstGenerator(maxDepth: 5)
-    }
-
-    private static func bstGenerator(maxDepth: Int) -> ReflectiveGenerator<BST> {
-        if maxDepth <= 0 {
-            return #gen(.just(.leaf))
-        }
-        let nodeBranch = #gen(bstGenerator(maxDepth: maxDepth - 1), .uint(in: 0 ... 9), bstGenerator(maxDepth: maxDepth - 1)).map { left, value, right in
-            BST.node(left: left, value: value, right: right)
-        }
-        return #gen(.oneOf(weighted: (1, .just(.leaf)), (3, nodeBranch)))
-    }
-
-    func isValidBST() -> Bool {
-        isValidBST(min: nil, max: nil)
-    }
-
-    private func isValidBST(min: UInt?, max: UInt?) -> Bool {
-        switch self {
-        case .leaf:
-            return true
-        case let .node(left, value, right):
-            if let min, value <= min { return false }
-            if let max, value >= max { return false }
-            return left.isValidBST(min: min, max: value) &&
-                right.isValidBST(min: value, max: max)
-        }
-    }
-
-    var height: Int {
-        switch self {
-        case .leaf: 0
-        case let .node(left, _, right):
-            1 + Swift.max(left.height, right.height)
-        }
-    }
-}
-
 @Suite("Online CGS Interpreter")
 struct OnlineCGSInterpreterTests {
     // MARK: - BST Height Diversity
 
     @Test("BST: online CGS produces valid BSTs at heights >= 2", .disabled("Takes 21 seconds to run"))
     func bstHeightDiversity() {
-        let gen = BST.arbitrary
+        let gen = BST.arbitrary()
         let isValidNonLeafBST: (BST) -> Bool = { $0 != .leaf && $0.isValidBST() }
 
         var iterator = OnlineCGSInterpreter(
@@ -217,7 +172,7 @@ struct OnlineCGSInterpreterTests {
 
     @Test("Smoothing recovers dead branches in tuned BST generator")
     func smoothingRecoverDeadBranches() throws {
-        let gen = BST.arbitrary
+        let gen = BST.arbitrary()
         let isValidBST: (BST) -> Bool = { $0.height >= 1 && $0.isValidBST() }
 
         let tuned = try GeneratorTuning.tune(
@@ -285,7 +240,7 @@ struct OnlineCGSInterpreterTests {
 
     @Test("Static profile: tuned BST shows low entropy at depth-1+ picks")
     func staticProfileEntropy() throws {
-        let gen = BST.arbitrary
+        let gen = BST.arbitrary()
         let isValidBST: (BST) -> Bool = { $0.height >= 1 && $0.isValidBST() }
 
         let tuned = try GeneratorTuning.tune(
@@ -318,7 +273,7 @@ struct OnlineCGSInterpreterTests {
 
     @Test("Empirical profile: validity rates decrease with depth for BST")
     func empiricalProfileValidity() throws {
-        let gen = BST.arbitrary
+        let gen = BST.arbitrary()
         let isValidBST: (BST) -> Bool = { $0.height >= 1 && $0.isValidBST() }
 
         let tuned = try GeneratorTuning.tune(
@@ -353,7 +308,7 @@ struct OnlineCGSInterpreterTests {
 
     @Test("Adaptive smooth vs global smooth: adaptive achieves better diversity")
     func adaptiveSmoothVsGlobalSmooth() throws {
-        let gen = BST.arbitrary
+        let gen = BST.arbitrary()
         let isValidBST: (BST) -> Bool = { $0.height >= 1 && $0.isValidBST() }
         let maxRuns: UInt64 = 100
 

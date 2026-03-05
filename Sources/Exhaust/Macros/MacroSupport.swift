@@ -185,6 +185,134 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
         return nil
     }
 
+    // MARK: - Explore
+
+    /// Runs a feedback-guided property test with hill-climbing mutation.
+    /// This is the runtime target of the `#explore` macro expansion.
+    @discardableResult
+    public static func __explore<Output>(
+        _ gen: ReflectiveGenerator<Output>,
+        settings: [ExploreSettings],
+        scorer: @escaping (Output) -> Double,
+        sourceCode: String?,
+        fileID: StaticString = #fileID,
+        filePath: StaticString = #filePath,
+        line: UInt = #line,
+        column: UInt = #column,
+        property: @escaping (Output) -> Bool,
+    ) -> Output? {
+        var maxIterations: UInt64 = 10_000
+        var seed: UInt64?
+        var shrinkConfig: ShrinkBudget = .fast
+        var suppressIssueReporting = false
+        var poolCapacity: Int = 256
+        var generateRatio: Double = 0.2
+
+        for setting in settings {
+            switch setting {
+            case let .maxIterations(n):
+                maxIterations = n
+            case let .replay(s):
+                seed = s
+            case let .shrinkBudget(config):
+                shrinkConfig = config
+            case .suppressIssueReporting:
+                suppressIssueReporting = true
+            case let .poolCapacity(n):
+                poolCapacity = n
+            case let .generateRatio(r):
+                generateRatio = r
+            }
+        }
+
+        var runner = ExploreRunner(
+            gen: gen,
+            property: property,
+            maxIterations: maxIterations,
+            shrinkConfig: shrinkConfig,
+            poolCapacity: poolCapacity,
+            generateRatio: generateRatio,
+            seed: seed,
+            scorer: scorer
+        )
+        let actualSeed = runner.baseSeed
+
+        let result = runner.run()
+
+        switch result {
+        case let .failure(counterexample, shrunkSequence, original, iteration):
+            let failure = PropertyTestFailure(
+                counterexample: counterexample,
+                original: original,
+                sourceCode: sourceCode,
+                seed: actualSeed,
+                iteration: Int(iteration),
+                maxIterations: maxIterations,
+                blueprint: shrunkSequence.shortString,
+                propertyInvocations: nil,
+            )
+            let rendered = failure.render(format: ExhaustLog.configuration.format)
+            ExhaustLog.error(
+                category: .propertyTest,
+                event: "explore_property_failed",
+                rendered,
+            )
+            if !suppressIssueReporting {
+                reportIssue(
+                    rendered,
+                    fileID: fileID,
+                    filePath: filePath,
+                    line: line,
+                    column: column,
+                )
+            }
+            return counterexample
+
+        case let .unshrunkFailure(counterexample, iteration):
+            let failure = PropertyTestFailure(
+                counterexample: counterexample,
+                original: nil as Output?,
+                sourceCode: sourceCode,
+                seed: actualSeed,
+                iteration: Int(iteration),
+                maxIterations: maxIterations,
+                blueprint: nil,
+                propertyInvocations: nil,
+            )
+            let rendered = failure.render(format: ExhaustLog.configuration.format)
+            ExhaustLog.error(
+                category: .propertyTest,
+                event: "explore_property_failed",
+                rendered,
+            )
+            if !suppressIssueReporting {
+                reportIssue(
+                    rendered,
+                    fileID: fileID,
+                    filePath: filePath,
+                    line: line,
+                    column: column,
+                )
+            }
+            return counterexample
+
+        case let .passed(iterations, poolSize):
+            var passMetadata = [
+                "iterations": "\(iterations)",
+                "poolSize": "\(poolSize)",
+            ]
+            if let sourceCode {
+                passMetadata["source"] = sourceCode
+            }
+            ExhaustLog.notice(
+                category: .propertyTest,
+                event: "explore_property_passed",
+                metadata: passMetadata,
+            )
+            return nil
+        }
+    }
+
     // MARK: - Sampling
 
     /// Generates a single value from a generator. Runtime target of `#sample` expansion.

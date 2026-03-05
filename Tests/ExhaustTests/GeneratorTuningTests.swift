@@ -10,59 +10,6 @@ import Testing
 @testable import Exhaust
 @_spi(ExhaustInternal) import ExhaustCore
 
-// MARK: - BST Definition (self-contained for test independence)
-
-private enum BST: Equatable, Hashable {
-    case leaf
-    indirect case node(left: BST, value: UInt, right: BST)
-
-    static var arbitrary: ReflectiveGenerator<BST> {
-        bstGenerator(maxDepth: 5)
-    }
-
-    private static func bstGenerator(maxDepth: Int) -> ReflectiveGenerator<BST> {
-        if maxDepth <= 0 {
-            return #gen(.just(.leaf))
-        }
-        let nodeBranch = #gen(bstGenerator(maxDepth: maxDepth - 1), .uint(in: 0 ... 9), bstGenerator(maxDepth: maxDepth - 1)).map { left, value, right in
-            BST.node(left: left, value: value, right: right)
-        }
-        return #gen(.oneOf(weighted: (1, .just(.leaf)), (3, nodeBranch)))
-    }
-
-    func isValidBST() -> Bool {
-        isValidBST(min: nil, max: nil)
-    }
-
-    private func isValidBST(min: UInt?, max: UInt?) -> Bool {
-        switch self {
-        case .leaf:
-            return true
-        case let .node(left, value, right):
-            if let min, value <= min { return false }
-            if let max, value >= max { return false }
-            return left.isValidBST(min: min, max: value) &&
-                right.isValidBST(min: value, max: max)
-        }
-    }
-
-    var height: Int {
-        switch self {
-        case .leaf: 0
-        case let .node(left, _, right):
-            1 + Swift.max(left.height, right.height)
-        }
-    }
-
-    var nodeCount: Int {
-        switch self {
-        case .leaf: 0
-        case let .node(left, _, right):
-            1 + left.nodeCount + right.nodeCount
-        }
-    }
-}
-
 @Suite("Choice Gradient Sampling")
 struct GeneratorTuningTests {
     // MARK: - Pick Adaptation
@@ -324,11 +271,11 @@ struct GeneratorTuningTests {
         let sampleCount: UInt64 = 500
 
         // Raw generation: only a fraction of output satisfies the predicate
-        let rawValues = Array(ValueInterpreter(BST.arbitrary, seed: 42, maxRuns: sampleCount))
+        let rawValues = Array(ValueInterpreter(BST.arbitrary(), seed: 42, maxRuns: sampleCount))
         let rawValidCount = rawValues.count(where: isValidNonLeafBST)
 
         // Tuned filter: all output satisfies the predicate
-        let tunedGen = BST.arbitrary.filter(.probeSampling, isValidNonLeafBST)
+        let tunedGen = BST.arbitrary().filter(.probeSampling, isValidNonLeafBST)
         let tunedValues = Array(ValueInterpreter(tunedGen, seed: 42, maxRuns: sampleCount))
 
         #expect(tunedValues.allSatisfy(isValidNonLeafBST))
@@ -342,7 +289,7 @@ struct GeneratorTuningTests {
         let duration: TimeInterval = 1
 
         // --- .rejectionSampling strategy ---
-        let rejectGen = BST.arbitrary.filter(.rejectionSampling, isValidBST)
+        let rejectGen = BST.arbitrary().filter(.rejectionSampling, isValidBST)
         var rejectIterator = ValueInterpreter(rejectGen, seed: 42, maxRuns: .max)
         var rejectValues = [BST]()
 
@@ -357,7 +304,7 @@ struct GeneratorTuningTests {
         print(".rejectionSampling: \(rejectValues.count) valid (\(rejectUnique.count) unique)")
 
         // --- .probeSampling strategy ---
-        let tuneGen = BST.arbitrary.filter(.probeSampling, isValidBST)
+        let tuneGen = BST.arbitrary().filter(.probeSampling, isValidBST)
         var tuneIterator = ValueInterpreter(tuneGen, seed: 42, maxRuns: .max)
         var tuneValues = [BST]()
 
@@ -377,7 +324,7 @@ struct GeneratorTuningTests {
             tree != .leaf && tree.isValidBST()
         }
 
-        let tunedGen = BST.arbitrary.filter(.probeSampling, isValidNonLeafBST)
+        let tunedGen = BST.arbitrary().filter(.probeSampling, isValidNonLeafBST)
         let values = Array(ValueInterpreter(tunedGen, seed: 99, maxRuns: 500))
 
         #expect(values.allSatisfy(isValidNonLeafBST))
@@ -386,7 +333,7 @@ struct GeneratorTuningTests {
 
     @Test("BST: tuned generator structure has meaningful weight differences")
     func bstTunedStructure() throws {
-        let naive = BST.arbitrary
+        let naive = BST.arbitrary()
 
         let isValidBST: (BST) -> Bool = { $0.isValidBST() }
 

@@ -7,5 +7,6 @@ struct ExhaustMacrosPlugin: CompilerPlugin {
         GenerateMacro.self,
         ExhaustTestMacro.self,
         SampleMacro.self,
+        ExploreMacro.self,
     ]
 }
