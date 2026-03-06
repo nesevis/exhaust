@@ -232,7 +232,7 @@ public enum Interpreters {
 
         let bitPattern = convertibleValue.bitPattern64
         if isRangeExplicit, (min ... max).contains(bitPattern) == false {
-            throw ReflectionError.inputWasOutOfGeneratorRange(convertibleValue, min ... max)
+            throw ReflectionError.inputWasOutOfGeneratorRange(String(describing: convertibleValue), min ... max)
         }
 
         let reflectedRange: ClosedRange<UInt64>
@@ -323,7 +323,7 @@ public enum Interpreters {
         try reflectRecursive(gen, onFinalOutput: finalOutput).map { ($0.value, $0.path) }
     }
 
-    public enum ReflectionError: LocalizedError {
+    public enum ReflectionError: LocalizedError, Equatable {
         case reflectedNil(type: String, resultType: String)
         case contramapWasWrongType
         case zipWasWrongLengthOrType
@@ -332,6 +332,6 @@ public enum Interpreters {
         case inputWasWrongForSequence(String)
         case couldNotReflectOnSequenceElement(String)
         case pickValueIsNotEquatable(String)
-        case inputWasOutOfGeneratorRange(any BitPatternConvertible, ClosedRange<UInt64>)
+        case inputWasOutOfGeneratorRange(String, ClosedRange<UInt64>)
     }
 }

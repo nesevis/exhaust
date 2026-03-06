@@ -75,8 +75,10 @@ struct CoreGeneratorTests {
             #expect(recipe != nil)
 
             // Test reflection fails with different value
-            let badRecipe = try Interpreters.reflect(gen, with: 43)
-            #expect(badRecipe == nil)
+            // TODO: This isn't a particularly useful error to be throwing
+            #expect(throws: Interpreters.ReflectionError.contramapWasWrongType) {
+                _ = try Interpreters.reflect(gen, with: 43)
+            }
 
             // Test replay
             guard let recipe else {
