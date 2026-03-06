@@ -86,6 +86,29 @@
         return CoveringArray(strength: strength, rows: rows, profile: profile)
     }
 
+    /// Returns the strongest covering array that fits within `budget` rows
+    /// for a boundary domain profile, or `nil` if even t=2 doesn't fit.
+    public static func bestFitting(budget: UInt64, boundaryProfile: BoundaryDomainProfile) -> CoveringArray? {
+        let syntheticParams = boundaryProfile.parameters.map { param in
+            FiniteParameter(
+                index: param.index,
+                domainSize: param.domainSize,
+                kind: .chooseBits(range: 0 ... max(param.domainSize, 1) - 1, tag: .uint64)
+            )
+        }
+        var totalSpace: UInt64 = 1
+        for param in syntheticParams {
+            let (product, overflow) = totalSpace.multipliedReportingOverflow(by: param.domainSize)
+            if overflow { totalSpace = .max; break }
+            totalSpace = product
+        }
+        let syntheticProfile = FiniteDomainProfile(
+            parameters: syntheticParams,
+            totalSpace: totalSpace
+        )
+        return bestFitting(budget: budget, profile: syntheticProfile)
+    }
+
     // MARK: - Exhaustive Enumeration
 
     private static func exhaustive(profile: FiniteDomainProfile) -> CoveringArray {

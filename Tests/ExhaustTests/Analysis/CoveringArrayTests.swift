@@ -14,7 +14,7 @@ struct FiniteDomainAnalysisTests {
     @Test("Bool generator produces 1 parameter with domain 2")
     func boolAnalysis() {
         let gen = #gen(.bool())
-        let profile = FiniteDomainAnalysis.analyze(gen)
+        let profile = analyzeFinite(gen)
         #expect(profile != nil)
         #expect(profile?.parameters.count == 1)
         #expect(profile?.parameters[0].domainSize == 2)
@@ -24,7 +24,7 @@ struct FiniteDomainAnalysisTests {
     @Test("Int range produces 1 parameter with correct domain")
     func intRangeAnalysis() {
         let gen = #gen(.int(in: 0 ... 4))
-        let profile = FiniteDomainAnalysis.analyze(gen)
+        let profile = analyzeFinite(gen)
         #expect(profile != nil)
         #expect(profile?.parameters.count == 1)
         #expect(profile?.parameters[0].domainSize == 5)
@@ -34,7 +34,7 @@ struct FiniteDomainAnalysisTests {
     @Test("Zip of finite generators produces correct parameter count")
     func zipAnalysis() {
         let gen = #gen(.bool(), .bool(), .int(in: 0 ... 2))
-        let profile = FiniteDomainAnalysis.analyze(gen)
+        let profile = analyzeFinite(gen)
         #expect(profile != nil)
         #expect(profile?.parameters.count == 3)
         #expect(profile?.parameters[0].domainSize == 2)
@@ -46,32 +46,32 @@ struct FiniteDomainAnalysisTests {
     @Test("Non-finite generator returns nil")
     func nonFiniteReturnsNil() {
         let gen = #gen(.asciiString(length: 1 ... 5))
-        let profile = FiniteDomainAnalysis.analyze(gen)
-        #expect(profile == nil)
+        let result = ChoiceTreeAnalysis.analyze(gen)
+        #expect(result == nil)
     }
 
     @Test("Partially finite generator returns nil")
     func partiallyFiniteReturnsNil() {
         let gen = #gen(.bool(), .asciiString(length: 1 ... 5))
-        let profile = FiniteDomainAnalysis.analyze(gen)
-        #expect(profile == nil)
+        let result = ChoiceTreeAnalysis.analyze(gen)
+        #expect(result == nil)
     }
 
     @Test("oneOf enum produces correct domain")
     func oneOfEnumAnalysis() {
         enum Direction: CaseIterable { case north, south, east, west }
         let gen = ReflectiveGenerator<Direction>.oneOf(Direction.self)
-        let profile = FiniteDomainAnalysis.analyze(gen)
+        let profile = analyzeFinite(gen)
         #expect(profile != nil)
         #expect(profile?.parameters.count == 1)
         #expect(profile?.parameters[0].domainSize == 4)
         #expect(profile?.totalSpace == 4)
     }
 
-    @Test("Large domain range returns nil")
-    func largeDomainReturnsNil() {
+    @Test("Large domain range returns nil for finite")
+    func largeDomainReturnsNilForFinite() {
         let gen = #gen(.int(in: 0 ... 1000))
-        let profile = FiniteDomainAnalysis.analyze(gen)
+        let profile = analyzeFinite(gen)
         #expect(profile == nil)
     }
 }
@@ -83,7 +83,7 @@ struct IPOGCoveringArrayTests {
     @Test("5 booleans at t=2 produces compact covering array")
     func fiveBoolsPairwise() {
         let gen = #gen(.bool(), .bool(), .bool(), .bool(), .bool())
-        let profile = FiniteDomainAnalysis.analyze(gen)!
+        let profile = analyzeFinite(gen)!
         let covering = CoveringArray.generate(profile: profile, strength: 2)!
 
         // Known bound: 5 booleans pairwise should need ~6 rows
@@ -98,7 +98,7 @@ struct IPOGCoveringArrayTests {
     @Test("Coverage verification for mixed domains")
     func mixedDomainsCoverage() {
         let gen = #gen(.bool(), .int(in: 0 ... 2), .int(in: 0 ... 3), .bool())
-        let profile = FiniteDomainAnalysis.analyze(gen)!
+        let profile = analyzeFinite(gen)!
         let covering = CoveringArray.generate(profile: profile, strength: 2)!
 
         verifyTWayCoverage(covering: covering, profile: profile, strength: 2)
@@ -107,7 +107,7 @@ struct IPOGCoveringArrayTests {
     @Test("Strength 3 produces valid covering array")
     func strength3() {
         let gen = #gen(.bool(), .bool(), .bool(), .int(in: 0 ... 2))
-        let profile = FiniteDomainAnalysis.analyze(gen)!
+        let profile = analyzeFinite(gen)!
         let covering = CoveringArray.generate(profile: profile, strength: 3)!
 
         verifyTWayCoverage(covering: covering, profile: profile, strength: 3)
@@ -116,7 +116,7 @@ struct IPOGCoveringArrayTests {
     @Test("Exhaustive enumeration when strength equals parameter count")
     func exhaustiveEnumeration() {
         let gen = #gen(.bool(), .bool(), .int(in: 0 ... 2))
-        let profile = FiniteDomainAnalysis.analyze(gen)!
+        let profile = analyzeFinite(gen)!
         let covering = CoveringArray.generate(profile: profile, strength: profile.parameters.count)!
 
         // 2 * 2 * 3 = 12 rows
@@ -126,7 +126,7 @@ struct IPOGCoveringArrayTests {
     @Test("bestFitting returns covering array within budget")
     func bestFitting() {
         let gen = #gen(.bool(), .bool(), .bool(), .bool(), .bool())
-        let profile = FiniteDomainAnalysis.analyze(gen)!
+        let profile = analyzeFinite(gen)!
 
         let covering = CoveringArray.bestFitting(budget: 10, profile: profile)
         #expect(covering != nil)
@@ -155,7 +155,7 @@ struct IPOGCoveringArrayTests {
             .bool(),
             .bool()
         )
-        let profile = FiniteDomainAnalysis.analyze(gen)!
+        let profile = analyzeFinite(gen)!
         let covering = CoveringArray.generate(profile: profile, strength: 2)!
 
         // 64-row seed should absorb most boolean pairs; expect modest growth
@@ -189,7 +189,7 @@ struct IPOGCoveringArrayTests {
             .int(in: 0 ... 2),
             .int(in: 0 ... 2)
         )
-        let profile = FiniteDomainAnalysis.analyze(gen)!
+        let profile = analyzeFinite(gen)!
 
         let pairwise = CoveringArray.generate(profile: profile, strength: 2)!
         verifyTWayCoverage(covering: pairwise, profile: profile, strength: 2)
@@ -207,7 +207,7 @@ struct CoveringArrayReplayTests {
     @Test("Replay of covering array row produces valid value")
     func replayProducesValidValue() throws {
         let gen = #gen(.bool(), .bool(), .int(in: 0 ... 2))
-        let profile = try #require(FiniteDomainAnalysis.analyze(gen))
+        let profile = try #require(analyzeFinite(gen))
         let covering = try #require(CoveringArray.generate(profile: profile, strength: 2))
 
         var replayedCount = 0
@@ -229,7 +229,7 @@ struct CoveringArrayReplayTests {
     @Test("Replay of single bool parameter produces distinct values")
     func replaySingleBool() throws {
         let gen = #gen(.bool())
-        let profile = try #require(FiniteDomainAnalysis.analyze(gen))
+        let profile = try #require(analyzeFinite(gen))
 
         let row0 = CoveringArrayRow(values: [0])
         let tree0 = try #require(CoveringArrayReplay.buildTree(row: row0, profile: profile))
@@ -372,6 +372,11 @@ private func verifyTWayCoverage(
             "Missing coverage for parameter combination \(combo): got \(seen.count), expected \(expected)"
         )
     }
+}
+
+private func analyzeFinite<Output>(_ gen: ReflectiveGenerator<Output>) -> FiniteDomainProfile? {
+    guard case let .finite(profile) = ChoiceTreeAnalysis.analyze(gen) else { return nil }
+    return profile
 }
 
 private func allCombinations(of n: Int, choose k: Int) -> [[Int]] {

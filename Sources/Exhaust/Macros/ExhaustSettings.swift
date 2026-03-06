@@ -33,6 +33,16 @@ public enum ExhaustSettings<Output> {
     /// The value must fail the property — if it passes, an issue is reported.
     case reflecting(Output)
 
+    /// The iteration budget for structured coverage analysis (exhaustive enumeration,
+    /// t-way covering arrays, boundary value covering arrays).
+    ///
+    /// This budget is *additive* with `maxIterations` — structured coverage runs first,
+    /// then random sampling runs for `maxIterations` iterations. The default is 100.
+    ///
+    /// When the generator's total space fits within this budget, `#exhaust` performs
+    /// exhaustive enumeration and skips the random phase entirely.
+    case coverageBudget(UInt64)
+
     /// Disables automatic t-way covering array analysis.
     ///
     /// By default, `#exhaust` detects generators composed entirely of finite-domain

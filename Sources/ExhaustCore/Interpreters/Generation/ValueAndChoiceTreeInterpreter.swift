@@ -117,7 +117,7 @@ import Foundation
 
         case let .impure(operation, continuation):
             switch operation {
-                    // MARK: - Contramap
+            // MARK: - Contramap
 
             case let .contramap(_, nextGen):
                 return try handleContramap(

@@ -32,6 +32,7 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
         property: (Output) -> Bool,
     ) -> Output? {
         var maxIterations: UInt64 = 100
+        var coverageBudget: UInt64 = 100
         var seed: UInt64?
         var shrinkConfig: ShrinkBudget = .fast
         var suppressIssueReporting = false
@@ -42,6 +43,8 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
             switch setting {
             case let .maxIterations(n):
                 maxIterations = n
+            case let .coverageBudget(n):
+                coverageBudget = n
             case let .replay(s):
                 seed = s
             case let .shrinkBudget(config):
@@ -81,90 +84,31 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
             }
         }
 
-        // --- T-way covering array path ---
-        if useRandomOnly == false, seed == nil, let profile = FiniteDomainAnalysis.analyze(gen) {
-            let isExhaustive = profile.totalSpace <= maxIterations
-
-            let covering: CoveringArray?
-            if isExhaustive {
-                covering = CoveringArray.generate(profile: profile, strength: profile.parameters.count)
-            } else {
-                covering = CoveringArray.bestFitting(budget: maxIterations, profile: profile)
-            }
-
-            if let covering, covering.strength >= 2 {
-                var iterations = 0
-
-                // Phase 1: Replay covering array rows
-                for row in covering.rows {
-                    guard let tree = CoveringArrayReplay.buildTree(row: row, profile: profile) else {
-                        continue
-                    }
-                    guard let value: Output = try? Interpreters.replay(gen, using: tree) else {
-                        continue
-                    }
-                    iterations += 1
-                    if property(value) == false {
-                        var propertyInvocationCount = 0
-                        let countingProperty: (Output) -> Bool = { value in
-                            propertyInvocationCount += 1
-                            return property(value)
-                        }
-                        do {
-                            if let (shrunkSequence, shrunkValue) = try Interpreters.reduce(
-                                gen: gen,
-                                tree: tree,
-                                config: shrinkConfig,
-                                property: countingProperty,
-                            ) {
-                                var failure = PropertyTestFailure(
-                                    counterexample: shrunkValue,
-                                    original: value,
-                                    sourceCode: sourceCode,
-                                    seed: nil,
-                                    iteration: iterations,
-                                    maxIterations: maxIterations,
-                                    blueprint: shrunkSequence.shortString,
-                                    propertyInvocations: propertyInvocationCount,
-                                )
-                                failure.replayHint = "No replay seed — found via systematic combinatorial coverage."
-                                let rendered = failure.render(format: ExhaustLog.configuration.format)
-                                ExhaustLog.error(
-                                    category: .propertyTest,
-                                    event: "property_failed",
-                                    rendered,
-                                )
-                                if !suppressIssueReporting {
-                                    reportIssue(
-                                        rendered,
-                                        fileID: fileID,
-                                        filePath: filePath,
-                                        line: line,
-                                        column: column,
-                                    )
-                                }
-                                return shrunkValue
-                            }
-                        } catch {
-                            reportIssue(
-                                "\(error)",
-                                fileID: fileID,
-                                filePath: filePath,
-                                line: line,
-                                column: column,
-                            )
-                            return value
-                        }
-
-                        // Shrinking failed — report original
+        // --- Structured coverage phase ---
+        if !useRandomOnly, seed == nil {
+            let coverageResult = CoverageRunner.run(gen, coverageBudget: coverageBudget, property: property)
+            switch coverageResult {
+            case let .failure(value, tree, iteration):
+                var propertyInvocationCount = 0
+                let countingProperty: (Output) -> Bool = { value in
+                    propertyInvocationCount += 1
+                    return property(value)
+                }
+                do {
+                    if let (shrunkSequence, shrunkValue) = try Interpreters.reduce(
+                        gen: gen,
+                        tree: tree,
+                        config: shrinkConfig,
+                        property: countingProperty,
+                    ) {
                         var failure = PropertyTestFailure(
-                            counterexample: value,
-                            original: nil as Output?,
+                            counterexample: shrunkValue,
+                            original: value,
                             sourceCode: sourceCode,
                             seed: nil,
-                            iteration: iterations,
+                            iteration: iteration,
                             maxIterations: maxIterations,
-                            blueprint: nil,
+                            blueprint: shrunkSequence.shortString,
                             propertyInvocations: propertyInvocationCount,
                         )
                         failure.replayHint = "No replay seed — found via systematic combinatorial coverage."
@@ -183,109 +127,54 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
                                 column: column,
                             )
                         }
-                        return nil
+                        return shrunkValue
                     }
+                } catch {
+                    reportIssue(
+                        "\(error)",
+                        fileID: fileID,
+                        filePath: filePath,
+                        line: line,
+                        column: column,
+                    )
+                    return value
                 }
 
-                // Phase 2: If exhaustive, stop. Otherwise fill remaining budget with random.
-                if isExhaustive {
-                    ExhaustLog.notice(
-                        category: .propertyTest,
-                        event: "tway_coverage",
-                        metadata: [
-                            "strength": "\(covering.strength)",
-                            "covering_rows": "\(covering.rows.count)",
-                            "total_space": "\(profile.totalSpace)",
-                            "parameters": "\(profile.parameters.count)",
-                            "exhaustive": "true",
-                        ],
+                // Shrinking failed — report original
+                var failure = PropertyTestFailure(
+                    counterexample: value,
+                    original: nil as Output?,
+                    sourceCode: sourceCode,
+                    seed: nil,
+                    iteration: iteration,
+                    maxIterations: maxIterations,
+                    blueprint: nil,
+                    propertyInvocations: propertyInvocationCount,
+                )
+                failure.replayHint = "No replay seed — found via systematic combinatorial coverage."
+                let rendered = failure.render(format: ExhaustLog.configuration.format)
+                ExhaustLog.error(
+                    category: .propertyTest,
+                    event: "property_failed",
+                    rendered,
+                )
+                if !suppressIssueReporting {
+                    reportIssue(
+                        rendered,
+                        fileID: fileID,
+                        filePath: filePath,
+                        line: line,
+                        column: column,
                     )
-                    var passMetadata = ["iterations": "\(iterations)"]
-                    if let sourceCode {
-                        passMetadata["source"] = sourceCode
-                    }
-                    ExhaustLog.notice(
-                        category: .propertyTest,
-                        event: "property_passed",
-                        metadata: passMetadata,
-                    )
-                    return nil
                 }
+                return nil
 
-                // Not exhaustive — fill remaining budget with random sampling
-                let remaining = maxIterations - UInt64(iterations)
-                if remaining > 0 {
-                    var randomGen = ValueAndChoiceTreeInterpreter(
-                        gen,
-                        seed: seed,
-                        maxRuns: remaining,
-                    )
-
-                    while let (next, tree) = randomGen.next() {
-                        iterations += 1
-                        if property(next) == false {
-                            var propertyInvocationCount = 0
-                            let countingProperty: (Output) -> Bool = { value in
-                                propertyInvocationCount += 1
-                                return property(value)
-                            }
-                            do {
-                                if let (shrunkSequence, shrunkValue) = try Interpreters.reduce(
-                                    gen: gen,
-                                    tree: tree,
-                                    config: shrinkConfig,
-                                    property: countingProperty,
-                                ) {
-                                    let failure = PropertyTestFailure(
-                                        counterexample: shrunkValue,
-                                        original: next,
-                                        sourceCode: sourceCode,
-                                        seed: randomGen.baseSeed,
-                                        iteration: iterations,
-                                        maxIterations: maxIterations,
-                                        blueprint: shrunkSequence.shortString,
-                                        propertyInvocations: propertyInvocationCount,
-                                    )
-                                    let rendered = failure.render(format: ExhaustLog.configuration.format)
-                                    ExhaustLog.error(
-                                        category: .propertyTest,
-                                        event: "property_failed",
-                                        rendered,
-                                    )
-                                    if !suppressIssueReporting {
-                                        reportIssue(
-                                            rendered,
-                                            fileID: fileID,
-                                            filePath: filePath,
-                                            line: line,
-                                            column: column,
-                                        )
-                                    }
-                                    return shrunkValue
-                                }
-                            } catch {
-                                reportIssue(
-                                    "\(error)",
-                                    fileID: fileID,
-                                    filePath: filePath,
-                                    line: line,
-                                    column: column,
-                                )
-                                return next
-                            }
-                        }
-                    }
-                }
-
+            case let .exhaustive(iterations):
                 ExhaustLog.notice(
                     category: .propertyTest,
                     event: "tway_coverage",
                     metadata: [
-                        "strength": "\(covering.strength)",
-                        "covering_rows": "\(covering.rows.count)",
-                        "total_space": "\(profile.totalSpace)",
-                        "parameters": "\(profile.parameters.count)",
-                        "exhaustive": "false",
+                        "exhaustive": "true",
                     ],
                 )
                 var passMetadata = ["iterations": "\(iterations)"]
@@ -298,9 +187,28 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
                     metadata: passMetadata,
                 )
                 return nil
+
+            case let .partial(iterations, strength, rows, parameters, totalSpace, kind):
+                ExhaustLog.notice(
+                    category: .propertyTest,
+                    event: "tway_coverage",
+                    metadata: [
+                        "strength": "\(strength)",
+                        "covering_rows": "\(rows)",
+                        "total_space": "\(totalSpace)",
+                        "parameters": "\(parameters)",
+                        "exhaustive": "false",
+                        "kind": kind == .boundaryValue ? "boundary" : "finite",
+                    ],
+                )
+                // Fall through to random phase with full maxIterations budget
+                _ = iterations
+
+            case .notApplicable:
+                break
             }
         }
-        // --- Fallback: standard random sampling ---
+        // --- Random sampling phase (full maxIterations budget) ---
 
         var iterations = 0
         var generator = ValueAndChoiceTreeInterpreter(
