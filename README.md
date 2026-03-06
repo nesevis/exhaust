@@ -67,6 +67,40 @@ Configure with settings:
 }
 ```
 
+### How `#exhaust` Tests
+
+`#exhaust` runs up to two phases, each with its own iteration budget:
+
+**Phase 1: Structured coverage** (default budget: 100 iterations)
+
+Before any random sampling, `#exhaust` analyzes the generator's structure to select the best systematic strategy:
+
+1. **Exhaustive enumeration** — If the generator is composed entirely of small finite domains (booleans, enums, bounded ranges ≤256 values) and the total space fits within the coverage budget, every combination is tested. No random phase follows.
+
+2. **t-way covering arrays** — If the total space is too large for exhaustive enumeration but all parameters are finite, `#exhaust` uses the IPOG algorithm to build a covering array guaranteeing that every t-tuple of parameter values appears in at least one test case. IPOG starts at pairwise (t=2) and increases strength as long as the array fits within the budget.
+
+3. **Boundary value coverage** — If some parameters have large ranges (e.g., `.int(in: 0...10000)`), `#exhaust` synthesizes boundary value representatives for each parameter — `{min, min+1, midpoint, max-1, max, 0}` for integers, special IEEE 754 values for floats — and builds a covering array over those boundary values. This guarantees that every pairwise combination of boundary values is tested.
+
+4. **Skip** — If the generator uses size-scaled operations (`.int()` without a range), `getSize`/`resize`, or has more than 20 parameters, structured coverage is skipped entirely.
+
+The analysis works by running the generator through `ValueAndChoiceTreeInterpreter` with `materializePicks` enabled, producing a `ChoiceTree` that captures every random decision. Walking this tree extracts the parameter model — an approach that sees through bind chains and other opaque compositions that would defeat a static generator walk.
+
+**Phase 2: Random sampling** (default budget: 100 iterations)
+
+After structured coverage completes (unless exhaustive), `#exhaust` runs random sampling for the full `maxIterations` budget. The two budgets are additive — structured coverage does not consume random iterations.
+
+If either phase finds a failing value, `#exhaust` immediately reduces it to a minimal counterexample using the `Reducer`.
+
+**Settings:**
+
+| Setting | Default | Effect |
+|---|---|---|
+| `.maxIterations(n)` | 100 | Random sampling budget |
+| `.coverageBudget(n)` | 100 | Structured coverage budget |
+| `.randomOnly` | off | Skip structured coverage entirely |
+| `.shrinkBudget(.fast/.slow)` | `.fast` | Reduction thoroughness |
+| `.replay(seed)` | — | Deterministic reproduction |
+
 ### Sampling
 
 Use `#sample` for quick value generation outside of property tests:
@@ -171,6 +205,20 @@ The `Reducer` implements a 12-pass reduction system that operates on the princip
 Passes include branch promotion and pivoting (operating on the `ChoiceTree`), adaptive span deletion, value simplification via binary search, cross-container redistribution, sibling reordering, and speculative delete-and-repair. All candidates are evaluated against a shortlex ordering to ensure monotonic progress toward minimal counterexamples.
 
 Two budget profiles are available: `.fast` (default, ~500 probes) for tight feedback loops, and `.slow` (~2500 probes) for thorough minimization.
+
+### Combinatorial Coverage
+
+When `#exhaust` can determine a generator's parameter structure — the number of independent random decisions and the domain of each — it uses that information to select a systematic testing strategy before any random sampling begins.
+
+`ChoiceTreeAnalysis` performs this analysis by running the generator once through `ValueAndChoiceTreeInterpreter` with `materializePicks` enabled, which evaluates all branches of every `pick` operation. The resulting `ChoiceTree` is walked to extract a parameter model:
+
+- **Finite parameters** — `chooseBits` with explicit ranges ≤256 values, or `pick` between pure branches
+- **Boundary parameters** — `chooseBits` with large explicit ranges, synthesized down to boundary value representatives
+- **Sequence parameters** — explicit constant-scaled lengths (capped at `{0, 1, 2}`) plus up to 2 element slots
+
+The parameter model feeds the IPOG covering array generator (Lei & Kacker, ECBS 2007), which builds a compact test suite guaranteeing that every t-tuple of parameter values appears in at least one row. Each row is converted to a `ChoiceTree` and replayed through the generator using the same replay infrastructure used for shrinking.
+
+This approach composes two complementary techniques from the NIST combinatorial testing literature (SP 800-142): boundary value analysis selects *which values* to test per parameter, and t-way combination ensures *interactions* between those values are covered.
 
 ### Choice Gradient Sampling
 

@@ -132,25 +132,26 @@ benchmark("Bound5, pathological 2") {
     }
 }
 
-benchmark("Bound5, 50 iterations, reflective") {
-    struct Bound5: Equatable {
-        let a: [Int16]
-        let b: [Int16]
-        let c: [Int16]
-        let d: [Int16]
-        let e: [Int16]
-        
-        let arr: [Int16]
-        
-        init(a: [Int16], b: [Int16], c: [Int16], d: [Int16], e: [Int16]) {
-            self.a = a
-            self.b = b
-            self.c = c
-            self.d = d
-            self.e = e
-            self.arr = a + b + c + d + e
-        }
+struct Bound5: Equatable {
+    let a: [Int16]
+    let b: [Int16]
+    let c: [Int16]
+    let d: [Int16]
+    let e: [Int16]
+    
+    let arr: [Int16]
+    
+    init(a: [Int16], b: [Int16], c: [Int16], d: [Int16], e: [Int16]) {
+        self.a = a
+        self.b = b
+        self.c = c
+        self.d = d
+        self.e = e
+        self.arr = a + b + c + d + e
     }
+}
+
+benchmark("Bound5, 50 iterations, reflective") {
     let arrGen = #gen(.int16(scaling: .linear).array(length: 0 ... 10))
         .filter(.rejectionSampling) { $0.isEmpty || $0.dropFirst().reduce($0[0], &+) < 256 }
     let gen = #gen(arrGen, arrGen, arrGen, arrGen, arrGen) { a, b, c, d, e in
@@ -177,6 +178,19 @@ benchmark("Bound5, 50 iterations, reflective") {
         }
     } catch {
         print(error)
+    }
+}
+
+benchmark("Bound 5 single, random") {
+    let arrGen = #gen(.int16(scaling: .linear)).array(length: 0 ... 10)
+        .filter { $0.isEmpty || $0.dropFirst().reduce($0[0], &+) < 256 }
+    
+    let gen = #gen(arrGen, arrGen, arrGen, arrGen, arrGen) {
+        Bound5(a: $0, b: $1, c: $2, d: $3, e: $4)
+    }
+    
+    let counter = #exhaust(gen, .suppressIssueReporting, .replay(0xf0cacc1ac0ffee)) {
+        $0.arr.isEmpty || $0.arr.dropFirst().reduce($0.arr[0], &+) < 5 * 256
     }
 }
 

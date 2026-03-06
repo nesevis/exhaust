@@ -118,15 +118,15 @@ struct UniquenessBenchmarkTests {
     // MARK: - Main Benchmark
 
     // Kolbu
-    @Test("Time to 500 BST")
+    @Test("Time to 500 BST", .disabled())
     func bstBenchmark() throws {
 //        let onlineCGS = measureOnlineCGS(Self.bstProblem)
-//        let rejection = measureRejection(Self.bstProblem)
+        let rejection = measureRejection(Self.bstProblem)
         let adaptive = try measureAdaptivelySmoothed(Self.bstProblem)
-        let cgsTuned = try measureOnlineInformedTuning(Self.bstProblem)
+//        let cgsTuned = try measureOnlineInformedTuning(Self.bstProblem)
         let cgsShared = try measureCGSFitnessSharing(Self.bstProblem)
-        let cgsUCB = try measureCGSUCB(Self.bstProblem)
-        printProblemResults(Self.bstProblem, results: [adaptive, cgsTuned, cgsShared, cgsUCB])
+//        let cgsUCB = try measureCGSUCB(Self.bstProblem)
+        printProblemResults(Self.bstProblem, results: [rejection, adaptive, cgsShared])
     }
     
     @Test("Time to 100 AVL", .disabled())

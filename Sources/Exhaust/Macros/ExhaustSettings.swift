@@ -43,15 +43,13 @@ public enum ExhaustSettings<Output> {
     /// exhaustive enumeration and skips the random phase entirely.
     case coverageBudget(UInt64)
 
-    /// Disables automatic t-way covering array analysis.
+    /// Disables automatic structured coverage analysis.
     ///
-    /// By default, `#exhaust` detects generators composed entirely of finite-domain
-    /// elements (booleans, small enums, bounded integral ranges) and uses IPOG covering
-    /// arrays to guarantee that every t-tuple of parameter values is tested. An
-    /// empirical study of real-world software faults found that pairwise (t=2)
-    /// coverage catches ~93% of interaction bugs, and 3-way (t=3) catches ~98%
-    /// (Kuhn, Wallace & Gallo, "Software Fault Interactions and Implications for
-    /// Software Testing", IEEE TSE 2004).
+    /// By default, `#exhaust` analyzes the generator's structure and selects a
+    /// systematic coverage strategy: exhaustive enumeration for small finite domains,
+    /// t-way covering arrays for larger finite domains, or boundary value covering
+    /// arrays for generators with large explicit ranges. This runs before random
+    /// sampling and uses its own budget (see ``coverageBudget``).
     ///
     /// When `.randomOnly` is set, `#exhaust` skips this analysis and proceeds
     /// directly to random sampling. Useful for benchmarking, comparing coverage
