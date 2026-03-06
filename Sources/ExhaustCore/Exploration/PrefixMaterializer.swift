@@ -176,7 +176,7 @@ private extension PrefixMaterializer {
     ) throws -> (Output, ChoiceTree)? {
         switch gen {
         case let .pure(value):
-            return (value, ChoiceTree.just(String(String(describing: value).prefix(50))))
+            return (value, .emptyJust)
 
         case let .impure(operation, continuation):
             switch operation {

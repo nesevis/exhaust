@@ -113,7 +113,7 @@ import Foundation
         case let .pure(value):
             // The ChoiceTree value will be discarded from the caller if it's coming
             // from .chooseBits
-            return (value, ChoiceTree.just(String(String(describing: value).prefix(50))))
+            return (value, .emptyJust)
 
         case let .impure(operation, continuation):
             switch operation {
