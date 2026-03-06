@@ -24,10 +24,10 @@ struct MetaGeneratorPropertyTests {
     @Test("Generated generators round-trip through reflect and replay")
     func reflectionRoundTrip() throws {
         var recipeIter = ValueInterpreter(simpleIntRecipeGen, maxRuns: 30)
-        while let recipe = recipeIter.next() {
+        while let recipe = try recipeIter.next() {
             let gen = buildGenerator(from: recipe)
             var valueIter = ValueAndChoiceTreeInterpreter(gen, maxRuns: 10)
-            while let (value, _) = valueIter.next() {
+            while let (value, _) = try valueIter.next() {
                 guard let tree = try? Interpreters.reflect(gen, with: value) else { continue }
                 guard let replayed = try? Interpreters.replay(gen, using: tree) else { continue }
                 #expect(
@@ -43,10 +43,10 @@ struct MetaGeneratorPropertyTests {
     @Test("Replaying the same ChoiceTree produces identical values")
     func replayDeterminism() throws {
         var recipeIter = ValueInterpreter(simpleIntRecipeGen, maxRuns: 30)
-        while let recipe = recipeIter.next() {
+        while let recipe = try recipeIter.next() {
             let gen = buildGenerator(from: recipe)
             var valueIter = ValueAndChoiceTreeInterpreter(gen, maxRuns: 10)
-            while let (_, tree) = valueIter.next() {
+            while let (_, tree) = try valueIter.next() {
                 let replay1 = try? Interpreters.replay(gen, using: tree)
                 let replay2 = try? Interpreters.replay(gen, using: tree)
                 guard let r1 = replay1, let r2 = replay2 else { continue }
@@ -63,10 +63,10 @@ struct MetaGeneratorPropertyTests {
     @Test("Materialize with flattened tree agrees with replay")
     func materializeAgreement() throws {
         var recipeIter = ValueInterpreter(simpleIntRecipeGen, maxRuns: 30)
-        while let recipe = recipeIter.next() {
+        while let recipe = try recipeIter.next() {
             let gen = buildGenerator(from: recipe)
             var valueIter = ValueAndChoiceTreeInterpreter(gen, maxRuns: 10)
-            while let (value, _) = valueIter.next() {
+            while let (value, _) = try valueIter.next() {
                 guard let reflectedTree = try? Interpreters.reflect(gen, with: value) else { continue }
                 guard let replayed = try? Interpreters.replay(gen, using: reflectedTree) else { continue }
                 let sequence = ChoiceSequence.flatten(reflectedTree)
@@ -84,7 +84,7 @@ struct MetaGeneratorPropertyTests {
     @Test("Mapping with identity produces same values")
     func functorIdentity() throws {
         var recipeIter = ValueInterpreter(simpleIntRecipeGen, maxRuns: 30)
-        while let recipe = recipeIter.next() {
+        while let recipe = try recipeIter.next() {
             let gen = buildGenerator(from: recipe)
             // contramap(id, gen.map(id)) adds no PRNG-consuming operations
             let mappedGen: ReflectiveGenerator<Any> = Gen.contramap(
@@ -95,7 +95,7 @@ struct MetaGeneratorPropertyTests {
             var iter1: ValueInterpreter<Any> = ValueInterpreter(gen, seed: 42, maxRuns: 10)
             var iter2: ValueInterpreter<Any> = ValueInterpreter(mappedGen, seed: 42, maxRuns: 10)
 
-            while let v1 = iter1.next(), let v2 = iter2.next() {
+            while let v1 = try iter1.next(), let v2 = try iter2.next() {
                 #expect(
                     anyEquals(v1, v2),
                     "Functor identity failed for recipe: \(recipe)"
@@ -111,7 +111,7 @@ struct MetaGeneratorPropertyTests {
         // Use Int recipes so we can apply Int->Int transforms
         let intLeafGen = recipeGenerator(producing: .int, maxDepth: 0)
         var recipeIter = ValueInterpreter(intLeafGen, maxRuns: 30)
-        while let recipe = recipeIter.next() {
+        while let recipe = try recipeIter.next() {
             let gen = buildGenerator(from: recipe)
             let f: (Any) -> Any = { ($0 as! Int) * 2 }
             let g: (Any) -> Any = { ($0 as! Int) + 1 }
@@ -124,7 +124,7 @@ struct MetaGeneratorPropertyTests {
             var iter1 = ValueInterpreter(composed1, seed: 42, maxRuns: 10)
             var iter2 = ValueInterpreter(composed2, seed: 42, maxRuns: 10)
 
-            while let v1 = iter1.next(), let v2 = iter2.next() {
+            while let v1 = try iter1.next(), let v2 = try iter2.next() {
                 #expect(
                     anyEquals(v1, v2),
                     "Functor composition failed for recipe: \(recipe)"
@@ -138,7 +138,7 @@ struct MetaGeneratorPropertyTests {
     @Test("just(x).bind(f) produces same values as f(x)")
     func monadLeftIdentity() throws {
         var valueIter = ValueInterpreter(Gen.choose(in: -100 ... 100 as ClosedRange<Int>), seed: 7, maxRuns: 30)
-        while let x = valueIter.next() {
+        while let x = try valueIter.next() {
             let f: (Int) -> ReflectiveGenerator<Int> = { val in
                 Gen.choose(in: val ... (val + 10))
             }
@@ -149,7 +149,7 @@ struct MetaGeneratorPropertyTests {
             var lhsIter = ValueInterpreter(lhs, seed: 99, maxRuns: 5)
             var rhsIter = ValueInterpreter(rhs, seed: 99, maxRuns: 5)
 
-            while let v1 = lhsIter.next(), let v2 = rhsIter.next() {
+            while let v1 = try lhsIter.next(), let v2 = try rhsIter.next() {
                 #expect(v1 == v2, "Monad left identity failed for x=\(x)")
             }
         }
@@ -161,7 +161,7 @@ struct MetaGeneratorPropertyTests {
     func monadRightIdentity() throws {
         let intLeafGen = recipeGenerator(producing: .int, maxDepth: 0)
         var recipeIter = ValueInterpreter(intLeafGen, maxRuns: 30)
-        while let recipe = recipeIter.next() {
+        while let recipe = try recipeIter.next() {
             let gen = buildGenerator(from: recipe)
             // bind { .pure($0) } adds no PRNG-consuming operations
             let boundGen = gen.bind { .pure($0) }
@@ -169,7 +169,7 @@ struct MetaGeneratorPropertyTests {
             var iter1 = ValueInterpreter(gen, seed: 42, maxRuns: 10)
             var iter2 = ValueInterpreter(boundGen, seed: 42, maxRuns: 10)
 
-            while let v1 = iter1.next(), let v2 = iter2.next() {
+            while let v1 = try iter1.next(), let v2 = try iter2.next() {
                 #expect(
                     anyEquals(v1, v2),
                     "Monad right identity failed for recipe: \(recipe)"
@@ -185,7 +185,7 @@ struct MetaGeneratorPropertyTests {
         // Use simple Int recipes to test shrinking
         let intLeafGen = recipeGenerator(producing: .int, maxDepth: 0)
         var recipeIter = ValueInterpreter(intLeafGen, maxRuns: 20)
-        while let recipe = recipeIter.next() {
+        while let recipe = try recipeIter.next() {
             let gen = buildGenerator(from: recipe)
             let property: (Any) -> Bool = { value in
                 guard let intVal = value as? Int else { return true }
@@ -193,7 +193,7 @@ struct MetaGeneratorPropertyTests {
             }
 
             var valueIter = ValueAndChoiceTreeInterpreter(gen, seed: 7, maxRuns: 20)
-            while let (value, tree) = valueIter.next() {
+            while let (value, tree) = try valueIter.next() {
                 guard !property(value) else { continue }
                 guard let (_, shrunk) = try? Interpreters.reduce(
                     gen: gen, tree: tree, config: .fast, property: property
@@ -213,7 +213,7 @@ struct MetaGeneratorPropertyTests {
         // Generate Int recipes and apply known predicates
         let intLeafGen = recipeGenerator(producing: .int, maxDepth: 0)
         var recipeIter = ValueInterpreter(intLeafGen, maxRuns: 20)
-        while let recipe = recipeIter.next() {
+        while let recipe = try recipeIter.next() {
             // Only use predicates applicable to the recipe's output type
             for predicate in KnownPredicate.applicable(to: recipe.outputType) {
                 // For .isPositive, constrain the inner recipe to include positive values
@@ -232,7 +232,7 @@ struct MetaGeneratorPropertyTests {
                 )
 
                 var valueIter = ValueInterpreter(filteredGen, maxRuns: 15)
-                while let value = valueIter.next() {
+                while let value = try valueIter.next() {
                     #expect(
                         predicate.evaluate(value),
                         "Filter \(predicate) violated for recipe: \(recipe)"
@@ -247,13 +247,13 @@ struct MetaGeneratorPropertyTests {
     @Test("choose(in: range) values are always within range")
     func sizeBounds() throws {
         var recipeIter = ValueInterpreter(intRecipeGen, maxRuns: 30)
-        while let recipe = recipeIter.next() {
+        while let recipe = try recipeIter.next() {
             // Extract the range from leaf Int recipes for direct validation
             guard case let .leaf(.int(range)) = recipe else { continue }
             let gen = Gen.choose(in: range)
 
             var valueIter = ValueInterpreter(gen, maxRuns: 20)
-            while let value = valueIter.next() {
+            while let value = try valueIter.next() {
                 #expect(
                     range.contains(value),
                     "Value \(value) outside range \(range)"

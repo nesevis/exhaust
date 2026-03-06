@@ -103,7 +103,7 @@ struct GenerateMacroIntegrationTests {
         )
 
         var iterator = ValueAndChoiceTreeInterpreter(personGen, seed: 7, maxRuns: 10)
-        while let (generated, _) = iterator.next() {
+        while let (generated, _) = try iterator.next() {
             let reflectedTree = try #require(try Interpreters.reflect(personGen, with: generated))
             let sequence = ChoiceSequence(reflectedTree)
             let roundTripped = try #require(

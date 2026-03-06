@@ -39,12 +39,12 @@ struct CompositionTests {
     @Suite("Array Generation")
     struct ArrayTests {
         @Test("Array generator creates arrays of specified size")
-        func arrayOfFixedLength() {
+        func arrayOfFixedLength() throws {
             let arrayGen = #gen(.int(in: 1 ... 100)).array(length: 5)
 
             for _ in 0 ..< 20 {
                 var iterator = ValueInterpreter(arrayGen)
-                let array = iterator.next()!
+                let array = try iterator.next()!
                 #expect(array.count == 5)
                 for element in array {
                     #expect(1 ... 100 ~= element)
@@ -53,25 +53,25 @@ struct CompositionTests {
         }
 
         @Test("Arbitrary .array(length:) creates arrays")
-        func arbitraryArray() {
+        func arbitraryArray() throws {
             let gen = #gen(.int()).array(length: 3 ... 7)
 
             for _ in 0 ..< 20 {
                 var iterator = ValueInterpreter(gen)
-                let array = iterator.next()!
+                let array = try iterator.next()!
                 #expect(3 ... 7 ~= array.count)
             }
         }
 
         @Test("Nested .array(length:) creates nested arrays")
-        func nestedArray() {
+        func nestedArray() throws {
             let gen = #gen(.string())
                 .array(length: 2 ... 4) // Inner arrays of 2-4 strings
                 .array(length: 2 ... 3) // Outer array of 2-3 inner arrays
 
             for _ in 0 ..< 10 {
                 var iterator = ValueInterpreter(gen)
-                let nestedArray = iterator.next()!
+                let nestedArray = try iterator.next()!
                 #expect(2 ... 3 ~= nestedArray.count)
 
                 for innerArray in nestedArray {
@@ -85,7 +85,7 @@ struct CompositionTests {
             let gen = #gen(.uint8()).array(length: 1000 ... 1000)
 
             var iterator = ValueInterpreter(gen)
-            let largeArray = iterator.next()!
+            let largeArray = try iterator.next()!
             #expect(largeArray.count == 1000)
 
             // Should still support round-trip
@@ -109,7 +109,7 @@ struct CompositionTests {
                 .array(length: 2 ... 3) // [[[Int]]]
 
             var iterator = ValueInterpreter(gen)
-            let nested = iterator.next()!
+            let nested = try iterator.next()!
 
             // Validate structure
             #expect(2 ... 3 ~= nested.count)
@@ -136,7 +136,7 @@ struct CompositionTests {
     @Suite("Choice Generation")
     struct ChoiceTests {
         @Test("oneOf chooses between alternatives")
-        func oneOfChoosesBetweenAlternatives() {
+        func oneOfChoosesBetweenAlternatives() throws {
             let intAsStringGen = #gen(.int(in: 1 ... 10)).map { "\($0)" }
 
             let choiceGen = #gen(.oneOf(weighted: (1, intAsStringGen), (1, .string())))
@@ -146,7 +146,7 @@ struct CompositionTests {
 
             for _ in 0 ..< 100 {
                 var iterator = ValueInterpreter(choiceGen)
-                let result = iterator.next()!
+                let result = try iterator.next()!
 
                 if Int(result) != nil {
                     sawNumeric = true
@@ -161,7 +161,7 @@ struct CompositionTests {
         }
 
         @Test("oneOf with weighted choices")
-        func oneOfWeighted() {
+        func oneOfWeighted() throws {
             let gen = #gen(.oneOf(weighted: (9, .just("common")), (1, .just("rare"))))
 
             var commonCount = 0
@@ -169,7 +169,7 @@ struct CompositionTests {
 
             for _ in 0 ..< 1000 {
                 var iterator = ValueInterpreter(gen)
-                let result = iterator.next()!
+                let result = try iterator.next()!
                 if result == "common" {
                     commonCount += 1
                 } else {
@@ -195,7 +195,7 @@ struct CompositionTests {
             }
 
             var iterator = ValueInterpreter(companyGen)
-            let company = iterator.next()!
+            let company = try iterator.next()!
 
             // Test round-trip
             if let recipe = try Interpreters.reflect(companyGen, with: company) {
@@ -220,7 +220,7 @@ struct CompositionTests {
             // Generate many values to test stability
             for iteration in 0 ..< 100 {
                 var iterator = ValueInterpreter(pickedGen)
-                let generated = iterator.next()!
+                let generated = try iterator.next()!
                 if let recipe = try Interpreters.reflect(pickedGen, with: generated) {
                     if let replayed = try Interpreters.replay(pickedGen, using: recipe) {
                         #expect(generated == replayed, "Failed at iteration \(iteration)")
@@ -258,7 +258,7 @@ struct CompositionTests {
             )
 
             var iterator = ValueInterpreter(gen)
-            let instance = iterator.next()!
+            let instance = try iterator.next()!
             let recipe = try #require(try Interpreters.reflect(gen, with: instance))
             let replay = try #require(try Interpreters.replay(gen, using: recipe))
             #expect(instance == replay)

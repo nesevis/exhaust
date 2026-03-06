@@ -16,11 +16,11 @@ struct ConformanceTests {
         // MARK: Static methods
 
         @Test("Static .array(gen) produces arrays")
-        func staticArray() {
+        func staticArray() throws {
             let gen: ReflectiveGenerator<[Int]> = .array(Gen.choose(in: 0 ... 100))
             var iterator = ValueInterpreter(gen, seed: 42)
 
-            if let array = iterator.next() {
+            if let array = try iterator.next() {
                 for element in array {
                     #expect(0 ... 100 ~= element)
                 }
@@ -28,7 +28,7 @@ struct ConformanceTests {
         }
 
         @Test("Static .array(gen, length:) produces fixed-range arrays")
-        func staticArrayWithLength() {
+        func staticArrayWithLength() throws {
             let gen: ReflectiveGenerator<[Int]> = .array(
                 Gen.choose(in: 0 ... 100),
                 length: 3 ... 5
@@ -36,7 +36,7 @@ struct ConformanceTests {
             var iterator = ValueInterpreter(gen, seed: 42)
 
             var generated = 0
-            while let array = iterator.next() {
+            while let array = try iterator.next() {
                 #expect(array.count >= 3 && array.count <= 5)
                 generated += 1
             }
@@ -44,32 +44,32 @@ struct ConformanceTests {
         }
 
         @Test("Static .array(gen, length:) with linear scaling")
-        func staticArrayLinear() {
+        func staticArrayLinear() throws {
             let gen: ReflectiveGenerator<[Int]> = .array(Gen.choose(in: 0 ... 10), length: 0 ... 10, scaling: .linear)
             var iterator = ValueInterpreter(gen, seed: 42)
-            if let array = iterator.next() { #expect(array.count <= 10) }
+            if let array = try iterator.next() { #expect(array.count <= 10) }
         }
 
         @Test("Static .array(gen, length:) with constant scaling")
-        func staticArrayConstant() {
+        func staticArrayConstant() throws {
             let gen: ReflectiveGenerator<[Int]> = .array(Gen.choose(in: 0 ... 10), length: 0 ... 10, scaling: .constant)
             var iterator = ValueInterpreter(gen, seed: 42)
-            if let array = iterator.next() { #expect(array.count <= 10) }
+            if let array = try iterator.next() { #expect(array.count <= 10) }
         }
 
         @Test("Static .array(gen, length:) with exponential scaling")
-        func staticArrayExponential() {
+        func staticArrayExponential() throws {
             let gen: ReflectiveGenerator<[Int]> = .array(Gen.choose(in: 0 ... 10), length: 0 ... 10, scaling: .exponential)
             var iterator = ValueInterpreter(gen, seed: 42)
-            if let array = iterator.next() { #expect(array.count <= 10) }
+            if let array = try iterator.next() { #expect(array.count <= 10) }
         }
 
         @Test("Static .set(gen) produces sets")
-        func staticSet() {
+        func staticSet() throws {
             let gen: ReflectiveGenerator<Set<Int>> = .set(Gen.choose(in: 0 ... 1000))
             var iterator = ValueInterpreter(gen, seed: 42)
 
-            if let set = iterator.next() {
+            if let set = try iterator.next() {
                 for element in set {
                     #expect(0 ... 1000 ~= element)
                 }
@@ -77,7 +77,7 @@ struct ConformanceTests {
         }
 
         @Test("Static .set(gen, count:) produces bounded sets")
-        func staticSetWithCount() {
+        func staticSetWithCount() throws {
             let gen: ReflectiveGenerator<Set<Int>> = .set(
                 Gen.choose(in: 0 ... 1000),
                 count: 2 ... 5,
@@ -86,7 +86,7 @@ struct ConformanceTests {
             var iterator = ValueInterpreter(gen, seed: 42)
 
             var generated = 0
-            while let set = iterator.next() {
+            while let set = try iterator.next() {
                 #expect(set.count >= 2 && set.count <= 5)
                 generated += 1
             }
@@ -94,14 +94,14 @@ struct ConformanceTests {
         }
 
         @Test("Static .dictionary(k, v) produces dictionaries")
-        func staticDictionary() {
+        func staticDictionary() throws {
             let gen: ReflectiveGenerator<[Int: Int]> = .dictionary(
                 Gen.choose(in: 0 ... 100),
                 Gen.choose(in: 0 ... 100)
             )
             var iterator = ValueInterpreter(gen, seed: 42)
 
-            if let dict = iterator.next() {
+            if let dict = try iterator.next() {
                 for (key, value) in dict {
                     #expect(0 ... 100 ~= key)
                     #expect(0 ... 100 ~= value)
@@ -110,12 +110,12 @@ struct ConformanceTests {
         }
 
         @Test("Static .shuffled(gen) produces shuffled array")
-        func staticShuffled() {
+        func staticShuffled() throws {
             let source = ReflectiveGenerator<[Int]>.pure([1, 2, 3, 4, 5])
             let gen: ReflectiveGenerator<[Int]> = .shuffled(source)
             var iterator = ValueInterpreter(gen, seed: 42)
 
-            if let result = iterator.next() {
+            if let result = try iterator.next() {
                 #expect(result.sorted() == [1, 2, 3, 4, 5])
             }
         }
@@ -123,11 +123,11 @@ struct ConformanceTests {
         // MARK: Instance methods
 
         @Test("Instance .array() produces arrays")
-        func instanceArray() {
+        func instanceArray() throws {
             let gen = (Gen.choose(in: 0 ... 100) as ReflectiveGenerator<Int>).array()
             var iterator = ValueInterpreter(gen, seed: 42)
 
-            if let array = iterator.next() {
+            if let array = try iterator.next() {
                 for element in array {
                     #expect(0 ... 100 ~= element)
                 }
@@ -135,32 +135,32 @@ struct ConformanceTests {
         }
 
         @Test("Instance .array(length:scaling:) with linear scaling")
-        func instanceArrayLinear() {
+        func instanceArrayLinear() throws {
             let gen = (Gen.choose(in: 0 ... 10) as ReflectiveGenerator<Int>).array(length: 0 ... 10, scaling: .linear)
             var iterator = ValueInterpreter(gen, seed: 42)
-            if let array = iterator.next() { #expect(array.count <= 10) }
+            if let array = try iterator.next() { #expect(array.count <= 10) }
         }
 
         @Test("Instance .array(length:scaling:) with constant scaling")
-        func instanceArrayConstant() {
+        func instanceArrayConstant() throws {
             let gen = (Gen.choose(in: 0 ... 10) as ReflectiveGenerator<Int>).array(length: 0 ... 10, scaling: .constant)
             var iterator = ValueInterpreter(gen, seed: 42)
-            if let array = iterator.next() { #expect(array.count <= 10) }
+            if let array = try iterator.next() { #expect(array.count <= 10) }
         }
 
         @Test("Instance .array(length:scaling:) with exponential scaling")
-        func instanceArrayExponential() {
+        func instanceArrayExponential() throws {
             let gen = (Gen.choose(in: 0 ... 10) as ReflectiveGenerator<Int>).array(length: 0 ... 10, scaling: .exponential)
             var iterator = ValueInterpreter(gen, seed: 42)
-            if let array = iterator.next() { #expect(array.count <= 10) }
+            if let array = try iterator.next() { #expect(array.count <= 10) }
         }
 
         @Test("Instance .set() produces sets")
-        func instanceSet() {
+        func instanceSet() throws {
             let gen = (Gen.choose(in: 0 ... 1000) as ReflectiveGenerator<Int>).set()
             var iterator = ValueInterpreter(gen, seed: 42)
 
-            if let set = iterator.next() {
+            if let set = try iterator.next() {
                 for element in set {
                     #expect(0 ... 1000 ~= element)
                 }
@@ -168,13 +168,13 @@ struct ConformanceTests {
         }
 
         @Test("Instance .set(count:) produces bounded sets")
-        func instanceSetWithCount() {
+        func instanceSetWithCount() throws {
             let gen = (Gen.choose(in: 0 ... 1000) as ReflectiveGenerator<Int>)
                 .set(count: 2 ... 5, scaling: .constant)
             var iterator = ValueInterpreter(gen, seed: 42)
 
             var generated = 0
-            while let set = iterator.next() {
+            while let set = try iterator.next() {
                 #expect(set.count >= 2 && set.count <= 5)
                 generated += 1
             }
@@ -182,17 +182,17 @@ struct ConformanceTests {
         }
 
         @Test("Instance .shuffled() produces shuffled collection")
-        func instanceShuffled() {
+        func instanceShuffled() throws {
             let gen = (ReflectiveGenerator<[Int]>.pure([1, 2, 3, 4, 5])).shuffled()
             var iterator = ValueInterpreter(gen, seed: 42)
 
-            if let result = iterator.next() {
+            if let result = try iterator.next() {
                 #expect(result.sorted() == [1, 2, 3, 4, 5])
             }
         }
 
         @Test("Instance .element() on Hashable collection")
-        func instanceElementHashable() {
+        func instanceElementHashable() throws {
             let gen = (Gen.choose(in: 0 ... 100) as ReflectiveGenerator<Int>)
                 .array(length: 5)
                 .bind { array in
@@ -202,7 +202,7 @@ struct ConformanceTests {
                 }
             var iterator = ValueInterpreter(gen, seed: 42)
 
-            if let (array, element) = iterator.next() {
+            if let (array, element) = try iterator.next() {
                 #expect(array.contains(element))
             }
         }
@@ -215,31 +215,31 @@ struct ConformanceTests {
         // MARK: Double
 
         @Test("double() produces doubles")
-        func doubleDefault() {
+        func doubleDefault() throws {
             let gen: ReflectiveGenerator<Double> = .double()
             var iterator = ValueInterpreter(gen, seed: 42)
-            #expect(iterator.next() != nil)
+            #expect(try iterator.next() != nil)
         }
 
         @Test("double(in:) with explicit range")
-        func doubleInRange() {
+        func doubleInRange() throws {
             let gen: ReflectiveGenerator<Double> = .double(in: 0.0 ... 1.0)
             var iterator = ValueInterpreter(gen, seed: 42)
 
             for _ in 0 ..< 20 {
-                if let value = iterator.next() {
+                if let value = try iterator.next() {
                     #expect(0.0 ... 1.0 ~= value)
                 }
             }
         }
 
         @Test("double(in:scaling:) with explicit scaling")
-        func doubleWithScaling() {
+        func doubleWithScaling() throws {
             let gen: ReflectiveGenerator<Double> = .double(in: -10.0 ... 10.0, scaling: .constant)
             var iterator = ValueInterpreter(gen, seed: 42)
 
             for _ in 0 ..< 20 {
-                if let value = iterator.next() {
+                if let value = try iterator.next() {
                     #expect(-10.0 ... 10.0 ~= value)
                 }
             }
@@ -248,31 +248,31 @@ struct ConformanceTests {
         // MARK: Float
 
         @Test("float() produces floats")
-        func floatDefault() {
+        func floatDefault() throws {
             let gen: ReflectiveGenerator<Float> = .float()
             var iterator = ValueInterpreter(gen, seed: 42)
-            #expect(iterator.next() != nil)
+            #expect(try iterator.next() != nil)
         }
 
         @Test("float(in:) with Float range")
-        func floatInRange() {
+        func floatInRange() throws {
             let gen: ReflectiveGenerator<Float> = .float(in: Float(0.0) ... Float(1.0))
             var iterator = ValueInterpreter(gen, seed: 42)
 
             for _ in 0 ..< 20 {
-                if let value = iterator.next() {
+                if let value = try iterator.next() {
                     #expect(Float(0.0) ... Float(1.0) ~= value)
                 }
             }
         }
 
         @Test("float(in:) with Double range convenience")
-        func floatInDoubleRange() {
+        func floatInDoubleRange() throws {
             let gen: ReflectiveGenerator<Float> = .float(in: 0.0 ... 1.0)
             var iterator = ValueInterpreter(gen, seed: 42)
 
             for _ in 0 ..< 20 {
-                if let value = iterator.next() {
+                if let value = try iterator.next() {
                     #expect(Float(0.0) ... Float(1.0) ~= value)
                 }
             }
@@ -281,66 +281,66 @@ struct ConformanceTests {
         // MARK: Signed integers
 
         @Test("int8() with and without range")
-        func int8Gen() {
+        func int8Gen() throws {
             let gen1: ReflectiveGenerator<Int8> = .int8()
             let gen2: ReflectiveGenerator<Int8> = .int8(in: -10 ... 10)
             var iter1 = ValueInterpreter(gen1, seed: 42)
             var iter2 = ValueInterpreter(gen2, seed: 42)
 
-            #expect(iter1.next() != nil)
-            if let v = iter2.next() {
+            #expect(try iter1.next() != nil)
+            if let v = try iter2.next() {
                 #expect(-10 ... 10 ~= v)
             }
         }
 
         @Test("int16() with and without range")
-        func int16Gen() {
+        func int16Gen() throws {
             let gen1: ReflectiveGenerator<Int16> = .int16()
             let gen2: ReflectiveGenerator<Int16> = .int16(in: -100 ... 100)
             var iter1 = ValueInterpreter(gen1, seed: 42)
             var iter2 = ValueInterpreter(gen2, seed: 42)
 
-            #expect(iter1.next() != nil)
-            if let v = iter2.next() {
+            #expect(try iter1.next() != nil)
+            if let v = try iter2.next() {
                 #expect(-100 ... 100 ~= v)
             }
         }
 
         @Test("int32() with and without range")
-        func int32Gen() {
+        func int32Gen() throws {
             let gen1: ReflectiveGenerator<Int32> = .int32()
             let gen2: ReflectiveGenerator<Int32> = .int32(in: -1000 ... 1000)
             var iter1 = ValueInterpreter(gen1, seed: 42)
             var iter2 = ValueInterpreter(gen2, seed: 42)
 
-            #expect(iter1.next() != nil)
-            if let v = iter2.next() {
+            #expect(try iter1.next() != nil)
+            if let v = try iter2.next() {
                 #expect(-1000 ... 1000 ~= v)
             }
         }
 
         @Test("int64() with and without range")
-        func int64Gen() {
+        func int64Gen() throws {
             let gen1: ReflectiveGenerator<Int64> = .int64()
             let gen2: ReflectiveGenerator<Int64> = .int64(in: -1000 ... 1000)
             var iter1 = ValueInterpreter(gen1, seed: 42)
             var iter2 = ValueInterpreter(gen2, seed: 42)
 
-            #expect(iter1.next() != nil)
-            if let v = iter2.next() {
+            #expect(try iter1.next() != nil)
+            if let v = try iter2.next() {
                 #expect(-1000 ... 1000 ~= v)
             }
         }
 
         @Test("int() with and without range")
-        func intGen() {
+        func intGen() throws {
             let gen1: ReflectiveGenerator<Int> = .int()
             let gen2: ReflectiveGenerator<Int> = .int(in: -1000 ... 1000)
             var iter1 = ValueInterpreter(gen1, seed: 42)
             var iter2 = ValueInterpreter(gen2, seed: 42)
 
-            #expect(iter1.next() != nil)
-            if let v = iter2.next() {
+            #expect(try iter1.next() != nil)
+            if let v = try iter2.next() {
                 #expect(-1000 ... 1000 ~= v)
             }
         }
@@ -348,66 +348,66 @@ struct ConformanceTests {
         // MARK: Unsigned integers
 
         @Test("uint8() with and without range")
-        func uint8Gen() {
+        func uint8Gen() throws {
             let gen1: ReflectiveGenerator<UInt8> = .uint8()
             let gen2: ReflectiveGenerator<UInt8> = .uint8(in: 0 ... 50)
             var iter1 = ValueInterpreter(gen1, seed: 42)
             var iter2 = ValueInterpreter(gen2, seed: 42)
 
-            #expect(iter1.next() != nil)
-            if let v = iter2.next() {
+            #expect(try iter1.next() != nil)
+            if let v = try iter2.next() {
                 #expect(0 ... 50 ~= v)
             }
         }
 
         @Test("uint16() with and without range")
-        func uint16Gen() {
+        func uint16Gen() throws {
             let gen1: ReflectiveGenerator<UInt16> = .uint16()
             let gen2: ReflectiveGenerator<UInt16> = .uint16(in: 0 ... 500)
             var iter1 = ValueInterpreter(gen1, seed: 42)
             var iter2 = ValueInterpreter(gen2, seed: 42)
 
-            #expect(iter1.next() != nil)
-            if let v = iter2.next() {
+            #expect(try iter1.next() != nil)
+            if let v = try iter2.next() {
                 #expect(0 ... 500 ~= v)
             }
         }
 
         @Test("uint32() with and without range")
-        func uint32Gen() {
+        func uint32Gen() throws {
             let gen1: ReflectiveGenerator<UInt32> = .uint32()
             let gen2: ReflectiveGenerator<UInt32> = .uint32(in: 0 ... 5000)
             var iter1 = ValueInterpreter(gen1, seed: 42)
             var iter2 = ValueInterpreter(gen2, seed: 42)
 
-            #expect(iter1.next() != nil)
-            if let v = iter2.next() {
+            #expect(try iter1.next() != nil)
+            if let v = try iter2.next() {
                 #expect(0 ... 5000 ~= v)
             }
         }
 
         @Test("uint64() with and without range")
-        func uint64Gen() {
+        func uint64Gen() throws {
             let gen1: ReflectiveGenerator<UInt64> = .uint64()
             let gen2: ReflectiveGenerator<UInt64> = .uint64(in: 0 ... 10000)
             var iter1 = ValueInterpreter(gen1, seed: 42)
             var iter2 = ValueInterpreter(gen2, seed: 42)
 
-            #expect(iter1.next() != nil)
-            if let v = iter2.next() {
+            #expect(try iter1.next() != nil)
+            if let v = try iter2.next() {
                 #expect(0 ... 10000 ~= v)
             }
         }
 
         @Test("uint() with and without range")
-        func uintGen() {
+        func uintGen() throws {
             let gen1: ReflectiveGenerator<UInt> = .uint()
             let gen2: ReflectiveGenerator<UInt> = .uint(in: 0 ... 10000)
             var iter1 = ValueInterpreter(gen1, seed: 42)
             var iter2 = ValueInterpreter(gen2, seed: 42)
 
-            #expect(iter1.next() != nil)
-            if let v = iter2.next() {
+            #expect(try iter1.next() != nil)
+            if let v = try iter2.next() {
                 #expect(0 ... 10000 ~= v)
             }
         }
@@ -418,14 +418,14 @@ struct ConformanceTests {
     @Suite("Miscellaneous conformances")
     struct Miscellaneous {
         @Test("bool() produces both true and false")
-        func boolBothValues() {
+        func boolBothValues() throws {
             let gen: ReflectiveGenerator<Bool> = .bool()
             var sawTrue = false
             var sawFalse = false
 
             for seed in UInt64(1) ... 20 {
                 var iterator = ValueInterpreter(gen, seed: seed)
-                if let value = iterator.next() {
+                if let value = try iterator.next() {
                     if value { sawTrue = true } else { sawFalse = true }
                 }
                 if sawTrue && sawFalse { break }
@@ -436,14 +436,14 @@ struct ConformanceTests {
         }
 
         @Test("Instance .optional() produces both nil and non-nil")
-        func instanceOptional() {
+        func instanceOptional() throws {
             let gen = (Gen.choose(in: 0 ... 100) as ReflectiveGenerator<Int>).optional()
             var sawNil = false
             var sawSome = false
 
             for seed in UInt64(1) ... 50 {
                 var iterator = ValueInterpreter(gen, seed: seed)
-                if let value = iterator.next() {
+                if let value = try iterator.next() {
                     if value == nil { sawNil = true } else { sawSome = true }
                 }
                 if sawNil && sawSome { break }
@@ -454,13 +454,13 @@ struct ConformanceTests {
         }
 
         @Test("oneOf for CaseIterable produces all cases")
-        func oneOfCaseIterable() {
+        func oneOfCaseIterable() throws {
             let gen: ReflectiveGenerator<ConformanceDirection> = .oneOf(ConformanceDirection.self)
             var seen: Set<String> = []
 
             for seed in UInt64(1) ... 50 {
                 var iterator = ValueInterpreter(gen, seed: seed)
-                if let value = iterator.next() {
+                if let value = try iterator.next() {
                     seen.insert("\(value)")
                 }
                 if seen.count == 4 { break }
@@ -470,14 +470,14 @@ struct ConformanceTests {
         }
 
         @Test(".just() produces constant value")
-        func justConstant() {
+        func justConstant() throws {
             let gen: ReflectiveGenerator<Int> = .just(42)
             var iterator = ValueInterpreter(gen, seed: 1)
-            #expect(iterator.next() == 42)
+            #expect(try iterator.next() == 42)
         }
 
         @Test("oneOf(generators...) picks from generators")
-        func oneOfGenerators() {
+        func oneOfGenerators() throws {
             let gen: ReflectiveGenerator<Int> = .oneOf(
                 Gen.choose(in: 0 ... 0),
                 Gen.choose(in: 100 ... 100)
@@ -487,7 +487,7 @@ struct ConformanceTests {
 
             for seed in UInt64(1) ... 50 {
                 var iterator = ValueInterpreter(gen, seed: seed)
-                if let value = iterator.next() {
+                if let value = try iterator.next() {
                     if value == 0 { sawZero = true }
                     if value == 100 { sawHundred = true }
                 }
@@ -499,7 +499,7 @@ struct ConformanceTests {
         }
 
         @Test("oneOf(weighted:) respects weights")
-        func oneOfWeighted() {
+        func oneOfWeighted() throws {
             let gen: ReflectiveGenerator<Int> = .oneOf(
                 weighted: (100, Gen.choose(in: 0 ... 0)),
                 (1, Gen.choose(in: 100 ... 100))
@@ -508,7 +508,7 @@ struct ConformanceTests {
             var counts = [0: 0, 100: 0]
             for seed in UInt64(1) ... 200 {
                 var iterator = ValueInterpreter(gen, seed: seed)
-                if let value = iterator.next() {
+                if let value = try iterator.next() {
                     counts[value, default: 0] += 1
                 }
             }

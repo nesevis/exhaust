@@ -35,7 +35,7 @@ public struct ValueInterpreter<Element>: ~Copyable, ExhaustIterator {
         context.sizeOverride = sizeOverride
     }
 
-    public mutating func next() -> Element? {
+    public mutating func next() throws -> Element? {
         guard context.runs < context.maxRuns else {
             return nil
         }
@@ -69,8 +69,6 @@ public struct ValueInterpreter<Element>: ~Copyable, ExhaustIterator {
                 ],
             )
             return nil
-        } catch {
-            fatalError(error.localizedDescription)
         }
     }
 

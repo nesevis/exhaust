@@ -150,7 +150,7 @@ public enum ChoiceGradientTuner<FinalOutput> {
                 maxRuns: runsThisBatch,
                 fitnessAccumulator: accumulator,
             )
-            while iterator.next() != nil {}
+            while try iterator.next() != nil {}
 
             completedRuns += runsThisBatch
             guard completedRuns < warmupRuns else { break }

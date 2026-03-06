@@ -9,16 +9,16 @@
 /// containing `~Copyable` fields (like `Xoshiro256`) from conforming.
 public protocol ExhaustIterator<Element>: ~Copyable {
     associatedtype Element
-    mutating func next() -> Element?
+    mutating func next() throws -> Element?
 }
 
 extension ExhaustIterator where Self: ~Copyable {
     /// Return the first `n` elements as an array.
-    public mutating func prefix(_ n: Int) -> [Element] {
+    public mutating func prefix(_ n: Int) throws -> [Element] {
         var result = [Element]()
         result.reserveCapacity(n)
         for _ in 0 ..< n {
-            guard let element = next() else { break }
+            guard let element = try next() else { break }
             result.append(element)
         }
         return result
@@ -27,9 +27,9 @@ extension ExhaustIterator where Self: ~Copyable {
 
 extension Array {
     /// Collect all elements from a `~Copyable` iterator.
-    public init(collecting iterator: inout some ExhaustIterator<Element> & ~Copyable) {
+    public init(collecting iterator: inout some ExhaustIterator<Element> & ~Copyable) throws {
         self = []
-        while let element = iterator.next() {
+        while let element = try iterator.next() {
             append(element)
         }
     }

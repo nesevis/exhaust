@@ -19,7 +19,7 @@ private func generate<Output>(
     seed: UInt64 = 42,
 ) throws -> (value: Output, tree: ChoiceTree) {
     var iter = ValueAndChoiceTreeInterpreter(gen, materializePicks: true, seed: seed)
-    return try #require(iter.prefix(1).last)
+    return try #require(try iter.prefix(1).last)
 }
 
 // MARK: - ChoiceValue.reductionTarget
@@ -187,7 +187,7 @@ struct ReducerReduceValuesTests {
         outer: for seed: UInt64 in 0 ... 20 {
             var iterator = ValueAndChoiceTreeInterpreter(gen, materializePicks: true, seed: seed)
             for _ in 0 ..< 50 {
-                guard let (value, tree) = iterator.next() else { break }
+                guard let (value, tree) = try iterator.next() else { break }
                 if value > 1.0 {
                     foundTree = tree
                     break outer
@@ -248,7 +248,7 @@ struct ReducerReduceValuesTests {
         // Ensure we start from a non-trivial parent so stale validRanges would matter.
         var iterator = ValueAndChoiceTreeInterpreter(gen, materializePicks: false, seed: 1337, maxRuns: 500)
         var found: ((UInt64, UInt64, UInt64), ChoiceTree)?
-        while let pair = iterator.next() {
+        while let pair = try iterator.next() {
             let value = pair.0
             if value.0 > 0 && property(value) == false {
                 found = pair

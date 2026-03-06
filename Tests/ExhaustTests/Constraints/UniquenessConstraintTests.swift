@@ -14,7 +14,7 @@ struct UniquenessConstraintTests {
     // MARK: - Choice-sequence uniqueness via combinator
 
     @Test("High-cardinality generator produces all maxRuns unique values")
-    func highCardinalityProducesAllUnique() {
+    func highCardinalityProducesAllUnique() throws {
         // Use a non-size-scaled generator to avoid collisions from small sizes
         let gen = #gen(.uint64(in: 0 ... UInt64.max)).unique()
         let maxRuns: UInt64 = 50
@@ -25,7 +25,7 @@ struct UniquenessConstraintTests {
         )
 
         var values = [UInt64]()
-        while let (value, _) = iterator.next() {
+        while let (value, _) = try iterator.next() {
             values.append(value)
         }
 
@@ -35,7 +35,7 @@ struct UniquenessConstraintTests {
     }
 
     @Test("Low-cardinality generator exhausts retry budget")
-    func lowCardinalityExhaustsRetryBudget() {
+    func lowCardinalityExhaustsRetryBudget() throws {
         // Gen.exact always produces the same value with the same choice sequence
         let gen = Gen.exact(42).unique()
         var iterator = ValueAndChoiceTreeInterpreter(
@@ -45,7 +45,7 @@ struct UniquenessConstraintTests {
         )
 
         var count = 0
-        while iterator.next() != nil {
+        while try iterator.next() != nil {
             count += 1
         }
 
@@ -53,7 +53,7 @@ struct UniquenessConstraintTests {
     }
 
     @Test("Bool generator produces exactly 2 unique values")
-    func boolProducesExactlyTwo() {
+    func boolProducesExactlyTwo() throws {
         let gen = #gen(.bool()).unique()
         var iterator = ValueAndChoiceTreeInterpreter(
             gen,
@@ -62,7 +62,7 @@ struct UniquenessConstraintTests {
         )
 
         var values = Set<Bool>()
-        while let (value, _) = iterator.next() {
+        while let (value, _) = try iterator.next() {
             values.insert(value)
         }
 
@@ -72,7 +72,7 @@ struct UniquenessConstraintTests {
     }
 
     @Test("Determinism: same seed produces identical unique results")
-    func determinism() {
+    func determinism() throws {
         let gen = #gen(.uint64()).unique()
         let seed: UInt64 = 99
         let maxRuns: UInt64 = 20
@@ -86,10 +86,10 @@ struct UniquenessConstraintTests {
 
         var values1 = [UInt64]()
         var values2 = [UInt64]()
-        while let (v, _) = iter1.next() {
+        while let (v, _) = try iter1.next() {
             values1.append(v)
         }
-        while let (v, _) = iter2.next() {
+        while let (v, _) = try iter2.next() {
             values2.append(v)
         }
 
@@ -99,7 +99,7 @@ struct UniquenessConstraintTests {
     // MARK: - ValueInterpreter with unique combinator
 
     @Test("ValueInterpreter with unique combinator produces unique values")
-    func valueInterpreterUniqueness() {
+    func valueInterpreterUniqueness() throws {
         // Use a non-size-scaled generator to avoid collisions from small sizes
         let gen = #gen(.uint64(in: 0 ... UInt64.max)).unique()
         let seed: UInt64 = 42
@@ -108,7 +108,7 @@ struct UniquenessConstraintTests {
         var vi = ValueInterpreter(gen, seed: seed, maxRuns: maxRuns)
 
         var values = [UInt64]()
-        while let v = vi.next() {
+        while let v = try vi.next() {
             values.append(v)
         }
 
@@ -119,7 +119,7 @@ struct UniquenessConstraintTests {
     // MARK: - Key-based uniqueness (unique(by:) with key path)
 
     @Test("unique(by:) deduplicates by key path")
-    func uniqueByKeyPath() {
+    func uniqueByKeyPath() throws {
         // Generate pairs where first element varies but second is bounded (0-4)
         let secondGen = #gen(.uint64(in: 0 ... 4))
         let pairGen = #gen(
@@ -135,7 +135,7 @@ struct UniquenessConstraintTests {
 
         var seenKeys = Set<UInt64>()
         var count = 0
-        while let (pair, _) = iterator.next() {
+        while let (pair, _) = try iterator.next() {
             let key = pair.1
             let inserted = seenKeys.insert(key).inserted
             #expect(inserted, "Key \(key) was already seen — unique(by: \\.1) should deduplicate")
@@ -150,7 +150,7 @@ struct UniquenessConstraintTests {
     // MARK: - Key-based uniqueness (unique(by:) with transform)
 
     @Test("unique(by:) deduplicates by transform function")
-    func uniqueByTransform() {
+    func uniqueByTransform() throws {
         // Generate values and deduplicate by modulo 5
         let gen = #gen(.uint64())
             .unique(by: { $0 % 5 })
@@ -163,7 +163,7 @@ struct UniquenessConstraintTests {
 
         var seenRemainders = Set<UInt64>()
         var count = 0
-        while let (value, _) = iterator.next() {
+        while let (value, _) = try iterator.next() {
             let remainder = value % 5
             let inserted = seenRemainders.insert(remainder).inserted
             #expect(inserted, "Remainder \(remainder) was already seen — unique(by:) should deduplicate")
@@ -176,7 +176,7 @@ struct UniquenessConstraintTests {
     // MARK: - CGS interpreter with unique combinator
 
     @Test("CGS interpreter with unique combinator produces unique values")
-    func cgsUniqueness() {
+    func cgsUniqueness() throws {
         let gen = #gen(.oneOf(weighted:
             (1, .just(1)),
             (1, .just(2)),
@@ -190,7 +190,7 @@ struct UniquenessConstraintTests {
         )
 
         var values = Set<Int>()
-        while let value = iterator.next() {
+        while let value = try iterator.next() {
             let (inserted, _) = values.insert(value)
             #expect(inserted, "Every yielded value should be unique")
         }

@@ -9,7 +9,7 @@ import Testing
 @Suite(".optional() combinator")
 struct OptionalTests {
     @Test("Produces both nil and non-nil values")
-    func producesBothBranches() {
+    func producesBothBranches() throws {
         let gen = optionalGen(Gen.choose(in: 1 ... 100) as ReflectiveGenerator<Int>)
 
         var sawNil = false
@@ -17,7 +17,7 @@ struct OptionalTests {
 
         for _ in 0 ..< 200 {
             var iterator = ValueInterpreter(gen)
-            guard let value = iterator.next() else { break }
+            guard let value = try iterator.next() else { break }
             if value == nil {
                 sawNil = true
             } else {
@@ -31,12 +31,12 @@ struct OptionalTests {
     }
 
     @Test("Non-nil values satisfy the underlying generator's constraints")
-    func nonNilValuesSatisfyConstraints() {
+    func nonNilValuesSatisfyConstraints() throws {
         let gen = optionalGen(Gen.choose(in: 10 ... 20) as ReflectiveGenerator<Int>)
 
         for _ in 0 ..< 100 {
             var iterator = ValueInterpreter(gen)
-            guard let value = iterator.next() else { break }
+            guard let value = try iterator.next() else { break }
             if let unwrapped = value {
                 #expect(10 ... 20 ~= unwrapped)
             }
@@ -48,7 +48,7 @@ struct OptionalTests {
         let gen = optionalGen(Gen.choose(in: 0 ... 50) as ReflectiveGenerator<Int>)
 
         var optIter = ValueAndChoiceTreeInterpreter(gen, materializePicks: false, seed: seed)
-        let (value, tree) = try #require(optIter.prefix(1).last)
+        let (value, tree) = try #require(try optIter.prefix(1).last)
         let flattened = ChoiceSequence.flatten(tree)
         let materialized = try #require(try Interpreters.materialize(gen, with: tree, using: flattened))
         #expect(value == materialized)
@@ -61,21 +61,20 @@ struct OptionalTests {
     }
 
     @Test("Composes with arrayOf")
-    func composesWithArray() throws {
-        let gen = Gen.arrayOf(
+    func composesWithArray() throws {        let gen = Gen.arrayOf(
             optionalGen(Gen.choose(in: 1 ... 10) as ReflectiveGenerator<Int>),
             exactly: 5
         )
 
         var iterator = ValueInterpreter(gen)
-        let array = iterator.next()!
+        let array = try iterator.next()!
         #expect(array.count == 5)
 
         _ = try validateGenerator(gen)
     }
 
     @Test("Nested optional produces all three tiers")
-    func nestedOptional() {
+    func nestedOptional() throws {
         let gen = optionalGen(optionalGen(Gen.choose(in: 1 ... 10) as ReflectiveGenerator<Int>))
 
         var sawNone = false        // .none
@@ -84,7 +83,7 @@ struct OptionalTests {
 
         for _ in 0 ..< 500 {
             var iterator = ValueInterpreter(gen)
-            guard let value = iterator.next() else { break }
+            guard let value = try iterator.next() else { break }
             switch value {
             case .none:
                 sawNone = true

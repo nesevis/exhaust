@@ -133,7 +133,7 @@ struct PartialMonadicProfunctorLawTests {
 
     /// A Partial Monadic Profunctor must satisfy: `Gen.contramap({ $0 }, Gen.prune(generator))` is equivalent to `generator`
     @Test("PMP Law 1: contramap(Just) . prune == identity")
-    func pmpLaw1_ContramapJustPruneIsIdentity() {
+    func pmpLaw1_ContramapJustPruneIsIdentity() throws {
         // Arrange
         let generator = Gen.just(Int(42))
 
@@ -146,8 +146,8 @@ struct PartialMonadicProfunctorLawTests {
         var rhsIterator = ValueInterpreter(rhs)
 
         // Test via generation - both should produce same value
-        let lhsValue = lhsIterator.next()
-        let rhsValue = rhsIterator.next()
+        let lhsValue = try lhsIterator.next()
+        let rhsValue = try rhsIterator.next()
 
         // Assert
         #expect(lhsValue == rhsValue)
@@ -157,7 +157,7 @@ struct PartialMonadicProfunctorLawTests {
 
     /// A PMP must satisfy: `contramap(compose(f,g)) . prune` is equivalent to `contramap(f) . prune . contramap(g) . prune`
     @Test("PMP Law 2: Composition associativity")
-    func pmpLaw2_CompositionAssociativity() {
+    func pmpLaw2_CompositionAssociativity() throws {
         // Arrange
         let generator = Gen.just("hello")
 
@@ -180,8 +180,8 @@ struct PartialMonadicProfunctorLawTests {
         var rhsIterator = ValueInterpreter(rhs)
 
         // Test via generation - both should produce same value
-        let lhsValue = lhsIterator.next()
-        let rhsValue = rhsIterator.next()
+        let lhsValue = try lhsIterator.next()
+        let rhsValue = try rhsIterator.next()
 
         // Assert
         #expect(lhsValue == rhsValue)
@@ -191,7 +191,7 @@ struct PartialMonadicProfunctorLawTests {
 
     /// A PMP must satisfy: `Gen.contramap(f, Gen.prune(.pure(y)))` is equivalent to `.pure(y)`
     @Test("PMP Law 3: contramap . prune over pure values")
-    func pmpLaw3_contramapPruneOverPure() {
+    func pmpLaw3_contramapPruneOverPure() throws {
         // Arrange
         let pureValue = "test"
         let transform: (String) -> Int? = { $0.isEmpty == false ? $0.count : nil }
@@ -204,8 +204,8 @@ struct PartialMonadicProfunctorLawTests {
         var rhsIterator = ValueInterpreter(rhs)
 
         // Test via generation - both should produce same value
-        let lhsValue = lhsIterator.next()
-        let rhsValue = rhsIterator.next()
+        let lhsValue = try lhsIterator.next()
+        let rhsValue = try rhsIterator.next()
 
         // Assert
         #expect(lhsValue == rhsValue)
@@ -215,7 +215,7 @@ struct PartialMonadicProfunctorLawTests {
 
     /// A PMP must satisfy: `(contramap f . prune)(x >>= g)` is equivalent to `(contramap f . prune) x >>= (contramap f . prune) . g`
     @Test("PMP Law 4: contramap . prune distributes over bind")
-    func pmpLaw4_contramapPruneDistributesOverBind() {
+    func pmpLaw4_contramapPruneDistributesOverBind() throws {
         // Arrange - carefully chosen types for the law to work
         let baseGenerator = ReflectiveGenerator<Int>.pure(5)
         // Crucial: bindFunction must return a generator with the SAME input type as base
@@ -246,8 +246,8 @@ struct PartialMonadicProfunctorLawTests {
         var rhsIterator = ValueInterpreter(rhs)
 
         // Test via generation - both should produce same value
-        let lhsValue = lhsIterator.next()
-        let rhsValue = rhsIterator.next()
+        let lhsValue = try lhsIterator.next()
+        let rhsValue = try rhsIterator.next()
 
         // Assert
         #expect(lhsValue == rhsValue)
@@ -257,7 +257,7 @@ struct PartialMonadicProfunctorLawTests {
 
     /// A Profunctor must satisfy: `Gen.contramap(identity, generator)` is equivalent to `generator`
     @Test("Profunctor Law 1: contramap(identity) == identity")
-    func profunctorLaw1_contramapIdentity() {
+    func profunctorLaw1_contramapIdentity() throws {
         // Arrange
         let generator = Gen.just(42)
         let identity: (Int) -> Int = { $0 }
@@ -270,8 +270,8 @@ struct PartialMonadicProfunctorLawTests {
         var rhsIterator = ValueInterpreter(rhs)
 
         // Test via generation - both should produce same value
-        let lhsValue = lhsIterator.next()
-        let rhsValue = rhsIterator.next()
+        let lhsValue = try lhsIterator.next()
+        let rhsValue = try rhsIterator.next()
 
         // Assert
         #expect(lhsValue == rhsValue)
@@ -279,7 +279,7 @@ struct PartialMonadicProfunctorLawTests {
 
     /// A Profunctor must satisfy: `contramap(f . g)` is equivalent to `contramap(g, contramap(f, generator))`
     @Test("Profunctor Law 2: contramap(compose(f,g)) == contramap(g) . contramap(f)")
-    func profunctorLaw2_contramapComposition() {
+    func profunctorLaw2_contramapComposition() throws {
         // Arrange
         let generator = Gen.just(100)
         let f: (String) -> Int = { $0.count }
@@ -294,8 +294,8 @@ struct PartialMonadicProfunctorLawTests {
         var rhsIterator = ValueInterpreter(rhs)
 
         // Test via generation - both should produce same value
-        let lhsValue = lhsIterator.next()
-        let rhsValue = rhsIterator.next()
+        let lhsValue = try lhsIterator.next()
+        let rhsValue = try rhsIterator.next()
 
         // Assert
         #expect(lhsValue == rhsValue)
@@ -305,7 +305,7 @@ struct PartialMonadicProfunctorLawTests {
 
     /// The comap combinator should be equivalent to `contramap(transform, prune(generator))`
     @Test("Comap is equivalent to contramap . prune")
-    func comapEquivalence() {
+    func comapEquivalence() throws {
         // Arrange
         let generator = Gen.just(42)
         let transform: (String) -> Int? = { str in str.isEmpty ? nil : str.count }
@@ -320,8 +320,8 @@ struct PartialMonadicProfunctorLawTests {
         var rhsIterator = ValueInterpreter(contramapPruneResult)
 
         // Test via generation - both should produce same value
-        let lhsValue = lhsIterator.next()
-        let rhsValue = rhsIterator.next()
+        let lhsValue = try lhsIterator.next()
+        let rhsValue = try rhsIterator.next()
 
         // Assert
         #expect(lhsValue == rhsValue)

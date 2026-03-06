@@ -180,25 +180,25 @@ struct CharacterSetRangeExtractionTests {
     // MARK: - Generator tests
 
     @Test("character(from: .decimalDigits) generates only digits")
-    func characterFromDecimalDigits() {
+    func characterFromDecimalDigits() throws {
         let gen = characterGen(from: .decimalDigits)
-        exhaustCheck(gen) { char in
+        try exhaustCheck(gen) { char in
             char.unicodeScalars.allSatisfy { CharacterSet.decimalDigits.contains($0) }
         }
     }
 
     @Test("character(from: .lowercaseLetters) generates only lowercase letters")
-    func characterFromLowercaseLetters() {
+    func characterFromLowercaseLetters() throws {
         let gen = characterGen(from: .lowercaseLetters)
-        exhaustCheck(gen) { char in
+        try exhaustCheck(gen) { char in
             char.unicodeScalars.allSatisfy { CharacterSet.lowercaseLetters.contains($0) }
         }
     }
 
     @Test("character(from:) round-trips through reflect and replay")
-    func characterFromReflectionRoundTrip() {
+    func characterFromReflectionRoundTrip() throws {
         let gen = characterGen(from: .decimalDigits)
-        exhaustCheck(gen) { value in
+        try exhaustCheck(gen) { value in
             guard let tree = try? Interpreters.reflect(gen, with: value),
                   let replayed = try? Interpreters.replay(gen, using: tree)
             else { return false }
@@ -213,7 +213,7 @@ struct CharacterSetRangeExtractionTests {
         let property: (Character) -> Bool = { $0 < "5" }
 
         var iterator = ValueAndChoiceTreeInterpreter(gen, seed: 7, maxRuns: 100)
-        while let (value, tree) = iterator.next() {
+        while let (value, tree) = try iterator.next() {
             guard !property(value) else { continue }
             guard let (_, shrunk) = try Interpreters.reduce(
                 gen: gen, tree: tree, config: .fast, property: property,
@@ -226,15 +226,15 @@ struct CharacterSetRangeExtractionTests {
     }
 
     @Test("string(from: .alphanumerics) generates strings whose scalars are all in .alphanumerics")
-    func stringFromAlphanumerics() {
+    func stringFromAlphanumerics() throws {
         let gen = stringGen(from: .alphanumerics, length: 1 ... 10)
-        exhaustCheck(gen) { string in
+        try exhaustCheck(gen) { string in
             string.unicodeScalars.allSatisfy { CharacterSet.alphanumerics.contains($0) }
         }
     }
 
     @Test("Variadic character(from:) is equivalent to union")
-    func variadicCharacterFromEquivalence() {
+    func variadicCharacterFromEquivalence() throws {
         let variadicGen: ReflectiveGenerator<Character> = characterGen(from: .letters.union(.decimalDigits))
         let unionGen: ReflectiveGenerator<Character> = characterGen(from: .letters.union(.decimalDigits))
 
@@ -242,8 +242,8 @@ struct CharacterSetRangeExtractionTests {
         var variadicIterator = ValueAndChoiceTreeInterpreter(variadicGen, seed: 42, maxRuns: 200)
         var unionIterator = ValueAndChoiceTreeInterpreter(unionGen, seed: 42, maxRuns: 200)
 
-        while let (variadicValue, _) = variadicIterator.next(),
-              let (unionValue, _) = unionIterator.next()
+        while let (variadicValue, _) = try variadicIterator.next(),
+              let (unionValue, _) = try unionIterator.next()
         {
             #expect(variadicValue == unionValue, "Variadic and union generators should produce identical values with same seed")
         }
@@ -287,9 +287,9 @@ private func exhaustCheck<T>(
     maxIterations: UInt64 = 100,
     seed: UInt64 = 42,
     property: (T) -> Bool,
-) {
+) throws {
     var iter = ValueInterpreter(gen, seed: seed, maxRuns: maxIterations)
-    while let value = iter.next() {
+    while let value = try iter.next() {
         #expect(property(value), "Property failed for value: \(value)")
     }
 }

@@ -13,47 +13,47 @@ struct ReproducibilityTests {
     // MARK: - ValueAndChoiceTreeInterpreter
 
     @Test("Same seed produces identical value sequences")
-    func seedDeterminism() {
+    func seedDeterminism() throws {
         let gen: ReflectiveGenerator<Int> = Gen.choose()
         var iter1 = ValueAndChoiceTreeInterpreter(gen, seed: 42, maxRuns: 20)
-        let values1 = Array(collecting: &iter1).map(\.value)
+        let values1 = try Array(collecting: &iter1).map(\.value)
         var iter2 = ValueAndChoiceTreeInterpreter(gen, seed: 42, maxRuns: 20)
-        let values2 = Array(collecting: &iter2).map(\.value)
+        let values2 = try Array(collecting: &iter2).map(\.value)
         #expect(values1 == values2)
     }
 
     @Test("Different maxRuns with same seed share a common prefix")
-    func maxRunsIndependence() {
+    func maxRunsIndependence() throws {
         let gen: ReflectiveGenerator<Int> = Gen.choose()
         var shortIter = ValueAndChoiceTreeInterpreter(gen, seed: 42, maxRuns: 50)
-        let short = shortIter.prefix(30).map(\.value)
+        let short = try shortIter.prefix(30).map(\.value)
         var longIter = ValueAndChoiceTreeInterpreter(gen, seed: 42, maxRuns: 200)
-        let long = longIter.prefix(30).map(\.value)
+        let long = try longIter.prefix(30).map(\.value)
         #expect(short == long)
     }
 
     // MARK: - ValueInterpreter
 
     @Test("ValueInterpreter: same seed produces identical value sequences")
-    func valueInterpreterSeedDeterminism() {
+    func valueInterpreterSeedDeterminism() throws {
         let gen: ReflectiveGenerator<Int> = Gen.choose()
         var valIter1 = ValueInterpreter(gen, seed: 42, maxRuns: 20)
-        let values1 = Array(collecting: &valIter1)
+        let values1 = try Array(collecting: &valIter1)
         var valIter2 = ValueInterpreter(gen, seed: 42, maxRuns: 20)
-        let values2 = Array(collecting: &valIter2)
+        let values2 = try Array(collecting: &valIter2)
         #expect(values1 == values2)
     }
 
     // MARK: - GenerationContext helpers
 
     @Test("scaledSize cycles 1...100 independently of maxRuns")
-    func scaledSizeCycling() {
+    func scaledSizeCycling() throws {
         // All 100 sizes appear in each cycle
         let fullCycle = (0 as UInt64 ..< 100).map { GenerationContext.scaledSize(forRun: $0) }
         #expect(Set(fullCycle) == Set(1 ... 100))
 
         // Range and periodicity hold for arbitrary run indices
-        exhaustCheck(Gen.choose(in: UInt64(0) ... 10000)) { n in
+        try exhaustCheck(Gen.choose(in: UInt64(0) ... 10000)) { n in
             let size = GenerationContext.scaledSize(forRun: n)
             let cycled = GenerationContext.scaledSize(forRun: n + 100)
             return size >= 1 && size <= 100 && size == cycled
@@ -75,9 +75,9 @@ private func exhaustCheck<T>(
     maxIterations: UInt64 = 100,
     seed: UInt64 = 42,
     property: (T) -> Bool,
-) {
+) throws {
     var iter = ValueInterpreter(gen, seed: seed, maxRuns: maxIterations)
-    while let value = iter.next() {
+    while let value = try iter.next() {
         #expect(property(value), "Property failed for value: \(value)")
     }
 }

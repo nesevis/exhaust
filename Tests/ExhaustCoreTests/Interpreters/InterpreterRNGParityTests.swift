@@ -14,7 +14,7 @@ struct InterpreterRNGParityTests {
     // MARK: - Basic Types
 
     @Test("Int generation parity")
-    func intGenerationParity() {
+    func intGenerationParity() throws {
         let gen = Gen.choose(in: Int.min ... Int.max, scaling: Int.defaultScaling)
         let seed: UInt64 = 42
 
@@ -22,14 +22,14 @@ struct InterpreterRNGParityTests {
         var vact = ValueAndChoiceTreeInterpreter(gen, materializePicks: true, seed: seed, maxRuns: 10)
 
         for iteration in 0 ..< 10 {
-            let viValue = vi.next()!
-            let (vactValue, _) = vact.next()!
+            let viValue = try vi.next()!
+            let (vactValue, _) = try vact.next()!
             #expect(viValue == vactValue, "Iteration \(iteration): ValueInterpreter=\(viValue), ValueAndChoiceTreeInterpreter=\(vactValue)")
         }
     }
 
     @Test("UInt64 generation parity")
-    func uInt64GenerationParity() {
+    func uInt64GenerationParity() throws {
         let gen = Gen.choose(in: UInt64.min ... UInt64.max, scaling: UInt64.defaultScaling)
         let seed: UInt64 = 12345
 
@@ -37,14 +37,14 @@ struct InterpreterRNGParityTests {
         var vact = ValueAndChoiceTreeInterpreter(gen, materializePicks: true, seed: seed, maxRuns: 10)
 
         for iteration in 0 ..< 10 {
-            let viValue = vi.next()!
-            let (vactValue, _) = vact.next()!
+            let viValue = try vi.next()!
+            let (vactValue, _) = try vact.next()!
             #expect(viValue == vactValue, "Iteration \(iteration): ValueInterpreter=\(viValue), ValueAndChoiceTreeInterpreter=\(vactValue)")
         }
     }
 
     @Test("Bool generation parity")
-    func boolGenerationParity() {
+    func boolGenerationParity() throws {
         let gen = Gen.choose(from: [true, false])
         let seed: UInt64 = 999
 
@@ -52,14 +52,14 @@ struct InterpreterRNGParityTests {
         var vact = ValueAndChoiceTreeInterpreter(gen, materializePicks: true, seed: seed, maxRuns: 20)
 
         for iteration in 0 ..< 20 {
-            let viValue = vi.next()!
-            let (vactValue, _) = vact.next()!
+            let viValue = try vi.next()!
+            let (vactValue, _) = try vact.next()!
             #expect(viValue == vactValue, "Iteration \(iteration): ValueInterpreter=\(viValue), ValueAndChoiceTreeInterpreter=\(vactValue)")
         }
     }
 
     @Test("Float generation parity")
-    func floatGenerationParity() {
+    func floatGenerationParity() throws {
         let gen = Gen.choose(in: -Float.greatestFiniteMagnitude ... Float.greatestFiniteMagnitude, scaling: Float.defaultScaling)
         let seed: UInt64 = 7777
 
@@ -67,14 +67,14 @@ struct InterpreterRNGParityTests {
         var vact = ValueAndChoiceTreeInterpreter(gen, materializePicks: true, seed: seed, maxRuns: 10)
 
         for iteration in 0 ..< 10 {
-            let viValue = vi.next()!
-            let (vactValue, _) = vact.next()!
+            let viValue = try vi.next()!
+            let (vactValue, _) = try vact.next()!
             #expect(viValue.bitPattern == vactValue.bitPattern, "Iteration \(iteration): ValueInterpreter=\(viValue), ValueAndChoiceTreeInterpreter=\(vactValue)")
         }
     }
 
     @Test("Double generation parity")
-    func doubleGenerationParity() {
+    func doubleGenerationParity() throws {
         let gen = Gen.choose(in: -Double.greatestFiniteMagnitude ... Double.greatestFiniteMagnitude, scaling: Double.defaultScaling)
         let seed: UInt64 = 8888
 
@@ -82,8 +82,8 @@ struct InterpreterRNGParityTests {
         var vact = ValueAndChoiceTreeInterpreter(gen, materializePicks: true, seed: seed, maxRuns: 10)
 
         for iteration in 0 ..< 10 {
-            let viValue = vi.next()!
-            let (vactValue, _) = vact.next()!
+            let viValue = try vi.next()!
+            let (vactValue, _) = try vact.next()!
             #expect(viValue.bitPattern == vactValue.bitPattern, "Iteration \(iteration): ValueInterpreter=\(viValue), ValueAndChoiceTreeInterpreter=\(vactValue)")
         }
     }
@@ -91,7 +91,7 @@ struct InterpreterRNGParityTests {
     // MARK: - Pick Operations
 
     @Test("Simple pick parity with equal weights")
-    func simplePickParity() {
+    func simplePickParity() throws {
         let gen = Gen.pick(choices: [
             (1, Gen.just(100)),
             (1, Gen.just(200)),
@@ -102,14 +102,14 @@ struct InterpreterRNGParityTests {
         var vact = ValueAndChoiceTreeInterpreter(gen, materializePicks: true, seed: seed, maxRuns: 20)
 
         for iteration in 0 ..< 20 {
-            let viValue = vi.next()!
-            let (vactValue, _) = vact.next()!
+            let viValue = try vi.next()!
+            let (vactValue, _) = try vact.next()!
             #expect(viValue == vactValue, "Iteration \(iteration): ValueInterpreter=\(viValue), ValueAndChoiceTreeInterpreter=\(vactValue)")
         }
     }
 
     @Test("Pick parity with weighted choices")
-    func weightedPickParity() {
+    func weightedPickParity() throws {
         let gen = Gen.pick(choices: [
             (3, Gen.just("A")),
             (1, Gen.just("B")),
@@ -121,14 +121,14 @@ struct InterpreterRNGParityTests {
         var vact = ValueAndChoiceTreeInterpreter(gen, materializePicks: true, seed: seed, maxRuns: 30)
 
         for iteration in 0 ..< 30 {
-            let viValue = vi.next()!
-            let (vactValue, _) = vact.next()!
+            let viValue = try vi.next()!
+            let (vactValue, _) = try vact.next()!
             #expect(viValue == vactValue, "Iteration \(iteration): ValueInterpreter=\(viValue), ValueAndChoiceTreeInterpreter=\(vactValue)")
         }
     }
 
     @Test("Pick parity with generated values")
-    func pickWithGeneratedValuesParity() {
+    func pickWithGeneratedValuesParity() throws {
         let gen = Gen.pick(choices: [
             (1, Gen.choose(in: UInt64.min ... UInt64.max, scaling: UInt64.defaultScaling)),
             (1, Gen.choose(in: UInt64.min ... UInt64.max, scaling: UInt64.defaultScaling)),
@@ -139,14 +139,14 @@ struct InterpreterRNGParityTests {
         var vact = ValueAndChoiceTreeInterpreter(gen, materializePicks: true, seed: seed, maxRuns: 15)
 
         for iteration in 0 ..< 15 {
-            let viValue = vi.next()!
-            let (vactValue, _) = vact.next()!
+            let viValue = try vi.next()!
+            let (vactValue, _) = try vact.next()!
             #expect(viValue == vactValue, "Iteration \(iteration): ValueInterpreter=\(viValue), ValueAndChoiceTreeInterpreter=\(vactValue)")
         }
     }
 
     @Test("Nested pick parity")
-    func nestedPickParity() {
+    func nestedPickParity() throws {
         let innerPick = Gen.pick(choices: [
             (1, Gen.just(1)),
             (1, Gen.just(2)),
@@ -161,8 +161,8 @@ struct InterpreterRNGParityTests {
         var vact = ValueAndChoiceTreeInterpreter(outerPick, materializePicks: true, seed: seed, maxRuns: 20)
 
         for iteration in 0 ..< 20 {
-            let viValue = vi.next()!
-            let (vactValue, _) = vact.next()!
+            let viValue = try vi.next()!
+            let (vactValue, _) = try vact.next()!
             #expect(viValue == vactValue, "Iteration \(iteration): ValueInterpreter=\(viValue), ValueAndChoiceTreeInterpreter=\(vactValue)")
         }
     }
@@ -170,7 +170,7 @@ struct InterpreterRNGParityTests {
     // MARK: - Collections
 
     @Test("Array generation parity")
-    func arrayGenerationParity() {
+    func arrayGenerationParity() throws {
         let gen = Gen.arrayOf(Gen.choose(in: UInt64.min ... UInt64.max, scaling: UInt64.defaultScaling), exactly: 5)
         let seed: UInt64 = 1111
 
@@ -178,14 +178,14 @@ struct InterpreterRNGParityTests {
         var vact = ValueAndChoiceTreeInterpreter(gen, materializePicks: false, seed: seed, maxRuns: 5)
 
         for iteration in 0 ..< 5 {
-            let viValue = vi.next()!
-            let (vactValue, _) = vact.next()!
+            let viValue = try vi.next()!
+            let (vactValue, _) = try vact.next()!
             #expect(viValue == vactValue, "Iteration \(iteration): ValueInterpreter=\(viValue), ValueAndChoiceTreeInterpreter=\(vactValue)")
         }
     }
 
     @Test("Variable length array parity")
-    func variableLengthArrayParity() {
+    func variableLengthArrayParity() throws {
         let gen = Gen.arrayOf(Gen.choose(in: Int.min ... Int.max, scaling: Int.defaultScaling), within: UInt64(2) ... 5)
         let seed: UInt64 = 2222
 
@@ -193,8 +193,8 @@ struct InterpreterRNGParityTests {
         var vact = ValueAndChoiceTreeInterpreter(gen, materializePicks: true, seed: seed, maxRuns: 5)
 
         for iteration in 0 ..< 5 {
-            let viValue = vi.next()!
-            let (vactValue, _) = vact.next()!
+            let viValue = try vi.next()!
+            let (vactValue, _) = try vact.next()!
             #expect(viValue == vactValue, "Iteration \(iteration): arrays have different values")
         }
     }
@@ -202,7 +202,7 @@ struct InterpreterRNGParityTests {
     // MARK: - Zip Operations
 
     @Test("Zip two generators parity")
-    func zipTwoParity() {
+    func zipTwoParity() throws {
         let gen = Gen.zip(
             Gen.choose(in: UInt64.min ... UInt64.max, scaling: UInt64.defaultScaling),
             Gen.choose(in: Int.min ... Int.max, scaling: Int.defaultScaling)
@@ -213,14 +213,14 @@ struct InterpreterRNGParityTests {
         var vact = ValueAndChoiceTreeInterpreter(gen, materializePicks: true, seed: seed, maxRuns: 10)
 
         for iteration in 0 ..< 10 {
-            let viValue = vi.next()!
-            let (vactValue, _) = vact.next()!
+            let viValue = try vi.next()!
+            let (vactValue, _) = try vact.next()!
             #expect(viValue.0 == vactValue.0 && viValue.1 == vactValue.1, "Iteration \(iteration): tuples don't match")
         }
     }
 
     @Test("Zip three generators parity")
-    func zipThreeParity() {
+    func zipThreeParity() throws {
         let gen = Gen.zip(
             Gen.choose(in: UInt64.min ... UInt64.max, scaling: UInt64.defaultScaling),
             Gen.choose(in: Int.min ... Int.max, scaling: Int.defaultScaling),
@@ -232,8 +232,8 @@ struct InterpreterRNGParityTests {
         var vact = ValueAndChoiceTreeInterpreter(gen, materializePicks: true, seed: seed, maxRuns: 10)
 
         for iteration in 0 ..< 10 {
-            let viValue = vi.next()!
-            let (vactValue, _) = vact.next()!
+            let viValue = try vi.next()!
+            let (vactValue, _) = try vact.next()!
             #expect(viValue.0 == vactValue.0 && viValue.1 == vactValue.1 && viValue.2 == vactValue.2, "Iteration \(iteration): tuples don't match")
         }
     }
@@ -241,7 +241,7 @@ struct InterpreterRNGParityTests {
     // MARK: - Map and FlatMap
 
     @Test("Mapped generator parity")
-    func mappedGeneratorParity() {
+    func mappedGeneratorParity() throws {
         let gen = Gen.choose(in: UInt64.min ... UInt64.max, scaling: UInt64.defaultScaling).map { $0 % 100 }
         let seed: UInt64 = 5555
 
@@ -249,14 +249,14 @@ struct InterpreterRNGParityTests {
         var vact = ValueAndChoiceTreeInterpreter(gen, materializePicks: true, seed: seed, maxRuns: 10)
 
         for iteration in 0 ..< 10 {
-            let viValue = vi.next()!
-            let (vactValue, _) = vact.next()!
+            let viValue = try vi.next()!
+            let (vactValue, _) = try vact.next()!
             #expect(viValue == vactValue, "Iteration \(iteration): ValueInterpreter=\(viValue), ValueAndChoiceTreeInterpreter=\(vactValue)")
         }
     }
 
     @Test("FlatMapped generator parity")
-    func flatMappedGeneratorParity() {
+    func flatMappedGeneratorParity() throws {
         let gen = Gen.choose(in: 1 ... 10 as ClosedRange<Int>).bind { size in
             Gen.arrayOf(Gen.choose(in: UInt64.min ... UInt64.max, scaling: UInt64.defaultScaling), exactly: UInt64(size))
         }
@@ -266,8 +266,8 @@ struct InterpreterRNGParityTests {
         var vact = ValueAndChoiceTreeInterpreter(gen, materializePicks: true, seed: seed, maxRuns: 5)
 
         for iteration in 0 ..< 5 {
-            let viValue = vi.next()!
-            let (vactValue, _) = vact.next()!
+            let viValue = try vi.next()!
+            let (vactValue, _) = try vact.next()!
             #expect(viValue == vactValue, "Iteration \(iteration): arrays have different values")
         }
     }
@@ -275,7 +275,7 @@ struct InterpreterRNGParityTests {
     // MARK: - Complex Compositions
 
     @Test("Complex composition parity")
-    func complexCompositionParity() {
+    func complexCompositionParity() throws {
         let gen = Gen.zip(
             Gen.pick(choices: [
                 (2, Gen.choose(in: UInt64.min ... UInt64.max, scaling: UInt64.defaultScaling)),
@@ -290,8 +290,8 @@ struct InterpreterRNGParityTests {
         var vact = ValueAndChoiceTreeInterpreter(gen, materializePicks: true, seed: seed, maxRuns: 10)
 
         for iteration in 0 ..< 10 {
-            let viValue = vi.next()!
-            let (vactValue, _) = vact.next()!
+            let viValue = try vi.next()!
+            let (vactValue, _) = try vact.next()!
             #expect(viValue.0 == vactValue.0, "Iteration \(iteration): first component mismatch")
             #expect(viValue.1 == vactValue.1, "Iteration \(iteration): second component mismatch")
             #expect(viValue.2 == vactValue.2, "Iteration \(iteration): third component mismatch")
@@ -299,7 +299,7 @@ struct InterpreterRNGParityTests {
     }
 
     @Test("Deeply nested composition parity")
-    func deeplyNestedCompositionParity() {
+    func deeplyNestedCompositionParity() throws {
         let innerGen = Gen.zip(
             Gen.choose(in: UInt64.min ... UInt64.max, scaling: UInt64.defaultScaling),
             Gen.choose(from: [true, false])
@@ -315,8 +315,8 @@ struct InterpreterRNGParityTests {
         var vact = ValueAndChoiceTreeInterpreter(outerGen, materializePicks: true, seed: seed, maxRuns: 5)
 
         for iteration in 0 ..< 5 {
-            let viValue = vi.next()!
-            let (vactValue, _) = vact.next()!
+            let viValue = try vi.next()!
+            let (vactValue, _) = try vact.next()!
 
             #expect(viValue.count == vactValue.count, "Iteration \(iteration): array lengths differ")
             for (idx, (viElem, vactElem)) in zip(viValue, vactValue).enumerated() {
@@ -329,7 +329,7 @@ struct InterpreterRNGParityTests {
     // MARK: - Edge Cases
 
     @Test("Single element pick parity")
-    func singleElementPickParity() {
+    func singleElementPickParity() throws {
         let gen = Gen.pick(choices: [
             (1, Gen.just(42)),
         ])
@@ -339,14 +339,14 @@ struct InterpreterRNGParityTests {
         var vact = ValueAndChoiceTreeInterpreter(gen, materializePicks: true, seed: seed, maxRuns: 5)
 
         for iteration in 0 ..< 5 {
-            let viValue = vi.next()!
-            let (vactValue, _) = vact.next()!
+            let viValue = try vi.next()!
+            let (vactValue, _) = try vact.next()!
             #expect(viValue == vactValue, "Iteration \(iteration): ValueInterpreter=\(viValue), ValueAndChoiceTreeInterpreter=\(vactValue)")
         }
     }
 
     @Test("Empty array generation parity")
-    func emptyArrayParity() {
+    func emptyArrayParity() throws {
         let gen = Gen.arrayOf(Gen.choose(in: UInt64.min ... UInt64.max, scaling: UInt64.defaultScaling), exactly: 0)
         let seed: UInt64 = 54321
 
@@ -354,14 +354,14 @@ struct InterpreterRNGParityTests {
         var vact = ValueAndChoiceTreeInterpreter(gen, materializePicks: true, seed: seed, maxRuns: 5)
 
         for iteration in 0 ..< 5 {
-            let viValue = vi.next()!
-            let (vactValue, _) = vact.next()!
+            let viValue = try vi.next()!
+            let (vactValue, _) = try vact.next()!
             #expect(viValue.isEmpty && vactValue.isEmpty, "Iteration \(iteration): both should be empty arrays")
         }
     }
 
     @Test("Many iterations parity stress test")
-    func manyIterationsParity() {
+    func manyIterationsParity() throws {
         let gen = Gen.zip(
             Gen.choose(in: UInt64.min ... UInt64.max, scaling: UInt64.defaultScaling),
             Gen.choose(from: [true, false]),
@@ -373,15 +373,15 @@ struct InterpreterRNGParityTests {
         var vact = ValueAndChoiceTreeInterpreter(gen, materializePicks: true, seed: seed, maxRuns: 100)
 
         for iteration in 0 ..< 100 {
-            let viValue = vi.next()!
-            let (vactValue, _) = vact.next()!
+            let viValue = try vi.next()!
+            let (vactValue, _) = try vact.next()!
             #expect(viValue.0 == vactValue.0 && viValue.1 == vactValue.1 && viValue.2 == vactValue.2,
                     "Iteration \(iteration): tuples don't match")
         }
     }
 
     @Test("Multiple seeds produce different but consistent results")
-    func multipleSeedsParity() {
+    func multipleSeedsParity() throws {
         let gen = stringGen()
         let seeds: [UInt64] = [1, 42, 100, 999, 12345]
 
@@ -390,8 +390,8 @@ struct InterpreterRNGParityTests {
             var vact = ValueAndChoiceTreeInterpreter(gen, materializePicks: true, seed: seed, maxRuns: 5)
 
             for iteration in 0 ..< 5 {
-                let viValue = vi.next()!
-                let (vactValue, _) = vact.next()!
+                let viValue = try vi.next()!
+                let (vactValue, _) = try vact.next()!
                 #expect(viValue == vactValue, "Seed \(seed), iteration \(iteration): ValueInterpreter=\(viValue), ValueAndChoiceTreeInterpreter=\(vactValue)")
             }
         }

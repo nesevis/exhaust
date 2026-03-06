@@ -17,7 +17,7 @@ struct OneOfTests {
         seed: UInt64 = 42,
     ) throws -> (original: Output, materialized: Output) {
         var interpreter = ValueAndChoiceTreeInterpreter(gen, materializePicks: false, seed: seed)
-        let (value, tree) = try #require(interpreter.prefix(1).last)
+        let (value, tree) = try #require(try interpreter.prefix(1).last)
         let flattened = ChoiceSequence.flatten(tree)
         let materialized = try #require(try Interpreters.materialize(gen, with: tree, using: flattened))
         return (value, materialized)
@@ -26,7 +26,7 @@ struct OneOfTests {
     // MARK: - Equal-weight oneOf
 
     @Test("Equal-weight oneOf produces values from all branches")
-    func equalWeightProducesVariety() {
+    func equalWeightProducesVariety() throws {
         let gen: ReflectiveGenerator<String> = Gen.pick(choices: [
             (1, Gen.just("alpha")),
             (1, Gen.just("beta")),
@@ -35,7 +35,7 @@ struct OneOfTests {
         var seen: Set<String> = []
         var iterator = ValueInterpreter(gen)
         for _ in 0 ..< 200 {
-            guard let value = iterator.next() else { break }
+            guard let value = try iterator.next() else { break }
             seen.insert(value)
         }
         #expect(seen.count == 3, "Expected all three branches, saw \(seen)")
@@ -44,7 +44,7 @@ struct OneOfTests {
     // MARK: - Weighted oneOf
 
     @Test("Weighted oneOf produces values from all branches")
-    func weightedProducesVariety() {
+    func weightedProducesVariety() throws {
         let gen: ReflectiveGenerator<String> = Gen.pick(choices: [
             (1, Gen.just("rare")),
             (5, Gen.just("common")),
@@ -52,7 +52,7 @@ struct OneOfTests {
         var seen: Set<String> = []
         var iterator = ValueInterpreter(gen)
         for _ in 0 ..< 200 {
-            guard let value = iterator.next() else { break }
+            guard let value = try iterator.next() else { break }
             seen.insert(value)
         }
         #expect(seen.count == 2, "Expected both branches, saw \(seen)")
@@ -87,14 +87,14 @@ struct OneOfTests {
     // MARK: - Gen.pick integration
 
     @Test("oneOf works with Gen.pick and map")
-    func worksWithPickAndMap() {
+    func worksWithPickAndMap() throws {
         let gen = Gen.pick(choices: [
             (1, Gen.just(1)),
             (1, Gen.just(2)),
             (1, Gen.just(3)),
         ]).map { $0 * 10 }
         var iterator = ValueInterpreter(gen)
-        let value = iterator.next()
+        let value = try iterator.next()
         #expect(value == 10 || value == 20 || value == 30)
     }
 }

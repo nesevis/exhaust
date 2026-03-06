@@ -12,7 +12,7 @@ import Testing
 @Suite("Generator Composition Edge Cases")
 struct GeneratorCompositionEdgeCaseTests {
     @Test("Single value generator composition")
-    func singleValueGeneratorComposition() {
+    func singleValueGeneratorComposition() throws {
         let constantGen = Gen.just(42)
         let normalGen = stringGen()
 
@@ -21,14 +21,14 @@ struct GeneratorCompositionEdgeCaseTests {
         // Generate multiple values
         for _ in 0 ..< 10 {
             var iterator = ValueInterpreter(composed)
-            let (constant, string) = iterator.next()!
+            let (constant, string) = try iterator.next()!
             #expect(constant == 42) // Constant should always be the same
             // String can be anything
         }
     }
 
     @Test("Zipping many generators maintains correctness")
-    func largeZipComposition() {
+    func largeZipComposition() throws {
         let gen = Gen.zip(
             Gen.choose(in: Int.min ... Int.max, scaling: Int.defaultScaling),
             stringGen(),
@@ -40,7 +40,7 @@ struct GeneratorCompositionEdgeCaseTests {
         // Verify all components are generated correctly
         for _ in 0 ..< 20 {
             var iterator = ValueInterpreter(gen)
-            let (int, string, uint, double, ranged) = iterator.next()!
+            let (int, string, uint, double, ranged) = try iterator.next()!
 
             // Type checking ensures correctness, but verify range constraint
             #expect(ranged >= 1)
@@ -49,7 +49,7 @@ struct GeneratorCompositionEdgeCaseTests {
     }
 
     @Test("Nested composition with multiple levels")
-    func nestedCompositionLevels() {
+    func nestedCompositionLevels() throws {
         let innerGen = Gen.zip(
             Gen.choose(in: Int.min ... Int.max, scaling: Int.defaultScaling),
             stringGen()
@@ -58,7 +58,7 @@ struct GeneratorCompositionEdgeCaseTests {
         let outerGen = Gen.zip(middleGen, Gen.choose(in: UInt.min ... UInt.max, scaling: UInt.defaultScaling))
 
         var iterator = ValueInterpreter(outerGen)
-        let nestedTuple = iterator.next()!
+        let nestedTuple = try iterator.next()!
         // TOOD: write #expects
 
         // All values should be generated successfully
@@ -66,7 +66,7 @@ struct GeneratorCompositionEdgeCaseTests {
     }
 
     @Test("Empty array generator in composition")
-    func emptyArrayGeneratorComposition() {
+    func emptyArrayGeneratorComposition() throws {
         let emptyArrayGen = Gen.just([Int]())
         let normalGen = stringGen()
 
@@ -74,13 +74,13 @@ struct GeneratorCompositionEdgeCaseTests {
 
         for _ in 0 ..< 10 {
             var iterator = ValueInterpreter(composed)
-            let (emptyArray, _) = iterator.next()!
+            let (emptyArray, _) = try iterator.next()!
             #expect(emptyArray.isEmpty)
         }
     }
 
     @Test("Composition with bound generators")
-    func boundGeneratorComposition() {
+    func boundGeneratorComposition() throws {
         let dependentGen = (Gen.choose(in: Int.min ... Int.max, scaling: Int.defaultScaling) as ReflectiveGenerator<Int>).bind { first in
             Gen.choose(in: first ... (first + 10)).map { second in
                 (first, second)
@@ -92,7 +92,7 @@ struct GeneratorCompositionEdgeCaseTests {
 
         for _ in 0 ..< 20 {
             var iterator = ValueInterpreter(composed)
-            let ((first, second), _) = iterator.next()!
+            let ((first, second), _) = try iterator.next()!
             #expect(second >= first)
             #expect(second <= first + 10)
         }
@@ -107,7 +107,7 @@ struct GeneratorCompositionEdgeCaseTests {
         )
 
         var iterator = ValueInterpreter(gen)
-        let generated = iterator.next()!
+        let generated = try iterator.next()!
         let recipe = try #require(try Interpreters.reflect(gen, with: generated))
         let replayed = try #require(try Interpreters.replay(gen, using: recipe))
 
@@ -115,7 +115,7 @@ struct GeneratorCompositionEdgeCaseTests {
     }
 
     @Test("Composition with array generation")
-    func arrayComposition() {
+    func arrayComposition() throws {
         let arrayGen = Gen.arrayOf(
             Gen.choose(in: Int.min ... Int.max, scaling: Int.defaultScaling),
             within: 0 ... 5
@@ -126,14 +126,14 @@ struct GeneratorCompositionEdgeCaseTests {
 
         for _ in 0 ..< 20 {
             var iterator = ValueInterpreter(composed)
-            let (array, string) = iterator.next()!
+            let (array, string) = try iterator.next()!
             #expect(array.count >= 0) // swiftlint:disable:this empty_count
             #expect(array.count <= 5)
         }
     }
 
     @Test("Deeply nested array composition")
-    func deeplyNestedArrayComposition() {
+    func deeplyNestedArrayComposition() throws {
         let nestedGen = Gen.arrayOf(
             Gen.arrayOf(
                 Gen.arrayOf(
@@ -149,7 +149,7 @@ struct GeneratorCompositionEdgeCaseTests {
 
         for _ in 0 ..< 10 {
             var iterator = ValueInterpreter(composed)
-            let (nested, string) = iterator.next()!
+            let (nested, string) = try iterator.next()!
 
             // Verify structure depth
             #expect(nested.count >= 1)

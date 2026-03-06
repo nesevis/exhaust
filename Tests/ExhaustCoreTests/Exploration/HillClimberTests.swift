@@ -9,9 +9,9 @@ import Testing
 @Suite("HillClimber")
 struct HillClimberTests {
     @Test("Value climbing increases score by adjusting values")
-    func valueClimbingIncreasesScore() {
+    func valueClimbingIncreasesScore() throws {
         let gen = Gen.choose(in: 0 ... 1000 as ClosedRange<Int>)
-        let (_, tree) = generateWithTree(gen, seed: 42)
+        let (_, tree) = try generateWithTree(gen, seed: 42)
         let sequence = ChoiceSequence(tree)
         let initialSeed = Seed(sequence: sequence, tree: tree, noveltyScore: 0, fitness: 0, generation: 0)
         var prng = Xoshiro256(seed: 7)
@@ -42,13 +42,13 @@ struct HillClimberTests {
     }
 
     @Test("Branch climbing discovers alternative branches that improve score")
-    func branchClimbingDiscoversBetterBranches() {
+    func branchClimbingDiscoversBetterBranches() throws {
         let lowBranch = Gen.choose(in: 0 ... 10 as ClosedRange<Int>)
         let highBranch = Gen.choose(in: 90 ... 100 as ClosedRange<Int>)
         let gen = Gen.pick(choices: [(9, lowBranch), (1, highBranch)])
 
         // Generate with the likely low branch
-        let (value, tree) = generateWithTree(gen, seed: 42)
+        let (value, tree) = try generateWithTree(gen, seed: 42)
         let sequence = ChoiceSequence(tree)
         let initialSeed = Seed(sequence: sequence, tree: tree, noveltyScore: 0, fitness: Double(value), generation: 0)
         var prng = Xoshiro256(seed: 7)
@@ -77,9 +77,9 @@ struct HillClimberTests {
     }
 
     @Test("Returns counterexample immediately when property fails")
-    func returnsCounterexampleOnPropertyFailure() {
+    func returnsCounterexampleOnPropertyFailure() throws {
         let gen = Gen.choose(in: 0 ... 1000 as ClosedRange<Int>)
-        let (_, tree) = generateWithTree(gen, seed: 42)
+        let (_, tree) = try generateWithTree(gen, seed: 42)
         let sequence = ChoiceSequence(tree)
         let initialSeed = Seed(sequence: sequence, tree: tree, noveltyScore: 0, fitness: 0, generation: 0)
         var prng = Xoshiro256(seed: 7)
@@ -105,9 +105,9 @@ struct HillClimberTests {
     }
 
     @Test("Budget is respected")
-    func budgetRespected() {
+    func budgetRespected() throws {
         let gen = Gen.choose(in: 0 ... 1000 as ClosedRange<Int>)
-        let (_, tree) = generateWithTree(gen, seed: 42)
+        let (_, tree) = try generateWithTree(gen, seed: 42)
         let sequence = ChoiceSequence(tree)
         let initialSeed = Seed(sequence: sequence, tree: tree, noveltyScore: 0, fitness: 0, generation: 0)
         var prng = Xoshiro256(seed: 7)
@@ -132,9 +132,9 @@ struct HillClimberTests {
     }
 
     @Test("BST integration: hill climbing with height scorer steers toward deeper trees")
-    func bstHeightClimbing() {
+    func bstHeightClimbing() throws {
         let gen = BST.arbitrary(maxDepth: 6, valueRange: 0 ... 99)
-        let (value, tree) = generateWithTree(gen, seed: 42)
+        let (value, tree) = try generateWithTree(gen, seed: 42)
         let sequence = ChoiceSequence(tree)
         let initialSeed = Seed(
             sequence: sequence, tree: tree,
@@ -169,7 +169,7 @@ private func generateWithTree<Output>(
     seed: UInt64,
     materializePicks: Bool = false,
     iteration: Int = 0,
-) -> (value: Output, tree: ChoiceTree) {
+) throws -> (value: Output, tree: ChoiceTree) {
     var iter = ValueAndChoiceTreeInterpreter(gen, materializePicks: materializePicks, seed: seed)
-    return iter.prefix(iteration + 1).last!
+    return try iter.prefix(iteration + 1).last!
 }

@@ -19,9 +19,9 @@ import Testing
 @Suite("Generate-Reflect-Replay Roundtrip")
 struct RoundtripPropertyTests {
     @Test("Primitive generators round-trip through reflect and replay")
-    func primitiveRoundtrip() {
+    func primitiveRoundtrip() throws {
         let intGen: ReflectiveGenerator<Int> = Gen.choose(in: -1000 ... 1000)
-        exhaustCheck(intGen) { value in
+        try exhaustCheck(intGen) { value in
             guard let tree = try? Interpreters.reflect(intGen, with: value),
                   let replayed = try? Interpreters.replay(intGen, using: tree)
             else { return false }
@@ -29,7 +29,7 @@ struct RoundtripPropertyTests {
         }
 
         let doubleGen: ReflectiveGenerator<Double> = Gen.choose(in: -1000.0 ... 1000.0)
-        exhaustCheck(doubleGen) { value in
+        try exhaustCheck(doubleGen) { value in
             guard let tree = try? Interpreters.reflect(doubleGen, with: value),
                   let replayed = try? Interpreters.replay(doubleGen, using: tree)
             else { return false }
@@ -37,7 +37,7 @@ struct RoundtripPropertyTests {
         }
 
         let boolGen = Gen.choose(from: [true, false])
-        exhaustCheck(boolGen, maxIterations: 50) { value in
+        try exhaustCheck(boolGen, maxIterations: 50) { value in
             guard let tree = try? Interpreters.reflect(boolGen, with: value),
                   let replayed = try? Interpreters.replay(boolGen, using: tree)
             else { return false }
@@ -45,7 +45,7 @@ struct RoundtripPropertyTests {
         }
 
         let asciiGen = asciiStringGen(length: 1 ... 10)
-        exhaustCheck(asciiGen) { value in
+        try exhaustCheck(asciiGen) { value in
             guard let tree = try? Interpreters.reflect(asciiGen, with: value),
                   let replayed = try? Interpreters.replay(asciiGen, using: tree)
             else { return false }
@@ -53,7 +53,7 @@ struct RoundtripPropertyTests {
         }
 
         let charGen = characterGen(from: .decimalDigits)
-        exhaustCheck(charGen) { value in
+        try exhaustCheck(charGen) { value in
             guard let tree = try? Interpreters.reflect(charGen, with: value),
                   let replayed = try? Interpreters.replay(charGen, using: tree)
             else { return false }
@@ -62,10 +62,10 @@ struct RoundtripPropertyTests {
     }
 
     @Test("Composed generators round-trip through reflect and replay")
-    func composedRoundtrip() {
+    func composedRoundtrip() throws {
         // Array
         let arrayGen = Gen.arrayOf(Gen.choose(in: 0 ... 100) as ReflectiveGenerator<Int>, within: 1 ... 5)
-        exhaustCheck(arrayGen) { value in
+        try exhaustCheck(arrayGen) { value in
             guard let tree = try? Interpreters.reflect(arrayGen, with: value),
                   let replayed = try? Interpreters.replay(arrayGen, using: tree)
             else { return false }
@@ -78,7 +78,7 @@ struct RoundtripPropertyTests {
             (1, Gen.just(Optional<Int>.none)),
             (5, innerIntGen.map { Optional($0) }),
         ])
-        exhaustCheck(optionalGen) { value in
+        try exhaustCheck(optionalGen) { value in
             guard let tree = try? Interpreters.reflect(optionalGen, with: value),
                   let replayed = try? Interpreters.replay(optionalGen, using: tree)
             else { return false }
@@ -90,7 +90,7 @@ struct RoundtripPropertyTests {
             Gen.choose(in: 0 ... 100) as ReflectiveGenerator<Int>,
             Gen.choose(in: 0 ... 100) as ReflectiveGenerator<Int>,
         )
-        exhaustCheck(zipGen) { value in
+        try exhaustCheck(zipGen) { value in
             guard let tree = try? Interpreters.reflect(zipGen, with: value),
                   let replayed = try? Interpreters.replay(zipGen, using: tree)
             else { return false }
@@ -102,7 +102,7 @@ struct RoundtripPropertyTests {
             (1, Gen.choose(in: 0 ... 50)),
             (1, Gen.choose(in: 100 ... 200)),
         ])
-        exhaustCheck(oneOfGen) { value in
+        try exhaustCheck(oneOfGen) { value in
             guard let tree = try? Interpreters.reflect(oneOfGen, with: value),
                   let replayed = try? Interpreters.replay(oneOfGen, using: tree)
             else { return false }
@@ -116,7 +116,7 @@ struct RoundtripPropertyTests {
 @Suite("Size Scaling")
 struct SizeScalingPropertyTests {
     @Test("scaledRange monotonically expands as size increases")
-    func scaledRangeMonotonicity() {
+    func scaledRangeMonotonicity() throws {
         let range = UInt64(0) ... UInt64(10000)
         let sizeGen = Gen.zip(
             Gen.choose(in: UInt64(1) ... 99),
@@ -124,7 +124,7 @@ struct SizeScalingPropertyTests {
         )
 
         // Linear scaling
-        exhaustCheck(sizeGen) { s1, s2 in
+        try exhaustCheck(sizeGen) { s1, s2 in
             let lo = min(s1, s2)
             let hi = max(s1, s2)
             guard lo < hi else { return true }
@@ -134,7 +134,7 @@ struct SizeScalingPropertyTests {
         }
 
         // Exponential scaling
-        exhaustCheck(sizeGen) { s1, s2 in
+        try exhaustCheck(sizeGen) { s1, s2 in
             let lo = min(s1, s2)
             let hi = max(s1, s2)
             guard lo < hi else { return true }
@@ -144,14 +144,14 @@ struct SizeScalingPropertyTests {
         }
 
         // Constant scaling: range must equal input at all sizes
-        exhaustCheck(Gen.choose(in: UInt64(0) ... 100)) { size in
+        try exhaustCheck(Gen.choose(in: UInt64(0) ... 100)) { size in
             let r = Gen.scaledRange(range, scaling: .constant, size: size)
             return r == range
         }
     }
 
     @Test("scaledDistance is monotonically non-decreasing in fraction")
-    func scaledDistanceMonotonicity() {
+    func scaledDistanceMonotonicity() throws {
         let gen = Gen.zip(
             Gen.choose(in: UInt64(1) ... 10000),
             Gen.choose(in: UInt64(0) ... 99),
@@ -159,7 +159,7 @@ struct SizeScalingPropertyTests {
         )
 
         // Linear
-        exhaustCheck(gen) { distance, f1Raw, f2Raw in
+        try exhaustCheck(gen) { distance, f1Raw, f2Raw in
             let fLo = Double(min(f1Raw, f2Raw)) / 100.0
             let fHi = Double(max(f1Raw, f2Raw)) / 100.0
             guard fLo < fHi else { return true }
@@ -169,7 +169,7 @@ struct SizeScalingPropertyTests {
         }
 
         // Exponential
-        exhaustCheck(gen) { distance, f1Raw, f2Raw in
+        try exhaustCheck(gen) { distance, f1Raw, f2Raw in
             let fLo = Double(min(f1Raw, f2Raw)) / 100.0
             let fHi = Double(max(f1Raw, f2Raw)) / 100.0
             guard fLo < fHi else { return true }
@@ -179,7 +179,7 @@ struct SizeScalingPropertyTests {
         }
 
         // Result is always <= distance
-        exhaustCheck(Gen.zip(
+        try exhaustCheck(Gen.zip(
             Gen.choose(in: UInt64(0) ... 100_000),
             Gen.choose(in: UInt64(0) ... 100),
         )) { distance, fRaw in
@@ -196,15 +196,15 @@ struct SizeScalingPropertyTests {
 @Suite("FloatShortlex")
 struct FloatShortlexPropertyTests {
     @Test("Simple non-negative integers have shortlexKey equal to their value")
-    func simpleIntegerIdentity() {
-        exhaustCheck(Gen.choose(in: UInt64(0) ... (1 << 20))) { n in
+    func simpleIntegerIdentity() throws {
+        try exhaustCheck(Gen.choose(in: UInt64(0) ... (1 << 20))) { n in
             FloatShortlex.shortlexKey(for: Double(n)) == n
         }
     }
 
     @Test("Magnitude ordering preserved among simple non-negative integers")
-    func magnitudeOrdering() {
-        exhaustCheck(Gen.zip(
+    func magnitudeOrdering() throws {
+        try exhaustCheck(Gen.zip(
             Gen.choose(in: UInt64(0) ... (1 << 20)),
             Gen.choose(in: UInt64(0) ... (1 << 20)),
         )) { a, b in
@@ -214,8 +214,8 @@ struct FloatShortlexPropertyTests {
     }
 
     @Test("reverseLowerBits is an involution")
-    func reverseLowerBitsInvolution() {
-        exhaustCheck(Gen.zip(
+    func reverseLowerBitsInvolution() throws {
+        try exhaustCheck(Gen.zip(
             Gen.choose(in: UInt64(0) ... ((1 << 20) - 1)),
             Gen.choose(in: UInt64(1) ... 63),
         )) { rawX, countRaw in
@@ -234,9 +234,9 @@ struct FloatShortlexPropertyTests {
 @Suite("Replay Idempotence")
 struct ReplayIdempotencePropertyTests {
     @Test("Replaying the same tree always produces the same value")
-    func replayIdempotence() {
+    func replayIdempotence() throws {
         let gen: ReflectiveGenerator<Int> = Gen.choose(in: -10000 ... 10000)
-        exhaustCheck(gen) { value in
+        try exhaustCheck(gen) { value in
             guard let tree = try? Interpreters.reflect(gen, with: value),
                   let replay1 = try? Interpreters.replay(gen, using: tree),
                   let replay2 = try? Interpreters.replay(gen, using: tree),
@@ -252,29 +252,29 @@ struct ReplayIdempotencePropertyTests {
 @Suite("ChoiceValue Complexity")
 struct ChoiceValuePropertyTests {
     @Test("semanticSimplest always has complexity <= the original value")
-    func semanticSimplestMinimalComplexity() {
+    func semanticSimplestMinimalComplexity() throws {
         // Unsigned
-        exhaustCheck(Gen.choose(in: UInt64(0) ... 100_000)) { rawValue in
+        try exhaustCheck(Gen.choose(in: UInt64(0) ... 100_000)) { rawValue in
             let value = ChoiceValue.unsigned(rawValue, .uint64)
             return value.semanticSimplest.complexity <= value.complexity
         }
 
         // Signed
-        exhaustCheck(Gen.choose(in: Int64(-50000) ... 50000)) { rawValue in
+        try exhaustCheck(Gen.choose(in: Int64(-50000) ... 50000)) { rawValue in
             let value = ChoiceValue(rawValue, tag: .int64)
             return value.semanticSimplest.complexity <= value.complexity
         }
 
         // Floating
-        exhaustCheck(Gen.choose(in: -1000.0 ... 1000.0) as ReflectiveGenerator<Double>) { rawValue in
+        try exhaustCheck(Gen.choose(in: -1000.0 ... 1000.0) as ReflectiveGenerator<Double>) { rawValue in
             let value = ChoiceValue(rawValue, tag: .double)
             return value.semanticSimplest.complexity <= value.complexity
         }
     }
 
     @Test("Unsigned ChoiceValue complexity strictly increases with value")
-    func unsignedComplexityMonotonicity() {
-        exhaustCheck(Gen.zip(
+    func unsignedComplexityMonotonicity() throws {
+        try exhaustCheck(Gen.zip(
             Gen.choose(in: UInt64(0) ... 100_000),
             Gen.choose(in: UInt64(0) ... 100_000),
         )) { a, b in
@@ -291,8 +291,8 @@ struct ChoiceValuePropertyTests {
 @Suite("ShortlexKey Roundtrip")
 struct ShortlexKeyPropertyTests {
     @Test("fromShortlexKey inverts shortlexKey for signed integers")
-    func signedShortlexRoundtrip() {
-        exhaustCheck(Gen.choose(in: Int64(-50000) ... 50000)) { rawValue in
+    func signedShortlexRoundtrip() throws {
+        try exhaustCheck(Gen.choose(in: Int64(-50000) ... 50000)) { rawValue in
             let value = ChoiceValue(rawValue, tag: .int64)
             let key = value.shortlexKey
             let recovered = ChoiceValue.fromShortlexKey(key, tag: .int64)
@@ -301,8 +301,8 @@ struct ShortlexKeyPropertyTests {
     }
 
     @Test("shortlexKey orders signed integers by proximity to zero")
-    func signedShortlexOrdering() {
-        exhaustCheck(Gen.zip(
+    func signedShortlexOrdering() throws {
+        try exhaustCheck(Gen.zip(
             Gen.choose(in: Int64(-50000) ... 50000),
             Gen.choose(in: Int64(-50000) ... 50000),
         )) { a, b in
@@ -319,9 +319,9 @@ struct ShortlexKeyPropertyTests {
 @Suite("Interpreter Agreement")
 struct InterpreterAgreementPropertyTests {
     @Test("Materialize with flattened tree agrees with replay")
-    func materializeAgreesWithReplay() {
+    func materializeAgreesWithReplay() throws {
         let gen: ReflectiveGenerator<Int> = Gen.choose(in: -1000 ... 1000)
-        exhaustCheck(gen) { value in
+        try exhaustCheck(gen) { value in
             guard let tree = try? Interpreters.reflect(gen, with: value),
                   let replayed = try? Interpreters.replay(gen, using: tree)
             else { return false }
@@ -333,9 +333,9 @@ struct InterpreterAgreementPropertyTests {
     }
 
     @Test("Reflect stabilizes after one round")
-    func reflectIdempotence() {
+    func reflectIdempotence() throws {
         let gen: ReflectiveGenerator<Int> = Gen.choose(in: -1000 ... 1000)
-        exhaustCheck(gen) { value in
+        try exhaustCheck(gen) { value in
             guard let tree1 = try? Interpreters.reflect(gen, with: value),
                   let replayed = try? Interpreters.replay(gen, using: tree1),
                   let tree2 = try? Interpreters.reflect(gen, with: replayed)
@@ -353,25 +353,25 @@ struct InterpreterAgreementPropertyTests {
 @Suite("Generator Contracts")
 struct GeneratorContractPropertyTests {
     @Test("Gen.choose always produces values within the specified range")
-    func chooseRangeContainment() {
-        exhaustCheck(Gen.choose(in: -500 ... 500) as ReflectiveGenerator<Int>) { value in
+    func chooseRangeContainment() throws {
+        try exhaustCheck(Gen.choose(in: -500 ... 500) as ReflectiveGenerator<Int>) { value in
             value >= -500 && value <= 500
         }
 
-        exhaustCheck(Gen.choose(in: UInt64(10) ... 10000)) { value in
+        try exhaustCheck(Gen.choose(in: UInt64(10) ... 10000)) { value in
             value >= 10 && value <= 10000
         }
 
         let doubleGen: ReflectiveGenerator<Double> = Gen.choose(in: -1.0 ... 1.0)
-        exhaustCheck(doubleGen) { value in
+        try exhaustCheck(doubleGen) { value in
             value >= -1.0 && value <= 1.0
         }
     }
 
     @Test("Gen.just always produces its constant value")
-    func justConstancy() {
+    func justConstancy() throws {
         let gen = Gen.just(42)
-        exhaustCheck(gen) { value in
+        try exhaustCheck(gen) { value in
             value == 42
         }
     }
@@ -387,7 +387,7 @@ struct ShrinkingPropertyTests {
         let property: (Int) -> Bool = { $0 < 50 }
 
         var iterator = ValueAndChoiceTreeInterpreter(gen, seed: 7, maxRuns: 50)
-        while let (value, tree) = iterator.next() {
+        while let (value, tree) = try iterator.next() {
             guard !property(value) else { continue }
             guard let (_, shrunk) = try Interpreters.reduce(
                 gen: gen, tree: tree, config: .fast, property: property,
@@ -402,7 +402,7 @@ struct ShrinkingPropertyTests {
         let property: (Int) -> Bool = { $0 < 50 }
 
         var iterator = ValueAndChoiceTreeInterpreter(gen, seed: 7, maxRuns: 50)
-        while let (value, tree) = iterator.next() {
+        while let (value, tree) = try iterator.next() {
             guard !property(value) else { continue }
             let originalSequence = ChoiceSequence.flatten(tree)
             guard let (shrunkSequence, _) = try Interpreters.reduce(
@@ -421,8 +421,8 @@ struct ShrinkingPropertyTests {
 @Suite("ChoiceValue Comparable")
 struct ChoiceValueComparablePropertyTests {
     @Test("Unsigned ChoiceValue ordering agrees with natural UInt64 ordering")
-    func unsignedComparableConsistency() {
-        exhaustCheck(Gen.zip(
+    func unsignedComparableConsistency() throws {
+        try exhaustCheck(Gen.zip(
             Gen.choose(in: UInt64(0) ... 100_000),
             Gen.choose(in: UInt64(0) ... 100_000),
         )) { a, b in
@@ -443,9 +443,9 @@ private func exhaustCheck<T>(
     maxIterations: UInt64 = 100,
     seed: UInt64 = 42,
     property: (T) -> Bool,
-) {
+) throws {
     var iter = ValueInterpreter(gen, seed: seed, maxRuns: maxIterations)
-    while let value = iter.next() {
+    while let value = try iter.next() {
         #expect(property(value), "Property failed for value: \(value)")
     }
 }

@@ -190,7 +190,7 @@ private extension ReflectiveGenerator where Operation == ReflectiveOperation {
         )
 
         for sampleIndex in 0 ..< samples {
-            guard let (value, tree) = iterator.next() else { continue }
+            guard let (value, tree) = try? iterator.next() else { continue }
             valuesGenerated += 1
 
             let generatedSequence = ChoiceSequence.flatten(tree)

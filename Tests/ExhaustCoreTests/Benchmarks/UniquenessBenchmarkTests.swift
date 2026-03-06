@@ -98,16 +98,16 @@ struct UniquenessBenchmarkTests {
     // MARK: - Structural Probe
 
     @Test("Structural probe detects picks vs chooseBits-only generators")
-    func structuralProbe() {
-        #expect(probeContainsPicks(Self.bstProblem.generator), "BST should contain picks")
-        #expect(probeContainsPicks(Self.avlProblem.generator), "AVL should contain picks")
-        #expect(!probeContainsPicks(Self.sortedProblem.generator), "SORTED should not contain picks")
+    func structuralProbe() throws {
+        #expect(try probeContainsPicks(Self.bstProblem.generator), "BST should contain picks")
+        #expect(try probeContainsPicks(Self.avlProblem.generator), "AVL should contain picks")
+        #expect(try !probeContainsPicks(Self.sortedProblem.generator), "SORTED should not contain picks")
     }
 
     /// Runs the generator a handful of times and returns true as soon as any tree contains a pick site.
-    private func probeContainsPicks(_ generator: ReflectiveGenerator<some Any>) -> Bool {
+    private func probeContainsPicks(_ generator: ReflectiveGenerator<some Any>) throws -> Bool {
         var iterator = ValueAndChoiceTreeInterpreter(generator, seed: Self.seed, maxRuns: 10)
-        while let (_, tree) = iterator.next() {
+        while let (_, tree) = try iterator.next() {
             if tree.containsPicks { return true }
         }
         return false
@@ -118,8 +118,8 @@ struct UniquenessBenchmarkTests {
     // Kolbu
     @Test("Time to 500 BST", .disabled())
     func bstBenchmark() throws {
-//        let onlineCGS = measureOnlineCGS(Self.bstProblem)
-        let rejection = measureRejection(Self.bstProblem)
+//        let onlineCGS = try measureOnlineCGS(Self.bstProblem)
+        let rejection = try measureRejection(Self.bstProblem)
         let adaptive = try measureAdaptivelySmoothed(Self.bstProblem)
 //        let cgsTuned = try measureOnlineInformedTuning(Self.bstProblem)
         let cgsShared = try measureCGSFitnessSharing(Self.bstProblem)
@@ -137,7 +137,7 @@ struct UniquenessBenchmarkTests {
 
     @Test("Bounded sum: Adaptive vs CGS-Tuned", .disabled("Benchmark"))
     func boundedSumBenchmark() throws {
-        let rejection = measureRejection(Self.boundedSumProblem)
+        let rejection = try measureRejection(Self.boundedSumProblem)
         let adaptive = try measureAdaptivelySmoothed(Self.boundedSumProblem)
         let cgsTuned = try measureOnlineInformedTuning(Self.boundedSumProblem)
         printProblemResults(Self.boundedSumProblem, results: [rejection, adaptive, cgsTuned])
@@ -165,9 +165,9 @@ struct UniquenessBenchmarkTests {
     private func runAllStrategies(
         _ problem: BenchmarkProblem<some Hashable>,
     ) throws -> [BenchmarkResult] {
-        let rejection = measureRejection(problem)
+        let rejection = try measureRejection(problem)
         let smoothed = try measureSmoothed(problem)
-//        let onlineCGS = measureOnlineCGS(problem)
+//        let onlineCGS = try measureOnlineCGS(problem)
         let adaptive = try measureAdaptivelySmoothed(problem)
         let auto = try measureAutoAdapted(problem)
         let cgsTuned = try measureOnlineInformedTuning(problem, weightingStrategy: .totalFitness)
@@ -181,14 +181,14 @@ struct UniquenessBenchmarkTests {
 
     private func measureRejection<Value: Hashable>(
         _ problem: BenchmarkProblem<Value>,
-    ) -> BenchmarkResult {
+    ) throws -> BenchmarkResult {
         var unique = Set<Value>()
         var total = 0
         var quality = [Int: Int]()
         var iterator = ValueAndChoiceTreeInterpreter(problem.generator, seed: Self.seed, maxRuns: Self.budget)
 
         let start = ContinuousClock.now
-        while unique.count < Self.targetUnique, let (value, _) = iterator.next() {
+        while unique.count < Self.targetUnique, let (value, _) = try iterator.next() {
             total += 1
             if problem.predicate(value) {
                 let (inserted, _) = unique.insert(value)
@@ -210,7 +210,7 @@ struct UniquenessBenchmarkTests {
 
     private func measureOnlineCGS<Value: Hashable>(
         _ problem: BenchmarkProblem<Value>,
-    ) -> BenchmarkResult {
+    ) throws -> BenchmarkResult {
         var unique = Set<Value>()
         var total = 0
         var quality = [Int: Int]()
@@ -223,7 +223,7 @@ struct UniquenessBenchmarkTests {
         )
 
         let start = ContinuousClock.now
-        while unique.count < Self.targetUnique, let value = iterator.next() {
+        while unique.count < Self.targetUnique, let value = try iterator.next() {
             total += 1
             if problem.predicate(value) {
                 let (inserted, _) = unique.insert(value)
@@ -261,7 +261,7 @@ struct UniquenessBenchmarkTests {
         var quality = [Int: Int]()
         var iterator = ValueAndChoiceTreeInterpreter(smoothed, seed: Self.seed, maxRuns: Self.budget)
 
-        while unique.count < Self.targetUnique, let (value, _) = iterator.next() {
+        while unique.count < Self.targetUnique, let (value, _) = try iterator.next() {
             total += 1
             if problem.predicate(value) {
                 let (inserted, _) = unique.insert(value)
@@ -304,7 +304,7 @@ struct UniquenessBenchmarkTests {
         var quality = [Int: Int]()
         var iterator = ValueAndChoiceTreeInterpreter(adaptive, seed: Self.seed, maxRuns: Self.budget)
 
-        while unique.count < Self.targetUnique, let (value, _) = iterator.next() {
+        while unique.count < Self.targetUnique, let (value, _) = try iterator.next() {
             total += 1
             if problem.predicate(value) {
                 let (inserted, _) = unique.insert(value)
@@ -340,7 +340,7 @@ struct UniquenessBenchmarkTests {
         var quality = [Int: Int]()
         var iterator = ValueAndChoiceTreeInterpreter(generator, seed: Self.seed, maxRuns: Self.budget)
 
-        while unique.count < Self.targetUnique, let (value, _) = iterator.next() {
+        while unique.count < Self.targetUnique, let (value, _) = try iterator.next() {
             total += 1
             if problem.predicate(value) {
                 let (inserted, _) = unique.insert(value)
@@ -391,7 +391,7 @@ struct UniquenessBenchmarkTests {
         var quality = [Int: Int]()
         var iterator = ValueAndChoiceTreeInterpreter(tuned, seed: Self.seed, maxRuns: Self.budget)
 
-        while unique.count < Self.targetUnique, let (value, _) = iterator.next() {
+        while unique.count < Self.targetUnique, let (value, _) = try iterator.next() {
             total += 1
             if problem.predicate(value) {
                 let (inserted, _) = unique.insert(value)
@@ -436,7 +436,7 @@ struct UniquenessBenchmarkTests {
         var quality = [Int: Int]()
         var iterator = ValueAndChoiceTreeInterpreter(tuned, seed: Self.seed, maxRuns: Self.budget)
 
-        while unique.count < Self.targetUnique, let (value, _) = iterator.next() {
+        while unique.count < Self.targetUnique, let (value, _) = try iterator.next() {
             total += 1
             if problem.predicate(value) {
                 let (inserted, _) = unique.insert(value)
@@ -481,7 +481,7 @@ struct UniquenessBenchmarkTests {
         var quality = [Int: Int]()
         var iterator = ValueAndChoiceTreeInterpreter(tuned, seed: Self.seed, maxRuns: Self.budget)
 
-        while unique.count < Self.targetUnique, let (value, _) = iterator.next() {
+        while unique.count < Self.targetUnique, let (value, _) = try iterator.next() {
             total += 1
             if problem.predicate(value) {
                 let (inserted, _) = unique.insert(value)

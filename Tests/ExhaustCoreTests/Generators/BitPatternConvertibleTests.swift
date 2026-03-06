@@ -43,9 +43,9 @@ struct BitPatternConvertibleTests {
     }
 
     @Test("Int BitPatternConvertible round-trip for various values")
-    func intBitPatternRoundTrip() {
+    func intBitPatternRoundTrip() throws {
         // #exhaust was Exhaust-only; using exhaustCheck helper
-        exhaustCheck(Gen.choose() as ReflectiveGenerator<Int>) { value in
+        try exhaustCheck(Gen.choose() as ReflectiveGenerator<Int>) { value in
             Int(bitPattern64: value.bitPattern64) == value
         }
     }
@@ -56,15 +56,15 @@ struct BitPatternConvertibleTests {
     }
 
     @Test("UInt64 to Int mapping round-trip consistency")
-    func uInt64ToIntMappingRoundTrip() {
-        exhaustCheck(Gen.choose() as ReflectiveGenerator<UInt64>) { bitPattern in
+    func uInt64ToIntMappingRoundTrip() throws {
+        try exhaustCheck(Gen.choose() as ReflectiveGenerator<UInt64>) { bitPattern in
             Int(bitPattern64: bitPattern).bitPattern64 == bitPattern
         }
     }
 
     @Test("Float BitPatternConvertible round-trip for special values")
-    func floatSpecialValuesRoundTrip() {
-        exhaustCheck(Gen.choose() as ReflectiveGenerator<Float>) { val in
+    func floatSpecialValuesRoundTrip() throws {
+        try exhaustCheck(Gen.choose() as ReflectiveGenerator<Float>) { val in
             val.isNaN || Float(bitPattern64: val.bitPattern64) == val
         }
     }
@@ -90,19 +90,19 @@ struct BitPatternConvertibleTests {
     }
 
     @Test("Property test Float bit pattern representation is sequential with size")
-    func propertyTestFloatBitPatternSequentiality() {
+    func propertyTestFloatBitPatternSequentiality() throws {
         let gen = Gen.zip(
             Gen.choose(in: -Float.greatestFiniteMagnitude ... Float(0)),
             Gen.choose(in: Float(1) ... Float.greatestFiniteMagnitude.nextDown),
         )
-        exhaustCheck(gen) { low, high in
+        try exhaustCheck(gen) { low, high in
             low.bitPattern64 < high.bitPattern64
         }
     }
 
     @Test("Double BitPatternConvertible round-trip for special values")
-    func doubleSpecialValuesRoundTrip() {
-        exhaustCheck(Gen.choose() as ReflectiveGenerator<Double>) { val in
+    func doubleSpecialValuesRoundTrip() throws {
+        try exhaustCheck(Gen.choose() as ReflectiveGenerator<Double>) { val in
             val.isNaN || Double(bitPattern64: val.bitPattern64) == val
         }
     }
@@ -128,26 +128,26 @@ struct BitPatternConvertibleTests {
     }
 
     @Test("Property test Double bit pattern representation is sequential with size")
-    func propertyTestDoubleBitPatternSequentiality() {
+    func propertyTestDoubleBitPatternSequentiality() throws {
         let gen = Gen.zip(
             Gen.choose(in: -Double.greatestFiniteMagnitude ... 0),
             Gen.choose(in: 1.0 ... Double.greatestFiniteMagnitude.nextDown),
         )
-        exhaustCheck(gen) { low, high in
+        try exhaustCheck(gen) { low, high in
             low.bitPattern64 < high.bitPattern64
         }
     }
 
     @Test("UInt64 to Float mapping round-trip consistency")
-    func uInt64ToFloatMappingRoundTrip() {
-        exhaustCheck(Gen.choose(in: UInt64(0) ... UInt64(UInt32.max))) { bitPattern in
+    func uInt64ToFloatMappingRoundTrip() throws {
+        try exhaustCheck(Gen.choose(in: UInt64(0) ... UInt64(UInt32.max))) { bitPattern in
             Float(bitPattern64: bitPattern).bitPattern64 == bitPattern
         }
     }
 
     @Test("UInt64 to Double mapping round-trip consistency")
-    func uInt64ToDoubleMappingRoundTrip() {
-        exhaustCheck(Gen.choose() as ReflectiveGenerator<UInt64>) { bitPattern in
+    func uInt64ToDoubleMappingRoundTrip() throws {
+        try exhaustCheck(Gen.choose() as ReflectiveGenerator<UInt64>) { bitPattern in
             Double(bitPattern64: bitPattern).bitPattern64 == bitPattern
         }
     }
@@ -155,40 +155,40 @@ struct BitPatternConvertibleTests {
     // MARK: - Signed Integer Tests
 
     @Test("Int8 BitPatternConvertible round-trip")
-    func int8BitPatternRoundTrip() {
-        exhaustCheck(Gen.choose() as ReflectiveGenerator<Int8>) { val in
+    func int8BitPatternRoundTrip() throws {
+        try exhaustCheck(Gen.choose() as ReflectiveGenerator<Int8>) { val in
             Int8(bitPattern64: val.bitPattern64) == val
         }
     }
 
     @Test("Int16 BitPatternConvertible round-trip")
-    func int16BitPatternRoundTrip() {
-        exhaustCheck(Gen.choose() as ReflectiveGenerator<Int16>) { val in
+    func int16BitPatternRoundTrip() throws {
+        try exhaustCheck(Gen.choose() as ReflectiveGenerator<Int16>) { val in
             Int16(bitPattern64: val.bitPattern64) == val
         }
     }
 
     @Test("Int32 BitPatternConvertible round-trip")
-    func int32BitPatternRoundTrip() {
-        exhaustCheck(Gen.choose() as ReflectiveGenerator<Int32>) { val in
+    func int32BitPatternRoundTrip() throws {
+        try exhaustCheck(Gen.choose() as ReflectiveGenerator<Int32>) { val in
             Int32(bitPattern64: val.bitPattern64) == val
         }
     }
 
     @Test("Int64 BitPatternConvertible round-trip")
-    func int64BitPatternRoundTrip() {
-        exhaustCheck(Gen.choose() as ReflectiveGenerator<Int64>) { val in
+    func int64BitPatternRoundTrip() throws {
+        try exhaustCheck(Gen.choose() as ReflectiveGenerator<Int64>) { val in
             Int64(bitPattern64: val.bitPattern64) == val
         }
     }
 
     @Test("Property test Int64 bit pattern representation is sequential with size")
-    func propertyTestSignedIntegerBitPatternSequentiality() {
+    func propertyTestSignedIntegerBitPatternSequentiality() throws {
         let gen = Gen.zip(
             Gen.choose(in: Int64.min ... Int64(0)),
             Gen.choose(in: Int64(1) ... Int64.max),
         )
-        exhaustCheck(gen) { low, high in
+        try exhaustCheck(gen) { low, high in
             low.bitPattern64 < high.bitPattern64
         }
     }
@@ -196,36 +196,36 @@ struct BitPatternConvertibleTests {
     // MARK: - Unsigned Integer Tests
 
     @Test("UInt8 BitPatternConvertible round-trip")
-    func uInt8BitPatternRoundTrip() {
-        exhaustCheck(Gen.choose() as ReflectiveGenerator<UInt8>) { val in
+    func uInt8BitPatternRoundTrip() throws {
+        try exhaustCheck(Gen.choose() as ReflectiveGenerator<UInt8>) { val in
             UInt8(bitPattern64: val.bitPattern64) == val
         }
     }
 
     @Test("UInt16 BitPatternConvertible round-trip")
-    func uInt16BitPatternRoundTrip() {
-        exhaustCheck(Gen.choose() as ReflectiveGenerator<UInt16>) { val in
+    func uInt16BitPatternRoundTrip() throws {
+        try exhaustCheck(Gen.choose() as ReflectiveGenerator<UInt16>) { val in
             UInt16(bitPattern64: val.bitPattern64) == val
         }
     }
 
     @Test("UInt32 BitPatternConvertible round-trip")
-    func uInt32BitPatternRoundTrip() {
-        exhaustCheck(Gen.choose() as ReflectiveGenerator<UInt32>) { val in
+    func uInt32BitPatternRoundTrip() throws {
+        try exhaustCheck(Gen.choose() as ReflectiveGenerator<UInt32>) { val in
             UInt32(bitPattern64: val.bitPattern64) == val
         }
     }
 
     @Test("UInt64 BitPatternConvertible round-trip")
-    func uInt64BitPatternRoundTrip() {
-        exhaustCheck(Gen.choose() as ReflectiveGenerator<UInt64>) { val in
+    func uInt64BitPatternRoundTrip() throws {
+        try exhaustCheck(Gen.choose() as ReflectiveGenerator<UInt64>) { val in
             UInt64(bitPattern64: val.bitPattern64) == val
         }
     }
 
     @Test("UInt BitPatternConvertible round-trip")
-    func uIntBitPatternRoundTrip() {
-        exhaustCheck(Gen.choose() as ReflectiveGenerator<UInt>) { val in
+    func uIntBitPatternRoundTrip() throws {
+        try exhaustCheck(Gen.choose() as ReflectiveGenerator<UInt>) { val in
             UInt(bitPattern64: val.bitPattern64) == val
         }
     }
@@ -239,9 +239,9 @@ private func exhaustCheck<T>(
     maxIterations: UInt64 = 100,
     seed: UInt64 = 42,
     property: (T) -> Bool,
-) {
+) throws {
     var iter = ValueInterpreter(gen, seed: seed, maxRuns: maxIterations)
-    while let value = iter.next() {
+    while let value = try iter.next() {
         #expect(property(value), "Property failed for value: \(value)")
     }
 }

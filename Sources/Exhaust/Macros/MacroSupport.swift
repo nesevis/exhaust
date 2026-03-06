@@ -218,7 +218,7 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
         )
         let actualSeed = generator.baseSeed
 
-        while let (next, tree) = generator.next() {
+        do { while let (next, tree) = try generator.next() {
             iterations += 1
             let passed = property(next)
             if passed == false {
@@ -303,6 +303,16 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
                 )
                 return nil
             }
+        }
+        } catch {
+            reportIssue(
+                "\(error)",
+                fileID: fileID,
+                filePath: filePath,
+                line: line,
+                column: column,
+            )
+            return nil
         }
 
         var passMetadata = ["iterations": "\(maxIterations)"]
@@ -453,7 +463,7 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
         seed: UInt64?,
     ) -> Output {
         var interpreter = ValueInterpreter(gen, seed: seed, maxRuns: 1, sizeOverride: 50)
-        guard let value = interpreter.next() else {
+        guard let value = try? interpreter.next() else {
             fatalError("#sample: generator produced no values")
         }
         return value
@@ -467,7 +477,7 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
     ) -> [Output] {
         var interpreter = ValueInterpreter(gen, seed: seed, maxRuns: count)
         var results: [Output] = []
-        while let value = interpreter.next() {
+        while let value = try? interpreter.next() {
             results.append(value)
         }
         return results

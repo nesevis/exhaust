@@ -112,9 +112,9 @@ private enum HypothesisFloatParityHelpers {
         _ gen: ReflectiveGenerator<Output>,
         seed: UInt64 = 42,
         count: Int = 256,
-    ) -> [Output] {
+    ) throws -> [Output] {
         var iter = ValueInterpreter(gen, seed: seed, maxRuns: UInt64(count))
-        return iter.prefix(count)
+        return try iter.prefix(count)
     }
 }
 
@@ -302,7 +302,7 @@ struct HypothesisFloatEncodingParityTests {
 @Suite("Hypothesis Float Range/Subnormal Parity")
 struct HypothesisFloatRangeAndSubnormalParityTests {
     @Test("Generated doubles stay in very large finite ranges")
-    func doublesAreInRangeForLargeBounds() {
+    func doublesAreInRangeForLargeBounds() throws {
         // Adjustment relative to `test_floats_are_in_range`:
         // uses sampled draws via `ValueInterpreter` instead of Hypothesis `@given`.
         let ranges: [ClosedRange<Double>] = [
@@ -311,37 +311,37 @@ struct HypothesisFloatRangeAndSubnormalParityTests {
         ]
 
         for range in ranges {
-            let values = HypothesisFloatParityHelpers.sample(#gen(.double(in: range)))
+            let values = try HypothesisFloatParityHelpers.sample(#gen(.double(in: range)))
             #expect(values.allSatisfy { range.contains($0) })
         }
     }
 
     @Test("Can generate both signed zeros when interval is [-0.0, 0.0]")
-    func canGenerateBothZeros() {
+    func canGenerateBothZeros() throws {
         // Adjustment relative to `test_can_generate_both_zeros_when_in_interval`:
         // covers one canonical interval because Exhaust has no unconstrained float strategy
         // that includes NaN/Inf and Hypothesis-style assumptions.
-        let values = HypothesisFloatParityHelpers.sample(#gen(.double(in: -0.0 ... 0.0)), count: 128)
+        let values = try HypothesisFloatParityHelpers.sample(#gen(.double(in: -0.0 ... 0.0)), count: 128)
         #expect(values.contains(where: { $0 == 0.0 && $0.sign == .plus }))
         #expect(values.contains(where: { $0 == 0.0 && $0.sign == .minus }))
     }
 
     @Test("Does not generate negative values when lower bound is +0.0")
-    func nonNegativeRangeDoesNotGenerateNegativeSigns() {
+    func nonNegativeRangeDoesNotGenerateNegativeSigns() throws {
         // Direct parity with `test_does_not_generate_negative_if_right_boundary_is_positive`.
-        let values = HypothesisFloatParityHelpers.sample(#gen(.double(in: 0.0 ... 1.0)))
+        let values = try HypothesisFloatParityHelpers.sample(#gen(.double(in: 0.0 ... 1.0)))
         #expect(values.allSatisfy { $0.sign == .plus })
     }
 
     @Test("Does not generate positive values when upper bound is -0.0")
-    func nonPositiveRangeDoesNotGeneratePositiveSigns() {
+    func nonPositiveRangeDoesNotGeneratePositiveSigns() throws {
         // Direct parity with `test_does_not_generate_positive_if_right_boundary_is_negative`.
-        let values = HypothesisFloatParityHelpers.sample(#gen(.double(in: -1.0 ... -0.0)))
+        let values = try HypothesisFloatParityHelpers.sample(#gen(.double(in: -1.0 ... -0.0)))
         #expect(values.allSatisfy { $0.sign == .minus })
     }
 
     @Test("Narrow interval generation remains within bounds")
-    func veryNarrowInterval() {
+    func veryNarrowInterval() throws {
         // Direct parity with `test_very_narrow_interval`, expressed with Swift `nextDown`.
         let upperBound = -1.0
         var lowerBound = upperBound
@@ -350,37 +350,37 @@ struct HypothesisFloatRangeAndSubnormalParityTests {
         }
         #expect(lowerBound < upperBound)
 
-        let values = HypothesisFloatParityHelpers.sample(#gen(.double(in: lowerBound ... upperBound)))
+        let values = try HypothesisFloatParityHelpers.sample(#gen(.double(in: lowerBound ... upperBound)))
         #expect(values.allSatisfy { lowerBound <= $0 && $0 <= upperBound })
     }
 
     @Test("Can generate positive and negative subnormal doubles")
-    func canGenerateSubnormalDoubles() {
+    func canGenerateSubnormalDoubles() throws {
         // Adjustment relative to `test_can_generate_subnormals`:
         // uses bounded positive/negative subnormal ranges to avoid half-bounded strategy APIs.
         let smallestNormal = Double.leastNormalMagnitude
         let largestSubnormal = smallestNormal.nextDown
         let smallestSubnormal = Double.leastNonzeroMagnitude
 
-        let positives = HypothesisFloatParityHelpers.sample(#gen(.double(in: smallestSubnormal ... largestSubnormal)))
+        let positives = try HypothesisFloatParityHelpers.sample(#gen(.double(in: smallestSubnormal ... largestSubnormal)))
         #expect(positives.allSatisfy { $0 > 0 && $0 < smallestNormal })
 
-        let negatives = HypothesisFloatParityHelpers.sample(#gen(.double(in: -largestSubnormal ... -smallestSubnormal)))
+        let negatives = try HypothesisFloatParityHelpers.sample(#gen(.double(in: -largestSubnormal ... -smallestSubnormal)))
         #expect(negatives.allSatisfy { $0 < 0 && $0 > -smallestNormal })
     }
 
     @Test("Can generate positive and negative subnormal floats")
-    func canGenerateSubnormalFloats() {
+    func canGenerateSubnormalFloats() throws {
         // Adjustment relative to `test_can_generate_subnormals`:
         // same as Double case, but for 32-bit Float.
         let smallestNormal = Float.leastNormalMagnitude
         let largestSubnormal = smallestNormal.nextDown
         let smallestSubnormal = Float.leastNonzeroMagnitude
 
-        let positives = HypothesisFloatParityHelpers.sample(#gen(.float(in: smallestSubnormal ... largestSubnormal)))
+        let positives = try HypothesisFloatParityHelpers.sample(#gen(.float(in: smallestSubnormal ... largestSubnormal)))
         #expect(positives.allSatisfy { $0 > 0 && $0 < smallestNormal })
 
-        let negatives = HypothesisFloatParityHelpers.sample(#gen(.float(in: -largestSubnormal ... -smallestSubnormal)))
+        let negatives = try HypothesisFloatParityHelpers.sample(#gen(.float(in: -largestSubnormal ... -smallestSubnormal)))
         #expect(negatives.allSatisfy { $0 < 0 && $0 > -smallestNormal })
     }
 }

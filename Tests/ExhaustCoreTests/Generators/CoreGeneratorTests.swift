@@ -14,12 +14,12 @@ struct CoreGeneratorTests {
     @Suite("Gen Factory Methods")
     struct GenFactoryTests {
         @Test("Gen.choose produces values within specified range")
-        func genChooseRange() {
+        func genChooseRange() throws {
             let gen = Gen.choose(in: 10 ... 20) as ReflectiveGenerator<Int>
             var iterator = ValueInterpreter(gen)
 
             for _ in 0 ..< 50 {
-                let value = iterator.next()!
+                let value = try iterator.next()!
                 #expect(10 ... 20 ~= value)
             }
         }
@@ -55,12 +55,12 @@ struct CoreGeneratorTests {
         }
 
         @Test("Gen.choose with type produces valid values")
-        func genChooseType() {
+        func genChooseType() throws {
             let gen = Gen.choose(in: UInt32.min ... UInt32.max, scaling: UInt32.defaultScaling)
             var iterator = ValueInterpreter(gen)
 
             for _ in 0 ..< 20 {
-                let value = iterator.next()!
+                let value = try iterator.next()!
                 #expect(value is UInt32)
             }
         }
@@ -75,7 +75,7 @@ struct CoreGeneratorTests {
             #expect(recipe != nil)
 
             // Test reflection fails with different value
-            let badRecipe = try? Interpreters.reflect(gen, with: 43)
+            let badRecipe = try Interpreters.reflect(gen, with: 43)
             #expect(badRecipe == nil)
 
             // Test replay
@@ -91,13 +91,13 @@ struct CoreGeneratorTests {
         }
 
         @Test(".just produces constant value")
-        func genJust() {
+        func genJust() throws {
             let value = "constant"
             let gen = Gen.just(value)
             var iterator = ValueInterpreter(gen)
 
             for _ in 0 ..< 10 {
-                let generated = iterator.next()!
+                let generated = try iterator.next()!
                 #expect(generated == value)
             }
         }
@@ -119,12 +119,12 @@ struct CoreGeneratorTests {
             var seedIter = ValueInterpreter(
                 Gen.choose(in: UInt64.min ... UInt64.max, scaling: UInt64.defaultScaling) as ReflectiveGenerator<UInt64>
             )
-            let seeds = seedIter.prefix(10)
+            let seeds = try seedIter.prefix(10)
 
             for (index, gen) in generators.enumerated() {
                 var iterator = ValueInterpreter(gen, seed: seeds.randomElement()!)
                 for iteration in 0 ..< 10 {
-                    let generated = iterator.next()!
+                    let generated = try iterator.next()!
                     if let recipe = try Interpreters.reflect(gen, with: generated) {
                         if let replayed = try Interpreters.replay(gen, using: recipe) {
                             #expect(generated == replayed)
@@ -160,13 +160,13 @@ struct CoreGeneratorTests {
     @Suite("Performance Tests")
     struct PerformanceTests {
         @Test("High-frequency generation performance")
-        func highFrequencyGeneration() {
+        func highFrequencyGeneration() throws {
             let gen = Gen.choose(in: 1 ... 1000) as ReflectiveGenerator<Int>
             var iterator = ValueInterpreter(gen, maxRuns: 10000)
 
             // Should be able to generate many values quickly
             for _ in 0 ..< 10000 {
-                _ = iterator.next()!
+                _ = try iterator.next()!
             }
 
             // If we get here without timeout, performance is acceptable
@@ -177,33 +177,33 @@ struct CoreGeneratorTests {
     @Suite("ChoiceTreeGeneratorTests")
     struct ChoiceTreeGeneratorTests {
         @Test("Simple integer test for RNG consistency")
-        func simpleIntegerRNGConsistency() {
+        func simpleIntegerRNGConsistency() throws {
             let gen = Gen.choose(in: Int.min ... Int.max, scaling: Int.defaultScaling)
             var iterator = ValueInterpreter(gen, seed: 42)
-            let output1 = iterator.next()!
+            let output1 = try iterator.next()!
 
             var thing = ValueAndChoiceTreeInterpreter(gen, materializePicks: true, seed: 42)
-            let (output2, _) = thing.next()!
+            let (output2, _) = try thing.next()!
 
             #expect(output1 == output2, "First values should match: \(output1) vs \(output2)")
         }
 
         @Test("RNG state consistency between interpreters")
-        func rNGStateConsistency() {
+        func rNGStateConsistency() throws {
             // Use a simple generator that just picks between two values
             let gen = Gen.pick(choices: [(1, Gen.just(100)), (1, Gen.just(200))])
 
             var vi = ValueInterpreter(gen, seed: 42, maxRuns: 5)
             var vact = ValueAndChoiceTreeInterpreter(gen, materializePicks: false, seed: 42, maxRuns: 5)
 
-            let vi1 = vi.next()!
-            let (vact1, _) = vact.next()!
+            let vi1 = try vi.next()!
+            let (vact1, _) = try vact.next()!
 
-            let vi2 = vi.next()!
-            let (vact2, _) = vact.next()!
+            let vi2 = try vi.next()!
+            let (vact2, _) = try vact.next()!
 
-            let vi3 = vi.next()!
-            let (vact3, _) = vact.next()!
+            let vi3 = try vi.next()!
+            let (vact3, _) = try vact.next()!
 
             #expect(vi1 == vact1, "First: \(vi1) vs \(vact1)")
             #expect(vi2 == vact2, "Second: \(vi2) vs \(vact2)")
@@ -214,13 +214,13 @@ struct CoreGeneratorTests {
         func materializePicksDoesNotChangeSeedOutput() throws {
             let gen = stringGen()
             var iterator = ValueInterpreter(gen, seed: 4)
-            _ = iterator.next()
-            _ = iterator.next()
-            let output = iterator.next()!
+            _ = try iterator.next()
+            _ = try iterator.next()
+            let output = try iterator.next()!
             var thing = ValueAndChoiceTreeInterpreter(gen, materializePicks: true, seed: 4)
-            _ = thing.next()
-            _ = thing.next()
-            let test = thing.next()
+            _ = try thing.next()
+            _ = try thing.next()
+            let test = try thing.next()
             let (output2, choiceTree) = try #require(test)
 
             print("ValueInterpreter output: \(output.description)")

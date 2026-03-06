@@ -14,10 +14,10 @@ struct GenerationExamplesTests {
     @Suite("Basic Examples")
     struct BasicExampleTests {
         @Test("Profile memory allocations")
-        func profileMemAlloc() {
+        func profileMemAlloc() throws {
             let generator = #gen(.string())
             var iterator = ValueAndChoiceTreeInterpreter(generator, materializePicks: true, seed: 1, maxRuns: 100)
-            while let (value, tree) = iterator.next() {
+            while let (value, tree) = try iterator.next() {
                 let value = value
                 let tree = tree
             }
@@ -26,7 +26,7 @@ struct GenerationExamplesTests {
         }
 
         @Test("Test Gen filtering")
-        func genFiltering() {
+        func genFiltering() throws {
             let generator = #gen(.uint())
                 .filter { $0.isMultiple(of: 3) }
                 .classify(
@@ -34,19 +34,19 @@ struct GenerationExamplesTests {
                     ("odd", { n in n % 2 != 0 }),
                 )
             var iterator = ValueAndChoiceTreeInterpreter(generator, seed: 1, maxRuns: 100)
-            while let (value, _) = iterator.next() {
+            while let (value, _) = try iterator.next() {
                 #expect(value.isMultiple(of: 3))
             }
         }
 
         @Test("Test Gen slice")
-        func genSlice() {
+        func genSlice() throws {
             let collection = "What in the devil is the purpose of this?"
 //            let stringCollection = String(collection)
             let generator = Gen.slice(of: collection)
             var iterator = ValueAndChoiceTreeInterpreter(generator, seed: 2, maxRuns: 100)
             var max = 0
-            while let (value, _) = iterator.next() {
+            while let (value, _) = try iterator.next() {
                 // This is a subset
                 max = Swift.max(value.count, max)
                 #expect(collection.count > value.count)
@@ -56,12 +56,12 @@ struct GenerationExamplesTests {
         }
 
         @Test("Test Gen element")
-        func genElement() {
+        func genElement() throws {
             let collection = "What in the devil is the purpose of this?"
 //            let stringCollection = String(collection)
             let generator = Gen.element(from: collection)
             var iterator = ValueAndChoiceTreeInterpreter(generator, seed: 2, maxRuns: 100)
-            while let (value, _) = iterator.next() {
+            while let (value, _) = try iterator.next() {
                 // This is a subset
                 // This is a continuous subset, not a sampling
                 #expect(collection.contains(value))
@@ -69,13 +69,13 @@ struct GenerationExamplesTests {
         }
 
         @Test("ValueAndChoiceTreeGeneratorDoesntSwallowMaps")
-        func vACTGdoesntswallomaps() {
+        func vACTGdoesntswallomaps() throws {
             let gen = #gen(.uint()).map(\.self).map { second in
                 second.description
             }
 //            let filtered = Gen.filter(gen, { $0.contains("@") })
             var iterator = ValueAndChoiceTreeInterpreter(gen, maxRuns: 2)
-            while let (value, tree) = iterator.next() {
+            while let (value, tree) = try iterator.next() {
                 let value = value
                 let tree = tree
             }
@@ -85,7 +85,7 @@ struct GenerationExamplesTests {
         func example2() throws {
             let gen = #gen(.int(in: 1 ... 5))
             var iterator = ValueInterpreter(gen)
-            let results = iterator.next()
+            let results = try iterator.next()
             let nonNilResults = try #require(results)
             let choices = try Interpreters.reflect(gen, with: nonNilResults, where: { _ in true })
             #expect(choices != nil)
@@ -111,7 +111,7 @@ struct GenerationExamplesTests {
                 Person(age: age, height: height)
             }
             var iterator = ValueInterpreter(zipped)
-            let result = iterator.next()!
+            let result = try iterator.next()!
             let choices = try Interpreters.reflect(zipped, with: result)
             if let choices {
                 let replayed = try Interpreters.replay(zipped, using: choices)
@@ -133,7 +133,7 @@ struct GenerationExamplesTests {
             let stringGen = #gen(.string())
             for i in 0 ..< 3 {
                 var iterator = ValueInterpreter(stringGen)
-                let generated = iterator.next()!
+                let generated = try iterator.next()!
                 if let recipe = try Interpreters.reflect(stringGen, with: generated) {
                     if let replayed = try Interpreters.replay(stringGen, using: recipe) {
                         // Round-trip successful
@@ -149,7 +149,7 @@ struct GenerationExamplesTests {
             let arrayGen = #gen(.string()).array(length: 1 ... 3)
             for i in 0 ..< 3 {
                 var iterator = ValueInterpreter(arrayGen)
-                let generated = iterator.next()!
+                let generated = try iterator.next()!
                 if let recipe = try Interpreters.reflect(arrayGen, with: generated) {
                     if let replayed = try Interpreters.replay(arrayGen, using: recipe) {
                         // Round-trip successful

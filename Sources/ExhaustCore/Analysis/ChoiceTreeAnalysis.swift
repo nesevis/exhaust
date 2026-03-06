@@ -44,7 +44,7 @@ public enum ChoiceTreeAnalysis {
                 maxRuns: 1,
             )
 
-            guard let (_, tree) = interpreter.next() else {
+            guard let (_, tree) = try? interpreter.next() else {
                 return nil
             }
 

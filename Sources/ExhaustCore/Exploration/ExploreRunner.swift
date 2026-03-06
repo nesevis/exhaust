@@ -77,7 +77,7 @@ public struct ExploreRunner<Output>: ~Copyable {
             maxRuns: initialBatch,
         )
 
-        while let (value, tree) = interpreter.next() {
+        while let (value, tree) = try? interpreter.next() {
             iteration += 1
 
             if property(value) == false {
@@ -160,7 +160,7 @@ public struct ExploreRunner<Output>: ~Copyable {
             maxRuns: 1,
         )
 
-        guard let (value, tree) = singleInterpreter.next() else { return nil }
+        guard let (value, tree) = try? singleInterpreter.next() else { return nil }
 
         if property(value) == false {
             return shrinkAndReturn(value: value, tree: tree, iteration: iteration)

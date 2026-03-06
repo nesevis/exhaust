@@ -69,7 +69,7 @@ struct LargeUnionListShrinkingChallenge {
         var iterator = ValueAndChoiceTreeInterpreter(Self.gen, materializePicks: true, seed: 1337, maxRuns: 100)
 
         var outputs = [(value: [[Int]], shrunk: [[Int]])]()
-        while let (value, tree) = iterator.next() {
+        while let (value, tree) = try iterator.next() {
             guard Self.property(value) == false && outputs.count <= 50 else { continue }
             let (_, output) = try #require(try Interpreters.reduce(gen: Self.gen, tree: tree, config: .fast, property: Self.property))
             outputs.append((value, output))

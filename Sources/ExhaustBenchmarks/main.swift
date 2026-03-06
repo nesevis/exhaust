@@ -9,7 +9,7 @@ import ExhaustCore
 benchmark("Int Generation") {
     let generator = Gen.choose(in: 0 ... 1000)
     var iterator = ValueInterpreter(generator, seed: 1, maxRuns: 100)
-    while let next = iterator.next() {
+    while let next = try iterator.next() {
         let bla = next
         let bla2 = bla
     }
@@ -18,7 +18,7 @@ benchmark("Int Generation") {
 benchmark("String generation") {
     let generator = #gen(.string())
     var iterator = ValueInterpreter(generator, seed: 1, maxRuns: 100)
-    while let next = iterator.next() {
+    while let next = try iterator.next() {
         let next = next
     }
 }
@@ -26,7 +26,7 @@ benchmark("String generation") {
 benchmark("String generation with reflection") {
     let generator = #gen(.string())
     var iterator = ValueInterpreter(generator, seed: 1, maxRuns: 100)
-    while let next = iterator.next() {
+    while let next = try iterator.next() {
         let reflection = try Interpreters.reflect(generator, with: next)
     }
 }
@@ -34,7 +34,7 @@ benchmark("String generation with reflection") {
 benchmark("String generation with choiceTree") {
     let generator = #gen(.string())
     var iterator = ValueAndChoiceTreeInterpreter(generator, seed: 1, maxRuns: 100)
-    while let (value, tree) = iterator.next() {
+    while let (value, tree) = try iterator.next() {
         let value = value
         let tree = tree
     }
@@ -45,7 +45,7 @@ benchmark("String generation with choiceTree") {
 benchmark("Double generation with choiceTree materialised") {
     let generator = #gen(.oneOf(weighted: (1, .double()), (2, .double()), (4, .double())))
     var iterator = ValueAndChoiceTreeInterpreter(generator, materializePicks: true, seed: 1, maxRuns: 100)
-    while let (value, tree) = iterator.next() {
+    while let (value, tree) = try iterator.next() {
         let value = value
         let tree = tree
     }
@@ -54,7 +54,7 @@ benchmark("Double generation with choiceTree materialised") {
 benchmark("String generation with choiceTree materialised") {
     let generator = #gen(.string())
     var iterator = ValueAndChoiceTreeInterpreter(generator, materializePicks: true, seed: 1, maxRuns: 100)
-    while let (value, tree) = iterator.next() {
+    while let (value, tree) = try iterator.next() {
 //        let value = value
 //        let tree = tree
     }
@@ -70,7 +70,7 @@ benchmark("Zipped person") {
     let generator = #gen(.asciiString(), .uint8(), .double())
         .mapped(forward: { Person(name: $0.0, age: $0.1, height: $0.2) }, backward: { ($0.name, $0.age, $0.height) })
     var iterator = ValueInterpreter(generator, seed: 1, maxRuns: 100)
-    while let next = iterator.next() {
+    while let next = try iterator.next() {
         let next = next
     }
 }
@@ -79,7 +79,7 @@ benchmark("Zipped person with reflection") {
     let generator = #gen(.asciiString(), .uint8(), .double())
         .mapped(forward: { Person(name: $0.0, age: $0.1, height: $0.2) }, backward: { ($0.name, $0.age, $0.height) })
     var iterator = ValueInterpreter(generator, seed: 1, maxRuns: 100)
-    while let next = iterator.next() {
+    while let next = try iterator.next() {
         let reflection = try Interpreters.reflect(generator, with: next)
     }
 }
@@ -92,7 +92,7 @@ benchmark("Zipped person with ChoiceTree") {
     )
     .mapped(forward: { Person(name: $0.0, age: $0.1, height: $0.2) }, backward: { ($0.name, $0.age, $0.height) })
     var iterator = ValueAndChoiceTreeInterpreter(generator, materializePicks: true, seed: 1, maxRuns: 100)
-    while let (value, tree) = iterator.next() {
+    while let (value, tree) = try iterator.next() {
         let value = value
         let tree = tree
     }
@@ -168,7 +168,7 @@ benchmark("Bound5, 50 iterations, reflective") {
     do {
         var iterator = ValueAndChoiceTreeInterpreter(gen, seed: 1337, maxRuns: 1000)
         var count = 0
-        while let (value, tree) = iterator.next() {
+        while let (value, tree) = try iterator.next() {
             guard property(value) == false else { continue }
             count += 1
             _ = try Interpreters.reduce(gen: gen, tree: tree, config: .fast, property: property)
@@ -221,7 +221,7 @@ benchmark("Bound5, 50 iterations") {
 
     do {
         var count = 0
-        while let (value, tree) = iterator.next() {
+        while let (value, tree) = try iterator.next() {
             guard property(value) == false else { continue }
             count += 1
             _ = try Interpreters.reduce(gen: gen, tree: tree, config: .fast, property: property)

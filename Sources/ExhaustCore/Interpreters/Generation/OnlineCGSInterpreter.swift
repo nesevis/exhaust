@@ -139,7 +139,7 @@ public struct OnlineCGSInterpreter<FinalOutput>: ~Copyable, ExhaustIterator {
 
     // MARK: - Iterator
 
-    public mutating func next() -> Element? {
+    public mutating func next() throws -> Element? {
         guard context.runs < context.maxRuns else {
             context.printClassifications()
             return nil
@@ -178,8 +178,6 @@ public struct OnlineCGSInterpreter<FinalOutput>: ~Copyable, ExhaustIterator {
             )
             context.runs = context.maxRuns
             return nil
-        } catch {
-            fatalError(error.localizedDescription)
         }
     }
 

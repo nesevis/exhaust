@@ -131,7 +131,7 @@ struct CalculatorShrinkingChallenge {
     func calculatorFull() throws {
         var iterator = ValueAndChoiceTreeInterpreter(Self.gen, materializePicks: true, seed: 1337, maxRuns: 100)
         var lastFailing: (CalculatorShrinkingChallenge.Expr, ChoiceTree)?
-        while let pair = iterator.next() {
+        while let pair = try iterator.next() {
             if Self.property(pair.0) == false {
                 lastFailing = pair
             }
@@ -170,7 +170,7 @@ struct CalculatorShrinkingChallenge {
     @Test("Test branch replacement")
     func branchReplacement() throws {
         var exprIter = ValueAndChoiceTreeInterpreter(Self.gen, materializePicks: true, seed: 1337, maxRuns: 10)
-        let exprs = Array(collecting: &exprIter).dropFirst(5)
+        let exprs = try Array(collecting: &exprIter).dropFirst(5)
         for (value, tree) in exprs {
             let branches = Self.extractBranches(in: tree)
 //            print(ChoiceSequence.flatten(tree).shortString)

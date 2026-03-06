@@ -17,13 +17,13 @@ func xoshiroAgainstReference() {
 }
 
 @Test("Test seed stability", .disabled("Size scaling changed from logarithmic to linear"))
-func xoshiroSeedStability() {
+func xoshiroSeedStability() throws {
     // This test required #sample which is Exhaust-only. Using ValueInterpreter instead.
     let gen = Gen.choose(in: Int64.min ... Int64.max, scaling: Int64.defaultScaling)
     var iter = ValueInterpreter(gen, seed: 0, maxRuns: 10)
     var digits: [Int64] = []
     for _ in 0 ..< 10 {
-        digits.append(iter.next()!)
+        digits.append(try iter.next()!)
     }
     let expectedDigits: [Int64] = [0, 16238, -6_660_220, -179_123_592, 8_005_708_369, 274_739_608_301, -684_234_672_488, 2_508_988_163_057, 100_069_181_990_740, 943_184_394_974_117]
     #expect(digits == expectedDigits)
@@ -34,10 +34,10 @@ func reflectOnGetsize() throws {
     // Test stringGen()
     let gen = stringGen()
     var iterator = ValueInterpreter(gen, seed: 123)
-    _ = iterator.next()
-    let generated = iterator.next()!
+    _ = try iterator.next()
+    let generated = try iterator.next()!
     print("Generated string: '\(generated)'")
-    let generated2 = iterator.next()!
+    let generated2 = try iterator.next()!
     let recipe2 = try Interpreters.reflect(gen, with: generated2)
     let replay = try Interpreters.replay(gen, using: #require(recipe2))
     #expect(generated2 == replay)

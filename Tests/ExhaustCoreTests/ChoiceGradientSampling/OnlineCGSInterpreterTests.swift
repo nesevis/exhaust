@@ -14,7 +14,7 @@ struct OnlineCGSInterpreterTests {
     // MARK: - BST Height Diversity
 
     @Test("BST: online CGS produces valid BSTs at heights >= 2", .disabled("Takes 21 seconds to run"))
-    func bstHeightDiversity() {
+    func bstHeightDiversity() throws {
         let gen = BST.arbitrary()
         let isValidNonLeafBST: (BST) -> Bool = { $0 != .leaf && $0.isValidBST() }
 
@@ -27,7 +27,7 @@ struct OnlineCGSInterpreterTests {
         )
 
         var validTrees = [BST]()
-        while let value = iterator.next() {
+        while let value = try iterator.next() {
             if isValidNonLeafBST(value) {
                 validTrees.append(value)
             }
@@ -48,7 +48,7 @@ struct OnlineCGSInterpreterTests {
     // MARK: - Simple Pick Guidance
 
     @Test("Pick guidance: CGS favours branch matching predicate")
-    func simplePickGuidance() {
+    func simplePickGuidance() throws {
         let gen = Gen.pick(choices: [
             (1, Gen.choose(in: 1 ... 100)),
             (1, Gen.choose(in: 901 ... 1000)),
@@ -62,13 +62,13 @@ struct OnlineCGSInterpreterTests {
             seed: 42,
             maxRuns: 200,
         )
-        let cgsValues = Array(collecting: &cgsIterator)
+        let cgsValues = try Array(collecting: &cgsIterator)
 
         let cgsHitRate = Double(cgsValues.count(where: predicate)) / Double(cgsValues.count)
 
         // Naive baseline: ~50% since both branches have equal weight
         var naiveIterator = ValueInterpreter(gen, seed: 42, maxRuns: 200)
-        let naiveValues = Array(collecting: &naiveIterator)
+        let naiveValues = try Array(collecting: &naiveIterator)
         let naiveHitRate = Double(naiveValues.count(where: predicate)) / Double(naiveValues.count)
 
         print("Pick guidance — naive: \(String(format: "%.1f%%", naiveHitRate * 100)), CGS: \(String(format: "%.1f%%", cgsHitRate * 100))")
@@ -81,7 +81,7 @@ struct OnlineCGSInterpreterTests {
     // MARK: - Deterministic Seeding
 
     @Test("Same seed produces same output sequence")
-    func deterministicSeeding() {
+    func deterministicSeeding() throws {
         let gen = Gen.pick(choices: [
             (1, Gen.choose(in: 1 ... 500)),
             (1, Gen.choose(in: 501 ... 1000)),
@@ -95,7 +95,7 @@ struct OnlineCGSInterpreterTests {
             seed: 42,
             maxRuns: 50,
         )
-        let values1 = Array(collecting: &iterator1)
+        let values1 = try Array(collecting: &iterator1)
 
         var iterator2 = OnlineCGSInterpreter(
             gen,
@@ -104,7 +104,7 @@ struct OnlineCGSInterpreterTests {
             seed: 42,
             maxRuns: 50,
         )
-        let values2 = Array(collecting: &iterator2)
+        let values2 = try Array(collecting: &iterator2)
 
         #expect(values1 == values2, "Same seed should produce identical output sequences")
     }
@@ -112,7 +112,7 @@ struct OnlineCGSInterpreterTests {
     // MARK: - Zip CGS Guidance
 
     @Test("Zip: CGS guidance improves joint predicate satisfaction")
-    func zipCGSGuidance() {
+    func zipCGSGuidance() throws {
         let gen = Gen.zip(
             Gen.choose(in: 1 ... 20),
             Gen.choose(in: 1 ... 20)
@@ -126,13 +126,13 @@ struct OnlineCGSInterpreterTests {
             seed: 42,
             maxRuns: 200,
         )
-        let cgsValues = Array(collecting: &cgsZipIterator)
+        let cgsValues = try Array(collecting: &cgsZipIterator)
 
         let cgsHitRate = Double(cgsValues.count(where: predicate)) / Double(cgsValues.count)
 
         // Naive baseline
         var naiveZipIterator = ValueInterpreter(gen, seed: 42, maxRuns: 200)
-        let naiveValues = Array(collecting: &naiveZipIterator)
+        let naiveValues = try Array(collecting: &naiveZipIterator)
         let naiveHitRate = Double(naiveValues.count(where: predicate)) / Double(naiveValues.count)
 
         print("Zip guidance — naive: \(String(format: "%.1f%%", naiveHitRate * 100)), CGS: \(String(format: "%.1f%%", cgsHitRate * 100))")
@@ -144,7 +144,7 @@ struct OnlineCGSInterpreterTests {
     // MARK: - ChooseBits Subdivision
 
     @Test("ChooseBits subdivision concentrates output in favoured subrange")
-    func chooseBitsSubdivision() {
+    func chooseBitsSubdivision() throws {
         let gen = Gen.choose(in: 1 ... 1000 as ClosedRange<UInt64>)
         let predicate: (UInt64) -> Bool = { $0 < 100 }
 
@@ -155,7 +155,7 @@ struct OnlineCGSInterpreterTests {
             seed: 42,
             maxRuns: 200,
         )
-        let cgsValues = Array(collecting: &cgsBitsIterator)
+        let cgsValues = try Array(collecting: &cgsBitsIterator)
 
         let hitRate = Double(cgsValues.count(where: predicate)) / Double(cgsValues.count)
 
@@ -184,7 +184,7 @@ struct OnlineCGSInterpreterTests {
 
         var iterator = ValueInterpreter(smoothed, seed: 42, maxRuns: 2000)
         var validTrees = [BST]()
-        while let tree = iterator.next() {
+        while let tree = try iterator.next() {
             if isValidBST(tree) {
                 validTrees.append(tree)
             }
@@ -206,7 +206,7 @@ struct OnlineCGSInterpreterTests {
     // MARK: - All-Zero Fallback
 
     @Test("All-zero fallback: unsatisfiable predicate falls back to equal weights")
-    func allZeroFallback() {
+    func allZeroFallback() throws {
         let gen = Gen.pick(choices: [
             (1, Gen.choose(in: 1 ... 10)),
             (1, Gen.choose(in: 11 ... 20)),
@@ -222,7 +222,7 @@ struct OnlineCGSInterpreterTests {
             seed: 42,
             maxRuns: 50,
         )
-        let values = Array(collecting: &fallbackIterator)
+        let values = try Array(collecting: &fallbackIterator)
 
         // Should still produce values (not crash)
         #expect(!values.isEmpty, "All-zero fallback should still produce values")
@@ -330,7 +330,7 @@ struct OnlineCGSInterpreterTests {
         var globalUnique = Set<BST>()
         var globalHeights = [Int: Int]()
 
-        while let (tree, _) = globalIterator.next() {
+        while let (tree, _) = try globalIterator.next() {
             if isValidBST(tree) {
                 globalValid += 1
                 globalUnique.insert(tree)
@@ -355,7 +355,7 @@ struct OnlineCGSInterpreterTests {
         var adaptiveUnique = Set<BST>()
         var adaptiveHeights = [Int: Int]()
 
-        while let (tree, _) = adaptiveIterator.next() {
+        while let (tree, _) = try adaptiveIterator.next() {
             if isValidBST(tree) {
                 adaptiveValid += 1
                 adaptiveUnique.insert(tree)
@@ -397,7 +397,7 @@ struct DerivativeContextTests {
     private func sampleApplied(_ context: Context, gen: ReflectiveGenerator<Any>) throws -> Int {
         let result = try context.apply(gen)
         var iterator = ValueInterpreter(result, seed: 1, maxRuns: 1)
-        let value = iterator.next()
+        let value = try iterator.next()
         return try #require(value)
     }
 

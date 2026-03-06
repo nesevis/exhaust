@@ -85,7 +85,7 @@ struct CGSBenchmark {
 
         let genStart = ContinuousClock.now
         while ContinuousClock.now - genStart < .seconds(duration) {
-            guard let tree = iterator.next() else { break }
+            guard let tree = try iterator.next() else { break }
             total += 1
             if isValid(tree) {
                 valid += 1
@@ -125,7 +125,7 @@ struct CGSBenchmark {
         var baseTotal = 0
         var baseUnique = Set<BenchBST>()
 
-        while let tree = baseIterator.next() {
+        while let tree = try baseIterator.next() {
             baseTotal += 1
             if isValid(tree) {
                 baseUnique.insert(tree)
@@ -155,7 +155,7 @@ struct CGSBenchmark {
             var totalCount = 0
             var uniqueValid = Set<BenchBST>()
 
-            while let tree = iterator.next() {
+            while let tree = try iterator.next() {
                 totalCount += 1
                 if isValid(tree) {
                     uniqueValid.insert(tree)

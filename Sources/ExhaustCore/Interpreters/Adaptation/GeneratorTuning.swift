@@ -109,7 +109,7 @@ public enum GeneratorTuning {
         var probe = ValueAndChoiceTreeInterpreter(generator, seed: probeSeed, maxRuns: probeRuns)
         var maxComplexity: UInt64 = 0
 
-        while let (_, tree) = probe.next() {
+        while let (_, tree) = try probe.next() {
             maxComplexity = max(maxComplexity, tree.pickComplexity)
         }
 
@@ -1220,7 +1220,7 @@ public enum GeneratorTuning {
         var selectionCounts = [UInt64: [UInt64: Int]]()
         var validityCounts = [UInt64: [UInt64: (selected: Int, valid: Int)]]()
 
-        while let (value, tree) = iterator.next() {
+        while let (value, tree) = try? iterator.next() {
             let isValid = predicate(value)
             collectEmpiricalData(
                 from: tree,

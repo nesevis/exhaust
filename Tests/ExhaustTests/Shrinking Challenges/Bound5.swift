@@ -128,7 +128,7 @@ struct Bound5ShrinkingChallenge {
         do {
             var iterator = ValueAndChoiceTreeInterpreter(gen, seed: 1337, maxRuns: 1000)
             var count = 0
-            while let (value, tree) = iterator.next() {
+            while let (value, tree) = try iterator.next() {
                 guard property(value) == false else { continue }
                 count += 1
                 _ = try Interpreters.reduce(gen: gen, tree: tree, config: .fast, property: property)
@@ -165,7 +165,7 @@ struct Bound5ShrinkingChallenge {
         }
 
         var iterator = ValueAndChoiceTreeInterpreter(gen, seed: 1337, maxRuns: 100)
-        while let (value, tree) = iterator.next() {
+        while let (value, tree) = try iterator.next() {
             guard property(value) == false else { continue }
             _ = try Interpreters.reduce(gen: gen, tree: tree, config: .fast, property: property)
         }

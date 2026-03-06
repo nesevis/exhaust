@@ -123,9 +123,9 @@ struct GeneratorTuningTests {
 
         // Generate from both and verify identical output
         var values1Iter = ValueInterpreter(tuned1, seed: 99, maxRuns: 50)
-        let values1 = Array(collecting: &values1Iter)
+        let values1 = try Array(collecting: &values1Iter)
         var values2Iter = ValueInterpreter(tuned2, seed: 99, maxRuns: 50)
-        let values2 = Array(collecting: &values2Iter)
+        let values2 = try Array(collecting: &values2Iter)
 
         #expect(values1 == values2, "Same seed should produce identical tuned generators")
     }
