@@ -308,6 +308,32 @@ public extension ReflectiveGenerator where Operation == ReflectiveOperation {
         )
     }
 
+    /// Creates a recursive generator with a constant base case value.
+    ///
+    /// - Parameters:
+    ///   - base: The ground value used when recursion bottoms out
+    ///   - extend: Closure that builds one recursive layer from the previous layer
+    /// - Returns: A generator that produces recursive values with size-controlled depth
+    static func recursive(
+        base: Value,
+        extend: @escaping (@escaping () -> ReflectiveGenerator<Value>, UInt64) -> ReflectiveGenerator<Value>
+    ) -> ReflectiveGenerator<Value> {
+        Gen.recursive(base: base, extend: extend)
+    }
+
+    /// Creates a recursive generator with a generator base case.
+    ///
+    /// - Parameters:
+    ///   - base: Generator for the base case
+    ///   - extend: Closure that builds one recursive layer from the previous layer
+    /// - Returns: A generator that produces recursive values with size-controlled depth
+    static func recursive(
+        base: ReflectiveGenerator<Value>,
+        extend: @escaping (@escaping () -> ReflectiveGenerator<Value>, UInt64) -> ReflectiveGenerator<Value>
+    ) -> ReflectiveGenerator<Value> {
+        Gen.recursive(base: base, extend: extend)
+    }
+
     /// Retrieves the current size parameter controlling generator complexity.
     ///
     /// The size parameter ranges from 1–100 and controls how complex generated values

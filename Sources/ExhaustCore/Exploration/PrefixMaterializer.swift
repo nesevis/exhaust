@@ -299,6 +299,20 @@ private extension PrefixMaterializer {
                     inputValue: inputValue,
                     context: &context,
                 )
+
+            case let .recursive(base, extend):
+                let size = context.sizeOverride ?? context.size
+                let unfolded = Gen.unfoldRecursive(base: base, extend: extend, size: size)
+                guard let (result, tree) = try generateRecursive(unfolded, with: inputValue, context: &context) else {
+                    return nil
+                }
+                return try runContinuation(
+                    result: result,
+                    calleeChoiceTree: tree,
+                    continuation: continuation,
+                    inputValue: inputValue,
+                    context: &context,
+                )
             }
         }
     }

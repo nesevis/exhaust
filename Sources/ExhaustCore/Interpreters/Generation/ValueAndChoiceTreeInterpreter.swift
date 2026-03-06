@@ -254,6 +254,18 @@ public struct ValueAndChoiceTreeInterpreter<FinalOutput>: ~Copyable, ExhaustIter
                     context: &context,
                 )
 
+            case let .recursive(base, extend):
+                let size = context.sizeOverride ?? GenerationContext.scaledSize(forRun: context.runs)
+                let unfolded = Gen.unfoldRecursive(base: base, extend: extend, size: size)
+                guard let (result, tree) = try generateRecursive(unfolded, with: inputValue, context: &context) else { return nil }
+                return try runContinuation(
+                    result: result,
+                    calleeChoiceTree: tree,
+                    continuation: continuation,
+                    inputValue: inputValue,
+                    context: &context,
+                )
+
             case let .unique(gen, fingerprint, keyExtractor):
                 var attempts = 0 as UInt64
                 while attempts < GenerationContext.maxFilterRuns {

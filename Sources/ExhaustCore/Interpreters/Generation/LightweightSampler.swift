@@ -114,6 +114,11 @@ enum LightweightSampler {
                 guard let result = try eval(gen, with: inputValue, rng: &rng, size: size) else { return nil }
                 _ = keyExtractor // suppress unused warning
                 return try cont(result, continuation, inputValue: inputValue, rng: &rng, size: size)
+
+            case let .recursive(base, extend):
+                let unfolded = Gen.unfoldRecursive(base: base, extend: extend, size: size)
+                guard let result = try eval(unfolded, with: inputValue, rng: &rng, size: size) else { return nil }
+                return try cont(result, continuation, inputValue: inputValue, rng: &rng, size: size)
             }
         }
     }

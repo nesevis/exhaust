@@ -103,6 +103,14 @@ extension Interpreters {
             )
         case let .filter(gen, _, _, _), let .classify(gen, _, _), let .unique(gen, _, _):
             try replayWithChoicesHelper(gen, choices: &choices) as? Output
+
+        case let .recursive(base, extend):
+            try replayWithChoicesRecursive(
+                base: base,
+                extend: extend,
+                continuation: continuation,
+                choices: &choices,
+            )
         }
     }
 
@@ -383,6 +391,15 @@ extension Interpreters {
             try replayRecursive(subGenerator, with: script) as? Output
         case let .filter(gen, _, _, _), let .classify(gen, _, _), let .unique(gen, _, _):
             try replayRecursive(gen, with: script) as? Output
+
+        case let .recursive(base, extend):
+            try replayRecursiveRecursiveOp(
+                base: base,
+                extend: extend,
+                script: script,
+                continuation: continuation,
+                runContinuation: runContinuation,
+            )
         }
     }
 
@@ -500,6 +517,46 @@ extension Interpreters {
                 return try replayRecursive(nextGen, with: script)
             },
         )
+    }
+
+    private static func replayWithChoicesRecursive<Output>(
+        base: ReflectiveGenerator<Any>,
+        extend: (@escaping () -> ReflectiveGenerator<Any>, UInt64) -> ReflectiveGenerator<Any>,
+        continuation: @escaping (Any) throws -> ReflectiveGenerator<Output>,
+        choices: inout [ChoiceTree],
+    ) throws -> Output? {
+        // Try increasing sizes until the unfolded generator matches the tree.
+        // Forward path uses size /= 2, so size N produces log2(N)+1 layers.
+        for size in [0, 1, 2, 4, 8, 16, 32, 64, 100] as [UInt64] {
+            let unfolded = Gen.unfoldRecursive(base: base, extend: extend, size: size)
+            var attemptChoices = choices
+            if let result = try? replayWithChoicesHelper(unfolded, choices: &attemptChoices),
+               let nextGen = try? continuation(result),
+               let output = try? replayWithChoicesHelper(nextGen, choices: &attemptChoices)
+            {
+                choices = attemptChoices
+                return output
+            }
+        }
+        return nil
+    }
+
+    private static func replayRecursiveRecursiveOp<Output>(
+        base: ReflectiveGenerator<Any>,
+        extend: (@escaping () -> ReflectiveGenerator<Any>, UInt64) -> ReflectiveGenerator<Any>,
+        script: ChoiceTree,
+        continuation: @escaping (Any) throws -> ReflectiveGenerator<Output>,
+        runContinuation: (Any) throws -> Output?,
+    ) throws -> Output? {
+        for size in [0, 1, 2, 4, 8, 16, 32, 64, 100] as [UInt64] {
+            let unfolded = Gen.unfoldRecursive(base: base, extend: extend, size: size)
+            if let result = try? replayRecursive(unfolded, with: script),
+               let output = try? runContinuation(result)
+            {
+                return output
+            }
+        }
+        return nil
     }
 
     enum ReplayError: LocalizedError {

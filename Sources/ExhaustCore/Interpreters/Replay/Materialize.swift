@@ -378,6 +378,15 @@ extension Interpreters {
             try materializeRecursiveClassify(gen: gen, tree: tree, context: &context)
         case let .unique(gen, _, _):
             try materializeRecursiveClassify(gen: gen, tree: tree, context: &context)
+
+        case let .recursive(base, extend):
+            try materializeRecursiveRecursiveOp(
+                base: base,
+                extend: extend,
+                continuation: continuation,
+                tree: tree,
+                context: &context,
+            )
         }
     }
 
@@ -458,7 +467,7 @@ extension Interpreters {
 
         guard let result = try materializeSequenceElements(
             using: elementGenerator,
-            elementScript: elements.first,
+            elementScripts: elements,
             context: &context,
             requireElements: false,
             validLengthRange: lengthMeta.validRange,
@@ -527,7 +536,7 @@ extension Interpreters {
     /// constraints from the sequence's length generator (e.g. `exactly: 10`).
     private static func materializeSequenceElements(
         using elementGenerator: ReflectiveGenerator<Any>,
-        elementScript: ChoiceTree?,
+        elementScripts: [ChoiceTree],
         context: inout Context,
         requireElements: Bool,
         validLengthRange: ClosedRange<UInt64>? = nil,
@@ -543,10 +552,15 @@ extension Interpreters {
             accumulatedValues.reserveCapacity(Int(validLengthRange.lowerBound))
         }
 
-        if let elementScript {
+        if elementScripts.isEmpty == false {
+            var elementIndex = 0
+            // Phase 1: Process elements that have context entries
             while context.peek != .sequence(false), !context.isAtEnd {
+                let script = elementIndex < elementScripts.count
+                    ? elementScripts[elementIndex]
+                    : elementScripts[elementScripts.count - 1]
                 let indexBefore = context.index
-                let elementValue = try materializeRecursive(elementGenerator, with: elementScript, context: &context)
+                let elementValue = try materializeRecursive(elementGenerator, with: script, context: &context)
                 if let elementValue {
                     accumulatedValues.append(elementValue)
                 } else if requireElements {
@@ -555,6 +569,19 @@ extension Interpreters {
                     // No progress was made — break to prevent infinite loop
                     break
                 }
+                elementIndex += 1
+            }
+            // Phase 2: Process remaining element scripts that don't need context entries
+            // (e.g., `.just` elements produce no ChoiceSequence entries)
+            while elementIndex < elementScripts.count {
+                let script = elementScripts[elementIndex]
+                let indexBefore = context.index
+                let elementValue = try? materializeRecursive(elementGenerator, with: script, context: &context)
+                guard let elementValue, context.index == indexBefore else {
+                    break
+                }
+                accumulatedValues.append(elementValue)
+                elementIndex += 1
             }
         }
 
@@ -703,6 +730,15 @@ extension Interpreters {
                 choices: &choices,
                 context: &context,
             )
+
+        case let .recursive(base, extend):
+            try materializeWithChoicesRecursive(
+                base: base,
+                extend: extend,
+                continuation: continuation,
+                choices: &choices,
+                context: &context,
+            )
         }
     }
 
@@ -803,7 +839,7 @@ extension Interpreters {
 
         guard let result = try materializeSequenceElements(
             using: elementGenerator,
-            elementScript: elements.first,
+            elementScripts: elements,
             context: &context,
             requireElements: true,
             validLengthRange: lengthMeta.validRange,
@@ -1071,6 +1107,52 @@ extension Interpreters {
             )
         }
         context.skipToMatchingGroupClose()
+        return nil
+    }
+
+    private static func materializeRecursiveRecursiveOp<Output>(
+        base: ReflectiveGenerator<Any>,
+        extend: (@escaping () -> ReflectiveGenerator<Any>, UInt64) -> ReflectiveGenerator<Any>,
+        continuation: @escaping (Any) throws -> ReflectiveGenerator<Output>,
+        tree: ChoiceTree,
+        context: inout Context,
+    ) throws -> Output? {
+        // Try increasing sizes until the unfolded generator matches the tree.
+        // Forward path uses size /= 2, so size N produces log2(N)+1 layers.
+        for size in [0, 1, 2, 4, 8, 16, 32, 64, 100] as [UInt64] {
+            let unfolded = Gen.unfoldRecursive(base: base, extend: extend, size: size)
+            var attemptContext = context
+            if let result = try? materializeRecursive(unfolded, with: tree, context: &attemptContext) {
+                let nextGen = try continuation(result)
+                if let output = try? materializeRecursive(nextGen, with: tree, context: &attemptContext) {
+                    context = attemptContext
+                    return output
+                }
+            }
+        }
+        return nil
+    }
+
+    private static func materializeWithChoicesRecursive<Output>(
+        base: ReflectiveGenerator<Any>,
+        extend: (@escaping () -> ReflectiveGenerator<Any>, UInt64) -> ReflectiveGenerator<Any>,
+        continuation: @escaping (Any) throws -> ReflectiveGenerator<Output>,
+        choices: inout ChoiceCursor,
+        context: inout Context,
+    ) throws -> Output? {
+        for size in [0, 1, 2, 4, 8, 16, 32, 64, 100] as [UInt64] {
+            let unfolded = Gen.unfoldRecursive(base: base, extend: extend, size: size)
+            var attemptChoices = choices
+            var attemptContext = context
+            if let result = try? materializeWithChoicesHelper(unfolded, with: &attemptChoices, context: &attemptContext) {
+                let nextGen = try continuation(result)
+                if let output = try? materializeWithChoicesHelper(nextGen, with: &attemptChoices, context: &attemptContext) {
+                    choices = attemptChoices
+                    context = attemptContext
+                    return output
+                }
+            }
+        }
         return nil
     }
 
