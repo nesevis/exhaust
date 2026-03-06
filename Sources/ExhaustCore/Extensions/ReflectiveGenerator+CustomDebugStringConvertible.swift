@@ -130,9 +130,6 @@ extension ReflectiveGenerator: CustomDebugStringConvertible where Operation == R
             let genDesc = gen.treeDescription(prefix: childPrefix, isLast: true, depth: depth + 1)
             return "unique(fingerprint: \(fingerprintShort), \(mode))\n" + genDesc
 
-        case let .recursive(base, _):
-            let baseDesc = base.treeDescription(prefix: childPrefix, isLast: true, depth: depth + 1)
-            return "recursive\n" + baseDesc
         }
     }
 

@@ -378,15 +378,6 @@ extension Interpreters {
             try materializeRecursiveClassify(gen: gen, tree: tree, context: &context)
         case let .unique(gen, _, _):
             try materializeRecursiveClassify(gen: gen, tree: tree, context: &context)
-
-        case let .recursive(base, extend):
-            try materializeRecursiveRecursiveOp(
-                base: base,
-                extend: extend,
-                continuation: continuation,
-                tree: tree,
-                context: &context,
-            )
         }
     }
 
@@ -727,15 +718,6 @@ extension Interpreters {
         case let .unique(gen, _, _):
             try materializeWithChoicesClassify(
                 gen: gen,
-                choices: &choices,
-                context: &context,
-            )
-
-        case let .recursive(base, extend):
-            try materializeWithChoicesRecursive(
-                base: base,
-                extend: extend,
-                continuation: continuation,
                 choices: &choices,
                 context: &context,
             )
@@ -1107,52 +1089,6 @@ extension Interpreters {
             )
         }
         context.skipToMatchingGroupClose()
-        return nil
-    }
-
-    private static func materializeRecursiveRecursiveOp<Output>(
-        base: ReflectiveGenerator<Any>,
-        extend: (@escaping () -> ReflectiveGenerator<Any>, UInt64) -> ReflectiveGenerator<Any>,
-        continuation: @escaping (Any) throws -> ReflectiveGenerator<Output>,
-        tree: ChoiceTree,
-        context: inout Context,
-    ) throws -> Output? {
-        // Try increasing sizes until the unfolded generator matches the tree.
-        // Forward path uses size /= 2, so size N produces log2(N)+1 layers.
-        for size in [0, 1, 2, 4, 8, 16, 32, 64, 100] as [UInt64] {
-            let unfolded = Gen.unfoldRecursive(base: base, extend: extend, size: size)
-            var attemptContext = context
-            if let result = try? materializeRecursive(unfolded, with: tree, context: &attemptContext) {
-                let nextGen = try continuation(result)
-                if let output = try? materializeRecursive(nextGen, with: tree, context: &attemptContext) {
-                    context = attemptContext
-                    return output
-                }
-            }
-        }
-        return nil
-    }
-
-    private static func materializeWithChoicesRecursive<Output>(
-        base: ReflectiveGenerator<Any>,
-        extend: (@escaping () -> ReflectiveGenerator<Any>, UInt64) -> ReflectiveGenerator<Any>,
-        continuation: @escaping (Any) throws -> ReflectiveGenerator<Output>,
-        choices: inout ChoiceCursor,
-        context: inout Context,
-    ) throws -> Output? {
-        for size in [0, 1, 2, 4, 8, 16, 32, 64, 100] as [UInt64] {
-            let unfolded = Gen.unfoldRecursive(base: base, extend: extend, size: size)
-            var attemptChoices = choices
-            var attemptContext = context
-            if let result = try? materializeWithChoicesHelper(unfolded, with: &attemptChoices, context: &attemptContext) {
-                let nextGen = try continuation(result)
-                if let output = try? materializeWithChoicesHelper(nextGen, with: &attemptChoices, context: &attemptContext) {
-                    choices = attemptChoices
-                    context = attemptContext
-                    return output
-                }
-            }
-        }
         return nil
     }
 

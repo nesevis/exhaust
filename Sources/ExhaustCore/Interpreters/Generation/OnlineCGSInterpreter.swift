@@ -505,31 +505,6 @@ public struct OnlineCGSInterpreter<FinalOutput>: ~Copyable, ExhaustIterator {
                     derivativeContext: derivativeContext,
                 )
 
-            // MARK: - Recursive
-
-            case let .recursive(base, extend):
-                let size = context.sizeOverride ?? GenerationContext.scaledSize(forRun: context.runs)
-                let unfolded = Gen.unfoldRecursive(base: base, extend: extend, size: size)
-                guard let result = try generateRecursive(
-                    unfolded,
-                    with: inputValue,
-                    context: &context,
-                    predicate: predicate,
-                    sampleCount: sampleCount,
-                    cgsState: &cgsState,
-                    derivativeContext: derivativeContext,
-                ) else { return nil }
-                return try runContinuation(
-                    result: result,
-                    continuation: continuation,
-                    inputValue: inputValue,
-                    context: &context,
-                    predicate: predicate,
-                    sampleCount: sampleCount,
-                    cgsState: &cgsState,
-                    derivativeContext: derivativeContext,
-                )
-
             // MARK: - Unique
 
             case let .unique(gen, fingerprint, keyExtractor):

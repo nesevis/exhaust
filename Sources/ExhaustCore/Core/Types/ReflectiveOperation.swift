@@ -341,23 +341,4 @@ public enum ReflectiveOperation {
     ///     When `nil`, deduplication uses the choice sequence instead.
     case unique(gen: ReflectiveGenerator<Any>, fingerprint: UInt64, keyExtractor: ((Any) -> AnyHashable)?)
 
-    /// Recursive generator that unfolds a base generator through an extension closure.
-    ///
-    /// This operation enables declarative definition of recursive data types (trees, lists,
-    /// expressions) with automatic depth control via the size parameter. At interpretation
-    /// time, the combinator unfolds layers iteratively — each layer is a plain generator
-    /// built from existing operations, so no new ChoiceTree nodes are needed.
-    ///
-    /// **Forward pass**: Unfold `size /= 2` times, then interpret the resulting plain generator
-    /// **Backward pass**: Try increasing depths until the target value decomposes successfully
-    /// **Replay pass**: Try increasing depths until the choice sequence matches
-    ///
-    /// - Parameters:
-    ///   - base: The ground generator (leaves / base case)
-    ///   - extend: Closure that builds one recursive layer. Receives a thunk returning the
-    ///     previous layer's generator and the remaining recursion budget.
-    case recursive(
-        base: ReflectiveGenerator<Any>,
-        extend: (@escaping () -> ReflectiveGenerator<Any>, UInt64) -> ReflectiveGenerator<Any>
-    )
 }

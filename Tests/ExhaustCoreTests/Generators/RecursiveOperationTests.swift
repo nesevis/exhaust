@@ -23,19 +23,19 @@ struct RecursiveOperationTests {
         #expect(generated > 0)
     }
 
-    @Test("Smaller sizes produce shallower trees")
+    @Test("Smaller maxDepth produces shallower trees")
     func depthScaling() throws {
-        let gen = BST.arbitraryRecursive()
-
-        // Small size override
-        var smallIterator = ValueInterpreter(gen, seed: 42, maxRuns: 20, sizeOverride: 2)
+        // Small maxDepth
+        let smallGen = BST.arbitraryRecursive(maxDepth: 2)
+        var smallIterator = ValueInterpreter(smallGen, seed: 42, maxRuns: 20)
         var smallHeights: [Int] = []
         while let tree = try smallIterator.next() {
             smallHeights.append(tree.height)
         }
 
-        // Large size override
-        var largeIterator = ValueInterpreter(gen, seed: 42, maxRuns: 20, sizeOverride: 100)
+        // Large maxDepth
+        let largeGen = BST.arbitraryRecursive(maxDepth: 7)
+        var largeIterator = ValueInterpreter(largeGen, seed: 42, maxRuns: 20)
         var largeHeights: [Int] = []
         while let tree = try largeIterator.next() {
             largeHeights.append(tree.height)
@@ -47,13 +47,13 @@ struct RecursiveOperationTests {
         #expect(avgSmall < avgLarge, "Average small height (\(avgSmall)) should be less than large (\(avgLarge))")
     }
 
-    @Test("Size 0 produces only base cases")
-    func sizeZeroProducesBase() throws {
-        let gen = BST.arbitraryRecursive()
-        var iterator = ValueInterpreter(gen, seed: 42, maxRuns: 10, sizeOverride: 0)
+    @Test("maxDepth 0 produces only base cases")
+    func maxDepthZeroProducesBase() throws {
+        let gen = BST.arbitraryRecursive(maxDepth: 0)
+        var iterator = ValueInterpreter(gen, seed: 42, maxRuns: 10)
 
         while let tree = try iterator.next() {
-            #expect(tree == .leaf, "At size 0, recursive should produce only base case")
+            #expect(tree == .leaf, "At maxDepth 0, recursive should produce only base case")
         }
     }
 
@@ -90,7 +90,7 @@ struct RecursiveOperationTests {
     func baseAsGenerator() throws {
         // Use a generator for the base case (random leaf values)
         let baseGen = Gen.choose(in: UInt(0) ... 9).map { BST.node(left: .leaf, value: $0, right: .leaf) }
-        let gen = Gen.recursive(base: baseGen) { recurse, remaining in
+        let gen = Gen.recursive(base: baseGen, maxDepth: 5) { recurse, remaining in
             let nodeBranch = Gen.zip(recurse(), Gen.choose(in: UInt(0) ... 9), recurse()).map { left, value, right in
                 BST.node(left: left, value: value, right: right)
             }
@@ -165,27 +165,27 @@ struct RecursiveOperationTests {
             #expect(sawArray, "Should produce at least one array")
         }
 
-        @Test("Size 0 produces only base case (null)")
-        func sizeZeroProducesBase() throws {
-            let gen = JSONValue.arbitraryRecursive()
-            var iterator = ValueInterpreter(gen, seed: 42, maxRuns: 10, sizeOverride: 0)
+        @Test("maxDepth 0 produces only base case (null)")
+        func maxDepthZeroProducesBase() throws {
+            let gen = JSONValue.arbitraryRecursive(maxDepth: 0)
+            var iterator = ValueInterpreter(gen, seed: 42, maxRuns: 10)
 
             while let value = try iterator.next() {
-                #expect(value == .null, "At size 0, recursive should produce only base case, got: \(value)")
+                #expect(value == .null, "At maxDepth 0, recursive should produce only base case, got: \(value)")
             }
         }
 
-        @Test("Depth scales with size")
+        @Test("Depth scales with maxDepth")
         func depthScaling() throws {
-            let gen = JSONValue.arbitraryRecursive()
-
-            var smallIterator = ValueInterpreter(gen, seed: 42, maxRuns: 30, sizeOverride: 2)
+            let smallGen = JSONValue.arbitraryRecursive(maxDepth: 2)
+            var smallIterator = ValueInterpreter(smallGen, seed: 42, maxRuns: 30)
             var smallDepths: [Int] = []
             while let value = try smallIterator.next() {
                 smallDepths.append(value.depth)
             }
 
-            var largeIterator = ValueInterpreter(gen, seed: 42, maxRuns: 30, sizeOverride: 100)
+            let largeGen = JSONValue.arbitraryRecursive(maxDepth: 7)
+            var largeIterator = ValueInterpreter(largeGen, seed: 42, maxRuns: 30)
             var largeDepths: [Int] = []
             while let value = try largeIterator.next() {
                 largeDepths.append(value.depth)
@@ -236,7 +236,7 @@ struct RecursiveOperationTests {
         @Test("Nested arrays contain varied elements")
         func nestedArrayContent() throws {
             let gen = JSONValue.arbitraryRecursive()
-            var iterator = ValueInterpreter(gen, seed: 42, maxRuns: 50, sizeOverride: 50)
+            var iterator = ValueInterpreter(gen, seed: 42, maxRuns: 50)
 
             var maxDepth = 0
             var maxNodeCount = 0

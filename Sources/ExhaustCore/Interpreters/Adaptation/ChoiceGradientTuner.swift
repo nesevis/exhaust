@@ -297,15 +297,6 @@ public enum ChoiceGradientTuner<FinalOutput> {
                     continuation: continuation,
                 )
 
-            case let .recursive(base, extend):
-                return .impure(
-                    operation: .recursive(
-                        base: bakeWeights(base, from: accumulator, strategy: strategy),
-                        extend: extend
-                    ),
-                    continuation: continuation,
-                )
-
             case .chooseBits, .just, .getSize:
                 return gen
             }
@@ -589,15 +580,6 @@ public enum ChoiceGradientTuner<FinalOutput> {
                         gen: try subdivideSequenceLengths(subGen, context: context),
                         fingerprint: fingerprint,
                         keyExtractor: keyExtractor,
-                    ),
-                    continuation: continuation,
-                )
-
-            case let .recursive(base, extend):
-                return .impure(
-                    operation: .recursive(
-                        base: try subdivideSequenceLengths(base, context: context),
-                        extend: extend
                     ),
                     continuation: continuation,
                 )

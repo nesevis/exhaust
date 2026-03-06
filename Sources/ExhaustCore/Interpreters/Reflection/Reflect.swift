@@ -134,9 +134,6 @@ public enum Interpreters {
 
         case let .unique(gen, _, _):
             return try reflectPassthroughOperation(gen: gen, finalOutput: finalOutput)
-
-        case let .recursive(base, extend):
-            return try reflectRecursiveOperation(base: base, extend: extend, finalOutput: finalOutput)
         }
     }
 
@@ -316,26 +313,6 @@ public enum Interpreters {
             results.append(contentsOf: result.map(\.value))
         }
         return [(value: results, path: [.group(paths)])]
-    }
-
-    private static func reflectRecursiveOperation(
-        base: ReflectiveGenerator<Any>,
-        extend: (@escaping () -> ReflectiveGenerator<Any>, UInt64) -> ReflectiveGenerator<Any>,
-        finalOutput: Any,
-    ) throws -> [(value: Any, path: [ChoiceTree])] {
-        // Try increasing depths until the target value decomposes successfully.
-        // Depth 0 = base only, depth N = N unfolding layers.
-        var current = base
-        for depth in 0 ..< 20 {
-            if let results = try? reflectRecursive(current, onFinalOutput: finalOutput),
-               !results.isEmpty
-            {
-                return results.map { ($0.value, $0.path) }
-            }
-            let prev = current
-            current = extend({ prev }, UInt64(1 << depth))
-        }
-        throw ReflectionError.couldNotMapInputToGenerator
     }
 
     @inline(__always)
