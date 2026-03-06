@@ -17,13 +17,6 @@ public extension ReflectiveGenerator {
         Gen.choose(from: [true, false])
     }
 
-    static func optional(_ gen: ReflectiveGenerator<Value>) -> ReflectiveGenerator<Value?> {
-        Gen.pick(choices: [
-            (1, Gen.just(.none)),
-            (5, gen.asOptional()),
-        ])
-    }
-
     /// Creates a generator that randomly selects from one of the provided generators with equal weight.
     static func oneOf(_ generators: ReflectiveGenerator<Value>...) -> ReflectiveGenerator<Value> {
         Gen.pick(choices: generators.map { (1, $0) })
