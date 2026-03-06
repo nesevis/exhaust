@@ -79,15 +79,14 @@ struct Bound5ShrinkingChallenge {
         #expect(arr.count == 2)
         #expect(arr == [-32768, -1])
     }
-
+    
     @Test("Bound5, Pathological 3")
     func bound5Pathological3() throws {
         let value: Bound5 = ([-11954, 25609, -21279], [20837, 6773, -1304, -13732, -2626, -3440, 15253, 28268, -31908, 30491], [23543, -10339, -12447, 9150, 18335, -2103, 15547, 11124], [-32635, 18394, -23954, 13750, 27692, 25639, 23372, -27650, 18759, 17794], [-6525, 2724, -30958, 28797, -2409, -1095, 2335, -14856])
-        let tree = try #require(try Interpreters.reflect(Self.gen, with: value))
-
-//        ExhaustLog.setConfiguration(.init(isEnabled: true, minimumLevel: .info, categoryMinimumLevels: [.reducer: .debug], format: .llmOptimized))
-        let (_, output) = try #require(try Interpreters.reduce(gen: Self.gen, tree: tree, config: .fast, property: Self.property))
-
+        
+        let counterExample = #exhaust(Self.gen, .suppressIssueReporting, .reflecting(value), property: Self.property)
+        let output = try #require(counterExample)
+        
         let arr = (output.0 + output.1 + output.2 + output.3 + output.4).sorted()
         #expect(arr.count == 2)
         #expect(arr == [-32768, -1])
@@ -101,38 +100,45 @@ struct Bound5ShrinkingChallenge {
             let c: [Int16]
             let d: [Int16]
             let e: [Int16]
+            
+            let arr: [Int16]
+            
+            init(a: [Int16], b: [Int16], c: [Int16], d: [Int16], e: [Int16]) {
+                self.a = a
+                self.b = b
+                self.c = c
+                self.d = d
+                self.e = e
+                self.arr = a + b + c + d + e
+            }
         }
-        let arrGen = #gen(.int16().array(length: 0 ... 10))
-        let gen = #gen(arrGen, arrGen, arrGen, arrGen, arrGen)
-            .map(Bound5.init)
+        let arrGen = #gen(.int16(scaling: .linear).array(length: 0 ... 10))
+            .filter(.rejectionSampling) { $0.isEmpty || $0.dropFirst().reduce($0[0], &+) < 256 }
+        let gen = #gen(arrGen, arrGen, arrGen, arrGen, arrGen) { a, b, c, d, e in
+            Bound5(a: a, b: b, c: c, d: d, e: e)
+        }
 
         let property: (Bound5) -> Bool = { b5 in
-            let arr = b5.a + b5.b + b5.c + b5.d + b5.e
-            if arr.isEmpty {
+            if b5.arr.isEmpty {
                 return true
             }
-            return arr.dropFirst().reduce(arr[0], &+) < 5 * 256
+            return b5.arr.dropFirst().reduce(b5.arr[0], &+) < 5 * 256
         }
-        var iterator = ValueAndChoiceTreeInterpreter(gen, materializePicks: true, seed: 1337, maxRuns: 100)
 
-//        var values = [(before: Bound5, after: Bound5)]()
-        while let (value, tree) = iterator.next() {
-            guard property(value) == false else { continue }
-            let (_, output) = try #require(try Interpreters.reduce(gen: gen, tree: tree, config: .fast, property: property))
-//            values.append((value, output))
+        do {
+            var iterator = ValueAndChoiceTreeInterpreter(gen, seed: 1337, maxRuns: 1000)
+            var count = 0
+            while let (value, tree) = iterator.next() {
+                guard property(value) == false else { continue }
+                count += 1
+                _ = try Interpreters.reduce(gen: gen, tree: tree, config: .fast, property: property)
+                if count >= 50 {
+                    break
+                }
+            }
+        } catch {
+            print(error)
         }
-//        let list = values.enumerated().sorted(by: { lhs, rhs in
-//            let lhs = lhs.element.after
-//            let rhs = rhs.element.after
-//            let lhsCount = lhs.0.count + lhs.1.count + lhs.2.count + lhs.3.count + lhs.4.count
-//            let rhsCount = rhs.0.count + rhs.1.count + rhs.2.count + rhs.3.count + rhs.4.count
-//            return lhsCount < rhsCount
-//        })
-
-//        for (offset, values) in values.enumerated() {
-//            let (before, after) = values
-//            print("\(offset + 1): \(after) original: \(before)")
-//        }
     }
 
     @Test("Bound5, reflectMirror")

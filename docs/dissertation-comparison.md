@@ -76,7 +76,9 @@ Plus `probabilityOf` and `enumerate` as sketched extensions.
 | `ValueAndChoiceTreeInterpreter` | generate + randomness | `Interpreters/Generation/ValueAndChoiceTreeInterpreter.swift` |
 | `OnlineCGSInterpreter` | CGS algorithm (Fig 3.3) | `Interpreters/Generation/OnlineCGSInterpreter.swift` |
 | `Reflect` | reflect | `Interpreters/Reflection/Reflect.swift` |
-| `Materialize` | parse | Replays a ChoiceTree deterministically |
+| `Replay` | parse (from ChoiceTree) | `Interpreters/Replay/Replay.swift` |
+| `Materialize` | parse (from ChoiceSequence) | `Interpreters/Replay/Materialize.swift` |
+| `PrefixMaterializer` | partial parse + generate | `Exploration/PrefixMaterializer.swift` |
 | `Reducer` | choices + shrinking passes | Validity-preserving shrinking via choice sequence manipulation |
 
 ### Not yet implemented
@@ -85,10 +87,33 @@ These dissertation concepts have no direct Exhaust equivalent:
 
 - **genWithWeights** (example-based generation) — Exhaust's `Reflect` + `ChoiceGradientTuner` could compose to achieve this, but there's no dedicated reflect-then-reweight pipeline.
 - **complete** (partial value completion) — no mixed forward+backward interpreter.
-- **enumerate** (exhaustive interpretation of Pick) — not present.
 - **probabilityOf** (probability computation) — not present.
 
-**Verdict: Core-faithful with different emphasis.** Exhaust covers the dissertation's core forward/backward/replay triangle completely. The dissertation explores many novel interpretations (completers, enumerators, probability calculators) to demonstrate the power of the freer monad representation. Exhaust focuses on making the core interpretations production-grade with ChoiceTree hierarchies, stack-safe sequence handling, and the CGS optimization pipeline.
+### Partially addressed: enumerate
+
+The dissertation's `enumerate` interpreter exhaustively interprets `Pick` to produce all possible values. Exhaust takes a different approach to the same goal via **unified ChoiceTree analysis + t-way covering arrays** (`Sources/ExhaustCore/Analysis/`).
+
+`ChoiceTreeAnalysis` runs the generator through VACTI (`ValueAndChoiceTreeInterpreter`) with `materializePicks = true`, which evaluates the full generator — including all bind chains — and produces a `ChoiceTree` capturing every random decision made during generation. The analysis then walks this tree to extract a parameter model:
+
+- **Finite parameters** — `chooseBits` with explicit ranges ≤256 values, or `pick` between pure branches
+- **Boundary parameters** — `chooseBits` with large ranges, synthesized down to boundary representatives (`{min, min+1, midpoint, max-1, max, 0 if in range}` for integers; special IEEE 754 values for floats)
+- **Sequence parameters** — length (capped at `{0, 1, 2}`) plus up to 2 element slots with boundary or finite values
+
+The analysis returns one of three outcomes:
+
+| Result | Condition | Strategy |
+|---|---|---|
+| `.finite(FiniteDomainProfile)` | All parameters have ≤256 values | Exhaustive enumeration if space ≤ budget, otherwise t-way IPOG |
+| `.boundary(BoundaryDomainProfile)` | Some parameters have large ranges | t-way IPOG over boundary values |
+| `nil` | Uses `getSize`/`resize`, >20 parameters, or other non-analyzable patterns | Skip to random sampling |
+
+The parameter model feeds the IPOG covering array generator (Lei & Kacker, "IPOG: A General Strategy for T-Way Software Testing", ECBS 2007), which produces a compact test suite guaranteeing that every t-tuple of parameter values appears in at least one test case.
+
+When the total space is small enough (`totalSpace <= coverageBudget`), this is effectively exhaustive enumeration — every combination is tested. For larger spaces, t-way coverage provides a principled middle ground between exhaustive and random. An empirical study of real-world faults found that pairwise (t=2) coverage catches ~93% of interaction bugs, and 3-way catches ~98% (Kuhn, Wallace & Gallo, "Software Fault Interactions and Implications for Software Testing", IEEE TSE 2004).
+
+The key difference from the dissertation's `enumerate`: Exhaust's approach is automatic (transparent to the user — `#exhaust` detects finite generators and switches strategy) and works through the existing `Interpreters.replay` infrastructure rather than requiring a new interpreter. Each covering array row is converted to a `ChoiceTree` and replayed through the generator, reusing the same replay engine used for shrinking and materialization. The coverage budget is separate from and additive with `maxIterations` — structured coverage runs first, then random sampling runs for the full `maxIterations` budget.
+
+**Verdict: Core-faithful with different emphasis.** Exhaust covers the dissertation's core forward/backward/replay triangle completely. The dissertation explores many novel interpretations (completers, enumerators, probability calculators) to demonstrate the power of the freer monad representation. Exhaust focuses on making the core interpretations production-grade with ChoiceTree hierarchies, stack-safe sequence handling, the CGS optimization pipeline, and automatic combinatorial coverage for finite domains.
 
 ---
 
@@ -234,9 +259,10 @@ The correctness properties the dissertation establishes — soundness, completen
 | Filter/validity | Implicit in CGS predicate | Reified as `.filter` operation | More explicit |
 | Interpreter count | 7+ (exploring generality) | 6 (optimized for production) | Narrower but deeper |
 | Test case reduction | 3 passes (`subTrees`, `zeroDraws`, `swapBits`) | 12 passes with adaptive probing, budgets, float specialization | Massively expanded |
+| Combinatorial coverage | Not addressed | Unified ChoiceTree analysis → automatic t-way covering arrays (IPOG) for finite domains + boundary value synthesis for large domains | Novel — draws on Lei & Kacker (ECBS 2007), Kuhn et al. (IEEE TSE 2004), and NIST SP 800-142 |
 | Example-based generation | `reflect -> analyzeWeights -> genWithWeights` | Not yet implemented | Future opportunity |
 | Partial completion | `complete` interpreter | Not yet implemented | Future opportunity |
-| Enumeration | `enumerate` interpreter | Not yet implemented | Future opportunity |
+| Enumeration | `enumerate` interpreter | Unified ChoiceTree analysis with automatic exhaustive enumeration (small domains) and boundary value coverage (large domains) | Different approach — via VACTI-generated ChoiceTree walk + covering arrays + replay, not a dedicated interpreter |
 
 ---
 
@@ -244,6 +270,6 @@ The correctness properties the dissertation establishes — soundness, completen
 
 Exhaust is a **faithful implementation** of the dissertation's core theory — the freer monad foundation, the reflective operation set, and the forward/backward/replay interpreter triangle are all directly traceable to Goldstein's formalization. The CGS algorithm is implemented correctly at the derivative level.
 
-Where Exhaust adds genuine novelty is in the **offline CGS pipeline** (warmup -> fitness sharing -> adaptive smoothing), the **12-pass Reducer** (adaptive probing, budget management, float specialization, cross-container redistribution), the **sequence length subdivision** preprocessing, and the **reification of filter/classify/unique** into the operation set. These are practical engineering contributions that make the theory work at scale in a strict, non-lazy language.
+Where Exhaust adds genuine novelty is in the **offline CGS pipeline** (warmup -> fitness sharing -> adaptive smoothing), the **12-pass Reducer** (adaptive probing, budget management, float specialization, cross-container redistribution), the **sequence length subdivision** preprocessing, the **reification of filter/classify/unique** into the operation set, and **automatic combinatorial coverage** via unified ChoiceTree analysis. The coverage system is particularly notable: `ChoiceTreeAnalysis` runs the generator through VACTI to produce a `ChoiceTree`, then walks it to extract a parameter model — handling not just finite domains but also large-range boundary value synthesis and sequence parameters. This approach sees through opaque bind chains that defeat recursive generator walkers, because VACTI evaluates the full generator before analysis begins. The extracted parameters feed IPOG covering arrays for t-way combinatorial coverage, composing boundary value analysis (selecting *which values* to test) with interaction testing (ensuring *combinations* of those values are covered) — the standard practice recommended by NIST SP 800-142. This leverages the inspectability of the freer monad representation in a way the dissertation doesn't explore: using a forward interpretation (VACTI) to enable structural analysis that selects a fundamentally different testing strategy.
 
-What Exhaust hasn't yet explored are the dissertation's more **speculative interpretations** — completers, enumerators, `probabilityOf`, and the example-based generation workflow. These represent the dissertation's exploration of what's possible with the freer monad representation, and they remain available as future directions since the underlying architecture supports them.
+What Exhaust hasn't yet explored are the dissertation's more **speculative interpretations** — completers, `probabilityOf`, and the example-based generation workflow. These represent the dissertation's exploration of what's possible with the freer monad representation, and they remain available as future directions since the underlying architecture supports them.

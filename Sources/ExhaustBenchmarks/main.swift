@@ -151,8 +151,8 @@ benchmark("Bound5, 50 iterations, reflective") {
             self.arr = a + b + c + d + e
         }
     }
-    let arrGen = #gen(.int16().array(length: 0 ... 10))
-        .filter { $0.isEmpty || $0.dropFirst().reduce($0[0], &+) < 256 }
+    let arrGen = #gen(.int16(scaling: .linear).array(length: 0 ... 10))
+        .filter(.rejectionSampling) { $0.isEmpty || $0.dropFirst().reduce($0[0], &+) < 256 }
     let gen = #gen(arrGen, arrGen, arrGen, arrGen, arrGen) { a, b, c, d, e in
         Bound5(a: a, b: b, c: c, d: d, e: e)
     }
@@ -190,8 +190,8 @@ benchmark("Bound5, 50 iterations") {
 //        .filter { $0.isEmpty || $0.dropFirst().reduce($0[0], &+) < 256 }
 //    let gen = #gen(arrGen, arrGen, arrGen, arrGen, arrGen)
 
-    let arrGen = #gen(.int16()).array(length: 0 ... 10)
-        .filter { $0.isEmpty || $0.dropFirst().reduce($0[0], &+) < 256 }
+    let arrGen = #gen(.int16(scaling: .linear)).array(length: 0 ... 10)
+        .filter(.choiceGradientSampling) { $0.isEmpty || $0.dropFirst().reduce($0[0], &+) < 256 }
     let gen = Gen.zip(arrGen, arrGen, arrGen, arrGen, arrGen)
 
     let property: (Bound5) -> Bool = { arg in
