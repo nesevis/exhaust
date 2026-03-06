@@ -4,7 +4,7 @@
 //
 
 /// Converts covering array rows into `ChoiceTree` structures for replay.
-@_spi(ExhaustInternal) public enum CoveringArrayReplay {
+public enum CoveringArrayReplay {
 
     /// Builds a `ChoiceTree` from a covering array row that can be replayed
     /// through the original generator via `Interpreters.replay`.

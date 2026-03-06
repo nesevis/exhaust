@@ -8,13 +8,13 @@
 /// - Tier 1: branch-path fingerprints (structural novelty) — the vector of
 ///   `(siteID, branchID)` pairs at each pick site, hashed to a `UInt64`.
 /// - Tier 2: full `ChoiceSequence` deduplication (value-level novelty).
-@_spi(ExhaustInternal) public struct NoveltyTracker {
+public struct NoveltyTracker {
     /// Tier 1: branch-path fingerprint hashes (structural novelty).
     private var seenBranchPaths: Set<UInt64> = []
     /// Tier 2: full sequence deduplication (value-level novelty).
     private var seenSequences: Set<ChoiceSequence> = []
 
-    @_spi(ExhaustInternal) public init() {}
+    public init() {}
 
     /// Score a (tree, sequence) pair. Higher = more novel.
     ///
@@ -22,7 +22,7 @@
     /// has been seen. Otherwise returns a positive score:
     /// - Branch-path hash unseen: 1.0 + sequence bonus
     /// - Branch-path hash seen but full sequence unseen: 0.5
-    @_spi(ExhaustInternal) public mutating func score(tree: ChoiceTree, sequence: ChoiceSequence) -> Double {
+    public mutating func score(tree: ChoiceTree, sequence: ChoiceSequence) -> Double {
         let branchPath = Self.branchPathHash(of: tree)
         let branchPathIsNew = seenBranchPaths.insert(branchPath).inserted
         let sequenceIsNew = seenSequences.insert(sequence).inserted
@@ -41,7 +41,7 @@
 
     /// Extract a structural fingerprint from a ChoiceTree by walking pick sites
     /// and hashing their `(siteID, branchID)` vectors.
-    @_spi(ExhaustInternal) public static func branchPathHash(of tree: ChoiceTree) -> UInt64 {
+    public static func branchPathHash(of tree: ChoiceTree) -> UInt64 {
         var hasher = Hasher()
         branchPathHashHelper(tree, hasher: &hasher)
         let h = hasher.finalize()

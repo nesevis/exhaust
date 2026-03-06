@@ -33,7 +33,7 @@
 // let personGen = #gen(nameGen, ageGen) { Person(name: $0, age: $1) }
 // // Expands to: Gen._macroZip(nameGen, ageGen, labels: ["name", "age"], forward: { ... })
 // ```
-@_spi(ExhaustInternal) import ExhaustCore
+import ExhaustCore
 
 @freestanding(expression)
 public macro gen<each T, R>(

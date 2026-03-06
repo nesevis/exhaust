@@ -8,7 +8,7 @@
 import Foundation
 import Testing
 @testable import Exhaust
-@_spi(ExhaustInternal) import ExhaustCore
+import ExhaustCore
 
 @Suite("Online CGS Interpreter")
 struct OnlineCGSInterpreterTests {

@@ -8,7 +8,7 @@
 
 import Testing
 @testable import Exhaust
-@_spi(ExhaustInternal) import ExhaustCore
+import ExhaustCore
 
 @Suite("#gen macro reflection")
 struct GenerateMacroIntegrationTests {

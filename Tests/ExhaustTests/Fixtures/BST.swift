@@ -4,7 +4,7 @@
 //
 
 @testable import Exhaust
-@_spi(ExhaustInternal) import ExhaustCore
+import ExhaustCore
 
 enum BST: Equatable, Hashable, CustomStringConvertible {
     case leaf

@@ -7,7 +7,7 @@
 
 import Testing
 @testable import Exhaust
-@_spi(ExhaustInternal) import ExhaustCore
+import ExhaustCore
 
 @Suite("Generation Examples")
 struct GenerationExamplesTests {

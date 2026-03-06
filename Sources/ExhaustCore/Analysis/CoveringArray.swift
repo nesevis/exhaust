@@ -4,9 +4,9 @@
 //
 
 /// A single row in the covering array, mapping parameter indices to value indices.
-@_spi(ExhaustInternal) public struct CoveringArrayRow: @unchecked Sendable {
+public struct CoveringArrayRow: @unchecked Sendable {
     /// `values[i]` is a value index in `0..<parameters[i].domainSize`.
-    @_spi(ExhaustInternal) public var values: [UInt64]
+    public var values: [UInt64]
 }
 
 /// A t-way covering array guaranteeing that every t-tuple of parameter values
@@ -20,10 +20,10 @@
 /// The architecture accommodates future extension to ordered t-way coverage
 /// via concatenated covering arrays, as described by Kuhn, Raunak & Kacker
 /// in "Ordered t-way Combinations for Testing State-based Systems".
-@_spi(ExhaustInternal) public struct CoveringArray: @unchecked Sendable {
-    @_spi(ExhaustInternal) public let strength: Int
-    @_spi(ExhaustInternal) public let rows: [CoveringArrayRow]
-    @_spi(ExhaustInternal) public let profile: FiniteDomainProfile
+public struct CoveringArray: @unchecked Sendable {
+    public let strength: Int
+    public let rows: [CoveringArrayRow]
+    public let profile: FiniteDomainProfile
 
     /// Returns the strongest covering array that fits within `budget` rows,
     /// or `nil` if even t=2 doesn't fit.

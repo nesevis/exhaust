@@ -5,7 +5,7 @@
 //  Created by Chris Kolbu on 24/2/2026.
 //
 
-@_spi(ExhaustInternal) import ExhaustCore
+import ExhaustCore
 
 public extension ReflectiveGenerator {
     /// Creates a generator that always produces the same constant value.

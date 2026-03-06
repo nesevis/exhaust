@@ -1,5 +1,5 @@
 import CustomDump
-@_spi(ExhaustInternal) import ExhaustCore
+import ExhaustCore
 
 struct PropertyTestFailure<Output> {
     let counterexample: Output

@@ -9,7 +9,7 @@
 
 import Testing
 @testable import Exhaust
-@testable @_spi(ExhaustInternal) import ExhaustCore
+@testable import ExhaustCore
 
 @Suite("Meta-Generator Property Tests")
 struct MetaGeneratorPropertyTests {

@@ -6,7 +6,7 @@
 //
 
 import Foundation
-@_spi(ExhaustInternal) import ExhaustCore
+import ExhaustCore
 
 public extension ReflectiveGenerator {
     static func character(in range: ClosedRange<Character>? = nil) -> ReflectiveGenerator<Character> {

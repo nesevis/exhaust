@@ -7,11 +7,11 @@
 
 import Foundation
 
-@_spi(ExhaustInternal) public struct SiblingGroup: Equatable {
+public struct SiblingGroup: Equatable {
     /// Each sibling's range in the sequence. Contiguous, non-overlapping, in order.
-    @_spi(ExhaustInternal) public let ranges: [ClosedRange<Int>]
-    @_spi(ExhaustInternal) public let depth: Int
-    @_spi(ExhaustInternal) public let kind: SiblingChildKind
+    public let ranges: [ClosedRange<Int>]
+    public let depth: Int
+    public let kind: SiblingChildKind
 
     var valueRanges: [ClosedRange<Int>]? {
         switch kind {
@@ -25,7 +25,7 @@ import Foundation
     }
 }
 
-@_spi(ExhaustInternal) public enum SiblingChildKind: Equatable {
+public enum SiblingChildKind: Equatable {
     case bareValue
     case sequence
     case group

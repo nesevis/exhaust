@@ -7,7 +7,7 @@
 
 import Foundation
 
-@_spi(ExhaustInternal) public enum ChoiceTree: Hashable, Equatable, Sendable {
+public enum ChoiceTree: Hashable, Equatable, Sendable {
     /// A primitive choice, typically a number or a high-level semantic label.
     case choice(ChoiceValue, ChoiceMetadata)
 
@@ -47,7 +47,7 @@ extension ChoiceTree {
         return false
     }
 
-    @_spi(ExhaustInternal) public var isSelected: Bool {
+    public var isSelected: Bool {
         if case .selected = self {
             return true
         }
@@ -70,7 +70,7 @@ extension ChoiceTree {
 
     /// Whether this tree contains any pick sites (`.branch` nodes).
     /// Short-circuits on the first pick found.
-    @_spi(ExhaustInternal) public var containsPicks: Bool {
+    public var containsPicks: Bool {
         switch self {
         case .branch:
             true
@@ -194,7 +194,7 @@ extension ChoiceTree: CustomDebugStringConvertible {
         NSString(string: debugDescription)
     }
 
-    @_spi(ExhaustInternal) public var debugDescription: String {
+    public var debugDescription: String {
         treeDescription(prefix: "", isLast: true)
     }
 
@@ -285,7 +285,7 @@ extension ChoiceTree: CustomDebugStringConvertible {
     }
 
     /// Recursively unwraps wrapper nodes (selected, important) to get to the core content
-    @_spi(ExhaustInternal) public var unwrapped: ChoiceTree {
+    public var unwrapped: ChoiceTree {
         switch self {
         case let .selected(inner):
             inner.unwrapped

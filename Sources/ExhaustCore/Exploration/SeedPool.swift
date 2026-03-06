@@ -6,16 +6,16 @@
 // MARK: - Seed
 
 /// A seed: the ChoiceSequence (for mutation) + ChoiceTree (for structural info) + metadata.
-@_spi(ExhaustInternal) public struct Seed {
-    @_spi(ExhaustInternal) public let sequence: ChoiceSequence
-    @_spi(ExhaustInternal) public let tree: ChoiceTree
-    @_spi(ExhaustInternal) public var noveltyScore: Double
+public struct Seed {
+    public let sequence: ChoiceSequence
+    public let tree: ChoiceTree
+    public var noveltyScore: Double
     /// Target function score. Used for fitness-guided search when a `.target` is provided.
-    @_spi(ExhaustInternal) public var fitness: Double
+    public var fitness: Double
     /// Which explore iteration discovered this seed.
-    @_spi(ExhaustInternal) public let generation: UInt64
+    public let generation: UInt64
 
-    @_spi(ExhaustInternal) public init(
+    public init(
         sequence: ChoiceSequence,
         tree: ChoiceTree,
         noveltyScore: Double,
@@ -32,7 +32,7 @@
 
 // MARK: - SearchDirective
 
-@_spi(ExhaustInternal) public enum SearchDirective {
+public enum SearchDirective {
     /// Produce a fresh value from the generator.
     case generate
     /// Mutate an existing interesting seed.
@@ -42,7 +42,7 @@
 // MARK: - SeedPool
 
 /// Storage + sampling of interesting inputs.
-@_spi(ExhaustInternal) public protocol SeedPool {
+public protocol SeedPool {
     /// Add a seed deemed interesting. Pool decides whether to accept and where to rank it.
     mutating func invest(_ seed: Seed)
 

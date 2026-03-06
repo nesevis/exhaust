@@ -9,7 +9,7 @@
 
 import Testing
 @testable import Exhaust
-@_spi(ExhaustInternal) import ExhaustCore
+import ExhaustCore
 
 // MARK: - Recipe Type (output type tracking)
 

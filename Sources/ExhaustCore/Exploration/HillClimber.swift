@@ -4,7 +4,7 @@
 //
 
 /// Result of a single hill-climbing pass on a seed.
-@_spi(ExhaustInternal) public enum HillClimbResult<Output> {
+public enum HillClimbResult<Output> {
     /// A property-violating value was discovered during climbing.
     case counterexample(value: Output, tree: ChoiceTree, probesUsed: Int)
     /// The seed was improved (higher scorer output).
@@ -23,8 +23,8 @@
 /// - Score improvement → accept
 /// - Same score, sequence no longer → accept (lateral move to escape local optima)
 /// - Score decrease → reject
-@_spi(ExhaustInternal) public enum HillClimber {
-    @_spi(ExhaustInternal) public static func climb<Output>(
+public enum HillClimber {
+    public static func climb<Output>(
         seed: Seed,
         gen: ReflectiveGenerator<Output>,
         scorer: (Output) -> Double,

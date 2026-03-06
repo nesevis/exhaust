@@ -4,7 +4,7 @@
 //
 
 /// Converts covering array rows into `ChoiceTree` structures for boundary profile replay.
-@_spi(ExhaustInternal) public enum BoundaryCoveringArrayReplay {
+public enum BoundaryCoveringArrayReplay {
 
     /// Builds a `ChoiceTree` from a covering array row using boundary parameter values.
     ///

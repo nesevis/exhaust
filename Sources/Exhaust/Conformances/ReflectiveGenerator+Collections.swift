@@ -12,7 +12,7 @@
 // - Simd types
 // - ??
 
-@_spi(ExhaustInternal) import ExhaustCore
+import ExhaustCore
 
 public extension ReflectiveGenerator {
     static func array<Element>(

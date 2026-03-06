@@ -1,6 +1,6 @@
 #if CasePathable
 import CasePaths
-@_spi(ExhaustInternal) import ExhaustCore
+import ExhaustCore
 
 extension AnyCasePath: PartialPath {
     public func extract(from root: Any) throws -> Value? {

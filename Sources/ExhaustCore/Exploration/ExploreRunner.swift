@@ -4,7 +4,7 @@
 //
 
 /// Result of an exploration run.
-@_spi(ExhaustInternal) public enum ExploreResult<Output> {
+public enum ExploreResult<Output> {
     /// A counterexample was found and shrunk.
     case failure(counterexample: Output, shrunkSequence: ChoiceSequence, original: Output, iteration: UInt64)
     /// A counterexample was found but shrinking failed.
@@ -20,7 +20,7 @@
 ///
 /// The runner uses a mandatory `scorer` function to guide hill-climbing: mutations
 /// that increase the scorer output are accepted, and the seed pool ranks by fitness.
-@_spi(ExhaustInternal) public struct ExploreRunner<Output>: ~Copyable {
+public struct ExploreRunner<Output>: ~Copyable {
     private let gen: ReflectiveGenerator<Output>
     private let property: (Output) -> Bool
     private let maxIterations: UInt64
@@ -32,7 +32,7 @@
     private var schedule: LogarithmicSchedule
     private var prng: Xoshiro256
 
-    @_spi(ExhaustInternal) public init(
+    public init(
         gen: ReflectiveGenerator<Output>,
         property: @escaping (Output) -> Bool,
         maxIterations: UInt64 = 10_000,
@@ -61,11 +61,11 @@
         }
     }
 
-    @_spi(ExhaustInternal) public var baseSeed: UInt64 { prng.seed }
+    public var baseSeed: UInt64 { prng.seed }
 
     // MARK: - Run
 
-    @_spi(ExhaustInternal) public mutating func run() -> ExploreResult<Output> {
+    public mutating func run() -> ExploreResult<Output> {
         var iteration: UInt64 = 0
 
         // Phase 1: Generate an initial batch of fresh values to seed the pool

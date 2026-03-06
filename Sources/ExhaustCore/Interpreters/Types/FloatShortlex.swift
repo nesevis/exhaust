@@ -6,16 +6,16 @@
 //
 
 /// Utilities for float-specific shortlex/shrink ordering.
-@_spi(ExhaustInternal) public enum FloatShortlex {
-    @_spi(ExhaustInternal) public static let simpleIntegerUpperBound = 72_057_594_037_927_936.0 // 2^56
+public enum FloatShortlex {
+    public static let simpleIntegerUpperBound = 72_057_594_037_927_936.0 // 2^56
 
-    @_spi(ExhaustInternal) public static let exponentMask: UInt64 = 0x7FF
+    public static let exponentMask: UInt64 = 0x7FF
 
-    @_spi(ExhaustInternal) public static let mantissaMask: UInt64 = (UInt64(1) << 52) - 1
+    public static let mantissaMask: UInt64 = (UInt64(1) << 52) - 1
 
-    @_spi(ExhaustInternal) public static let exponentBias: UInt64 = 1023
+    public static let exponentBias: UInt64 = 1023
 
-    @_spi(ExhaustInternal) public static let nonSimpleTagMask: UInt64 = .init(1) << 63
+    public static let nonSimpleTagMask: UInt64 = .init(1) << 63
 
     /// Maps a `Double` into a lexical key matching Hypothesis-style float ordering.
     ///
@@ -23,7 +23,7 @@
     /// (key equals the integer value), and encodes other finite values by transformed
     /// exponent/mantissa so coarse semantic moves are cheap to discover.
     @inlinable
-    @_spi(ExhaustInternal) public static func shortlexKey(for value: Double) -> UInt64 {
+    public static func shortlexKey(for value: Double) -> UInt64 {
         let magnitude = abs(value)
 
         if magnitude.isNaN {
@@ -69,11 +69,11 @@
 
     /// Float overload for callers that are still working in `Float` precision.
     @inlinable
-    @_spi(ExhaustInternal) public static func shortlexKey(for value: Float) -> UInt64 {
+    public static func shortlexKey(for value: Float) -> UInt64 {
         shortlexKey(for: Double(value))
     }
 
-    @_spi(ExhaustInternal) public static func reverseLowerBits(_ value: UInt64, count: Int) -> UInt64 {
+    public static func reverseLowerBits(_ value: UInt64, count: Int) -> UInt64 {
         var x = value
         var reversed: UInt64 = 0
         for _ in 0 ..< count {

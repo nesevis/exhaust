@@ -2,7 +2,7 @@ import Benchmark
 import Exhaust
 import Foundation
 
-@_spi(ExhaustInternal) import ExhaustCore
+import ExhaustCore
 
 // swiftlint:disable force_try
 

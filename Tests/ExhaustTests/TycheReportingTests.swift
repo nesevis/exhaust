@@ -9,7 +9,7 @@
 import Foundation
 import Testing
 @testable import Exhaust
-@_spi(ExhaustInternal) import ExhaustCore
+import ExhaustCore
 
 @Suite("Tyche Reporting Framework")
 struct TycheReportingTests {

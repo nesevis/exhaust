@@ -19,8 +19,8 @@ import Foundation
 ///
 /// This avoids diversity collapse on recursive generators because each derivative has
 /// already fixed all choices above it, making deeper sampling tractable.
-@_spi(ExhaustInternal) public struct OnlineCGSInterpreter<FinalOutput>: ~Copyable, ExhaustIterator {
-    @_spi(ExhaustInternal) public typealias Element = FinalOutput
+public struct OnlineCGSInterpreter<FinalOutput>: ~Copyable, ExhaustIterator {
+    public typealias Element = FinalOutput
 
     // MARK: - Derivative Context
 
@@ -31,14 +31,14 @@ import Foundation
     /// This replaces the opaque `DerivativeWrapper` closure chain with a defunctionalized
     /// representation, matching the paper's treatment of CGS derivatives as syntactic
     /// transformations on the generator data structure (Goldstein, Ch. 3).
-    @_spi(ExhaustInternal) public struct DerivativeContext {
-        @_spi(ExhaustInternal) public private(set) var frames: [DerivativeFrame] = []
+    public struct DerivativeContext {
+        public private(set) var frames: [DerivativeFrame] = []
 
-        @_spi(ExhaustInternal) public init() {}
+        public init() {}
 
-        @_spi(ExhaustInternal) public var depth: Int { frames.count }
+        public var depth: Int { frames.count }
 
-        @_spi(ExhaustInternal) public mutating func push(_ frame: DerivativeFrame) {
+        public mutating func push(_ frame: DerivativeFrame) {
             frames.append(frame)
         }
 
@@ -47,7 +47,7 @@ import Foundation
         /// Frames are stored in push order (oldest first). `apply` iterates in reverse
         /// (newest/innermost first) to match the closure chain's nesting:
         /// `gen.bind(innerCont).bind(outerCont).map(cast)`.
-        @_spi(ExhaustInternal) public func apply(_ gen: ReflectiveGenerator<Any>) throws -> ReflectiveGenerator<FinalOutput> {
+        public func apply(_ gen: ReflectiveGenerator<Any>) throws -> ReflectiveGenerator<FinalOutput> {
             var current = gen
             for frame in frames.reversed() {
                 switch frame {
@@ -84,7 +84,7 @@ import Foundation
         }
     }
 
-    @_spi(ExhaustInternal) public enum DerivativeFrame {
+    public enum DerivativeFrame {
         case bind(continuation: (Any) throws -> ReflectiveGenerator<Any>)
         case zipComponent(
             index: Int,
@@ -107,7 +107,7 @@ import Foundation
         var fitnessAccumulator: FitnessAccumulator?
     }
 
-    @_spi(ExhaustInternal) public init(
+    public init(
         _ generator: ReflectiveGenerator<FinalOutput>,
         predicate: @escaping (FinalOutput) -> Bool,
         sampleCount: UInt64 = 50,
@@ -139,7 +139,7 @@ import Foundation
 
     // MARK: - Iterator
 
-    @_spi(ExhaustInternal) public mutating func next() -> Element? {
+    public mutating func next() -> Element? {
         guard context.runs < context.maxRuns else {
             context.printClassifications()
             return nil

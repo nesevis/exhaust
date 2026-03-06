@@ -6,14 +6,14 @@
 //
 
 /// The magical 3-in-1 PRNG
-@_spi(ExhaustInternal) public struct Xoshiro256: ~Copyable {
-    @_spi(ExhaustInternal) public typealias StateType = (UInt64, UInt64, UInt64, UInt64)
+public struct Xoshiro256: ~Copyable {
+    public typealias StateType = (UInt64, UInt64, UInt64, UInt64)
 
-    @_spi(ExhaustInternal) public let seed: UInt64
+    public let seed: UInt64
     private var state: StateType
 
     /// Read-only access to internal state for explicit cloning.
-    @_spi(ExhaustInternal) public var currentState: StateType { state }
+    public var currentState: StateType { state }
 
     /// Jump polynomial for 2^128 steps
     private static let jumpPoly: [UInt64] = [
@@ -27,12 +27,12 @@
         0x7771_0069_854E_E241, 0x3910_9BB0_2ACB_E635,
     ]
 
-    @_spi(ExhaustInternal) public init() {
+    public init() {
         var rng = SystemRandomNumberGenerator()
         self.init(seed: rng.next())
     }
 
-    @_spi(ExhaustInternal) public init(seed: UInt64) {
+    public init(seed: UInt64) {
         self.seed = seed
         // SplitMix64 guarantees we won't get all zeros
         var splitmix = SplitMix64(seed: seed)
@@ -45,12 +45,12 @@
     }
 
     /// Construct from explicit state for deliberate cloning.
-    @_spi(ExhaustInternal) public init(seed: UInt64, state: StateType) {
+    public init(seed: UInt64, state: StateType) {
         self.seed = seed
         self.state = state
     }
 
-    @_spi(ExhaustInternal) public mutating func next() -> UInt64 {
+    public mutating func next() -> UInt64 {
         let result = rotateLeft(state.1 &* 5, 7) &* 9
         let t = state.1 &<< 17
 
@@ -69,7 +69,7 @@
     /// Uses multiply-high with rejection sampling to avoid modulo bias.
     /// This follows Lemire's approach and avoids `%` on the hot path.
     @inline(__always)
-    @_spi(ExhaustInternal) public mutating func next(upperBound: UInt64) -> UInt64 {
+    public mutating func next(upperBound: UInt64) -> UInt64 {
         precondition(upperBound > 0, "upperBound must be > 0")
 
         // Power-of-two bounds can be sampled with a single mask.
@@ -92,7 +92,7 @@
     /// This is intentionally separate from `next(upperBound:)` so callers can
     /// choose between stdlib range behavior and fast bounded sampling.
     @inline(__always)
-    @_spi(ExhaustInternal) public mutating func next(in range: ClosedRange<UInt64>) -> UInt64 {
+    public mutating func next(in range: ClosedRange<UInt64>) -> UInt64 {
         let width = range.upperBound &- range.lowerBound
         if width == UInt64.max { return next() }
         return range.lowerBound &+ next(upperBound: width &+ 1)
@@ -104,7 +104,7 @@
     }
 
     /// Jump ahead 2^128 steps for parallel streams
-    @_spi(ExhaustInternal) public mutating func jump() {
+    public mutating func jump() {
         var s0: UInt64 = 0
         var s1: UInt64 = 0
         var s2: UInt64 = 0
@@ -126,7 +126,7 @@
     }
 
     /// Create an independent stream
-    @_spi(ExhaustInternal) public func spawned(streamID: UInt64) -> Xoshiro256 {
+    public func spawned(streamID: UInt64) -> Xoshiro256 {
         var newGen = Xoshiro256(seed: seed, state: state)
         // Use streamID to determine number of jumps
         for _ in 0 ..< (streamID & 0xFF) {

@@ -1,5 +1,5 @@
 import Foundation
-@_spi(ExhaustInternal) import ExhaustCore
+import ExhaustCore
 
 // MARK: - Reporter Protocol
 

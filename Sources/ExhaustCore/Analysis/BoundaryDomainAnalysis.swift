@@ -5,14 +5,14 @@
 
 /// A parameter in the boundary model with synthetic values derived from
 /// boundary value analysis of the underlying generator operation.
-@_spi(ExhaustInternal) public struct BoundaryParameter: @unchecked Sendable {
-    @_spi(ExhaustInternal) public let index: Int
-    @_spi(ExhaustInternal) public let values: [UInt64]
-    @_spi(ExhaustInternal) public let domainSize: UInt64
-    @_spi(ExhaustInternal) public let kind: BoundaryParameterKind
+public struct BoundaryParameter: @unchecked Sendable {
+    public let index: Int
+    public let values: [UInt64]
+    public let domainSize: UInt64
+    public let kind: BoundaryParameterKind
 }
 
-@_spi(ExhaustInternal) public enum BoundaryParameterKind: @unchecked Sendable {
+public enum BoundaryParameterKind: @unchecked Sendable {
     /// A chooseBits with a range too large for finite-domain analysis.
     /// Values are boundary representatives: {min, min+1, midpoint, max-1, max, 0 if in range}
     case chooseBits(range: ClosedRange<UInt64>, tag: TypeTag)
@@ -33,14 +33,14 @@
 }
 
 /// Result of boundary analysis — a synthetic finite domain suitable for IPOG.
-@_spi(ExhaustInternal) public struct BoundaryDomainProfile: @unchecked Sendable {
-    @_spi(ExhaustInternal) public let parameters: [BoundaryParameter]
+public struct BoundaryDomainProfile: @unchecked Sendable {
+    public let parameters: [BoundaryParameter]
 }
 
 // MARK: - Boundary Value Computation
 
 /// Boundary value selection functions used by `ChoiceTreeAnalysis`.
-@_spi(ExhaustInternal) public enum BoundaryDomainAnalysis {
+public enum BoundaryDomainAnalysis {
 
     static func computeBoundaryValues(min: UInt64, max: UInt64, tag: TypeTag) -> [UInt64] {
         switch tag {

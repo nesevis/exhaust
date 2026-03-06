@@ -6,30 +6,30 @@
 //
 
 /// Utilities for float-specific shrinking phases used by `reduceValues`.
-@_spi(ExhaustInternal) public enum FloatShrink {
-    @_spi(ExhaustInternal) public static let doubleMantissaBits = 52
+public enum FloatShrink {
+    public static let doubleMantissaBits = 52
 
-    @_spi(ExhaustInternal) public static let doubleExponentBias = 1023
+    public static let doubleExponentBias = 1023
 
-    @_spi(ExhaustInternal) public static let doubleExponentMask: UInt64 = 0x7FF
+    public static let doubleExponentMask: UInt64 = 0x7FF
 
-    @_spi(ExhaustInternal) public static let doubleMantissaMask: UInt64 = (UInt64(1) << doubleMantissaBits) - 1
+    public static let doubleMantissaMask: UInt64 = (UInt64(1) << doubleMantissaBits) - 1
 
-    @_spi(ExhaustInternal) public static let floatMantissaBits = 23
+    public static let floatMantissaBits = 23
 
-    @_spi(ExhaustInternal) public static let floatExponentBias = 127
+    public static let floatExponentBias = 127
 
-    @_spi(ExhaustInternal) public static let floatExponentMask: UInt32 = 0xFF
+    public static let floatExponentMask: UInt32 = 0xFF
 
-    @_spi(ExhaustInternal) public static let floatMantissaMask: UInt32 = (UInt32(1) << floatMantissaBits) - 1
+    public static let floatMantissaMask: UInt32 = (UInt32(1) << floatMantissaBits) - 1
 
-    @_spi(ExhaustInternal) public static let maxPreciseIntegerDouble = 9_007_199_254_740_992.0 // 2^53
+    public static let maxPreciseIntegerDouble = 9_007_199_254_740_992.0 // 2^53
 
-    @_spi(ExhaustInternal) public static let maxPreciseIntegerFloat = 16_777_216.0 // 2^24
+    public static let maxPreciseIntegerFloat = 16_777_216.0 // 2^24
 
     /// Returns the cutoff above which `x + 1 == x` for a given float tag.
     @inlinable
-    @_spi(ExhaustInternal) public static func maxPreciseInteger(for tag: TypeTag) -> Double {
+    public static func maxPreciseInteger(for tag: TypeTag) -> Double {
         switch tag {
         case .double:
             maxPreciseIntegerDouble
@@ -42,7 +42,7 @@
 
     /// Returns the Hypothesis-style special-value shortlist, in probe order.
     @inlinable
-    @_spi(ExhaustInternal) public static func specialValues(for tag: TypeTag) -> [Double] {
+    public static func specialValues(for tag: TypeTag) -> [Double] {
         switch tag {
         case .double:
             [Double.greatestFiniteMagnitude, Double.infinity, Double.nan]
@@ -56,7 +56,7 @@
     /// Exact integer ratio (`numerator / denominator`) for finite values,
     /// reduced by powers of two when representable as 64-bit integers.
     @inlinable
-    @_spi(ExhaustInternal) public static func integerRatio(for value: Double, tag: TypeTag) -> (numerator: Int64, denominator: UInt64)? {
+    public static func integerRatio(for value: Double, tag: TypeTag) -> (numerator: Int64, denominator: UInt64)? {
         switch tag {
         case .double:
             return integerRatio(value)
@@ -69,7 +69,7 @@
         }
     }
 
-    @_spi(ExhaustInternal) public static func integerRatio(_ value: Double) -> (numerator: Int64, denominator: UInt64)? {
+    public static func integerRatio(_ value: Double) -> (numerator: Int64, denominator: UInt64)? {
         guard value.isFinite else { return nil }
         guard value != 0 else { return (0, 1) }
 
@@ -93,7 +93,7 @@
         return buildRatio(sign: sign, significand: significand, exponent: exponent)
     }
 
-    @_spi(ExhaustInternal) public static func integerRatio(_ value: Float) -> (numerator: Int64, denominator: UInt64)? {
+    public static func integerRatio(_ value: Float) -> (numerator: Int64, denominator: UInt64)? {
         guard value.isFinite else { return nil }
         guard value != 0 else { return (0, 1) }
 
@@ -117,7 +117,7 @@
         return buildRatio(sign: sign, significand: significand, exponent: exponent)
     }
 
-    @_spi(ExhaustInternal) public static func buildRatio(sign: Int64, significand: UInt64, exponent: Int) -> (numerator: Int64, denominator: UInt64)? {
+    public static func buildRatio(sign: Int64, significand: UInt64, exponent: Int) -> (numerator: Int64, denominator: UInt64)? {
         guard significand > 0 else { return (0, 1) }
         var numerator = significand
         var denominator: UInt64 = 1

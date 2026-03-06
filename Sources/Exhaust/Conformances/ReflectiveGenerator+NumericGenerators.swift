@@ -5,7 +5,7 @@
 //  Created by Chris Kolbu on 22/2/2026.
 //
 
-@_spi(ExhaustInternal) import ExhaustCore
+import ExhaustCore
 
 // MARK: - Floating-point generators
 

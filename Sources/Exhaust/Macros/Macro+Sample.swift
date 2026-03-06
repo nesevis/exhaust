@@ -13,7 +13,7 @@
 //   - gen: The generator to sample from.
 //   - seed: Optional seed for deterministic replay.
 // - Returns: A single generated value.
-@_spi(ExhaustInternal) import ExhaustCore
+import ExhaustCore
 
 @freestanding(expression)
 public macro sample<T>(

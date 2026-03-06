@@ -6,7 +6,7 @@
 import Foundation
 
 /// Determines how many mutations to attempt for a given seed before moving on.
-@_spi(ExhaustInternal) public protocol PowerSchedule {
+public protocol PowerSchedule {
     /// How many mutations to attempt for this seed before moving on.
     func energy(for seed: Seed, poolSize: Int, averagePoolFitness: Double) -> Int
 }
@@ -16,16 +16,16 @@ import Foundation
 /// Higher-scoring seeds get more mutations. Larger pools reduce per-seed
 /// energy to maintain breadth. When `averagePoolFitness > 0`, fitness replaces
 /// novelty as the scaling signal.
-@_spi(ExhaustInternal) public struct LogarithmicSchedule: PowerSchedule {
+public struct LogarithmicSchedule: PowerSchedule {
     private let baseEnergy: Int
     private let maxEnergy: Int
 
-    @_spi(ExhaustInternal) public init(baseEnergy: Int = 8, maxEnergy: Int = 64) {
+    public init(baseEnergy: Int = 8, maxEnergy: Int = 64) {
         self.baseEnergy = baseEnergy
         self.maxEnergy = maxEnergy
     }
 
-    @_spi(ExhaustInternal) public func energy(
+    public func energy(
         for seed: Seed,
         poolSize: Int,
         averagePoolFitness: Double = 0,

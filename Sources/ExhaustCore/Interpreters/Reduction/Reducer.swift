@@ -170,7 +170,7 @@ public extension Interpreters {
         }
     }
 
-    @_spi(ExhaustInternal) static func reduce<Output>(
+    static func reduce<Output>(
         gen: ReflectiveGenerator<Output>,
         tree: ChoiceTree,
         config: ShrinkConfiguration,

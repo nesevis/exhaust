@@ -1,4 +1,4 @@
-@_spi(ExhaustInternal) import ExhaustCore
+import ExhaustCore
 import CustomDump
 import IssueReporting
 

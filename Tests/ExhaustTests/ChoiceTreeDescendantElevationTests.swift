@@ -5,7 +5,7 @@
 
 import Testing
 @testable import Exhaust
-@_spi(ExhaustInternal) import ExhaustCore
+import ExhaustCore
 
 @Suite("ChoiceTree descendant elevation")
 struct ChoiceTreeDescendantElevationTests {

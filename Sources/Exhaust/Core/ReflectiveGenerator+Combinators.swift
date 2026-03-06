@@ -1,4 +1,4 @@
-@_spi(ExhaustInternal) import ExhaustCore
+import ExhaustCore
 
 public extension ReflectiveGenerator where Operation == ReflectiveOperation {
     /// Creates a bidirectional transformation of this generator using forward and backward functions.
@@ -119,7 +119,6 @@ public extension ReflectiveGenerator where Operation == ReflectiveOperation {
     /// extracts the wrapped value for the underlying generator to reflect on.
     ///
     /// - Returns: A generator that produces optional versions of the original values
-    @_spi(ExhaustInternal)
     @inlinable
     func asOptional() -> ReflectiveGenerator<Value?> {
         let description = String(describing: Value.self)

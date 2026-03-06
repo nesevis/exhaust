@@ -1,7 +1,7 @@
 // Encapsulates the structured coverage phase of a property test.
 //
 // Implements the analysis hierarchy: exhaustive → t-way → boundary.
-@_spi(ExhaustInternal) import ExhaustCore
+import ExhaustCore
 
 enum CoverageRunner {
     enum Result<Output> {

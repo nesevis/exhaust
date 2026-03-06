@@ -11,7 +11,7 @@ extension ReducerStrategies {
     ///
     /// Requires the tree to have been generated with `materializePicks: true`
     /// so that alternative (non-selected) branches are present in each group.
-    @_spi(ExhaustInternal) public static func pivotBranches<Output>(
+    public static func pivotBranches<Output>(
         _ gen: ReflectiveGenerator<Output>,
         tree: ChoiceTree,
         property: (Output) -> Bool,

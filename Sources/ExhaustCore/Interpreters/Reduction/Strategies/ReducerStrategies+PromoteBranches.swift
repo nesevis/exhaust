@@ -8,7 +8,7 @@
 extension ReducerStrategies {
     /// Pass: reduce pick-branch structure by replacing a complex branch's
     /// subtree with a simpler sub-branch, ordered by shortlex complexity.
-    @_spi(ExhaustInternal) public static func promoteBranches<Output>(
+    public static func promoteBranches<Output>(
         _ gen: ReflectiveGenerator<Output>,
         tree: ChoiceTree,
         property: (Output) -> Bool,

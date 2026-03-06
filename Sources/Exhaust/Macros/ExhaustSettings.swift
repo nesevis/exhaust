@@ -6,7 +6,7 @@
 //     person.age >= 0
 // }
 // ```
-@_spi(ExhaustInternal) import ExhaustCore
+import ExhaustCore
 
 public enum ExhaustSettings<Output> {
     /// The upper bound on the number of test iterations to run.

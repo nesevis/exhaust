@@ -7,11 +7,11 @@
 
 import Foundation
 
-@_spi(ExhaustInternal) public struct ValueInterpreter<Element>: ~Copyable, ExhaustIterator {
+public struct ValueInterpreter<Element>: ~Copyable, ExhaustIterator {
     let generator: ReflectiveGenerator<Element>
     private var context: GenerationContext
 
-    @_spi(ExhaustInternal) public init(
+    public init(
         _ generator: ReflectiveGenerator<Element>,
         seed: UInt64? = nil,
         maxRuns: UInt64? = nil,
@@ -35,7 +35,7 @@ import Foundation
         context.sizeOverride = sizeOverride
     }
 
-    @_spi(ExhaustInternal) public mutating func next() -> Element? {
+    public mutating func next() -> Element? {
         guard context.runs < context.maxRuns else {
             return nil
         }
@@ -393,7 +393,7 @@ import Foundation
 
     // MARK: - Hashable
 
-    @_spi(ExhaustInternal) public func hash(into hasher: inout Hasher) {
+    public func hash(into hasher: inout Hasher) {
         hasher.combine(context.baseSeed)
     }
 }

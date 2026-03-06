@@ -5,13 +5,13 @@
 //  Created by Chris Kolbu on 20/7/2025.
 //
 
-@_spi(ExhaustInternal) public enum ChoiceValue: Comparable, Hashable, Equatable, Sendable {
+public enum ChoiceValue: Comparable, Hashable, Equatable, Sendable {
     case unsigned(UInt64, TypeTag)
     /// The UInt64 represents its hashable behaviour
     case signed(Int64, UInt64, TypeTag)
     case floating(Double, UInt64, TypeTag)
 
-    @_spi(ExhaustInternal) public init(_ value: any BitPatternConvertible, tag: TypeTag) {
+    public init(_ value: any BitPatternConvertible, tag: TypeTag) {
         switch tag {
         case .uint:
             self = .unsigned(value.bitPattern64, .uint)
@@ -44,7 +44,7 @@
     /// - Unsigned integers: 0
     /// - Signed integers: 0
     /// - Floating point: 0.0
-    @_spi(ExhaustInternal) public var semanticSimplest: ChoiceValue {
+    public var semanticSimplest: ChoiceValue {
         switch self {
         case let .unsigned(_, tag):
             return .unsigned(0, tag)
@@ -133,11 +133,11 @@
         }
     }
 
-    @_spi(ExhaustInternal) public var convertible: any BitPatternConvertible {
+    public var convertible: any BitPatternConvertible {
         tag.makeConvertible(bitPattern64: bitPattern64)
     }
 
-    @_spi(ExhaustInternal) public func hash(into hasher: inout Hasher) {
+    public func hash(into hasher: inout Hasher) {
         switch self {
         case let .unsigned(uInt64, _):
             hasher.combine(uInt64)
@@ -149,7 +149,7 @@
         hasher.combine(tag)
     }
 
-    @_spi(ExhaustInternal) public static func == (lhs: Self, rhs: Self) -> Bool {
+    public static func == (lhs: Self, rhs: Self) -> Bool {
         guard lhs.tag == rhs.tag else { return false }
         return switch (lhs, rhs) {
         case let (.unsigned(lhsValue, _), .unsigned(rhsValue, _)):
@@ -163,7 +163,7 @@
         }
     }
 
-    @_spi(ExhaustInternal) public static func < (lhs: Self, rhs: Self) -> Bool {
+    public static func < (lhs: Self, rhs: Self) -> Bool {
         switch (lhs, rhs) {
         case (.unsigned, .unsigned):
             lhs.bitPattern64 < rhs.bitPattern64

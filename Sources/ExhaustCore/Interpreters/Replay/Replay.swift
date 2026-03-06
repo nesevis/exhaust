@@ -19,7 +19,7 @@ extension Interpreters {
     ///   - choiceTree: The structured script of choices to follow.
     /// - Returns: The deterministically generated value, or `nil` if the tree does not
     ///   match the generator's structure.
-    @_spi(ExhaustInternal) public static func replay<Output>(
+    public static func replay<Output>(
         _ gen: ReflectiveGenerator<Output>,
         using choiceTree: ChoiceTree,
     ) throws -> Output? {

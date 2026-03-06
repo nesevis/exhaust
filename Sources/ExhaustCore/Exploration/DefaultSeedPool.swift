@@ -16,14 +16,14 @@
 /// - **Insertion**: Accept if novelty > 0. Evict the lowest-novelty seed.
 /// - **Sampling**: Weighted random by novelty score.
 /// - **Revise**: Halves the novelty score of the most-recently-sampled seed.
-@_spi(ExhaustInternal) public struct DefaultSeedPool: SeedPool {
+public struct DefaultSeedPool: SeedPool {
     private var seeds: [Seed] = []
     private let capacity: Int
     private let generateRatio: Double
     private let useFitness: Bool
     private var lastSampledIndex: Int?
 
-    @_spi(ExhaustInternal) public init(
+    public init(
         capacity: Int = 256,
         generateRatio: Double = 0.2,
         useFitness: Bool = false,
@@ -33,16 +33,16 @@
         self.useFitness = useFitness
     }
 
-    @_spi(ExhaustInternal) public var count: Int { seeds.count }
-    @_spi(ExhaustInternal) public var isEmpty: Bool { seeds.isEmpty }
+    public var count: Int { seeds.count }
+    public var isEmpty: Bool { seeds.isEmpty }
 
     /// The average fitness across all seeds in the pool.
-    @_spi(ExhaustInternal) public var averageFitness: Double {
+    public var averageFitness: Double {
         guard !seeds.isEmpty else { return 0 }
         return seeds.reduce(0.0) { $0 + $1.fitness } / Double(seeds.count)
     }
 
-    @_spi(ExhaustInternal) public mutating func invest(_ seed: Seed) {
+    public mutating func invest(_ seed: Seed) {
         if useFitness {
             investFitness(seed)
         } else {
@@ -50,7 +50,7 @@
         }
     }
 
-    @_spi(ExhaustInternal) public mutating func revise() {
+    public mutating func revise() {
         guard let idx = lastSampledIndex, idx < seeds.count else { return }
         if useFitness {
             seeds[idx].fitness *= 0.5
@@ -59,7 +59,7 @@
         }
     }
 
-    @_spi(ExhaustInternal) public mutating func sample(using prng: inout Xoshiro256) -> SearchDirective {
+    public mutating func sample(using prng: inout Xoshiro256) -> SearchDirective {
         guard !seeds.isEmpty else { return .generate }
 
         // With generateRatio probability, produce a fresh value

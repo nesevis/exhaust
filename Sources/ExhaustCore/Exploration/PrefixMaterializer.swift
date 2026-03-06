@@ -11,8 +11,8 @@
 /// This enables Hypothesis-style "extend=full" probing: modify one entry in
 /// a flat sequence, replay the prefix, and let fresh random choices fill in
 /// beyond the modification point. No pre-materialized branches needed.
-@_spi(ExhaustInternal) public enum PrefixMaterializer {
-    @_spi(ExhaustInternal) public static func materialize<Output>(
+public enum PrefixMaterializer {
+    public static func materialize<Output>(
         _ gen: ReflectiveGenerator<Output>,
         prefix: ChoiceSequence,
         seed: UInt64,

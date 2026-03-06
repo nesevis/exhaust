@@ -8,7 +8,7 @@
 
 import Testing
 @testable import Exhaust
-@_spi(ExhaustInternal) import ExhaustCore
+import ExhaustCore
 
 @Suite("Reflect and Flatten Integration Tests")
 struct ReflectAndFlattenTests {

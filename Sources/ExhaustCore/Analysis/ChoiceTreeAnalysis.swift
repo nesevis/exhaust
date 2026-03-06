@@ -10,9 +10,9 @@
 /// `BoundaryDomainAnalysis`. By running the generator through VACTI with
 /// `materializePicks = true`, the analysis sees through opaque bind chains
 /// that the recursive walker cannot follow.
-@_spi(ExhaustInternal) public enum ChoiceTreeAnalysis {
+public enum ChoiceTreeAnalysis {
 
-    @_spi(ExhaustInternal) public enum AnalysisResult {
+    public enum AnalysisResult {
         case finite(FiniteDomainProfile)
         case boundary(BoundaryDomainProfile)
     }

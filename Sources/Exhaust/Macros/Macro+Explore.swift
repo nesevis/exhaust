@@ -18,7 +18,7 @@
 // ```
 //
 // - Returns: The shrunk counterexample if the property fails, or `nil` if all iterations pass.
-@_spi(ExhaustInternal) import ExhaustCore
+import ExhaustCore
 
 @freestanding(expression)
 @discardableResult

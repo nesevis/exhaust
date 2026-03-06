@@ -9,7 +9,6 @@ import Foundation
 
 /// A set of `UInt32` ranges representing Unicode scalar values, backed by `RangeSet`.
 /// Provides O(log n) index-to-scalar lookup for single-pick generation.
-@_spi(ExhaustInternal)
 public struct ScalarRangeSet: Sendable {
     public let rangeSet: RangeSet<UInt32>
 
@@ -97,7 +96,6 @@ extension CharacterSet {
     ///
     /// - Plane 0 (BMP): first 8192 bytes, 1 bit per scalar U+0000…U+FFFF
     /// - Planes 1–16: each occupied plane appends 8193 bytes (1-byte plane index + 8192-byte bitmap)
-    @_spi(ExhaustInternal)
     public func scalarRangeSet() -> ScalarRangeSet {
         let bitmap = bitmapRepresentation
         let planeSize = 8192

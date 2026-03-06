@@ -9,13 +9,13 @@ import Foundation
 
 // swiftlint:disable function_parameter_count
 
-@_spi(ExhaustInternal) public struct ValueAndChoiceTreeInterpreter<FinalOutput>: ~Copyable, ExhaustIterator {
-    @_spi(ExhaustInternal) public typealias Element = (value: FinalOutput, tree: ChoiceTree)
+public struct ValueAndChoiceTreeInterpreter<FinalOutput>: ~Copyable, ExhaustIterator {
+    public typealias Element = (value: FinalOutput, tree: ChoiceTree)
 
     let generator: ReflectiveGenerator<FinalOutput>
     private(set) var context: GenerationContext
 
-    @_spi(ExhaustInternal) public init(
+    public init(
         _ generator: ReflectiveGenerator<FinalOutput>,
         materializePicks: Bool = false,
         seed: UInt64? = nil,
@@ -39,13 +39,13 @@ import Foundation
         )
     }
 
-    @_spi(ExhaustInternal) public var baseSeed: UInt64 {
+    public var baseSeed: UInt64 {
         context.baseSeed
     }
 
     // MARK: - Iterator
 
-    @_spi(ExhaustInternal) public mutating func next() -> Element? {
+    public mutating func next() -> Element? {
         guard context.runs < context.maxRuns else {
             context.printClassifications()
             return nil

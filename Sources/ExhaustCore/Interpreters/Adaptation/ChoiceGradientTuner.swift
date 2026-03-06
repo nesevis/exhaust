@@ -58,12 +58,12 @@ import Foundation
 /// The three stages compose: CGS provides the right ranking, fitness sharing
 /// prevents overcommitment to the winner, and adaptive smoothing ensures no
 /// single site strangles diversity.
-@_spi(ExhaustInternal) public enum ChoiceGradientTuner<FinalOutput> {
+public enum ChoiceGradientTuner<FinalOutput> {
     /// How baked pick weights are derived from the accumulated fitness data.
     ///
     /// All strategies use the same CGS warmup data; they differ only in how
     /// that data is converted to static pick weights.
-    @_spi(ExhaustInternal) public enum WeightingStrategy {
+    public enum WeightingStrategy {
         /// Raw cumulative fitness: weight = sum of fitness scores across warmup runs.
         /// Fast to compute but produces peaky weights that lock onto the dominant
         /// cluster, limiting diversity at high unique counts.
@@ -96,7 +96,7 @@ import Foundation
         case ucb(explorationConstant: Double)
     }
 
-    @_spi(ExhaustInternal) public static func tune(
+    public static func tune(
         _ generator: ReflectiveGenerator<FinalOutput>,
         predicate: @escaping (FinalOutput) -> Bool,
         warmupRuns: UInt64 = 400,

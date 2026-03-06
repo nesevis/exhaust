@@ -33,10 +33,6 @@ let package = Package(
             name: "Exhaust",
             targets: ["Exhaust"]
         ),
-        .library(
-            name: "ExhaustCore",
-            targets: ["ExhaustCore"]
-        ),
     ],
     traits: [
         .trait(name: "CasePathable", description: "Adds PartialPath conformance for AnyCasePath from swift-case-paths"),

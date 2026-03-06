@@ -9,7 +9,7 @@ import Foundation
 import OSLog
 import Testing
 @testable import Exhaust
-@_spi(ExhaustInternal) import ExhaustCore
+import ExhaustCore
 
 @MainActor
 @Suite("Shrinking Challenge: Bound5")

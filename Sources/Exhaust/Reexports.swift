@@ -1,4 +1,4 @@
-@_spi(ExhaustInternal) import ExhaustCore
+import ExhaustCore
 
 // MARK: - Consumer-visible type re-exports
 

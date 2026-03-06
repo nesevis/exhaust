@@ -1,4 +1,4 @@
-@_spi(ExhaustInternal) import ExhaustCore
+import ExhaustCore
 
 public extension __ExhaustRuntime {
     /// Maps a single generator with a forward transform and Mirror-based backward extraction.

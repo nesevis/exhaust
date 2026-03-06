@@ -7,7 +7,7 @@
 
 import Foundation
 
-@_spi(ExhaustInternal) public enum ChoiceSequenceValue: Hashable, Equatable, Sendable {
+public enum ChoiceSequenceValue: Hashable, Equatable, Sendable {
     /// The elements within the `true`---`false` range are logically grouped
     case group(Bool)
     /// Values that repeat within a sequence
@@ -35,7 +35,7 @@ import Foundation
 
     // MARK: - Shortlex
 
-    @_spi(ExhaustInternal) public func shortLexCompare(_ other: ChoiceSequenceValue) -> ShortlexOrder {
+    public func shortLexCompare(_ other: ChoiceSequenceValue) -> ShortlexOrder {
         switch (self, other) {
         case (.group(true), .group(true)), (.sequence(true, isLengthExplicit: _), .sequence(true, isLengthExplicit: _)):
             return .eq
@@ -89,11 +89,11 @@ import Foundation
 
     // MARK: - Inner type
 
-    @_spi(ExhaustInternal) public struct Branch: Hashable, Equatable, Sendable {
-        @_spi(ExhaustInternal) public let id: UInt64
-        @_spi(ExhaustInternal) public let validIDs: [UInt64]
+    public struct Branch: Hashable, Equatable, Sendable {
+        public let id: UInt64
+        public let validIDs: [UInt64]
 
-        @_spi(ExhaustInternal) public init(id: UInt64, validIDs: [UInt64]) {
+        public init(id: UInt64, validIDs: [UInt64]) {
             self.id = id
             self.validIDs = validIDs
         }
@@ -113,12 +113,12 @@ import Foundation
         }
     }
 
-    @_spi(ExhaustInternal) public struct Value: Hashable, Equatable, Sendable {
-        @_spi(ExhaustInternal) public let choice: ChoiceValue
-        @_spi(ExhaustInternal) public let validRange: ClosedRange<UInt64>?
-        @_spi(ExhaustInternal) public let isRangeExplicit: Bool
+    public struct Value: Hashable, Equatable, Sendable {
+        public let choice: ChoiceValue
+        public let validRange: ClosedRange<UInt64>?
+        public let isRangeExplicit: Bool
 
-        @_spi(ExhaustInternal) public init(choice: ChoiceValue, validRange: ClosedRange<UInt64>?, isRangeExplicit: Bool = false) {
+        public init(choice: ChoiceValue, validRange: ClosedRange<UInt64>?, isRangeExplicit: Bool = false) {
             self.choice = choice
             self.validRange = validRange
             self.isRangeExplicit = isRangeExplicit
@@ -132,7 +132,7 @@ import Foundation
             return .eq
         }
 
-        @_spi(ExhaustInternal) public func hash(into hasher: inout Hasher) {
+        public func hash(into hasher: inout Hasher) {
             hasher.combine(choice)
         }
     }

@@ -241,7 +241,7 @@ extension Interpreters {
         }
     }
 
-    @_spi(ExhaustInternal) public enum Strictness: Equatable {
+    public enum Strictness: Equatable {
         /// For reduction passes that have not changed the ChoiceTree structure
         case normal
         /// For reduction passes that have changed the structure
@@ -259,7 +259,7 @@ extension Interpreters {
     ///   - choiceSequence: The unstructured script of values to follow.
     /// - Returns: The deterministically generated value, or `nil` if the tree does not
     ///   match the generator's structure.
-    @_spi(ExhaustInternal) public static func materialize<Output>(
+    public static func materialize<Output>(
         _ gen: ReflectiveGenerator<Output>,
         with tree: ChoiceTree,
         using values: ChoiceSequence,

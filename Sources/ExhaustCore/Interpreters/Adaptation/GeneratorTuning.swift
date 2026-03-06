@@ -27,7 +27,7 @@ import Foundation
 ///
 /// `chooseBits` and `getSize` operations are subdivided into synthesised picks
 /// of subranges, then tuned through the pick path.
-@_spi(ExhaustInternal) public enum GeneratorTuning {
+public enum GeneratorTuning {
     // MARK: - Context
 
     final class TuningContext {
@@ -95,7 +95,7 @@ import Foundation
     ///   - seed: Optional seed for deterministic tuning.
     ///   - predicate: The property that generated values should satisfy.
     /// - Returns: A tuned generator if picks were found, or the original generator unchanged.
-    @_spi(ExhaustInternal) public static func probeAndTune<Output>(
+    public static func probeAndTune<Output>(
         _ generator: ReflectiveGenerator<Output>,
         probeSeed: UInt64 = 0,
         probeRuns: UInt64 = 10,
@@ -141,7 +141,7 @@ import Foundation
     ///   - seed: Optional seed for deterministic tuning.
     ///   - predicate: The property that generated values should satisfy.
     /// - Returns: A tuned generator with weights biased toward predicate satisfaction.
-    @_spi(ExhaustInternal) public static func tune<Output>(
+    public static func tune<Output>(
         _ generator: ReflectiveGenerator<Output>,
         samples: UInt64 = 100,
         maxSize: UInt64 = 100,
@@ -947,7 +947,7 @@ import Foundation
     ///   - epsilon: Laplace smoothing constant. Default: 1.0
     ///   - temperature: Temperature parameter. Default: 2.0
     /// - Returns: A generator with smoothed pick weights throughout the tree.
-    @_spi(ExhaustInternal) public static func smooth<Output>(
+    public static func smooth<Output>(
         _ generator: ReflectiveGenerator<Output>,
         epsilon: Double = 1.0,
         temperature: Double = 2.0,
@@ -1050,23 +1050,23 @@ import Foundation
     // MARK: - Pick Site Profile
 
     /// Statistics about a single pick site in a generator tree.
-    @_spi(ExhaustInternal) public struct SiteStats: CustomStringConvertible {
-        @_spi(ExhaustInternal) public let siteID: UInt64
-        @_spi(ExhaustInternal) public let depth: Int
-        @_spi(ExhaustInternal) public let branchCount: Int
-        @_spi(ExhaustInternal) public let weights: [UInt64]
+    public struct SiteStats: CustomStringConvertible {
+        public let siteID: UInt64
+        public let depth: Int
+        public let branchCount: Int
+        public let weights: [UInt64]
         /// Shannon entropy in bits, computed from the weight distribution.
-        @_spi(ExhaustInternal) public let entropy: Double
+        public let entropy: Double
         /// Maximum possible entropy: log₂(branchCount).
-        @_spi(ExhaustInternal) public let maxEntropy: Double
+        public let maxEntropy: Double
         /// Ratio of actual entropy to maximum (0 = bottleneck, 1 = uniform).
-        @_spi(ExhaustInternal) public let entropyRatio: Double
+        public let entropyRatio: Double
 
         // Empirical fields (nil when only static profiling is used)
-        @_spi(ExhaustInternal) public let selectionCounts: [UInt64: Int]?
-        @_spi(ExhaustInternal) public let validityCounts: [UInt64: (selected: Int, valid: Int)]?
+        public let selectionCounts: [UInt64: Int]?
+        public let validityCounts: [UInt64: (selected: Int, valid: Int)]?
 
-        @_spi(ExhaustInternal) public var description: String {
+        public var description: String {
             let empirical: String
             if let validityCounts {
                 let pairs = validityCounts.sorted(by: { $0.key < $1.key })
@@ -1083,10 +1083,10 @@ import Foundation
     }
 
     /// A profile of all pick sites in a generator tree.
-    @_spi(ExhaustInternal) public struct PickSiteProfile: CustomStringConvertible {
-        @_spi(ExhaustInternal) public let sites: [SiteStats]
+    public struct PickSiteProfile: CustomStringConvertible {
+        public let sites: [SiteStats]
 
-        @_spi(ExhaustInternal) public var description: String {
+        public var description: String {
             sites.map(\.description).joined(separator: "\n")
         }
     }
@@ -1101,7 +1101,7 @@ import Foundation
     ///
     /// - Parameter generator: The generator to profile (typically the output of ``tune``).
     /// - Returns: A profile containing statistics for every pick site.
-    @_spi(ExhaustInternal) public static func profile(
+    public static func profile(
         _ generator: ReflectiveGenerator<some Any>,
     ) -> PickSiteProfile {
         var sites = [SiteStats]()
@@ -1200,7 +1200,7 @@ import Foundation
     ///   - samples: Number of values to generate for empirical data.
     ///   - seed: Optional seed for reproducibility.
     /// - Returns: A profile with both static entropy and empirical validity data.
-    @_spi(ExhaustInternal) public static func profile<Output>(
+    public static func profile<Output>(
         _ generator: ReflectiveGenerator<Output>,
         predicate: @escaping (Output) -> Bool,
         samples: UInt64 = 1000,
@@ -1332,7 +1332,7 @@ import Foundation
     ///   - baseTemperature: Temperature for well-distributed sites. Default: 1.0
     ///   - maxTemperature: Temperature for bottleneck sites. Default: 4.0
     /// - Returns: A generator with adaptively smoothed pick weights.
-    @_spi(ExhaustInternal) public static func smoothAdaptively<Output>(
+    public static func smoothAdaptively<Output>(
         _ generator: ReflectiveGenerator<Output>,
         epsilon: Double = 1.0,
         baseTemperature: Double = 1.0,
