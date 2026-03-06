@@ -340,4 +340,5 @@ public enum ReflectiveOperation {
     ///   - keyExtractor: Optional function to extract a hashable key from generated values.
     ///     When `nil`, deduplication uses the choice sequence instead.
     case unique(gen: ReflectiveGenerator<Any>, fingerprint: UInt64, keyExtractor: ((Any) -> AnyHashable)?)
+
 }

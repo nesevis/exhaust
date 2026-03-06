@@ -308,6 +308,68 @@ public extension ReflectiveGenerator where Operation == ReflectiveOperation {
         )
     }
 
+    /// Creates a recursive generator with a constant base case value.
+    ///
+    /// The `extend` closure receives a `recurse` thunk and a `remaining` depth budget
+    /// that counts down from `maxDepth` (outermost) to 1 (innermost). To terminate
+    /// early, return a generator that doesn't call `recurse()` — this short-circuits
+    /// the recursion since inner layers are only reachable through `recurse()`.
+    ///
+    /// ```swift
+    /// .recursive(base: .leaf, maxDepth: 5) { recurse, remaining in
+    ///     guard remaining > 1 else { return .just(.leaf) }
+    ///     .oneOf(weighted:
+    ///         (1, .just(.leaf)),
+    ///         (Int(remaining), #gen(recurse(), .uint(in: 0...9), recurse()).map { .node($0, $1, $2) })
+    ///     )
+    /// }
+    /// ```
+    ///
+    /// - Parameters:
+    ///   - base: The ground value used when recursion bottoms out
+    ///   - maxDepth: Maximum number of recursive layers to unfold
+    ///   - extend: Closure that builds one recursive layer from the previous layer
+    /// - Returns: A generator that produces recursive values with depth-controlled structure
+    static func recursive(
+        base: Value,
+        maxDepth: UInt64,
+        extend: @escaping (@escaping () -> ReflectiveGenerator<Value>, UInt64) -> ReflectiveGenerator<Value>
+    ) -> ReflectiveGenerator<Value> {
+        Gen.recursive(base: base, maxDepth: maxDepth, extend: extend)
+    }
+
+    /// Creates a recursive generator with a generator base case.
+    ///
+    /// Use this overload when the base case itself needs randomness (e.g. random leaf values).
+    ///
+    /// The `extend` closure receives a `recurse` thunk and a `remaining` depth budget
+    /// that counts down from `maxDepth` (outermost) to 1 (innermost). To terminate
+    /// early, return a generator that doesn't call `recurse()` — this short-circuits
+    /// the recursion since inner layers are only reachable through `recurse()`.
+    ///
+    /// ```swift
+    /// let baseGen = Gen.choose(in: 0...9).map { Expression.literal($0) }
+    /// .recursive(base: baseGen, maxDepth: 4) { recurse, remaining in
+    ///     .oneOf(weighted:
+    ///         (1, baseGen),
+    ///         (Int(remaining), #gen(recurse(), recurse()).map { .add($0, $1) })
+    ///     )
+    /// }
+    /// ```
+    ///
+    /// - Parameters:
+    ///   - base: Generator for the base case
+    ///   - maxDepth: Maximum number of recursive layers to unfold
+    ///   - extend: Closure that builds one recursive layer from the previous layer
+    /// - Returns: A generator that produces recursive values with depth-controlled structure
+    static func recursive(
+        base: ReflectiveGenerator<Value>,
+        maxDepth: UInt64,
+        extend: @escaping (@escaping () -> ReflectiveGenerator<Value>, UInt64) -> ReflectiveGenerator<Value>
+    ) -> ReflectiveGenerator<Value> {
+        Gen.recursive(base: base, maxDepth: maxDepth, extend: extend)
+    }
+
     /// Retrieves the current size parameter controlling generator complexity.
     ///
     /// The size parameter ranges from 1–100 and controls how complex generated values

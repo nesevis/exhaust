@@ -23,6 +23,15 @@ enum BST: Equatable, Hashable, CustomStringConvertible {
         return Gen.pick(choices: [(1, Gen.just(.leaf)), (3, nodeBranch)])
     }
 
+    static func arbitraryRecursive(maxDepth: UInt64 = 5, valueRange: ClosedRange<UInt> = 0 ... 9) -> ReflectiveGenerator<BST> {
+        Gen.recursive(base: .leaf, maxDepth: maxDepth) { recurse, remaining in
+            let nodeBranch = Gen.zip(recurse(), Gen.choose(in: valueRange), recurse()).map { left, value, right in
+                BST.node(left: left, value: value, right: right)
+            }
+            return Gen.pick(choices: [(1, Gen.just(.leaf)), (Int(remaining), nodeBranch)])
+        }
+    }
+
     func isValidBST() -> Bool {
         isValidBST(min: nil, max: nil)
     }

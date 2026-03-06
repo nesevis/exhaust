@@ -74,6 +74,16 @@ struct UniquenessBenchmarkTests {
         )
     }
 
+    private static var bstRecursiveProblem: BenchmarkProblem<BST> {
+        BenchmarkProblem(
+            name: "BST-Recursive",
+            generator: BST.arbitraryRecursive(),
+            predicate: { $0.height >= 1 && $0.isValidBST() },
+            qualityBucket: \.height,
+            bucketLabel: "height",
+        )
+    }
+
     private static var avlProblem: BenchmarkProblem<BST> {
         BenchmarkProblem(
             name: "AVL",
@@ -116,15 +126,18 @@ struct UniquenessBenchmarkTests {
     // MARK: - Main Benchmark
 
     // Kolbu
-    @Test("Time to 500 BST", .disabled())
+    @Test("Time to 500 BST")
     func bstBenchmark() throws {
 //        let onlineCGS = try measureOnlineCGS(Self.bstProblem)
         let rejection = try measureRejection(Self.bstProblem)
         let adaptive = try measureAdaptivelySmoothed(Self.bstProblem)
 //        let cgsTuned = try measureOnlineInformedTuning(Self.bstProblem)
         let cgsShared = try measureCGSFitnessSharing(Self.bstProblem)
+        let cgsSharedRecursive = try measureCGSFitnessSharing(Self.bstRecursiveProblem)
+        let rejectionRecursive = try measureRejection(Self.bstRecursiveProblem)
 //        let cgsUCB = try measureCGSUCB(Self.bstProblem)
         printProblemResults(Self.bstProblem, results: [rejection, adaptive, cgsShared])
+        printProblemResults(Self.bstRecursiveProblem, results: [rejectionRecursive, cgsSharedRecursive])
     }
 
     @Test("Time to 100 AVL", .disabled())
