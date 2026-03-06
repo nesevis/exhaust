@@ -1,8 +1,6 @@
 //
 //  ReflectiveGenerator.swift
-//  Exhaust
-//
-//  Created by Chris Kolbu on 25/7/2025.
+//  ExhaustTests
 //
 
 import Testing

@@ -7,6 +7,7 @@ import PackageDescription
 
 let usePrecompiled = ProcessInfo.processInfo.environment["EXHAUST_RELEASE"] != nil
 
+
 let coreTarget: Target = usePrecompiled
     ? .binaryTarget(name: "ExhaustCore", path: "Frameworks/ExhaustCore.xcframework")
     : .target(
@@ -32,6 +33,10 @@ let package = Package(
         .library(
             name: "Exhaust",
             targets: ["Exhaust"]
+        ),
+        .library(
+            name: "ExhaustCore",
+            targets: ["ExhaustCore"]
         ),
     ],
     traits: [
@@ -75,6 +80,13 @@ let package = Package(
         .testTarget(
             name: "ExhaustTests",
             dependencies: ["Exhaust", "ExhaustCore"],
+            plugins: [
+                .plugin(name: "SwiftLintBuildToolPlugin", package: "SwiftLintPlugins")
+            ]
+        ),
+        .testTarget(
+            name: "ExhaustCoreTests",
+            dependencies: ["ExhaustCore"],
             plugins: [
                 .plugin(name: "SwiftLintBuildToolPlugin", package: "SwiftLintPlugins")
             ]

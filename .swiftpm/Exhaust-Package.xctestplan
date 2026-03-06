@@ -1,23 +1,21 @@
 {
   "configurations" : [
     {
-      "id" : "04888FA0-457D-4F78-8597-43EF42BD6566",
+      "id" : "F93FEE47-2E98-428E-BFD6-2E1492679634",
       "name" : "Test Scheme Action",
       "options" : {
-        "environmentVariableEntries" : [
-          {
-            "key" : "EXHAUST_RELEASE",
-            "value" : "1"
-          }
-        ],
-        "testExecutionOrdering" : "random"
+
       }
     }
   ],
   "defaultOptions" : {
     "codeCoverageEnabled" : true,
     "performanceAntipatternCheckerEnabled" : true,
-    "testExecutionOrdering" : "random"
+    "targetForVariableExpansion" : {
+      "containerPath" : "container:",
+      "identifier" : "ExhaustBenchmarks",
+      "name" : "ExhaustBenchmarks"
+    }
   },
   "codeCoverageTargets" : [
     {
@@ -33,10 +31,6 @@
   ],
   "testTargets" : [
     {
-      "parallelizable" : true,
-      "skippedTests" : [
-        "TestCaseReducerTests"
-      ],
       "target" : {
         "containerPath" : "container:",
         "identifier" : "ExhaustTests",
@@ -44,10 +38,13 @@
       }
     },
     {
-      "parallelizable" : true,
-      "skippedTests" : [
-        "TestCaseReducerTests"
-      ],
+      "target" : {
+        "containerPath" : "container:",
+        "identifier" : "ExhaustMacrosTests",
+        "name" : "ExhaustMacrosTests"
+      }
+    },
+    {
       "target" : {
         "containerPath" : "container:",
         "identifier" : "ExhaustCoreTests",

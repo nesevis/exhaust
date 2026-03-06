@@ -3,7 +3,7 @@
 //  ExhaustTests
 //
 
-@testable import Exhaust
+@testable import ExhaustCore
 
 enum BST: Equatable, Hashable, CustomStringConvertible {
     case leaf
@@ -15,12 +15,12 @@ enum BST: Equatable, Hashable, CustomStringConvertible {
 
     private static func bstGenerator(maxDepth: Int, valueRange: ClosedRange<UInt>) -> ReflectiveGenerator<BST> {
         if maxDepth <= 0 {
-            return .just(.leaf)
+            return Gen.just(.leaf)
         }
-        let nodeBranch = #gen(bstGenerator(maxDepth: maxDepth - 1, valueRange: valueRange), .uint(in: valueRange), bstGenerator(maxDepth: maxDepth - 1, valueRange: valueRange)).map { left, value, right in
+        let nodeBranch = Gen.zip(bstGenerator(maxDepth: maxDepth - 1, valueRange: valueRange), Gen.choose(in: valueRange), bstGenerator(maxDepth: maxDepth - 1, valueRange: valueRange)).map { left, value, right in
             BST.node(left: left, value: value, right: right)
         }
-        return .oneOf(weighted: (1, .just(.leaf)), (3, nodeBranch))
+        return Gen.pick(choices: [(1, Gen.just(.leaf)), (3, nodeBranch)])
     }
 
     func isValidBST() -> Bool {
