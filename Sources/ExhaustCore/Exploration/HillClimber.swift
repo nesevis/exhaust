@@ -61,7 +61,7 @@ public enum HillClimber {
 
             switch entry {
             // Skip structural markers
-            case .group, .sequence:
+            case .group, .sequence, .just:
                 i -= 1
                 continue
 

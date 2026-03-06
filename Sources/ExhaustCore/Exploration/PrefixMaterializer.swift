@@ -48,13 +48,15 @@ private extension PrefixMaterializer {
             entries = sequence
         }
 
-        /// Skip consecutive `.group(true/false)` markers at the current position.
+        /// Skip consecutive `.group(true/false)` and `.just` markers at the current position.
         /// Groups are transparent wrappers from `runContinuation` and pick sites.
+        /// Just markers carry no data and are purely structural.
         private mutating func skipGroups() {
             while position < entries.count {
-                if case .group = entries[position] {
+                switch entries[position] {
+                case .group, .just:
                     position += 1
-                } else {
+                default:
                     return
                 }
             }
@@ -147,7 +149,7 @@ private extension PrefixMaterializer {
                     depth += 1
                 case .group(false), .sequence(false, _):
                     depth -= 1
-                case .value, .reduced:
+                case .value, .reduced, .just:
                     if depth == 0 { count += 1 }
                 case .branch:
                     break // Branch markers are inside groups, not standalone

@@ -65,6 +65,8 @@ extension ChoiceSequence {
             bits = 6
         case let .branch(b):
             bits = b.id ^ 0xDEADBEEFCAFEBABE
+        case .just:
+            bits = 7
         }
         bits ^= UInt64(position) &* 0x9E3779B97F4A7C15
         bits = (bits ^ (bits >> 30)) &* 0xBF58476D1CE4E5B9
@@ -133,7 +135,9 @@ public extension ChoiceSequence {
                 validRange: meta.validRange,
                 isRangeExplicit: meta.isRangeExplicit
             )))
-        case .just, .getSize:
+        case .just:
+            output.append(.just)
+        case .getSize:
             break
         case let .sequence(_, elements, meta):
             output.append(.sequence(true, isLengthExplicit: meta.isRangeExplicit))
@@ -185,7 +189,7 @@ public extension ChoiceSequence {
                 groupCount += 1
             case .group(false):
                 groupCount -= 1
-            case .value, .reduced, .branch:
+            case .value, .reduced, .branch, .just:
                 break
             }
         }
@@ -233,7 +237,7 @@ public extension ChoiceSequence {
                     childrenAtDepth[childrenAtDepth.count - 1].append(spanIndex)
                 }
 
-            case .value, .reduced, .branch:
+            case .value, .reduced, .branch, .just:
                 break
             }
         }
@@ -280,7 +284,7 @@ public extension ChoiceSequence {
                 depth += 1
             case .sequence(false, isLengthExplicit: _):
                 depth -= 1
-            case .value, .reduced, .branch:
+            case .value, .reduced, .branch, .just:
                 continue
             }
         }
@@ -357,7 +361,8 @@ public extension ChoiceSequence {
             switch (preceding, entry) {
             case (nil, .value), (nil, .reduced):
                 spans.append(ChoiceSpan(kind: entry, range: i ... i, depth: depth))
-            case (.value, .value), (.reduced, .value), (.value, .reduced), (.reduced, .reduced):
+            case (.value, .value), (.reduced, .value), (.value, .reduced), (.reduced, .reduced),
+                 (.just, .value), (.just, .reduced):
                 spans.append(ChoiceSpan(kind: entry, range: i ... i, depth: depth))
             case (.sequence(true, isLengthExplicit: _), .value), (.sequence(true, isLengthExplicit: _), .reduced):
                 spans.append(ChoiceSpan(kind: entry, range: i ... i, depth: depth))
@@ -427,8 +432,8 @@ public extension ChoiceSequence {
                     )
                 }
 
-            case .branch:
-                // Branch markers are structural, skip them
+            case .branch, .just:
+                // Branch and just markers are structural, skip them
                 break
             }
         }
@@ -494,8 +499,8 @@ public extension ChoiceSequence {
                 children.append((range: start ... index, kind: isGroupChild ? .group : .sequence))
                 index += 1
 
-            case .branch:
-                // Branch markers are structural and not standalone children.
+            case .branch, .just:
+                // Branch and just markers are structural and not standalone children.
                 index += 1
 
             case .group(false), .sequence(false, isLengthExplicit: _):
@@ -518,7 +523,7 @@ public extension ChoiceSequence {
             switch sequence[idx] {
             case let .value(v), let .reduced(v):
                 keys.append(v.choice)
-            case .branch, .sequence, .group:
+            case .branch, .sequence, .group, .just:
                 continue
             }
         }

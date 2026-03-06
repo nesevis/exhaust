@@ -142,6 +142,11 @@ extension Interpreters {
             }
         }
 
+        mutating func consumeJust() {
+            guard case .just = peek else { return }
+            index += 1
+        }
+
         mutating func consumeBranchIfPresent(line: Int = #line) -> ChoiceSequenceValue.Branch? {
             guard case let .branch(v) = peek else {
                 if isInstrumented {
@@ -404,6 +409,10 @@ extension Interpreters {
         guard case .just = tree else {
             return nil
         }
+        // Consume the `.just` marker from the context if present
+        if case .just = context.peek {
+            context.consumeJust()
+        }
         let nextGen = try continuation(value)
         return try materializeRecursive(nextGen, with: tree, context: &context)
     }
@@ -560,18 +569,6 @@ extension Interpreters {
                     // No progress was made — break to prevent infinite loop
                     break
                 }
-                elementIndex += 1
-            }
-            // Phase 2: Process remaining element scripts that don't need context entries
-            // (e.g., `.just` elements produce no ChoiceSequence entries)
-            while elementIndex < elementScripts.count {
-                let script = elementScripts[elementIndex]
-                let indexBefore = context.index
-                let elementValue = try? materializeRecursive(elementGenerator, with: script, context: &context)
-                guard let elementValue, context.index == indexBefore else {
-                    break
-                }
-                accumulatedValues.append(elementValue)
                 elementIndex += 1
             }
         }

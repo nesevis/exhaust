@@ -28,14 +28,6 @@ struct ChoiceSequenceTests {
         #expect(value.validRange == (0 ... 100 as ClosedRange<UInt64>))
     }
 
-    @Test("Flatten just returns empty")
-    func flattenJust() {
-        let tree = ChoiceTree.just("constant")
-
-        let flattened = ChoiceSequence.flatten(tree)
-
-        #expect(flattened.isEmpty)
-    }
 
     @Test("Flatten getSize returns empty")
     func flattenGetSize() {
@@ -183,22 +175,26 @@ struct ChoiceSequenceTests {
 
         let flattened = ChoiceSequence.flatten(tree)
 
-        // Should be: group(true), value(42), group(false)
-        // just and getSize are skipped
-        #expect(flattened.count == 3)
+        // Should be: group(true), just, value(42), just, group(false)
+        // getSize is skipped, just emits a marker
+        #expect(flattened.count == 5)
 
         guard case .group(true) = flattened[0] else {
             Issue.record("Expected opening group marker")
             return
         }
 
-        guard case let .value(value) = flattened[1] else {
+        #expect(flattened[1] == .just)
+
+        guard case let .value(value) = flattened[2] else {
             Issue.record("Expected value")
             return
         }
         #expect(value.choice == .unsigned(42, .uint64))
 
-        guard case .group(false) = flattened[2] else {
+        #expect(flattened[3] == .just)
+
+        guard case .group(false) = flattened[4] else {
             Issue.record("Expected closing group marker")
             return
         }

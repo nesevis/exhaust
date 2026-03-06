@@ -21,6 +21,9 @@ public enum ChoiceSequenceValue: Hashable, Equatable, Sendable {
     case value(Value)
     /// A value that has been set to its semantically simplest form that should not be individually shrunk further
     case reduced(Value)
+    /// A marker for a `.just` node — carries no data but makes `.just` elements
+    /// visible in the flat sequence (needed for element counting in PrefixMaterializer).
+    case just
 
     var value: Value? {
         switch self {
@@ -59,6 +62,7 @@ public enum ChoiceSequenceValue: Hashable, Equatable, Sendable {
     /// Canonical ordering of entry kinds for cross-kind comparison.
     private var kindOrder: Int {
         switch self {
+        case .just: 0
         case .group: 1
         case .sequence: 2
         case .branch: 3
@@ -69,6 +73,8 @@ public enum ChoiceSequenceValue: Hashable, Equatable, Sendable {
 
     var shortString: String {
         switch self {
+        case .just:
+            return "J"
         case .group(true):
             return "("
         case .group(false):
