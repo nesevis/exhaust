@@ -23,6 +23,8 @@ public enum ChoiceValue: Comparable, Hashable, Equatable, Sendable {
             self = .unsigned(value.bitPattern64, .uint16)
         case .uint8:
             self = .unsigned(value.bitPattern64, .uint8)
+        case .bits:
+            self = .unsigned(value.bitPattern64, .bits)
         case .int:
             self = .signed(Int64(Int(bitPattern64: value.bitPattern64)), value.bitPattern64, .int)
         case .int64:

@@ -50,6 +50,8 @@ public enum BoundaryDomainAnalysis {
             return computeFloatBoundaryValues(min: min, max: max, tag: tag)
         case let .date(intervalSeconds, timeZoneID):
             return computeDateBoundaryValues(min: min, max: max, intervalSeconds: intervalSeconds, timeZoneID: timeZoneID)
+        case .bits:
+            return [min, max]
         default:
             return computeIntegerBoundaryValues(min: min, max: max, tag: tag)
         }
@@ -135,6 +137,8 @@ public enum BoundaryDomainAnalysis {
             return Float(0.0).bitPattern64
         case .date(_, _):
             return Int64(0).bitPattern64
+        case .bits:
+            return 0
         }
     }
 

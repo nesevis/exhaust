@@ -100,6 +100,7 @@ extension ChoiceSequence {
         case .double: 10
         case .float: 11
         case .date: 12
+        case .bits: 13
         }
     }
 }

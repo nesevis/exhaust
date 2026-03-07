@@ -412,7 +412,7 @@ extension ReducerStrategies {
 
     private static func supportsTandemTag(_ tag: TypeTag) -> Bool {
         switch tag {
-        case .int, .int64, .int32, .int16, .int8, .uint, .uint64, .uint32, .uint16, .uint8, .double, .float, .date:
+        case .int, .int64, .int32, .int16, .int8, .uint, .uint64, .uint32, .uint16, .uint8, .double, .float, .date, .bits:
             true
         }
     }

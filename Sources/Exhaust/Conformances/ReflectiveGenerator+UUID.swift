@@ -10,53 +10,61 @@ public extension ReflectiveGenerator {
     /// Generates valid UUID v4 values.
     ///
     /// UUID v4 has 122 random bits with a fixed version nibble (`4`) and
-    /// variant bits (`10`). Four `UInt32` generators produce exactly 122
-    /// random bits (32 + 28 + 30 + 32) — the mapping is bijective.
+    /// variant bits (`10`). Two `UInt64` generators produce exactly 122
+    /// random bits (60 + 62) — the mapping is bijective.
     ///
     /// ```swift
     /// let gen = #gen(.uuid())
     /// ```
     static func uuid() -> ReflectiveGenerator<UUID> {
         Gen.zip(
-            Gen.choose(in: UInt32(0) ... .max),          // 32 bits → bytes 0–3
-            Gen.choose(in: UInt32(0) ... 0x0FFF_FFFF),   // 28 bits → bytes 4–7
-            Gen.choose(in: UInt32(0) ... 0x3FFF_FFFF),   // 30 bits → bytes 8–11
-            Gen.choose(in: UInt32(0) ... .max)           // 32 bits → bytes 12–15
+            Gen.chooseBits(in: 0 ... 0x0FFF_FFFF_FFFF_FFFF),  // 60 bits → bytes 0–7
+            Gen.chooseBits(in: 0 ... 0x3FFF_FFFF_FFFF_FFFF)   // 62 bits → bytes 8–15
         ).mapped(
-            forward: { uuidFromParts($0, $1, $2, $3) },
-            backward: { uuidToParts($0) }
+            forward: { uuidFromHalves($0, $1) },
+            backward: { uuidToHalves($0) }
         )
     }
 }
 
 // MARK: - UUID v4 Bit Layout
 //
-// Byte 6 high nibble = version (0x4), byte 8 top 2 bits = variant (0b10).
+// Bytes 0–7 (high UInt64, big-endian):
+//   bits 63–16: 48 random bits (bytes 0–5)
+//   bits 15–12: version nibble = 0x4
+//   bits 11–0:  12 random bits (byte 6 low nibble + byte 7)
+//   Total: 60 random bits
+//
+// Bytes 8–15 (low UInt64, big-endian):
+//   bits 63–62: variant = 0b10
+//   bits 61–0:  62 random bits
+//   Total: 62 random bits
+//
 // Generators produce only the random bits; fixed bits are inserted/stripped
 // in the forward/backward functions below.
 
 private extension ReflectiveGenerator {
-    static func uuidFromParts(_ a: UInt32, _ b: UInt32, _ c: UInt32, _ d: UInt32) -> UUID {
+    static func uuidFromHalves(_ high60: UInt64, _ low62: UInt64) -> UUID {
+        let highU64 = ((high60 >> 12) << 16) | (0x4 << 12) | (high60 & 0xFFF)
+        let lowU64 = 0x8000_0000_0000_0000 | low62
+
         var bytes: uuid_t = (0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0)
         withUnsafeMutableBytes(of: &bytes) { buf in
-            buf.storeBytes(of: a.bigEndian, as: UInt32.self)
-            buf.storeBytes(of: ((b & 0x0FFF_F000) << 4 | 0x0000_4000 | (b & 0x0000_0FFF)).bigEndian,
-                           toByteOffset: 4, as: UInt32.self)
-            buf.storeBytes(of: (0x8000_0000 as UInt32 | c).bigEndian,
-                           toByteOffset: 8, as: UInt32.self)
-            buf.storeBytes(of: d.bigEndian, toByteOffset: 12, as: UInt32.self)
+            buf.storeBytes(of: highU64.bigEndian, as: UInt64.self)
+            buf.storeBytes(of: lowU64.bigEndian, toByteOffset: 8, as: UInt64.self)
         }
         return UUID(uuid: bytes)
     }
 
-    static func uuidToParts(_ uuid: UUID) -> (UInt32, UInt32, UInt32, UInt32) {
+    static func uuidToHalves(_ uuid: UUID) -> (UInt64, UInt64) {
         withUnsafeBytes(of: uuid.uuid) { buf in
-            let a = UInt32(bigEndian: buf.loadUnaligned(as: UInt32.self))
-            let raw4 = UInt32(bigEndian: buf.loadUnaligned(fromByteOffset: 4, as: UInt32.self))
-            let b = ((raw4 >> 4) & 0x0FFF_F000) | (raw4 & 0x0000_0FFF)
-            let c = UInt32(bigEndian: buf.loadUnaligned(fromByteOffset: 8, as: UInt32.self)) & 0x3FFF_FFFF
-            let d = UInt32(bigEndian: buf.loadUnaligned(fromByteOffset: 12, as: UInt32.self))
-            return (a, b, c, d)
+            let rawHigh = UInt64(bigEndian: buf.loadUnaligned(as: UInt64.self))
+            let rawLow = UInt64(bigEndian: buf.loadUnaligned(fromByteOffset: 8, as: UInt64.self))
+
+            let high60 = ((rawHigh >> 16) << 12) | (rawHigh & 0xFFF)
+            let low62 = rawLow & 0x3FFF_FFFF_FFFF_FFFF
+
+            return (high60, low62)
         }
     }
 }
