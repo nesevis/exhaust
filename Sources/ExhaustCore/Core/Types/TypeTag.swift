@@ -18,6 +18,11 @@ public enum TypeTag: Equatable, Hashable, Sendable {
     case int8
     case double
     case float
+    /// Date steps: the underlying integer represents step indices, where each step
+    /// is `intervalSeconds` seconds. Used by boundary analysis to compute
+    /// calendar-meaningful boundary values (month/year boundaries, DST transitions).
+    /// The `timeZoneID` limits DST boundary values to a single timezone.
+    case date(intervalSeconds: Int64, timeZoneID: String)
 
     @inlinable
     public init<T>(type: T) {
@@ -69,6 +74,7 @@ extension TypeTag {
         case .int8: Int8(bitPattern64: bitPattern64)
         case .double: Double(bitPattern64: bitPattern64)
         case .float: Float(bitPattern64: bitPattern64)
+        case .date: Int64(bitPattern64: bitPattern64)
         }
     }
 }
@@ -88,6 +94,7 @@ extension TypeTag: CustomStringConvertible {
         case .int8: "Int8"
         case .double: "Double"
         case .float: "Float"
+        case .date: "Date"
         }
     }
 }

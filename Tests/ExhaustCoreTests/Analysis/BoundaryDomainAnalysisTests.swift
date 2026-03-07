@@ -3,6 +3,7 @@
 //  Exhaust
 //
 
+import Foundation
 import Testing
 @testable import ExhaustCore
 
@@ -292,6 +293,212 @@ struct ChoiceTreeAnalysisTests {
         )
         let result = ChoiceTreeAnalysis.analyze(gen)
         #expect(result == nil)
+    }
+}
+
+// MARK: - Date Boundary Values
+
+@Suite("Date Boundary Values")
+struct DateBoundaryValueTests {
+
+    @Test("Step-domain edges and midpoint are present")
+    func stepDomainBoundaries() {
+        // Range: 1000 seconds, interval: 100 seconds → 10 steps
+        let lower: Int64 = 725_760_000 // 2024-01-01
+        let upper: Int64 = lower + 1000
+        let interval: Int64 = 100
+
+        let values = BoundaryDomainAnalysis.computeBoundaryValues(
+            min: lower.bitPattern64,
+            max: upper.bitPattern64,
+            tag: .date(intervalSeconds: interval, timeZoneID: "GMT")
+        )
+
+        // First step
+        #expect(values.contains(lower.bitPattern64))
+        // Last aligned step (1000 / 100 * 100 = 1000)
+        #expect(values.contains(upper.bitPattern64))
+        // Second step
+        #expect(values.contains((lower + interval).bitPattern64))
+        // Second-to-last step
+        #expect(values.contains((upper - interval).bitPattern64))
+        // Midpoint step (step 5 → lower + 500)
+        #expect(values.contains((lower + 500).bitPattern64))
+    }
+
+    @Test("Values are snapped to interval (no off-grid values)")
+    func valuesAreSnapped() {
+        let lower: Int64 = 0
+        let upper: Int64 = 86_400 * 365 // 1 year
+        let interval: Int64 = 3_600 // 1 hour
+
+        let values = BoundaryDomainAnalysis.computeBoundaryValues(
+            min: lower.bitPattern64,
+            max: upper.bitPattern64,
+            tag: .date(intervalSeconds: interval, timeZoneID: "GMT")
+        )
+
+        for bp in values {
+            let seconds = Int64(bitPattern64: bp)
+            let offset = seconds - lower
+            #expect(
+                offset >= 0 && offset % interval == 0,
+                "Value \(seconds) is not aligned to interval \(interval) from lower \(lower)"
+            )
+        }
+    }
+
+    @Test("Reference date epoch appears when in range")
+    func referenceDate() {
+        // Range spanning the reference date (0 seconds since ref)
+        let lower: Int64 = -86_400
+        let upper: Int64 = 86_400
+        let interval: Int64 = 1
+
+        let values = BoundaryDomainAnalysis.computeBoundaryValues(
+            min: lower.bitPattern64,
+            max: upper.bitPattern64,
+            tag: .date(intervalSeconds: interval, timeZoneID: "GMT")
+        )
+
+        #expect(values.contains(Int64(0).bitPattern64))
+    }
+
+    @Test("Unix epoch appears when in range")
+    func unixEpoch() {
+        let unixEpoch: Int64 = -978_307_200
+        let lower = unixEpoch - 86_400
+        let upper = unixEpoch + 86_400
+
+        let values = BoundaryDomainAnalysis.computeBoundaryValues(
+            min: lower.bitPattern64,
+            max: upper.bitPattern64,
+            tag: .date(intervalSeconds: 1, timeZoneID: "GMT")
+        )
+
+        #expect(values.contains(unixEpoch.bitPattern64))
+    }
+
+    @Test("Epochs outside range are excluded")
+    func epochsOutsideRange() {
+        // Range entirely in 2024 — Unix epoch (1970) and Y2038 should not appear
+        let lower: Int64 = 725_760_000 // ~2024-01-01
+        let upper: Int64 = lower + 86_400 * 30
+
+        let values = BoundaryDomainAnalysis.computeBoundaryValues(
+            min: lower.bitPattern64,
+            max: upper.bitPattern64,
+            tag: .date(intervalSeconds: 1, timeZoneID: "GMT")
+        )
+
+        let unixEpoch: Int64 = -978_307_200
+        let y2038: Int64 = 1_169_176_447
+        #expect(!values.contains(unixEpoch.bitPattern64))
+        #expect(!values.contains(y2038.bitPattern64))
+    }
+}
+
+// MARK: - DST Boundary Values
+
+@Suite("Date Boundary Values — DST Transitions")
+struct DateDSTBoundaryTests {
+
+    struct DSTCase: Sendable, CustomTestStringConvertible {
+        let label: String
+        let timeZoneID: String
+        let year: Int
+        let month: Int
+        let day: Int
+        let hour: Int
+        var testDescription: String { label }
+    }
+
+    // Known DST transitions verified against Foundation Calendar below.
+    // US: 2nd Sunday of March (spring), 1st Sunday of November (fall) — post-2007
+    // EU: Last Sunday of March (spring), last Sunday of October (fall)
+    // AU: 1st Sunday of October (spring), 1st Sunday of April (fall) — Southern Hemisphere
+    static let knownTransitions: [DSTCase] = [
+        // US Eastern (UTC-5) 2024
+        DSTCase(label: "US Eastern spring 2024 (Mar 10, 07:00 UTC)", timeZoneID: "America/New_York", year: 2024, month: 3, day: 10, hour: 7),
+        DSTCase(label: "US Eastern fall 2024 (Nov 3, 06:00 UTC)", timeZoneID: "America/New_York", year: 2024, month: 11, day: 3, hour: 6),
+        // US Pacific (UTC-8) 2024
+        DSTCase(label: "US Pacific spring 2024 (Mar 10, 10:00 UTC)", timeZoneID: "America/Los_Angeles", year: 2024, month: 3, day: 10, hour: 10),
+        DSTCase(label: "US Pacific fall 2024 (Nov 3, 09:00 UTC)", timeZoneID: "America/Los_Angeles", year: 2024, month: 11, day: 3, hour: 9),
+        // EU 2024
+        DSTCase(label: "EU spring 2024 (Mar 31, 01:00 UTC)", timeZoneID: "Europe/London", year: 2024, month: 3, day: 31, hour: 1),
+        DSTCase(label: "EU fall 2024 (Oct 27, 01:00 UTC)", timeZoneID: "Europe/London", year: 2024, month: 10, day: 27, hour: 1),
+        // AU 2024 — 2:00 AM AEST (UTC+10) = previous day 16:00 UTC
+        DSTCase(label: "AU spring 2024 (Oct 5, 16:00 UTC)", timeZoneID: "Australia/Sydney", year: 2024, month: 10, day: 5, hour: 16),
+        DSTCase(label: "AU fall 2024 (Apr 6, 16:00 UTC)", timeZoneID: "Australia/Sydney", year: 2024, month: 4, day: 6, hour: 16),
+        // US pre-2007: 1st Sunday of April, last Sunday of October
+        DSTCase(label: "US Eastern spring 2006 (Apr 2, 07:00 UTC)", timeZoneID: "America/New_York", year: 2006, month: 4, day: 2, hour: 7),
+        DSTCase(label: "US Eastern fall 2006 (Oct 29, 06:00 UTC)", timeZoneID: "America/New_York", year: 2006, month: 10, day: 29, hour: 6),
+        // Different year to test rule consistency
+        DSTCase(label: "EU spring 2025 (Mar 30, 01:00 UTC)", timeZoneID: "Europe/London", year: 2025, month: 3, day: 30, hour: 1),
+        DSTCase(label: "EU fall 2025 (Oct 26, 01:00 UTC)", timeZoneID: "Europe/London", year: 2025, month: 10, day: 26, hour: 1),
+    ]
+
+    @Test("DST transition appears in boundary values", arguments: knownTransitions)
+    func dstTransitionPresent(transition: DSTCase) {
+        let calendar = Calendar(identifier: .gregorian)
+        let components = DateComponents(
+            timeZone: .gmt,
+            year: transition.year,
+            month: transition.month,
+            day: transition.day,
+            hour: transition.hour
+        )
+        let expectedDate = calendar.date(from: components)!
+        let expectedSeconds = Int64(expectedDate.timeIntervalSinceReferenceDate)
+
+        // Range spanning ±7 days around the transition, 1-second interval
+        let lower = expectedSeconds - 7 * 86_400
+        let upper = expectedSeconds + 7 * 86_400
+
+        let values = BoundaryDomainAnalysis.computeBoundaryValues(
+            min: lower.bitPattern64,
+            max: upper.bitPattern64,
+            tag: .date(intervalSeconds: 1, timeZoneID: transition.timeZoneID)
+        )
+
+        #expect(
+            values.contains(expectedSeconds.bitPattern64),
+            "\(transition.label): expected \(expectedSeconds) in boundary values"
+        )
+    }
+
+    @Test("DST neighbors (±1 step) are included", arguments: knownTransitions)
+    func dstNeighborsPresent(transition: DSTCase) {
+        let calendar = Calendar(identifier: .gregorian)
+        let components = DateComponents(
+            timeZone: .gmt,
+            year: transition.year,
+            month: transition.month,
+            day: transition.day,
+            hour: transition.hour
+        )
+        let expectedDate = calendar.date(from: components)!
+        let expectedSeconds = Int64(expectedDate.timeIntervalSinceReferenceDate)
+
+        let interval: Int64 = 3_600 // 1 hour
+        let lower = expectedSeconds - 7 * 86_400
+        let upper = expectedSeconds + 7 * 86_400
+
+        let values = BoundaryDomainAnalysis.computeBoundaryValues(
+            min: lower.bitPattern64,
+            max: upper.bitPattern64,
+            tag: .date(intervalSeconds: interval, timeZoneID: transition.timeZoneID)
+        )
+
+        // The snapped transition and at least one neighbor should be present
+        let snappedOffset = ((expectedSeconds - lower) / interval) * interval
+        let snapped = lower + snappedOffset
+        #expect(values.contains(snapped.bitPattern64), "Snapped transition value missing")
+        #expect(
+            values.contains((snapped + interval).bitPattern64)
+                || values.contains((snapped - interval).bitPattern64),
+            "At least one neighbor of snapped transition should be present"
+        )
     }
 }
 

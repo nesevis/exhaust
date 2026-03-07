@@ -37,6 +37,8 @@ public enum ChoiceValue: Comparable, Hashable, Equatable, Sendable {
             self = .floating(Double(bitPattern64: value.bitPattern64), value.bitPattern64, .double)
         case .float:
             self = .floating(Double(Float(bitPattern64: value.bitPattern64)), value.bitPattern64, .float)
+        case .date:
+            self = .signed(Int64(bitPattern64: value.bitPattern64), value.bitPattern64, tag)
         }
     }
 
@@ -53,7 +55,7 @@ public enum ChoiceValue: Comparable, Hashable, Equatable, Sendable {
             case .int8: Int8(0).bitPattern64
             case .int16: Int16(0).bitPattern64
             case .int32: Int32(0).bitPattern64
-            case .int64: Int64(0).bitPattern64
+            case .int64, .date: Int64(0).bitPattern64
             case .int: Int(0).bitPattern64
             default: fatalError("Unexpected tag \(tag) for signed ChoiceValue")
             }
@@ -124,7 +126,7 @@ public enum ChoiceValue: Comparable, Hashable, Equatable, Sendable {
             case .int8: return Double(Int8(bitPattern64: bitPattern64))
             case .int16: return Double(Int16(bitPattern64: bitPattern64))
             case .int32: return Double(Int32(bitPattern64: bitPattern64))
-            case .int64: return Double(Int64(bitPattern64: bitPattern64))
+            case .int64, .date: return Double(Int64(bitPattern64: bitPattern64))
             case .int: return Double(Int(bitPattern64: bitPattern64))
             default: fatalError("Unexpected tag \(tag) for signed ChoiceValue")
             }

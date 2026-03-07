@@ -38,7 +38,7 @@ extension ChoiceValue {
     /// - For unsigned integers and floats: the key equals the bit pattern.
     public static func fromShortlexKey(_ key: UInt64, tag: TypeTag) -> ChoiceValue {
         switch tag {
-        case .int, .int8, .int16, .int32, .int64:
+        case .int, .int8, .int16, .int32, .int64, .date:
             // Zigzag decode: inverse of (value << 1) ^ (value >> 63)
             let decoded = Int64(bitPattern: key >> 1) ^ -Int64(bitPattern: key & 1)
             // Convert decoded Int64 to the typed value's bit pattern encoding

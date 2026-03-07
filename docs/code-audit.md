@@ -23,7 +23,7 @@ Exhaust is a well-architected property-based testing framework built on a genuin
 ### What's good
 - Clean two-module split: `ExhaustCore` (engine) -> `Exhaust` (consumer-facing wrapper + macros)
 - `Reexports.swift` curates the public surface via typealiases
-- Macros (`#gen`, `#exhaust`, `#explore`, `#sample`) provide the primary entry points
+- Macros (`#gen`, `#exhaust`, `#explore`, `#extract`) provide the primary entry points
 - `Gen` namespace is correctly positioned as internal plumbing (called by `Exhaust` module, not by consumers)
 - `ReflectiveGenerator` static methods + instance combinators provide a fluent, chainable API
 
@@ -167,9 +167,7 @@ During hill climbing, `PrefixMaterializer` counts top-level sequence elements by
 
 `map` and `bind` are now re-exported on `ReflectiveGenerator` in the `Exhaust` module with `@Sendable` closure constraints. The underlying `FreerMonad` methods are renamed to `_map`/`_bind` to avoid shadowing. `bind` includes a docstring warning that it breaks the reflection path.
 
-**5.4 `bool()` generates via `choose(from: [true, false])` instead of `chooseBits`**
-
-This creates a `pick` with two branches and array allocation instead of using `chooseBits(min: 0, max: 1, tag: .bool)`. The latter would be simpler in the choice tree and cheaper to shrink.
+**~~5.4 `bool()` generates via `choose(from: [true, false])` instead of `chooseBits`~~** **RESOLVED.**
 
 ---
 
@@ -200,7 +198,7 @@ Since this is acknowledged as "beginning phases," brief notes:
 8. **Decompose GenerationContext** into concern-grouped sub-structs (PRNG, sizing, dedup, classification, CGS)
 9. **Add customizable `optional()` weight ratio** — `func optional(nilWeight: Int = 1, someWeight: Int = 5)`
 10. ~~**Expose `bind` on ReflectiveGenerator**~~ **RESOLVED** — `map` and `bind` re-exported with `@Sendable` constraints; docstring warns about reflection breakage
-11. **Use `chooseBits` for `bool()`** instead of `choose(from: [true, false])` — simpler choice tree, cheaper shrinking
+11. ~~**Use `chooseBits` for `bool()`**~~ **RESOLVED**
 
 ### Low Impact / Long-term
 12. **Cache PrefixMaterializer sequence boundary positions** for O(1) lookups during hill climbing — profile first to confirm this is a bottleneck

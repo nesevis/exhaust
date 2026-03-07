@@ -106,6 +106,16 @@ public struct CoveringArray: @unchecked Sendable {
             parameters: syntheticParams,
             totalSpace: totalSpace
         )
+
+        // For 1-parameter boundary profiles, IPOG requires paramCount >= 2.
+        // Generate a trivial strength-1 covering array that tests each value.
+        if syntheticParams.count == 1 {
+            let count = syntheticParams[0].domainSize
+            guard count <= budget else { return nil }
+            let rows = (0 ..< count).map { CoveringArrayRow(values: [$0]) }
+            return CoveringArray(strength: 1, rows: rows, profile: syntheticProfile)
+        }
+
         return bestFitting(budget: budget, profile: syntheticProfile)
     }
 

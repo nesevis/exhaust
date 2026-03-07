@@ -94,7 +94,10 @@ enum CoverageRunner {
         guard let covering = CoveringArray.bestFitting(budget: coverageBudget, boundaryProfile: profile) else {
             return .notApplicable
         }
-        guard covering.strength >= 2 else {
+        // Strength 1 is valid for boundary coverage (test all boundary values for
+        // each parameter). Unlike finite-domain coverage where t>=2 ensures pairwise
+        // interaction, boundary coverage aims to hit every interesting value.
+        guard covering.strength >= 1 else {
             return .notApplicable
         }
 

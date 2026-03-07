@@ -37,7 +37,7 @@ public enum ExhaustSettings<Output> {
     /// t-way covering arrays, boundary value covering arrays).
     ///
     /// This budget is *additive* with `maxIterations` — structured coverage runs first,
-    /// then random sampling runs for `maxIterations` iterations. The default is 100.
+    /// then random sampling runs for `maxIterations` iterations. The default is 2000.
     ///
     /// When the generator's total space fits within this budget, `#exhaust` performs
     /// exhaustive enumeration and skips the random phase entirely.

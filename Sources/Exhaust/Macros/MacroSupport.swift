@@ -32,7 +32,7 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
         property: @Sendable (Output) -> Bool,
     ) -> Output? {
         var maxIterations: UInt64 = 100
-        var coverageBudget: UInt64 = 100
+        var coverageBudget: UInt64 = 2000
         var seed: UInt64?
         var shrinkConfig: ShrinkBudget = .fast
         var suppressIssueReporting = false
@@ -85,6 +85,7 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
         }
 
         // --- Structured coverage phase ---
+        var coverageIterations = 0
         if !useRandomOnly, seed == nil {
             let coverageResult = CoverageRunner.run(gen, coverageBudget: coverageBudget, property: property)
             switch coverageResult {
@@ -175,9 +176,13 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
                     event: "tway_coverage",
                     metadata: [
                         "exhaustive": "true",
+                        "iterations": "\(iterations)",
                     ],
                 )
-                var passMetadata = ["iterations": "\(iterations)"]
+                var passMetadata = [
+                    "iterations": "\(iterations)",
+                    "property_invocations": "\(iterations)",
+                ]
                 if let sourceCode {
                     passMetadata["source"] = sourceCode
                 }
@@ -189,20 +194,20 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
                 return nil
 
             case let .partial(iterations, strength, rows, parameters, totalSpace, kind):
+                coverageIterations = iterations
                 ExhaustLog.notice(
                     category: .propertyTest,
                     event: "tway_coverage",
                     metadata: [
                         "strength": "\(strength)",
                         "covering_rows": "\(rows)",
+                        "iterations": "\(iterations)",
                         "total_space": "\(totalSpace)",
                         "parameters": "\(parameters)",
                         "exhaustive": "false",
                         "kind": kind == .boundaryValue ? "boundary" : "finite",
                     ],
                 )
-                // Fall through to random phase with full maxIterations budget
-                _ = iterations
 
             case .notApplicable:
                 break
@@ -315,7 +320,15 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
             return nil
         }
 
-        var passMetadata = ["iterations": "\(maxIterations)"]
+        let totalPropertyCalls = coverageIterations + iterations
+        var passMetadata = [
+            "iterations": "\(maxIterations)",
+            "property_invocations": "\(totalPropertyCalls)",
+        ]
+        if coverageIterations > 0 {
+            passMetadata["coverage_invocations"] = "\(coverageIterations)"
+            passMetadata["random_invocations"] = "\(iterations)"
+        }
         if let sourceCode {
             passMetadata["source"] = sourceCode
         }

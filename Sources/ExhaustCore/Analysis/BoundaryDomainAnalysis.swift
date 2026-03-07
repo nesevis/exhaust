@@ -3,6 +3,8 @@
 //  Exhaust
 //
 
+import Foundation
+
 /// A parameter in the boundary model with synthetic values derived from
 /// boundary value analysis of the underlying generator operation.
 public struct BoundaryParameter: @unchecked Sendable {
@@ -46,6 +48,8 @@ public enum BoundaryDomainAnalysis {
         switch tag {
         case .double, .float:
             return computeFloatBoundaryValues(min: min, max: max, tag: tag)
+        case let .date(intervalSeconds, timeZoneID):
+            return computeDateBoundaryValues(min: min, max: max, intervalSeconds: intervalSeconds, timeZoneID: timeZoneID)
         default:
             return computeIntegerBoundaryValues(min: min, max: max, tag: tag)
         }
@@ -129,6 +133,180 @@ public enum BoundaryDomainAnalysis {
             return Double(0.0).bitPattern64
         case .float:
             return Float(0.0).bitPattern64
+        case .date(_, _):
+            return Int64(0).bitPattern64
         }
+    }
+
+    // MARK: - Date Boundary Values
+
+    /// Seconds since reference date for well-known epoch points where
+    /// date-handling bugs tend to cluster.
+    private static let interestingDateEpochs: [Int64] = [
+        0,                  // Reference date (2001-01-01 00:00:00 UTC)
+        -978_307_200,       // Unix epoch (1970-01-01 00:00:00 UTC)
+        1_169_176_447,      // Y2038 32-bit overflow (2038-01-19 03:14:07 UTC)
+        -31_622_400,        // Y2K (2000-01-01 00:00:00 UTC)
+    ]
+
+    /// Computes boundary values for dates stored as seconds since reference date.
+    ///
+    /// Values are produced in the *step domain* — every value is snapped to an
+    /// integral multiple of `intervalSeconds` from `lowerSeconds` so that each
+    /// boundary maps to a distinct output date after quantization. For each
+    /// interesting point the ±1 step neighbors are also included.
+    private static func computeDateBoundaryValues(min: UInt64, max: UInt64, intervalSeconds: Int64, timeZoneID: String) -> [UInt64] {
+        let lowerSeconds = Int64(bitPattern64: min)
+        let upperSeconds = Int64(bitPattern64: max)
+        let rangeSeconds = upperSeconds - lowerSeconds
+        guard rangeSeconds > 0, intervalSeconds > 0 else {
+            return min == max ? [min] : [min, max].sorted()
+        }
+
+        var values = Set<UInt64>()
+
+        // Snap a seconds value to the nearest interval step from lowerSeconds.
+        // Returns nil if the value falls outside the range.
+        func snap(_ seconds: Int64) -> Int64? {
+            let offset = seconds - lowerSeconds
+            guard offset >= 0 else { return nil }
+            let snapped = lowerSeconds + (offset / intervalSeconds) * intervalSeconds
+            guard snapped <= upperSeconds else { return nil }
+            return snapped
+        }
+
+        // Insert a snapped seconds value if it falls within the range.
+        func insert(_ seconds: Int64) {
+            if let snapped = snap(seconds) {
+                values.insert(snapped.bitPattern64)
+            }
+        }
+
+        // Insert a value and its ±1 step neighbors.
+        func insertWithNeighbors(_ seconds: Int64) {
+            guard let snapped = snap(seconds) else { return }
+            values.insert(snapped.bitPattern64)
+            insert(snapped + intervalSeconds)
+            insert(snapped - intervalSeconds)
+        }
+
+        // 1. Domain edges (first and last interval-aligned steps)
+        insert(lowerSeconds)
+        let lastAligned = lowerSeconds + (rangeSeconds / intervalSeconds) * intervalSeconds
+        insert(lastAligned)
+
+        // 2. BVA ±1 in the step domain
+        insert(lowerSeconds + intervalSeconds)
+        if lastAligned > lowerSeconds {
+            insert(lastAligned - intervalSeconds)
+        }
+
+        // 3. Midpoint step
+        let midStep = rangeSeconds / intervalSeconds / 2
+        insert(lowerSeconds + midStep * intervalSeconds)
+
+        // 4. Key epoch points (snapped, with neighbors)
+        for epoch in interestingDateEpochs where epoch >= lowerSeconds && epoch <= upperSeconds {
+            insertWithNeighbors(epoch)
+        }
+
+        // 5. Calendar boundaries (first and last within range, snapped, with neighbors)
+        let secondsPerDay: Int64 = 86_400
+        let secondsPerMonth: Int64 = 2_592_000    // 30 days
+        let secondsPerYear: Int64 = 31_536_000     // 365 days
+
+        for unitSeconds in [secondsPerDay, secondsPerMonth, secondsPerYear] {
+            guard unitSeconds <= rangeSeconds else { continue }
+
+            // First calendar boundary at or after lowerSeconds
+            let firstBoundary: Int64
+            if lowerSeconds >= 0 {
+                firstBoundary = ((lowerSeconds + unitSeconds - 1) / unitSeconds) * unitSeconds
+            } else {
+                // For negative values, round toward zero (i.e. toward the next boundary)
+                let divided = lowerSeconds / unitSeconds
+                let remainder = lowerSeconds - divided * unitSeconds
+                firstBoundary = remainder == 0 ? lowerSeconds : (divided + 1) * unitSeconds
+            }
+
+            if firstBoundary <= upperSeconds {
+                insertWithNeighbors(firstBoundary)
+            }
+
+            // Last calendar boundary at or before upperSeconds
+            let lastBoundary: Int64
+            if upperSeconds >= 0 {
+                lastBoundary = (upperSeconds / unitSeconds) * unitSeconds
+            } else {
+                let divided = upperSeconds / unitSeconds
+                let remainder = upperSeconds - divided * unitSeconds
+                lastBoundary = remainder == 0 ? upperSeconds : (divided - 1) * unitSeconds
+            }
+
+            if lastBoundary >= lowerSeconds, lastBoundary != firstBoundary {
+                insertWithNeighbors(lastBoundary)
+            }
+        }
+
+        // 6. DST transition times for the specified timezone (snapped, with neighbors)
+        for transition in DSTTransitions.inRange(lower: lowerSeconds, upper: upperSeconds, timeZoneID: timeZoneID) {
+            insertWithNeighbors(transition)
+        }
+
+        return values.sorted()
+    }
+}
+
+// MARK: - DST Transition Computation
+
+/// Computes DST transition times using Foundation's `TimeZone.nextDaylightSavingTimeTransition`.
+enum DSTTransitions {
+
+    /// Returns DST transition times (seconds since reference date) that fall within [lower, upper]
+    /// for the given timezone.
+    ///
+    /// Only the first and last transitions within [lower, upper] are included to
+    /// keep boundary value counts small for large ranges. Each transition includes
+    /// the transition moment itself plus the start and end of its calendar day.
+    static func inRange(lower: Int64, upper: Int64, timeZoneID: String) -> [Int64] {
+        guard let zone = TimeZone(identifier: timeZoneID) else { return [] }
+
+        let startDate = Date(timeIntervalSinceReferenceDate: TimeInterval(lower))
+        let endDate = Date(timeIntervalSinceReferenceDate: TimeInterval(upper))
+
+        var first: Date?
+        var last: Date?
+        var cursor = startDate
+        while let next = zone.nextDaylightSavingTimeTransition(after: cursor),
+              next <= endDate
+        {
+            if first == nil { first = next }
+            last = next
+            cursor = next
+        }
+
+        var picked = [Date]()
+        if let first { picked.append(first) }
+        if let last, last != first { picked.append(last) }
+
+        var transitions = [Int64]()
+        for transition in picked {
+            transitions.append(Int64(transition.timeIntervalSinceReferenceDate))
+
+            // Include the start and end of the transition day in this timezone.
+            // DST bugs often manifest at the opposite edge of the transition day
+            // (e.g., the 25th hour of a fall-back day, or midnight that doesn't
+            // exist on a spring-forward-at-midnight day).
+            var calendar = Calendar(identifier: .gregorian)
+            calendar.timeZone = zone
+            let startOfDay = calendar.startOfDay(for: transition)
+            transitions.append(Int64(startOfDay.timeIntervalSinceReferenceDate))
+            if let endOfDay = calendar.date(byAdding: .day, value: 1, to: startOfDay) {
+                let endSeconds = Int64(endOfDay.timeIntervalSinceReferenceDate)
+                transitions.append(endSeconds)
+                transitions.append(endSeconds - 1)
+            }
+        }
+        return transitions
     }
 }
