@@ -261,4 +261,149 @@ struct MetaGeneratorPropertyTests {
             }
         }
     }
+
+    // MARK: 11. Just Values
+
+    @Test("Just values always produce the same constant")
+    func justValuesAreConstant() throws {
+        let justRecipes: [GenRecipe] = [
+            .leaf(.justInt(42)),
+            .leaf(.justInt(-7)),
+            .leaf(.justInt(0)),
+            .leaf(.justBool(true)),
+            .leaf(.justBool(false)),
+            .leaf(.justIntArray([1, 2, 3])),
+            .leaf(.justIntArray([])),
+        ]
+
+        for recipe in justRecipes {
+            let gen = buildGenerator(from: recipe)
+            var valueIter = ValueAndChoiceTreeInterpreter(gen, maxRuns: 5)
+            var first: Any?
+            while let (value, _) = try valueIter.next() {
+                if let first {
+                    #expect(
+                        anyEquals(first, value),
+                        "Just generator produced different values for recipe: \(recipe)"
+                    )
+                } else {
+                    first = value
+                }
+            }
+        }
+    }
+
+    @Test("Just values round-trip through reflect and replay")
+    func justValuesReflectionRoundTrip() throws {
+        let justRecipes: [GenRecipe] = [
+            .leaf(.justInt(42)),
+            .leaf(.justBool(true)),
+            .leaf(.justIntArray([10, 20])),
+            .leaf(.justIntArray([])),
+        ]
+
+        for recipe in justRecipes {
+            let gen = buildGenerator(from: recipe)
+            var valueIter = ValueAndChoiceTreeInterpreter(gen, maxRuns: 3)
+            while let (value, _) = try valueIter.next() {
+                guard let tree = try? Interpreters.reflect(gen, with: value) else { continue }
+                guard let replayed = try? Interpreters.replay(gen, using: tree) else { continue }
+                #expect(
+                    anyEquals(value, replayed),
+                    "Just round-trip failed for recipe: \(recipe)"
+                )
+            }
+        }
+    }
+
+    // MARK: 12. Zipped Generators
+
+    @Test("Zipped generators round-trip through reflect and replay")
+    func zippedReflectionRoundTrip() throws {
+        let zippedRecipes: [GenRecipe] = [
+            .combinator(.zipped(.leaf(.int(-10 ... 10)), .leaf(.int(0 ... 100)))),
+            .combinator(.zipped(.leaf(.justInt(5)), .leaf(.int(-5 ... 5)))),
+            .combinator(.zipped(.leaf(.bool), .leaf(.bool))),
+        ]
+
+        for recipe in zippedRecipes {
+            let gen = buildGenerator(from: recipe)
+            var valueIter = ValueAndChoiceTreeInterpreter(gen, maxRuns: 10)
+            while let (value, _) = try valueIter.next() {
+                guard let tree = try? Interpreters.reflect(gen, with: value) else { continue }
+                guard let replayed = try? Interpreters.replay(gen, using: tree) else { continue }
+                #expect(
+                    anyEquals(value, replayed),
+                    "Zip round-trip failed for recipe: \(recipe)"
+                )
+            }
+        }
+    }
+
+    @Test("Zipped generators replay deterministically")
+    func zippedReplayDeterminism() throws {
+        let zippedRecipes: [GenRecipe] = [
+            .combinator(.zipped(.leaf(.int(-10 ... 10)), .leaf(.int(0 ... 100)))),
+            .combinator(.zipped(.leaf(.justInt(5)), .leaf(.justInt(10)))),
+            .combinator(.zipped(.leaf(.bool), .leaf(.int(0 ... 50)))),
+        ]
+
+        for recipe in zippedRecipes {
+            let gen = buildGenerator(from: recipe)
+            var valueIter = ValueAndChoiceTreeInterpreter(gen, maxRuns: 10)
+            while let (_, tree) = try valueIter.next() {
+                let r1 = try? Interpreters.replay(gen, using: tree)
+                let r2 = try? Interpreters.replay(gen, using: tree)
+                guard let r1, let r2 else { continue }
+                #expect(
+                    anyEquals(r1, r2),
+                    "Zip replay not deterministic for recipe: \(recipe)"
+                )
+            }
+        }
+    }
+
+    @Test("Zipped generators materialize consistently")
+    func zippedMaterializeAgreement() throws {
+        let zippedRecipes: [GenRecipe] = [
+            .combinator(.zipped(.leaf(.int(-10 ... 10)), .leaf(.int(0 ... 100)))),
+            .combinator(.zipped(.leaf(.justInt(5)), .leaf(.int(-5 ... 5)))),
+        ]
+
+        for recipe in zippedRecipes {
+            let gen = buildGenerator(from: recipe)
+            var valueIter = ValueAndChoiceTreeInterpreter(gen, maxRuns: 10)
+            while let (value, _) = try valueIter.next() {
+                guard let reflectedTree = try? Interpreters.reflect(gen, with: value) else { continue }
+                guard let replayed = try? Interpreters.replay(gen, using: reflectedTree) else { continue }
+                let sequence = ChoiceSequence.flatten(reflectedTree)
+                guard let materialized = try? Interpreters.materialize(gen, with: reflectedTree, using: sequence) else { continue }
+                #expect(
+                    anyEquals(materialized, replayed),
+                    "Zip materialize disagrees with replay for recipe: \(recipe)"
+                )
+            }
+        }
+    }
+
+    // MARK: 13. Random Recipes with Just/Zip
+
+    @Test("Random recipes with just and zip round-trip through reflect and replay")
+    func randomJustZipRecipesRoundTrip() throws {
+        // Use depth 2 to get combinations of just, zip, and other combinators
+        let recipeGen = recipeGenerator(producing: .int, maxDepth: 2)
+        var recipeIter = ValueInterpreter(recipeGen, maxRuns: 40)
+        while let recipe = try recipeIter.next() {
+            let gen = buildGenerator(from: recipe)
+            var valueIter = ValueAndChoiceTreeInterpreter(gen, maxRuns: 5)
+            while let (value, _) = try valueIter.next() {
+                guard let tree = try? Interpreters.reflect(gen, with: value) else { continue }
+                guard let replayed = try? Interpreters.replay(gen, using: tree) else { continue }
+                #expect(
+                    anyEquals(value, replayed),
+                    "Round-trip failed for recipe: \(recipe)"
+                )
+            }
+        }
+    }
 }

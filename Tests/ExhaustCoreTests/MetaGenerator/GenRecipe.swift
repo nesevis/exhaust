@@ -126,6 +126,7 @@ indirect enum GenRecipe: Equatable, Hashable, CustomStringConvertible {
         case bool
         case justInt(Int)
         case justBool(Bool)
+        case justIntArray([Int])
 
         var description: String {
             switch self {
@@ -133,6 +134,7 @@ indirect enum GenRecipe: Equatable, Hashable, CustomStringConvertible {
             case .bool: "bool"
             case let .justInt(v): "just(\(v))"
             case let .justBool(v): "just(\(v))"
+            case let .justIntArray(v): "just(\(v))"
             }
         }
 
@@ -140,6 +142,7 @@ indirect enum GenRecipe: Equatable, Hashable, CustomStringConvertible {
             switch self {
             case .int, .justInt: .int
             case .bool, .justBool: .bool
+            case .justIntArray: .arrayOf(.int)
             }
         }
     }
@@ -150,6 +153,7 @@ indirect enum GenRecipe: Equatable, Hashable, CustomStringConvertible {
         case oneOf([GenRecipe])
         case filtered(GenRecipe, KnownPredicate)
         case resized(GenRecipe, size: UInt64)
+        case zipped(GenRecipe, GenRecipe)
 
         var description: String {
             switch self {
@@ -163,6 +167,8 @@ indirect enum GenRecipe: Equatable, Hashable, CustomStringConvertible {
                 "\(inner).filter(\(predicate))"
             case let .resized(inner, size: size):
                 "resize(\(size), \(inner))"
+            case let .zipped(a, b):
+                "zip(\(a), \(b))"
             }
         }
     }
@@ -193,6 +199,9 @@ indirect enum GenRecipe: Equatable, Hashable, CustomStringConvertible {
                 return inner.outputType
             case let .resized(inner, size: _):
                 return inner.outputType
+            case let .zipped(a, _):
+                // Zipped produces an array of the first recipe's type (both must match)
+                return a.outputType
             }
         }
     }
@@ -216,6 +225,7 @@ func recipeGenerator(producing type: RecipeType, maxDepth: Int) -> ReflectiveGen
         (1, oneOfGenerator(producing: type, maxDepth: maxDepth)),
         (1, filteredGenerator(producing: type, maxDepth: maxDepth)),
         (1, resizedGenerator(producing: type, maxDepth: maxDepth)),
+        (1, zippedGenerator(producing: type, maxDepth: maxDepth)),
     ])
 }
 
@@ -230,6 +240,11 @@ private func leafGenerator(producing type: RecipeType) -> ReflectiveGenerator<Ge
         Gen.pick(choices: [
             (3, .pure(.leaf(.bool))),
             (1, Gen.choose(from: [true, false])._map { .leaf(.justBool($0)) }),
+        ])
+    case .arrayOf(.int):
+        Gen.pick(choices: [
+            (2, arrayGenerator(producing: type, maxDepth: 1)),
+            (1, justIntArrayLeaf()),
         ])
     case .arrayOf:
         // Arrays can't be leaves — fall through to an array combinator at depth 1
@@ -250,6 +265,12 @@ private func intRangeLeaf() -> ReflectiveGenerator<GenRecipe> {
 
 private func justIntLeaf() -> ReflectiveGenerator<GenRecipe> {
     Gen.choose(in: -50 ... 50 as ClosedRange<Int>)._map { .leaf(.justInt($0)) }
+}
+
+private func justIntArrayLeaf() -> ReflectiveGenerator<GenRecipe> {
+    Gen.choose(in: 0 ... 3 as ClosedRange<UInt64>)._bind { length in
+        Gen.arrayOf(Gen.choose(in: -50 ... 50 as ClosedRange<Int>), exactly: length)._map { .leaf(.justIntArray($0)) }
+    }
 }
 
 private func mappedGenerator(producing type: RecipeType, maxDepth: Int) -> ReflectiveGenerator<GenRecipe> {
@@ -323,6 +344,14 @@ private func resizedGenerator(producing type: RecipeType, maxDepth: Int) -> Refl
     }
 }
 
+private func zippedGenerator(producing type: RecipeType, maxDepth: Int) -> ReflectiveGenerator<GenRecipe> {
+    let subA = recipeGenerator(producing: type, maxDepth: maxDepth - 1)
+    let subB = recipeGenerator(producing: type, maxDepth: maxDepth - 1)
+    return Gen.zip(subA, subB)._map { a, b in
+        GenRecipe.combinator(.zipped(a, b))
+    }
+}
+
 // MARK: - Recipe Interpreter
 
 /// Builds a real `ReflectiveGenerator<Any>` from a `GenRecipe`.
@@ -344,6 +373,8 @@ private func buildLeaf(_ kind: GenRecipe.LeafKind) -> ReflectiveGenerator<Any> {
     case let .justInt(value):
         Gen.just(value).erase()
     case let .justBool(value):
+        Gen.just(value).erase()
+    case let .justIntArray(value):
         Gen.just(value).erase()
     }
 }
@@ -371,6 +402,10 @@ private func buildCombinator(_ kind: GenRecipe.CombinatorKind) -> ReflectiveGene
 
     case let .resized(inner, size: size):
         return Gen.resize(size, buildGenerator(from: inner))
+
+    case let .zipped(a, b):
+        // Zip produces a pair; we pick the first element to keep the output type consistent
+        return Gen.zip(buildGenerator(from: a), buildGenerator(from: b))._map { first, _ in first }
     }
 }
 
