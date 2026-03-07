@@ -483,6 +483,29 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
         return results
     }
 
+    // MARK: - Examination
+
+    /// Validates a generator's reflection, replay, and health. Runtime target of `#examine` expansion.
+    @discardableResult
+    public static func __examine<Output>(
+        _ gen: ReflectiveGenerator<Output>,
+        samples: Int,
+        seed: UInt64?,
+        fileID: StaticString,
+        filePath: StaticString,
+        line: UInt,
+        column: UInt,
+    ) -> ValidationReport {
+        gen.validate(
+            samples: samples,
+            seed: seed,
+            fileID: fileID,
+            filePath: filePath,
+            line: line,
+            column: column,
+        )
+    }
+
     // MARK: - Reflecting
 
     // swiftlint:disable:next function_parameter_count
