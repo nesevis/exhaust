@@ -2,9 +2,9 @@ import SwiftDiagnostics
 import SwiftSyntax
 import SwiftSyntaxMacros
 
-/// Expression macro that expands `#sample(gen)` or `#sample(gen, count: N)` into
-/// a call to `__ExhaustRuntime.__sample(...)` or `__ExhaustRuntime.__sampleArray(...)`.
-public struct SampleMacro: ExpressionMacro {
+/// Expression macro that expands `#extract(gen)` or `#extract(gen, count: N)` into
+/// a call to `__ExhaustRuntime.__extract(...)` or `__ExhaustRuntime.__extractArray(...)`.
+public struct ExtractMacro: ExpressionMacro {
     public static func expansion(
         of node: some FreestandingMacroExpansionSyntax,
         in context: some MacroExpansionContext,
@@ -14,9 +14,9 @@ public struct SampleMacro: ExpressionMacro {
         guard !args.isEmpty else {
             context.diagnose(Diagnostic(
                 node: Syntax(node),
-                message: ExhaustMacroDiagnostic.sampleMissingGenerator,
+                message: ExhaustMacroDiagnostic.extractMissingGenerator,
             ))
-            return "fatalError(\"#sample requires a generator argument\")"
+            return "fatalError(\"#extract requires a generator argument\")"
         }
 
         let generatorExpr = args[0].expression.trimmedDescription
@@ -29,7 +29,7 @@ public struct SampleMacro: ExpressionMacro {
         if let countArg {
             let countExpr = countArg.expression.trimmedDescription
             return """
-            __ExhaustRuntime.__sampleArray(
+            __ExhaustRuntime.__extractArray(
                 \(raw: generatorExpr),
                 count: \(raw: countExpr),
                 seed: \(raw: seedExpr)
@@ -37,7 +37,7 @@ public struct SampleMacro: ExpressionMacro {
             """
         } else {
             return """
-            __ExhaustRuntime.__sample(
+            __ExhaustRuntime.__extract(
                 \(raw: generatorExpr),
                 seed: \(raw: seedExpr)
             )

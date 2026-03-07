@@ -101,13 +101,13 @@ If either phase finds a failing value, `#exhaust` immediately reduces it to a mi
 | `.shrinkBudget(.fast/.slow)` | `.fast` | Reduction thoroughness |
 | `.replay(seed)` | — | Deterministic reproduction |
 
-### Sampling
+### Extraction
 
-Use `#sample` for quick value generation outside of property tests:
+Use `#extract` for quick value generation outside of property tests:
 
 ```swift
-let person = #sample(personGen)
-let people = #sample(personGen, count: 100, seed: 42)
+let person = #extract(personGen)
+let people = #extract(personGen, count: 100, seed: 42)
 ```
 
 ### Filter Strategies

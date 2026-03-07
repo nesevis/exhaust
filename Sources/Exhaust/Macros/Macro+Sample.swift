@@ -5,21 +5,21 @@
 // moderately complex output rather than minimal values.
 //
 // ```swift
-// let person = #sample(personGen)
-// let person = #sample(personGen, seed: 42)
+// let person = #extract(personGen)
+// let person = #extract(personGen, seed: 42)
 // ```
 //
 // - Parameters:
-//   - gen: The generator to sample from.
+//   - gen: The generator to extract from.
 //   - seed: Optional seed for deterministic replay.
 // - Returns: A single generated value.
 import ExhaustCore
 
 @freestanding(expression)
-public macro sample<T>(
+public macro extract<T>(
     _ gen: ReflectiveGenerator<T>,
     seed: UInt64? = nil,
-) -> T = #externalMacro(module: "ExhaustMacros", type: "SampleMacro")
+) -> T = #externalMacro(module: "ExhaustMacros", type: "ExtractMacro")
 
 /// Generates an array of values from a generator without running a property test.
 ///
@@ -27,18 +27,18 @@ public macro sample<T>(
 /// elements tend to be simpler and later elements more complex.
 ///
 /// ```swift
-/// let people = #sample(personGen, count: 10)
-/// let people = #sample(personGen, count: 10, seed: 42)
+/// let people = #extract(personGen, count: 10)
+/// let people = #extract(personGen, count: 10, seed: 42)
 /// ```
 ///
 /// - Parameters:
-///   - gen: The generator to sample from.
+///   - gen: The generator to extract from.
 ///   - count: The number of values to generate.
 ///   - seed: Optional seed for deterministic replay.
 /// - Returns: An array of generated values.
 @freestanding(expression)
-public macro sample<T>(
+public macro extract<T>(
     _ gen: ReflectiveGenerator<T>,
     count: UInt64,
     seed: UInt64? = nil,
-) -> [T] = #externalMacro(module: "ExhaustMacros", type: "SampleMacro")
+) -> [T] = #externalMacro(module: "ExhaustMacros", type: "ExtractMacro")
