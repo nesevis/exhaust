@@ -206,6 +206,17 @@ struct ConformanceTests {
                 #expect(array.contains(element))
             }
         }
+
+        @Test("Static .element(from:) is reflectable")
+        func elementFromIsReflectable() throws {
+            let gen = ReflectiveGenerator.element(from: [10, 20, 30, 40, 50])
+
+            var iterator = ValueInterpreter(gen, seed: 42)
+            let value = try #require(try iterator.next())
+
+            let tree = try Interpreters.reflect(gen, with: value)
+            #expect(tree != nil, ".element(from:) should be reflectable")
+        }
     }
 
     // MARK: - Numeric generators
