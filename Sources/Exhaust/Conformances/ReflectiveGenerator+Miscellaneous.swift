@@ -14,7 +14,11 @@ public extension ReflectiveGenerator {
     }
 
     static func bool() -> ReflectiveGenerator<Bool> {
-        Gen.choose(from: [true, false])
+        Gen.choose(in: UInt8(0) ... 1)
+            .mapped(
+                forward: { $0 == 1 },
+                backward: { $0 ? 1 : 0 }
+            )
     }
 
     /// Creates a generator that randomly selects from one of the provided generators with equal weight.
