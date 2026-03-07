@@ -73,16 +73,6 @@ Scans for `poolMinFitness` (O(n)), then scans again for `minIdx` (O(n)). Both ca
 
 ---
 
-### 10. HillClimber: defer reflection to end of climb
-
-**File:** `HillClimber.swift:137–141`
-
-On every accepted mutation, `Interpreters.reflect` runs a full backward pass and then `ChoiceSequence(reflected)` flattens the resulting tree. Only the final improved seed actually needs reflection.
-
-**Change:** Use `result.sequence` directly during the climb. Reflect only once at line 223 when building the final `Seed`.
-
----
-
 ### 11. Replay interpreter: use index cursor instead of `removeFirst()`
 
 **File:** `Replay.swift:117, 134, 168, 253–256`
