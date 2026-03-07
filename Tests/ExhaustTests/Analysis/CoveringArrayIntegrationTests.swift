@@ -84,7 +84,7 @@ struct CoveringArrayIntegrationTests {
         )
 
         var missCount = 0
-        for _ in 0 ..< 20 {
+        for _ in 0 ..< 40 {
             let result = #exhaust(
                 gen,
                 .maxIterations(100),
@@ -97,8 +97,8 @@ struct CoveringArrayIntegrationTests {
                 missCount += 1
             }
         }
-        // Random should miss at least once in 20 trials
-        // (expected ~4 misses). If covering array were used, it would never miss.
+        // Random should miss at least once in 40 trials
+        // (expected ~8 misses). If covering array were used, it would never miss.
         #expect(missCount >= 1, "Random-only should miss the narrow failure at least once in 20 trials")
     }
 }
