@@ -197,41 +197,25 @@ extension Interpreters {
         continuation: @escaping (Any) throws -> ReflectiveGenerator<Output>,
         choices: inout [ChoiceTree],
     ) throws -> Output? {
-        // Mirroring materializeWithChoicesZip: try group-unwrapped first,
-        // then flat choices. reflectZipOperation wraps per-generator choices
-        // in a single .group, while generation produces flat choices.
-        typealias ZipAttempt = (scripts: [ChoiceTree], consumedCount: Int)
-        var attempts: [ZipAttempt] = []
-
-        if let first = choices.first,
-           case let .group(children) = first,
-           children.allSatisfy({ !$0.isBranch && !$0.isSelected })
+        // Unwrap a single non-branch group wrapper (produced by reflect's
+        // reflectZipOperation which wraps flat choices in .group(...)).
+        if choices.count == 1,
+           case let .group(children) = choices[0],
+           children.allSatisfy({ $0.isBranch || $0.isSelected }) == false
         {
-            attempts.append((scripts: children, consumedCount: 1))
+            choices = children
         }
 
-        if choices.count >= generators.count {
-            attempts.append((scripts: Array(choices.prefix(generators.count)), consumedCount: generators.count))
-        }
-
-        for attempt in attempts where attempt.scripts.count == generators.count {
-            var subResults = [Any]()
-            var didSucceed = true
-            for (generator, choiceTree) in zip(generators, attempt.scripts) {
-                guard let subResult = try replayRecursive(generator, with: choiceTree) else {
-                    didSucceed = false
-                    break
-                }
-                subResults.append(subResult)
+        // Each generator consumes sequentially from the shared choices.
+        var subResults = [Any]()
+        for gen in generators {
+            guard let result = try replayWithChoicesHelper(gen, choices: &choices) else {
+                return nil
             }
-            guard didSucceed else { continue }
-
-            choices.removeFirst(attempt.consumedCount)
-            let nextGen = try continuation(subResults)
-            return try replayWithChoicesHelper(nextGen, choices: &choices)
+            subResults.append(result)
         }
-
-        throw ReplayError.mismatchInChoicesAndGenerators
+        let nextGen = try continuation(subResults)
+        return try replayWithChoicesHelper(nextGen, choices: &choices)
     }
 
     @inline(__always)
@@ -355,8 +339,8 @@ extension Interpreters {
         runContinuation: (Any) throws -> Output?,
     ) throws -> Output? {
         switch operation {
-        case .zip:
-            fatalError("Unsupported")
+        case let .zip(generators):
+            return try replayRecursiveZip(generators: generators, script: script, runContinuation: runContinuation)
         case .chooseBits:
             return try replayRecursiveChooseBits(script: script, runContinuation: runContinuation)
         case let .just(value):
@@ -495,6 +479,45 @@ extension Interpreters {
         }
 
         return try runContinuation(accumulatedValues)
+    }
+
+    private static func replayRecursiveZip<Output>(
+        generators: ContiguousArray<ReflectiveGenerator<Any>>,
+        script: ChoiceTree,
+        runContinuation: (Any) throws -> Output?,
+    ) throws -> Output? {
+        guard case let .group(children) = script else {
+            return nil
+        }
+
+        // 1:1 mapping: each generator gets its own subtree. Works for both
+        // VACTI (structured groups) and flat (simple choice nodes).
+        if children.count == generators.count {
+            var subResults = [Any]()
+            var didSucceed = true
+            for (gen, tree) in zip(generators, children) {
+                guard let result = try replayRecursive(gen, with: tree) else {
+                    didSucceed = false
+                    break
+                }
+                subResults.append(result)
+            }
+            if didSucceed {
+                return try runContinuation(subResults)
+            }
+        }
+
+        // Flat sequential consumption (reflected trees where children
+        // count differs from generators count).
+        var remaining = children
+        var subResults = [Any]()
+        for gen in generators {
+            guard let result = try replayWithChoicesHelper(gen, choices: &remaining) else {
+                return nil
+            }
+            subResults.append(result)
+        }
+        return try runContinuation(subResults)
     }
 
     @inline(__always)

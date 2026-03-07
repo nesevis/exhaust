@@ -309,7 +309,7 @@ public enum Interpreters {
 
         for (generator, output) in zip(generators, outputs) {
             let result = try Self.reflectRecursive(generator, onFinalOutput: output)
-            paths.append(.group(result.flatMap(\.path)))
+            paths.append(contentsOf: result.flatMap(\.path))
             results.append(contentsOf: result.map(\.value))
         }
         return [(value: results, path: [.group(paths)])]
