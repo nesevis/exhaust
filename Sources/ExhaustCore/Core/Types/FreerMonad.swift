@@ -55,12 +55,12 @@ public extension FreerMonad {
     /// - Returns: A new computation representing the sequenced effects
     /// - Throws: Rethrows any errors from the transform function
     @inlinable
-    func bind<NewValue>(_ transform: @escaping (Value) throws -> FreerMonad<Operation, NewValue>) rethrows -> FreerMonad<Operation, NewValue> {
+    func _bind<NewValue>(_ transform: @escaping (Value) throws -> FreerMonad<Operation, NewValue>) rethrows -> FreerMonad<Operation, NewValue> {
         switch self {
         case let .pure(value):
             try transform(value)
         case let .impure(operation, continuation):
-            .impure(operation: operation) { try continuation($0).bind(transform) }
+            .impure(operation: operation) { try continuation($0)._bind(transform) }
         }
     }
 
@@ -81,11 +81,11 @@ public extension FreerMonad {
     /// - Returns: A computation that produces the transformed value
     /// - Throws: Rethrows any errors from the transform function
     @inlinable
-    func map<NewValue>(_ transform: @escaping (Value) throws -> NewValue) rethrows -> FreerMonad<Operation, NewValue> {
+    func _map<NewValue>(_ transform: @escaping (Value) throws -> NewValue) rethrows -> FreerMonad<Operation, NewValue> {
         switch self {
         case let .pure(value): try .pure(transform(value))
         case let .impure(operation, continuation):
-            .impure(operation: operation) { try continuation($0).map(transform) }
+            .impure(operation: operation) { try continuation($0)._map(transform) }
         }
     }
 

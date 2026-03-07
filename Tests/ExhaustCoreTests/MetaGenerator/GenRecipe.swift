@@ -229,7 +229,7 @@ private func leafGenerator(producing type: RecipeType) -> ReflectiveGenerator<Ge
     case .bool:
         Gen.pick(choices: [
             (3, .pure(.leaf(.bool))),
-            (1, Gen.choose(from: [true, false]).map { .leaf(.justBool($0)) }),
+            (1, Gen.choose(from: [true, false])._map { .leaf(.justBool($0)) }),
         ])
     case .arrayOf:
         // Arrays can't be leaves — fall through to an array combinator at depth 1
@@ -239,8 +239,8 @@ private func leafGenerator(producing type: RecipeType) -> ReflectiveGenerator<Ge
 
 private func intRangeLeaf() -> ReflectiveGenerator<GenRecipe> {
     // Generate two bounds and sort them to form a valid range
-    Gen.choose(in: -100 ... 100 as ClosedRange<Int>).bind { a in
-        Gen.choose(in: -100 ... 100 as ClosedRange<Int>).map { b in
+    Gen.choose(in: -100 ... 100 as ClosedRange<Int>)._bind { a in
+        Gen.choose(in: -100 ... 100 as ClosedRange<Int>)._map { b in
             let lo = min(a, b)
             let hi = max(a, b)
             return GenRecipe.leaf(.int(lo ... hi))
@@ -249,7 +249,7 @@ private func intRangeLeaf() -> ReflectiveGenerator<GenRecipe> {
 }
 
 private func justIntLeaf() -> ReflectiveGenerator<GenRecipe> {
-    Gen.choose(in: -50 ... 50 as ClosedRange<Int>).map { .leaf(.justInt($0)) }
+    Gen.choose(in: -50 ... 50 as ClosedRange<Int>)._map { .leaf(.justInt($0)) }
 }
 
 private func mappedGenerator(producing type: RecipeType, maxDepth: Int) -> ReflectiveGenerator<GenRecipe> {
@@ -257,10 +257,10 @@ private func mappedGenerator(producing type: RecipeType, maxDepth: Int) -> Refle
     guard transforms.isEmpty == false else {
         return leafGenerator(producing: type)
     }
-    return Gen.choose(from: transforms).bind { transform in
+    return Gen.choose(from: transforms)._bind { transform in
         // The inner recipe must produce a type compatible with the transform
         let innerType = transform.applicableType ?? type
-        return recipeGenerator(producing: innerType, maxDepth: maxDepth - 1).map { inner in
+        return recipeGenerator(producing: innerType, maxDepth: maxDepth - 1)._map { inner in
             .combinator(.mapped(inner, transform))
         }
     }
@@ -270,9 +270,9 @@ private func arrayGenerator(producing type: RecipeType, maxDepth: Int) -> Reflec
     guard case let .arrayOf(elementType) = type else {
         return leafGenerator(producing: type)
     }
-    return Gen.choose(in: 0 ... 3 as ClosedRange<UInt64>).bind { lo in
-        Gen.choose(in: lo ... (lo + 4)).bind { hi in
-            recipeGenerator(producing: elementType, maxDepth: maxDepth - 1).map { inner in
+    return Gen.choose(in: 0 ... 3 as ClosedRange<UInt64>)._bind { lo in
+        Gen.choose(in: lo ... (lo + 4))._bind { hi in
+            recipeGenerator(producing: elementType, maxDepth: maxDepth - 1)._map { inner in
                 GenRecipe.combinator(.array(inner, lengthRange: lo ... hi))
             }
         }
@@ -281,9 +281,9 @@ private func arrayGenerator(producing type: RecipeType, maxDepth: Int) -> Reflec
 
 private func oneOfGenerator(producing type: RecipeType, maxDepth: Int) -> ReflectiveGenerator<GenRecipe> {
     // Generate 2–3 sub-recipes all producing the same type
-    Gen.choose(in: 2 ... 3 as ClosedRange<Int>).bind { count in
+    Gen.choose(in: 2 ... 3 as ClosedRange<Int>)._bind { count in
         let subGen = recipeGenerator(producing: type, maxDepth: maxDepth - 1)
-        return Gen.arrayOf(subGen, exactly: UInt64(count)).map { recipes in
+        return Gen.arrayOf(subGen, exactly: UInt64(count))._map { recipes in
             GenRecipe.combinator(.oneOf(recipes))
         }
     }
@@ -294,13 +294,13 @@ private func filteredGenerator(producing type: RecipeType, maxDepth: Int) -> Ref
     guard predicates.isEmpty == false else {
         return leafGenerator(producing: type)
     }
-    return Gen.choose(from: predicates).bind { predicate in
+    return Gen.choose(from: predicates)._bind { predicate in
         var innerGen = recipeGenerator(producing: type, maxDepth: maxDepth - 1)
         // For .isPositive, constrain inner int ranges to include positive values
         if predicate == .isPositive {
             innerGen = constrainedIntLeafForPositive()
         }
-        return innerGen.map { inner in
+        return innerGen._map { inner in
             .combinator(.filtered(inner, predicate))
         }
     }
@@ -308,16 +308,16 @@ private func filteredGenerator(producing type: RecipeType, maxDepth: Int) -> Ref
 
 private func constrainedIntLeafForPositive() -> ReflectiveGenerator<GenRecipe> {
     // Ensure the range includes at least one positive value
-    Gen.choose(in: 1 ... 100 as ClosedRange<Int>).bind { hi in
-        Gen.choose(in: -50 ... hi).map { lo in
+    Gen.choose(in: 1 ... 100 as ClosedRange<Int>)._bind { hi in
+        Gen.choose(in: -50 ... hi)._map { lo in
             GenRecipe.leaf(.int(lo ... hi))
         }
     }
 }
 
 private func resizedGenerator(producing type: RecipeType, maxDepth: Int) -> ReflectiveGenerator<GenRecipe> {
-    Gen.choose(in: 1 ... 50 as ClosedRange<UInt64>).bind { size in
-        recipeGenerator(producing: type, maxDepth: maxDepth - 1).map { inner in
+    Gen.choose(in: 1 ... 50 as ClosedRange<UInt64>)._bind { size in
+        recipeGenerator(producing: type, maxDepth: maxDepth - 1)._map { inner in
             .combinator(.resized(inner, size: size))
         }
     }
@@ -353,7 +353,7 @@ private func buildCombinator(_ kind: GenRecipe.CombinatorKind) -> ReflectiveGene
     case let .mapped(inner, transform):
         return Gen.contramap(
             { (newOutput: Any) throws -> Any in transform.backward(newOutput) },
-            buildGenerator(from: inner).map { transform.forward($0) }
+            buildGenerator(from: inner)._map { transform.forward($0) }
         )
 
     case let .array(inner, lengthRange: range):

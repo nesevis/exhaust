@@ -265,7 +265,7 @@ private func characterGen(from characterSet: CharacterSet) -> ReflectiveGenerato
             return srs.index(of: scalar)
         },
         Gen.choose(in: 0 ... srs.scalarCount - 1)
-            .map { Character(srs.scalar(at: $0)) },
+            ._map { Character(srs.scalar(at: $0)) },
     )
 }
 
@@ -277,7 +277,7 @@ private func stringGen(
     let charGen = characterGen(from: characterSet)
     return Gen.contramap(
         { (s: String) throws -> [Character] in s.unicodeScalars.map { Character($0) } },
-        Gen.arrayOf(charGen, within: length).map { String($0) },
+        Gen.arrayOf(charGen, within: length)._map { String($0) },
     )
 }
 

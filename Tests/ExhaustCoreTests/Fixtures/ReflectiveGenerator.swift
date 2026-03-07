@@ -38,7 +38,7 @@ func asciiCharGen() -> ReflectiveGenerator<Character> {
             return srs.index(of: scalar)
         },
         Gen.choose(in: 0 ... srs.scalarCount - 1)
-            .map { Character(srs.scalar(at: $0)) }
+            ._map { Character(srs.scalar(at: $0)) }
     )
 }
 
@@ -55,7 +55,7 @@ func defaultCharGen() -> ReflectiveGenerator<Character> {
             return srs.index(of: scalar)
         },
         Gen.choose(in: 0 ... srs.scalarCount - 1)
-            .map { Character(srs.scalar(at: $0)) }
+            ._map { Character(srs.scalar(at: $0)) }
     )
 }
 
@@ -64,7 +64,7 @@ func asciiStringGen() -> ReflectiveGenerator<String> {
     let charGen = asciiCharGen()
     return Gen.contramap(
         { (s: String) -> [Character] in s.unicodeScalars.map { Character($0) } },
-        Gen.arrayOf(charGen).map { String($0) }
+        Gen.arrayOf(charGen)._map { String($0) }
     )
 }
 
@@ -73,7 +73,7 @@ func stringGen() -> ReflectiveGenerator<String> {
     let charGen = defaultCharGen()
     return Gen.contramap(
         { (s: String) -> [Character] in s.unicodeScalars.map { Character($0) } },
-        Gen.arrayOf(charGen).map { String($0) }
+        Gen.arrayOf(charGen)._map { String($0) }
     )
 }
 
@@ -95,7 +95,7 @@ func charGen(from characterSet: CharacterSet) -> ReflectiveGenerator<Character> 
             return srs.index(of: scalar)
         },
         Gen.choose(in: 0 ... srs.scalarCount - 1)
-            .map { Character(srs.scalar(at: $0)) }
+            ._map { Character(srs.scalar(at: $0)) }
     )
 }
 

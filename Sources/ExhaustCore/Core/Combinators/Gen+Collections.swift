@@ -22,7 +22,7 @@ public extension Gen {
     ) -> ReflectiveGenerator<[Output]> {
         // Use `bind` to get the result of the length generator.
         let sequenceOperation = ReflectiveOperation.sequence(
-            length: length ?? Gen.getSize().bind {
+            length: length ?? Gen.getSize()._bind {
                 Gen.chooseDerived(in: ($0 / 10) ... $0)
             },
             gen: elementGenerator.erase(),
@@ -118,7 +118,7 @@ public extension Gen {
                 // This will be out of order, but is that ok?
                 (Array(dict.keys), Array(dict.values))
             },
-            zipped.map { keys, values in
+            zipped._map { keys, values in
                 Dictionary(
                     Swift.zip(keys, values).map { ($0.0, $0.1) },
                     uniquingKeysWith: { key, _ in key },
@@ -189,13 +189,13 @@ public extension Gen {
     static func shuffled<Element>(
         _ gen: ReflectiveGenerator<some Collection<Element>>,
     ) -> ReflectiveGenerator<[Element]> {
-        gen.bind { array in
+        gen._bind { array in
             guard array.count > 1 else { return .pure(Array(array)) }
             return Gen.arrayOf(
                 Gen.choose(in: UInt64.min ... UInt64.max),
                 exactly: UInt64(array.count),
             )
-            .map { keys in
+            ._map { keys in
                 Swift.zip(array, keys)
                     .sorted { $0.1 < $1.1 }
                     .map(\.0)
@@ -218,7 +218,7 @@ public extension Gen {
         _ elementGenerator: ReflectiveGenerator<Output>,
         lengthRange: ClosedRange<UInt64>? = nil,
     ) -> ReflectiveGenerator<[Output]> {
-        getSize().bind { size in
+        getSize()._bind { size in
             let actualRange = lengthRange ?? (0 ... size)
             let clampedMin = max(actualRange.lowerBound, 0)
             let clampedMax = min(actualRange.upperBound, size)
@@ -232,7 +232,7 @@ public extension Gen {
     static func slice<AnyCollection: Collection>(
         of collection: AnyCollection,
     ) -> ReflectiveGenerator<AnyCollection.SubSequence> {
-        getSize().bind { size in
+        getSize()._bind { size in
             let count = collection.count
             // Max length with size as percentage of total space/count
             let maxLength = min(((count * Int(size)) / 100) + 2, count)
@@ -268,7 +268,7 @@ public extension Gen {
                     let startPos = indices.firstIndex(of: subset.startIndex) ?? 0
                     return (subset.count, startPos)
                 },
-                filtered.map { (length: Int, startIndexPos: Int) -> AnyCollection.SubSequence in
+                filtered._map { (length: Int, startIndexPos: Int) -> AnyCollection.SubSequence in
                     let startIndex = indices[startIndexPos]
                     let endIndexPos = min(startIndexPos + length, indices.count)
                     let endIndex = endIndexPos < indices.count ? indices[endIndexPos] : collection.endIndex
@@ -291,7 +291,7 @@ public extension Gen {
     static func slice<C: Collection>(
         _ gen: ReflectiveGenerator<C>,
     ) -> ReflectiveGenerator<C.SubSequence> {
-        gen.bind { collection in
+        gen._bind { collection in
             slice(of: collection)
         }
     }
@@ -323,7 +323,7 @@ public extension Gen {
                 }
                 return 0
             },
-            Gen.choose(in: 0 ... (count - 1)).map { dict[$0]! },
+            Gen.choose(in: 0 ... (count - 1))._map { dict[$0]! },
         )
     }
 
@@ -347,7 +347,7 @@ public extension Gen {
 
         return Gen.contramap(
             { (element: AnyCollection.Element) -> Int in elementDict[element]! },
-            Gen.choose(in: 0 ... (collection.count - 1)).map { intDict[$0]! },
+            Gen.choose(in: 0 ... (collection.count - 1))._map { intDict[$0]! },
         )
     }
 }
@@ -374,7 +374,7 @@ extension Gen {
         )
         return Gen.contramap(
             { (set: Set<Element>) -> [Element] in Array(set) },
-            filtered.map { Set($0) },
+            filtered._map { Set($0) },
         )
     }
 }

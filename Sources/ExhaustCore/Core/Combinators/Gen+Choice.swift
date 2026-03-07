@@ -107,7 +107,7 @@ public extension Gen {
             },
             Gen.choose(in: collection.startIndex ... collection.endIndex.advanced(by: -1))
                 // We're using round-robin indexing here so that the lookup does not fail when shrinking
-                .map { collection[$0 % count] },
+                ._map { collection[$0 % count] },
         )
     }
 
@@ -119,7 +119,7 @@ public extension Gen {
         let count = collection.count
         return Gen.choose(in: collection.startIndex ... collection.endIndex.advanced(by: -1))
             // We're using round-robin indexing here so that the lookup does not fail when shrinking
-            .map { collection[$0 % count] }
+            ._map { collection[$0 % count] }
     }
 
     /// Internal helper for choose ranges derived from runtime context (e.g. `getSize`).
@@ -158,7 +158,7 @@ public extension Gen {
         case .constant:
             Gen.choose(in: range)
         case .linear, .linearFrom, .exponential, .exponentialFrom:
-            Gen.getSize().bind { size in
+            Gen.getSize()._bind { size in
                 let effectiveRange = scaledRange(range, scaling: scaling, size: size)
                 return Gen.chooseDerived(in: effectiveRange)
             }

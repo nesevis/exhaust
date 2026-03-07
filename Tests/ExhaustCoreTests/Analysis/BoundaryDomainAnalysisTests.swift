@@ -246,11 +246,11 @@ struct ChoiceTreeAnalysisTests {
         // analyzeContinuation rejects .impure continuations. But the ChoiceTree
         // walker sees through it because VACTI evaluates the full chain.
         let gen: ReflectiveGenerator<(UInt8, UInt8)> = Gen.choose(in: 0 ... 10 as ClosedRange<UInt8>)
-            .bind { _ in
-                Gen.choose(in: 0 ... 20 as ClosedRange<UInt8>).map { y in y }
+            ._bind { _ in
+                Gen.choose(in: 0 ... 20 as ClosedRange<UInt8>)._map { y in y }
             }
-            .bind { y in
-                Gen.choose(in: 0 ... 10 as ClosedRange<UInt8>).map { x in (x, y) }
+            ._bind { y in
+                Gen.choose(in: 0 ... 10 as ClosedRange<UInt8>)._map { x in (x, y) }
             }
 
         let newResult = ChoiceTreeAnalysis.analyze(gen)
@@ -316,8 +316,8 @@ private func asciiStringGen(length: ClosedRange<Int>) -> ReflectiveGenerator<Str
             return asciiSRS.index(of: scalar)
         },
         Gen.choose(in: 0 ... asciiSRS.scalarCount - 1)
-            .map { Character(asciiSRS.scalar(at: $0)) }
+            ._map { Character(asciiSRS.scalar(at: $0)) }
     )
     return Gen.arrayOf(charGen, within: UInt64(length.lowerBound) ... UInt64(length.upperBound))
-        .map { String($0) }
+        ._map { String($0) }
 }

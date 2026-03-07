@@ -131,33 +131,17 @@ The `as!` casts at monadic boundaries are architecturally justified (the interpr
 **3.2 Unresolved FIXMEs**
 
 - `ReflectiveGenerator+Combinators.swift:67` — "Should we be force unwrapping here? What if it's optional?" — This is a correctness question, not just style.
-- `ReflectiveGenerator+Collections.swift:124, 133` — "This is not reflective" on `element()` — The method uses `bind` which breaks the reflection path. This is a **functional gap** — `element()` won't shrink properly.
+- ~~`ReflectiveGenerator+Collections.swift:124, 133` — "This is not reflective" on `element()` — The method uses `bind` which breaks the reflection path. This is a **functional gap** — `element()` won't shrink properly.~~ **RESOLVED:** Replaced instance `element()` with static `element(from:)` that delegates to `Gen.element(from:)`. Fully reflective.
 - `GenerationContext.swift:73` — "FIXME: Xoshiro features this" — Minor.
 - `ReflectiveGenerator+Combinators.swift:128` — "Can we verify this closure is executed from a `pick`?" — Indicates a correctness assumption that's unverified.
-
-**3.3 `element()` is the only combinator that breaks the bidirectional contract**
-
-A comprehensive audit of all `.bind` usage in Sources/ found **14 bind call sites** on `ReflectiveGenerator`. Of these, only the two `element()` overloads in `ReflectiveGenerator+Collections.swift:123-135` are reflection-breaking. All other bind uses are either size-parameter-driven (reflectively recoverable), internal interpreter infrastructure, or Swift Array/Sequence operations (not generator sequencing).
-
-`element()` uses `bind { Gen.choose(from: $0) }` which generates a collection, then picks from it. The backward pass can't reflect through this — it would need to reconstruct which collection was generated and which index was chosen. This silently breaks shrinking for any generator that uses `element()`.
-
-**Recommendation:** Either make this reflective (sequence + index approach) or mark it as `@available(*, deprecated, message: "Not reflective — shrinking will not work through this combinator")`.
 
 ---
 
 ## 4. Algorithmic Observations
 
-**4.1 Zobrist hash computation**
+**~~4.1 Zobrist hash computation~~** **NOT AN ISSUE.**
 
-`ChoiceSequence.zobristHash` recomputes the full XOR hash on every access. The `zobristHashUpdating` method exists for incremental updates but nothing prevents callers from using the computed property repeatedly.
-
-**Recommendation:** If profiling shows this matters, cache the hash and invalidate on mutation. Given that `ChoiceSequence` is a `ContiguousArray` (value type), this may require a wrapper struct.
-
-**4.2 Reducer runs all 13 strategies in fixed order**
-
-The reducer always cycles through all 13 `ShrinkPass` cases in `CaseIterable` order, tracking stalls per pass. There's no prioritization based on the shape of the choice sequence (e.g., skip `redistributeNumericPairs` when there are no numeric values).
-
-**Recommendation:** Low priority — the stall-based early exit already handles this adaptively. But a cheap pre-scan of the choice sequence to skip obviously inapplicable passes would save overhead.
+All call sites already follow the optimal pattern: compute `zobristHash` once into a local variable, then use `zobristHashUpdating` for O(1) incremental updates during probing. Full recomputation only happens after the underlying sequence changes. No caching needed.
 
 **4.3 PrefixMaterializer sequence element counting is O(n)**
 
@@ -169,9 +153,9 @@ During hill climbing, `PrefixMaterializer` counts top-level sequence elements by
 
 ## 5. Gaps & Missing Functionality
 
-**5.1 No `Sendable` conformance on generators**
+**~~5.1 No `Sendable` conformance on generators~~** **RESOLVED.**
 
-`ReflectiveGenerator` (aka `FreerMonad<ReflectiveOperation, Value>`) stores closures in its `impure` case, making it inherently non-Sendable. This limits use in concurrent test environments. This may be a fundamental constraint, but it's worth noting for Swift 6 concurrency.
+`FreerMonad` is now `@unchecked Sendable`. Safety is guaranteed by two mechanisms: (1) all internal closures in the generator chain are framework-controlled and pure, (2) all user-injected closures (`property`, `scorer`, `predicate`, `forward`/`backward`, etc.) are marked `@Sendable` at the public API boundary. This enables sharing generators across concurrent test methods.
 
 **5.2 `optional()` weight ratio is hardcoded**
 
@@ -179,9 +163,9 @@ During hill climbing, `PrefixMaterializer` counts top-level sequence elements by
 
 **Recommendation:** Add an overload: `func optional(nilWeight: Int = 1, someWeight: Int = 5)`.
 
-**5.3 No `flatMap`/`bind` exposed on `ReflectiveGenerator`**
+**~~5.3 No `flatMap`/`bind` exposed on `ReflectiveGenerator`~~** **RESOLVED.**
 
-The `bind` method exists on `FreerMonad` but isn't re-exported or documented as part of the `ReflectiveGenerator` API. Users who need dependent generation (where the second generator depends on the first value) have no documented path. The `#gen` macro may handle this, but it's not clear.
+`map` and `bind` are now re-exported on `ReflectiveGenerator` in the `Exhaust` module with `@Sendable` closure constraints. The underlying `FreerMonad` methods are renamed to `_map`/`_bind` to avoid shadowing. `bind` includes a docstring warning that it breaks the reflection path.
 
 **5.4 `bool()` generates via `choose(from: [true, false])` instead of `chooseBits`**
 
@@ -203,7 +187,7 @@ Since this is acknowledged as "beginning phases," brief notes:
 
 ### Critical (before publishing)
 1. **Remove ExhaustCore product from Package.swift** — Prevents consumers from importing internal machinery directly
-2. **Fix the `element()` reflectivity gap** — The only public combinator that silently breaks shrinking. Either make it reflective or deprecate it
+2. ~~**Fix the `element()` reflectivity gap**~~ **RESOLVED** — Replaced with static `element(from:)` that delegates to reflective `Gen.element(from:)`
 3. **Resolve the FIXME at `Combinators.swift:67`** — "Should we be force unwrapping here? What if it's optional?" is a potential correctness bug in `mapped(forward:backward:)` with PartialPath
 4. **Verify `Gen` is hidden after ExhaustCore removal** — Ensure `Gen` doesn't leak into consumer autocomplete/documentation
 
@@ -215,11 +199,11 @@ Since this is acknowledged as "beginning phases," brief notes:
 ### Medium Impact
 8. **Decompose GenerationContext** into concern-grouped sub-structs (PRNG, sizing, dedup, classification, CGS)
 9. **Add customizable `optional()` weight ratio** — `func optional(nilWeight: Int = 1, someWeight: Int = 5)`
-10. **Expose `bind` on ReflectiveGenerator** or document dependent generation patterns for advanced users
+10. ~~**Expose `bind` on ReflectiveGenerator**~~ **RESOLVED** — `map` and `bind` re-exported with `@Sendable` constraints; docstring warns about reflection breakage
 11. **Use `chooseBits` for `bool()`** instead of `choose(from: [true, false])` — simpler choice tree, cheaper shrinking
 
 ### Low Impact / Long-term
-12. **Cache PrefixMaterializer sequence boundary positions** for O(1) lookups during hill climbing
-13. **Consider Zobrist hash caching** if profiling shows repeated full recomputation
+12. **Cache PrefixMaterializer sequence boundary positions** for O(1) lookups during hill climbing — profile first to confirm this is a bottleneck
+13. ~~**Consider Zobrist hash caching**~~ **NOT AN ISSUE** — all call sites already use incremental updates correctly
 14. **Document Materialize vs Replay split** — when to use tree-based vs sequence-based replay
 15. **Add a ReflectiveOperation audit mechanism** for the ~15 switch sites (checklist, CI verification, or marker comments)

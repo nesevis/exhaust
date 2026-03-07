@@ -132,8 +132,8 @@ struct CollectionGeneratorTests {
             let gen = Gen.arrayOf(
                 Gen.choose(in: 0 ... 100) as ReflectiveGenerator<Int>,
                 exactly: 5
-            ).bind { array in
-                Gen.shuffled(ReflectiveGenerator<[Int]>.pure(array)).map { shuffled in
+            )._bind { array in
+                Gen.shuffled(ReflectiveGenerator<[Int]>.pure(array))._map { shuffled in
                     (array.sorted(), shuffled.sorted())
                 }
             }

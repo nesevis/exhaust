@@ -111,7 +111,7 @@ struct BinaryHeapShrinkingChallenge {
         }
 
         let nodeGen = #gen(.int(in: min ... maxVal))
-            .bind { value in
+            ._bind { value in
                 Gen.zip(
                     heapGen(min: value, depth: depth / 2),
                     heapGen(min: value, depth: depth / 2),

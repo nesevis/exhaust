@@ -67,7 +67,7 @@ public extension ReflectiveGenerator where Operation == ReflectiveOperation {
             // FIXME: Should we be force unwrapping here? What if it's optional?
             try backward.extract(from: newOutput)!
         }
-        let erasedGen = try map { try forward.extract(from: $0) }
+        let erasedGen = try _map { try forward.extract(from: $0) }
 
         return Gen.contramap(erasedBackward, erasedGen)
     }
@@ -89,7 +89,7 @@ public extension ReflectiveGenerator where Operation == ReflectiveOperation {
         backward: @Sendable @escaping (NewOutput) throws -> Value,
     ) throws -> ReflectiveGenerator<NewOutput?> {
         let erasedBackward: (Any) throws -> Any = { try backward($0 as! NewOutput) }
-        let erasedGen = try map { try forward.extract(from: $0) }
+        let erasedGen = try _map { try forward.extract(from: $0) }
 
         return Gen.contramap(erasedBackward, erasedGen)
     }
@@ -105,7 +105,7 @@ public extension ReflectiveGenerator where Operation == ReflectiveOperation {
     func map<NewOutput>(
         _ path: some PartialPath<Value, NewOutput>,
     ) throws -> ReflectiveGenerator<NewOutput?> {
-        try map { try path.extract(from: $0) }
+        try _map { try path.extract(from: $0) }
     }
 
     /// Converts this generator to produce optional values, enabling nil/non-nil choice patterns.
@@ -383,5 +383,54 @@ public extension ReflectiveGenerator where Operation == ReflectiveOperation {
     /// ```
     static func getSize() -> ReflectiveGenerator<UInt64> {
         Gen.getSize()
+    }
+
+    // MARK: - Functor & Monad
+
+    /// Transforms the generated value using a pure function.
+    ///
+    /// Use `map` when you want to convert the output type without introducing
+    /// additional generator structure. The transformation is applied after generation.
+    ///
+    /// ```swift
+    /// let lengths = #gen(.asciiString()).map { $0.count }
+    /// ```
+    ///
+    /// - Parameter transform: A function to apply to each generated value
+    /// - Returns: A generator producing the transformed values
+    @inlinable
+    func map<NewValue>(_ transform: @Sendable @escaping (Value) throws -> NewValue) rethrows -> ReflectiveGenerator<NewValue> {
+        switch self {
+        case let .pure(value): try .pure(transform(value))
+        case let .impure(operation, continuation):
+            .impure(operation: operation) { try continuation($0).map(transform) }
+        }
+    }
+
+    /// Chains this generator with a dependent generator.
+    ///
+    /// Use `bind` when the next generator depends on the value produced by this one.
+    /// This is more powerful than `map` but **breaks reflection** — the backward pass
+    /// cannot see through the dependency, so shrinking will not work through `bind` chains.
+    ///
+    /// Prefer `map`, `zip`, or `#gen(a, b) { ... }` when possible. Use `bind` only
+    /// when you genuinely need dependent generation.
+    ///
+    /// ```swift
+    /// let dependentArray = #gen(.int(in: 1...10)).bind { n in
+    ///     Gen.arrayOf(Gen.choose(in: 0...n), exactly: UInt64(n))
+    /// }
+    /// ```
+    ///
+    /// - Parameter transform: A function that takes the generated value and returns a new generator
+    /// - Returns: A generator that sequences the two computations
+    @inlinable
+    func bind<NewValue>(_ transform: @Sendable @escaping (Value) throws -> ReflectiveGenerator<NewValue>) rethrows -> ReflectiveGenerator<NewValue> {
+        switch self {
+        case let .pure(value):
+            try transform(value)
+        case let .impure(operation, continuation):
+            .impure(operation: operation) { try continuation($0).bind(transform) }
+        }
     }
 }

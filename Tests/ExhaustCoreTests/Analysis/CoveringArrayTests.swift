@@ -317,8 +317,8 @@ private func asciiStringGen(length: ClosedRange<Int>) -> ReflectiveGenerator<Str
             return asciiSRS.index(of: scalar)
         },
         Gen.choose(in: 0 ... asciiSRS.scalarCount - 1)
-            .map { Character(asciiSRS.scalar(at: $0)) }
+            ._map { Character(asciiSRS.scalar(at: $0)) }
     )
     return Gen.arrayOf(charGen, within: UInt64(length.lowerBound) ... UInt64(length.upperBound))
-        .map { String($0) }
+        ._map { String($0) }
 }

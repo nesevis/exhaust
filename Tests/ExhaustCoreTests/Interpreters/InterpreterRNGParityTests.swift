@@ -242,7 +242,7 @@ struct InterpreterRNGParityTests {
 
     @Test("Mapped generator parity")
     func mappedGeneratorParity() throws {
-        let gen = Gen.choose(in: UInt64.min ... UInt64.max, scaling: UInt64.defaultScaling).map { $0 % 100 }
+        let gen = Gen.choose(in: UInt64.min ... UInt64.max, scaling: UInt64.defaultScaling)._map { $0 % 100 }
         let seed: UInt64 = 5555
 
         var vi = ValueInterpreter(gen, seed: seed, maxRuns: 10)
@@ -257,7 +257,7 @@ struct InterpreterRNGParityTests {
 
     @Test("FlatMapped generator parity")
     func flatMappedGeneratorParity() throws {
-        let gen = Gen.choose(in: 1 ... 10 as ClosedRange<Int>).bind { size in
+        let gen = Gen.choose(in: 1 ... 10 as ClosedRange<Int>)._bind { size in
             Gen.arrayOf(Gen.choose(in: UInt64.min ... UInt64.max, scaling: UInt64.defaultScaling), exactly: UInt64(size))
         }
         let seed: UInt64 = 6666
@@ -305,8 +305,8 @@ struct InterpreterRNGParityTests {
             Gen.choose(from: [true, false])
         )
         let middleGen = Gen.pick(choices: [
-            (1, innerGen.map { ($0.0, $0.1, 1) }),
-            (1, innerGen.map { ($0.0, $0.1, 2) }),
+            (1, innerGen._map { ($0.0, $0.1, 1) }),
+            (1, innerGen._map { ($0.0, $0.1, 2) }),
         ])
         let outerGen = Gen.arrayOf(middleGen, exactly: 3)
         let seed: UInt64 = 11111

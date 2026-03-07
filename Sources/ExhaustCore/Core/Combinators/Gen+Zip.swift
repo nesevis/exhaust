@@ -29,7 +29,7 @@ public extension Gen {
                 }
                 return values
             },
-            impure.map { (values: [Any]) -> (repeat each T) in
+            impure._map { (values: [Any]) -> (repeat each T) in
                 var index = 0
                 func next<U>(_: U.Type) -> U {
                     defer { index += 1 }

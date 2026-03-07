@@ -114,7 +114,7 @@ public extension __ExhaustRuntime {
             _mirrorExtractAll(output, labels: labels)
         }
 
-        return Gen.contramap(backwardToArray, impure.map(forwardFromArray))
+        return Gen.contramap(backwardToArray, impure._map(forwardFromArray))
     }
 
     /// Zips multiple generators with a failable backward closure for extraction.
@@ -165,7 +165,7 @@ public extension __ExhaustRuntime {
             return values
         }
 
-        return Gen.contramap(backwardToArray, impure.map(forwardFromArray))
+        return Gen.contramap(backwardToArray, impure._map(forwardFromArray))
     }
 
     // MARK: - Scalar conversion overloads

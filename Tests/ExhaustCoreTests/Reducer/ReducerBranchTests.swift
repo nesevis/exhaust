@@ -45,14 +45,14 @@ private func makeTaggedGen() -> ReflectiveGenerator<Tagged> {
             if case let .small(a) = tagged { return a }
             return 0
         },
-        Gen.choose(in: 0 ... 100 as ClosedRange<Int>).map { Tagged.small($0) }
+        Gen.choose(in: 0 ... 100 as ClosedRange<Int>)._map { Tagged.small($0) }
     )
     let bigBranch = Gen.contramap(
         { (tagged: Tagged) throws -> (Int, Int) in
             if case let .big(a, b) = tagged { return (a, b) }
             return (0, 0)
         },
-        Gen.zip(Gen.choose(in: 0 ... 100 as ClosedRange<Int>), Gen.choose(in: 0 ... 100 as ClosedRange<Int>)).map { Tagged.big($0, $1) }
+        Gen.zip(Gen.choose(in: 0 ... 100 as ClosedRange<Int>), Gen.choose(in: 0 ... 100 as ClosedRange<Int>))._map { Tagged.big($0, $1) }
     )
     return Gen.pick(choices: [(1, smallBranch), (1, bigBranch)])
 }
@@ -64,7 +64,7 @@ private func makeTaggedGen() -> ReflectiveGenerator<Tagged> {
 private func makeThreeWayGen() -> ReflectiveGenerator<Int> {
     let pairBranch = Gen.contramap(
         { (value: Int) -> (Int, Int) in (value / 2, value - value / 2) },
-        Gen.zip(Gen.choose(in: 1 ... 50 as ClosedRange<Int>), Gen.choose(in: 1 ... 50 as ClosedRange<Int>)).map { $0 + $1 }
+        Gen.zip(Gen.choose(in: 1 ... 50 as ClosedRange<Int>), Gen.choose(in: 1 ... 50 as ClosedRange<Int>))._map { $0 + $1 }
     )
     return Gen.pick(choices: [(1, Gen.choose(in: 0 ... 0 as ClosedRange<Int>)), (1, Gen.choose(in: 1 ... 100 as ClosedRange<Int>)), (1, pairBranch)])
 }

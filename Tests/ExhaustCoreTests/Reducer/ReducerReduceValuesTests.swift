@@ -236,7 +236,7 @@ struct ReducerReduceValuesTests {
     func dynamicRangesDoNotBlockValueShrinking() throws {
         // Child values are constrained by the chosen parent value.
         let gen = Gen.choose(in: UInt64(0) ... 100)
-            .bind { parent in
+            ._bind { parent in
                 Gen.zip(Gen.just(parent), Gen.choose(in: parent ... 100), Gen.choose(in: parent ... 100))
             }
 

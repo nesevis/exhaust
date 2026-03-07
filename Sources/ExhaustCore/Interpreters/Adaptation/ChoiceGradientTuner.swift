@@ -483,7 +483,7 @@ public enum ChoiceGradientTuner<FinalOutput> {
 
                         let subSeqGen: ReflectiveGenerator<Any> = try .impure(
                             operation: .sequence(
-                                length: subSizeGen.bind(getSizeContinuation),
+                                length: subSizeGen._bind(getSizeContinuation),
                                 gen: subdividedElement,
                             ),
                             continuation: { .pure($0) },

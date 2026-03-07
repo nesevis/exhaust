@@ -89,7 +89,7 @@ struct MetaGeneratorPropertyTests {
             // contramap(id, gen.map(id)) adds no PRNG-consuming operations
             let mappedGen: ReflectiveGenerator<Any> = Gen.contramap(
                 { (newOutput: Any) throws -> Any in newOutput },
-                gen.map { $0 }
+                gen._map { $0 }
             )
 
             var iter1: ValueInterpreter<Any> = ValueInterpreter(gen, seed: 42, maxRuns: 10)
@@ -117,9 +117,9 @@ struct MetaGeneratorPropertyTests {
             let g: (Any) -> Any = { ($0 as! Int) + 1 }
 
             // gen.map(f).map(g)
-            let composed1 = gen.map(f).map(g)
+            let composed1 = gen._map(f)._map(g)
             // gen.map(g . f)
-            let composed2 = gen.map { g(f($0)) }
+            let composed2 = gen._map { g(f($0)) }
 
             var iter1 = ValueInterpreter(composed1, seed: 42, maxRuns: 10)
             var iter2 = ValueInterpreter(composed2, seed: 42, maxRuns: 10)
@@ -143,7 +143,7 @@ struct MetaGeneratorPropertyTests {
                 Gen.choose(in: val ... (val + 10))
             }
 
-            let lhs: ReflectiveGenerator<Int> = Gen.just(x).bind { f($0) }
+            let lhs: ReflectiveGenerator<Int> = Gen.just(x)._bind { f($0) }
             let rhs: ReflectiveGenerator<Int> = f(x)
 
             var lhsIter = ValueInterpreter(lhs, seed: 99, maxRuns: 5)
@@ -164,7 +164,7 @@ struct MetaGeneratorPropertyTests {
         while let recipe = try recipeIter.next() {
             let gen = buildGenerator(from: recipe)
             // bind { .pure($0) } adds no PRNG-consuming operations
-            let boundGen = gen.bind { .pure($0) }
+            let boundGen = gen._bind { .pure($0) }
 
             var iter1 = ValueInterpreter(gen, seed: 42, maxRuns: 10)
             var iter2 = ValueInterpreter(boundGen, seed: 42, maxRuns: 10)

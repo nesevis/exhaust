@@ -92,7 +92,7 @@ struct OneOfTests {
             (1, Gen.just(1)),
             (1, Gen.just(2)),
             (1, Gen.just(3)),
-        ]).map { $0 * 10 }
+        ])._map { $0 * 10 }
         var iterator = ValueInterpreter(gen)
         let value = try iterator.next()
         #expect(value == 10 || value == 20 || value == 30)

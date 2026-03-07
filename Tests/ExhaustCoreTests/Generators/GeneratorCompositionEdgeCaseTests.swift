@@ -81,8 +81,8 @@ struct GeneratorCompositionEdgeCaseTests {
 
     @Test("Composition with bound generators")
     func boundGeneratorComposition() throws {
-        let dependentGen = (Gen.choose(in: Int.min ... Int.max, scaling: Int.defaultScaling) as ReflectiveGenerator<Int>).bind { first in
-            Gen.choose(in: first ... (first + 10)).map { second in
+        let dependentGen = (Gen.choose(in: Int.min ... Int.max, scaling: Int.defaultScaling) as ReflectiveGenerator<Int>)._bind { first in
+            Gen.choose(in: first ... (first + 10))._map { second in
                 (first, second)
             }
         }

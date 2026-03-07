@@ -18,9 +18,9 @@ enum JSONValue: Equatable, Hashable, CustomStringConvertible {
 
     static func arbitraryRecursive(maxDepth: UInt64 = 5) -> ReflectiveGenerator<JSONValue> {
         Gen.recursive(base: .null, maxDepth: maxDepth) { recurse, remaining in
-            let intLeaf = Gen.choose(in: valueRange).map { JSONValue.int($0) }
+            let intLeaf = Gen.choose(in: valueRange)._map { JSONValue.int($0) }
             let arrayBranch = Gen.arrayOf(recurse(), within: 0 ... 3, scaling: .constant)
-                .map { JSONValue.array($0) }
+                ._map { JSONValue.array($0) }
 
             return Gen.pick(choices: [
                 (weight: 2, generator: Gen.just(.null)),

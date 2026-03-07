@@ -52,13 +52,13 @@ public struct OnlineCGSInterpreter<FinalOutput>: ~Copyable, ExhaustIterator {
             for frame in frames.reversed() {
                 switch frame {
                 case let .bind(continuation):
-                    current = try current.bind { try continuation($0) }
+                    current = try current._bind { try continuation($0) }
 
                 case let .zipComponent(index, completed, allGenerators, continuation):
                     let capturedIndex = index
                     let capturedCompleted = completed
                     let capturedGenerators = allGenerators
-                    current = try current.bind { componentResult -> ReflectiveGenerator<Any> in
+                    current = try current._bind { componentResult -> ReflectiveGenerator<Any> in
                         var gens = ContiguousArray<ReflectiveGenerator<Any>>()
                         gens.reserveCapacity(capturedGenerators.count)
                         for (j, g) in capturedGenerators.enumerated() {
@@ -74,13 +74,13 @@ public struct OnlineCGSInterpreter<FinalOutput>: ~Copyable, ExhaustIterator {
                             operation: .zip(gens),
                             continuation: { .pure($0) },
                         )
-                    }.bind { zipResult in
+                    }._bind { zipResult in
                         try continuation(zipResult)
                     }
 
                 }
             }
-            return current.map { $0 as! FinalOutput }
+            return current._map { $0 as! FinalOutput }
         }
     }
 
@@ -696,7 +696,7 @@ public struct OnlineCGSInterpreter<FinalOutput>: ~Copyable, ExhaustIterator {
         var derivatives = ContiguousArray<ReflectiveGenerator<FinalOutput>>()
         derivatives.reserveCapacity(liveChoiceMap.count)
         for i in liveChoiceMap {
-            let derivative = try choices[i].generator.bind { innerValue in
+            let derivative = try choices[i].generator._bind { innerValue in
                 try continuation(innerValue).erase()
             }
             derivatives.append(try derivativeContext.apply(derivative))

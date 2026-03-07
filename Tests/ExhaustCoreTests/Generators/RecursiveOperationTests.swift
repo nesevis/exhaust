@@ -89,9 +89,9 @@ struct RecursiveOperationTests {
     @Test("Base-as-generator overload works")
     func baseAsGenerator() throws {
         // Use a generator for the base case (random leaf values)
-        let baseGen = Gen.choose(in: UInt(0) ... 9).map { BST.node(left: .leaf, value: $0, right: .leaf) }
+        let baseGen = Gen.choose(in: UInt(0) ... 9)._map { BST.node(left: .leaf, value: $0, right: .leaf) }
         let gen = Gen.recursive(base: baseGen, maxDepth: 5) { recurse, remaining in
-            let nodeBranch = Gen.zip(recurse(), Gen.choose(in: UInt(0) ... 9), recurse()).map { left, value, right in
+            let nodeBranch = Gen.zip(recurse(), Gen.choose(in: UInt(0) ... 9), recurse())._map { left, value, right in
                 BST.node(left: left, value: value, right: right)
             }
             return Gen.pick(choices: [

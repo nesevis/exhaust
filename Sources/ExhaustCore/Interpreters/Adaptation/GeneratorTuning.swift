@@ -663,7 +663,7 @@ public enum GeneratorTuning {
                 // the actual length generator, then build the sequence
                 let subSeqGen: ReflectiveGenerator<Any> = try .impure(
                     operation: .sequence(
-                        length: subSizeGen.bind(getSizeContinuation),
+                        length: subSizeGen._bind(getSizeContinuation),
                         gen: elementGen,
                     ),
                     continuation: { .pure($0) },
