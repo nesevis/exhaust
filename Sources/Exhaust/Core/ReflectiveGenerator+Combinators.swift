@@ -17,8 +17,8 @@ public extension ReflectiveGenerator where Operation == ReflectiveOperation {
     /// - Throws: Rethrows errors from the transformation functions
     @inlinable
     func mapped<NewOutput>(
-        forward: @escaping (Value) throws -> NewOutput,
-        backward: @escaping (NewOutput) throws -> Value,
+        forward: @Sendable @escaping (Value) throws -> NewOutput,
+        backward: @Sendable @escaping (NewOutput) throws -> Value,
     ) rethrows -> ReflectiveGenerator<NewOutput> {
         try Gen.contramap(backward, map(forward))
     }
@@ -36,7 +36,7 @@ public extension ReflectiveGenerator where Operation == ReflectiveOperation {
     /// - Throws: Rethrows errors from the forward transformation
     @inlinable
     func mapped<NewOutput>(
-        forward: @escaping (Value) throws -> NewOutput,
+        forward: @Sendable @escaping (Value) throws -> NewOutput,
         backward: some PartialPath<NewOutput, Value>,
     ) rethrows -> ReflectiveGenerator<NewOutput> {
         let erasedBackward: (Any) throws -> Any = { newOutput in
@@ -86,7 +86,7 @@ public extension ReflectiveGenerator where Operation == ReflectiveOperation {
     @inlinable
     func mapped<NewOutput>(
         forward: some PartialPath<Value, NewOutput>,
-        backward: @escaping (NewOutput) throws -> Value,
+        backward: @Sendable @escaping (NewOutput) throws -> Value,
     ) throws -> ReflectiveGenerator<NewOutput?> {
         let erasedBackward: (Any) throws -> Any = { try backward($0 as! NewOutput) }
         let erasedGen = try map { try forward.extract(from: $0) }
@@ -150,7 +150,7 @@ public extension ReflectiveGenerator where Operation == ReflectiveOperation {
     /// ```
     @inlinable
     func classify(
-        _ classifiers: (String, (Value) -> Bool)...,
+        _ classifiers: (String, @Sendable (Value) -> Bool)...,
     ) -> ReflectiveGenerator<Value> {
         .impure(operation:
             .classify(
@@ -209,7 +209,7 @@ public extension ReflectiveGenerator where Operation == ReflectiveOperation {
     @inlinable
     func filter(
         _ type: FilterType = .auto,
-        _ predicate: @escaping (Value) -> Bool,
+        _ predicate: @Sendable @escaping (Value) -> Bool,
         fileID: String = #fileID,
         line: UInt = #line,
     ) -> ReflectiveGenerator<Value> {
@@ -281,7 +281,8 @@ public extension ReflectiveGenerator where Operation == ReflectiveOperation {
         fileID: String = #fileID,
         line: UInt = #line,
     ) -> ReflectiveGenerator<Value> {
-        unique(by: { $0[keyPath: keyPath] }, fileID: fileID, line: line)
+        nonisolated(unsafe) let keyPath = keyPath
+        return unique(by: { $0[keyPath: keyPath] }, fileID: fileID, line: line)
     }
 
     /// Creates a generator that only produces unique values, deduplicated by a transform.
@@ -296,7 +297,7 @@ public extension ReflectiveGenerator where Operation == ReflectiveOperation {
     /// - Returns: A generator that only yields values with unique keys.
     @inlinable
     func unique(
-        by transform: @escaping (Value) -> some Hashable,
+        by transform: @Sendable @escaping (Value) -> some Hashable,
         fileID: String = #fileID,
         line: UInt = #line,
     ) -> ReflectiveGenerator<Value> {
@@ -333,7 +334,7 @@ public extension ReflectiveGenerator where Operation == ReflectiveOperation {
     static func recursive(
         base: Value,
         maxDepth: UInt64,
-        extend: @escaping (@escaping () -> ReflectiveGenerator<Value>, UInt64) -> ReflectiveGenerator<Value>
+        extend: @Sendable @escaping (@escaping () -> ReflectiveGenerator<Value>, UInt64) -> ReflectiveGenerator<Value>
     ) -> ReflectiveGenerator<Value> {
         Gen.recursive(base: base, maxDepth: maxDepth, extend: extend)
     }
@@ -365,7 +366,7 @@ public extension ReflectiveGenerator where Operation == ReflectiveOperation {
     static func recursive(
         base: ReflectiveGenerator<Value>,
         maxDepth: UInt64,
-        extend: @escaping (@escaping () -> ReflectiveGenerator<Value>, UInt64) -> ReflectiveGenerator<Value>
+        extend: @Sendable @escaping (@escaping () -> ReflectiveGenerator<Value>, UInt64) -> ReflectiveGenerator<Value>
     ) -> ReflectiveGenerator<Value> {
         Gen.recursive(base: base, maxDepth: maxDepth, extend: extend)
     }

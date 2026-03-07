@@ -33,7 +33,7 @@ struct GeneratorTuningIntegrationTests {
         let gen = #gen(.oneOf(weighted:
             (1, .int(in: 1 ... 500)),
             (1, .int(in: 501 ... 1000))))
-        let predicate: (Int) -> Bool = { $0 <= 250 }
+        let predicate: @Sendable (Int) -> Bool = { $0 <= 250 }
 
         // Raw generator: only ~25% of output satisfies the predicate
         var rawIter = ValueInterpreter(gen, seed: 99, maxRuns: 200)
@@ -107,7 +107,7 @@ struct GeneratorTuningIntegrationTests {
 
     @Test("BST: .probeSampling produces more valid BSTs than raw generation")
     func bstProbeSamplingOutperformsRawGeneration() throws {
-        let isValidNonLeafBST: (BST) -> Bool = { tree in
+        let isValidNonLeafBST: @Sendable (BST) -> Bool = { tree in
             tree != .leaf && tree.isValidBST()
         }
 
@@ -130,7 +130,7 @@ struct GeneratorTuningIntegrationTests {
 
     @Test("BST: timed benchmark — .probeSampling vs .rejectionSampling (paper comparison)", .disabled("Not required"))
     func bstTimedBenchmark() throws {
-        let isValidBST: (BST) -> Bool = { $0.height >= 1 && $0.isValidBST() }
+        let isValidBST: @Sendable (BST) -> Bool = { $0.height >= 1 && $0.isValidBST() }
         let duration: TimeInterval = 1
 
         // --- .rejectionSampling strategy ---
@@ -165,7 +165,7 @@ struct GeneratorTuningIntegrationTests {
 
     @Test("BST: .probeSampling produces valid non-leaf trees")
     func bstProbeSamplingNonLeaf() throws {
-        let isValidNonLeafBST: (BST) -> Bool = { tree in
+        let isValidNonLeafBST: @Sendable (BST) -> Bool = { tree in
             tree != .leaf && tree.isValidBST()
         }
 

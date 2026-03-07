@@ -21,7 +21,7 @@ public extension __ExhaustRuntime {
     static func _macroMap<Input, Output>(
         _ generator: ReflectiveGenerator<Input>,
         label: String,
-        forward: @escaping (Input) -> Output,
+        forward: @Sendable @escaping (Input) -> Output,
     ) -> ReflectiveGenerator<Output> {
         Gen.contramap(
             { _mirrorExtract($0, label: label) },
@@ -47,8 +47,8 @@ public extension __ExhaustRuntime {
     /// - Returns: A bidirectional generator with case-discriminating backward mapping.
     static func _macroMap<Input, Output>(
         _ generator: ReflectiveGenerator<Input>,
-        backward: @escaping (Output) -> Input?,
-        forward: @escaping (Input) -> Output,
+        backward: @Sendable @escaping (Output) -> Input?,
+        forward: @Sendable @escaping (Input) -> Output,
     ) -> ReflectiveGenerator<Output> {
         Gen.contramap(
             { (output: Output) throws -> Input in
@@ -88,7 +88,7 @@ public extension __ExhaustRuntime {
     static func _macroZip<each T, NewOutput>(
         _ generators: repeat ReflectiveGenerator<each T>,
         labels: [String],
-        forward: @escaping ((repeat each T)) -> NewOutput,
+        forward: @Sendable @escaping ((repeat each T)) -> NewOutput,
     ) -> ReflectiveGenerator<NewOutput> {
         var erased: ContiguousArray<ReflectiveGenerator<Any>> = []
         erased.reserveCapacity(5)
@@ -135,8 +135,8 @@ public extension __ExhaustRuntime {
     /// - Returns: A bidirectional generator with case-discriminating backward mapping.
     static func _macroZip<each T, NewOutput>(
         _ generators: repeat ReflectiveGenerator<each T>,
-        backward: @escaping (NewOutput) -> [Any]?,
-        forward: @escaping ((repeat each T)) -> NewOutput,
+        backward: @Sendable @escaping (NewOutput) -> [Any]?,
+        forward: @Sendable @escaping ((repeat each T)) -> NewOutput,
     ) -> ReflectiveGenerator<NewOutput> {
         var erased: ContiguousArray<ReflectiveGenerator<Any>> = []
         erased.reserveCapacity(5)
@@ -178,7 +178,7 @@ public extension __ExhaustRuntime {
     @inlinable
     static func _macroMapScalar<Input: BinaryInteger, Output: BinaryInteger>(
         _ generator: ReflectiveGenerator<Input>,
-        forward: @escaping (Input) -> Output,
+        forward: @Sendable @escaping (Input) -> Output,
     ) -> ReflectiveGenerator<Output> {
         generator.mapped(forward: forward, backward: { Input($0) })
     }
@@ -187,7 +187,7 @@ public extension __ExhaustRuntime {
     @inlinable
     static func _macroMapScalar<Input: BinaryFloatingPoint, Output: BinaryFloatingPoint>(
         _ generator: ReflectiveGenerator<Input>,
-        forward: @escaping (Input) -> Output,
+        forward: @Sendable @escaping (Input) -> Output,
     ) -> ReflectiveGenerator<Output> {
         generator.mapped(forward: forward, backward: { Input($0) })
     }
@@ -196,7 +196,7 @@ public extension __ExhaustRuntime {
     @inlinable
     static func _macroMapScalar<Input, Output>(
         _ generator: ReflectiveGenerator<Input>,
-        forward: @escaping (Input) -> Output,
+        forward: @Sendable @escaping (Input) -> Output,
     ) -> ReflectiveGenerator<Output> {
         generator.map(forward)
     }

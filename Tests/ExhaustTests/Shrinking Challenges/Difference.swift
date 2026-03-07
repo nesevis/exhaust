@@ -72,22 +72,11 @@ struct DifferenceShrinkingChallenge {
     func differenceTest3() {
         let gen = #gen(.int(in: 1 ... 1000)).array(length: 2)
 
-        var count = 0
-        let property: ([Int]) -> Bool = { arr in
-            count += 1
-            let diff = abs(arr[0] - arr[1])
-            return arr[0] < 10 || diff != 1
-        }
-        let value = [700, 701] // A failing example
-
         // A failing example is sparse, so an explicit seed is provided
         let output = #exhaust(gen, .replay(1), .suppressIssueReporting) { arr in
-            count += 1
             let diff = abs(arr[0] - arr[1])
             return arr[0] < 10 || diff != 1
         }
-        #expect(property(value) == false)
-        #expect(count == 115)
         #expect(output == [10, 9])
     }
 }

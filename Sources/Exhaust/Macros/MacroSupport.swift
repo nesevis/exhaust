@@ -29,7 +29,7 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
         filePath: StaticString = #filePath,
         line: UInt = #line,
         column: UInt = #column,
-        property: (Output) -> Bool,
+        property: @Sendable (Output) -> Bool,
     ) -> Output? {
         var maxIterations: UInt64 = 100
         var coverageBudget: UInt64 = 100
@@ -335,13 +335,13 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
     public static func __explore<Output>(
         _ gen: ReflectiveGenerator<Output>,
         settings: [ExploreSettings],
-        scorer: @escaping (Output) -> Double,
+        scorer: @Sendable @escaping (Output) -> Double,
         sourceCode: String?,
         fileID: StaticString = #fileID,
         filePath: StaticString = #filePath,
         line: UInt = #line,
         column: UInt = #column,
-        property: @escaping (Output) -> Bool,
+        property: @Sendable @escaping (Output) -> Bool,
     ) -> Output? {
         var maxIterations: UInt64 = 10_000
         var seed: UInt64?
@@ -496,7 +496,7 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
         filePath: StaticString,
         line: UInt,
         column: UInt,
-        property: (Output) -> Bool,
+        property: @Sendable (Output) -> Bool,
     ) throws -> Output? {
         guard property(value) == false else {
             let message = "reflecting: value passes the property — reduction requires a failing value"
