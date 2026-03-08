@@ -8,9 +8,7 @@
 extension ReflectiveGenerator: CustomDebugStringConvertible where Operation == ReflectiveOperation {
     /// Provides a human-readable tree view of the generator composition.
     ///
-    /// This implementation shows the hierarchical structure of generator operations,
-    /// making it easier to understand complex generator compositions, debug generation
-    /// issues, and visualize how Choice Gradient Sampling optimizations are applied.
+    /// This implementation shows the hierarchical structure of generator operations, making it easier to understand complex generator compositions, debug generation issues, and visualize how Choice Gradient Sampling optimizations are applied.
     ///
     /// Example output:
     /// ```
@@ -129,7 +127,6 @@ extension ReflectiveGenerator: CustomDebugStringConvertible where Operation == R
             let mode = keyExtractor != nil ? "by key" : "by choice sequence"
             let genDesc = gen.treeDescription(prefix: childPrefix, isLast: true, depth: depth + 1)
             return "unique(fingerprint: \(fingerprintShort), \(mode))\n" + genDesc
-
         }
     }
 

@@ -7,6 +7,11 @@
 
 import Foundation
 
+// MARK: - Academic Provenance
+
+//
+// Implements the `generate` interpretation G⟦·⟧ (Goldstein §3.3.3, Fig 4.3 for the reflective version). Pure forward pass that consumes PRNG entropy to produce values — no randomness capture.
+
 public struct ValueInterpreter<Element>: ~Copyable, ExhaustIterator {
     let generator: ReflectiveGenerator<Element>
     private var context: GenerationContext
@@ -72,8 +77,7 @@ public struct ValueInterpreter<Element>: ~Copyable, ExhaustIterator {
         }
     }
 
-    /// Used to generate results around a similar level of complexity.
-    /// Intended to be used to increase pool of results to compare against
+    /// Used to generate results around a similar level of complexity. Intended to be used to increase pool of results to compare against.
     func fixedAtSize() -> ValueInterpreter<Element> {
         var fixed = ValueInterpreter(
             generator,

@@ -5,11 +5,11 @@
 //  Created by Chris Kolbu on 11/2/2026.
 //
 
+import ExhaustCore
 import Foundation
 import OSLog
 import Testing
 @testable import Exhaust
-import ExhaustCore
 
 @MainActor
 @Suite("Shrinking Challenge: Bound5")
@@ -79,14 +79,14 @@ struct Bound5ShrinkingChallenge {
         #expect(arr.count == 2)
         #expect(arr == [-32768, -1])
     }
-    
+
     @Test("Bound5, Pathological 3")
     func bound5Pathological3() throws {
         let value: Bound5 = ([-11954, 25609, -21279], [20837, 6773, -1304, -13732, -2626, -3440, 15253, 28268, -31908, 30491], [23543, -10339, -12447, 9150, 18335, -2103, 15547, 11124], [-32635, 18394, -23954, 13750, 27692, 25639, 23372, -27650, 18759, 17794], [-6525, 2724, -30958, 28797, -2409, -1095, 2335, -14856])
-        
+
         let counterExample = #exhaust(Self.gen, .suppressIssueReporting, .reflecting(value), property: Self.property)
         let output = try #require(counterExample)
-        
+
         let arr = (output.0 + output.1 + output.2 + output.3 + output.4).sorted()
         #expect(arr.count == 2)
         #expect(arr == [-32768, -1])
@@ -100,16 +100,16 @@ struct Bound5ShrinkingChallenge {
             let c: [Int16]
             let d: [Int16]
             let e: [Int16]
-            
+
             let arr: [Int16]
-            
+
             init(a: [Int16], b: [Int16], c: [Int16], d: [Int16], e: [Int16]) {
                 self.a = a
                 self.b = b
                 self.c = c
                 self.d = d
                 self.e = e
-                self.arr = a + b + c + d + e
+                arr = a + b + c + d + e
             }
         }
         let arrGen = #gen(.int16(scaling: .linear).array(length: 0 ... 10))

@@ -114,7 +114,6 @@ enum LightweightSampler {
                 guard let result = try eval(gen, with: inputValue, rng: &rng, size: size) else { return nil }
                 _ = keyExtractor // suppress unused warning
                 return try cont(result, continuation, inputValue: inputValue, rng: &rng, size: size)
-
             }
         }
     }

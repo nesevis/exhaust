@@ -3,17 +3,19 @@ import SwiftSyntax
 import SwiftSyntaxBuilder
 import SwiftSyntaxMacros
 
-/// Expression macro that expands `#explore(gen, .settings..., scorer: scoreFn) { ... }` or
-/// `#explore(gen, .settings..., scorer: scoreFn, property: someFunc)` into a call to
-/// `__ExhaustRuntime.__explore(...)`.
+/// Expression macro that expands `#explore(gen, .settings..., scorer: scoreFn) { ... }` or `#explore(gen, .settings..., scorer: scoreFn, property: someFunc)` into a call to `__ExhaustRuntime.__explore(...)`.
 ///
-/// When a trailing closure is used, the closure body source code is captured
-/// for log output. When a function reference is passed, `sourceCode` is `nil`.
+/// When a trailing closure is used, the closure body source code is captured for log output. When a function reference is passed, `sourceCode` is `nil`.
 public struct ExploreMacro: ExpressionMacro {
     public static func expansion(
         of node: some FreestandingMacroExpansionSyntax,
         in context: some MacroExpansionContext,
     ) throws -> ExprSyntax {
+        context.diagnose(Diagnostic(
+            node: Syntax(node),
+            message: ExhaustMacroDiagnostic.exploreUnderDevelopment,
+        ))
+
         let args = node.arguments.map(\.self)
 
         if let trailingClosure = node.trailingClosure {

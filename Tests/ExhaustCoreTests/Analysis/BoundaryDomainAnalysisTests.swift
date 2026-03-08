@@ -121,7 +121,7 @@ struct BoundaryDomainAnalysisTests {
             Gen.choose(in: 0 ... 10000),
             Gen.choose(in: 0 ... 10000),
             Gen.choose(in: 0 ... 10000),
-            Gen.choose(in: 0 ... 10000)
+            Gen.choose(in: 0 ... 10000),
         )
         let result = ChoiceTreeAnalysis.analyze(gen)
         #expect(result == nil)
@@ -289,7 +289,7 @@ struct ChoiceTreeAnalysisTests {
             Gen.choose(in: 0 ... 10000), Gen.choose(in: 0 ... 10000), Gen.choose(in: 0 ... 10000),
             Gen.choose(in: 0 ... 10000), Gen.choose(in: 0 ... 10000), Gen.choose(in: 0 ... 10000),
             Gen.choose(in: 0 ... 10000), Gen.choose(in: 0 ... 10000), Gen.choose(in: 0 ... 10000),
-            Gen.choose(in: 0 ... 10000), Gen.choose(in: 0 ... 10000), Gen.choose(in: 0 ... 10000)
+            Gen.choose(in: 0 ... 10000), Gen.choose(in: 0 ... 10000), Gen.choose(in: 0 ... 10000),
         )
         let result = ChoiceTreeAnalysis.analyze(gen)
         #expect(result == nil)
@@ -300,7 +300,6 @@ struct ChoiceTreeAnalysisTests {
 
 @Suite("Date Boundary Values")
 struct DateBoundaryValueTests {
-
     @Test("Step-domain edges and midpoint are present")
     func stepDomainBoundaries() {
         // Range: 1000 seconds, interval: 100 seconds → 10 steps
@@ -311,7 +310,7 @@ struct DateBoundaryValueTests {
         let values = BoundaryDomainAnalysis.computeBoundaryValues(
             min: lower.bitPattern64,
             max: upper.bitPattern64,
-            tag: .date(intervalSeconds: interval, timeZoneID: "GMT")
+            tag: .date(intervalSeconds: interval, timeZoneID: "GMT"),
         )
 
         // First step
@@ -329,13 +328,13 @@ struct DateBoundaryValueTests {
     @Test("Values are snapped to interval (no off-grid values)")
     func valuesAreSnapped() {
         let lower: Int64 = 0
-        let upper: Int64 = 86_400 * 365 // 1 year
-        let interval: Int64 = 3_600 // 1 hour
+        let upper: Int64 = 86400 * 365 // 1 year
+        let interval: Int64 = 3600 // 1 hour
 
         let values = BoundaryDomainAnalysis.computeBoundaryValues(
             min: lower.bitPattern64,
             max: upper.bitPattern64,
-            tag: .date(intervalSeconds: interval, timeZoneID: "GMT")
+            tag: .date(intervalSeconds: interval, timeZoneID: "GMT"),
         )
 
         for bp in values {
@@ -343,7 +342,7 @@ struct DateBoundaryValueTests {
             let offset = seconds - lower
             #expect(
                 offset >= 0 && offset % interval == 0,
-                "Value \(seconds) is not aligned to interval \(interval) from lower \(lower)"
+                "Value \(seconds) is not aligned to interval \(interval) from lower \(lower)",
             )
         }
     }
@@ -351,14 +350,14 @@ struct DateBoundaryValueTests {
     @Test("Reference date epoch appears when in range")
     func referenceDate() {
         // Range spanning the reference date (0 seconds since ref)
-        let lower: Int64 = -86_400
-        let upper: Int64 = 86_400
+        let lower: Int64 = -86400
+        let upper: Int64 = 86400
         let interval: Int64 = 1
 
         let values = BoundaryDomainAnalysis.computeBoundaryValues(
             min: lower.bitPattern64,
             max: upper.bitPattern64,
-            tag: .date(intervalSeconds: interval, timeZoneID: "GMT")
+            tag: .date(intervalSeconds: interval, timeZoneID: "GMT"),
         )
 
         #expect(values.contains(Int64(0).bitPattern64))
@@ -367,13 +366,13 @@ struct DateBoundaryValueTests {
     @Test("Unix epoch appears when in range")
     func unixEpoch() {
         let unixEpoch: Int64 = -978_307_200
-        let lower = unixEpoch - 86_400
-        let upper = unixEpoch + 86_400
+        let lower = unixEpoch - 86400
+        let upper = unixEpoch + 86400
 
         let values = BoundaryDomainAnalysis.computeBoundaryValues(
             min: lower.bitPattern64,
             max: upper.bitPattern64,
-            tag: .date(intervalSeconds: 1, timeZoneID: "GMT")
+            tag: .date(intervalSeconds: 1, timeZoneID: "GMT"),
         )
 
         #expect(values.contains(unixEpoch.bitPattern64))
@@ -383,12 +382,12 @@ struct DateBoundaryValueTests {
     func epochsOutsideRange() {
         // Range entirely in 2024 — Unix epoch (1970) and Y2038 should not appear
         let lower: Int64 = 725_760_000 // ~2024-01-01
-        let upper: Int64 = lower + 86_400 * 30
+        let upper: Int64 = lower + 86400 * 30
 
         let values = BoundaryDomainAnalysis.computeBoundaryValues(
             min: lower.bitPattern64,
             max: upper.bitPattern64,
-            tag: .date(intervalSeconds: 1, timeZoneID: "GMT")
+            tag: .date(intervalSeconds: 1, timeZoneID: "GMT"),
         )
 
         let unixEpoch: Int64 = -978_307_200
@@ -402,7 +401,6 @@ struct DateBoundaryValueTests {
 
 @Suite("Date Boundary Values — DST Transitions")
 struct DateDSTBoundaryTests {
-
     struct DSTCase: Sendable, CustomTestStringConvertible {
         let label: String
         let timeZoneID: String
@@ -410,7 +408,9 @@ struct DateDSTBoundaryTests {
         let month: Int
         let day: Int
         let hour: Int
-        var testDescription: String { label }
+        var testDescription: String {
+            label
+        }
     }
 
     // Known DST transitions verified against Foundation Calendar below.
@@ -446,24 +446,24 @@ struct DateDSTBoundaryTests {
             year: transition.year,
             month: transition.month,
             day: transition.day,
-            hour: transition.hour
+            hour: transition.hour,
         )
         let expectedDate = calendar.date(from: components)!
         let expectedSeconds = Int64(expectedDate.timeIntervalSinceReferenceDate)
 
         // Range spanning ±7 days around the transition, 1-second interval
-        let lower = expectedSeconds - 7 * 86_400
-        let upper = expectedSeconds + 7 * 86_400
+        let lower = expectedSeconds - 7 * 86400
+        let upper = expectedSeconds + 7 * 86400
 
         let values = BoundaryDomainAnalysis.computeBoundaryValues(
             min: lower.bitPattern64,
             max: upper.bitPattern64,
-            tag: .date(intervalSeconds: 1, timeZoneID: transition.timeZoneID)
+            tag: .date(intervalSeconds: 1, timeZoneID: transition.timeZoneID),
         )
 
         #expect(
             values.contains(expectedSeconds.bitPattern64),
-            "\(transition.label): expected \(expectedSeconds) in boundary values"
+            "\(transition.label): expected \(expectedSeconds) in boundary values",
         )
     }
 
@@ -475,19 +475,19 @@ struct DateDSTBoundaryTests {
             year: transition.year,
             month: transition.month,
             day: transition.day,
-            hour: transition.hour
+            hour: transition.hour,
         )
         let expectedDate = calendar.date(from: components)!
         let expectedSeconds = Int64(expectedDate.timeIntervalSinceReferenceDate)
 
-        let interval: Int64 = 3_600 // 1 hour
-        let lower = expectedSeconds - 7 * 86_400
-        let upper = expectedSeconds + 7 * 86_400
+        let interval: Int64 = 3600 // 1 hour
+        let lower = expectedSeconds - 7 * 86400
+        let upper = expectedSeconds + 7 * 86400
 
         let values = BoundaryDomainAnalysis.computeBoundaryValues(
             min: lower.bitPattern64,
             max: upper.bitPattern64,
-            tag: .date(intervalSeconds: interval, timeZoneID: transition.timeZoneID)
+            tag: .date(intervalSeconds: interval, timeZoneID: transition.timeZoneID),
         )
 
         // The snapped transition and at least one neighbor should be present
@@ -497,14 +497,14 @@ struct DateDSTBoundaryTests {
         #expect(
             values.contains((snapped + interval).bitPattern64)
                 || values.contains((snapped - interval).bitPattern64),
-            "At least one neighbor of snapped transition should be present"
+            "At least one neighbor of snapped transition should be present",
         )
     }
 }
 
 // MARK: - Helpers
 
-private func analyzeBoundary<Output>(_ gen: ReflectiveGenerator<Output>) -> BoundaryDomainProfile? {
+private func analyzeBoundary(_ gen: ReflectiveGenerator<some Any>) -> BoundaryDomainProfile? {
     guard case let .boundary(profile) = ChoiceTreeAnalysis.analyze(gen) else { return nil }
     return profile
 }
@@ -517,13 +517,13 @@ private func asciiStringGen(length: ClosedRange<Int>) -> ReflectiveGenerator<Str
         { (char: Character) throws -> Int in
             guard let scalar = char.unicodeScalars.first else {
                 throw Interpreters.ReflectionError.couldNotReflectOnSequenceElement(
-                    "Character has no scalars"
+                    "Character has no scalars",
                 )
             }
             return asciiSRS.index(of: scalar)
         },
         Gen.choose(in: 0 ... asciiSRS.scalarCount - 1)
-            ._map { Character(asciiSRS.scalar(at: $0)) }
+            ._map { Character(asciiSRS.scalar(at: $0)) },
     )
     return Gen.arrayOf(charGen, within: UInt64(length.lowerBound) ... UInt64(length.upperBound))
         ._map { String($0) }

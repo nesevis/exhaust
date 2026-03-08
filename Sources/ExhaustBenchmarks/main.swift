@@ -1,8 +1,7 @@
 import Benchmark
 import Exhaust
-import Foundation
-
 import ExhaustCore
+import Foundation
 
 // swiftlint:disable force_try
 
@@ -138,16 +137,16 @@ struct Bound5: Equatable {
     let c: [Int16]
     let d: [Int16]
     let e: [Int16]
-    
+
     let arr: [Int16]
-    
+
     init(a: [Int16], b: [Int16], c: [Int16], d: [Int16], e: [Int16]) {
         self.a = a
         self.b = b
         self.c = c
         self.d = d
         self.e = e
-        self.arr = a + b + c + d + e
+        arr = a + b + c + d + e
     }
 }
 
@@ -184,12 +183,12 @@ benchmark("Bound5, 50 iterations, reflective") {
 benchmark("Bound 5 single, random") {
     let arrGen = #gen(.int16(scaling: .linear)).array(length: 0 ... 10)
         .filter { $0.isEmpty || $0.dropFirst().reduce($0[0], &+) < 256 }
-    
+
     let gen = #gen(arrGen, arrGen, arrGen, arrGen, arrGen) {
         Bound5(a: $0, b: $1, c: $2, d: $3, e: $4)
     }
-    
-    let counter = #exhaust(gen, .suppressIssueReporting, .replay(0xf0cacc1ac0ffee)) {
+
+    let counter = #exhaust(gen, .suppressIssueReporting, .replay(0xF0_CACC_1AC0_FFEE)) {
         $0.arr.isEmpty || $0.arr.dropFirst().reduce($0.arr[0], &+) < 5 * 256
     }
 }
@@ -238,7 +237,7 @@ benchmark("ScalarRangeSet.scalar(at:)") {
     let chars = CharacterSet.illegalCharacters.inverted.subtracting(.controlCharacters)
     let srs = chars.scalarRangeSet()
     var f: Unicode.Scalar?
-    for n in 1...10_000 {
+    for n in 1 ... 10000 {
         f = srs.scalar(at: n)
     }
     precondition(f != nil)
@@ -247,7 +246,7 @@ benchmark("ScalarRangeSet.scalar(at:)") {
 benchmark("ScalarRangeSet.index(of:)") {
     let chars = CharacterSet.illegalCharacters.inverted.subtracting(.controlCharacters)
     let srs = chars.scalarRangeSet()
-    let count = min(srs.scalarCount, 10_000)
+    let count = min(srs.scalarCount, 10000)
     let scalars = (0 ..< count).map { srs.scalar(at: $0) }
     var result = 0
     for scalar in scalars {

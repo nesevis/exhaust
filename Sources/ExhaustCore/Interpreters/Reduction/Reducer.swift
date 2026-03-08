@@ -8,7 +8,9 @@
 import Foundation
 
 public extension Interpreters {
+    /// Configuration presets for the reducer's shrink strategies.
     enum ShrinkConfiguration {
+        /// Per-strategy probe budgets controlling how many candidates each strategy evaluates.
         struct ProbeBudgets {
             let deleteAlignedSiblingWindows: Int
             let redistributeNumericPairs: Int
@@ -27,6 +29,7 @@ public extension Interpreters {
             )
         }
 
+        /// Tuning parameters for the beam search used by aligned sibling deletion.
         struct AlignedDeletionBeamSearchTuning {
             let minBeamWidth: Int
             let beamWidthScale: Int
@@ -98,6 +101,21 @@ public extension Interpreters {
             }
         }
     }
+
+    // MARK: - Academic Provenance
+
+    //
+    // Internal test-case reduction — shrinking by shortlex-optimizing choice sequences rather than output values — originates with MacIver & Donaldson (ECOOP 2020, "Reduction via Generation"). Goldstein §4.6 formalizes three specific passes in the context of reflective generators:
+    //
+    //   Goldstein §4.6   Exhaust equivalent
+    //   ──────────────   ──────────────────────────────
+    //   subTrees       → promoteBranches
+    //   zeroDraws      → naiveSimplifyValuesToSemanticSimplest + simplifyValuesToSemanticSimplest
+    //   swapBits       → reduceValues
+    //
+    // Exhaust extends the reducer with nine additional passes: pivotBranches, deleteContainerSpans, deleteSequenceBoundaries, deleteFreeStandingValues, deleteAlignedSiblingWindows, reduceValuesInTandem, redistributeNumericPairs, speculativeDeleteAndRepair, normaliseSiblingOrder.
+    //
+    // Shortlex ordering (MacIver & Donaldson §2.2) is the reduction order: shorter choice sequences are always preferred, with lexicographic comparison as tiebreaker. The adaptive `findInteger` and `binarySearchWithGuess` probes used throughout are from MacIver's Hypothesis (see AdaptiveProbe.swift).
 
     private enum ShrinkPass: String, CaseIterable, Hashable, Equatable, Comparable {
         case naiveSimplifyValuesToSemanticSimplest

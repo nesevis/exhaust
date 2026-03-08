@@ -5,9 +5,9 @@
 //  Example tests demonstrating basic generation patterns and edge cases.
 //
 
+import ExhaustCore
 import Testing
 @testable import Exhaust
-import ExhaustCore
 
 @Suite("Generation Examples")
 struct GenerationExamplesTests {

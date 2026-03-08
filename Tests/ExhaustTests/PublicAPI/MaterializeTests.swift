@@ -5,10 +5,10 @@
 //  Created by Chris Kolbu on 12/2/2026.
 //
 
+import ExhaustCore
 import Foundation
 import Testing
 @testable import Exhaust
-import ExhaustCore
 
 @Suite("Materialize")
 struct MaterializeTests {

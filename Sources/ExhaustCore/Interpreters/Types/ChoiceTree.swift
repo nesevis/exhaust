@@ -7,39 +7,46 @@
 
 import Foundation
 
+// MARK: - Academic Provenance
+
+//
+// The dissertation (Goldstein §3.3.3, §4.6) represents randomness as flat bit-string choice sequences. Exhaust adds this hierarchical ChoiceTree to preserve structural information (sequence boundaries, branch sites, nesting) for targeted shrinking and replay. The flat representation is in ChoiceSequence.swift.
+
+/// A tree of choices that captures every decision made during generation.
+///
+/// Each node represents a single generation decision (a numeric choice, a branch selection, a sequence of elements, and so on). Interpreters walk this tree to replay, reflect, shrink, or analyze generated values.
 public enum ChoiceTree: Hashable, Equatable, Sendable {
     /// A primitive choice, typically a number or a high-level semantic label.
     case choice(ChoiceValue, ChoiceMetadata)
 
-    /// A deterministic or constant value that can't be shrunk
-    /// This is encoded into the generator, and doesn't need to be part of the ``ChoiceTree``
-    /// The string value is a description of the value for debug purposes
+    /// A deterministic or constant value that cannot be shrunk.
+    ///
+    /// This is encoded into the generator and does not need to be part of the ``ChoiceTree``. The string value is a description of the value for debug purposes.
     case just(String)
 
-    /// A node that represents the generation of a sequence. It explicitly
-    /// captures the length and the choice trees for each of its elements.
+    /// A node that represents the generation of a sequence. It explicitly captures the length and the choice trees for each of its elements.
     indirect case sequence(length: UInt64, elements: [ChoiceTree], ChoiceMetadata)
 
-    /// A node that represents a branching choice made via `pick`.
-    /// `siteID` identifies the pick site, `id` is the stable branch identifier, and `branchIDs` contains all ids in this pick site.
+    /// A node that represents a branching choice made via ``pick``. ``siteID`` identifies the pick site, ``id`` is the stable branch identifier, and ``branchIDs`` contains all identifiers in this pick site.
     indirect case branch(siteID: UInt64, weight: UInt64, id: UInt64, branchIDs: [UInt64], choice: ChoiceTree)
 
-    /// Represents a nested group of choices that usually represent objects or tuples
+    /// Represents a nested group of choices that usually represent objects or tuples.
     indirect case group([ChoiceTree])
 
-    /// Represents a size value retrieved from the generation context
+    /// Represents a size value retrieved from the generation context.
     case getSize(UInt64)
 
-    /// Represents a resized generation context with nested choices
+    /// Represents a resized generation context with nested choices.
     indirect case resize(newSize: UInt64, choices: [ChoiceTree])
 
-    /// Used only for replay. Represents the selected branch in a ``group`` of ``branch``es.
+    /// Wraps the selected branch in a ``group`` of ``branch`` nodes. Produced by reflection and VACTI, consumed by replay and materialization.
     indirect case selected(ChoiceTree)
 }
 
 extension ChoiceTree {
     static let emptyJust = Self.just("")
 
+    /// Whether this node is a `.choice` leaf.
     var isChoice: Bool {
         if case .choice = self {
             return true
@@ -47,6 +54,7 @@ extension ChoiceTree {
         return false
     }
 
+    /// Whether this node is a `.selected` wrapper.
     public var isSelected: Bool {
         if case .selected = self {
             return true
@@ -54,6 +62,7 @@ extension ChoiceTree {
         return false
     }
 
+    /// Whether this node is a `.branch` pick site.
     var isBranch: Bool {
         if case .branch = self {
             return true
@@ -61,6 +70,7 @@ extension ChoiceTree {
         return false
     }
 
+    /// Whether this node is a `.just` constant.
     var isJust: Bool {
         if case .just = self {
             return true
@@ -87,8 +97,7 @@ extension ChoiceTree {
         }
     }
 
-    /// Returns the maximum `breadth × 2^pickDepth` across all pick sites,
-    /// where pickDepth counts nested `.branch` levels.
+    /// Returns the maximum `breadth × 2^pickDepth` across all pick sites, where pickDepth counts nested `.branch` levels.
     var pickComplexity: UInt64 {
         pickComplexityHelper(pickDepth: 0)
     }
@@ -114,12 +123,10 @@ extension ChoiceTree {
 }
 
 extension ChoiceTree {
-    /// Recursively transforms a `ChoiceTree` by applying a given closure to each node.
+    /// Recursively transforms a ``ChoiceTree`` by applying a given closure to each node.
     ///
-    /// **Not currently used**
-    ///
-    /// - Parameter transform: A closure that takes a `ChoiceTree` and returns a transformed `ChoiceTree`.
-    /// - Returns: A new `ChoiceTree` with the transform applied to all its nodes and their children.
+    /// - Parameter transform: A closure that takes a ``ChoiceTree`` and returns a transformed ``ChoiceTree``.
+    /// - Returns: A new ``ChoiceTree`` with the transform applied to all its nodes and their children.
     func map(_ transform: (ChoiceTree) throws -> ChoiceTree) rethrows -> ChoiceTree {
         let transformedNode = try transform(self)
 
@@ -147,9 +154,7 @@ extension ChoiceTree {
 
     /// Widens non-explicit sequence length ranges to accept any length.
     ///
-    /// After structural passes like `deleteSequenceBoundaries` merge inner sequences,
-    /// the tree's recorded length ranges can become stale. This method relaxes those
-    /// ranges so subsequent materialization passes don't reject valid candidates.
+    /// After structural passes like `deleteSequenceBoundaries` merge inner sequences, the tree's recorded length ranges can become stale. This method relaxes those ranges so subsequent materialization passes don't reject valid candidates.
     /// Only affects sequence nodes whose `isRangeExplicit` is `false`.
     func relaxingNonExplicitSequenceLengthRanges() -> ChoiceTree {
         map { node in
@@ -166,6 +171,7 @@ extension ChoiceTree {
         }
     }
 
+    /// Returns whether any node in this tree satisfies the given predicate. Short-circuits on the first match.
     func contains(_ predicate: (ChoiceTree) -> Bool) -> Bool {
         let selfResult = predicate(self)
         guard selfResult == false else {
@@ -261,30 +267,30 @@ extension ChoiceTree: CustomDebugStringConvertible {
         case let .choice(choiceValue, _):
             switch choiceValue {
             case let .unsigned(uInt64, _):
-                return uInt64.description
+                uInt64.description
             case let .signed(int, _, _):
-                return int.description
+                int.description
             case let .floating(float, _, _):
-                return float.description
+                float.description
             }
         case let .just(type):
-            return "just(\(type))"
+            "just(\(type))"
         case let .sequence(_, elements, _):
-            return "[" + elements.map(\.elementDescription).joined(separator: ", ") + "]"
+            "[" + elements.map(\.elementDescription).joined(separator: ", ") + "]"
         case let .branch(_, weight, id, _, gen):
-            return "\(weight),\(id): \(gen.elementDescription)"
+            "\(weight),\(id): \(gen.elementDescription)"
         case let .group(array):
-            return "{" + array.map(\.elementDescription).joined() + "}"
+            "{" + array.map(\.elementDescription).joined() + "}"
         case let .selected(choiceTree):
-            return choiceTree.elementDescription
+            choiceTree.elementDescription
         case let .getSize(size):
-            return "getSize(\(size))"
+            "getSize(\(size))"
         case let .resize(newSize, choices):
-            return "resize(\(newSize): [\(choices.map(\.elementDescription).joined(separator: ", "))])"
+            "resize(\(newSize): [\(choices.map(\.elementDescription).joined(separator: ", "))])"
         }
     }
 
-    /// Recursively unwraps wrapper nodes (selected, important) to get to the core content
+    /// Recursively unwraps `.selected` wrapper nodes to get the core content.
     public var unwrapped: ChoiceTree {
         switch self {
         case let .selected(inner):

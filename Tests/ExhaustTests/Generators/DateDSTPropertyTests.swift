@@ -6,28 +6,27 @@
 //  that random testing is unlikely to find.
 //
 
+import Foundation
 import Testing
 @testable import Exhaust
-import Foundation
 
 @Suite("Date DST Property Tests")
 struct DateDSTPropertyTests {
-
-    // US Eastern spring forward 2024: March 10 at 2:00 AM EST → 3:00 AM EDT
-    // In UTC: March 10 at 07:00 UTC
-    // Seconds since reference date for 2024-03-10 07:00 UTC:
-    //   2024-01-01 = 725_760_000, + 69 days * 86400 + 7 * 3600 = 731_746_800
+    /// US Eastern spring forward 2024: March 10 at 2:00 AM EST → 3:00 AM EDT
+    /// In UTC: March 10 at 07:00 UTC
+    /// Seconds since reference date for 2024-03-10 07:00 UTC:
+    ///   2024-01-01 = 725_760_000, + 69 days * 86400 + 7 * 3600 = 731_746_800
     static let springForward2024 = Date(timeIntervalSinceReferenceDate: 731_746_800)
 
-    // A ±2 week range around the spring forward transition
+    /// A ±2 week range around the spring forward transition
     static let springRange = springForward2024.addingTimeInterval(-14 * 86400)
         ... springForward2024.addingTimeInterval(14 * 86400)
 
-    // US Eastern fall back 2024: November 3 at 2:00 AM EDT → 1:00 AM EST
-    // In UTC: November 3 at 06:00 UTC
+    /// US Eastern fall back 2024: November 3 at 2:00 AM EDT → 1:00 AM EST
+    /// In UTC: November 3 at 06:00 UTC
     static let fallBack2024 = Date(timeIntervalSinceReferenceDate: 752_306_400)
 
-    // A ±2 week range around the fall back transition
+    /// A ±2 week range around the fall back transition
     static let fallBackRange = fallBack2024.addingTimeInterval(-14 * 86400)
         ... fallBack2024.addingTimeInterval(14 * 86400)
 
@@ -94,6 +93,7 @@ struct DateDSTPropertyTests {
     }
 
     // MARK: - Google Closure Library: "The 1 Hour Per Year Bug"
+
     // https://tomeraberba.ch/the-1-hour-per-year-bug
     //
     // The buggy pattern computes relative day labels ("today"/"tomorrow") by:
@@ -107,7 +107,7 @@ struct DateDSTPropertyTests {
     func closureLibraryDSTBug() {
         let gen = #gen(
             .date(between: Self.fallBackRange, interval: .hours(1), timeZone: Self.usEastern),
-            .date(between: Self.fallBackRange, interval: .hours(1), timeZone: Self.usEastern)
+            .date(between: Self.fallBackRange, interval: .hours(1), timeZone: Self.usEastern),
         )
 
         // The specific Closure Library bug: two dates on the SAME calendar day
@@ -133,7 +133,7 @@ struct DateDSTPropertyTests {
     func closureLibraryDSTBugRandomOnly() {
         let gen = #gen(
             .date(between: Self.fallBackRange, interval: .hours(1), timeZone: Self.usEastern),
-            .date(between: Self.fallBackRange, interval: .hours(1), timeZone: Self.usEastern)
+            .date(between: Self.fallBackRange, interval: .hours(1), timeZone: Self.usEastern),
         )
 
         // The specific Closure Library bug: two dates on the SAME calendar day
@@ -162,6 +162,7 @@ struct DateDSTPropertyTests {
     }
 
     // MARK: - iOS DST Alarm Bug (2010/2011)
+
     // In late 2010 and early 2011, a bug in Apple's iOS caused recurring alarms
     // to fire an hour late (or early) when countries transitioned into or out of
     // Daylight Saving Time. The alarm app computed "tomorrow at the same time"
@@ -236,6 +237,7 @@ struct DateDSTPropertyTests {
     }
 
     // MARK: - Bug: "This date doesn't exist"
+
     // https://www.linkedin.com/posts/activity-7386650870408560640-HGt1
     // DateFormatter defaults to 00:00 when no time is given. In timezones that
     // spring forward at midnight (Cuba, Chile, Egypt), midnight never happens on
@@ -252,9 +254,9 @@ struct DateDSTPropertyTests {
         TimeZone(identifier: "Africa/Cairo")!,
     ]
 
-    // Full year 2024 — Cuba's spring forward (March 10) is 1 day out of 366
-    static let yearRange2024 = Date(timeIntervalSinceReferenceDate: 725_760_000)    // 2024-01-01
-        ... Date(timeIntervalSinceReferenceDate: 725_760_000 + 86400 * 366)          // 2025-01-01
+    /// Full year 2024 — Cuba's spring forward (March 10) is 1 day out of 366
+    static let yearRange2024 = Date(timeIntervalSinceReferenceDate: 725_760_000) // 2024-01-01
+        ... Date(timeIntervalSinceReferenceDate: 725_760_000 + 86400 * 366) // 2025-01-01
 
     @Test("DateFormatter returns nil for valid calendar dates where midnight doesn't exist")
     func dateFormatterMidnightBug() {
@@ -277,5 +279,4 @@ struct DateDSTPropertyTests {
 
         #expect(counterExample != nil, "Expected boundary analysis to find a date where midnight doesn't exist")
     }
-
 }

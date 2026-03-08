@@ -6,6 +6,7 @@
 import ExhaustCore
 
 // MARK: - Int128 / UInt128 generators
+
 //
 // These are composite generators built from two UInt64 halves using `Gen.chooseBits`.
 // Limitations:
@@ -18,7 +19,7 @@ public extension ReflectiveGenerator {
     static func uint128() -> ReflectiveGenerator<UInt128> {
         Gen.zip(
             Gen.chooseBits(),
-            Gen.chooseBits()
+            Gen.chooseBits(),
         ).mapped(
             forward: { high, low in
                 UInt128(high) << 64 | UInt128(low)
@@ -26,18 +27,17 @@ public extension ReflectiveGenerator {
             backward: { value in
                 (UInt64(truncatingIfNeeded: value >> 64),
                  UInt64(truncatingIfNeeded: value))
-            }
+            },
         )
     }
 
     /// Generates arbitrary `Int128` values from two `UInt64` halves.
     ///
-    /// The high half uses sign-bit XOR so that shrinking naturally drives
-    /// toward zero: the mapped bit pattern orders negative → zero → positive.
+    /// The high half uses sign-bit XOR so that shrinking naturally drives toward zero: the mapped bit pattern orders negative → zero → positive.
     static func int128() -> ReflectiveGenerator<Int128> {
         Gen.zip(
             Gen.chooseBits(),
-            Gen.chooseBits()
+            Gen.chooseBits(),
         ).mapped(
             forward: { high, low in
                 let bits = UInt128(high) << 64 | UInt128(low)
@@ -47,7 +47,7 @@ public extension ReflectiveGenerator {
                 let bits = UInt128(bitPattern: value)
                 return (UInt64(truncatingIfNeeded: bits >> 64),
                         UInt64(truncatingIfNeeded: bits))
-            }
+            },
         )
     }
 }

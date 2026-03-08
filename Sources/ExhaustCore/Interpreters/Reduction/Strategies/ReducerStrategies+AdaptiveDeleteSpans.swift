@@ -6,11 +6,9 @@
 //
 
 extension ReducerStrategies {
-    /// Adaptive span deletion: for each position, finds the largest contiguous batch of same-depth
-    /// spans that can be deleted while preserving the property failure.
+    /// Adaptive span deletion: for each position, finds the largest contiguous batch of same-depth spans that can be deleted while preserving the property failure. Generalizes the contiguous-deletion category from MacIver & Donaldson (ECOOP 2020, §3.1) to tree-structured spans.
     ///
-    /// - Complexity: O(*n* · log *n* · *M*), where *n* is the number of spans and *M* is the cost
-    ///   of a single property invocation. Iterates over up to *n* positions; at each, `findInteger` makes
+    /// - Complexity: O(*n* · log *n* · *M*), where *n* is the number of spans and *M* is the cost of a single property invocation. Iterates over up to *n* positions; at each, `findInteger` makes
     ///   O(log *n*) property invocations. Returns on first successful deletion.
     static func adaptiveDeleteSpans<Output>(
         _ gen: ReflectiveGenerator<Output>,

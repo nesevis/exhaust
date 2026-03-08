@@ -13,11 +13,12 @@ public extension ReflectiveGenerator {
         Gen.just(value)
     }
 
+    /// Generates arbitrary `Bool` values. Shrinks toward `false`.
     static func bool() -> ReflectiveGenerator<Bool> {
         Gen.choose(in: UInt8(0) ... 1)
             .mapped(
                 forward: { $0 == 1 },
-                backward: { $0 ? 1 : 0 }
+                backward: { $0 ? 1 : 0 },
             )
     }
 
@@ -40,6 +41,7 @@ public extension ReflectiveGenerator where Value: CaseIterable, Value.AllCases.I
 }
 
 public extension ReflectiveGenerator where Operation == ReflectiveOperation {
+    /// Wraps this generator to produce optional values, choosing between `nil` and a generated value.
     func optional() -> ReflectiveGenerator<Value?> {
         Gen.pick(choices: [
             (1, Gen.just(.none)),

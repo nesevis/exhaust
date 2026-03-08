@@ -5,11 +5,9 @@
 
 /// Converts covering array rows into `ChoiceTree` structures for boundary profile replay.
 public enum BoundaryCoveringArrayReplay {
-
     /// Builds a `ChoiceTree` from a covering array row using boundary parameter values.
     ///
-    /// Unlike `CoveringArrayReplay` which maps value indices to sequential offsets,
-    /// this maps value indices to concrete boundary bit patterns stored in each parameter.
+    /// Unlike `CoveringArrayReplay` which maps value indices to sequential offsets, this maps value indices to concrete boundary bit patterns stored in each parameter.
     public static func buildTree(row: CoveringArrayRow, profile: BoundaryDomainProfile) -> ChoiceTree? {
         guard row.values.count == profile.parameters.count else { return nil }
 
@@ -27,7 +25,7 @@ public enum BoundaryCoveringArrayReplay {
                     param: param,
                     valueIndex: valueIndex,
                     range: range,
-                    tag: tag
+                    tag: tag,
                 ) else { return nil }
                 trees.append(tree)
                 i += 1
@@ -38,7 +36,7 @@ public enum BoundaryCoveringArrayReplay {
                     lengthValueIndex: valueIndex,
                     lengthRange: lengthRange,
                     remainingParams: Array(profile.parameters.dropFirst(i + 1)),
-                    remainingValues: Array(row.values.dropFirst(i + 1))
+                    remainingValues: Array(row.values.dropFirst(i + 1)),
                 ) else { return nil }
                 trees.append(tree)
                 i += 1 + consumed
@@ -51,7 +49,7 @@ public enum BoundaryCoveringArrayReplay {
                 guard let tree = buildPickTree(
                     param: param,
                     valueIndex: valueIndex,
-                    choices: choices
+                    choices: choices,
                 ) else { return nil }
                 trees.append(tree)
                 i += 1
@@ -122,7 +120,7 @@ public enum BoundaryCoveringArrayReplay {
                     param: param,
                     valueIndex: valueIndex,
                     range: range,
-                    tag: tag
+                    tag: tag,
                 ) else { return nil }
                 elementTrees.append(tree)
 
@@ -137,7 +135,7 @@ public enum BoundaryCoveringArrayReplay {
     }
 
     private static func buildPickTree(
-        param: BoundaryParameter,
+        param _: BoundaryParameter,
         valueIndex: UInt64,
         choices: ContiguousArray<ReflectiveOperation.PickTuple>,
     ) -> ChoiceTree? {
@@ -154,7 +152,7 @@ public enum BoundaryCoveringArrayReplay {
             weight: chosen.weight,
             id: chosen.id,
             branchIDs: branchIDs,
-            choice: subTree
+            choice: subTree,
         )
         return .group([.selected(branch)])
     }
@@ -162,15 +160,15 @@ public enum BoundaryCoveringArrayReplay {
     private static func buildSubTree(for gen: ReflectiveGenerator<Any>) -> ChoiceTree? {
         switch gen {
         case .pure:
-            return .just("")
+            .just("")
         case let .impure(operation, _):
             switch operation {
             case .just:
-                return .just("")
+                .just("")
             case let .contramap(_, next), let .prune(next):
-                return buildSubTree(for: next)
+                buildSubTree(for: next)
             default:
-                return nil
+                nil
             }
         }
     }

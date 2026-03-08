@@ -3,9 +3,9 @@
 //  ExhaustTests
 //
 
+import ExhaustCore
 import Testing
 @testable import Exhaust
-import ExhaustCore
 
 @Suite("Coverage Budget")
 struct CoverageBudgetTests {
@@ -13,9 +13,9 @@ struct CoverageBudgetTests {
     // TODO. Test in a different way
 //    func exhaustiveSkipsRandom() {
 //        // 2 * 2 = 4 combinations, well within default budget
-////        var seen = Set<String>()
+    ////        var seen = Set<String>()
 //        #exhaust(#gen(.bool(), .bool()), .maxIterations(50)) { a, b in
-////            seen.insert("\(a),\(b)")
+    ////            seen.insert("\(a),\(b)")
 //            return true
 //        }
 //        // Should have exactly 4 combinations (exhaustive)

@@ -23,7 +23,7 @@ func xoshiroSeedStability() throws {
     var iter = ValueInterpreter(gen, seed: 0, maxRuns: 10)
     var digits: [Int64] = []
     for _ in 0 ..< 10 {
-        digits.append(try iter.next()!)
+        try digits.append(iter.next()!)
     }
     let expectedDigits: [Int64] = [0, 16238, -6_660_220, -179_123_592, 8_005_708_369, 274_739_608_301, -684_234_672_488, 2_508_988_163_057, 100_069_181_990_740, 943_184_394_974_117]
     #expect(digits == expectedDigits)

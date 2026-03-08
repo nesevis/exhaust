@@ -7,26 +7,17 @@
 
 import Foundation
 
-/// Offline, one-shot tuning that transforms a generator's pick structure
-/// using fitness-weighted sampling inspired by Choice Gradient Sampling (CGS).
+/// Offline, one-shot tuning that transforms a generator's pick structure using fitness-weighted sampling inspired by Choice Gradient Sampling (CGS).
 ///
-/// Tuning is performed once at creation time via a single top-down recursive
-/// pass. The result is a normal `ReflectiveGenerator` with synthesised pick
-/// structure whose weights reflect predicate satisfaction rates. Shrinking is
-/// unaffected because the reducer operates on `ChoiceTree`/`ChoiceSequence`
-/// and is weight-agnostic.
+/// Tuning is performed once at creation time via a single top-down recursive pass. The result is a normal `ReflectiveGenerator` with synthesised pick structure whose weights reflect predicate satisfaction rates. Shrinking is unaffected because the reducer operates on `ChoiceTree`/`ChoiceSequence` and is weight-agnostic.
 ///
 /// ## Algorithm
 ///
-/// At every `pick`, each choice is sampled through the continuation pipeline
-/// to measure how often the final output satisfies the predicate. The measured
-/// success count becomes the choice's weight. Inner generators are recursively
-/// tuned using *composed predicates* — the current continuation is folded
-/// into the predicate so that inner operations always evaluate against the
-/// final output.
+/// At every `pick`, each choice is sampled through the continuation pipeline to measure how often the final output satisfies the predicate. The measured success count becomes the choice's weight. Inner generators are recursively tuned using *composed predicates* — the current continuation is folded into the predicate so that inner operations always evaluate against the final output.
 ///
-/// `chooseBits` and `getSize` operations are subdivided into synthesised picks
-/// of subranges, then tuned through the pick path.
+/// `chooseBits` and `getSize` operations are subdivided into synthesised picks of subranges, then tuned through the pick path.
+///
+/// The specification-entropy objective and symbolic weight computation are based on Tjoa et al., "Tuning Random Generators for Property-Based Testing" (OOPSLA2, 2025). Exhaust diverges by using convergence-gated batched sampling instead of the paper's fixed sample budget.
 public enum GeneratorTuning {
     // MARK: - Context
 
@@ -43,8 +34,7 @@ public enum GeneratorTuning {
         }
 
         /// Sample budget decays linearly with depth as a safety ceiling.
-        /// Convergence detection in `measureAndTunePick` typically stops
-        /// well before this cap, so deeper sites still get meaningful signal.
+        /// Convergence detection in `measureAndTunePick` typically stops well before this cap, so deeper sites still get meaningful signal.
         var maxSamplesPerSite: UInt64 {
             max(1, baseSampleCount / (1 + depth))
         }
@@ -61,27 +51,15 @@ public enum GeneratorTuning {
     /// Minimum total samples per choice before convergence checks begin (2 × batchSize).
     private static let convergenceMinSamples: UInt64 = 40
 
-    /// Minimum selection probability per choice. Prevents extreme weight ratios
-    /// from compounding across depth levels, which would collapse rare-but-valid
-    /// deep paths to near-zero probability. The paper (§4.3, Figure 13) shows
-    /// that bounding weights to [0.1, 0.9] prevents overfitting and improves
-    /// output diversity.
+    /// Minimum selection probability per choice. Prevents extreme weight ratios from compounding across depth levels, which would collapse rare-but-valid deep paths to near-zero probability. The paper (§4.3, Figure 13) shows that bounding weights to [0.1, 0.9] prevents overfitting and improves output diversity.
     ///
-    /// **Caveat for wide picks:** the floor applies per-choice, so a pick with
-    /// many dead branches pays a cost proportional to `deadBranches / totalBranches`.
-    /// Binary picks lose at most ~10% of selection probability to the floor, but
-    /// e.g. a 20-way pick with 2 valid branches drops valid selection from ~100%
-    /// to ~36%. If this becomes a problem, scale the fraction inversely with
-    /// branch count (`weightFloorFraction / choiceCount`) to cap total floor
-    /// budget at a fixed share of weight regardless of branch count.
+    /// **Caveat for wide picks:** the floor applies per-choice, so a pick with many dead branches pays a cost proportional to `deadBranches / totalBranches`.
+    /// Binary picks lose at most ~10% of selection probability to the floor, but e.g. a 20-way pick with 2 valid branches drops valid selection from ~100% to ~36%. If this becomes a problem, scale the fraction inversely with branch count (`weightFloorFraction / choiceCount`) to cap total floor budget at a fixed share of weight regardless of branch count.
     private static let weightFloorFraction: Double = 0.1
 
     // MARK: - Public API
 
-    /// Probes a generator's structure by running it a few times and checking whether
-    /// the resulting choice trees contain any pick sites. If picks are present,
-    /// performs full tuning with adaptive smoothing. If not, returns the
-    /// generator unchanged — tuning has nothing to attach weights to.
+    /// Probes a generator's structure by running it a few times and checking whether the resulting choice trees contain any pick sites. If picks are present, performs full tuning with adaptive smoothing. If not, returns the generator unchanged — tuning has nothing to attach weights to.
     ///
     /// - Parameters:
     ///   - generator: The generator to probe and possibly tune.
@@ -89,8 +67,7 @@ public enum GeneratorTuning {
     ///   - probeRuns: Number of probe generations to inspect (default 10).
     ///   - minPerChoice: Minimum samples per choice at the deepest pick level (default 30).
     ///   - maxSamples: Upper bound on the computed sample count (default 5000).
-    ///   - maxRuns: Planned generation volume. When provided, the tuning budget is
-    ///     capped so that tuning doesn't dwarf generation time for small runs.
+    ///   - maxRuns: Planned generation volume. When provided, the tuning budget is capped so that tuning doesn't dwarf generation time for small runs.
     ///   - maxSize: Maximum size parameter used when subdividing `getSize`.
     ///   - seed: Optional seed for deterministic tuning.
     ///   - predicate: The property that generated values should satisfy.
@@ -131,8 +108,7 @@ public enum GeneratorTuning {
 
     /// Tunes a generator so that its pick weights reflect predicate satisfaction rates.
     ///
-    /// The transformation is eager — the returned generator has its structure fully
-    /// tuned and can be used with any interpreter.
+    /// The transformation is eager — the returned generator has its structure fully tuned and can be used with any interpreter.
     ///
     /// - Parameters:
     ///   - generator: The generator to tune.
@@ -148,11 +124,10 @@ public enum GeneratorTuning {
         seed: UInt64? = nil,
         predicate: @escaping (Output) -> Bool,
     ) throws -> ReflectiveGenerator<Output> {
-        let rng: Xoshiro256
-        if let seed {
-            rng = Xoshiro256(seed: seed)
+        let rng = if let seed {
+            Xoshiro256(seed: seed)
         } else {
-            rng = Xoshiro256()
+            Xoshiro256()
         }
         let context = TuningContext(
             baseSampleCount: samples,
@@ -929,18 +904,14 @@ public enum GeneratorTuning {
 
     /// Applies Laplace smoothing and temperature scaling to pick weights in a tuned generator.
     ///
-    /// After ``tune`` bakes success counts into pick weights, deeper branches may receive
-    /// weight 0 because composed predicates have near-zero success rates during sampling.
+    /// After ``tune`` bakes success counts into pick weights, deeper branches may receive weight 0 because composed predicates have near-zero success rates during sampling.
     /// This post-processing step recovers dead branches and controls exploration:
     ///
-    /// 1. **Laplace smoothing (ε)**: Adds ε to every weight before scaling, ensuring
-    ///    branches with zero success count still get non-zero probability.
-    /// 2. **Temperature (T)**: Raises smoothed weights to 1/T. T > 1 flattens toward
-    ///    uniform (more exploration). T < 1 sharpens toward argmax (more exploitation).
+    /// 1. **Laplace smoothing (ε)**: Adds ε to every weight before scaling, ensuring branches with zero success count still get non-zero probability.
+    /// 2. **Temperature (T)**: Raises smoothed weights to 1/T. T > 1 flattens toward uniform (more exploration). T < 1 sharpens toward argmax (more exploitation).
     ///    T = 1 preserves original ratios with the ε offset.
     ///
-    /// The transformation walks the generator tree and rescales every reachable pick's
-    /// weights to integers summing to ~10000, with a floor of 1 per branch.
+    /// The transformation walks the generator tree and rescales every reachable pick's weights to integers summing to ~10000, with a floor of 1 per branch.
     ///
     /// - Parameters:
     ///   - generator: A tuned generator (typically the output of ``tune``).
@@ -1095,9 +1066,7 @@ public enum GeneratorTuning {
 
     /// Profiles all pick sites in a generator, computing entropy from weights.
     ///
-    /// This walks the tuned `ReflectiveGenerator` tree and collects statistics
-    /// at each `.pick` site: weight distribution, Shannon entropy, and the
-    /// entropy ratio (how uniform the distribution is).
+    /// This walks the tuned `ReflectiveGenerator` tree and collects statistics at each `.pick` site: weight distribution, Shannon entropy, and the entropy ratio (how uniform the distribution is).
     ///
     /// - Parameter generator: The generator to profile (typically the output of ``tune``).
     /// - Returns: A profile containing statistics for every pick site.
@@ -1190,9 +1159,7 @@ public enum GeneratorTuning {
 
     /// Profiles a generator empirically by generating samples and testing them.
     ///
-    /// This combines static weight analysis (Level 2) with empirical data from
-    /// actually running the generator: which branches are selected and which
-    /// selections lead to valid outputs.
+    /// This combines static weight analysis (Level 2) with empirical data from actually running the generator: which branches are selected and which selections lead to valid outputs.
     ///
     /// - Parameters:
     ///   - generator: The generator to profile.
@@ -1316,15 +1283,12 @@ public enum GeneratorTuning {
 
     /// Applies per-site temperature scaling based on entropy analysis.
     ///
-    /// Unlike ``smooth`` which applies the same temperature everywhere, this
-    /// function computes each pick site's entropy ratio and derives a
-    /// site-specific temperature:
+    /// Unlike ``smooth`` which applies the same temperature everywhere, this function computes each pick site's entropy ratio and derives a site-specific temperature:
     ///
     /// - Bottleneck sites (low entropy ratio) get high temperature → more exploration
     /// - Well-distributed sites (high entropy ratio) get low temperature → preserve tuned weights
     ///
-    /// This avoids sacrificing validity at well-distributed sites while still
-    /// recovering dead branches at bottleneck sites.
+    /// This avoids sacrificing validity at well-distributed sites while still recovering dead branches at bottleneck sites.
     ///
     /// - Parameters:
     ///   - generator: A tuned generator (typically the output of ``tune``).

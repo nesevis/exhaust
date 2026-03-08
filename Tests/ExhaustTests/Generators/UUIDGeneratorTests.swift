@@ -3,13 +3,12 @@
 //  Exhaust
 //
 
+import Foundation
 import Testing
 @testable import Exhaust
-import Foundation
 
 @Suite("UUID Generator")
 struct UUIDGeneratorTests {
-
     @Test("Generated UUIDs are valid v4")
     func validV4() {
         let gen = #gen(.uuid())

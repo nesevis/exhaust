@@ -19,7 +19,7 @@ struct ExploreIntegrationTests {
             property: { $0 < 50 },
             maxIterations: 500,
             seed: 42,
-            scorer: { Double($0) }
+            scorer: { Double($0) },
         )
         let result = runner.run()
         guard case let .failure(counterexample, _, _, _) = result else {
@@ -37,7 +37,7 @@ struct ExploreIntegrationTests {
             property: { $0 >= 0 },
             maxIterations: 200,
             seed: 42,
-            scorer: { _ in 0 }
+            scorer: { _ in 0 },
         )
         let result = runner.run()
         guard case .passed = result else {
@@ -56,9 +56,9 @@ struct ExploreIntegrationTests {
         var runner = ExploreRunner(
             gen: gen,
             property: { array in array.reduce(0, +) < 400 },
-            maxIterations: 10_000,
+            maxIterations: 10000,
             seed: 42,
-            scorer: { array in Double(array.reduce(0, +)) }
+            scorer: { array in Double(array.reduce(0, +)) },
         )
         let result = runner.run()
         guard case let .failure(counterexample, _, _, _) = result else {
@@ -78,9 +78,9 @@ struct ExploreIntegrationTests {
         var runner = ExploreRunner(
             gen: gen,
             property: { $0 < 90 },
-            maxIterations: 1_000,
+            maxIterations: 1000,
             seed: 42,
-            scorer: { Double($0) }
+            scorer: { Double($0) },
         )
         let result = runner.run()
         guard case let .failure(counterexample, _, _, _) = result else {
@@ -99,7 +99,7 @@ struct ExploreIntegrationTests {
             maxIterations: 500,
             shrinkConfig: .fast,
             seed: 42,
-            scorer: { Double($0) }
+            scorer: { Double($0) },
         )
         let result = runner.run()
         guard case let .failure(counterexample, _, _, _) = result else {
@@ -118,7 +118,7 @@ struct ExploreIntegrationTests {
             property: { _ in true }, // Always passes — just check pool grows
             maxIterations: 200,
             seed: 42,
-            scorer: { _ in 0 }
+            scorer: { _ in 0 },
         )
         _ = runner.run()
         // The pool should have accumulated some seeds (can't assert exact count
@@ -135,7 +135,7 @@ struct ExploreIntegrationTests {
             property: { $0 < 50 },
             maxIterations: 500,
             seed: nil,
-            scorer: { Double($0) }
+            scorer: { Double($0) },
         )
         let result = runner.run()
         switch result {
@@ -157,7 +157,7 @@ struct ExploreIntegrationTests {
             property: { $0 >= 0 },
             maxIterations: 200,
             seed: nil,
-            scorer: { _ in 0.0 }
+            scorer: { _ in 0.0 },
         )
         let result = runner.run()
         guard case .passed = result else {
@@ -175,14 +175,14 @@ struct ExploreIntegrationTests {
             property: { $0 < 500 },
             maxIterations: 200,
             seed: 42,
-            scorer: { Double($0) }
+            scorer: { Double($0) },
         )
         var runner2 = ExploreRunner(
             gen: gen,
             property: { $0 < 500 },
             maxIterations: 200,
             seed: 42,
-            scorer: { Double($0) }
+            scorer: { Double($0) },
         )
         let result1 = runner1.run()
         let result2 = runner2.run()
@@ -212,9 +212,9 @@ struct ExploreIntegrationTests {
                 // Fails when all three are above 90
                 !(a > 90 && b > 90 && c > 90)
             },
-            maxIterations: 10_000,
+            maxIterations: 10000,
             seed: nil,
-            scorer: { a, b, c in Double(a + b + c) }
+            scorer: { a, b, c in Double(a + b + c) },
         )
         let result = runner.run()
 
@@ -236,9 +236,9 @@ struct ExploreIntegrationTests {
         var runner = ExploreRunner(
             gen: gen,
             property: { $0 < 950 },
-            maxIterations: 2_000,
+            maxIterations: 2000,
             seed: 42,
-            scorer: { Double($0) }
+            scorer: { Double($0) },
         )
         let result = runner.run()
         guard case let .failure(counterexample, _, _, _) = result else {
@@ -254,9 +254,9 @@ struct ExploreIntegrationTests {
         var runner = ExploreRunner(
             gen: gen,
             property: { $0 < 900 },
-            maxIterations: 2_000,
+            maxIterations: 2000,
             seed: nil,
-            scorer: { Double($0) }
+            scorer: { Double($0) },
         )
         let result = runner.run()
         switch result {

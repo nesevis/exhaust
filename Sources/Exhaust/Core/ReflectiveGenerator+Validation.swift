@@ -1,10 +1,10 @@
-import ExhaustCore
 import CustomDump
+import ExhaustCore
 import IssueReporting
 
 // MARK: - Types
 
-/// A report summarising the results of generator validation.
+/// A report summarizing the results of generator validation.
 public struct ValidationReport: Sendable, CustomStringConvertible {
     public let sampleCount: Int
     public let valuesGenerated: Int
@@ -15,13 +15,18 @@ public struct ValidationReport: Sendable, CustomStringConvertible {
     /// Total wall-clock time for the validation run, in seconds.
     public let elapsedTime: Double
 
-    public var passed: Bool { failures.isEmpty }
+    /// Whether the validation passed with no failures.
+    public var passed: Bool {
+        failures.isEmpty
+    }
 
+    /// The fraction of generated values that survived reflection round-trip.
     public var reflectionSuccessRate: Double {
         guard valuesGenerated > 0 else { return 0 }
         return Double(reflectionRoundTripSuccesses) / Double(valuesGenerated)
     }
 
+    /// The fraction of generated values with distinct choice sequences.
     public var uniquenessRate: Double {
         guard valuesGenerated > 0 else { return 0 }
         return Double(uniqueChoiceSequences) / Double(valuesGenerated)
@@ -33,8 +38,7 @@ public struct ValidationReport: Sendable, CustomStringConvertible {
         return elapsedTime / Double(valuesGenerated)
     }
 
-    /// Whether the average time per sample exceeds 5 ms, suggesting the generator
-    /// may be too expensive for large-scale property testing.
+    /// Whether the average time per sample exceeds 5 ms, suggesting the generator may be too expensive for large-scale property testing.
     public var isSlowGenerator: Bool {
         averageTimePerSample > 0.005
     }
@@ -86,16 +90,14 @@ public enum ValidationFailure: Sendable, CustomStringConvertible {
 // MARK: - Non-Equatable overload
 
 public extension ReflectiveGenerator where Operation == ReflectiveOperation {
-    /// Validates this generator by checking reflection round-trip, replay determinism,
-    /// and generation health. Uses choice-sequence comparison for round-trip checks.
+    /// Validates this generator by checking reflection round-trip, replay determinism, and generation health. Uses choice-sequence comparison for round-trip checks.
     ///
-    /// Failures are recorded as test issues via `reportIssue`, so calling this inside
-    /// a test is sufficient — no assertions needed.
+    /// Failures are recorded as test issues via `reportIssue`, so calling this inside a test is sufficient — no assertions needed.
     ///
     /// - Parameters:
     ///   - samples: Number of values to generate and test. Defaults to 200.
     ///   - seed: Optional seed for deterministic validation runs.
-    /// - Returns: A ``ValidationReport`` summarising the results.
+    /// - Returns: A ``ValidationReport`` summarizing the results.
     @discardableResult
     func validate(
         samples: Int = 200,
@@ -103,7 +105,7 @@ public extension ReflectiveGenerator where Operation == ReflectiveOperation {
         fileID: StaticString = #fileID,
         filePath: StaticString = #filePath,
         line: UInt = #line,
-        column: UInt = #column
+        column: UInt = #column,
     ) -> ValidationReport {
         _validate(samples: samples, seed: seed, differ: nil, fileID: fileID, filePath: filePath, line: line, column: column)
     }
@@ -112,17 +114,14 @@ public extension ReflectiveGenerator where Operation == ReflectiveOperation {
 // MARK: - Equatable overload
 
 public extension ReflectiveGenerator where Operation == ReflectiveOperation, Value: Equatable {
-    /// Validates this generator by checking reflection round-trip, replay determinism,
-    /// and generation health. Uses `Equatable` conformance and `CustomDump.diff` for
-    /// rich failure output.
+    /// Validates this generator by checking reflection round-trip, replay determinism, and generation health. Uses `Equatable` conformance and `CustomDump.diff` for rich failure output.
     ///
-    /// Failures are recorded as test issues via `reportIssue`, so calling this inside
-    /// a test is sufficient — no assertions needed.
+    /// Failures are recorded as test issues via `reportIssue`, so calling this inside a test is sufficient — no assertions needed.
     ///
     /// - Parameters:
     ///   - samples: Number of values to generate and test. Defaults to 200.
     ///   - seed: Optional seed for deterministic validation runs.
-    /// - Returns: A ``ValidationReport`` summarising the results.
+    /// - Returns: A ``ValidationReport`` summarizing the results.
     @discardableResult
     func validate(
         samples: Int = 200,
@@ -130,7 +129,7 @@ public extension ReflectiveGenerator where Operation == ReflectiveOperation, Val
         fileID: StaticString = #fileID,
         filePath: StaticString = #filePath,
         line: UInt = #line,
-        column: UInt = #column
+        column: UInt = #column,
     ) -> ValidationReport {
         _validate(
             samples: samples,
@@ -145,7 +144,7 @@ public extension ReflectiveGenerator where Operation == ReflectiveOperation, Val
             fileID: fileID,
             filePath: filePath,
             line: line,
-            column: column
+            column: column,
         )
     }
 }
@@ -173,7 +172,7 @@ private extension ReflectiveGenerator where Operation == ReflectiveOperation {
         fileID: StaticString,
         filePath: StaticString,
         line: UInt,
-        column: UInt
+        column: UInt,
     ) -> ValidationReport {
         let maxFailures = 20
         var failures: [ValidationFailure] = []
@@ -213,7 +212,7 @@ private extension ReflectiveGenerator where Operation == ReflectiveOperation {
                             case let .notEqual(detail):
                                 failures.append(.reflectionRoundTripMismatch(
                                     sampleIndex: sampleIndex,
-                                    detail: detail
+                                    detail: detail,
                                 ))
                             }
                         } else {
@@ -227,7 +226,7 @@ private extension ReflectiveGenerator where Operation == ReflectiveOperation {
                         } else {
                             failures.append(.reflectionRoundTripMismatch(
                                 sampleIndex: sampleIndex,
-                                detail: "choice sequences differ: \(generatedSequence.shortString) vs \(reflectedSequence.shortString)"
+                                detail: "choice sequences differ: \(generatedSequence.shortString) vs \(reflectedSequence.shortString)",
                             ))
                         }
                     }

@@ -6,8 +6,7 @@
 //
 
 extension ReducerStrategies {
-    /// Pass: reduce pick-branch structure by replacing a complex branch's
-    /// subtree with a simpler sub-branch, ordered by shortlex complexity.
+    /// Pass: reduce pick-branch structure by replacing a complex branch's subtree with a simpler sub-branch, ordered by shortlex complexity.
     public static func promoteBranches<Output>(
         _ gen: ReflectiveGenerator<Output>,
         tree: ChoiceTree,
@@ -98,8 +97,7 @@ extension ReducerStrategies {
         return results
     }
 
-    /// Returns the branch ID of the `.selected` branch within a pick-site group,
-    /// or `nil` if no selected branch is found.
+    /// Returns the branch ID of the `.selected` branch within a pick-site group, or `nil` if no selected branch is found.
     private static func selectedBranchID(of group: ChoiceTree) -> UInt64? {
         guard case let .group(array) = group else { return nil }
         for element in array {

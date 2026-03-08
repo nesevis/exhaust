@@ -94,11 +94,9 @@ extension ReducerStrategies {
 
     /// Coordinated deletion across structurally aligned sibling containers.
     /// Builds cohorts of sibling container pairs and deletes aligned child windows.
-    /// Alignment is index-based over the shared prefix (`0..<min(childCountA, childCountB)`),
-    /// so containers do not need identical child counts.
+    /// Alignment is index-based over the shared prefix (`0..<min(childCountA, childCountB)`), so containers do not need identical child counts.
     ///
-    /// - Complexity: O(*g* · *c* · *n* · log *n* · *M*), where *g* is sibling group count, *c* is
-    ///   cohorts per group, *n* is child count per cohort, and *M* is one property invocation.
+    /// - Complexity: O(*g* · *c* · *n* · log *n* · *M*), where *g* is sibling group count, *c* is cohorts per group, *n* is child count per cohort, and *M* is one property invocation.
     static func deleteAlignedSiblingWindows<Output>(
         _ gen: ReflectiveGenerator<Output>,
         tree: ChoiceTree,

@@ -9,29 +9,22 @@ public struct CoveringArrayRow: @unchecked Sendable {
     public var values: [UInt64]
 }
 
-/// A t-way covering array guaranteeing that every t-tuple of parameter values
-/// appears in at least one row.
+/// A t-way covering array guaranteeing that every t-tuple of parameter values appears in at least one row.
 ///
 /// Generated using the IPOG (In-Parameter-Order-General) algorithm from:
 /// Lei & Kacker, "IPOG: A General Strategy for T-Way Software Testing",
-/// 14th Annual IEEE International Conference and Workshops on the
-/// Engineering of Computer-Based Systems (ECBS 2007).
+/// 14th Annual IEEE International Conference and Workshops on the Engineering of Computer-Based Systems (ECBS 2007).
 ///
-/// The architecture accommodates future extension to ordered t-way coverage
-/// via concatenated covering arrays, as described by Kuhn, Raunak & Kacker
-/// in "Ordered t-way Combinations for Testing State-based Systems".
+/// The architecture accommodates future extension to ordered t-way coverage via concatenated covering arrays, as described by Kuhn, Raunak & Kacker in "Ordered t-way Combinations for Testing State-based Systems".
 public struct CoveringArray: @unchecked Sendable {
     public let strength: Int
     public let rows: [CoveringArrayRow]
     public let profile: FiniteDomainProfile
 
-    /// Returns the strongest covering array that fits within `budget` rows,
-    /// or `nil` if even t=2 doesn't fit.
+    /// Returns the strongest covering array that fits within `budget` rows, or `nil` if even t=2 doesn't fit.
     ///
-    /// Searches bottom-up (t=2, 3, …) so it can stop as soon as a strength
-    /// exceeds the budget, avoiding unnecessary IPOG runs at high strengths.
-    /// Also skips strengths whose initial seed rows alone exceed the budget
-    /// (the seed is the exhaustive product of the first `t` parameters).
+    /// Searches bottom-up (t=2, 3, …) so it can stop as soon as a strength exceeds the budget, avoiding unnecessary IPOG runs at high strengths.
+    /// Also skips strengths whose initial seed rows alone exceed the budget (the seed is the exhaustive product of the first `t` parameters).
     public static func bestFitting(budget: UInt64, profile: FiniteDomainProfile) -> CoveringArray? {
         let paramCount = profile.parameters.count
         guard paramCount >= 2 else { return nil }
@@ -61,10 +54,7 @@ public struct CoveringArray: @unchecked Sendable {
 
     /// Generates a covering array using the IPOG algorithm (Lei & Kacker, ECBS 2007).
     ///
-    /// IPOG builds the array incrementally: it starts with an exhaustive enumeration
-    /// of the first `t` parameters, then extends one parameter at a time via
-    /// *horizontal growth* (greedily choosing the best value for each existing row)
-    /// followed by *vertical growth* (adding new rows for any uncovered tuples).
+    /// IPOG builds the array incrementally: it starts with an exhaustive enumeration of the first `t` parameters, then extends one parameter at a time via *horizontal growth* (greedily choosing the best value for each existing row) followed by *vertical growth* (adding new rows for any uncovered tuples).
     ///
     /// - Parameters:
     ///   - profile: The finite domain profile describing all parameters.
@@ -86,14 +76,13 @@ public struct CoveringArray: @unchecked Sendable {
         return CoveringArray(strength: strength, rows: rows, profile: profile)
     }
 
-    /// Returns the strongest covering array that fits within `budget` rows
-    /// for a boundary domain profile, or `nil` if even t=2 doesn't fit.
+    /// Returns the strongest covering array that fits within `budget` rows for a boundary domain profile, or `nil` if even t=2 doesn't fit.
     public static func bestFitting(budget: UInt64, boundaryProfile: BoundaryDomainProfile) -> CoveringArray? {
         let syntheticParams = boundaryProfile.parameters.map { param in
             FiniteParameter(
                 index: param.index,
                 domainSize: param.domainSize,
-                kind: .chooseBits(range: 0 ... max(param.domainSize, 1) - 1, tag: .uint64)
+                kind: .chooseBits(range: 0 ... max(param.domainSize, 1) - 1, tag: .uint64),
             )
         }
         var totalSpace: UInt64 = 1
@@ -104,7 +93,7 @@ public struct CoveringArray: @unchecked Sendable {
         }
         let syntheticProfile = FiniteDomainProfile(
             parameters: syntheticParams,
-            totalSpace: totalSpace
+            totalSpace: totalSpace,
         )
 
         // For 1-parameter boundary profiles, IPOG requires paramCount >= 2.
@@ -153,8 +142,7 @@ public struct CoveringArray: @unchecked Sendable {
 
 /// Internal builder implementing the IPOG algorithm (Lei & Kacker, ECBS 2007).
 ///
-/// Uses `Optional<UInt64>` for don't-care tracking during vertical growth,
-/// which the paper denotes as wildcard positions that can be freely assigned.
+/// Uses `Optional<UInt64>` for don't-care tracking during vertical growth, which the paper denotes as wildcard positions that can be freely assigned.
 private struct IPOGBuilder {
     let params: [FiniteParameter]
     let strength: Int
@@ -169,9 +157,9 @@ private struct IPOGBuilder {
     init(params: [FiniteParameter], strength: Int) {
         self.params = params
         self.strength = strength
-        self.n = params.count
-        self.rows = []
-        self.covered = CoveredSet()
+        n = params.count
+        rows = []
+        covered = CoveredSet()
     }
 
     mutating func run() {
@@ -233,7 +221,7 @@ private struct IPOGBuilder {
                     row: rows[rowIdx],
                     mustInclude: i,
                     strength: strength,
-                    upToParam: i + 1
+                    upToParam: i + 1,
                 )
                 if count > bestCount {
                     bestCount = count
@@ -246,7 +234,7 @@ private struct IPOGBuilder {
                 row: rows[rowIdx],
                 mustInclude: i,
                 strength: strength,
-                upToParam: i + 1
+                upToParam: i + 1,
             )
         }
     }
@@ -258,7 +246,7 @@ private struct IPOGBuilder {
             mustInclude: i,
             strength: strength,
             upToParam: i + 1,
-            params: params
+            params: params,
         )
 
         for tuple in uncoveredTuples {

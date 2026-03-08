@@ -13,7 +13,9 @@ public struct Xoshiro256: ~Copyable {
     private var state: StateType
 
     /// Read-only access to internal state for explicit cloning.
-    public var currentState: StateType { state }
+    public var currentState: StateType {
+        state
+    }
 
     /// Jump polynomial for 2^128 steps
     private static let jumpPoly: [UInt64] = [
@@ -89,8 +91,7 @@ public struct Xoshiro256: ~Copyable {
 
     /// Returns a random integer in `range`.
     ///
-    /// This is intentionally separate from `next(upperBound:)` so callers can
-    /// choose between stdlib range behavior and fast bounded sampling.
+    /// This is intentionally separate from `next(upperBound:)` so callers can choose between stdlib range behavior and fast bounded sampling.
     @inline(__always)
     public mutating func next(in range: ClosedRange<UInt64>) -> UInt64 {
         let width = range.upperBound &- range.lowerBound

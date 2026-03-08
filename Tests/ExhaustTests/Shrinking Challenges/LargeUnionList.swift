@@ -5,10 +5,10 @@
 //  Created by Chris Kolbu on 11/2/2026.
 //
 
+import ExhaustCore
 import Foundation
 import Testing
 @testable import Exhaust
-import ExhaustCore
 
 @MainActor
 @Suite("Shrinking Challenge: Large Union List")
@@ -70,7 +70,7 @@ struct LargeUnionListShrinkingChallenge {
 
         var outputs = [(value: [[Int]], shrunk: [[Int]])]()
         while let (value, tree) = try iterator.next() {
-            guard Self.property(value) == false && outputs.count <= 50 else { continue }
+            guard Self.property(value) == false, outputs.count <= 50 else { continue }
             let (_, output) = try #require(try Interpreters.reduce(gen: Self.gen, tree: tree, config: .fast, property: Self.property))
             outputs.append((value, output))
         }

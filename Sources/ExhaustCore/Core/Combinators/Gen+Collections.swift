@@ -5,11 +5,9 @@ public extension Gen {
     /// Creates a generator for an array of random values.
     ///
     /// This implementation is stack-safe and can generate very large arrays without overflowing.
-    /// It works by first generating a random length, then using a primitive `.sequence` operation
-    /// which the interpreter can execute iteratively.
+    /// It works by first generating a random length, then using a primitive `.sequence` operation which the interpreter can execute iteratively.
     ///
-    /// The array length is controlled by the provided length generator, which defaults to a
-    /// size-based range if not specified.
+    /// The array length is controlled by the provided length generator, which defaults to a size-based range if not specified.
     ///
     /// - Parameters:
     ///   - elementGenerator: A self-contained generator for the elements of the array
@@ -42,12 +40,10 @@ public extension Gen {
     /// Creates a generator for an array with length constrained to a specific range.
     ///
     /// This variant allows precise control over array length by specifying exact bounds.
-    /// The `scaling` parameter controls how the length range interacts with the size
-    /// parameter (1–100), following Hedgehog's Range model:
+    /// The `scaling` parameter controls how the length range interacts with the size parameter (1–100), following Hedgehog's Range model:
     ///
     /// - `.constant`: The full range is available at all sizes.
-    /// - `.linear` (default): The upper bound grows linearly from the lower bound toward
-    ///   the specified upper bound as size increases.
+    /// - `.linear` (default): The upper bound grows linearly from the lower bound toward the specified upper bound as size increases.
     /// - `.exponential`: Same as linear but with exponential interpolation.
     ///
     /// - Parameters:
@@ -74,8 +70,7 @@ public extension Gen {
 
     /// Creates a generator for an array with exactly the specified length.
     ///
-    /// This is a convenience method that generates arrays of a fixed size,
-    /// useful when you need predictable collection sizes for testing.
+    /// This is a convenience method that generates arrays of a fixed size, useful when you need predictable collection sizes for testing.
     ///
     /// - Parameters:
     ///   - elementGenerator: The generator for array elements
@@ -91,12 +86,9 @@ public extension Gen {
 
     /// Creates a generator for dictionaries with random key-value pairs.
     ///
-    /// This combinator generates dictionaries by creating parallel arrays of keys and values,
-    /// then zipping them together. If duplicate keys are generated, the `uniquingKeysWith`
-    /// parameter determines which value to keep (currently keeps the first value).
+    /// This combinator generates dictionaries by creating parallel arrays of keys and values, then zipping them together. If duplicate keys are generated, the `uniquingKeysWith` parameter determines which value to keep (currently keeps the first value).
     ///
-    /// The dictionary size follows the same size-based generation as arrays, ensuring
-    /// consistent behavior across collection types.
+    /// The dictionary size follows the same size-based generation as arrays, ensuring consistent behavior across collection types.
     ///
     /// - Parameters:
     ///   - keyGenerator: Generator for dictionary keys (must be Hashable)
@@ -129,9 +121,7 @@ public extension Gen {
 
     /// Creates a generator for a set of unique random values.
     ///
-    /// This implementation generates an array of elements, filters out any with duplicates,
-    /// and converts to a set. The filter operation ensures deterministic reproducibility
-    /// through seeds while leveraging CGS optimization to minimize wasted generation cycles.
+    /// This implementation generates an array of elements, filters out any with duplicates, and converts to a set. The filter operation ensures deterministic reproducibility through seeds while leveraging CGS optimization to minimize wasted generation cycles.
     ///
     /// - Parameters:
     ///   - elementGenerator: A generator for the elements of the set (must be Hashable)
@@ -177,11 +167,7 @@ public extension Gen {
 
     /// Shuffles the output of an array generator into a random permutation.
     ///
-    /// Uses a sort-key approach: generates one random `UInt64` per element, then
-    /// sorts the array by those keys. This produces a uniform permutation and
-    /// shrinks cleanly toward the original generation order (identity permutation)
-    /// as the reducer drives sort keys toward zero. Identical keys preserve
-    /// relative order (stable sort), so partial shrinking is well-behaved.
+    /// Uses a sort-key approach: generates one random `UInt64` per element, then sorts the array by those keys. This produces a uniform permutation and shrinks cleanly toward the original generation order (identity permutation) as the reducer drives sort keys toward zero. Identical keys preserve relative order (stable sort), so partial shrinking is well-behaved.
     ///
     /// - Parameter gen: An array generator whose output should be shuffled
     /// - Returns: A generator that produces a randomly permuted array
@@ -205,9 +191,7 @@ public extension Gen {
 
     /// Creates an array generator whose length is controlled by the current size parameter.
     ///
-    /// This is a convenience method that combines `getSize` with `arrayOf` to create
-    /// arrays that grow in complexity as tests progress. The size parameter acts as
-    /// an upper bound, with the actual length chosen randomly within the constraint.
+    /// This is a convenience method that combines `getSize` with `arrayOf` to create arrays that grow in complexity as tests progress. The size parameter acts as an upper bound, with the actual length chosen randomly within the constraint.
     ///
     /// - Parameters:
     ///   - elementGenerator: The generator for array elements
@@ -280,10 +264,7 @@ public extension Gen {
 
     /// Creates a generator for a contiguous subrange of a generated collection.
     ///
-    /// Composes the input generator with `slice(of:)` via `bind`, producing
-    /// the collection's `SubSequence` type. Shrinking comes for free: `slice(of:)`
-    /// already shrinks toward shorter subranges and earlier start positions, and
-    /// the inner generator shrinks its elements independently.
+    /// Composes the input generator with `slice(of:)` via `bind`, producing the collection's `SubSequence` type. Shrinking comes for free: `slice(of:)` already shrinks toward shorter subranges and earlier start positions, and the inner generator shrinks its elements independently.
     ///
     /// - Parameter gen: A generator that produces a collection
     /// - Returns: A generator that produces a contiguous subrange of the generated collection
@@ -298,8 +279,7 @@ public extension Gen {
 
     /// Creates a generator that picks a random element from a collection.
     ///
-    /// This combinator generates individual elements by selecting random indices
-    /// from the provided collection. It works with any ``Collection`` type.
+    /// This combinator generates individual elements by selecting random indices from the provided collection. It works with any ``Collection`` type.
     ///
     /// - Parameter collection: The collection to pick elements from
     /// - Returns: A generator that produces random elements from the collection
@@ -329,8 +309,7 @@ public extension Gen {
 
     /// Creates a generator that picks a random element from a collection.
     ///
-    /// This combinator generates individual elements by selecting random indices
-    /// from the provided collection. It works with any ``Collection`` type.
+    /// This combinator generates individual elements by selecting random indices from the provided collection. It works with any ``Collection`` type.
     ///
     /// - Parameter collection: The collection to pick elements from
     /// - Returns: A generator that produces random elements from the collection

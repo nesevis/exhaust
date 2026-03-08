@@ -54,13 +54,13 @@ struct NoveltyTrackerTests {
         // Tree selecting branch id=1 (only the selected branch present in the tree)
         let tree1 = ChoiceTree.branch(
             siteID: 1, weight: 1, id: 1, branchIDs: [1, 2],
-            choice: .choice(.unsigned(5, .uint64), ChoiceMetadata(validRange: 0 ... 100))
+            choice: .choice(.unsigned(5, .uint64), ChoiceMetadata(validRange: 0 ... 100)),
         )
 
         // Tree selecting branch id=2 (different branch chosen)
         let tree2 = ChoiceTree.branch(
             siteID: 1, weight: 1, id: 2, branchIDs: [1, 2],
-            choice: .choice(.unsigned(10, .uint64), ChoiceMetadata(validRange: 0 ... 100))
+            choice: .choice(.unsigned(10, .uint64), ChoiceMetadata(validRange: 0 ... 100)),
         )
 
         let seq1 = ChoiceSequence(tree1)
@@ -112,7 +112,7 @@ struct NoveltyTrackerTests {
         let tree2 = ChoiceTree.group([
             .selected(.branch(
                 siteID: 99, weight: 1, id: 1, branchIDs: [1],
-                choice: .choice(.unsigned(42, .uint64), ChoiceMetadata(validRange: 0 ... 100))
+                choice: .choice(.unsigned(42, .uint64), ChoiceMetadata(validRange: 0 ... 100)),
             )),
         ])
         let seq2 = ChoiceSequence(tree2)

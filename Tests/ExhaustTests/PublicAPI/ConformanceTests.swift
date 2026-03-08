@@ -3,9 +3,9 @@
 //  Exhaust
 //
 
+import ExhaustCore
 import Testing
 @testable import Exhaust
-import ExhaustCore
 
 @Suite("Public API Conformances")
 struct ConformanceTests {
@@ -31,7 +31,7 @@ struct ConformanceTests {
         func staticArrayWithLength() throws {
             let gen: ReflectiveGenerator<[Int]> = .array(
                 Gen.choose(in: 0 ... 100),
-                length: 3 ... 5
+                length: 3 ... 5,
             )
             var iterator = ValueInterpreter(gen, seed: 42)
 
@@ -81,7 +81,7 @@ struct ConformanceTests {
             let gen: ReflectiveGenerator<Set<Int>> = .set(
                 Gen.choose(in: 0 ... 1000),
                 count: 2 ... 5,
-                scaling: .constant
+                scaling: .constant,
             )
             var iterator = ValueInterpreter(gen, seed: 42)
 
@@ -97,7 +97,7 @@ struct ConformanceTests {
         func staticDictionary() throws {
             let gen: ReflectiveGenerator<[Int: Int]> = .dictionary(
                 Gen.choose(in: 0 ... 100),
-                Gen.choose(in: 0 ... 100)
+                Gen.choose(in: 0 ... 100),
             )
             var iterator = ValueInterpreter(gen, seed: 42)
 
@@ -439,7 +439,7 @@ struct ConformanceTests {
                 if let value = try iterator.next() {
                     if value { sawTrue = true } else { sawFalse = true }
                 }
-                if sawTrue && sawFalse { break }
+                if sawTrue, sawFalse { break }
             }
 
             #expect(sawTrue, "Expected at least one true")
@@ -457,7 +457,7 @@ struct ConformanceTests {
                 if let value = try iterator.next() {
                     if value == nil { sawNil = true } else { sawSome = true }
                 }
-                if sawNil && sawSome { break }
+                if sawNil, sawSome { break }
             }
 
             #expect(sawNil, "Expected at least one nil")
@@ -491,7 +491,7 @@ struct ConformanceTests {
         func oneOfGenerators() throws {
             let gen: ReflectiveGenerator<Int> = .oneOf(
                 Gen.choose(in: 0 ... 0),
-                Gen.choose(in: 100 ... 100)
+                Gen.choose(in: 100 ... 100),
             )
             var sawZero = false
             var sawHundred = false
@@ -502,7 +502,7 @@ struct ConformanceTests {
                     if value == 0 { sawZero = true }
                     if value == 100 { sawHundred = true }
                 }
-                if sawZero && sawHundred { break }
+                if sawZero, sawHundred { break }
             }
 
             #expect(sawZero, "Expected to see 0")
@@ -513,7 +513,7 @@ struct ConformanceTests {
         func oneOfWeighted() throws {
             let gen: ReflectiveGenerator<Int> = .oneOf(
                 weighted: (100, Gen.choose(in: 0 ... 0)),
-                (1, Gen.choose(in: 100 ... 100))
+                (1, Gen.choose(in: 100 ... 100)),
             )
 
             var counts = [0: 0, 100: 0]

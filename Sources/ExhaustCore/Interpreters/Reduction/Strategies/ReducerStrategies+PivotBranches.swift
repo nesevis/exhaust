@@ -6,11 +6,9 @@
 //
 
 extension ReducerStrategies {
-    /// Pass: try switching which branch is `.selected` at each pick site,
-    /// preferring alternatives whose subtrees are shortlex-simpler.
+    /// Pass: try switching which branch is `.selected` at each pick site, preferring alternatives whose subtrees are shortlex-simpler.
     ///
-    /// Requires the tree to have been generated with `materializePicks: true`
-    /// so that alternative (non-selected) branches are present in each group.
+    /// Requires the tree to have been generated with `materializePicks: true` so that alternative (non-selected) branches are present in each group.
     public static func pivotBranches<Output>(
         _ gen: ReflectiveGenerator<Output>,
         tree: ChoiceTree,
@@ -72,8 +70,7 @@ extension ReducerStrategies {
         return nil
     }
 
-    /// Extracts fingerprints of pick-site groups that contain at least one `.selected`
-    /// branch and at least one non-selected alternative.
+    /// Extracts fingerprints of pick-site groups that contain at least one `.selected` branch and at least one non-selected alternative.
     private static func extractPickSites(from tree: ChoiceTree) -> [Fingerprint] {
         var results: [Fingerprint] = []
         for element in tree.walk() {

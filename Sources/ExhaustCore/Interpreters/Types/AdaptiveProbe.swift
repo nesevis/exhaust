@@ -7,19 +7,15 @@
 
 import Foundation
 
-/// Adaptive probes for efficient shrinking, based on David MacIver's work on Hypothesis
-/// https://notebook.drmaciver.com/posts/2019-04-30-13:03.html
+/// Adaptive probes for efficient shrinking, based on David MacIver's Hypothesis shrinker (MacIver & Donaldson, "Reduction via Generation", ECOOP 2020, §3.1).
 ///
-/// These two algorithms form the backbone of every shrink pass. Their cost is logarithmic
-/// in the size of the *output* (or the error of the guess), not the size of the input range.
+/// These two algorithms form the backbone of every shrink pass. Their cost is logarithmic in the size of the *output* (or the error of the guess), not the size of the input range.
 public enum AdaptiveProbe {
     /// Discovers the **largest** `k` for which `predicate(k)` holds, in O(log k) time.
     ///
-    /// `predicate(0)` is assumed true and is not checked. The predicate must be monotonic:
-    /// once it returns `false` for some value, it must return `false` for all larger values.
+    /// `predicate(0)` is assumed true and is not checked. The predicate must be monotonic: once it returns `false` for some value, it must return `false` for all larger values.
     ///
-    /// Used wherever a pass needs to find "how many of these can I do at once" — e.g.,
-    /// batch-deleting the largest contiguous run of spans in adaptive span deletion.
+    /// Used wherever a pass needs to find "how many of these can I do at once" — e.g., batch-deleting the largest contiguous run of spans in adaptive span deletion.
     ///
     /// - Parameter predicate: A monotonic predicate where `predicate(0)` is assumed true.
     /// - Returns: The largest `k >= 0` for which `predicate(k)` holds.
@@ -66,15 +62,11 @@ public enum AdaptiveProbe {
 
     /// Binary search where you supply a **guess** of the answer.
     ///
-    /// Finds `n` such that `lo <= n < hi` and `predicate(n) != predicate(n + 1)`.
-    /// `predicate(lo)` is assumed to be `true` and `predicate(hi)` is assumed to be `false`.
+    /// Finds `n` such that `lo <= n < hi` and `predicate(n) != predicate(n + 1)`. `predicate(lo)` is assumed to be `true` and `predicate(hi)` is assumed to be `false`.
     ///
-    /// The cost is O(log(|guess − answer|)) rather than O(log(hi − lo)). If the guess is good,
-    /// this approaches O(1). If the guess is maximally wrong, it costs at most 2× a standard
-    /// binary search — a bounded downside for a potentially large upside.
+    /// The cost is O(log(|guess − answer|)) rather than O(log(hi − lo)). If the guess is good, this approaches O(1). If the guess is maximally wrong, it costs at most 2× a standard binary search — a bounded downside for a potentially large upside.
     ///
-    /// The empirical centroid from value metadata provides the guess during value minimisation,
-    /// encoding distributional knowledge into reduced property invocations.
+    /// The empirical centroid from value metadata provides the guess during value minimisation, encoding distributional knowledge into reduced property invocations.
     ///
     /// - Parameters:
     ///   - low: Lower bound (inclusive). `predicate(low)` is assumed true.

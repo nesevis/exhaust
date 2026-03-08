@@ -75,7 +75,7 @@ struct RoundtripPropertyTests {
         // Optional — .optional() is Exhaust-only, using Gen.pick equivalent
         let innerIntGen: ReflectiveGenerator<Int> = Gen.choose(in: 0 ... 100)
         let optionalGen: ReflectiveGenerator<Int?> = Gen.pick(choices: [
-            (1, Gen.just(Optional<Int>.none)),
+            (1, Gen.just(Int?.none)),
             (5, innerIntGen._map { Optional($0) }),
         ])
         try exhaustCheck(optionalGen) { value in

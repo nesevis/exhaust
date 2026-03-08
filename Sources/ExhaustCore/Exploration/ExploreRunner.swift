@@ -15,11 +15,9 @@ public enum ExploreResult<Output> {
 
 /// Feedback-guided exploration runner.
 ///
-/// Combines seed-pool-based hill climbing with fresh generation to search the input
-/// space toward high-scorer regions while testing a property.
+/// Combines seed-pool-based hill climbing with fresh generation to search the input space toward high-scorer regions while testing a property.
 ///
-/// The runner uses a mandatory `scorer` function to guide hill-climbing: mutations
-/// that increase the scorer output are accepted, and the seed pool ranks by fitness.
+/// The runner uses a mandatory `scorer` function to guide hill-climbing: mutations that increase the scorer output are accepted, and the seed pool ranks by fitness.
 public struct ExploreRunner<Output>: ~Copyable {
     private let gen: ReflectiveGenerator<Output>
     private let property: (Output) -> Bool
@@ -35,7 +33,7 @@ public struct ExploreRunner<Output>: ~Copyable {
     public init(
         gen: ReflectiveGenerator<Output>,
         property: @escaping (Output) -> Bool,
-        maxIterations: UInt64 = 10_000,
+        maxIterations: UInt64 = 10000,
         shrinkConfig: Interpreters.ShrinkConfiguration = .fast,
         poolCapacity: Int = 256,
         generateRatio: Double = 0.2,
@@ -47,21 +45,23 @@ public struct ExploreRunner<Output>: ~Copyable {
         self.maxIterations = maxIterations
         self.shrinkConfig = shrinkConfig
         self.scorer = scorer
-        self.pool = DefaultSeedPool(
+        pool = DefaultSeedPool(
             capacity: poolCapacity,
             generateRatio: generateRatio,
-            useFitness: true
+            useFitness: true,
         )
-        self.tracker = NoveltyTracker()
-        self.schedule = LogarithmicSchedule()
+        tracker = NoveltyTracker()
+        schedule = LogarithmicSchedule()
         if let seed {
-            self.prng = Xoshiro256(seed: seed)
+            prng = Xoshiro256(seed: seed)
         } else {
-            self.prng = Xoshiro256()
+            prng = Xoshiro256()
         }
     }
 
-    public var baseSeed: UInt64 { prng.seed }
+    public var baseSeed: UInt64 {
+        prng.seed
+    }
 
     // MARK: - Run
 
@@ -93,7 +93,7 @@ public struct ExploreRunner<Output>: ~Copyable {
                     tree: tree,
                     noveltyScore: novelty,
                     fitness: fitness,
-                    generation: iteration
+                    generation: iteration,
                 ))
             }
         }
@@ -114,7 +114,7 @@ public struct ExploreRunner<Output>: ~Copyable {
                 let energy = schedule.energy(
                     for: seed,
                     poolSize: pool.count,
-                    averagePoolFitness: pool.averageFitness
+                    averagePoolFitness: pool.averageFitness,
                 )
 
                 let climbBudget = min(energy * 4, Int(maxIterations - iteration))
@@ -175,7 +175,7 @@ public struct ExploreRunner<Output>: ~Copyable {
                 tree: tree,
                 noveltyScore: novelty,
                 fitness: fitness,
-                generation: iteration
+                generation: iteration,
             ))
         }
 
@@ -184,33 +184,31 @@ public struct ExploreRunner<Output>: ~Copyable {
 
     /// Shrink a failing value and return the result.
     ///
-    /// Always reflects to get a structurally correct tree, since `materializePicks: false`
-    /// trees lack unselected branches needed by reducer strategies.
+    /// Always reflects to get a structurally correct tree, since `materializePicks: false` trees lack unselected branches needed by reducer strategies.
     private func shrinkAndReturn(
         value: Output,
         tree: ChoiceTree,
         iteration: UInt64,
-        fromMutation: Bool = false,
+        fromMutation _: Bool = false,
     ) -> ExploreResult<Output> {
         do {
-            let shrinkTree: ChoiceTree
-            if let reflected = try Interpreters.reflect(gen, with: value) {
-                shrinkTree = reflected
+            let shrinkTree: ChoiceTree = if let reflected = try Interpreters.reflect(gen, with: value) {
+                reflected
             } else {
-                shrinkTree = tree
+                tree
             }
 
             if let (shrunkSequence, shrunkValue) = try Interpreters.reduce(
                 gen: gen,
                 tree: shrinkTree,
                 config: shrinkConfig,
-                property: property
+                property: property,
             ) {
                 return .failure(
                     counterexample: shrunkValue,
                     shrunkSequence: shrunkSequence,
                     original: value,
-                    iteration: iteration
+                    iteration: iteration,
                 )
             }
         } catch {

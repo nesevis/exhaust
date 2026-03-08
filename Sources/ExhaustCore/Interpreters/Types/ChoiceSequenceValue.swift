@@ -7,22 +7,21 @@
 
 import Foundation
 
+/// An element in a flattened ``ChoiceSequence``, representing one entry from a ``ChoiceTree``.
+///
+/// Structural markers (``group``, ``sequence``, ``branch``, ``just``) delimit containers and pick sites, while ``value`` and ``reduced`` carry the actual numeric choices.
 public enum ChoiceSequenceValue: Hashable, Equatable, Sendable {
-    /// The elements within the `true`---`false` range are logically grouped
+    /// The elements within the `true`--`false` range are logically grouped.
     case group(Bool)
-    /// Values that repeat within a sequence
-    /// The elements within the `true`---`false` range are elements of the sequence
+    /// The elements within the `true`--`false` range are elements of a sequence.
     case sequence(Bool, isLengthExplicit: Bool = false)
-    /// A marker for a branching choice.
-    /// Stores selected branch id and the valid branch ids for the pick site.
-    /// This marker has no explicit closing marker.
+    /// A marker for a branching choice. Stores the selected branch identifier and the valid branch identifiers for the pick site. This marker has no explicit closing marker.
     case branch(Branch)
-    /// Individual values
+    /// An individual numeric value.
     case value(Value)
-    /// A value that has been set to its semantically simplest form that should not be individually shrunk further
+    /// A value that has been set to its semantically simplest form and should not be individually shrunk further.
     case reduced(Value)
-    /// A marker for a `.just` node — carries no data but makes `.just` elements
-    /// visible in the flat sequence (needed for element counting in PrefixMaterializer).
+    /// A marker for a `.just` node. Carries no data but makes `.just` elements visible in the flat sequence (needed for element counting in ``PrefixMaterializer``).
     case just
 
     var value: Value? {
@@ -95,6 +94,7 @@ public enum ChoiceSequenceValue: Hashable, Equatable, Sendable {
 
     // MARK: - Inner type
 
+    /// A branch marker storing the selected branch identifier and all valid identifiers for a pick site.
     public struct Branch: Hashable, Equatable, Sendable {
         public let id: UInt64
         public let validIDs: [UInt64]
@@ -119,6 +119,7 @@ public enum ChoiceSequenceValue: Hashable, Equatable, Sendable {
         }
     }
 
+    /// A numeric value entry carrying the ``ChoiceValue``, its valid range, and whether the range was explicitly specified.
     public struct Value: Hashable, Equatable, Sendable {
         public let choice: ChoiceValue
         public let validRange: ClosedRange<UInt64>?

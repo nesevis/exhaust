@@ -15,14 +15,11 @@ extension ReducerStrategies {
     }
 
     /// Pass 5b: Cross-container value redistribution.
-    /// For each pair of numeric values with the same tag, tries to decrease the earlier value
-    /// (toward its reduction target) while increasing the later value by the same amount k.
+    /// For each pair of numeric values with the same tag, tries to decrease the earlier value (toward its reduction target) while increasing the later value by the same amount k.
     /// This enables reduction when values in different containers are coupled.
     ///
     /// - Complexity: O(*s* + *v*² · log *d* · *M*), where *s* is the sequence length,
-    ///   *v* is the number of numeric values (bounded to ≤ 16 by the caller), *d* is the maximum
-    ///   bit-pattern distance, and *M* is the cost of a single property invocation. Iterates over O(*v*²)
-    ///   cross-container pairs, each invoking `findInteger` with O(log *d*) property invocations.
+    ///   *v* is the number of numeric values (bounded to ≤ 16 by the caller), *d* is the maximum bit-pattern distance, and *M* is the cost of a single property invocation. Iterates over O(*v*²) cross-container pairs, each invoking `findInteger` with O(log *d*) property invocations.
     static func redistributeNumericPairs<Output>(
         _ gen: ReflectiveGenerator<Output>,
         tree: ChoiceTree,

@@ -3,12 +3,9 @@ import SwiftSyntax
 import SwiftSyntaxBuilder
 import SwiftSyntaxMacros
 
-/// Expression macro that expands `#exhaust(gen, .settings...) { ... }` or
-/// `#exhaust(gen, .settings..., property: someFunc)` into a call to
-/// `__ExhaustRuntime.__exhaust(...)`.
+/// Expression macro that expands `#exhaust(gen, .settings...) { ... }` or `#exhaust(gen, .settings..., property: someFunc)` into a call to `__ExhaustRuntime.__exhaust(...)`.
 ///
-/// When a trailing closure is used, the closure body source code is captured
-/// for log output. When a function reference is passed, `sourceCode` is `nil`.
+/// When a trailing closure is used, the closure body source code is captured for log output. When a function reference is passed, `sourceCode` is `nil`.
 public struct ExhaustTestMacro: ExpressionMacro {
     public static func expansion(
         of node: some FreestandingMacroExpansionSyntax,

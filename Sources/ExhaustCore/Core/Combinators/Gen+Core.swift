@@ -6,9 +6,7 @@ public enum Gen {}
 public extension Gen {
     /// Lifts a reflective operation into a generator with type-safe result handling.
     ///
-    /// This is the fundamental operation that bridges between raw reflective operations
-    /// and type-safe generators. It handles the unsafe casting and error reporting
-    /// when the reflection system returns unexpected types.
+    /// This is the fundamental operation that bridges between raw reflective operations and type-safe generators. It handles the unsafe casting and error reporting when the reflection system returns unexpected types.
     ///
     /// - Parameter operation: The low-level reflective operation to lift
     /// - Returns: A generator that executes the operation and validates the result type
@@ -26,9 +24,7 @@ public extension Gen {
 
     /// Applies a pruning operation to a generator.
     ///
-    /// Pruning is used during shrinking to eliminate branches that don't contribute
-    /// to the final result. This optimization helps make property-based testing more efficient
-    /// by focusing on relevant test cases.
+    /// Pruning is used during shrinking to eliminate branches that don't contribute to the final result. This optimization helps make property-based testing more efficient by focusing on relevant test cases.
     ///
     /// - Parameter generator: The generator to apply pruning to
     /// - Returns: A generator with pruning applied
@@ -39,9 +35,7 @@ public extension Gen {
 
     /// Applies a contravariant transformation to a generator's input during reflection.
     ///
-    /// This is the fundamental operation for transforming inputs in the backward direction
-    /// during reflection. It allows a generator expecting one input type to work with
-    /// a different input type via a transformation function.
+    /// This is the fundamental operation for transforming inputs in the backward direction during reflection. It allows a generator expecting one input type to work with a different input type via a transformation function.
     ///
     /// - Parameters:
     ///   - transform: A function that transforms the new input type to the expected input type

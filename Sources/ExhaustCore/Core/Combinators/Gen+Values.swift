@@ -4,9 +4,7 @@
 public extension Gen {
     /// Creates a generator that always produces the same constant value.
     ///
-    /// This generator always succeeds during both generation and reflection phases,
-    /// regardless of what target value is being reflected against. It's the most
-    /// permissive constant value generator.
+    /// This generator always succeeds during both generation and reflection phases, regardless of what target value is being reflected against. It's the most permissive constant value generator.
     ///
     /// For validation during reflection, see `Gen.exact` instead.
     ///
@@ -26,8 +24,7 @@ public extension Gen {
     /// **Forward pass (generation):** Always produces the constant value
     /// **Backward pass (reflection):** Fails if the target value doesn't match exactly
     ///
-    /// This validation behavior makes `Gen.exact` essential for property-based testing
-    /// where you need to verify that generated structures contain specific expected values.
+    /// This validation behavior makes `Gen.exact` essential for property-based testing where you need to verify that generated structures contain specific expected values.
     ///
     /// - Parameter value: The constant value to generate and validate against
     /// - Returns: A generator that produces the constant and validates during reflection

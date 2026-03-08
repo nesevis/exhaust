@@ -2,8 +2,7 @@ import SwiftDiagnostics
 import SwiftSyntax
 import SwiftSyntaxMacros
 
-/// Expression macro that expands `#extract(gen)` or `#extract(gen, count: N)` into
-/// a call to `__ExhaustRuntime.__extract(...)` or `__ExhaustRuntime.__extractArray(...)`.
+/// Expression macro that expands `#extract(gen)` or `#extract(gen, count: N)` into a call to `__ExhaustRuntime.__extract(...)` or `__ExhaustRuntime.__extractArray(...)`.
 public struct ExtractMacro: ExpressionMacro {
     public static func expansion(
         of node: some FreestandingMacroExpansionSyntax,

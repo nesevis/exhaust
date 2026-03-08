@@ -8,9 +8,7 @@ public extension Gen {
     /// - `recurse`: A thunk that returns a generator for "recurse here" positions
     /// - `remaining`: Depth budget, counting down from `maxDepth` (outermost) to 1 (innermost)
     ///
-    /// To terminate early, return a generator that doesn't call `recurse()`. This
-    /// short-circuits the recursion — inner layers are never reached since `recurse()`
-    /// is the only way to reference them:
+    /// To terminate early, return a generator that doesn't call `recurse()`. This short-circuits the recursion — inner layers are never reached since `recurse()` is the only way to reference them:
     ///
     /// ```swift
     /// Gen.recursive(base: .leaf, maxDepth: 5) { recurse, remaining in
@@ -30,7 +28,7 @@ public extension Gen {
     static func recursive<Output>(
         base: Output,
         maxDepth: UInt64,
-        extend: @escaping (@escaping () -> ReflectiveGenerator<Output>, UInt64) -> ReflectiveGenerator<Output>
+        extend: @escaping (@escaping () -> ReflectiveGenerator<Output>, UInt64) -> ReflectiveGenerator<Output>,
     ) -> ReflectiveGenerator<Output> {
         recursive(base: Gen.just(base), maxDepth: maxDepth, extend: extend)
     }
@@ -39,9 +37,7 @@ public extension Gen {
     ///
     /// Use this overload when the base case itself needs randomness (e.g. random leaf values).
     ///
-    /// The generator is eagerly unfolded at construction time into a plain generator tree —
-    /// no special runtime operation exists. This means recursive generators are fully
-    /// transparent to all interpreters (generation, reflection, replay, CGS tuning).
+    /// The generator is eagerly unfolded at construction time into a plain generator tree — no special runtime operation exists. This means recursive generators are fully transparent to all interpreters (generation, reflection, replay, CGS tuning).
     ///
     /// - Parameters:
     ///   - base: Generator for the base case
@@ -51,7 +47,7 @@ public extension Gen {
     static func recursive<Output>(
         base: ReflectiveGenerator<Output>,
         maxDepth: UInt64,
-        extend: @escaping (@escaping () -> ReflectiveGenerator<Output>, UInt64) -> ReflectiveGenerator<Output>
+        extend: @escaping (@escaping () -> ReflectiveGenerator<Output>, UInt64) -> ReflectiveGenerator<Output>,
     ) -> ReflectiveGenerator<Output> {
         // Generate a base siteID at construction time. Each unfolded layer gets
         // a deterministic siteID (baseSiteID &+ remaining) so CGS can tune
@@ -77,7 +73,7 @@ public extension Gen {
 /// Used by `Gen.recursive` to give each layer a deterministic siteID for CGS tuning.
 private func replaceTopLevelPickSiteID<Output>(
     _ gen: ReflectiveGenerator<Output>,
-    with siteID: UInt64
+    with siteID: UInt64,
 ) -> ReflectiveGenerator<Output> {
     guard case let .impure(operation, continuation) = gen,
           case let .pick(choices) = operation
@@ -88,7 +84,7 @@ private func replaceTopLevelPickSiteID<Output>(
             siteID: siteID,
             id: choice.id,
             weight: choice.weight,
-            generator: choice.generator
+            generator: choice.generator,
         )
     })
     return .impure(operation: .pick(choices: replaced), continuation: continuation)

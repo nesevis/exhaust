@@ -5,6 +5,12 @@
 //  Created by Chris Kolbu on 8/2/2026.
 //
 
+// MARK: - Academic Provenance
+
+//
+// Corresponds to the dissertation's bracketed choice sequences (Goldstein §4.6). Shortlex ordering — shorter sequences are always simpler, with lexicographic comparison as tiebreaker — is from MacIver & Donaldson (ECOOP 2020, §2.2). Exhaust adds Zobrist hashing for O(1) incremental duplicate detection during reduction.
+
+/// A contiguous region of a ``ChoiceSequence``, identified by its kind, index range, and nesting depth.
 public struct ChoiceSpan: CustomDebugStringConvertible {
     public init(kind: ChoiceSequenceValue, range: ClosedRange<Int>, depth: Int) {
         self.kind = kind
@@ -12,8 +18,11 @@ public struct ChoiceSpan: CustomDebugStringConvertible {
         self.depth = depth
     }
 
+    /// The ``ChoiceSequenceValue`` that opened this span.
     public let kind: ChoiceSequenceValue
+    /// The index range within the ``ChoiceSequence`` that this span covers.
     public let range: ClosedRange<Int>
+    /// The nesting depth of this span (0 = top level).
     public let depth: Int
 
     public var debugDescription: String {
@@ -34,9 +43,9 @@ public extension Collection<ChoiceSequenceValue> {
 extension ChoiceSequence {
     /// Computes a Zobrist hash: XOR of position-dependent contributions for each element.
     /// Enables O(1) incremental updates when single elements change.
-    internal var zobristHash: UInt64 {
+    var zobristHash: UInt64 {
         var hash: UInt64 = 0
-        for (i, element) in self.enumerated() {
+        for (i, element) in enumerated() {
             hash ^= Self.zobristContribution(at: i, element)
         }
         return hash
@@ -44,43 +53,42 @@ extension ChoiceSequence {
 
     /// Position-dependent hash contribution of a single element.
     /// Uses splitmix64 mixing for good avalanche with XOR combination.
-    internal static func zobristContribution(at position: Int, _ value: ChoiceSequenceValue) -> UInt64 {
-        var bits: UInt64
-        switch value {
+    static func zobristContribution(at position: Int, _ value: ChoiceSequenceValue) -> UInt64 {
+        var bits: UInt64 = switch value {
         case let .value(v):
-            bits = v.choice.bitPattern64 ^ (zobristTagBits(v.choice.tag) << 48)
+            v.choice.bitPattern64 ^ (zobristTagBits(v.choice.tag) << 48)
         case let .reduced(v):
-            bits = v.choice.bitPattern64 ^ (zobristTagBits(v.choice.tag) << 48) ^ 0xFF00FF00FF00FF00
+            v.choice.bitPattern64 ^ (zobristTagBits(v.choice.tag) << 48) ^ 0xFF00_FF00_FF00_FF00
         case .sequence(true, isLengthExplicit: true):
-            bits = 1
+            1
         case .sequence(true, isLengthExplicit: false):
-            bits = 2
+            2
         case .sequence(false, isLengthExplicit: true):
-            bits = 3
+            3
         case .sequence(false, isLengthExplicit: false):
-            bits = 4
+            4
         case .group(true):
-            bits = 5
+            5
         case .group(false):
-            bits = 6
+            6
         case let .branch(b):
-            bits = b.id ^ 0xDEADBEEFCAFEBABE
+            b.id ^ 0xDEAD_BEEF_CAFE_BABE
         case .just:
-            bits = 7
+            7
         }
-        bits ^= UInt64(position) &* 0x9E3779B97F4A7C15
-        bits = (bits ^ (bits >> 30)) &* 0xBF58476D1CE4E5B9
-        bits = (bits ^ (bits >> 27)) &* 0x94D049BB133111EB
+        bits ^= UInt64(position) &* 0x9E37_79B9_7F4A_7C15
+        bits = (bits ^ (bits >> 30)) &* 0xBF58_476D_1CE4_E5B9
+        bits = (bits ^ (bits >> 27)) &* 0x94D0_49BB_1331_11EB
         bits ^= bits >> 31
         return bits
     }
 
     /// Updates a Zobrist hash in O(1) after replacing the element at `position`.
-    internal static func zobristHashUpdating(
+    static func zobristHashUpdating(
         _ hash: UInt64,
         at position: Int,
         replacing oldValue: ChoiceSequenceValue,
-        with newValue: ChoiceSequenceValue
+        with newValue: ChoiceSequenceValue,
     ) -> UInt64 {
         hash ^ zobristContribution(at: position, oldValue) ^ zobristContribution(at: position, newValue)
     }
@@ -108,16 +116,14 @@ extension ChoiceSequence {
 // MARK: - Helper functions
 
 public extension ChoiceSequence {
-
-    /// Creates a projection of a `ChoiceTree` to a flat list
+    /// Creates a flat ``ChoiceSequence`` by flattening the given ``ChoiceTree``.
     init(_ tree: ChoiceTree) {
         self = Self.flatten(tree)
     }
 
     /// Flattens the tree structure of ``ChoiceTree`` to a flat list for mutation/shrinking purposes.
     ///
-    /// - Parameter includingAllBranches: When `true`, includes all branches at pick sites
-    ///   (not just the selected branch). Used for complexity comparison in shrink passes.
+    /// - Parameter includingAllBranches: When `true`, includes all branches at pick sites (not just the selected branch). Used for complexity comparison in shrink passes.
     static func flatten(_ tree: ChoiceTree, includingAllBranches: Bool = false) -> ChoiceSequence {
         var result = ChoiceSequence()
         result.reserveCapacity(64)
@@ -128,14 +134,14 @@ public extension ChoiceSequence {
     private static func flatten(
         _ tree: ChoiceTree,
         includingAllBranches: Bool,
-        into output: inout ChoiceSequence
+        into output: inout ChoiceSequence,
     ) {
         switch tree {
         case let .choice(value, meta):
             output.append(.value(.init(
                 choice: value,
                 validRange: meta.validRange,
-                isRangeExplicit: meta.isRangeExplicit
+                isRangeExplicit: meta.isRangeExplicit,
             )))
         case .just:
             output.append(.just)
@@ -299,8 +305,7 @@ public extension ChoiceSequence {
         }
     }
 
-    /// Returns spans representing `][` boundaries (`.sequence(false)` followed by `.sequence(true)`)
-    /// that occur while nested inside an outer sequence (sequence depth > 1).
+    /// Returns spans representing `][` boundaries (`.sequence(false)` followed by `.sequence(true)`) that occur while nested inside an outer sequence (sequence depth > 1).
     /// Removing such a boundary merges two adjacent inner sequences into one.
     static func extractSequenceBoundarySpans(from sequence: ChoiceSequence) -> [ChoiceSpan] {
         var spans: [ChoiceSpan] = []
@@ -387,9 +392,7 @@ public extension ChoiceSequence {
 
     // MARK: - Sibling groups
 
-    /// Extracts groups of sibling elements within containers. A sibling group contains
-    /// the immediate children of a sequence or group container, where all children are
-    /// the same kind (all bare values or all containers of the same type).
+    /// Extracts groups of sibling elements within containers. A sibling group contains the immediate children of a sequence or group container, where all children are the same kind (all bare values or all containers of the same type).
     /// Only groups with >= 2 siblings are returned.
     static func extractSiblingGroups(from sequence: ChoiceSequence) -> [SiblingGroup] {
         var result: [SiblingGroup] = []

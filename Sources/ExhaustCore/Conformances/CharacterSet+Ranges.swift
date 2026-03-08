@@ -23,8 +23,7 @@ public struct ScalarRangeSet: Sendable {
     /// Total number of scalar values across all ranges.
     public let scalarCount: Int
 
-    /// Cumulative sizes for O(log n) index lookup.
-    /// `cumulativeCounts[i]` = total scalars in ranges 0..<i.
+    /// Cumulative sizes for O(log n) index lookup. `cumulativeCounts[i]` = total scalars in ranges 0..<i.
     private let cumulativeCounts: [Int]
 
     public init(_ rangeSet: RangeSet<UInt32>) {

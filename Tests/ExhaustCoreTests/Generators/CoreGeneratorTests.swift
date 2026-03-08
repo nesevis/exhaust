@@ -113,13 +113,13 @@ struct CoreGeneratorTests {
                 Gen.contramap(
                     { (s: String) -> UInt64 in UInt64(s)! },
                     Gen.choose(in: UInt64.min ... UInt64.max, scaling: UInt64.defaultScaling)
-                        ._map { $0.description }
+                        ._map { $0.description },
                 ),
                 Gen.just("constant"),
             ]
 
             var seedIter = ValueInterpreter(
-                Gen.choose(in: UInt64.min ... UInt64.max, scaling: UInt64.defaultScaling) as ReflectiveGenerator<UInt64>
+                Gen.choose(in: UInt64.min ... UInt64.max, scaling: UInt64.defaultScaling) as ReflectiveGenerator<UInt64>,
             )
             let seeds = try seedIter.prefix(10)
 

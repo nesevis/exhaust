@@ -125,7 +125,7 @@ struct UniquenessBenchmarkTests {
 
     // MARK: - Main Benchmark
 
-    // Kolbu
+    /// Kolbu
     @Test("Time to 500 BST", .disabled())
     func bstBenchmark() throws {
 //        let onlineCGS = try measureOnlineCGS(Self.bstProblem)
@@ -373,7 +373,7 @@ struct UniquenessBenchmarkTests {
         )
     }
 
-    // Kolbu
+    /// Kolbu
     private func measureOnlineInformedTuning<Value: Hashable>(
         _ problem: BenchmarkProblem<Value>,
         weightingStrategy: ChoiceGradientTuner<Value>.WeightingStrategy = .totalFitness,

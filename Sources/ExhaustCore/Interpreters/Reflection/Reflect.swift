@@ -7,6 +7,11 @@
 
 import Foundation
 
+// MARK: - Academic Provenance
+
+//
+// Implements the `reflect` interpretation (Goldstein §4.3.3, Fig 4.4). Backward pass that extracts choice sequences from concrete values by trying all possible decompositions. Exhaust extends reflection to handle six additional operations not in the dissertation: sequence, zip, just, filter, classify, and unique.
+
 public enum Interpreters {
     // MARK: - Public-Facing Reflect Function (Unchanged, but now correct)
 
@@ -65,8 +70,7 @@ public enum Interpreters {
 
     // MARK: - Backward Interpreter for Individual Operations
 
-    /// This helper interprets a single operation. It receives the overall final output
-    /// and determines what to do based on its own semantics.
+    /// This helper interprets a single operation. It receives the overall final output and determines what to do based on its own semantics.
     private static func interpretOperationBackward(
         _ op: ReflectiveOperation,
         onFinalOutput finalOutput: Any,
@@ -235,11 +239,10 @@ public enum Interpreters {
             throw ReflectionError.inputWasOutOfGeneratorRange(String(describing: convertibleValue), min ... max)
         }
 
-        let reflectedRange: ClosedRange<UInt64>
-        if isRangeExplicit {
-            reflectedRange = min ... max
+        let reflectedRange: ClosedRange<UInt64> = if isRangeExplicit {
+            min ... max
         } else {
-            reflectedRange = type(of: convertibleValue).bitPatternRanges
+            type(of: convertibleValue).bitPatternRanges
                 .first(where: { $0.contains(bitPattern) }) ?? (UInt64.min ... UInt64.max)
         }
 

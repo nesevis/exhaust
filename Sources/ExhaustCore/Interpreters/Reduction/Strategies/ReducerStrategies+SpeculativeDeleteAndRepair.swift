@@ -7,18 +7,11 @@
 
 extension ReducerStrategies {
     /// Pass 5c: Speculative deletion with proportional value repair.
-    /// Tries deleting spans AND adjusting remaining values toward their reduction targets
-    /// by a uniform delta. This handles cases where deletion alone fails because values encode
-    /// positions that become out-of-bounds after deletion.
+    /// Tries deleting spans AND adjusting remaining values toward their reduction targets by a uniform delta. This handles cases where deletion alone fails because values encode positions that become out-of-bounds after deletion.
     ///
-    /// Uses divide-and-conquer: tries deleting all spans at a given depth, then recursively
-    /// splits into halves on failure. The recursion tree has O(2*n* − 1) nodes, so total
-    /// candidates are O(*n*) per depth level.
+    /// Uses divide-and-conquer: tries deleting all spans at a given depth, then recursively splits into halves on failure. The recursion tree has O(2*n* − 1) nodes, so total candidates are O(*n*) per depth level.
     ///
-    /// - Complexity: O(*D* · *n* · *M*ᵣ) in the worst case, where *D* is the number of distinct
-    ///   depths, *n* is the number of spans at a given depth, and *M*ᵣ is the cost of
-    ///   `repairAfterDeletion` (see below). Returns on the first successful repair, so amortised
-    ///   cost is often much lower.
+    /// - Complexity: O(*D* · *n* · *M*ᵣ) in the worst case, where *D* is the number of distinct depths, *n* is the number of spans at a given depth, and *M*ᵣ is the cost of `repairAfterDeletion` (see below). Returns on the first successful repair, so amortised cost is often much lower.
     static func speculativeDeleteAndRepair<Output>(
         _ gen: ReflectiveGenerator<Output>,
         tree: ChoiceTree,
@@ -50,8 +43,7 @@ extension ReducerStrategies {
         return nil
     }
 
-    /// Recursively tries deleting the given span slice and repairing. On failure, splits
-    /// into halves and recurses on each. The recursion tree has at most 2*n* − 1 nodes.
+    /// Recursively tries deleting the given span slice and repairing. On failure, splits into halves and recurses on each. The recursion tree has at most 2*n* − 1 nodes.
     private static func divideAndConquerDeleteRepair<Output>(
         _ gen: ReflectiveGenerator<Output>,
         tree: ChoiceTree,
@@ -107,13 +99,10 @@ extension ReducerStrategies {
         )
     }
 
-    /// Given a shortened sequence (after deletion), tries uniform value repair to find
-    /// a valid, property-failing configuration.
+    /// Given a shortened sequence (after deletion), tries uniform value repair to find a valid, property-failing configuration.
     ///
     /// - Complexity: O(*s* + log *d* · *M*), where *s* is the shortened sequence length,
-    ///   *d* is the maximum bit-pattern distance among remaining values, and *M* is the cost of
-    ///   a single property invocation. The coarse sweep makes at most 16 probes, followed by a binary
-    ///   search refinement of O(log *d*) probes. Each probe calls `applyUniformRepair` in O(*v*).
+    ///   *d* is the maximum bit-pattern distance among remaining values, and *M* is the cost of a single property invocation. The coarse sweep makes at most 16 probes, followed by a binary search refinement of O(log *d*) probes. Each probe calls `applyUniformRepair` in O(*v*).
     static func repairAfterDeletion<Output>(
         _ gen: ReflectiveGenerator<Output>,
         tree: ChoiceTree,

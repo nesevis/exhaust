@@ -1,7 +1,6 @@
 /// A bidirectional generator that can both produce values and reflect on them.
 ///
-/// ReflectiveGenerator is the foundation of advanced property-based testing, enabling generators
-/// that work in **three distinct modes**:
+/// ReflectiveGenerator is the foundation of advanced property-based testing, enabling generators that work in **three distinct modes**:
 ///
 /// ## 1. Generation (Forward Pass)
 /// Produces random values using entropy, just like traditional generators.
@@ -24,9 +23,9 @@
 ///
 /// ## Implementation
 ///
-/// ReflectiveGenerator is a type alias for `FreerMonad<ReflectiveOperation, Output>`, separating
-/// the description of generation from its interpretation. This enables the same generator structure
-/// to be used for all three modes through different interpreters.
+/// ReflectiveGenerator is a type alias for `FreerMonad<ReflectiveOperation, Output>`, separating the description of generation from its interpretation. This enables the same generator structure to be used for all three modes through different interpreters.
+///
+/// The bidirectional generator design is based on Harrison Goldstein's dissertation, "Property-Based Testing for the People" (UPenn, 2024).
 ///
 /// **Construction**: Use `Gen` combinators, never construct directly.
 ///
@@ -36,8 +35,7 @@ public typealias ReflectiveGenerator<Output> = FreerMonad<ReflectiveOperation, O
 public extension ReflectiveGenerator where Operation == ReflectiveOperation {
     /// The bit pattern range associated with this generator's immediate choice operation.
     ///
-    /// For generators wrapping a `chooseBits` operation, returns the min/max range that
-    /// constrains the random values. Returns `nil` for pure values or non-choice operations.
+    /// For generators wrapping a `chooseBits` operation, returns the min/max range that constrains the random values. Returns `nil` for pure values or non-choice operations.
     ///
     /// This property is used internally for optimization and analysis of generator constraints.
     ///

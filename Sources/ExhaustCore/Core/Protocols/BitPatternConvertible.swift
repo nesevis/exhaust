@@ -1,11 +1,8 @@
 /// Describes a type that can be losslessly represented by a `UInt64` bit pattern.
 ///
-/// This protocol is the foundation for the unified `choose` generator, allowing it
-/// to work generically over any conforming type (e.g., `Int`, `Float`, `Character`).
+/// This protocol is the foundation for the unified `choose` generator, allowing it to work generically over any conforming type (e.g., `Int`, `Float`, `Character`).
 public protocol BitPatternConvertible: Equatable, Sendable {
-    /// The valid range of this type, expressed as an inclusive `ClosedRange`
-    /// of `UInt64` bit patterns. This is used by `choose()` as the default range
-    /// if a more specific one is not provided.
+    /// The valid range of this type, expressed as an inclusive `ClosedRange` of `UInt64` bit patterns. This is used by `choose()` as the default range if a more specific one is not provided.
     static var bitPatternRanges: [ClosedRange<UInt64>] { get }
 
     static var tag: TypeTag { get }
@@ -18,9 +15,7 @@ public protocol BitPatternConvertible: Equatable, Sendable {
     /// This is the core encoding step used by the `reflect` interpreter.
     var bitPattern64: UInt64 { get }
 
-    /// The preferred size-scaling distribution for this type when used with
-    /// ``Gen/choose(in:scaling:)``. Override to control how `arbitrary`
-    /// generators expand their range as the size parameter grows.
+    /// The preferred size-scaling distribution for this type when used with ``Gen/choose(in:scaling:)``. Override to control how `arbitrary` generators expand their range as the size parameter grows.
     static var defaultScaling: SizeScaling<Self> { get }
 }
 

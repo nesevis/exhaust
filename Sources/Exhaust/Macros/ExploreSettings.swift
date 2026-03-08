@@ -10,6 +10,7 @@
 // ```
 import ExhaustCore
 
+/// Configuration options for `#explore` feedback-guided property tests, passed as variadic arguments to control test behavior.
 public enum ExploreSettings {
     /// The upper bound on the number of test iterations to run.
     case maxIterations(UInt64)
@@ -22,9 +23,7 @@ public enum ExploreSettings {
 
     /// Suppresses test-framework issue reporting (`reportIssue`) on failure.
     ///
-    /// Use this when the property test is *expected* to find a counterexample and
-    /// the test asserts on the returned value rather than relying on the framework
-    /// to record the failure.
+    /// Use this when the property test is *expected* to find a counterexample and the test asserts on the returned value rather than relying on the framework to record the failure.
     case suppressIssueReporting
 
     /// Maximum number of seeds to keep in the pool.

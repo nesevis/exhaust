@@ -6,17 +6,11 @@
 //
 
 extension ReducerStrategies {
-    /// Binary search each individual value toward its reduction target.
-    /// For each `.value` entry, computes an initial target from recorded valid ranges,
-    /// then binary searches between the current bit pattern and that target to find the
-    /// minimum failing value.
+    /// Binary search each individual value toward its reduction target. Corresponds to Hypothesis's `minimize_individual_blocks` (MacIver & Donaldson, ECOOP 2020, §3.1) with extensions for signed cross-zero probing, stale-range escape hatches, and Hypothesis-style float shrinking paths.
     ///
-    /// If recorded ranges appear to block progress, the pass may probe one step beyond
-    /// the recorded boundary so subsequent loops can continue shrinking with refreshed context.
+    /// If recorded ranges appear to block progress, the pass may probe one step beyond the recorded boundary so subsequent loops can continue shrinking with refreshed context.
     ///
-    /// - Complexity: O(*n* · log *d* · *M*), where *n* is the number of value spans, *d* is the
-    ///   maximum bit-pattern distance between a value and its reduction target, and *M* is the cost
-    ///   of a single property invocation. The binary search with guess for each value makes O(log *d*) property invocations; the constant-size boundary probe (5 offsets) is dominated.
+    /// - Complexity: O(*n* · log *d* · *M*), where *n* is the number of value spans, *d* is the maximum bit-pattern distance between a value and its reduction target, and *M* is the cost of a single property invocation. The binary search with guess for each value makes O(log *d*) property invocations; the constant-size boundary probe (5 offsets) is dominated.
     static func reduceValues<Output>(
         _ gen: ReflectiveGenerator<Output>,
         tree: ChoiceTree,
@@ -418,24 +412,16 @@ extension ReducerStrategies {
 
     /// Probes exactly one bit-pattern step past a recorded boundary when `reduceValues` appears range-locked.
     ///
-    /// Motivation:
-    /// `ChoiceSequenceValue.Value.validRange` is recorded from the tree *at the time the value was
-    /// generated*. During reduction, earlier successful edits can change parent decisions (especially
-    /// through `bind` and branch pivots), which in turn changes the runtime-valid range for descendants.
+    /// Motivation: `ChoiceSequenceValue.Value.validRange` is recorded from the tree *at the time the value was generated*. During reduction, earlier successful edits can change parent decisions (especially through `bind` and branch pivots), which in turn changes the runtime-valid range for descendants.
     /// The recorded range can then be stale.
     ///
-    /// Why this matters:
-    /// `reduceValues` uses recorded ranges as a fast heuristic to bound binary search. Without an
-    /// escape hatch, a descendant can become stuck at a stale lower bound forever, even though replay
-    /// accepts smaller values under the new parent context.
+    /// Why this matters: `reduceValues` uses recorded ranges as a fast heuristic to bound binary search. Without an escape hatch, a descendant can become stuck at a stale lower bound forever, even though replay accepts smaller values under the new parent context.
     ///
     /// Concrete examples:
     /// 1. Binary-heap shrink:
     /// A node value drops from `91` to `0`, but grandchildren still carry recorded ranges `91...100`.
-    /// Range-gated search cannot move below `91`, so shrinking stalls. Probing `90` succeeds under the
-    /// updated parent, and subsequent loops continue to `0`, yielding the expected minimal counterexample.
-    /// 2. Bind-dependent generator:
-    /// `Gen.choose(0...100).bind { p in Gen.choose(p...100) }`.
+    /// Range-gated search cannot move below `91`, so shrinking stalls. Probing `90` succeeds under the updated parent, and subsequent loops continue to `0`, yielding the expected minimal counterexample.
+    /// 2. Bind-dependent generator: `Gen.choose(0...100).bind { p in Gen.choose(p...100) }`.
     /// After `p` shrinks, children may still have metadata from the old `p`. Recorded-range search can reject candidates that replay now accepts. One-step unlock re-enters a valid shrinking path.
     ///
     /// Why only one step:
@@ -493,8 +479,7 @@ extension ReducerStrategies {
         return false
     }
 
-    /// Tries Hypothesis-style "short-circuit" float candidates:
-    /// greatest finite magnitude, infinity, and NaN.
+    /// Tries Hypothesis-style "short-circuit" float candidates: greatest finite magnitude, infinity, and NaN.
     /// Returns `true` if a candidate was accepted.
     private static func tryFloatSpecialValueShrinks<Output>( // swiftlint:disable:this function_parameter_count
         seqIdx: Int,
@@ -537,8 +522,7 @@ extension ReducerStrategies {
         return false
     }
 
-    /// Tries Hypothesis-style float truncation shrinks:
-    /// for p in 0...9, consider floor(value * 2^p) / 2^p and ceil(value * 2^p) / 2^p.
+    /// Tries Hypothesis-style float truncation shrinks: for p in 0...9, consider floor(value * 2^p) / 2^p and ceil(value * 2^p) / 2^p.
     /// Returns `true` if a candidate was accepted.
     private static func tryFloatTruncationShrinks<Output>( // swiftlint:disable:this function_parameter_count
         seqIdx: Int,

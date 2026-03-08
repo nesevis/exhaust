@@ -43,8 +43,7 @@ public macro gen<each T, R>(
 
 /// Passes a single generator through unchanged.
 ///
-/// This concrete overload avoids the parameter-pack return type
-/// `(repeat each T)` which wraps a single `T` in a spurious tuple.
+/// This concrete overload avoids the parameter-pack return type `(repeat each T)` which wraps a single `T` in a spurious tuple.
 ///
 /// ```swift
 /// let intGen: ReflectiveGenerator<Int> = #gen(.int())
@@ -54,8 +53,7 @@ public macro gen<T>(
     _ generator: ReflectiveGenerator<T>,
 ) -> ReflectiveGenerator<T> = #externalMacro(module: "ExhaustMacros", type: "GenerateMacro")
 
-/// Composes two or more generators without a transform closure,
-/// combining them with `Gen.zip` to produce a tuple generator.
+/// Composes two or more generators without a transform closure, combining them with `Gen.zip` to produce a tuple generator.
 ///
 /// ```swift
 /// let pairGen: ReflectiveGenerator<(Int, String)> = #gen(.int(), .string())

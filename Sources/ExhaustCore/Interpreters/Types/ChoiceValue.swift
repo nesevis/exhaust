@@ -5,10 +5,15 @@
 //  Created by Chris Kolbu on 20/7/2025.
 //
 
+/// A single primitive value in the choice tree, tagged with its numeric type.
+///
+/// Each case carries the decoded value for comparison, the raw `UInt64` bit pattern for hashing, and a ``TypeTag`` for reconstruction.
 public enum ChoiceValue: Comparable, Hashable, Equatable, Sendable {
+    /// An unsigned integer value.
     case unsigned(UInt64, TypeTag)
-    /// The UInt64 represents its hashable behaviour
+    /// A signed integer value. The `UInt64` represents its hashable bit pattern.
     case signed(Int64, UInt64, TypeTag)
+    /// A floating-point value. The `UInt64` represents its hashable bit pattern.
     case floating(Double, UInt64, TypeTag)
 
     public init(_ value: any BitPatternConvertible, tag: TypeTag) {
@@ -72,6 +77,7 @@ public enum ChoiceValue: Comparable, Hashable, Equatable, Sendable {
         }
     }
 
+    /// The numeric type tag for this value.
     var tag: TypeTag {
         switch self {
         case let .unsigned(_, tag): tag
@@ -80,6 +86,7 @@ public enum ChoiceValue: Comparable, Hashable, Equatable, Sendable {
         }
     }
 
+    /// Returns a shortlex complexity score: the absolute magnitude of this value as a `UInt64`.
     var complexity: UInt64 {
         switch self {
         case let .unsigned(value, _):
@@ -99,11 +106,13 @@ public enum ChoiceValue: Comparable, Hashable, Equatable, Sendable {
         }
     }
 
+    /// Returns whether this value's bit pattern falls within the given range.
     func fits(in range: ClosedRange<UInt64>?) -> Bool {
         guard let range else { return true }
         return range.contains(bitPattern64)
     }
 
+    /// Formats a bit-pattern range into a human-readable string using this value's type tag.
     func displayRange(_ range: ClosedRange<UInt64>) -> String {
         switch self {
         case .unsigned:
@@ -119,24 +128,26 @@ public enum ChoiceValue: Comparable, Hashable, Equatable, Sendable {
         }
     }
 
+    /// Converts this value to `Double`, interpreting the bit pattern according to its type tag.
     var doubleValue: Double {
         switch self {
         case .unsigned:
-            return Double(bitPattern64)
+            Double(bitPattern64)
         case let .signed(_, _, tag):
             switch tag {
-            case .int8: return Double(Int8(bitPattern64: bitPattern64))
-            case .int16: return Double(Int16(bitPattern64: bitPattern64))
-            case .int32: return Double(Int32(bitPattern64: bitPattern64))
-            case .int64, .date: return Double(Int64(bitPattern64: bitPattern64))
-            case .int: return Double(Int(bitPattern64: bitPattern64))
+            case .int8: Double(Int8(bitPattern64: bitPattern64))
+            case .int16: Double(Int16(bitPattern64: bitPattern64))
+            case .int32: Double(Int32(bitPattern64: bitPattern64))
+            case .int64, .date: Double(Int64(bitPattern64: bitPattern64))
+            case .int: Double(Int(bitPattern64: bitPattern64))
             default: fatalError("Unexpected tag \(tag) for signed ChoiceValue")
             }
         case let .floating(value, _, _):
-            return value
+            value
         }
     }
 
+    /// Reconstructs the original ``BitPatternConvertible`` value from this choice's bit pattern and type tag.
     public var convertible: any BitPatternConvertible {
         tag.makeConvertible(bitPattern64: bitPattern64)
     }

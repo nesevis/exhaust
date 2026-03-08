@@ -5,10 +5,11 @@
 //  Created by Chris Kolbu on 22/2/2026.
 //
 
-import Foundation
 import ExhaustCore
+import Foundation
 
 public extension ReflectiveGenerator {
+    /// Generates a random Unicode character, optionally within the given range.
     static func character(in range: ClosedRange<Character>? = nil) -> ReflectiveGenerator<Character> {
         guard let range else { return characterGenerator(from: defaultScalarRangeSet) }
         let lower = range.lowerBound.unicodeScalars.min()!
@@ -16,19 +17,27 @@ public extension ReflectiveGenerator {
         return .character(from: CharacterSet(charactersIn: lower ... upper))
     }
 
+    /// Generates a random Unicode string with size-scaled or fixed length.
+    ///
+    /// ```swift
+    /// let gen = #gen(.string(length: 1...20))
+    /// ```
     static func string(length: ClosedRange<UInt64>? = nil, scaling: SizeScaling<UInt64> = .linear) -> ReflectiveGenerator<String> {
         stringGenerator(from: defaultScalarRangeSet, length: length, scaling: scaling)
     }
 
+    /// Generates a random printable ASCII string (U+0020--U+007E) with size-scaled or fixed length.
     static func asciiString(length: ClosedRange<UInt64>? = nil, scaling: SizeScaling<UInt64> = .linear) -> ReflectiveGenerator<String> {
         stringGenerator(from: asciiScalarRangeSet, length: length, scaling: scaling)
     }
 
+    /// Convenience overload accepting `ClosedRange<Int>` for string length.
     static func string(length: ClosedRange<Int>, scaling: SizeScaling<UInt64> = .linear) -> ReflectiveGenerator<String> {
         precondition(length.lowerBound >= 0, "Length must be non-negative")
         return string(length: UInt64(length.lowerBound) ... UInt64(length.upperBound), scaling: scaling)
     }
 
+    /// Convenience overload accepting `ClosedRange<Int>` for ASCII string length.
     static func asciiString(length: ClosedRange<Int>, scaling: SizeScaling<UInt64> = .linear) -> ReflectiveGenerator<String> {
         precondition(length.lowerBound >= 0, "Length must be non-negative")
         return asciiString(length: UInt64(length.lowerBound) ... UInt64(length.upperBound), scaling: scaling)
@@ -38,8 +47,7 @@ public extension ReflectiveGenerator {
 
     /// Generates a random character from the given `CharacterSet`.
     ///
-    /// Uses `ScalarRangeSet` to flatten the character set into a single contiguous
-    /// index space, then picks via `Gen.choose(in: 0...n-1)` with O(log n) lookup.
+    /// Uses `ScalarRangeSet` to flatten the character set into a single contiguous index space, then picks via `Gen.choose(in: 0...n-1)` with O(log n) lookup.
     /// Shrinks toward the first scalar in the set (e.g. '0' for `.decimalDigits`).
     static func character(from characterSet: CharacterSet) -> ReflectiveGenerator<Character> {
         characterGenerator(from: characterSet.scalarRangeSet())
@@ -82,11 +90,7 @@ private func characterGenerator(from srs: ScalarRangeSet) -> ReflectiveGenerator
 /// Builds a string generator directly from a pre-computed `ScalarRangeSet`.
 ///
 /// String <-> [Character] isn't bijective when the CharacterSet includes combining marks.
-/// The generator produces single-scalar characters, but Array(string) splits by grapheme
-/// clusters — so if "e" followed by U+0301 (combining accent) were generated as two
-/// characters, the String merges them into "é", and Array(...) returns one Character
-/// instead of two. We use `unicodeScalars.map` in the backward direction to preserve
-/// the original scalar count.
+/// The generator produces single-scalar characters, but Array(string) splits by grapheme clusters — so if "e" followed by U+0301 (combining accent) were generated as two characters, the String merges them into "é", and Array(...) returns one Character instead of two. We use `unicodeScalars.map` in the backward direction to preserve the original scalar count.
 private func stringGenerator(
     from srs: ScalarRangeSet,
     length: ClosedRange<UInt64>? = nil,

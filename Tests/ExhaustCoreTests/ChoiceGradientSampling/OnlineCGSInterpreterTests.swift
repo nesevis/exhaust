@@ -115,7 +115,7 @@ struct OnlineCGSInterpreterTests {
     func zipCGSGuidance() throws {
         let gen = Gen.zip(
             Gen.choose(in: 1 ... 20),
-            Gen.choose(in: 1 ... 20)
+            Gen.choose(in: 1 ... 20),
         )
         let predicate: ((Int, Int)) -> Bool = { $0.0 + $0.1 < 10 }
 
@@ -470,7 +470,7 @@ struct DerivativeContextTests {
                 let arr = zipResult as! [Any]
                 let sum = (arr[0] as! Int) + (arr[1] as! Int)
                 return .pure(sum as Any)
-            }
+            },
         ))
 
         // Component gen produces 100 (replacing g0 at index 0)

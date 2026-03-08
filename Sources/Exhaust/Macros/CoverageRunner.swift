@@ -46,11 +46,10 @@ enum CoverageRunner {
     ) -> Result<Output> {
         let isExhaustive = profile.totalSpace <= coverageBudget
 
-        let covering: CoveringArray?
-        if isExhaustive {
-            covering = CoveringArray.generate(profile: profile, strength: profile.parameters.count)
+        let covering: CoveringArray? = if isExhaustive {
+            CoveringArray.generate(profile: profile, strength: profile.parameters.count)
         } else {
-            covering = CoveringArray.bestFitting(budget: coverageBudget, profile: profile)
+            CoveringArray.bestFitting(budget: coverageBudget, profile: profile)
         }
 
         guard let covering, covering.strength >= 2 else {
@@ -81,7 +80,7 @@ enum CoverageRunner {
             rows: covering.rows.count,
             parameters: profile.parameters.count,
             totalSpace: profile.totalSpace,
-            kind: .finiteDomain
+            kind: .finiteDomain,
         )
     }
 
@@ -121,7 +120,7 @@ enum CoverageRunner {
             rows: covering.rows.count,
             parameters: profile.parameters.count,
             totalSpace: covering.profile.totalSpace,
-            kind: .boundaryValue
+            kind: .boundaryValue,
         )
     }
 }
