@@ -85,8 +85,7 @@ public struct ValueAndChoiceTreeInterpreter<FinalOutput>: ~Copyable, ExhaustIter
         }
     }
 
-    /// Used to generate results around a similar level of complexity.
-    /// Intended to be used to increase pool of results to compare against
+    /// Used to generate results around a similar level of complexity. Intended to be used to increase pool of results to compare against.
     func fixedAtSize() -> ValueAndChoiceTreeInterpreter<FinalOutput> {
         var fixed = ValueAndChoiceTreeInterpreter(
             generator,

@@ -5,8 +5,7 @@
 
 import Foundation
 
-/// A parameter in the boundary model with synthetic values derived from
-/// boundary value analysis of the underlying generator operation.
+/// A parameter in the boundary model with synthetic values derived from boundary value analysis of the underlying generator operation.
 public struct BoundaryParameter: @unchecked Sendable {
     public let index: Int
     public let values: [UInt64]
@@ -144,8 +143,7 @@ public enum BoundaryDomainAnalysis {
 
     // MARK: - Date Boundary Values
 
-    /// Seconds since reference date for well-known epoch points where
-    /// date-handling bugs tend to cluster.
+    /// Seconds since reference date for well-known epoch points where date-handling bugs tend to cluster.
     private static let interestingDateEpochs: [Int64] = [
         0,                  // Reference date (2001-01-01 00:00:00 UTC)
         -978_307_200,       // Unix epoch (1970-01-01 00:00:00 UTC)
@@ -155,10 +153,7 @@ public enum BoundaryDomainAnalysis {
 
     /// Computes boundary values for dates stored as seconds since reference date.
     ///
-    /// Values are produced in the *step domain* — every value is snapped to an
-    /// integral multiple of `intervalSeconds` from `lowerSeconds` so that each
-    /// boundary maps to a distinct output date after quantization. For each
-    /// interesting point the ±1 step neighbors are also included.
+    /// Values are produced in the *step domain* — every value is snapped to an integral multiple of `intervalSeconds` from `lowerSeconds` so that each boundary maps to a distinct output date after quantization. For each interesting point the ±1 step neighbors are also included.
     private static func computeDateBoundaryValues(min: UInt64, max: UInt64, intervalSeconds: Int64, timeZoneID: String) -> [UInt64] {
         let lowerSeconds = Int64(bitPattern64: min)
         let upperSeconds = Int64(bitPattern64: max)
@@ -266,12 +261,9 @@ public enum BoundaryDomainAnalysis {
 /// Computes DST transition times using Foundation's `TimeZone.nextDaylightSavingTimeTransition`.
 enum DSTTransitions {
 
-    /// Returns DST transition times (seconds since reference date) that fall within [lower, upper]
-    /// for the given timezone.
+    /// Returns DST transition times (seconds since reference date) that fall within [lower, upper] for the given timezone.
     ///
-    /// Only the first and last transitions within [lower, upper] are included to
-    /// keep boundary value counts small for large ranges. Each transition includes
-    /// the transition moment itself plus the start and end of its calendar day.
+    /// Only the first and last transitions within [lower, upper] are included to keep boundary value counts small for large ranges. Each transition includes the transition moment itself plus the start and end of its calendar day.
     static func inRange(lower: Int64, upper: Int64, timeZoneID: String) -> [Int64] {
         guard let zone = TimeZone(identifier: timeZoneID) else { return [] }
 

@@ -26,8 +26,7 @@ extension ReducerStrategies {
     /// For each sibling group of values will test how much it can reduce all siblings by the same amount.
     ///
     /// - Complexity: O(*g* · *w* · log *d* · *M*), where *g* is the number of sibling groups,
-    ///   *w* is the number of tandem windows explored per group, *d* is the maximum bit-pattern
-    ///   distance between a value and its reduction target, and *M* is the cost of a single property invocation.
+    ///   *w* is the number of tandem windows explored per group, *d* is the maximum bit-pattern distance between a value and its reduction target, and *M* is the cost of a single property invocation.
     static func reduceValuesInTandem<Output>(
         _ gen: ReflectiveGenerator<Output>,
         tree: ChoiceTree,

@@ -72,8 +72,7 @@ public struct ValueInterpreter<Element>: ~Copyable, ExhaustIterator {
         }
     }
 
-    /// Used to generate results around a similar level of complexity.
-    /// Intended to be used to increase pool of results to compare against
+    /// Used to generate results around a similar level of complexity. Intended to be used to increase pool of results to compare against.
     func fixedAtSize() -> ValueInterpreter<Element> {
         var fixed = ValueInterpreter(
             generator,

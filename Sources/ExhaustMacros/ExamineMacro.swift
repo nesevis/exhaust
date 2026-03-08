@@ -2,8 +2,7 @@ import SwiftDiagnostics
 import SwiftSyntax
 import SwiftSyntaxMacros
 
-/// Expression macro that expands `#examine(gen)` or `#examine(gen, samples: N, seed: S)` into
-/// a call to `__ExhaustRuntime.__examine(...)`.
+/// Expression macro that expands `#examine(gen)` or `#examine(gen, samples: N, seed: S)` into a call to `__ExhaustRuntime.__examine(...)`.
 public struct ExamineMacro: ExpressionMacro {
     public static func expansion(
         of node: some FreestandingMacroExpansionSyntax,

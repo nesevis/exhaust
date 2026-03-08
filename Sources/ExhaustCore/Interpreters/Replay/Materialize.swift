@@ -262,8 +262,7 @@ extension Interpreters {
     /// - Parameters:
     ///   - gen: The generator to execute.
     ///   - choiceSequence: The unstructured script of values to follow.
-    /// - Returns: The deterministically generated value, or `nil` if the tree does not
-    ///   match the generator's structure.
+    /// - Returns: The deterministically generated value, or `nil` if the tree does not match the generator's structure.
     public static func materialize<Output>(
         _ gen: ReflectiveGenerator<Output>,
         with tree: ChoiceTree,
@@ -528,12 +527,9 @@ extension Interpreters {
 
     // MARK: - Shared Helpers
 
-    /// Materializes a sequence of elements by consuming sequence open/close markers
-    /// and looping over elements until the sequence end marker is reached.
+    /// Materializes a sequence of elements by consuming sequence open/close markers and looping over elements until the sequence end marker is reached.
     ///
-    /// When `validLengthRange` is non-nil, the materialized element count must fall
-    /// within the range — otherwise the candidate is rejected. This enforces
-    /// constraints from the sequence's length generator (e.g. `exactly: 10`).
+    /// When `validLengthRange` is non-nil, the materialized element count must fall within the range — otherwise the candidate is rejected. This enforces constraints from the sequence's length generator (e.g. `exactly: 10`).
     private static func materializeSequenceElements(
         using elementGenerator: ReflectiveGenerator<Any>,
         elementScripts: [ChoiceTree],

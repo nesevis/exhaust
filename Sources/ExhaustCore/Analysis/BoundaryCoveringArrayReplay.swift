@@ -8,8 +8,7 @@ public enum BoundaryCoveringArrayReplay {
 
     /// Builds a `ChoiceTree` from a covering array row using boundary parameter values.
     ///
-    /// Unlike `CoveringArrayReplay` which maps value indices to sequential offsets,
-    /// this maps value indices to concrete boundary bit patterns stored in each parameter.
+    /// Unlike `CoveringArrayReplay` which maps value indices to sequential offsets, this maps value indices to concrete boundary bit patterns stored in each parameter.
     public static func buildTree(row: CoveringArrayRow, profile: BoundaryDomainProfile) -> ChoiceTree? {
         guard row.values.count == profile.parameters.count else { return nil }
 

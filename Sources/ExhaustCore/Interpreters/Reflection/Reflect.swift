@@ -65,8 +65,7 @@ public enum Interpreters {
 
     // MARK: - Backward Interpreter for Individual Operations
 
-    /// This helper interprets a single operation. It receives the overall final output
-    /// and determines what to do based on its own semantics.
+    /// This helper interprets a single operation. It receives the overall final output and determines what to do based on its own semantics.
     private static func interpretOperationBackward(
         _ op: ReflectiveOperation,
         onFinalOutput finalOutput: Any,

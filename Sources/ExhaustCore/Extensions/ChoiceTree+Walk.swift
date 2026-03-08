@@ -20,8 +20,7 @@ public struct Fingerprint: Hashable, Sendable {
         return copy
     }
 
-    /// Returns `true` when `self` is a strict ancestor of `other`
-    /// (i.e. `other.steps` starts with `self.steps` and is longer).
+    /// Returns `true` when `self` is a strict ancestor of `other` (i.e. `other.steps` starts with `self.steps` and is longer).
     public func isAncestor(of other: Fingerprint) -> Bool {
         steps.count < other.steps.count && other.steps.starts(with: steps)
     }
@@ -77,8 +76,7 @@ extension ChoiceTree {
 
 // MARK: - ChoiceTreeWalker
 
-/// A depth-first iterator that yields `(Fingerprint, ChoiceTree)` pairs
-/// for every node in a tree.
+/// A depth-first iterator that yields `(Fingerprint, ChoiceTree)` pairs for every node in a tree.
 public struct ChoiceTreeWalker: IteratorProtocol, Sequence {
     public struct Element {
         public let fingerprint: Fingerprint

@@ -21,8 +21,7 @@ public enum ChoiceSequenceValue: Hashable, Equatable, Sendable {
     case value(Value)
     /// A value that has been set to its semantically simplest form that should not be individually shrunk further
     case reduced(Value)
-    /// A marker for a `.just` node — carries no data but makes `.just` elements
-    /// visible in the flat sequence (needed for element counting in PrefixMaterializer).
+    /// A marker for a `.just` node — carries no data but makes `.just` elements visible in the flat sequence (needed for element counting in PrefixMaterializer).
     case just
 
     var value: Value? {

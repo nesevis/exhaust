@@ -5,12 +5,9 @@ import Foundation
 public extension Gen {
     /// Creates a generator that randomly selects from multiple weighted options.
     ///
-    /// This combinator enables probabilistic generation where different outcomes
-    /// have different likelihoods. The weights don't need to sum to any particular
-    /// value - they're interpreted as relative frequencies.
+    /// This combinator enables probabilistic generation where different outcomes have different likelihoods. The weights don't need to sum to any particular value - they're interpreted as relative frequencies.
     ///
-    /// During shrinking, the system will try simpler choices first based on their
-    /// position in the choices array and their weights.
+    /// During shrinking, the system will try simpler choices first based on their position in the choices array and their weights.
     ///
     /// - Parameter choices: An array of (weight, generator) pairs. Must not be empty.
     /// - Returns: A generator that produces values from one of the provided generators
@@ -42,12 +39,9 @@ public extension Gen {
 
     /// Creates a generator that randomly selects from multiple weighted options.
     ///
-    /// This combinator enables probabilistic generation where different outcomes
-    /// have different likelihoods. The weights don't need to sum to any particular
-    /// value - they're interpreted as relative frequencies.
+    /// This combinator enables probabilistic generation where different outcomes have different likelihoods. The weights don't need to sum to any particular value - they're interpreted as relative frequencies.
     ///
-    /// During shrinking, the system will try simpler choices first based on their
-    /// position in the choices array and their weights.
+    /// During shrinking, the system will try simpler choices first based on their position in the choices array and their weights.
     ///
     /// - Parameter choices: An array of (weight, generator) pairs. Must not be empty.
     /// - Returns: A generator that produces values from one of the provided generators
@@ -63,13 +57,9 @@ public extension Gen {
 
     /// Generates a random value within a specified range for types conforming to BitPatternConvertible.
     ///
-    /// This is the primary method for generating bounded random values. It works by
-    /// converting the range bounds to bit patterns, generating a random bit pattern
-    /// within those bounds, then converting back to the target type.
+    /// This is the primary method for generating bounded random values. It works by converting the range bounds to bit patterns, generating a random bit pattern within those bounds, then converting back to the target type.
     ///
-    /// The type parameter allows the compiler to infer the return type, while the range
-    /// parameter controls the bounds. If no range is provided, the full range for the
-    /// type is used.
+    /// The type parameter allows the compiler to infer the return type, while the range parameter controls the bounds. If no range is provided, the full range for the type is used.
     ///
     /// - Parameters:
     ///   - range: The range of values to generate from. Defaults to the type's full range
@@ -124,8 +114,7 @@ public extension Gen {
 
     /// Internal helper for choose ranges derived from runtime context (e.g. `getSize`).
     ///
-    /// These ranges should not be treated as strict during reflection because the
-    /// contextual value that produced them may be opaque from the reflected output.
+    /// These ranges should not be treated as strict during reflection because the contextual value that produced them may be opaque from the reflected output.
     @inlinable
     internal static func chooseDerived<Output: BitPatternConvertible>(
         in range: ClosedRange<Output>,
@@ -138,12 +127,10 @@ public extension Gen {
         )
     }
 
-    /// Generates a random value within a range, using a ``SizeScaling`` distribution
-    /// to control how tightly values cluster around an origin at small sizes.
+    /// Generates a random value within a range, using a ``SizeScaling`` distribution to control how tightly values cluster around an origin at small sizes.
     ///
     /// For `.constant`, delegates directly to ``choose(in:type:)`` with no size interaction.
-    /// For all other scalings, the effective range is computed from the current size (1–100)
-    /// using either linear or exponential interpolation in bit-pattern space.
+    /// For all other scalings, the effective range is computed from the current size (1–100) using either linear or exponential interpolation in bit-pattern space.
     ///
     /// - Parameters:
     ///   - range: The full range of values to generate from at size 100.
@@ -165,8 +152,7 @@ public extension Gen {
         }
     }
 
-    /// Computes the effective range for a given size by interpolating from the origin
-    /// toward the bounds using the specified scaling strategy.
+    /// Computes the effective range for a given size by interpolating from the origin toward the bounds using the specified scaling strategy.
     @usableFromInline
     internal static func scaledRange<Output: BitPatternConvertible>(
         _ range: ClosedRange<Output>,
@@ -242,8 +228,7 @@ public extension Gen {
 
     /// Generates a raw `UInt64` value within a bit range, tagged as `.bits`.
     ///
-    /// Use this for composite generators (UUID, Int128, UInt128) where the
-    /// individual UInt64 halves are not semantically meaningful on their own.
+    /// Use this for composite generators (UUID, Int128, UInt128) where the individual UInt64 halves are not semantically meaningful on their own.
     /// Boundary analysis will produce only all-low / all-high values.
     static func chooseBits(
         in range: ClosedRange<UInt64>? = nil

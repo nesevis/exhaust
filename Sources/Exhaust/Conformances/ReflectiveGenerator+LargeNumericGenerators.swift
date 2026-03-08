@@ -32,8 +32,7 @@ public extension ReflectiveGenerator {
 
     /// Generates arbitrary `Int128` values from two `UInt64` halves.
     ///
-    /// The high half uses sign-bit XOR so that shrinking naturally drives
-    /// toward zero: the mapped bit pattern orders negative → zero → positive.
+    /// The high half uses sign-bit XOR so that shrinking naturally drives toward zero: the mapped bit pattern orders negative → zero → positive.
     static func int128() -> ReflectiveGenerator<Int128> {
         Gen.zip(
             Gen.chooseBits(),

@@ -8,9 +8,7 @@
 public extension Gen {
     /// Creates a generator that categorizes generated values for statistical analysis.
     ///
-    /// Wraps the provided generator with classification predicates that track how frequently
-    /// different types of test data are generated. When test execution completes, statistics
-    /// are automatically reported to help developers understand test coverage and generator bias.
+    /// Wraps the provided generator with classification predicates that track how frequently different types of test data are generated. When test execution completes, statistics are automatically reported to help developers understand test coverage and generator bias.
     ///
     /// **Usage**: Apply labeled predicates to understand what kinds of values your generator produces:
     /// ```swift
@@ -22,9 +20,7 @@ public extension Gen {
     /// )
     /// ```
     ///
-    /// **Reporting**: Statistics are printed when the generator reaches `maxRuns`, showing
-    /// counts and percentages for each classifier. Values can satisfy multiple classifiers
-    /// simultaneously for comprehensive coverage analysis.
+    /// **Reporting**: Statistics are printed when the generator reaches `maxRuns`, showing counts and percentages for each classifier. Values can satisfy multiple classifiers simultaneously for comprehensive coverage analysis.
     ///
     /// - Parameters:
     ///   - generator: The base generator to wrap with classification

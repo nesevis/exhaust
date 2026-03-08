@@ -30,17 +30,12 @@ public final class FitnessAccumulator {
 
     // MARK: - Convergence Detection
 
-    /// Previous normalized weight shares per site, captured at the last
-    /// `hasConverged` call. Compared to the current snapshot to detect stability.
+    /// Previous normalized weight shares per site, captured at the last `hasConverged` call. Compared to the current snapshot to detect stability.
     private var previousSiteShares: [UInt64: [UInt64: Double]]?
 
-    /// Checks if the normalized weight distribution has stabilized across all
-    /// observed pick sites. Computes current shares and compares to the previous
-    /// snapshot; returns `true` when the maximum absolute shift across all sites
-    /// and choices is below `threshold`.
+    /// Checks if the normalized weight distribution has stabilized across all observed pick sites. Computes current shares and compares to the previous snapshot; returns `true` when the maximum absolute shift across all sites and choices is below `threshold`.
     ///
-    /// Each call captures a new snapshot, so call at regular intervals (e.g.,
-    /// every 20 warmup runs) rather than on every run.
+    /// Each call captures a new snapshot, so call at regular intervals (e.g., every 20 warmup runs) rather than on every run.
     func hasConverged(threshold: Double = 0.05) -> Bool {
         // Group records by siteID
         var siteFitnesses: [UInt64: ContiguousArray<(choiceID: UInt64, fitness: Double)>] = [:]

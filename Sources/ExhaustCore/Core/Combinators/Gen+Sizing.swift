@@ -4,10 +4,7 @@
 public extension Gen {
     /// Retrieves the current size parameter controlling generator complexity.
     ///
-    /// The size parameter is a fundamental concept in property-based testing that controls
-    /// how complex the generated values should be. It typically starts small and grows
-    /// as tests progress, allowing the system to find simple counterexamples first before
-    /// exploring more complex cases.
+    /// The size parameter is a fundamental concept in property-based testing that controls how complex the generated values should be. It typically starts small and grows as tests progress, allowing the system to find simple counterexamples first before exploring more complex cases.
     ///
     /// Common uses:
     /// - Controlling array/collection lengths
@@ -31,16 +28,13 @@ public extension Gen {
 
     /// Creates a generator with a temporarily modified size parameter.
     ///
-    /// This combinator allows you to override the current size parameter for a specific
-    /// generator and its nested generators. This is useful when you need to:
+    /// This combinator allows you to override the current size parameter for a specific generator and its nested generators. This is useful when you need to:
     /// - Generate smaller nested structures to avoid exponential growth
     /// - Create test cases with specific size requirements
     /// - Control recursion depth in complex data structures
     /// - Generate collections of a specific scale regardless of the global size
     ///
-    /// The size modification only affects the provided generator and any generators
-    /// it calls internally. Once the resized generator completes, the original size
-    /// parameter is restored.
+    /// The size modification only affects the provided generator and any generators it calls internally. Once the resized generator completes, the original size parameter is restored.
     ///
     /// - Parameters:
     ///   - newSize: The size parameter to use for the nested generator

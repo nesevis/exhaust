@@ -5,12 +5,9 @@
 
 // swiftlint:disable function_parameter_count
 
-/// Interpreter that consumes from a choice sequence prefix, then falls back
-/// to PRNG generation when the prefix is exhausted or mismatched.
+/// Interpreter that consumes from a choice sequence prefix, then falls back to PRNG generation when the prefix is exhausted or mismatched.
 ///
-/// This enables Hypothesis-style "extend=full" probing: modify one entry in
-/// a flat sequence, replay the prefix, and let fresh random choices fill in
-/// beyond the modification point. No pre-materialized branches needed.
+/// This enables Hypothesis-style "extend=full" probing: modify one entry in a flat sequence, replay the prefix, and let fresh random choices fill in beyond the modification point. No pre-materialized branches needed.
 public enum PrefixMaterializer {
     public static func materialize<Output>(
         _ gen: ReflectiveGenerator<Output>,
@@ -33,12 +30,9 @@ public enum PrefixMaterializer {
 // MARK: - Internal State
 
 private extension PrefixMaterializer {
-    /// Position-based cursor that traverses the full `ChoiceSequence` including
-    /// structural markers (`.group`, `.sequence`).
+    /// Position-based cursor that traverses the full `ChoiceSequence` including structural markers (`.group`, `.sequence`).
     ///
-    /// Group markers (from `runContinuation` grouping and pick sites) are
-    /// transparently skipped. Sequence markers are handled explicitly by
-    /// `tryConsumeSequenceOpen()` / `skipSequenceClose()`.
+    /// Group markers (from `runContinuation` grouping and pick sites) are transparently skipped. Sequence markers are handled explicitly by `tryConsumeSequenceOpen()` / `skipSequenceClose()`.
     struct PrefixCursor: ~Copyable {
         private let entries: ChoiceSequence
         private(set) var position: Int = 0
@@ -96,8 +90,7 @@ private extension PrefixMaterializer {
             }
         }
 
-        /// Try to consume a `.sequence(true)` marker and return info about the
-        /// sequence found in the prefix: element count and `isLengthExplicit`.
+        /// Try to consume a `.sequence(true)` marker and return info about the sequence found in the prefix: element count and `isLengthExplicit`.
         ///
         /// On success, position advances past the `.sequence(true)` marker.
         /// Returns `nil` if cursor is exhausted or not at a sequence marker.
@@ -122,8 +115,7 @@ private extension PrefixMaterializer {
             return (elementCount: count, isLengthExplicit: isExplicit)
         }
 
-        /// Skip past the matching `.sequence(false)` marker after all elements
-        /// have been consumed.
+        /// Skip past the matching `.sequence(false)` marker after all elements have been consumed.
         mutating func skipSequenceClose() {
             guard !exhausted else { return }
             skipGroups()
@@ -133,8 +125,7 @@ private extension PrefixMaterializer {
             }
         }
 
-        /// Count top-level balanced elements from the given position until the
-        /// matching `.sequence(false)` at depth 0.
+        /// Count top-level balanced elements from the given position until the matching `.sequence(false)` at depth 0.
         private func countTopLevelElements(from startPos: Int) -> Int? {
             var pos = startPos
             var depth = 0

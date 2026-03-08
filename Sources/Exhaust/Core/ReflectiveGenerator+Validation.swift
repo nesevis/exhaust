@@ -33,8 +33,7 @@ public struct ValidationReport: Sendable, CustomStringConvertible {
         return elapsedTime / Double(valuesGenerated)
     }
 
-    /// Whether the average time per sample exceeds 5 ms, suggesting the generator
-    /// may be too expensive for large-scale property testing.
+    /// Whether the average time per sample exceeds 5 ms, suggesting the generator may be too expensive for large-scale property testing.
     public var isSlowGenerator: Bool {
         averageTimePerSample > 0.005
     }
@@ -86,11 +85,9 @@ public enum ValidationFailure: Sendable, CustomStringConvertible {
 // MARK: - Non-Equatable overload
 
 public extension ReflectiveGenerator where Operation == ReflectiveOperation {
-    /// Validates this generator by checking reflection round-trip, replay determinism,
-    /// and generation health. Uses choice-sequence comparison for round-trip checks.
+    /// Validates this generator by checking reflection round-trip, replay determinism, and generation health. Uses choice-sequence comparison for round-trip checks.
     ///
-    /// Failures are recorded as test issues via `reportIssue`, so calling this inside
-    /// a test is sufficient — no assertions needed.
+    /// Failures are recorded as test issues via `reportIssue`, so calling this inside a test is sufficient — no assertions needed.
     ///
     /// - Parameters:
     ///   - samples: Number of values to generate and test. Defaults to 200.
@@ -112,12 +109,9 @@ public extension ReflectiveGenerator where Operation == ReflectiveOperation {
 // MARK: - Equatable overload
 
 public extension ReflectiveGenerator where Operation == ReflectiveOperation, Value: Equatable {
-    /// Validates this generator by checking reflection round-trip, replay determinism,
-    /// and generation health. Uses `Equatable` conformance and `CustomDump.diff` for
-    /// rich failure output.
+    /// Validates this generator by checking reflection round-trip, replay determinism, and generation health. Uses `Equatable` conformance and `CustomDump.diff` for rich failure output.
     ///
-    /// Failures are recorded as test issues via `reportIssue`, so calling this inside
-    /// a test is sufficient — no assertions needed.
+    /// Failures are recorded as test issues via `reportIssue`, so calling this inside a test is sufficient — no assertions needed.
     ///
     /// - Parameters:
     ///   - samples: Number of values to generate and test. Defaults to 200.

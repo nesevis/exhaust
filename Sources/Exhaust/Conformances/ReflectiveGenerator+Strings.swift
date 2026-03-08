@@ -38,8 +38,7 @@ public extension ReflectiveGenerator {
 
     /// Generates a random character from the given `CharacterSet`.
     ///
-    /// Uses `ScalarRangeSet` to flatten the character set into a single contiguous
-    /// index space, then picks via `Gen.choose(in: 0...n-1)` with O(log n) lookup.
+    /// Uses `ScalarRangeSet` to flatten the character set into a single contiguous index space, then picks via `Gen.choose(in: 0...n-1)` with O(log n) lookup.
     /// Shrinks toward the first scalar in the set (e.g. '0' for `.decimalDigits`).
     static func character(from characterSet: CharacterSet) -> ReflectiveGenerator<Character> {
         characterGenerator(from: characterSet.scalarRangeSet())
@@ -82,11 +81,7 @@ private func characterGenerator(from srs: ScalarRangeSet) -> ReflectiveGenerator
 /// Builds a string generator directly from a pre-computed `ScalarRangeSet`.
 ///
 /// String <-> [Character] isn't bijective when the CharacterSet includes combining marks.
-/// The generator produces single-scalar characters, but Array(string) splits by grapheme
-/// clusters — so if "e" followed by U+0301 (combining accent) were generated as two
-/// characters, the String merges them into "é", and Array(...) returns one Character
-/// instead of two. We use `unicodeScalars.map` in the backward direction to preserve
-/// the original scalar count.
+/// The generator produces single-scalar characters, but Array(string) splits by grapheme clusters — so if "e" followed by U+0301 (combining accent) were generated as two characters, the String merges them into "é", and Array(...) returns one Character instead of two. We use `unicodeScalars.map` in the backward direction to preserve the original scalar count.
 private func stringGenerator(
     from srs: ScalarRangeSet,
     length: ClosedRange<UInt64>? = nil,

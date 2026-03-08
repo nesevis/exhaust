@@ -11,17 +11,14 @@ import SwiftSyntax
 
 /// The result of analyzing a closure body for bidirectional mapping capability.
 enum ClosureAnalysisOutcome {
-    /// The closure body is a simple initializer/function call with labeled arguments
-    /// that correspond 1:1 with closure parameters, enabling backward mapping.
+    /// The closure body is a simple initializer/function call with labeled arguments that correspond 1:1 with closure parameters, enabling backward mapping.
     case bidirectional(BidirectionalResult)
 
     /// The closure body is a single-argument, unlabeled type conversion (e.g. `Int($0)`).
-    /// The backward pass is generated via constrained overloads at the expansion site
-    /// rather than Mirror extraction.
+    /// The backward pass is generated via constrained overloads at the expansion site rather than Mirror extraction.
     case scalarConversion
 
-    /// The closure body cannot be automatically reversed. The associated diagnostic
-    /// explains why.
+    /// The closure body cannot be automatically reversed. The associated diagnostic explains why.
     case forwardOnly(ExhaustMacroDiagnostic)
 }
 
@@ -44,9 +41,7 @@ struct BidirectionalResult {
     /// When set, the backward mapping uses pattern matching instead of Mirror.
     let caseName: String?
 
-    /// Original argument labels from the call site, in argument order.
-    /// `nil` for unlabeled arguments. Used to generate labeled pattern bindings
-    /// for enum case backward mapping (e.g. `case let .cat(age: v0)`).
+    /// Original argument labels from the call site, in argument order. `nil` for unlabeled arguments. Used to generate labeled pattern bindings for enum case backward mapping (e.g. `case let .cat(age: v0)`).
     let originalArgumentLabels: [String?]
 }
 
@@ -89,9 +84,7 @@ func analyzeClosureForBidirectional(
 
 /// Analyzes a closure that uses shorthand parameters ($0, $1, ...) for bidirectional capability.
 ///
-/// Shorthand params provide implicit positional ordering — `$0` corresponds to the first generator,
-/// `$1` to the second, etc. The labels needed for Mirror-based backward extraction come from the
-/// function call argument labels, not from parameter names.
+/// Shorthand params provide implicit positional ordering — `$0` corresponds to the first generator, `$1` to the second, etc. The labels needed for Mirror-based backward extraction come from the function call argument labels, not from parameter names.
 private func analyzeShorthandClosure(
     _ closure: ClosureExprSyntax,
     generatorCount: Int,
@@ -225,9 +218,7 @@ private func analyzeFunctionCall(
 
 /// Extracts the enum case name from a member access callee expression.
 ///
-/// Returns the member name for patterns like `Pet.cat(...)` or `Shape.circle(...)`,
-/// which are syntactically `MemberAccessExprSyntax` nodes. Returns `nil` for direct
-/// calls like `Person(...)` or explicit `.init(...)` calls.
+/// Returns the member name for patterns like `Pet.cat(...)` or `Shape.circle(...)`, which are syntactically `MemberAccessExprSyntax` nodes. Returns `nil` for direct calls like `Person(...)` or explicit `.init(...)` calls.
 private func extractCaseName(from callee: ExprSyntax) -> String? {
     guard let memberAccess = callee.as(MemberAccessExprSyntax.self) else {
         return nil

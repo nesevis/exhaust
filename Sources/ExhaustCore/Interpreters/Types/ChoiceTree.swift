@@ -16,12 +16,10 @@ public enum ChoiceTree: Hashable, Equatable, Sendable {
     /// The string value is a description of the value for debug purposes
     case just(String)
 
-    /// A node that represents the generation of a sequence. It explicitly
-    /// captures the length and the choice trees for each of its elements.
+    /// A node that represents the generation of a sequence. It explicitly captures the length and the choice trees for each of its elements.
     indirect case sequence(length: UInt64, elements: [ChoiceTree], ChoiceMetadata)
 
-    /// A node that represents a branching choice made via `pick`.
-    /// `siteID` identifies the pick site, `id` is the stable branch identifier, and `branchIDs` contains all ids in this pick site.
+    /// A node that represents a branching choice made via `pick`. `siteID` identifies the pick site, `id` is the stable branch identifier, and `branchIDs` contains all ids in this pick site.
     indirect case branch(siteID: UInt64, weight: UInt64, id: UInt64, branchIDs: [UInt64], choice: ChoiceTree)
 
     /// Represents a nested group of choices that usually represent objects or tuples
@@ -87,8 +85,7 @@ extension ChoiceTree {
         }
     }
 
-    /// Returns the maximum `breadth × 2^pickDepth` across all pick sites,
-    /// where pickDepth counts nested `.branch` levels.
+    /// Returns the maximum `breadth × 2^pickDepth` across all pick sites, where pickDepth counts nested `.branch` levels.
     var pickComplexity: UInt64 {
         pickComplexityHelper(pickDepth: 0)
     }
@@ -147,9 +144,7 @@ extension ChoiceTree {
 
     /// Widens non-explicit sequence length ranges to accept any length.
     ///
-    /// After structural passes like `deleteSequenceBoundaries` merge inner sequences,
-    /// the tree's recorded length ranges can become stale. This method relaxes those
-    /// ranges so subsequent materialization passes don't reject valid candidates.
+    /// After structural passes like `deleteSequenceBoundaries` merge inner sequences, the tree's recorded length ranges can become stale. This method relaxes those ranges so subsequent materialization passes don't reject valid candidates.
     /// Only affects sequence nodes whose `isRangeExplicit` is `false`.
     func relaxingNonExplicitSequenceLengthRanges() -> ChoiceTree {
         map { node in

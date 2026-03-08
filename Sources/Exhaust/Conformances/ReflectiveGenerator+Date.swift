@@ -8,8 +8,7 @@ import Foundation
 
 /// A calendar-meaningful duration for date generation.
 ///
-/// All cases resolve to a fixed number of seconds. Months are treated as 30 days
-/// and years as 365 days.
+/// All cases resolve to a fixed number of seconds. Months are treated as 30 days and years as 365 days.
 public enum DateSpan: Sendable, Comparable, Equatable {
     case seconds(Int)
     case minutes(Int)
@@ -107,8 +106,7 @@ public extension ReflectiveGenerator {
 
     /// Generates dates within an asymmetric span around `anchor`, spaced by `interval`.
     ///
-    /// The range bounds are relative to the anchor — negative values go into the past,
-    /// positive into the future.
+    /// The range bounds are relative to the anchor — negative values go into the past, positive into the future.
     ///
     /// ```swift
     /// let gen = #gen(.date(within: .days(-7) ... .days(30), of: anchor, interval: .hours(1)))

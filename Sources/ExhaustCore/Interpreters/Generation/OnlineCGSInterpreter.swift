@@ -11,26 +11,18 @@ import Foundation
 
 /// Online Choice Gradient Sampling interpreter that generates values directly.
 ///
-/// Unlike the eager `GeneratorTuning` tuner (which pre-computes all pick weights
-/// in a single top-down pass), this interpreter implements the paper's **online, per-value**
-/// algorithm (Figure 3.3). At each `pick` encountered during generation, it computes
-/// "derivatives" (residual generators after choosing each branch), samples from each
-/// derivative to measure fitness, and selects based on those fitness scores.
+/// Unlike the eager `GeneratorTuning` tuner (which pre-computes all pick weights in a single top-down pass), this interpreter implements the paper's **online, per-value** algorithm (Figure 3.3). At each `pick` encountered during generation, it computes
+/// "derivatives" (residual generators after choosing each branch), samples from each derivative to measure fitness, and selects based on those fitness scores.
 ///
-/// This avoids diversity collapse on recursive generators because each derivative has
-/// already fixed all choices above it, making deeper sampling tractable.
+/// This avoids diversity collapse on recursive generators because each derivative has already fixed all choices above it, making deeper sampling tractable.
 public struct OnlineCGSInterpreter<FinalOutput>: ~Copyable, ExhaustIterator {
     public typealias Element = FinalOutput
 
     // MARK: - Derivative Context
 
-    /// An inspectable data structure representing the composition of all outer continuations
-    /// needed to produce a `FinalOutput` from a local sub-generator. Each `handlePick` or
-    /// `handleZip` call pushes a frame; `apply` composes them to build a full derivative.
+    /// An inspectable data structure representing the composition of all outer continuations needed to produce a `FinalOutput` from a local sub-generator. Each `handlePick` or `handleZip` call pushes a frame; `apply` composes them to build a full derivative.
     ///
-    /// This replaces the opaque `DerivativeWrapper` closure chain with a defunctionalized
-    /// representation, matching the paper's treatment of CGS derivatives as syntactic
-    /// transformations on the generator data structure (Goldstein, Ch. 3).
+    /// This replaces the opaque `DerivativeWrapper` closure chain with a defunctionalized representation, matching the paper's treatment of CGS derivatives as syntactic transformations on the generator data structure (Goldstein, Ch. 3).
     public struct DerivativeContext {
         public private(set) var frames: [DerivativeFrame] = []
 
@@ -44,9 +36,7 @@ public struct OnlineCGSInterpreter<FinalOutput>: ~Copyable, ExhaustIterator {
 
         /// Compose all frames onto `gen` to produce a full `FinalOutput` generator.
         ///
-        /// Frames are stored in push order (oldest first). `apply` iterates in reverse
-        /// (newest/innermost first) to match the closure chain's nesting:
-        /// `gen.bind(innerCont).bind(outerCont).map(cast)`.
+        /// Frames are stored in push order (oldest first). `apply` iterates in reverse (newest/innermost first) to match the closure chain's nesting: `gen.bind(innerCont).bind(outerCont).map(cast)`.
         public func apply(_ gen: ReflectiveGenerator<Any>) throws -> ReflectiveGenerator<FinalOutput> {
             var current = gen
             for frame in frames.reversed() {

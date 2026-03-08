@@ -18,9 +18,7 @@ public enum TypeTag: Equatable, Hashable, Sendable {
     case int8
     case double
     case float
-    /// Date steps: the underlying integer represents step indices, where each step
-    /// is `intervalSeconds` seconds. Used by boundary analysis to compute
-    /// calendar-meaningful boundary values (month/year boundaries, DST transitions).
+    /// Date steps: the underlying integer represents step indices, where each step is `intervalSeconds` seconds. Used by boundary analysis to compute calendar-meaningful boundary values (month/year boundaries, DST transitions).
     /// The `timeZoneID` limits DST boundary values to a single timezone.
     case date(intervalSeconds: Int64, timeZoneID: String)
     /// Raw bit storage used by composite generators (UUID, Int128, UInt128).

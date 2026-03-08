@@ -13,9 +13,7 @@ public protocol PowerSchedule {
 
 /// Default schedule: logarithmic energy scaled by novelty (or fitness) and pool size.
 ///
-/// Higher-scoring seeds get more mutations. Larger pools reduce per-seed
-/// energy to maintain breadth. When `averagePoolFitness > 0`, fitness replaces
-/// novelty as the scaling signal.
+/// Higher-scoring seeds get more mutations. Larger pools reduce per-seed energy to maintain breadth. When `averagePoolFitness > 0`, fitness replaces novelty as the scaling signal.
 public struct LogarithmicSchedule: PowerSchedule {
     private let baseEnergy: Int
     private let maxEnergy: Int

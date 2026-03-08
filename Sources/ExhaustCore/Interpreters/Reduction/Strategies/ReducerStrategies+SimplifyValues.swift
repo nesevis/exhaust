@@ -9,9 +9,7 @@ extension ReducerStrategies {
     /// Pass 3: Try setting values to their semantically simplest form (0 for numbers, "a" for characters).
     /// Uses `find_integer` to batch consecutive simplifications.
     ///
-    /// - Complexity: O(*n* · log *n* · *M*), where *n* is the number of simplifiable value spans
-    ///   and *M* is the cost of a single property invocation. Each of the up to *n* positions invokes
-    ///   `findInteger`, which makes O(log *n*) property invocations.
+    /// - Complexity: O(*n* · log *n* · *M*), where *n* is the number of simplifiable value spans and *M* is the cost of a single property invocation. Each of the up to *n* positions invokes `findInteger`, which makes O(log *n*) property invocations.
     static func simplifyValues<Output>(
         _ gen: ReflectiveGenerator<Output>,
         tree: ChoiceTree,

@@ -23,8 +23,7 @@ public macro extract<T>(
 
 /// Generates an array of values from a generator without running a property test.
 ///
-/// Each element is generated at increasing size (cycling 1–100), so earlier
-/// elements tend to be simpler and later elements more complex.
+/// Each element is generated at increasing size (cycling 1–100), so earlier elements tend to be simpler and later elements more complex.
 ///
 /// ```swift
 /// let people = #extract(personGen, count: 10)

@@ -89,8 +89,7 @@ public struct Xoshiro256: ~Copyable {
 
     /// Returns a random integer in `range`.
     ///
-    /// This is intentionally separate from `next(upperBound:)` so callers can
-    /// choose between stdlib range behavior and fast bounded sampling.
+    /// This is intentionally separate from `next(upperBound:)` so callers can choose between stdlib range behavior and fast bounded sampling.
     @inline(__always)
     public mutating func next(in range: ClosedRange<UInt64>) -> UInt64 {
         let width = range.upperBound &- range.lowerBound

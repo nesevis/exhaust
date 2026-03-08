@@ -116,8 +116,7 @@ public extension ChoiceSequence {
 
     /// Flattens the tree structure of ``ChoiceTree`` to a flat list for mutation/shrinking purposes.
     ///
-    /// - Parameter includingAllBranches: When `true`, includes all branches at pick sites
-    ///   (not just the selected branch). Used for complexity comparison in shrink passes.
+    /// - Parameter includingAllBranches: When `true`, includes all branches at pick sites (not just the selected branch). Used for complexity comparison in shrink passes.
     static func flatten(_ tree: ChoiceTree, includingAllBranches: Bool = false) -> ChoiceSequence {
         var result = ChoiceSequence()
         result.reserveCapacity(64)
@@ -299,8 +298,7 @@ public extension ChoiceSequence {
         }
     }
 
-    /// Returns spans representing `][` boundaries (`.sequence(false)` followed by `.sequence(true)`)
-    /// that occur while nested inside an outer sequence (sequence depth > 1).
+    /// Returns spans representing `][` boundaries (`.sequence(false)` followed by `.sequence(true)`) that occur while nested inside an outer sequence (sequence depth > 1).
     /// Removing such a boundary merges two adjacent inner sequences into one.
     static func extractSequenceBoundarySpans(from sequence: ChoiceSequence) -> [ChoiceSpan] {
         var spans: [ChoiceSpan] = []
@@ -387,9 +385,7 @@ public extension ChoiceSequence {
 
     // MARK: - Sibling groups
 
-    /// Extracts groups of sibling elements within containers. A sibling group contains
-    /// the immediate children of a sequence or group container, where all children are
-    /// the same kind (all bare values or all containers of the same type).
+    /// Extracts groups of sibling elements within containers. A sibling group contains the immediate children of a sequence or group container, where all children are the same kind (all bare values or all containers of the same type).
     /// Only groups with >= 2 siblings are returned.
     static func extractSiblingGroups(from sequence: ChoiceSequence) -> [SiblingGroup] {
         var result: [SiblingGroup] = []

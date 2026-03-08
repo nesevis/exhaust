@@ -3,21 +3,13 @@ import SwiftSyntax
 import SwiftSyntaxBuilder
 import SwiftSyntaxMacros
 
-/// Expression macro that transforms `#gen(gen1, gen2, ...) { params in Body(...) }`
-/// into a `ReflectiveGenerator` with automatic backward mapping when possible.
+/// Expression macro that transforms `#gen(gen1, gen2, ...) { params in Body(...) }` into a `ReflectiveGenerator` with automatic backward mapping when possible.
 ///
-/// When the closure body is a struct or class initializer call with labeled arguments
-/// that map 1:1 to the closure parameters, the macro synthesizes a Mirror-based
-/// backward mapping, producing a fully bidirectional generator.
+/// When the closure body is a struct or class initializer call with labeled arguments that map 1:1 to the closure parameters, the macro synthesizes a Mirror-based backward mapping, producing a fully bidirectional generator.
 ///
-/// When the closure body is an enum case construction (detected via member access
-/// callee, e.g. `Pet.cat(age)`), the macro synthesizes a pattern-matching backward
-/// closure inspired by [swift-case-paths](https://github.com/pointfreeco/swift-case-paths)
-/// by Point-Free. This returns `nil` for non-matching cases, enabling `pick` to prune
-/// branches during reflection.
+/// When the closure body is an enum case construction (detected via member access callee, e.g. `Pet.cat(age)`), the macro synthesizes a pattern-matching backward closure inspired by [swift-case-paths](https://github.com/pointfreeco/swift-case-paths) by Point-Free. This returns `nil` for non-matching cases, enabling `pick` to prune branches during reflection.
 ///
-/// When backward inference is not possible (complex expressions, multi-statement bodies),
-/// the macro falls back to a forward-only `.map` with a warning.
+/// When backward inference is not possible (complex expressions, multi-statement bodies), the macro falls back to a forward-only `.map` with a warning.
 public struct GenerateMacro: ExpressionMacro {
     public static func expansion(
         of node: some FreestandingMacroExpansionSyntax,
@@ -62,8 +54,7 @@ public struct GenerateMacro: ExpressionMacro {
 
     /// Builds the expansion for a bidirectional mapping.
     ///
-    /// Dispatches to either Mirror-based extraction (struct/class init) or pattern-matching
-    /// extraction (enum case) based on whether the closure analysis detected a member access callee.
+    /// Dispatches to either Mirror-based extraction (struct/class init) or pattern-matching extraction (enum case) based on whether the closure analysis detected a member access callee.
     private static func buildBidirectionalExpansion(
         generatorArgs: [LabeledExprListSyntax.Element],
         closure: ClosureExprSyntax,
@@ -125,9 +116,7 @@ public struct GenerateMacro: ExpressionMacro {
 
     /// Builds the expansion using pattern-matching backward extraction for enum cases.
     ///
-    /// Generates `guard case let .caseName(bindings) = $0 else { return nil }` closures
-    /// for the backward pass. This approach is inspired by
-    /// [swift-case-paths](https://github.com/pointfreeco/swift-case-paths) by Point-Free.
+    /// Generates `guard case let .caseName(bindings) = $0 else { return nil }` closures for the backward pass. This approach is inspired by [swift-case-paths](https://github.com/pointfreeco/swift-case-paths) by Point-Free.
     private static func buildEnumCaseExpansion(
         generatorArgs: [LabeledExprListSyntax.Element],
         closure: ClosureExprSyntax,
@@ -167,8 +156,7 @@ public struct GenerateMacro: ExpressionMacro {
     /// Returns argument indices ordered by parameter position (matching generator order).
     ///
     /// Pattern match bindings are in argument order (matching enum declaration order).
-    /// Generators are in parameter order. This maps parameter → argument index so the
-    /// backward closure returns values in the order the zip expects.
+    /// Generators are in parameter order. This maps parameter → argument index so the backward closure returns values in the order the zip expects.
     private static func buildBackwardArgIndices(result: BidirectionalResult) -> [Int] {
         var paramToArgIndex: [String: Int] = [:]
         for (argIndex, paramRef) in result.argumentParamRefs.enumerated() {
@@ -177,12 +165,9 @@ public struct GenerateMacro: ExpressionMacro {
         return result.parameterNames.map { paramToArgIndex[$0]! }
     }
 
-    /// Builds the expansion for a single-generator, unlabeled-argument closure
-    /// (e.g. `#gen(.uint64()) { Int($0) }`).
+    /// Builds the expansion for a single-generator, unlabeled-argument closure (e.g. `#gen(.uint64()) { Int($0) }`).
     ///
-    /// Emits `__ExhaustRuntime._macroMapScalar(gen, forward: closure)` which has constrained overloads
-    /// for `BinaryInteger` and `BinaryFloatingPoint` that synthesize the backward pass
-    /// at compile time, with an unconstrained fallback that is forward-only.
+    /// Emits `__ExhaustRuntime._macroMapScalar(gen, forward: closure)` which has constrained overloads for `BinaryInteger` and `BinaryFloatingPoint` that synthesize the backward pass at compile time, with an unconstrained fallback that is forward-only.
     private static func buildScalarConversionExpansion(
         generatorArg: LabeledExprListSyntax.Element,
         closure: ClosureExprSyntax,

@@ -15,11 +15,9 @@ public enum ExploreResult<Output> {
 
 /// Feedback-guided exploration runner.
 ///
-/// Combines seed-pool-based hill climbing with fresh generation to search the input
-/// space toward high-scorer regions while testing a property.
+/// Combines seed-pool-based hill climbing with fresh generation to search the input space toward high-scorer regions while testing a property.
 ///
-/// The runner uses a mandatory `scorer` function to guide hill-climbing: mutations
-/// that increase the scorer output are accepted, and the seed pool ranks by fitness.
+/// The runner uses a mandatory `scorer` function to guide hill-climbing: mutations that increase the scorer output are accepted, and the seed pool ranks by fitness.
 public struct ExploreRunner<Output>: ~Copyable {
     private let gen: ReflectiveGenerator<Output>
     private let property: (Output) -> Bool
@@ -184,8 +182,7 @@ public struct ExploreRunner<Output>: ~Copyable {
 
     /// Shrink a failing value and return the result.
     ///
-    /// Always reflects to get a structurally correct tree, since `materializePicks: false`
-    /// trees lack unselected branches needed by reducer strategies.
+    /// Always reflects to get a structurally correct tree, since `materializePicks: false` trees lack unselected branches needed by reducer strategies.
     private func shrinkAndReturn(
         value: Output,
         tree: ChoiceTree,

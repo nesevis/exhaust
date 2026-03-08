@@ -26,9 +26,7 @@
 ///
 /// ## Architecture
 ///
-/// Operations use type erasure (`Any`) because Swift enums cannot change generic parameters
-/// across cases. The FreerMonad continuation handles type-safe conversion back to the expected
-/// output type, enabling the separation of effect description from interpretation.
+/// Operations use type erasure (`Any`) because Swift enums cannot change generic parameters across cases. The FreerMonad continuation handles type-safe conversion back to the expected output type, enabling the separation of effect description from interpretation.
 ///
 /// **Construction**: Operations are created by `Gen` combinators and interpreted by `Interpreters`.
 /// Never construct directly.
@@ -62,9 +60,7 @@ public enum ReflectiveOperation {
 
     /// Contravariant transformation that focuses on part of the input during reflection.
     ///
-    /// This is the key operation that enables generators to work with different input types
-    /// while maintaining bidirectional capabilities. The transform function acts as a "lens"
-    /// that extracts the relevant portion of data during reflection.
+    /// This is the key operation that enables generators to work with different input types while maintaining bidirectional capabilities. The transform function acts as a "lens" that extracts the relevant portion of data during reflection.
     ///
     /// **Forward pass**: Transform is ignored - generation proceeds with current context
     /// **Backward pass**: Transform extracts the focus area from the target value
@@ -80,31 +76,26 @@ public enum ReflectiveOperation {
 
     /// Weighted random choice between multiple generation strategies.
     ///
-    /// This operation enables probabilistic generation where different outcomes have different
-    /// likelihoods. It's the foundation for building complex generators from simpler components.
+    /// This operation enables probabilistic generation where different outcomes have different likelihoods. It's the foundation for building complex generators from simpler components.
     ///
     /// **Forward pass**: Randomly selects one choice based on relative weights
     /// **Backward pass**: **Key insight** - tries ALL choices against target value to find matches
     /// **Replay pass**: Uses recorded branch id to deterministically select the same branch
     ///
-    /// **Performance note**: ContiguousArray provides better cache locality than Array for
-    /// frequent iteration during reflection.
+    /// **Performance note**: ContiguousArray provides better cache locality than Array for frequent iteration during reflection.
     ///
     /// - Parameter choices: Array of weighted generator options with replay labels
     case pick(choices: ContiguousArray<PickTuple>)
 
     /// Conditional generation that prunes invalid branches during reflection.
     ///
-    /// This operation works with `contramap` to handle cases where the input transformation
-    /// might fail. When a preceding `contramap` returns `nil`, `prune` eliminates that
-    /// reflection path, focusing the search on valid branches.
+    /// This operation works with `contramap` to handle cases where the input transformation might fail. When a preceding `contramap` returns `nil`, `prune` eliminates that reflection path, focusing the search on valid branches.
     ///
     /// **Forward pass**: If input context is invalid (nil), generation fails gracefully
     /// **Backward pass**: Unwraps valid input and continues reflection with nested generator
     /// **Replay pass**: Passes through recorded valid inputs
     ///
-    /// **Why separate from contramap**: This separation allows interpreters to handle
-    /// failure cases explicitly, enabling different strategies for invalid branches.
+    /// **Why separate from contramap**: This separation allows interpreters to handle failure cases explicitly, enabling different strategies for invalid branches.
     ///
     /// - Parameter next: Generator to apply if the input is valid (non-nil)
     case prune(next: ReflectiveGenerator<Any>)
@@ -112,8 +103,7 @@ public enum ReflectiveOperation {
     /// Primitive random bit pattern generation within a bounded range.
     ///
     /// This is the fundamental randomness operation that underlies all bounded value generation.
-    /// By working at the bit pattern level, it provides a unified interface for generating
-    /// any `BitPatternConvertible` type with proper reflection support.
+    /// By working at the bit pattern level, it provides a unified interface for generating any `BitPatternConvertible` type with proper reflection support.
     ///
     /// **Forward pass**: Generates random UInt64 between min and max (inclusive)
     /// **Backward pass**: Checks if target value's bit pattern falls within [min, max]
@@ -125,22 +115,18 @@ public enum ReflectiveOperation {
     /// - `Character`: Bit pattern represents an index into a `CharacterSet`
     /// - `Bool`: Bit pattern 0 = false, 1 = true
     ///
-    /// **Uniformity**: The bit-level approach ensures uniform distribution across the
-    /// specified range, avoiding bias that can occur with modular arithmetic.
+    /// **Uniformity**: The bit-level approach ensures uniform distribution across the specified range, avoiding bias that can occur with modular arithmetic.
     ///
     /// - Parameters:
     ///   - min: Minimum bit pattern value (inclusive)
     ///   - max: Maximum bit pattern value (inclusive)
     ///   - tag: Type tag for proper interpretation of bit patterns
-    ///   - isRangeExplicit: Whether `min...max` came from an explicit, stable bound
-    ///     that reflection should preserve and validate.
+    ///   - isRangeExplicit: Whether `min...max` came from an explicit, stable bound that reflection should preserve and validate.
     case chooseBits(min: UInt64, max: UInt64, tag: TypeTag, isRangeExplicit: Bool)
 
     /// Stack-safe sequence generation for creating arrays and collections.
     ///
-    /// This operation enables the generation of variable-length collections without
-    /// recursive bind chains that could cause stack overflow. It's the foundation
-    /// for `Gen.arrayOf` and similar collection generators.
+    /// This operation enables the generation of variable-length collections without recursive bind chains that could cause stack overflow. It's the foundation for `Gen.arrayOf` and similar collection generators.
     ///
     /// **Forward pass**:
     /// 1. Generate length using the length generator
@@ -157,9 +143,7 @@ public enum ReflectiveOperation {
     /// 2. Replay each element using corresponding sub-trees
     /// 3. Reconstruct the exact original array
     ///
-    /// **Stack safety**: Unlike recursive monadic composition, this operation
-    /// is interpreted iteratively by the interpreter, avoiding deep call stacks
-    /// for large collections.
+    /// **Stack safety**: Unlike recursive monadic composition, this operation is interpreted iteratively by the interpreter, avoiding deep call stacks for large collections.
     ///
     /// - Parameters:
     ///   - length: Generator that determines the sequence length
@@ -168,20 +152,15 @@ public enum ReflectiveOperation {
 
     /// Parallel composition of multiple generators into a tuple result.
     ///
-    /// This operation enables clean composition of multiple generators without deeply
-    /// nested monadic bind chains ("pyramid of doom"). It's essential for building
-    /// generators that combine several independent random choices.
+    /// This operation enables clean composition of multiple generators without deeply nested monadic bind chains ("pyramid of doom"). It's essential for building generators that combine several independent random choices.
     ///
     /// **Forward pass**: Generates values from all generators and combines into tuple
     /// **Backward pass**: Decomposes target tuple and reflects each component independently
     /// **Replay pass**: Replays all generators using corresponding choice sub-trees
     ///
-    /// **Performance**: ContiguousArray provides better cache locality than Array
-    /// when iterating through generators during interpretation.
+    /// **Performance**: ContiguousArray provides better cache locality than Array when iterating through generators during interpretation.
     ///
-    /// **Type erasure**: All generators are erased to `ReflectiveGenerator<Any>`
-    /// because Swift enums cannot store heterogeneous generic types. The interpreter
-    /// handles type-safe reconstruction of the final tuple.
+    /// **Type erasure**: All generators are erased to `ReflectiveGenerator<Any>` because Swift enums cannot store heterogeneous generic types. The interpreter handles type-safe reconstruction of the final tuple.
     ///
     /// - Parameter generators: Array of generators to compose in parallel
     case zip(ContiguousArray<ReflectiveGenerator<Any>>)
@@ -189,8 +168,7 @@ public enum ReflectiveOperation {
     /// Produces a constant value without consuming any randomness.
     ///
     /// This is the simplest operation - it always produces the same predetermined value.
-    /// It's the foundation for `Gen.just` and serves as the identity element for
-    /// generator composition.
+    /// It's the foundation for `Gen.just` and serves as the identity element for generator composition.
     ///
     /// **Forward pass**: Always returns the stored constant value
     /// **Backward pass**: Succeeds if target equals the constant, fails otherwise
@@ -209,9 +187,7 @@ public enum ReflectiveOperation {
 
     /// Accesses the current size parameter for complexity-scaled generation.
     ///
-    /// The size parameter is fundamental to property-based testing - it controls how
-    /// complex generated values should be. Size typically starts small and grows as
-    /// tests progress, enabling simple counterexamples to be found before complex ones.
+    /// The size parameter is fundamental to property-based testing - it controls how complex generated values should be. Size typically starts small and grows as tests progress, enabling simple counterexamples to be found before complex ones.
     ///
     /// **Forward pass**: Returns the interpreter's current size parameter
     /// **Backward pass**: Returns a fixed size (often derived from target complexity)
@@ -223,18 +199,14 @@ public enum ReflectiveOperation {
     /// - Strings: Length scales with size (longer strings in later tests)
     /// - Numeric ranges: May use size to set bounds
     ///
-    /// **Reflection implications**: During reflection, size represents the complexity
-    /// of the target value being analyzed, helping guide the search through possible
-    /// generation paths.
+    /// **Reflection implications**: During reflection, size represents the complexity of the target value being analyzed, helping guide the search through possible generation paths.
     ///
     /// - Returns: Current size parameter as UInt64
     case getSize
 
     /// Temporarily overrides the size parameter for a nested generator scope.
     ///
-    /// This operation enables fine-grained control over generation complexity by
-    /// setting a specific size for part of the generator tree. The size change
-    /// is scoped - it only affects the nested generator and its descendants.
+    /// This operation enables fine-grained control over generation complexity by setting a specific size for part of the generator tree. The size change is scoped - it only affects the nested generator and its descendants.
     ///
     /// **Forward pass**: Sets new size, runs nested generator, then restores original size
     /// **Backward pass**: Runs nested generator with the specified size context
@@ -255,27 +227,17 @@ public enum ReflectiveOperation {
 
     /// Identifies generators with validity conditions that can be optimized.
     ///
-    /// This operation marks generators that have specific validity requirements or preconditions
-    /// that make them candidates for optimization through Choice Gradient Sampling (CGS) or
-    /// rejection sampling. The filter operation enables the framework to automatically detect
-    /// and improve generators that would otherwise waste computational resources on invalid inputs.
+    /// This operation marks generators that have specific validity requirements or preconditions that make them candidates for optimization through Choice Gradient Sampling (CGS) or rejection sampling. The filter operation enables the framework to automatically detect and improve generators that would otherwise waste computational resources on invalid inputs.
     ///
     /// **Forward pass**: Generates values using the wrapped generator and validates them with the predicate
     /// **Backward pass**: Only reflects on values that satisfy the predicate condition
     /// **Replay pass**: Replays the wrapped generator if the recorded choice satisfied the predicate
     ///
-    /// **CGS Optimization**: When a `filter` operation is detected, the Choice Gradient Sampling
-    /// system can analyze which random choices lead to predicate satisfaction. This enables
-    /// automatic bias adjustment to increase the proportion of valid outputs without manual
-    /// generator tuning.
+    /// **CGS Optimization**: When a `filter` operation is detected, the Choice Gradient Sampling system can analyze which random choices lead to predicate satisfaction. This enables automatic bias adjustment to increase the proportion of valid outputs without manual generator tuning.
     ///
-    /// **Rejection Sampling Fallback**: For generators that aren't suitable for CGS optimization,
-    /// the filter serves as a signal to use rejection sampling, generating candidates until
-    /// the predicate is satisfied.
+    /// **Rejection Sampling Fallback**: For generators that aren't suitable for CGS optimization, the filter serves as a signal to use rejection sampling, generating candidates until the predicate is satisfied.
     ///
-    /// **Fingerprint**: The fingerprint parameter provides a unique identifier for the specific
-    /// validity condition, enabling the optimization system to cache learned gradients and
-    /// apply them across different generator instances with the same logical constraints.
+    /// **Fingerprint**: The fingerprint parameter provides a unique identifier for the specific validity condition, enabling the optimization system to cache learned gradients and apply them across different generator instances with the same logical constraints.
     ///
     /// **Use cases**:
     /// - Balanced binary search trees (structural validity)
@@ -292,18 +254,13 @@ public enum ReflectiveOperation {
 
     /// Categorizes generated values for statistical analysis and test coverage reporting.
     ///
-    /// This operation enables developers to understand the distribution of generated test data
-    /// by applying labeled predicates to each generated value. The framework automatically
-    /// collects statistics and reports percentages when testing completes.
+    /// This operation enables developers to understand the distribution of generated test data by applying labeled predicates to each generated value. The framework automatically collects statistics and reports percentages when testing completes.
     ///
     /// **Forward pass**: Generates values normally while testing against all classifiers
     /// **Backward pass**: Reflects normally (classification doesn't affect reflection)
     /// **Replay pass**: Replays normally (classification is analysis, not generation)
     ///
-    /// **Statistical reporting**: When test execution reaches `maxRuns`, the interpreter
-    /// automatically prints distribution statistics showing what percentage of generated
-    /// values satisfied each classifier, enabling developers to verify test coverage and
-    /// identify generator bias.
+    /// **Statistical reporting**: When test execution reaches `maxRuns`, the interpreter automatically prints distribution statistics showing what percentage of generated values satisfied each classifier, enabling developers to verify test coverage and identify generator bias.
     ///
     /// **Use cases**:
     /// - Debug generator coverage: "Am I generating edge cases?"
@@ -318,17 +275,11 @@ public enum ReflectiveOperation {
 
     /// Deduplicates generated values, ensuring each output is unique.
     ///
-    /// This operation wraps a generator and tracks previously seen outputs to prevent
-    /// duplicates. Two deduplication strategies are supported:
+    /// This operation wraps a generator and tracks previously seen outputs to prevent duplicates. Two deduplication strategies are supported:
     ///
-    /// - **Choice-sequence based** (`keyExtractor == nil`): Deduplicates by the flattened
-    ///   `ChoiceSequence` of the inner generator's choice tree. Two values are considered
-    ///   duplicates if they were produced by the same random choices, even if the resulting
-    ///   values differ in non-deterministic ways.
+    /// - **Choice-sequence based** (`keyExtractor == nil`): Deduplicates by the flattened `ChoiceSequence` of the inner generator's choice tree. Two values are considered duplicates if they were produced by the same random choices, even if the resulting values differ in non-deterministic ways.
     ///
-    /// - **Key-based** (`keyExtractor != nil`): Deduplicates by a user-provided key
-    ///   extracted from the generated value. This enables value-based deduplication
-    ///   using key paths or arbitrary transforms.
+    /// - **Key-based** (`keyExtractor != nil`): Deduplicates by a user-provided key extracted from the generated value. This enables value-based deduplication using key paths or arbitrary transforms.
     ///
     /// **Forward pass**: Generates values and checks against seen set; retries on duplicates
     /// **Backward pass**: Passes through to inner generator (no dedup during reflection)

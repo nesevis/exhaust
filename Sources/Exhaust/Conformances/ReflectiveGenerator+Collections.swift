@@ -19,8 +19,7 @@ import ExhaustCore
 public extension ReflectiveGenerator {
     /// Creates a generator that produces arrays of random elements with size-scaled length.
     ///
-    /// The array length scales with the interpreter's size parameter (1–100),
-    /// producing shorter arrays early in a test run and longer ones later.
+    /// The array length scales with the interpreter's size parameter (1–100), producing shorter arrays early in a test run and longer ones later.
     ///
     /// ```swift
     /// let arrays = ReflectiveGenerator.array(.int(in: 0...10))
@@ -73,8 +72,7 @@ public extension ReflectiveGenerator {
 
     /// Creates a generator that produces sets of random elements with size-scaled count.
     ///
-    /// Elements are deduplicated by hash, so the generated set may be smaller than
-    /// the requested count if the element generator produces duplicates.
+    /// Elements are deduplicated by hash, so the generated set may be smaller than the requested count if the element generator produces duplicates.
     ///
     /// ```swift
     /// let tags = ReflectiveGenerator.set(.element(from: ["a", "b", "c", "d"]))
@@ -119,8 +117,7 @@ public extension ReflectiveGenerator {
 
     /// Creates a generator that produces dictionaries from key and value generators.
     ///
-    /// Array length (and thus dictionary size) is size-scaled. Keys are deduplicated
-    /// by hash — if the key generator produces duplicates, later values overwrite earlier ones.
+    /// Array length (and thus dictionary size) is size-scaled. Keys are deduplicated by hash — if the key generator produces duplicates, later values overwrite earlier ones.
     ///
     /// ```swift
     /// let config = ReflectiveGenerator.dictionary(.asciiString(), .int(in: 0...100))
@@ -139,8 +136,7 @@ public extension ReflectiveGenerator {
 
     /// Creates a generator that produces random contiguous slices of a generated collection.
     ///
-    /// Generates the full collection, then selects a random start index and length
-    /// to produce a `SubSequence`.
+    /// Generates the full collection, then selects a random start index and length to produce a `SubSequence`.
     ///
     /// - Parameter gen: Generator for the source collection to slice
     /// - Returns: A generator producing random sub-sequences
@@ -243,8 +239,7 @@ public extension ReflectiveGenerator where Operation == ReflectiveOperation {
 
     /// Picks a random element from a fixed collection.
     ///
-    /// This is fully reflective — the collection is known at construction time,
-    /// so the backward pass can find the element's index for reflection and shrinking.
+    /// This is fully reflective — the collection is known at construction time, so the backward pass can find the element's index for reflection and shrinking.
     ///
     /// ```swift
     /// let suit = ReflectiveGenerator.element(from: ["♠", "♥", "♦", "♣"])
@@ -260,8 +255,7 @@ public extension ReflectiveGenerator where Operation == ReflectiveOperation {
 
     /// Picks a random element from a fixed collection (non-Hashable variant).
     ///
-    /// This is fully reflective — the collection is known at construction time,
-    /// so the backward pass can find the element's index for reflection and shrinking.
+    /// This is fully reflective — the collection is known at construction time, so the backward pass can find the element's index for reflection and shrinking.
     ///
     /// - Parameter collection: The collection to pick elements from
     /// - Returns: A generator that produces random elements from the collection

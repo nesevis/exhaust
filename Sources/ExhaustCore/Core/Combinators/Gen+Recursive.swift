@@ -8,9 +8,7 @@ public extension Gen {
     /// - `recurse`: A thunk that returns a generator for "recurse here" positions
     /// - `remaining`: Depth budget, counting down from `maxDepth` (outermost) to 1 (innermost)
     ///
-    /// To terminate early, return a generator that doesn't call `recurse()`. This
-    /// short-circuits the recursion — inner layers are never reached since `recurse()`
-    /// is the only way to reference them:
+    /// To terminate early, return a generator that doesn't call `recurse()`. This short-circuits the recursion — inner layers are never reached since `recurse()` is the only way to reference them:
     ///
     /// ```swift
     /// Gen.recursive(base: .leaf, maxDepth: 5) { recurse, remaining in
@@ -39,9 +37,7 @@ public extension Gen {
     ///
     /// Use this overload when the base case itself needs randomness (e.g. random leaf values).
     ///
-    /// The generator is eagerly unfolded at construction time into a plain generator tree —
-    /// no special runtime operation exists. This means recursive generators are fully
-    /// transparent to all interpreters (generation, reflection, replay, CGS tuning).
+    /// The generator is eagerly unfolded at construction time into a plain generator tree — no special runtime operation exists. This means recursive generators are fully transparent to all interpreters (generation, reflection, replay, CGS tuning).
     ///
     /// - Parameters:
     ///   - base: Generator for the base case

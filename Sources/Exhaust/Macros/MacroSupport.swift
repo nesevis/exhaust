@@ -12,8 +12,7 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
     /// - Parameters:
     ///   - gen: The generator to produce test values from.
     ///   - settings: An array of `ExhaustSettings` controlling test behavior.
-    ///   - sourceCode: A string representation of the property closure body, captured at compile time.
-    ///     `nil` when a function reference is passed instead of a trailing closure.
+    ///   - sourceCode: A string representation of the property closure body, captured at compile time. `nil` when a function reference is passed instead of a trailing closure.
     ///   - fileID: The file ID of the call site (injected by macro expansion).
     ///   - filePath: The file path of the call site (injected by macro expansion).
     ///   - line: The line number of the call site (injected by macro expansion).

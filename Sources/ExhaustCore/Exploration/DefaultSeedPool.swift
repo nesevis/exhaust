@@ -3,8 +3,7 @@
 //  Exhaust
 //
 
-/// A bounded seed pool with dual-mode ranking: fitness-weighted when a target
-/// function is provided, novelty-weighted otherwise.
+/// A bounded seed pool with dual-mode ranking: fitness-weighted when a target function is provided, novelty-weighted otherwise.
 ///
 /// **Fitness mode** (when `useFitness` is `true`):
 /// - **Insertion**: Accept if novelty > 0 OR fitness exceeds the pool minimum.

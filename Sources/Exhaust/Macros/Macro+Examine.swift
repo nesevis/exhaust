@@ -1,5 +1,4 @@
-/// Validates a generator's reflection round-trip, replay determinism,
-/// and generation health. Failures are reported as test issues.
+/// Validates a generator's reflection round-trip, replay determinism, and generation health. Failures are reported as test issues.
 ///
 /// ```swift
 /// #examine(.int(in: 0...100))

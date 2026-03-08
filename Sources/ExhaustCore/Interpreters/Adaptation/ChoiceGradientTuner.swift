@@ -9,90 +9,56 @@ import Foundation
 
 /// Three-stage offline tuner for pick-heavy generators (BST, AVL, etc.).
 ///
-/// Pure online CGS (`OnlineCGSInterpreter`) gives excellent *ranking* of choices —
-/// it knows which picks lead to valid outputs — but it's expensive per-sample
-/// (derivative evaluation at every site) and overcommits to the dominant winner,
-/// quickly exhausting unique values. This tuner addresses both problems:
+/// Pure online CGS (`OnlineCGSInterpreter`) gives excellent *ranking* of choices — it knows which picks lead to valid outputs — but it's expensive per-sample (derivative evaluation at every site) and overcommits to the dominant winner, quickly exhausting unique values. This tuner addresses both problems:
 ///
 /// ## Stage 1: Online CGS warmup
 ///
-/// Runs the generator through `OnlineCGSInterpreter` for a fixed number of warmup
-/// passes, collecting per-site, per-choice fitness data into a `FitnessAccumulator`.
-/// Unlike `GeneratorTuning.tune()` which samples each site independently, CGS
-/// conditions on upstream choices via `DerivativeContext`, producing better weights
-/// for recursive generators where the validity of a subtree depends on ancestors.
+/// Runs the generator through `OnlineCGSInterpreter` for a fixed number of warmup passes, collecting per-site, per-choice fitness data into a `FitnessAccumulator`.
+/// Unlike `GeneratorTuning.tune()` which samples each site independently, CGS conditions on upstream choices via `DerivativeContext`, producing better weights for recursive generators where the validity of a subtree depends on ancestors.
 ///
-/// The warmup is the only expensive phase. All subsequent generation uses the cheap
-/// `ValueAndChoiceTreeInterpreter` with the baked weights — same quality signal,
+/// The warmup is the only expensive phase. All subsequent generation uses the cheap `ValueAndChoiceTreeInterpreter` with the baked weights — same quality signal,
 /// ~100x cheaper per sample.
 ///
 /// ## Stage 2: Fitness-shared weight baking
 ///
-/// Raw CGS fitness data assigns weights proportional to how often each choice led
-/// to valid outputs. If choice A succeeds 90% and choice B only 10%, the raw
-/// weights are 9:1. The generator then hammers choice A and quickly exhausts its
-/// unique values, while choice B — which leads to a different, equally valid region
-/// of the output space — is starved.
+/// Raw CGS fitness data assigns weights proportional to how often each choice led to valid outputs. If choice A succeeds 90% and choice B only 10%, the raw weights are 9:1. The generator then hammers choice A and quickly exhausts its unique values, while choice B — which leads to a different, equally valid region of the output space — is starved.
 ///
-/// The default `.fitnessSharing` strategy redistributes weight via niche-count
-/// sharing: `weight_i = fitness_i / (1 + N × share_i)` where `share_i` is the
-/// choice's proportion of total fitness at the site. Dominant choices get a heavy
-/// divisor; minority choices get a light one. This preserves the ranking (choice A
-/// still outweighs choice B) while flattening the distribution toward the tail.
+/// The default `.fitnessSharing` strategy redistributes weight via niche-count sharing: `weight_i = fitness_i / (1 + N × share_i)` where `share_i` is the choice's proportion of total fitness at the site. Dominant choices get a heavy divisor; minority choices get a light one. This preserves the ranking (choice A still outweighs choice B) while flattening the distribution toward the tail.
 ///
-/// On AVL benchmarks, fitness sharing makes CGS-baked weights 2x faster than raw
-/// `totalFitness` baking and 3x faster than `Adaptive` for time-to-100 unique
-/// valid trees.
+/// On AVL benchmarks, fitness sharing makes CGS-baked weights 2x faster than raw `totalFitness` baking and 3x faster than `Adaptive` for time-to-100 unique valid trees.
 ///
 /// ## Stage 3: Adaptive smoothing
 ///
-/// After baking, per-site entropy analysis identifies bottleneck sites — picks
-/// where one choice dominates — and applies higher temperature there to prevent
-/// any single site from becoming a chokepoint. Well-distributed sites keep low
-/// temperature to preserve the tuned distribution. This is the same
-/// `GeneratorTuning.smoothAdaptively` used by the probe-based tuner.
+/// After baking, per-site entropy analysis identifies bottleneck sites — picks where one choice dominates — and applies higher temperature there to prevent any single site from becoming a chokepoint. Well-distributed sites keep low temperature to preserve the tuned distribution. This is the same `GeneratorTuning.smoothAdaptively` used by the probe-based tuner.
 ///
 /// ## Result
 ///
 /// A statically-tuned generator suitable for `ValueAndChoiceTreeInterpreter`.
-/// The three stages compose: CGS provides the right ranking, fitness sharing
-/// prevents overcommitment to the winner, and adaptive smoothing ensures no
-/// single site strangles diversity.
+/// The three stages compose: CGS provides the right ranking, fitness sharing prevents overcommitment to the winner, and adaptive smoothing ensures no single site strangles diversity.
 public enum ChoiceGradientTuner<FinalOutput> {
     /// How baked pick weights are derived from the accumulated fitness data.
     ///
-    /// All strategies use the same CGS warmup data; they differ only in how
-    /// that data is converted to static pick weights.
+    /// All strategies use the same CGS warmup data; they differ only in how that data is converted to static pick weights.
     public enum WeightingStrategy {
         /// Raw cumulative fitness: weight = sum of fitness scores across warmup runs.
-        /// Fast to compute but produces peaky weights that lock onto the dominant
-        /// cluster, limiting diversity at high unique counts.
-        /// - Note: Not used in production. Retained for benchmarking against
-        ///   `.fitnessSharing`; consistently 2x slower on AVL.
+        /// Fast to compute but produces peaky weights that lock onto the dominant cluster, limiting diversity at high unique counts.
+        /// - Note: Not used in production. Retained for benchmarking against `.fitnessSharing`; consistently 2x slower on AVL.
         case totalFitness
 
         /// Validity rate: weight = (fitness / observations) × 10000.
-        /// Normalizes across sites regardless of sample count, but still suffers
-        /// from the same overcommitment to dominant choices as `totalFitness`.
-        /// - Note: Not used in production. Retained for benchmarking; performs
-        ///   similarly to `totalFitness`.
+        /// Normalizes across sites regardless of sample count, but still suffers from the same overcommitment to dominant choices as `totalFitness`.
+        /// - Note: Not used in production. Retained for benchmarking; performs similarly to `totalFitness`.
         case validityRate
 
         /// Niche-count fitness sharing: weight = fitness / (1 + N × share).
-        /// Discounts dominant choices proportionally — a choice with 90% of the
-        /// fitness gets a heavy divisor while a 10% choice gets a light one.
+        /// Discounts dominant choices proportionally — a choice with 90% of the fitness gets a heavy divisor while a 10% choice gets a light one.
         /// Preserves the CGS ranking while redistributing weight to the tail.
-        /// Default strategy; benchmarked as 2–3x faster than alternatives on
-        /// BST and AVL time-to-unique workloads.
+        /// Default strategy; benchmarked as 2–3x faster than alternatives on BST and AVL time-to-unique workloads.
         case fitnessSharing
 
         /// UCB1 exploration bonus: weight = meanFitness + C × √(ln(N_total) / N_i).
-        /// Adds an exploration bonus that decays as a choice is observed more,
-        /// based on the multi-armed bandit UCB1 formula. Unobserved choices get
-        /// maximum exploration bonus. Competitive with fitness sharing on BST;
-        /// slightly slower on AVL.
-        /// - Note: Not used in production. Retained as an alternative exploration
-        ///   strategy; ties with `.fitnessSharing` on BST but ~20% slower on AVL.
+        /// Adds an exploration bonus that decays as a choice is observed more, based on the multi-armed bandit UCB1 formula. Unobserved choices get maximum exploration bonus. Competitive with fitness sharing on BST; slightly slower on AVL.
+        /// - Note: Not used in production. Retained as an alternative exploration strategy; ties with `.fitnessSharing` on BST but ~20% slower on AVL.
         case ucb(explorationConstant: Double)
     }
 
@@ -175,8 +141,7 @@ public enum ChoiceGradientTuner<FinalOutput> {
         return GeneratorTuning.smoothAdaptively(baked, baseTemperature: 2.0, maxTemperature: 8.0)
     }
 
-    /// Recursively walks the generator tree, replacing pick weights with
-    /// accumulated fitness data from the online CGS tuning pass.
+    /// Recursively walks the generator tree, replacing pick weights with accumulated fitness data from the online CGS tuning pass.
     private static func bakeWeights<Output>(
         _ gen: ReflectiveGenerator<Output>,
         from accumulator: FitnessAccumulator,
@@ -305,16 +270,11 @@ public enum ChoiceGradientTuner<FinalOutput> {
 
     // MARK: - Fitness Sharing
 
-    /// Niche-count fitness sharing: prevents the generator from overcommitting
-    /// to the dominant choice at each pick site.
+    /// Niche-count fitness sharing: prevents the generator from overcommitting to the dominant choice at each pick site.
     ///
-    /// For each choice, `share_i = fitness_i / siteTotal` measures how much of
-    /// the site's total fitness it accounts for. The niche count
-    /// `1 + N × share_i` grows with dominance: a choice with 90% share among
+    /// For each choice, `share_i = fitness_i / siteTotal` measures how much of the site's total fitness it accounts for. The niche count `1 + N × share_i` grows with dominance: a choice with 90% share among
     /// 4 choices gets divisor 1 + 4×0.9 = 4.6, while a 10% choice gets
-    /// 1 + 4×0.1 = 1.4. Dividing raw fitness by the niche count compresses
-    /// the ratio from 9:1 down to ~1.96:0.71 ≈ 2.7:1 — still favoring the
-    /// winner, but giving the minority choice meaningful sampling probability.
+    /// 1 + 4×0.1 = 1.4. Dividing raw fitness by the niche count compresses the ratio from 9:1 down to ~1.96:0.71 ≈ 2.7:1 — still favoring the winner, but giving the minority choice meaningful sampling probability.
     private static func computeFitnessSharingWeights(
         choices: ContiguousArray<ReflectiveOperation.PickTuple>,
         accumulator: FitnessAccumulator,
@@ -349,13 +309,7 @@ public enum ChoiceGradientTuner<FinalOutput> {
 
     // MARK: - UCB Exploration Bonus
 
-    /// UCB1 (Upper Confidence Bound) exploration bonus from multi-armed bandit
-    /// literature. Each choice's weight is `meanFitness + C × √(ln(N) / n_i)`
-    /// where `N` is total observations across all choices at the site and `n_i`
-    /// is this choice's observation count. The exploration term decays as a
-    /// choice is sampled more, naturally balancing exploitation of known-good
-    /// choices with exploration of under-sampled ones. Unobserved choices get
-    /// the maximum exploration bonus `C × √(ln(N))`.
+    /// UCB1 (Upper Confidence Bound) exploration bonus from multi-armed bandit literature. Each choice's weight is `meanFitness + C × √(ln(N) / n_i)` where `N` is total observations across all choices at the site and `n_i` is this choice's observation count. The exploration term decays as a choice is sampled more, naturally balancing exploitation of known-good choices with exploration of under-sampled ones. Unobserved choices get the maximum exploration bonus `C × √(ln(N))`.
     private static func computeUCBWeights(
         choices: ContiguousArray<ReflectiveOperation.PickTuple>,
         accumulator: FitnessAccumulator,
@@ -403,10 +357,8 @@ public enum ChoiceGradientTuner<FinalOutput> {
         func makeID() -> UInt64 { defer { nextID &+= 1 }; return nextID }
     }
 
-    /// Preprocessing pass that rewrites sequence operations by converting their
-    /// length generators into picks over subranges. This makes the length decision
-    /// CGS-guidable at O(S × 4 × N_avg) cost instead of the O(N² × S) cost of
-    /// per-element derivative composition.
+    /// Preprocessing pass that rewrites sequence operations by converting their length generators into picks over subranges. This makes the length decision
+    /// CGS-guidable at O(S × 4 × N_avg) cost instead of the O(N² × S) cost of per-element derivative composition.
     private static func subdivideSequenceLengths<Output>(
         _ gen: ReflectiveGenerator<Output>,
         context: SubdivisionContext,

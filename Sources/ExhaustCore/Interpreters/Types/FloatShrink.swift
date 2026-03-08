@@ -53,8 +53,7 @@ public enum FloatShrink {
         }
     }
 
-    /// Exact integer ratio (`numerator / denominator`) for finite values,
-    /// reduced by powers of two when representable as 64-bit integers.
+    /// Exact integer ratio (`numerator / denominator`) for finite values, reduced by powers of two when representable as 64-bit integers.
     @inlinable
     public static func integerRatio(for value: Double, tag: TypeTag) -> (numerator: Int64, denominator: UInt64)? {
         switch tag {

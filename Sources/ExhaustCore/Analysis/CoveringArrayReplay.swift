@@ -6,8 +6,7 @@
 /// Converts covering array rows into `ChoiceTree` structures for replay.
 public enum CoveringArrayReplay {
 
-    /// Builds a `ChoiceTree` from a covering array row that can be replayed
-    /// through the original generator via `Interpreters.replay`.
+    /// Builds a `ChoiceTree` from a covering array row that can be replayed through the original generator via `Interpreters.replay`.
     ///
     /// - Parameters:
     ///   - row: The covering array row with value indices for each parameter.
