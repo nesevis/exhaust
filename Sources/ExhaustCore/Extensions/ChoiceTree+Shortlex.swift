@@ -10,7 +10,7 @@ extension ChoiceTree {
         switch self {
         case let .choice(_, meta), let .sequence(_, _, meta):
             return meta
-        case let .group(array):
+        case let .group(array, _):
             if let meta = array.first(where: { $0.metadata.validRange != nil })?.metadata {
                 return meta
             }

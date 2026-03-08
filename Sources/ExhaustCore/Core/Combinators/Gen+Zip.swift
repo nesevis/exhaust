@@ -9,6 +9,7 @@ public extension Gen {
     @inlinable
     static func zip<each T>(
         _ generators: repeat ReflectiveGenerator<each T>,
+        isOpaque: Bool = false,
     ) -> ReflectiveGenerator<(repeat each T)> {
         var erased: ContiguousArray<ReflectiveGenerator<Any>> = []
         erased.reserveCapacity(5) // It will rarely exceed this size
@@ -17,7 +18,7 @@ public extension Gen {
         }
 
         let impure: ReflectiveGenerator<[Any]> = .impure(
-            operation: .zip(erased),
+            operation: .zip(erased, isOpaque: isOpaque),
             continuation: { .pure($0 as! [Any]) },
         )
 

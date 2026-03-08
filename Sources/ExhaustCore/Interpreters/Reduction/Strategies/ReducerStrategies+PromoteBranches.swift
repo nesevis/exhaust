@@ -88,7 +88,7 @@ extension ReducerStrategies {
     ) -> [(fingerprint: Fingerprint, node: ChoiceTree)] {
         var results: [(fingerprint: Fingerprint, node: ChoiceTree)] = []
         for element in tree.walk() {
-            if case let .group(array) = element.node,
+            if case let .group(array, _) = element.node,
                array.allSatisfy(\.unwrapped.isBranch)
             {
                 results.append((element.fingerprint, element.node))
@@ -99,7 +99,7 @@ extension ReducerStrategies {
 
     /// Returns the branch ID of the `.selected` branch within a pick-site group, or `nil` if no selected branch is found.
     private static func selectedBranchID(of group: ChoiceTree) -> UInt64? {
-        guard case let .group(array) = group else { return nil }
+        guard case let .group(array, _) = group else { return nil }
         for element in array {
             if case let .selected(.branch(_, _, id, _, _)) = element {
                 return id

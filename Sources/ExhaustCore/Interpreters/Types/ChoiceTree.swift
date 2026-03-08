@@ -31,7 +31,11 @@ public enum ChoiceTree: Hashable, Equatable, Sendable {
     indirect case branch(siteID: UInt64, weight: UInt64, id: UInt64, branchIDs: [UInt64], choice: ChoiceTree)
 
     /// Represents a nested group of choices that usually represent objects or tuples.
-    indirect case group([ChoiceTree])
+    ///
+    /// When `isOpaque` is `true`, coverage analysis skips the group's subtree entirely. This prevents
+    /// high-lane compositions (e.g. SIMD8+) from exploding the parameter count in covering arrays, and
+    /// isolates `getSize`-dependent scalars so they don't poison the rest of the property's analysis.
+    indirect case group([ChoiceTree], isOpaque: Bool = false)
 
     /// Represents a size value retrieved from the generation context.
     case getSize(UInt64)
@@ -90,7 +94,7 @@ extension ChoiceTree {
             inner.containsPicks
         case let .sequence(_, elements, _):
             elements.contains(where: \.containsPicks)
-        case let .group(array):
+        case let .group(array, _):
             array.contains(where: \.containsPicks)
         case let .resize(_, choices):
             choices.contains(where: \.containsPicks)
@@ -114,7 +118,7 @@ extension ChoiceTree {
             return inner.pickComplexityHelper(pickDepth: pickDepth)
         case let .sequence(_, elements, _):
             return elements.map { $0.pickComplexityHelper(pickDepth: pickDepth) }.max() ?? 0
-        case let .group(array):
+        case let .group(array, _):
             return array.map { $0.pickComplexityHelper(pickDepth: pickDepth) }.max() ?? 0
         case let .resize(_, choices):
             return choices.map { $0.pickComplexityHelper(pickDepth: pickDepth) }.max() ?? 0
@@ -140,9 +144,9 @@ extension ChoiceTree {
         case let .branch(siteID, weight, id, branchIDs, choice):
             // For a branch, recursively map over its children.
             return try .branch(siteID: siteID, weight: weight, id: id, branchIDs: branchIDs, choice: choice.map(transform))
-        case let .group(children):
+        case let .group(children, isOpaque: isOpaque):
             // For a group, recursively map over its children.
-            return try .group(children.map { try $0.map(transform) })
+            return try .group(children.map { try $0.map(transform) }, isOpaque: isOpaque)
         case let .selected(child):
             // For a selected node, recursively map over the locked child.
             return try .selected(child.map(transform))
@@ -183,7 +187,7 @@ extension ChoiceTree {
             return selfResult
         case let .branch(_, _, _, _, gen):
             return gen.contains(predicate)
-        case let .sequence(_, elements, _), let .group(elements):
+        case let .sequence(_, elements, _), let .group(elements, _):
             // For a sequence, recursively map over its elements.
             return elements.contains { $0.contains(predicate) }
         case let .selected(child):
@@ -238,7 +242,7 @@ extension ChoiceTree: CustomDebugStringConvertible {
             result += "\n" + gen.treeDescription(prefix: childPrefix, isLast: true)
             return result
 
-        case let .group(children):
+        case let .group(children, _):
             var result = prefix + connector + "group"
             for (index, child) in children.enumerated() {
                 let isLastChild = index == children.count - 1
@@ -279,7 +283,7 @@ extension ChoiceTree: CustomDebugStringConvertible {
             "[" + elements.map(\.elementDescription).joined(separator: ", ") + "]"
         case let .branch(_, weight, id, _, gen):
             "\(weight),\(id): \(gen.elementDescription)"
-        case let .group(array):
+        case let .group(array, _):
             "{" + array.map(\.elementDescription).joined() + "}"
         case let .selected(choiceTree):
             choiceTree.elementDescription

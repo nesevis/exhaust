@@ -196,7 +196,7 @@ public enum GeneratorTuning {
                     predicate: predicate,
                 )
 
-            case let .zip(generators):
+            case let .zip(generators, _):
                 return try tuneZip(
                     generators: generators,
                     continuation: continuation,
@@ -965,7 +965,7 @@ public enum GeneratorTuning {
 
             return .pick(choices: smoothed)
 
-        case let .zip(generators):
+        case let .zip(generators, _):
             return .zip(ContiguousArray(generators.map {
                 smoothGenerator($0, epsilon: epsilon, temperature: temperature)
             }))
@@ -1123,7 +1123,7 @@ public enum GeneratorTuning {
                 profileGenerator(choice.generator, depth: depth + 1, sites: &sites)
             }
 
-        case let .zip(generators):
+        case let .zip(generators, _):
             for gen in generators {
                 profileGenerator(gen, depth: depth, sites: &sites)
             }
@@ -1244,7 +1244,7 @@ public enum GeneratorTuning {
                 validityCounts: &validityCounts,
             )
 
-        case let .group(children):
+        case let .group(children, _):
             for child in children {
                 collectEmpiricalData(
                     from: child,
@@ -1376,7 +1376,7 @@ public enum GeneratorTuning {
 
             return .pick(choices: smoothed)
 
-        case let .zip(generators):
+        case let .zip(generators, _):
             return .zip(ContiguousArray(generators.map {
                 smoothAdaptiveGenerator(
                     $0,

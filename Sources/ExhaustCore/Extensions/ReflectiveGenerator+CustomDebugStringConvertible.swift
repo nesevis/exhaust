@@ -75,7 +75,7 @@ extension ReflectiveGenerator: CustomDebugStringConvertible where Operation == R
 
             return header + "\n" + childDescriptions.joined(separator: "\n")
 
-        case let .zip(generators):
+        case let .zip(generators, _):
             let header = "zip(generators: \(generators.count))"
             if generators.isEmpty {
                 return header

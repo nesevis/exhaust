@@ -174,7 +174,7 @@ public struct ValueInterpreter<Element>: ~Copyable, ExhaustIterator {
                     runContinuation: runContinuation,
                 )
 
-            case let .zip(generators):
+            case let .zip(generators, _):
                 return try handleZip(
                     generators,
                     inputValue: inputValue,

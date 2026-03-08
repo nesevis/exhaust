@@ -34,7 +34,7 @@ extension ChoiceTree {
         switch self {
         case .choice, .just, .getSize:
             []
-        case let .group(elements):
+        case let .group(elements, _):
             elements
         case let .sequence(_, elements, _):
             elements
@@ -52,7 +52,7 @@ extension ChoiceTree {
         switch self {
         case .choice, .just, .getSize:
             preconditionFailure("Leaf nodes have no children to replace")
-        case let .group(elements):
+        case let .group(elements, _):
             var copy = elements
             copy[index] = newChild
             return .group(copy)

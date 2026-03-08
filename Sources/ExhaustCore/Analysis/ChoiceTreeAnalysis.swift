@@ -152,7 +152,10 @@ public enum ChoiceTreeAnalysis {
         case .just:
             true
 
-        case let .group(children):
+        case .group(_, isOpaque: true):
+            true
+
+        case let .group(children, _):
             walkGroup(children, parameters: &parameters)
 
         case let .selected(inner):
@@ -362,7 +365,10 @@ public enum ChoiceTreeAnalysis {
         case .just:
             return true
 
-        case let .group(children):
+        case .group(_, isOpaque: true):
+            return true
+
+        case let .group(children, _):
             if isPick(children) {
                 return walkPick(children, parameters: &parameters)
             }

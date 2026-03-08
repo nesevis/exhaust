@@ -307,7 +307,7 @@ extension Interpreters {
     ) throws -> Output? {
         // Handle group scripts by distributing choices to the generator
         // Groups containing branches represent `picks` and are handled together
-        if case let .group(choices) = tree {
+        if case let .group(choices, _) = tree {
             var result: Output?
 
             if choices.allSatisfy({ $0.isBranch || $0.isSelected }) == false {
@@ -345,7 +345,7 @@ extension Interpreters {
         context: inout Context,
     ) throws -> Output? {
         switch operation {
-        case .zip, .pick:
+        case .zip(_, _), .pick:
             nil
         case .chooseBits:
             try materializeRecursiveChooseBits(continuation: continuation, tree: tree, context: &context)
@@ -666,7 +666,7 @@ extension Interpreters {
                 choices: &choices,
                 context: &context,
             )
-        case let .zip(generators):
+        case let .zip(generators, _):
             try materializeWithChoicesZip(
                 generators: generators,
                 continuation: continuation,
@@ -749,7 +749,7 @@ extension Interpreters {
         guard choices.isEmpty == false, let choice = choices.removeFirst() else {
             return nil
         }
-        guard case let .group(branches) = choice else {
+        guard case let .group(branches, _) = choice else {
             if context.strictness == .relaxed {
                 return nil
             }
@@ -847,7 +847,7 @@ extension Interpreters {
         var attempts: [ZipAttempt] = []
 
         if let firstChoice = choices.element(atOffset: 0),
-           case let .group(children) = firstChoice,
+           case let .group(children, _) = firstChoice,
            children.allSatisfy({ $0.isBranch || $0.isSelected }) == false
         {
             attempts.append((scripts: children, consumedChoices: 1, consumesContextGroup: true))

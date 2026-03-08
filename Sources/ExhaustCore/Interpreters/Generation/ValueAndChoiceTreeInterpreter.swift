@@ -175,9 +175,10 @@ public struct ValueAndChoiceTreeInterpreter<FinalOutput>: ~Copyable, ExhaustIter
 
             // MARK: - Zip
 
-            case let .zip(generators):
+            case let .zip(generators, isOpaque):
                 return try handleZip(
                     generators,
+                    isOpaque: isOpaque,
                     continuation: continuation,
                     inputValue: inputValue,
                     context: &context,
@@ -526,6 +527,7 @@ public struct ValueAndChoiceTreeInterpreter<FinalOutput>: ~Copyable, ExhaustIter
     @inline(__always)
     private static func handleZip<Output>(
         _ generators: ContiguousArray<ReflectiveGenerator<Any>>,
+        isOpaque: Bool,
         continuation: (Any) throws -> ReflectiveGenerator<Output>,
         inputValue: some Any,
         context: inout GenerationContext,
@@ -544,7 +546,7 @@ public struct ValueAndChoiceTreeInterpreter<FinalOutput>: ~Copyable, ExhaustIter
         }
         return try runContinuation(
             result: results,
-            calleeChoiceTree: .group(choiceTrees),
+            calleeChoiceTree: .group(choiceTrees, isOpaque: isOpaque),
             continuation: continuation,
             inputValue: inputValue,
             context: &context,

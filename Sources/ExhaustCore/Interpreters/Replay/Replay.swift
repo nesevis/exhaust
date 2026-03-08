@@ -83,7 +83,7 @@ extension Interpreters {
                 continuation: continuation,
                 choices: &choices,
             )
-        case let .zip(generators):
+        case let .zip(generators, _):
             return try replayWithChoicesZip(
                 generators: generators,
                 continuation: continuation,
@@ -141,7 +141,7 @@ extension Interpreters {
             return nil
         }
         let choice = choices.removeFirst()
-        guard case var .group(branches) = choice else {
+        guard case var .group(branches, _) = choice else {
             throw ReplayError.wrongInputChoice
         }
 
@@ -204,7 +204,7 @@ extension Interpreters {
         // Unwrap a single non-branch group wrapper (produced by reflect's
         // reflectZipOperation which wraps flat choices in .group(...)).
         if choices.count == 1,
-           case let .group(children) = choices[0],
+           case let .group(children, _) = choices[0],
            children.allSatisfy({ $0.isBranch || $0.isSelected }) == false
         {
             choices = children
@@ -300,7 +300,7 @@ extension Interpreters {
     ) throws -> Output? {
         // Handle group scripts by distributing choices to the generator
         // Groups containing branches represent `picks` and are handled together
-        if case let .group(choices) = script {
+        if case let .group(choices, _) = script {
             if choices.allSatisfy({ $0.isBranch || $0.isSelected }) == false {
                 return try replayWithChoices(gen, choices: choices)
             }
@@ -343,7 +343,7 @@ extension Interpreters {
         runContinuation: (Any) throws -> Output?,
     ) throws -> Output? {
         switch operation {
-        case let .zip(generators):
+        case let .zip(generators, _):
             return try replayRecursiveZip(generators: generators, script: script, runContinuation: runContinuation)
         case .chooseBits:
             return try replayRecursiveChooseBits(script: script, runContinuation: runContinuation)
@@ -490,7 +490,7 @@ extension Interpreters {
         script: ChoiceTree,
         runContinuation: (Any) throws -> Output?,
     ) throws -> Output? {
-        guard case let .group(children) = script else {
+        guard case let .group(children, _) = script else {
             return nil
         }
 

@@ -71,7 +71,7 @@ enum LightweightSampler {
                 guard ok else { return nil }
                 return try cont(results, continuation, inputValue: inputValue, rng: &rng, size: size)
 
-            case let .zip(generators):
+            case let .zip(generators, _):
                 var results = [Any]()
                 results.reserveCapacity(generators.count)
                 for g in generators {

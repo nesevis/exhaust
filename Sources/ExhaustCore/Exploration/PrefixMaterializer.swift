@@ -217,7 +217,7 @@ private extension PrefixMaterializer {
                     context: &context,
                 )
 
-            case let .zip(generators):
+            case let .zip(generators, _):
                 return try handleZip(
                     generators,
                     continuation: continuation,
