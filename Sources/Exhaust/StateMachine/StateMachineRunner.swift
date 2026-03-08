@@ -79,24 +79,50 @@ public func __runStateMachine<Spec: StateMachineSpec>(
         return true
     }
 
-    // Delegate to the standard exhaust pipeline — suppress its reporting, we handle our own.
-    let failingSequence = __ExhaustRuntime.__exhaust(
-        seqGen,
-        settings: buildExhaustSettings(
-            maxIterations: maxIterations,
+    // --- Phase 1: Sequence Covering Array (SCA) coverage ---
+    //
+    // If the command generator is a simple pick with parameter-free branches,
+    // build a covering array where each sequence position is a parameter and
+    // each command type is a domain value. This guarantees every t-way ordered
+    // permutation of command types is tested.
+    var scaFoundFailure: [Spec.Command]?
+    if !useRandomOnly, seed == nil {
+        scaFoundFailure = runSCACoverage(
+            seqGen: seqGen,
+            commandGen: commandGen,
+            sequenceLength: sequenceLength,
             coverageBudget: coverageBudget,
-            seed: seed,
             reductionConfig: reductionConfig,
-            suppressIssueReporting: true,
-            useRandomOnly: useRandomOnly,
-        ),
-        sourceCode: nil,
-        fileID: fileID,
-        filePath: filePath,
-        line: line,
-        column: column,
-        property: property,
-    )
+            property: property,
+        )
+    }
+
+    // --- Phase 2: Random sampling (full budget) ---
+    let failingSequence: [Spec.Command]?
+    if let scaFoundFailure {
+        failingSequence = scaFoundFailure
+    } else {
+        // Skip generic coverage — SCA already covered command orderings.
+        // If SCA wasn't applicable, __exhaust's generic coverage runs.
+        let skipGenericCoverage = !useRandomOnly && seed == nil && extractPickChoices(from: commandGen) != nil
+        failingSequence = __ExhaustRuntime.__exhaust(
+            seqGen,
+            settings: buildExhaustSettings(
+                maxIterations: maxIterations,
+                coverageBudget: coverageBudget,
+                seed: seed,
+                reductionConfig: reductionConfig,
+                suppressIssueReporting: true,
+                useRandomOnly: useRandomOnly || skipGenericCoverage,
+            ),
+            sourceCode: nil,
+            fileID: fileID,
+            filePath: filePath,
+            line: line,
+            column: column,
+            property: property,
+        )
+    }
 
     guard let failingSequence else {
         return nil
@@ -207,6 +233,113 @@ private func renderFailure<Spec: StateMachineSpec>(
 }
 
 // MARK: - Helpers
+
+// MARK: - Sequence Covering Array (SCA) coverage
+
+/// Extracts pick choices from a command generator if it's a top-level `Gen.pick`.
+private func extractPickChoices<Command>(
+    from gen: ReflectiveGenerator<Command>,
+) -> ContiguousArray<ReflectiveOperation.PickTuple>? {
+    guard case let .impure(operation, _) = gen,
+          case let .pick(choices) = operation
+    else { return nil }
+    return choices
+}
+
+/// Checks whether all pick branches are parameter-free (pure/just generators).
+private func allBranchesParameterFree(
+    _ choices: ContiguousArray<ReflectiveOperation.PickTuple>,
+) -> Bool {
+    choices.allSatisfy { isParameterFree($0.generator) }
+}
+
+private func isParameterFree(_ gen: ReflectiveGenerator<Any>) -> Bool {
+    switch gen {
+    case .pure:
+        return true
+    case let .impure(op, _):
+        switch op {
+        case .just:
+            return true
+        case let .contramap(_, inner):
+            return isParameterFree(inner)
+        case let .prune(inner):
+            return isParameterFree(inner)
+        default:
+            return false
+        }
+    }
+}
+
+/// Runs SCA coverage for state-machine command sequences.
+///
+/// Builds a covering array where each position in the sequence is a parameter
+/// with the set of command types as its domain. Returns the reduced failing
+/// sequence if a violation is found.
+private func runSCACoverage<Command>(
+    seqGen: ReflectiveGenerator<[Command]>,
+    commandGen: ReflectiveGenerator<Command>,
+    sequenceLength: ClosedRange<Int>,
+    coverageBudget: UInt64,
+    reductionConfig: TCRBudget,
+    property: @escaping @Sendable ([Command]) -> Bool,
+) -> [Command]? {
+    guard let pickChoices = extractPickChoices(from: commandGen),
+          allBranchesParameterFree(pickChoices)
+    else { return nil }
+
+    let seqLen = sequenceLength.upperBound
+    guard seqLen >= 2, pickChoices.count >= 2 else { return nil }
+
+    let profile = SequenceCoveringArray.buildProfile(
+        sequenceLength: seqLen,
+        pickChoices: pickChoices,
+    )
+
+    guard let covering = CoveringArray.bestFitting(budget: coverageBudget, profile: profile) else {
+        return nil
+    }
+
+    let lengthRange = UInt64(0) ... UInt64(sequenceLength.upperBound)
+
+    for row in covering.rows {
+        guard let tree = SequenceCoveringArray.buildTree(
+            row: row,
+            profile: profile,
+            sequenceLengthRange: lengthRange,
+        ) else { continue }
+
+        guard let value: [Command] = try? Interpreters.replay(seqGen, using: tree) else {
+            continue
+        }
+
+        if property(value) == false {
+            // Reduce the failing sequence
+            if let (_, shrunkValue) = try? Interpreters.reduce(
+                gen: seqGen,
+                tree: tree,
+                config: reductionConfig,
+                property: property,
+            ) {
+                return shrunkValue
+            }
+            return value
+        }
+    }
+
+    ExhaustLog.notice(
+        category: .propertyTest,
+        event: "sca_coverage",
+        metadata: [
+            "strength": "\(covering.strength)",
+            "rows": "\(covering.rows.count)",
+            "sequence_length": "\(seqLen)",
+            "command_types": "\(pickChoices.count)",
+        ],
+    )
+
+    return nil
+}
 
 private func buildExhaustSettings<Output>(
     maxIterations: UInt64,
