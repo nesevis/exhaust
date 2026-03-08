@@ -20,7 +20,7 @@ extension ReducerStrategies {
         guard !pickSites.isEmpty else { return nil }
 
         for site in pickSites {
-            guard case let .group(elements) = tree[site] else { continue }
+            guard case let .group(elements, _) = tree[site] else { continue }
 
             // Find the index of the currently selected branch
             guard let selectedIndex = elements.firstIndex(where: \.isSelected) else { continue }
@@ -74,7 +74,7 @@ extension ReducerStrategies {
     private static func extractPickSites(from tree: ChoiceTree) -> [Fingerprint] {
         var results: [Fingerprint] = []
         for element in tree.walk() {
-            if case let .group(array) = element.node,
+            if case let .group(array, _) = element.node,
                array.allSatisfy(\.unwrapped.isBranch),
                array.contains(where: \.isSelected),
                array.count >= 2

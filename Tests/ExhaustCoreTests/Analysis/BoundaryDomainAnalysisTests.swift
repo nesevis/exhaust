@@ -502,6 +502,80 @@ struct DateDSTBoundaryTests {
     }
 }
 
+// MARK: - Opaque Group
+
+@Suite("Opaque Group Coverage Skipping")
+struct OpaqueGroupTests {
+    @Test("Opaque zip hides its parameters from coverage analysis")
+    func opaqueZipHidesParameters() {
+        // An opaque zip of 4 floats paired with a non-opaque int parameter.
+        // Coverage analysis should see only the int, not the 4 floats.
+        let opaqueFloats = Gen.zip(
+            Gen.choose(in: Float(0) ... Float(1)),
+            Gen.choose(in: Float(0) ... Float(1)),
+            Gen.choose(in: Float(0) ... Float(1)),
+            Gen.choose(in: Float(0) ... Float(1)),
+            isOpaque: true,
+        )
+        let gen = Gen.zip(
+            opaqueFloats._map { $0.0 },
+            Gen.choose(in: 0 ... 100),
+        )
+        guard let result = ChoiceTreeAnalysis.analyze(gen) else {
+            Issue.record("Expected analyzable generator")
+            return
+        }
+        switch result {
+        case let .finite(profile):
+            // Only the int 0...100 should appear
+            #expect(profile.parameters.count == 1)
+        case let .boundary(profile):
+            #expect(profile.parameters.count == 1)
+        }
+    }
+
+    @Test("getSize inside opaque group does not poison other parameters")
+    func getSizeInsideOpaqueDoesNotPoison() {
+        // A size-scaled float (uses getSize internally) inside an opaque zip.
+        // Without opaque, this would make the whole property unanalyzable.
+        let opaqueScaled = Gen.zip(
+            Gen.choose() as ReflectiveGenerator<Float>,
+            Gen.choose() as ReflectiveGenerator<Float>,
+            isOpaque: true,
+        )
+        let gen = Gen.zip(
+            opaqueScaled._map { $0.0 },
+            Gen.choose(in: 0 ... 10),
+        )
+        guard let result = ChoiceTreeAnalysis.analyze(gen) else {
+            Issue.record("Expected analyzable generator — opaque should isolate getSize")
+            return
+        }
+        switch result {
+        case let .finite(profile):
+            // Only the int 0...10 should appear (11 values, finite domain)
+            #expect(profile.parameters.count == 1)
+            #expect(profile.parameters[0].domainSize == 11)
+        case let .boundary(profile):
+            #expect(profile.parameters.count == 1)
+        }
+    }
+
+    @Test("Non-opaque zip still exposes all parameters")
+    func nonOpaqueZipExposesAll() {
+        let gen = Gen.zip(
+            Gen.choose(in: 0 ... 1),
+            Gen.choose(in: 0 ... 1),
+            Gen.choose(in: 0 ... 1),
+        )
+        guard case let .finite(profile) = ChoiceTreeAnalysis.analyze(gen) else {
+            Issue.record("Expected finite profile")
+            return
+        }
+        #expect(profile.parameters.count == 3)
+    }
+}
+
 // MARK: - Helpers
 
 private func analyzeBoundary(_ gen: ReflectiveGenerator<some Any>) -> BoundaryDomainProfile? {

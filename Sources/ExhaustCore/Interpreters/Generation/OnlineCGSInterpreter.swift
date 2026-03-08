@@ -367,7 +367,7 @@ public struct OnlineCGSInterpreter<FinalOutput>: ~Copyable, ExhaustIterator {
 
             // MARK: - Zip
 
-            case let .zip(generators):
+            case let .zip(generators, _):
                 return try handleZip(
                     generators,
                     continuation: continuation,

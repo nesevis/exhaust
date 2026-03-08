@@ -83,7 +83,7 @@ extension Interpreters {
                 continuation: continuation,
                 choices: &choices,
             )
-        case let .zip(generators):
+        case let .zip(generators, _):
             return try replayWithChoicesZip(
                 generators: generators,
                 continuation: continuation,
@@ -141,7 +141,7 @@ extension Interpreters {
             return nil
         }
         let choice = choices.removeFirst()
-        guard case var .group(branches) = choice else {
+        guard case var .group(branches, _) = choice else {
             throw ReplayError.wrongInputChoice
         }
 
@@ -201,22 +201,37 @@ extension Interpreters {
         continuation: @escaping (Any) throws -> ReflectiveGenerator<Output>,
         choices: inout [ChoiceTree],
     ) throws -> Output? {
-        // Unwrap a single non-branch group wrapper (produced by reflect's
-        // reflectZipOperation which wraps flat choices in .group(...)).
+        // Unwrap a single non-branch group wrapper that encloses per-lane
+        // subtrees (produced by reflect's reflectZipOperation).
         if choices.count == 1,
-           case let .group(children) = choices[0],
+           case let .group(children, _) = choices[0],
            children.allSatisfy({ $0.isBranch || $0.isSelected }) == false
         {
             choices = children
         }
 
-        // Each generator consumes sequentially from the shared choices.
+        // Each generator consumes its lane. If the next choice is a
+        // non-branch group, it's a per-lane subtree — unwrap it so the
+        // generator consumes from within. Otherwise consume directly.
         var subResults = [Any]()
         for gen in generators {
-            guard let result = try replayWithChoicesHelper(gen, choices: &choices) else {
-                return nil
+            guard choices.isEmpty == false else { return nil }
+
+            if case let .group(laneChoices, _) = choices[0],
+               laneChoices.allSatisfy({ !$0.isBranch && !$0.isSelected })
+            {
+                choices.removeFirst()
+                var laneChoicesMut = laneChoices
+                guard let result = try replayWithChoicesHelper(gen, choices: &laneChoicesMut) else {
+                    return nil
+                }
+                subResults.append(result)
+            } else {
+                guard let result = try replayWithChoicesHelper(gen, choices: &choices) else {
+                    return nil
+                }
+                subResults.append(result)
             }
-            subResults.append(result)
         }
         let nextGen = try continuation(subResults)
         return try replayWithChoicesHelper(nextGen, choices: &choices)
@@ -300,7 +315,7 @@ extension Interpreters {
     ) throws -> Output? {
         // Handle group scripts by distributing choices to the generator
         // Groups containing branches represent `picks` and are handled together
-        if case let .group(choices) = script {
+        if case let .group(choices, _) = script {
             if choices.allSatisfy({ $0.isBranch || $0.isSelected }) == false {
                 return try replayWithChoices(gen, choices: choices)
             }
@@ -343,7 +358,7 @@ extension Interpreters {
         runContinuation: (Any) throws -> Output?,
     ) throws -> Output? {
         switch operation {
-        case let .zip(generators):
+        case let .zip(generators, _):
             return try replayRecursiveZip(generators: generators, script: script, runContinuation: runContinuation)
         case .chooseBits:
             return try replayRecursiveChooseBits(script: script, runContinuation: runContinuation)
@@ -490,7 +505,7 @@ extension Interpreters {
         script: ChoiceTree,
         runContinuation: (Any) throws -> Output?,
     ) throws -> Output? {
-        guard case let .group(children) = script else {
+        guard case let .group(children, _) = script else {
             return nil
         }
 

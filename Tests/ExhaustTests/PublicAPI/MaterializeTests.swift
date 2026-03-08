@@ -212,9 +212,16 @@ struct MaterializeTests {
 
     @Test("Mapped-through-macro-expansion generators round-trip through materialize")
     func implicitlyMappedRoundtrip() {
+        // _macroMapScalar<BinaryInteger, BinaryInteger>: UInt64 → Int
         let mappedGen = #gen(.uint64(in: 0 ... 10000)) { Int($0) }
         #exhaust(mappedGen) { value in
             materializeViaReflection(mappedGen, value) == value
+        }
+
+        // _macroMapScalar<BinaryFloatingPoint, BinaryFloatingPoint>: Double → Float
+        let floatGen = #gen(.double(in: 0 ... 1000)) { Float($0) }
+        #exhaust(floatGen) { value in
+            materializeViaReflection(floatGen, value) == value
         }
 
         struct Point: Equatable {
@@ -222,6 +229,7 @@ struct MaterializeTests {
             let y: UInt64
         }
 
+        // _macroZip(labels:forward:): multi-generator struct init with Mirror backward
         let pointGen = #gen(.uint64(in: 0 ... 100), .uint64(in: 0 ... 100)) {
             Point(x: $0, y: $1)
         }
@@ -243,6 +251,43 @@ struct MaterializeTests {
         }
         #exhaust(personGen) { value in
             materializeViaReflection(personGen, value) == value
+        }
+
+        enum Pet: Equatable {
+            case dog(Int, String)
+        }
+
+        // _macroZip(backward:forward:): multi-generator enum case with pattern-matching backward
+        let petGen = #gen(.int(in: 0 ... 20), .string()) { age, name in
+            Pet.dog(age, name)
+        }
+        #exhaust(petGen) { value in
+            materializeViaReflection(petGen, value) == value
+        }
+
+        struct Wrapper: Equatable {
+            let value: Int
+            init(_ value: Int) { self.value = value }
+        }
+
+        // _macroMapScalar<Input, Output> (unconstrained fallback): Int → Wrapper (non-numeric output)
+        let wrapperGen = #gen(.int(in: 0 ... 100)) { Wrapper($0) }
+        #exhaust(wrapperGen) { value in
+            value.value >= 0 && value.value <= 100
+        }
+
+        enum Shape: Equatable {
+            case circle(Double)
+            case square(Double)
+        }
+
+        // _macroMap(backward:forward:): single-generator enum case with failable backward in a pick context
+        let shapeGen = #gen(.oneOf(
+            #gen(.double(in: 0.1 ... 10)) { Shape.circle($0) },
+            #gen(.double(in: 0.1 ... 10)) { Shape.square($0) },
+        ))
+        #exhaust(shapeGen) { value in
+            materializeViaReflection(shapeGen, value) == value
         }
     }
 

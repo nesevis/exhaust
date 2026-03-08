@@ -155,7 +155,7 @@ public extension ChoiceSequence {
             output.append(.sequence(false))
         case let .branch(_, _, _, _, gen):
             flatten(gen, includingAllBranches: includingAllBranches, into: &output)
-        case let .group(array):
+        case let .group(array, _):
             if array.allSatisfy({ $0.isBranch || $0.isSelected }),
                case let .selected(.branch(_, _, id, branchIDs, choice)) = array.first(where: \.isSelected)
             {

@@ -57,7 +57,7 @@ public struct NoveltyTracker {
             for element in elements {
                 branchPathHashHelper(element, hasher: &hasher)
             }
-        case let .group(array):
+        case let .group(array, _):
             for element in array {
                 branchPathHashHelper(element, hasher: &hasher)
             }

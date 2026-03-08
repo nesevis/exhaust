@@ -202,7 +202,7 @@ public enum ChoiceGradientTuner<FinalOutput> {
                 }
                 return .impure(operation: .pick(choices: baked), continuation: continuation)
 
-            case let .zip(generators):
+            case let .zip(generators, _):
                 let bakedGens = ContiguousArray(generators.map { bakeWeights($0, from: accumulator, strategy: strategy) })
                 return .impure(operation: .zip(bakedGens), continuation: continuation)
 
@@ -482,7 +482,7 @@ public enum ChoiceGradientTuner<FinalOutput> {
                 }
                 return .impure(operation: .pick(choices: subdivided), continuation: continuation)
 
-            case let .zip(generators):
+            case let .zip(generators, _):
                 let subdivided = try ContiguousArray(generators.map {
                     try subdivideSequenceLengths($0, context: context)
                 })

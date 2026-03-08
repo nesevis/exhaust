@@ -180,8 +180,10 @@ public enum ReflectiveOperation {
     ///
     /// **Type erasure**: All generators are erased to `ReflectiveGenerator<Any>` because Swift enums cannot store heterogeneous generic types. The interpreter handles type-safe reconstruction of the final tuple.
     ///
-    /// - Parameter generators: Array of generators to compose in parallel
-    case zip(ContiguousArray<ReflectiveGenerator<Any>>)
+    /// - Parameters:
+    ///   - generators: Array of generators to compose in parallel
+    ///   - isOpaque: When `true`, the resulting ``ChoiceTree/group(_:isOpaque:)`` is marked opaque so coverage analysis skips its subtree.
+    case zip(ContiguousArray<ReflectiveGenerator<Any>>, isOpaque: Bool = false)
 
     /// Produces a constant value without consuming any randomness.
     ///

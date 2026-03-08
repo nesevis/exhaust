@@ -127,7 +127,7 @@ public enum Interpreters {
                 finalOutput: finalOutput,
             )
 
-        case let .zip(generators):
+        case let .zip(generators, _):
             return try reflectZipOperation(generators: generators, finalOutput: finalOutput)
 
         case let .filter(gen, _, _, _):
@@ -312,9 +312,15 @@ public enum Interpreters {
 
         for (generator, output) in zip(generators, outputs) {
             let result = try Self.reflectRecursive(generator, onFinalOutput: output)
-            paths.append(contentsOf: result.flatMap(\.path))
+            let argPath = result.flatMap(\.path)
+            if argPath.count == 1 {
+                paths.append(argPath[0])
+            } else {
+                paths.append(.group(argPath))
+            }
             results.append(contentsOf: result.map(\.value))
         }
+
         return [(value: results, path: [.group(paths)])]
     }
 
