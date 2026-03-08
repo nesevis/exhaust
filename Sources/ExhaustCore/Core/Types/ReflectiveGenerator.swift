@@ -25,6 +25,8 @@
 ///
 /// ReflectiveGenerator is a type alias for `FreerMonad<ReflectiveOperation, Output>`, separating the description of generation from its interpretation. This enables the same generator structure to be used for all three modes through different interpreters.
 ///
+/// The bidirectional generator design is based on Harrison Goldstein's dissertation, "Property-Based Testing for the People" (UPenn, 2024).
+///
 /// **Construction**: Use `Gen` combinators, never construct directly.
 ///
 /// - SeeAlso: `Gen` for generator construction, `Interpreters` for execution

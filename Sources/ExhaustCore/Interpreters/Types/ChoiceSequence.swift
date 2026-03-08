@@ -5,6 +5,10 @@
 //  Created by Chris Kolbu on 8/2/2026.
 //
 
+// MARK: - Academic Provenance
+//
+// Corresponds to the dissertation's bracketed choice sequences (Goldstein §4.6). Shortlex ordering — shorter sequences are always simpler, with lexicographic comparison as tiebreaker — is from MacIver & Donaldson (ECOOP 2020, §2.2). Exhaust adds Zobrist hashing for O(1) incremental duplicate detection during reduction.
+
 /// A contiguous region of a ``ChoiceSequence``, identified by its kind, index range, and nesting depth.
 public struct ChoiceSpan: CustomDebugStringConvertible {
     public init(kind: ChoiceSequenceValue, range: ClosedRange<Int>, depth: Int) {

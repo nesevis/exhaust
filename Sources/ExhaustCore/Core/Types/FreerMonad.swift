@@ -17,6 +17,10 @@
 /// - Parameters:
 ///   - Operation: The type of effects this monad can represent
 ///   - Value: The type of values this computation ultimately produces
+// MARK: - Academic Provenance
+//
+// Based on the Freer Monad encoding from Goldstein §3.3.2: `data Freer f a = Return a | Bind (f a) (a -> Freer f b)`. Correspondence: `.pure` = `Return`, `.impure` = `Bind`. The dissertation is parameterized over a generic effect functor `f`; Exhaust fixes `f` to `ReflectiveOperation` for bidirectional generation.
+
 public enum FreerMonad<Operation, Value> {
     /// A pure value representing the successful completion of a computation.
     ///

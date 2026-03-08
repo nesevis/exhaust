@@ -15,6 +15,8 @@ import Foundation
 /// "derivatives" (residual generators after choosing each branch), samples from each derivative to measure fitness, and selects based on those fitness scores.
 ///
 /// This avoids diversity collapse on recursive generators because each derivative has already fixed all choices above it, making deeper sampling tractable.
+///
+/// The offline tuning pipeline (weight baking, symbolic subdivision) that consumes data from this interpreter is based on Tjoa et al., "Tuning Random Generators for Property-Based Testing" (OOPSLA2, 2025).
 public struct OnlineCGSInterpreter<FinalOutput>: ~Copyable, ExhaustIterator {
     public typealias Element = FinalOutput
 

@@ -16,6 +16,8 @@ import Foundation
 /// At every `pick`, each choice is sampled through the continuation pipeline to measure how often the final output satisfies the predicate. The measured success count becomes the choice's weight. Inner generators are recursively tuned using *composed predicates* — the current continuation is folded into the predicate so that inner operations always evaluate against the final output.
 ///
 /// `chooseBits` and `getSize` operations are subdivided into synthesised picks of subranges, then tuned through the pick path.
+///
+/// The specification-entropy objective and symbolic weight computation are based on Tjoa et al., "Tuning Random Generators for Property-Based Testing" (OOPSLA2, 2025). Exhaust diverges by using convergence-gated batched sampling instead of the paper's fixed sample budget.
 public enum GeneratorTuning {
     // MARK: - Context
 

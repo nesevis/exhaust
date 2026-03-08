@@ -9,6 +9,10 @@ import Foundation
 
 // swiftlint:disable function_parameter_count
 
+// MARK: - Academic Provenance
+//
+// Combines the `generate` and `randomness` interpretations: G⟦·⟧ + R⟦·⟧ (Goldstein §3.3.3). Captures a hierarchical ChoiceTree (Exhaust extension) alongside the generated value. Relates to the factoring theorem (Theorem 1, §4.4): P⟦g⟧ <$> R⟦g⟧ ≡ G⟦g⟧.
+
 public struct ValueAndChoiceTreeInterpreter<FinalOutput>: ~Copyable, ExhaustIterator {
     public typealias Element = (value: FinalOutput, tree: ChoiceTree)
 

@@ -35,6 +35,8 @@ import Foundation
 ///
 /// A statically-tuned generator suitable for `ValueAndChoiceTreeInterpreter`.
 /// The three stages compose: CGS provides the right ranking, fitness sharing prevents overcommitment to the winner, and adaptive smoothing ensures no single site strangles diversity.
+///
+/// Online CGS warmup is based on the per-value derivative sampling algorithm (Goldstein, Ch. 3, Fig 3.3). The offline weight-baking pipeline draws on Tjoa et al., "Tuning Random Generators for Property-Based Testing" (OOPSLA2, 2025). Fitness sharing and adaptive smoothing are Exhaust extensions.
 public enum ChoiceGradientTuner<FinalOutput> {
     /// How baked pick weights are derived from the accumulated fitness data.
     ///

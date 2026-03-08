@@ -7,6 +7,10 @@
 
 import Foundation
 
+// MARK: - Academic Provenance
+//
+// The dissertation (Goldstein §3.3.3, §4.6) represents randomness as flat bit-string choice sequences. Exhaust adds this hierarchical ChoiceTree to preserve structural information (sequence boundaries, branch sites, nesting) for targeted shrinking and replay. The flat representation is in ChoiceSequence.swift.
+
 /// A tree of choices that captures every decision made during generation.
 ///
 /// Each node represents a single generation decision (a numeric choice, a branch selection, a sequence of elements, and so on). Interpreters walk this tree to replay, reflect, shrink, or analyze generated values.

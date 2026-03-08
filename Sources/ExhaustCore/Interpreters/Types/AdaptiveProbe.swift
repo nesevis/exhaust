@@ -7,7 +7,7 @@
 
 import Foundation
 
-/// Adaptive probes for efficient shrinking, based on David MacIver's work on Hypothesis https://notebook.drmaciver.com/posts/2019-04-30-13:03.html
+/// Adaptive probes for efficient shrinking, based on David MacIver's Hypothesis shrinker (MacIver & Donaldson, "Reduction via Generation", ECOOP 2020, §3.1).
 ///
 /// These two algorithms form the backbone of every shrink pass. Their cost is logarithmic in the size of the *output* (or the error of the guess), not the size of the input range.
 public enum AdaptiveProbe {

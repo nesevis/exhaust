@@ -6,8 +6,7 @@
 //
 
 extension ReducerStrategies {
-    /// Binary search each individual value toward its reduction target.
-    /// For each `.value` entry, computes an initial target from recorded valid ranges, then binary searches between the current bit pattern and that target to find the minimum failing value.
+    /// Binary search each individual value toward its reduction target. Corresponds to Hypothesis's `minimize_individual_blocks` (MacIver & Donaldson, ECOOP 2020, §3.1) with extensions for signed cross-zero probing, stale-range escape hatches, and Hypothesis-style float shrinking paths.
     ///
     /// If recorded ranges appear to block progress, the pass may probe one step beyond the recorded boundary so subsequent loops can continue shrinking with refreshed context.
     ///
