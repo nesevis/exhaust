@@ -18,9 +18,3 @@ public protocol BitPatternConvertible: Equatable, Sendable {
     /// The preferred size-scaling distribution for this type when used with ``Gen/choose(in:scaling:)``. Override to control how `arbitrary` generators expand their range as the size parameter grows.
     static var defaultScaling: SizeScaling<Self> { get }
 }
-
-public extension BitPatternConvertible {
-    static var defaultScaling: SizeScaling<Self> {
-        .constant
-    }
-}

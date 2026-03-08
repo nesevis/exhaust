@@ -11,6 +11,10 @@ extension Optional: BitPatternConvertible where Wrapped: BitPatternConvertible {
     public static var tag: TypeTag {
         Wrapped.tag
     }
+    
+    public static var defaultScaling: SizeScaling<Self> {
+        .constant
+    }
 
     public static var bitPatternRanges: [ClosedRange<UInt64>] {
         Wrapped.bitPatternRanges
