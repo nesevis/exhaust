@@ -28,7 +28,7 @@ public extension ReflectiveGenerator {
         _ x: ReflectiveGenerator<Scalar>,
         _ y: ReflectiveGenerator<Scalar>,
     ) -> ReflectiveGenerator<SIMD2<Scalar>> where Value == SIMD2<Scalar> {
-        Gen.zip(x, y, isOpaque: true).mapped(
+        Gen.zip(x, y, isOpaque: true)._mapped(
             forward: { a, b in SIMD2(a, b) },
             backward: { v in (v[0], v[1]) },
         )
@@ -61,7 +61,7 @@ public extension ReflectiveGenerator {
         _ y: ReflectiveGenerator<Scalar>,
         _ z: ReflectiveGenerator<Scalar>,
     ) -> ReflectiveGenerator<SIMD3<Scalar>> where Value == SIMD3<Scalar> {
-        Gen.zip(x, y, z, isOpaque: true).mapped(
+        Gen.zip(x, y, z, isOpaque: true)._mapped(
             forward: { a, b, c in SIMD3(a, b, c) },
             backward: { v in (v[0], v[1], v[2]) },
         )
@@ -96,7 +96,7 @@ public extension ReflectiveGenerator {
         _ z: ReflectiveGenerator<Scalar>,
         _ w: ReflectiveGenerator<Scalar>,
     ) -> ReflectiveGenerator<SIMD4<Scalar>> where Value == SIMD4<Scalar> {
-        Gen.zip(x, y, z, w, isOpaque: true).mapped(
+        Gen.zip(x, y, z, w, isOpaque: true)._mapped(
             forward: { a, b, c, d in SIMD4(a, b, c, d) },
             backward: { v in (v[0], v[1], v[2], v[3]) },
         )
