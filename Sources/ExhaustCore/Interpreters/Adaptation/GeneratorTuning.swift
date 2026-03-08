@@ -124,11 +124,10 @@ public enum GeneratorTuning {
         seed: UInt64? = nil,
         predicate: @escaping (Output) -> Bool,
     ) throws -> ReflectiveGenerator<Output> {
-        let rng: Xoshiro256
-        if let seed {
-            rng = Xoshiro256(seed: seed)
+        let rng = if let seed {
+            Xoshiro256(seed: seed)
         } else {
-            rng = Xoshiro256()
+            Xoshiro256()
         }
         let context = TuningContext(
             baseSampleCount: samples,

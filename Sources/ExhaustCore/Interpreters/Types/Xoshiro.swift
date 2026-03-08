@@ -13,7 +13,9 @@ public struct Xoshiro256: ~Copyable {
     private var state: StateType
 
     /// Read-only access to internal state for explicit cloning.
-    public var currentState: StateType { state }
+    public var currentState: StateType {
+        state
+    }
 
     /// Jump polynomial for 2^128 steps
     private static let jumpPoly: [UInt64] = [

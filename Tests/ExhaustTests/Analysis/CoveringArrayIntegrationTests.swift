@@ -3,9 +3,9 @@
 //  Exhaust
 //
 
+import ExhaustCore
 import Testing
 @testable import Exhaust
-import ExhaustCore
 
 @Suite("Covering Array Integration")
 struct CoveringArrayIntegrationTests {
@@ -32,7 +32,7 @@ struct CoveringArrayIntegrationTests {
         // With randomOnly, the covering array path is skipped
         // This should still work via random sampling
         let gen = #gen(.bool(), .bool())
-        #exhaust(gen, .maxIterations(50), .randomOnly) { a, b in
+        #exhaust(gen, .maxIterations(50), .randomOnly) { _, _ in
             true
         }
     }
@@ -53,14 +53,14 @@ struct CoveringArrayIntegrationTests {
             .int(in: 0 ... 3),
             .int(in: 0 ... 3),
             .int(in: 0 ... 3),
-            .int(in: 0 ... 3)
+            .int(in: 0 ... 3),
         )
 
         let result = #exhaust(
             gen,
             .maxIterations(100),
-            .suppressIssueReporting
-        ) { p0, p1, _, p3, p4 in
+            .suppressIssueReporting,
+        ) { p0, p1, _, p3, _ in
             !(p0 == 2 && p1 == 3 && p3 == 1)
         }
         #expect(result != nil, "3-way covering should always find this failure")
@@ -76,7 +76,7 @@ struct CoveringArrayIntegrationTests {
             .int(in: 0 ... 3),
             .int(in: 0 ... 3),
             .int(in: 0 ... 3),
-            .int(in: 0 ... 3)
+            .int(in: 0 ... 3),
         )
 
         var missCount = 0
@@ -85,8 +85,8 @@ struct CoveringArrayIntegrationTests {
                 gen,
                 .maxIterations(100),
                 .randomOnly,
-                .suppressIssueReporting
-            ) { p0, p1, p2, p3, p4 in
+                .suppressIssueReporting,
+            ) { p0, p1, _, p3, _ in
                 !(p0 == 2 && p1 == 3 && p3 == 1)
             }
             if result == nil {

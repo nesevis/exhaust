@@ -61,9 +61,10 @@ struct OptionalTests {
     }
 
     @Test("Composes with arrayOf")
-    func composesWithArray() throws {        let gen = Gen.arrayOf(
+    func composesWithArray() throws {
+        let gen = Gen.arrayOf(
             optionalGen(Gen.choose(in: 1 ... 10) as ReflectiveGenerator<Int>),
-            exactly: 5
+            exactly: 5,
         )
 
         var iterator = ValueInterpreter(gen)
@@ -77,9 +78,9 @@ struct OptionalTests {
     func nestedOptional() throws {
         let gen = optionalGen(optionalGen(Gen.choose(in: 1 ... 10) as ReflectiveGenerator<Int>))
 
-        var sawNone = false        // .none
-        var sawSomeNone = false    // .some(.none)
-        var sawSomeSome = false    // .some(.some(_))
+        var sawNone = false // .none
+        var sawSomeNone = false // .some(.none)
+        var sawSomeSome = false // .some(.some(_))
 
         for _ in 0 ..< 500 {
             var iterator = ValueInterpreter(gen)

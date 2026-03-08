@@ -1,6 +1,6 @@
+import ExhaustCore
 import Testing
 @testable import Exhaust
-import ExhaustCore
 
 @Suite("Generator Validation")
 struct ValidationTests {
@@ -19,7 +19,7 @@ struct ValidationTests {
     func badBackwardMappingFails() {
         let gen = #gen(.int(in: 1 ... 100)).mapped(
             forward: { $0 * 2 },
-            backward: { $0 } // wrong inverse — should be { $0 / 2 }
+            backward: { $0 }, // wrong inverse — should be { $0 / 2 }
         )
 
         withKnownIssue {
@@ -49,7 +49,7 @@ struct ValidationTests {
 
         let gen: ReflectiveGenerator<Wrapper> = #gen(.int(in: 0 ... 50)).mapped(
             forward: { Wrapper(value: $0) },
-            backward: { $0.value }
+            backward: { $0.value },
         )
 
         let report = gen.validate(samples: 50, seed: 42)

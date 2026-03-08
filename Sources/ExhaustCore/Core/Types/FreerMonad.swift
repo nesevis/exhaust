@@ -18,6 +18,7 @@
 ///   - Operation: The type of effects this monad can represent
 ///   - Value: The type of values this computation ultimately produces
 // MARK: - Academic Provenance
+
 //
 // Based on the Freer Monad encoding from Goldstein §3.3.2: `data Freer f a = Return a | Bind (f a) (a -> Freer f b)`. Correspondence: `.pure` = `Return`, `.impure` = `Bind`. The dissertation is parameterized over a generic effect functor `f`; Exhaust fixes `f` to `ReflectiveOperation` for bidirectional generation.
 
@@ -109,28 +110,28 @@ public extension FreerMonad {
 
 // MARK: - Sendable
 
-// FreerMonad is `@unchecked Sendable` because, while it stores closures in its
-// `impure` case (which the compiler cannot verify as Sendable), the framework
-// guarantees thread safety through two complementary mechanisms:
-//
-// 1. **Internal closures are framework-controlled and pure by construction.**
-//    Every closure inside the generator chain — continuations in `impure`, transforms
-//    in `contramap`, predicates in `filter`/`classify`/`unique` — is created by `Gen`
-//    combinators or interpreter infrastructure. These closures perform deterministic
-//    value transformations (type casts, array indexing, bit pattern conversion) and
-//    never capture shared mutable state. The framework is the sole producer of these
-//    closures; users cannot inject arbitrary closures into the monad's continuation chain.
-//
-// 2. **User-injected closures are `@Sendable` at the API boundary.**
-//    Every public API that accepts a user-provided closure — `property` in `#exhaust`,
-//    `scorer` in `#explore`, `predicate` in `.filter()`, `forward`/`backward` in
-//    `.mapped()`, etc. — marks that parameter as `@Sendable`. This means the Swift
-//    compiler verifies at each call site that the user's closure captures only `Sendable`
-//    values, preventing shared mutable state from entering the system.
-//
-// Together, these guarantees mean that a `FreerMonad<ReflectiveOperation, Value>` (i.e.
-// `ReflectiveGenerator<Value>`) can be safely shared across concurrency domains — for
-// example, reusing the same generator across parallel test methods in Swift Testing.
+/// FreerMonad is `@unchecked Sendable` because, while it stores closures in its
+/// `impure` case (which the compiler cannot verify as Sendable), the framework
+/// guarantees thread safety through two complementary mechanisms:
+///
+/// 1. **Internal closures are framework-controlled and pure by construction.**
+///    Every closure inside the generator chain — continuations in `impure`, transforms
+///    in `contramap`, predicates in `filter`/`classify`/`unique` — is created by `Gen`
+///    combinators or interpreter infrastructure. These closures perform deterministic
+///    value transformations (type casts, array indexing, bit pattern conversion) and
+///    never capture shared mutable state. The framework is the sole producer of these
+///    closures; users cannot inject arbitrary closures into the monad's continuation chain.
+///
+/// 2. **User-injected closures are `@Sendable` at the API boundary.**
+///    Every public API that accepts a user-provided closure — `property` in `#exhaust`,
+///    `scorer` in `#explore`, `predicate` in `.filter()`, `forward`/`backward` in
+///    `.mapped()`, etc. — marks that parameter as `@Sendable`. This means the Swift
+///    compiler verifies at each call site that the user's closure captures only `Sendable`
+///    values, preventing shared mutable state from entering the system.
+///
+/// Together, these guarantees mean that a `FreerMonad<ReflectiveOperation, Value>` (i.e.
+/// `ReflectiveGenerator<Value>`) can be safely shared across concurrency domains — for
+/// example, reusing the same generator across parallel test methods in Swift Testing.
 extension FreerMonad: @unchecked Sendable {}
 
 public extension FreerMonad where Value == Any {

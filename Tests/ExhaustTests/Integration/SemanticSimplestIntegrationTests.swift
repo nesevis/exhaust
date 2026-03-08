@@ -5,9 +5,9 @@
 //  ChoiceValue.semanticSimplest tests that require #exhaust macro (Exhaust module).
 //
 
+import ExhaustCore
 import Testing
 @testable import Exhaust
-import ExhaustCore
 
 @Suite("ChoiceValue.semanticSimplest Integration")
 struct SemanticSimplestIntegrationTests {

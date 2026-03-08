@@ -82,7 +82,7 @@ public struct CoveringArray: @unchecked Sendable {
             FiniteParameter(
                 index: param.index,
                 domainSize: param.domainSize,
-                kind: .chooseBits(range: 0 ... max(param.domainSize, 1) - 1, tag: .uint64)
+                kind: .chooseBits(range: 0 ... max(param.domainSize, 1) - 1, tag: .uint64),
             )
         }
         var totalSpace: UInt64 = 1
@@ -93,7 +93,7 @@ public struct CoveringArray: @unchecked Sendable {
         }
         let syntheticProfile = FiniteDomainProfile(
             parameters: syntheticParams,
-            totalSpace: totalSpace
+            totalSpace: totalSpace,
         )
 
         // For 1-parameter boundary profiles, IPOG requires paramCount >= 2.
@@ -157,9 +157,9 @@ private struct IPOGBuilder {
     init(params: [FiniteParameter], strength: Int) {
         self.params = params
         self.strength = strength
-        self.n = params.count
-        self.rows = []
-        self.covered = CoveredSet()
+        n = params.count
+        rows = []
+        covered = CoveredSet()
     }
 
     mutating func run() {
@@ -221,7 +221,7 @@ private struct IPOGBuilder {
                     row: rows[rowIdx],
                     mustInclude: i,
                     strength: strength,
-                    upToParam: i + 1
+                    upToParam: i + 1,
                 )
                 if count > bestCount {
                     bestCount = count
@@ -234,7 +234,7 @@ private struct IPOGBuilder {
                 row: rows[rowIdx],
                 mustInclude: i,
                 strength: strength,
-                upToParam: i + 1
+                upToParam: i + 1,
             )
         }
     }
@@ -246,7 +246,7 @@ private struct IPOGBuilder {
             mustInclude: i,
             strength: strength,
             upToParam: i + 1,
-            params: params
+            params: params,
         )
 
         for tuple in uncoveredTuples {

@@ -163,7 +163,7 @@ public enum ChoiceGradientTuner<FinalOutput> {
                 let precomputedWeights: ContiguousArray<UInt64>? = switch strategy {
                 case .fitnessSharing:
                     computeFitnessSharingWeights(choices: choices, accumulator: accumulator)
-                case .ucb(let explorationConstant):
+                case let .ucb(explorationConstant):
                     computeUCBWeights(choices: choices, accumulator: accumulator, explorationConstant: explorationConstant)
                 default:
                     nil
@@ -353,10 +353,15 @@ public enum ChoiceGradientTuner<FinalOutput> {
     // MARK: - Sequence Length Subdivision
 
     private final class SubdivisionContext {
-        var nextID: UInt64 = UInt64.max / 2
+        var nextID: UInt64 = .max / 2
         let maxSize: UInt64
-        init(maxSize: UInt64 = 100) { self.maxSize = maxSize }
-        func makeID() -> UInt64 { defer { nextID &+= 1 }; return nextID }
+        init(maxSize: UInt64 = 100) {
+            self.maxSize = maxSize
+        }
+
+        func makeID() -> UInt64 {
+            defer { nextID &+= 1 }; return nextID
+        }
     }
 
     /// Preprocessing pass that rewrites sequence operations by converting their length generators into picks over subranges. This makes the length decision
@@ -468,11 +473,11 @@ public enum ChoiceGradientTuner<FinalOutput> {
                 var subdivided = ContiguousArray<ReflectiveOperation.PickTuple>()
                 subdivided.reserveCapacity(choices.count)
                 for choice in choices {
-                    subdivided.append(ReflectiveOperation.PickTuple(
+                    try subdivided.append(ReflectiveOperation.PickTuple(
                         siteID: choice.siteID,
                         id: choice.id,
                         weight: choice.weight,
-                        generator: try subdivideSequenceLengths(choice.generator, context: context),
+                        generator: subdivideSequenceLengths(choice.generator, context: context),
                     ))
                 }
                 return .impure(operation: .pick(choices: subdivided), continuation: continuation)
@@ -484,33 +489,33 @@ public enum ChoiceGradientTuner<FinalOutput> {
                 return .impure(operation: .zip(subdivided), continuation: continuation)
 
             case let .contramap(transform, next):
-                return .impure(
+                return try .impure(
                     operation: .contramap(
                         transform: transform,
-                        next: try subdivideSequenceLengths(next, context: context),
+                        next: subdivideSequenceLengths(next, context: context),
                     ),
                     continuation: continuation,
                 )
 
             case let .prune(next):
-                return .impure(
-                    operation: .prune(next: try subdivideSequenceLengths(next, context: context)),
+                return try .impure(
+                    operation: .prune(next: subdivideSequenceLengths(next, context: context)),
                     continuation: continuation,
                 )
 
             case let .resize(newSize, next):
-                return .impure(
+                return try .impure(
                     operation: .resize(
                         newSize: newSize,
-                        next: try subdivideSequenceLengths(next, context: context),
+                        next: subdivideSequenceLengths(next, context: context),
                     ),
                     continuation: continuation,
                 )
 
             case let .filter(subGen, fingerprint, filterType, predicate):
-                return .impure(
+                return try .impure(
                     operation: .filter(
-                        gen: try subdivideSequenceLengths(subGen, context: context),
+                        gen: subdivideSequenceLengths(subGen, context: context),
                         fingerprint: fingerprint,
                         filterType: filterType,
                         predicate: predicate,
@@ -519,9 +524,9 @@ public enum ChoiceGradientTuner<FinalOutput> {
                 )
 
             case let .classify(subGen, fingerprint, classifiers):
-                return .impure(
+                return try .impure(
                     operation: .classify(
-                        gen: try subdivideSequenceLengths(subGen, context: context),
+                        gen: subdivideSequenceLengths(subGen, context: context),
                         fingerprint: fingerprint,
                         classifiers: classifiers,
                     ),
@@ -529,9 +534,9 @@ public enum ChoiceGradientTuner<FinalOutput> {
                 )
 
             case let .unique(subGen, fingerprint, keyExtractor):
-                return .impure(
+                return try .impure(
                     operation: .unique(
-                        gen: try subdivideSequenceLengths(subGen, context: context),
+                        gen: subdivideSequenceLengths(subGen, context: context),
                         fingerprint: fingerprint,
                         keyExtractor: keyExtractor,
                     ),

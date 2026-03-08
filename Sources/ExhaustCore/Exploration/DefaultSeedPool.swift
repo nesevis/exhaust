@@ -32,8 +32,13 @@ public struct DefaultSeedPool: SeedPool {
         self.useFitness = useFitness
     }
 
-    public var count: Int { seeds.count }
-    public var isEmpty: Bool { seeds.isEmpty }
+    public var count: Int {
+        seeds.count
+    }
+
+    public var isEmpty: Bool {
+        seeds.isEmpty
+    }
 
     /// The average fitness across all seeds in the pool.
     public var averageFitness: Double {

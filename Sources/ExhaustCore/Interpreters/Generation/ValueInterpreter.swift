@@ -8,6 +8,7 @@
 import Foundation
 
 // MARK: - Academic Provenance
+
 //
 // Implements the `generate` interpretation G⟦·⟧ (Goldstein §3.3.3, Fig 4.3 for the reflective version). Pure forward pass that consumes PRNG entropy to produce values — no randomness capture.
 

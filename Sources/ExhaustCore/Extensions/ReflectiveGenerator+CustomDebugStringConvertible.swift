@@ -127,7 +127,6 @@ extension ReflectiveGenerator: CustomDebugStringConvertible where Operation == R
             let mode = keyExtractor != nil ? "by key" : "by choice sequence"
             let genDesc = gen.treeDescription(prefix: childPrefix, isLast: true, depth: depth + 1)
             return "unique(fingerprint: \(fingerprintShort), \(mode))\n" + genDesc
-
         }
     }
 

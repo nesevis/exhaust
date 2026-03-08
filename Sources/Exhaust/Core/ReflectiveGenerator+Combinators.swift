@@ -297,7 +297,7 @@ public extension ReflectiveGenerator where Operation == ReflectiveOperation {
     static func recursive(
         base: Value,
         maxDepth: UInt64,
-        extend: @Sendable @escaping (@escaping () -> ReflectiveGenerator<Value>, UInt64) -> ReflectiveGenerator<Value>
+        extend: @Sendable @escaping (@escaping () -> ReflectiveGenerator<Value>, UInt64) -> ReflectiveGenerator<Value>,
     ) -> ReflectiveGenerator<Value> {
         Gen.recursive(base: base, maxDepth: maxDepth, extend: extend)
     }
@@ -326,7 +326,7 @@ public extension ReflectiveGenerator where Operation == ReflectiveOperation {
     static func recursive(
         base: ReflectiveGenerator<Value>,
         maxDepth: UInt64,
-        extend: @Sendable @escaping (@escaping () -> ReflectiveGenerator<Value>, UInt64) -> ReflectiveGenerator<Value>
+        extend: @Sendable @escaping (@escaping () -> ReflectiveGenerator<Value>, UInt64) -> ReflectiveGenerator<Value>,
     ) -> ReflectiveGenerator<Value> {
         Gen.recursive(base: base, maxDepth: maxDepth, extend: extend)
     }

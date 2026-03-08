@@ -32,7 +32,7 @@ struct MetaGeneratorPropertyTests {
                 guard let replayed = try? Interpreters.replay(gen, using: tree) else { continue }
                 #expect(
                     anyEquals(value, replayed),
-                    "Round-trip failed for recipe: \(recipe)"
+                    "Round-trip failed for recipe: \(recipe)",
                 )
             }
         }
@@ -52,7 +52,7 @@ struct MetaGeneratorPropertyTests {
                 guard let r1 = replay1, let r2 = replay2 else { continue }
                 #expect(
                     anyEquals(r1, r2),
-                    "Replay not deterministic for recipe: \(recipe)"
+                    "Replay not deterministic for recipe: \(recipe)",
                 )
             }
         }
@@ -73,7 +73,7 @@ struct MetaGeneratorPropertyTests {
                 guard let materialized = try? Interpreters.materialize(gen, with: reflectedTree, using: sequence) else { continue }
                 #expect(
                     anyEquals(materialized, replayed),
-                    "Materialize disagrees with replay for recipe: \(recipe)"
+                    "Materialize disagrees with replay for recipe: \(recipe)",
                 )
             }
         }
@@ -89,7 +89,7 @@ struct MetaGeneratorPropertyTests {
             // contramap(id, gen.map(id)) adds no PRNG-consuming operations
             let mappedGen: ReflectiveGenerator<Any> = Gen.contramap(
                 { (newOutput: Any) throws -> Any in newOutput },
-                gen._map { $0 }
+                gen._map { $0 },
             )
 
             var iter1: ValueInterpreter<Any> = ValueInterpreter(gen, seed: 42, maxRuns: 10)
@@ -98,7 +98,7 @@ struct MetaGeneratorPropertyTests {
             while let v1 = try iter1.next(), let v2 = try iter2.next() {
                 #expect(
                     anyEquals(v1, v2),
-                    "Functor identity failed for recipe: \(recipe)"
+                    "Functor identity failed for recipe: \(recipe)",
                 )
             }
         }
@@ -127,7 +127,7 @@ struct MetaGeneratorPropertyTests {
             while let v1 = try iter1.next(), let v2 = try iter2.next() {
                 #expect(
                     anyEquals(v1, v2),
-                    "Functor composition failed for recipe: \(recipe)"
+                    "Functor composition failed for recipe: \(recipe)",
                 )
             }
         }
@@ -172,7 +172,7 @@ struct MetaGeneratorPropertyTests {
             while let v1 = try iter1.next(), let v2 = try iter2.next() {
                 #expect(
                     anyEquals(v1, v2),
-                    "Monad right identity failed for recipe: \(recipe)"
+                    "Monad right identity failed for recipe: \(recipe)",
                 )
             }
         }
@@ -196,11 +196,11 @@ struct MetaGeneratorPropertyTests {
             while let (value, tree) = try valueIter.next() {
                 guard !property(value) else { continue }
                 guard let (_, shrunk) = try? Interpreters.reduce(
-                    gen: gen, tree: tree, config: .fast, property: property
+                    gen: gen, tree: tree, config: .fast, property: property,
                 ) else { continue }
                 #expect(
                     !property(shrunk),
-                    "Shrunk value passes property but shouldn't, recipe: \(recipe)"
+                    "Shrunk value passes property but shouldn't, recipe: \(recipe)",
                 )
             }
         }
@@ -228,14 +228,14 @@ struct MetaGeneratorPropertyTests {
 
                 let filteredGen: ReflectiveGenerator<Any> = .impure(
                     operation: .filter(gen: innerGen.erase(), fingerprint: 0, filterType: .auto, predicate: { predicate.evaluate($0) }),
-                    continuation: { .pure($0) }
+                    continuation: { .pure($0) },
                 )
 
                 var valueIter = ValueInterpreter(filteredGen, maxRuns: 15)
                 while let value = try valueIter.next() {
                     #expect(
                         predicate.evaluate(value),
-                        "Filter \(predicate) violated for recipe: \(recipe)"
+                        "Filter \(predicate) violated for recipe: \(recipe)",
                     )
                 }
             }
@@ -256,7 +256,7 @@ struct MetaGeneratorPropertyTests {
             while let value = try valueIter.next() {
                 #expect(
                     range.contains(value),
-                    "Value \(value) outside range \(range)"
+                    "Value \(value) outside range \(range)",
                 )
             }
         }
@@ -284,7 +284,7 @@ struct MetaGeneratorPropertyTests {
                 if let first {
                     #expect(
                         anyEquals(first, value),
-                        "Just generator produced different values for recipe: \(recipe)"
+                        "Just generator produced different values for recipe: \(recipe)",
                     )
                 } else {
                     first = value
@@ -310,7 +310,7 @@ struct MetaGeneratorPropertyTests {
                 guard let replayed = try? Interpreters.replay(gen, using: tree) else { continue }
                 #expect(
                     anyEquals(value, replayed),
-                    "Just round-trip failed for recipe: \(recipe)"
+                    "Just round-trip failed for recipe: \(recipe)",
                 )
             }
         }
@@ -334,7 +334,7 @@ struct MetaGeneratorPropertyTests {
                 guard let replayed = try? Interpreters.replay(gen, using: tree) else { continue }
                 #expect(
                     anyEquals(value, replayed),
-                    "Zip round-trip failed for recipe: \(recipe)"
+                    "Zip round-trip failed for recipe: \(recipe)",
                 )
             }
         }
@@ -357,7 +357,7 @@ struct MetaGeneratorPropertyTests {
                 guard let r1, let r2 else { continue }
                 #expect(
                     anyEquals(r1, r2),
-                    "Zip replay not deterministic for recipe: \(recipe)"
+                    "Zip replay not deterministic for recipe: \(recipe)",
                 )
             }
         }
@@ -380,7 +380,7 @@ struct MetaGeneratorPropertyTests {
                 guard let materialized = try? Interpreters.materialize(gen, with: reflectedTree, using: sequence) else { continue }
                 #expect(
                     anyEquals(materialized, replayed),
-                    "Zip materialize disagrees with replay for recipe: \(recipe)"
+                    "Zip materialize disagrees with replay for recipe: \(recipe)",
                 )
             }
         }
@@ -401,7 +401,7 @@ struct MetaGeneratorPropertyTests {
                 guard let replayed = try? Interpreters.replay(gen, using: tree) else { continue }
                 #expect(
                     anyEquals(value, replayed),
-                    "Round-trip failed for recipe: \(recipe)"
+                    "Round-trip failed for recipe: \(recipe)",
                 )
             }
         }

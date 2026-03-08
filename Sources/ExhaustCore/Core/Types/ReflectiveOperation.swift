@@ -34,21 +34,22 @@
 /// - SeeAlso: `ReflectiveGenerator`, `Gen`, `Interpreters`
 //
 // MARK: - Academic Provenance
-//
-// Based on the `R b a` effect type (Goldstein §4.3, Fig 4.2). The dissertation defines six primitive operations; Exhaust maps them as follows:
-//
-//   Dissertation      Exhaust
-//   ─────────────     ─────────────
-//   Pick            → pick
-//   Lmap            → contramap
-//   Prune           → prune
-//   ChooseInteger   → chooseBits (divergence: Exhaust uses sized bit-width
-//                     selection with TypeTag, not arbitrary integer ranges)
-//   GetSize         → getSize
-//   Resize          → resize
-//
-// The remaining six cases are Exhaust extensions not present in the dissertation: `sequence`, `zip`, `just`, `filter`, `classify`, `unique`.
-//
+
+///
+/// Based on the `R b a` effect type (Goldstein §4.3, Fig 4.2). The dissertation defines six primitive operations; Exhaust maps them as follows:
+///
+///   Dissertation      Exhaust
+///   ─────────────     ─────────────
+///   Pick            → pick
+///   Lmap            → contramap
+///   Prune           → prune
+///   ChooseInteger   → chooseBits (divergence: Exhaust uses sized bit-width
+///                     selection with TypeTag, not arbitrary integer ranges)
+///   GetSize         → getSize
+///   Resize          → resize
+///
+/// The remaining six cases are Exhaust extensions not present in the dissertation: `sequence`, `zip`, `just`, `filter`, `classify`, `unique`.
+///
 public enum ReflectiveOperation {
     /// A weighted choice option for the `pick` operation.
     ///
@@ -308,5 +309,4 @@ public enum ReflectiveOperation {
     ///   - keyExtractor: Optional function to extract a hashable key from generated values.
     ///     When `nil`, deduplication uses the choice sequence instead.
     case unique(gen: ReflectiveGenerator<Any>, fingerprint: UInt64, keyExtractor: ((Any) -> AnyHashable)?)
-
 }

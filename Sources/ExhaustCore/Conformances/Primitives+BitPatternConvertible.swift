@@ -283,4 +283,3 @@ extension Int: BitPatternConvertible {
         UInt64(bitPattern: Int64(self)) ^ Self.signBitMask
     }
 }
-

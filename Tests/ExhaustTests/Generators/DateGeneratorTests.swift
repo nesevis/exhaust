@@ -3,10 +3,10 @@
 //  Exhaust
 //
 
-import Testing
-@testable import Exhaust
 import ExhaustCore
 import Foundation
+import Testing
+@testable import Exhaust
 
 @Suite("Date Generator")
 struct DateGeneratorTests {
@@ -87,7 +87,7 @@ struct DateGeneratorTests {
 
             if let date = try iterator.next() {
                 let offset = date.timeIntervalSince(lower)
-                #expect(offset.truncatingRemainder(dividingBy: 604800) == 0)
+                #expect(offset.truncatingRemainder(dividingBy: 604_800) == 0)
             }
         }
     }
@@ -195,7 +195,7 @@ struct DateGeneratorTests {
             var iterator = ValueInterpreter(gen, seed: 42)
 
             let expectedLower = anchor.addingTimeInterval(-12 * 3600)
-            let expectedUpper = anchor.addingTimeInterval(2 * 604800)
+            let expectedUpper = anchor.addingTimeInterval(2 * 604_800)
 
             for _ in 0 ..< 20 {
                 if let date = try iterator.next() {
@@ -296,10 +296,10 @@ struct DateGeneratorTests {
             (DateSpan.minutes(1), 60),
             (DateSpan.hours(1), 3600),
             (DateSpan.days(1), 86400),
-            (DateSpan.weeks(1), 604800),
+            (DateSpan.weeks(1), 604_800),
             (DateSpan.minutes(5), 300),
             (DateSpan.hours(24), 86400),
-            (DateSpan.days(7), 604800),
+            (DateSpan.days(7), 604_800),
             (DateSpan.months(1), 2_592_000),
             (DateSpan.years(1), 31_536_000),
         ])

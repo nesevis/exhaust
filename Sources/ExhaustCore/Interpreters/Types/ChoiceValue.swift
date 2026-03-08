@@ -132,18 +132,18 @@ public enum ChoiceValue: Comparable, Hashable, Equatable, Sendable {
     var doubleValue: Double {
         switch self {
         case .unsigned:
-            return Double(bitPattern64)
+            Double(bitPattern64)
         case let .signed(_, _, tag):
             switch tag {
-            case .int8: return Double(Int8(bitPattern64: bitPattern64))
-            case .int16: return Double(Int16(bitPattern64: bitPattern64))
-            case .int32: return Double(Int32(bitPattern64: bitPattern64))
-            case .int64, .date: return Double(Int64(bitPattern64: bitPattern64))
-            case .int: return Double(Int(bitPattern64: bitPattern64))
+            case .int8: Double(Int8(bitPattern64: bitPattern64))
+            case .int16: Double(Int16(bitPattern64: bitPattern64))
+            case .int32: Double(Int32(bitPattern64: bitPattern64))
+            case .int64, .date: Double(Int64(bitPattern64: bitPattern64))
+            case .int: Double(Int(bitPattern64: bitPattern64))
             default: fatalError("Unexpected tag \(tag) for signed ChoiceValue")
             }
         case let .floating(value, _, _):
-            return value
+            value
         }
     }
 

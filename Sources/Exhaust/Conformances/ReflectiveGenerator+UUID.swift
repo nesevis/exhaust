@@ -16,16 +16,17 @@ public extension ReflectiveGenerator {
     /// ```
     static func uuid() -> ReflectiveGenerator<UUID> {
         Gen.zip(
-            Gen.chooseBits(in: 0 ... 0x0FFF_FFFF_FFFF_FFFF),  // 60 bits → bytes 0–7
-            Gen.chooseBits(in: 0 ... 0x3FFF_FFFF_FFFF_FFFF)   // 62 bits → bytes 8–15
+            Gen.chooseBits(in: 0 ... 0x0FFF_FFFF_FFFF_FFFF), // 60 bits → bytes 0–7
+            Gen.chooseBits(in: 0 ... 0x3FFF_FFFF_FFFF_FFFF), // 62 bits → bytes 8–15
         ).mapped(
             forward: { uuidFromHalves($0, $1) },
-            backward: { uuidToHalves($0) }
+            backward: { uuidToHalves($0) },
         )
     }
 }
 
 // MARK: - UUID v4 Bit Layout
+
 //
 // Bytes 0–7 (high UInt64, big-endian):
 //   bits 63–16: 48 random bits (bytes 0–5)

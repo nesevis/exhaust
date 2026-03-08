@@ -37,7 +37,6 @@
 ///
 /// - SeeAlso: ``CoveringArray``, ``CoverageRunner``, ``BoundaryDomainAnalysis``
 public enum ChoiceTreeAnalysis {
-
     public enum AnalysisResult {
         /// All parameters have at most 256 values. Eligible for exhaustive enumeration or t-way covering.
         case finite(FiniteDomainProfile)
@@ -59,7 +58,7 @@ public enum ChoiceTreeAnalysis {
     /// Returns `.finite` if all parameters have small domains (≤256 values), `.boundary` if some parameters need boundary value synthesis, or `nil` if the generator is not analyzable (e.g., uses getSize/resize).
     ///
     /// Tries multiple seeds to maximize element coverage for sequences.
-    public static func analyze<Output>(_ gen: ReflectiveGenerator<Output>) -> AnalysisResult? {
+    public static func analyze(_ gen: ReflectiveGenerator<some Any>) -> AnalysisResult? {
         var bestParameters: [BoundaryParameter]?
 
         for seed in seeds {
@@ -105,9 +104,9 @@ public enum ChoiceTreeAnalysis {
         let allFinite = parameters.allSatisfy { param in
             switch param.kind {
             case .finiteChooseBits, .pick:
-                return true
+                true
             case .chooseBits, .sequenceLength, .sequenceElement:
-                return false
+                false
             }
         }
 
@@ -135,6 +134,7 @@ public enum ChoiceTreeAnalysis {
     }
 
     // MARK: - Tree Walk
+
     //
     // Dispatches on ChoiceTree node type. Returns false if the node
     // is unanalyzable (getSize, resize, bare branch). For groups,
@@ -147,29 +147,30 @@ public enum ChoiceTreeAnalysis {
     ) -> Bool {
         switch tree {
         case let .choice(value, metadata):
-            return walkChoice(value: value, metadata: metadata, parameters: &parameters)
+            walkChoice(value: value, metadata: metadata, parameters: &parameters)
 
         case .just:
-            return true
+            true
 
         case let .group(children):
-            return walkGroup(children, parameters: &parameters)
+            walkGroup(children, parameters: &parameters)
 
         case let .selected(inner):
-            return walkTree(inner, parameters: &parameters)
+            walkTree(inner, parameters: &parameters)
 
         case let .sequence(length, elements, metadata):
-            return walkSequence(length: length, elements: elements, metadata: metadata, parameters: &parameters)
+            walkSequence(length: length, elements: elements, metadata: metadata, parameters: &parameters)
 
         case .getSize, .resize:
-            return false
+            false
 
         case .branch:
-            return false
+            false
         }
     }
 
     // MARK: - Choice
+
     //
     // Processes a single numeric choice node. Requires explicit range
     // metadata (non-explicit ranges come from size scaling and are not
@@ -197,7 +198,7 @@ public enum ChoiceTreeAnalysis {
                 index: parameters.count,
                 values: Array(range.lowerBound ... range.upperBound),
                 domainSize: count,
-                kind: .finiteChooseBits(range: range, tag: tag)
+                kind: .finiteChooseBits(range: range, tag: tag),
             )
             parameters.append(param)
         } else {
@@ -206,7 +207,7 @@ public enum ChoiceTreeAnalysis {
                 index: parameters.count,
                 values: boundaryValues,
                 domainSize: UInt64(boundaryValues.count),
-                kind: .chooseBits(range: range, tag: tag)
+                kind: .chooseBits(range: range, tag: tag),
             )
             parameters.append(param)
         }
@@ -214,6 +215,7 @@ public enum ChoiceTreeAnalysis {
     }
 
     // MARK: - Group / Pick
+
     //
     // A group is classified as a pick when it contains at least one
     // .selected child and all children are .selected or .branch — the
@@ -277,7 +279,7 @@ public enum ChoiceTreeAnalysis {
                 siteID: siteID,
                 id: id,
                 weight: weight,
-                generator: .pure(())
+                generator: .pure(()),
             ))
         }
 
@@ -285,13 +287,14 @@ public enum ChoiceTreeAnalysis {
             index: parameters.count,
             values: Array(0 ..< domainSize),
             domainSize: domainSize,
-            kind: .pick(choices: pickTuples)
+            kind: .pick(choices: pickTuples),
         )
         parameters.append(param)
         return true
     }
 
     // MARK: - Sequence
+
     //
     // Extracts a length parameter and up to two element parameters from
     // a sequence node. The length parameter tests {0, 1, 2} (intersected
@@ -301,7 +304,7 @@ public enum ChoiceTreeAnalysis {
     // prohibitively expensive.
 
     private static func walkSequence(
-        length: UInt64,
+        length _: UInt64,
         elements: [ChoiceTree],
         metadata: ChoiceMetadata,
         parameters: inout [BoundaryParameter],
@@ -320,7 +323,7 @@ public enum ChoiceTreeAnalysis {
             index: parameters.count,
             values: lengthValues,
             domainSize: UInt64(lengthValues.count),
-            kind: .sequenceLength(lengthRange: lengthRange)
+            kind: .sequenceLength(lengthRange: lengthRange),
         )
         parameters.append(lengthParam)
 
@@ -335,6 +338,7 @@ public enum ChoiceTreeAnalysis {
     }
 
     // MARK: - Element Walk
+
     //
     // Same as walkTree but for elements within a sequence. Rejects
     // nested sequences, getSize, resize, and bare branches — these
@@ -395,7 +399,7 @@ public enum ChoiceTreeAnalysis {
                 index: parameters.count,
                 values: Array(range.lowerBound ... range.upperBound),
                 domainSize: count,
-                kind: .finiteChooseBits(range: range, tag: tag)
+                kind: .finiteChooseBits(range: range, tag: tag),
             )
             parameters.append(param)
         } else {
@@ -404,7 +408,7 @@ public enum ChoiceTreeAnalysis {
                 index: parameters.count,
                 values: boundaryValues,
                 domainSize: UInt64(boundaryValues.count),
-                kind: .sequenceElement(elementIndex: elementIndex, range: range, tag: tag)
+                kind: .sequenceElement(elementIndex: elementIndex, range: range, tag: tag),
             )
             parameters.append(param)
         }

@@ -5,10 +5,10 @@
 //  Created by Chris Kolbu on 11/2/2026.
 //
 
+import ExhaustCore
 import Foundation
 import Testing
 @testable import Exhaust
-import ExhaustCore
 
 @Suite("Shrinking Challenge: Distinct")
 struct DistinctShrinkingChallenge {

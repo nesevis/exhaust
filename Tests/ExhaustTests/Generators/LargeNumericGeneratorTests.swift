@@ -8,7 +8,6 @@ import Testing
 
 @Suite("Int128 / UInt128 Generators")
 struct LargeNumericGeneratorTests {
-
     @Test("UInt128 round-trips through bit pattern")
     func uint128RoundTrip() {
         let gen = #gen(.uint128())

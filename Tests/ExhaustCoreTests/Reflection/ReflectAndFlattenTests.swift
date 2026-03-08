@@ -216,7 +216,7 @@ struct ReflectAndFlattenTests {
     func reflectAndFlattenWithMapped() throws {
         let gen = Gen.contramap(
             { (value: UInt64) -> UInt64 in value / 2 },
-            Gen.choose(in: UInt64(0) ... 100)._map { $0 * 2 }
+            Gen.choose(in: UInt64(0) ... 100)._map { $0 * 2 },
         )
         let value: UInt64 = 84 // 42 * 2
 

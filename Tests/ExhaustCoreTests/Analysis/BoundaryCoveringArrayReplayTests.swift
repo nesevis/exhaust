@@ -94,7 +94,7 @@ struct BoundaryCoveringArrayReplayUnitTests {
     @Suite("buildPickTree")
     struct BuildPickTreeTests {
         @Test("Pick parameter produces branch with selected wrapper")
-        func pickProducesBranch() throws {
+        func pickProducesBranch() {
             let gen: ReflectiveGenerator<Bool> = Gen.pick(choices: [
                 (1, Gen.just(true)),
                 (1, Gen.just(false)),
@@ -116,7 +116,7 @@ struct BoundaryCoveringArrayReplayUnitTests {
         }
 
         @Test("Out-of-bounds pick value returns nil")
-        func outOfBoundsPick() throws {
+        func outOfBoundsPick() {
             let gen: ReflectiveGenerator<Bool> = Gen.pick(choices: [
                 (1, Gen.just(true)),
                 (1, Gen.just(false)),
@@ -187,7 +187,7 @@ struct BoundaryCoveringArrayReplayUnitTests {
     @Suite("buildSubTree")
     struct BuildSubTreeTests {
         @Test("Pure generator produces .just")
-        func pureProducesJust() throws {
+        func pureProducesJust() {
             // Verified via pick which calls buildSubTree internally
             let gen: ReflectiveGenerator<Bool> = Gen.pick(choices: [
                 (1, Gen.just(true)),
@@ -274,7 +274,7 @@ struct BoundaryCoveringArrayReplayUnitTests {
 
 // MARK: - Helpers
 
-private func analyzeBoundary<Output>(_ gen: ReflectiveGenerator<Output>) -> BoundaryDomainProfile? {
+private func analyzeBoundary(_ gen: ReflectiveGenerator<some Any>) -> BoundaryDomainProfile? {
     guard case let .boundary(profile) = ChoiceTreeAnalysis.analyze(gen) else { return nil }
     return profile
 }

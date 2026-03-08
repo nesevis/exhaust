@@ -294,7 +294,7 @@ struct ReducerSimplifyValuesTests {
     func characterSimplification() throws {
         let gen = Gen.arrayOf(
             charGen(from: CharacterSet(charactersIn: Unicode.Scalar(" ") ... Unicode.Scalar("z"))),
-            exactly: 3
+            exactly: 3,
         )
 
         let (_, tree) = try generate(gen)

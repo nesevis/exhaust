@@ -8,6 +8,7 @@
 import Foundation
 
 // MARK: - Academic Provenance
+
 //
 // The dissertation (Goldstein §3.3.3, §4.6) represents randomness as flat bit-string choice sequences. Exhaust adds this hierarchical ChoiceTree to preserve structural information (sequence boundaries, branch sites, nesting) for targeted shrinking and replay. The flat representation is in ChoiceSequence.swift.
 
@@ -266,26 +267,26 @@ extension ChoiceTree: CustomDebugStringConvertible {
         case let .choice(choiceValue, _):
             switch choiceValue {
             case let .unsigned(uInt64, _):
-                return uInt64.description
+                uInt64.description
             case let .signed(int, _, _):
-                return int.description
+                int.description
             case let .floating(float, _, _):
-                return float.description
+                float.description
             }
         case let .just(type):
-            return "just(\(type))"
+            "just(\(type))"
         case let .sequence(_, elements, _):
-            return "[" + elements.map(\.elementDescription).joined(separator: ", ") + "]"
+            "[" + elements.map(\.elementDescription).joined(separator: ", ") + "]"
         case let .branch(_, weight, id, _, gen):
-            return "\(weight),\(id): \(gen.elementDescription)"
+            "\(weight),\(id): \(gen.elementDescription)"
         case let .group(array):
-            return "{" + array.map(\.elementDescription).joined() + "}"
+            "{" + array.map(\.elementDescription).joined() + "}"
         case let .selected(choiceTree):
-            return choiceTree.elementDescription
+            choiceTree.elementDescription
         case let .getSize(size):
-            return "getSize(\(size))"
+            "getSize(\(size))"
         case let .resize(newSize, choices):
-            return "resize(\(newSize): [\(choices.map(\.elementDescription).joined(separator: ", "))])"
+            "resize(\(newSize): [\(choices.map(\.elementDescription).joined(separator: ", "))])"
         }
     }
 

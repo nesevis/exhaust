@@ -6,9 +6,9 @@
 //  and complex scenarios.
 //
 
+import ExhaustCore
 import Testing
 @testable import Exhaust
-import ExhaustCore
 
 // MARK: - Advanced Data Structures
 

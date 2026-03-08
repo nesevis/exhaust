@@ -37,13 +37,13 @@ public enum HillClimber {
         // so the external prng stream isn't perturbed by probe count.
         let probePRNGSeed = GenerationContext.runSeed(
             base: seed.generation &+ UInt64(seed.sequence.count),
-            runIndex: UInt64(bitPattern: Int64(seed.fitness.bitPattern))
+            runIndex: UInt64(bitPattern: Int64(seed.fitness.bitPattern)),
         )
         var probePRNG = Xoshiro256(seed: probePRNGSeed)
 
         // Materialize the seed via PrefixMaterializer to get baseline
         guard let baseline = PrefixMaterializer.materialize(
-            gen, prefix: currentSequence, seed: probePRNG.next()
+            gen, prefix: currentSequence, seed: probePRNG.next(),
         ) else {
             return .unchanged(probesUsed: 0)
         }
@@ -112,7 +112,7 @@ public enum HillClimber {
                         probe[i] = newEntry
 
                         guard let result = PrefixMaterializer.materialize(
-                            gen, prefix: probe, seed: probePRNG.next()
+                            gen, prefix: probe, seed: probePRNG.next(),
                         ) else {
                             probesUsed += 1
                             return false
@@ -176,7 +176,7 @@ public enum HillClimber {
                     probe[i] = .branch(.init(id: altID, validIDs: b.validIDs))
 
                     guard let result = PrefixMaterializer.materialize(
-                        gen, prefix: probe, seed: probePRNG.next()
+                        gen, prefix: probe, seed: probePRNG.next(),
                     ) else {
                         probesUsed += 1
                         continue

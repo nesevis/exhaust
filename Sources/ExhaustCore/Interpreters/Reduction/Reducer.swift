@@ -103,6 +103,7 @@ public extension Interpreters {
     }
 
     // MARK: - Academic Provenance
+
     //
     // Internal test-case reduction — shrinking by shortlex-optimizing choice sequences rather than output values — originates with MacIver & Donaldson (ECOOP 2020, "Reduction via Generation"). Goldstein §4.6 formalizes three specific passes in the context of reflective generators:
     //

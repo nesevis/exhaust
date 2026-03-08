@@ -30,7 +30,9 @@ public struct OnlineCGSInterpreter<FinalOutput>: ~Copyable, ExhaustIterator {
 
         public init() {}
 
-        public var depth: Int { frames.count }
+        public var depth: Int {
+            frames.count
+        }
 
         public mutating func push(_ frame: DerivativeFrame) {
             frames.append(frame)
@@ -69,7 +71,6 @@ public struct OnlineCGSInterpreter<FinalOutput>: ~Copyable, ExhaustIterator {
                     }._bind { zipResult in
                         try continuation(zipResult)
                     }
-
                 }
             }
             return current._map { $0 as! FinalOutput }
@@ -82,7 +83,7 @@ public struct OnlineCGSInterpreter<FinalOutput>: ~Copyable, ExhaustIterator {
             index: Int,
             completed: [Any],
             allGenerators: ContiguousArray<ReflectiveGenerator<Any>>,
-            continuation: (Any) throws -> ReflectiveGenerator<Any>
+            continuation: (Any) throws -> ReflectiveGenerator<Any>,
         )
     }
 
@@ -691,7 +692,7 @@ public struct OnlineCGSInterpreter<FinalOutput>: ~Copyable, ExhaustIterator {
             let derivative = try choices[i].generator._bind { innerValue in
                 try continuation(innerValue).erase()
             }
-            derivatives.append(try derivativeContext.apply(derivative))
+            try derivatives.append(derivativeContext.apply(derivative))
         }
 
         var fitnesses = ContiguousArray(repeating: UInt64(0), count: choiceCount)
@@ -756,7 +757,9 @@ public struct OnlineCGSInterpreter<FinalOutput>: ~Copyable, ExhaustIterator {
         // live choices with all-zero fitness fall back to equal weights
         let allLiveZero = liveChoiceMap.allSatisfy { fitnesses[$0] == 0 }
         var isLive = ContiguousArray(repeating: false, count: choiceCount)
-        for i in liveChoiceMap { isLive[i] = true }
+        for i in liveChoiceMap {
+            isLive[i] = true
+        }
         var weightedChoices = ContiguousArray<ReflectiveOperation.PickTuple>()
         weightedChoices.reserveCapacity(choices.count)
         for (i, choice) in choices.enumerated() {
@@ -855,5 +858,4 @@ public struct OnlineCGSInterpreter<FinalOutput>: ~Copyable, ExhaustIterator {
             derivativeContext: derivativeContext,
         )
     }
-
 }

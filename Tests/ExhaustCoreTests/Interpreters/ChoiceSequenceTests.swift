@@ -28,7 +28,6 @@ struct ChoiceSequenceTests {
         #expect(value.validRange == (0 ... 100 as ClosedRange<UInt64>))
     }
 
-
     @Test("Flatten getSize returns empty")
     func flattenGetSize() {
         let tree = ChoiceTree.getSize(100)

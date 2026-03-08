@@ -292,7 +292,6 @@ private extension PrefixMaterializer {
                     inputValue: inputValue,
                     context: &context,
                 )
-
             }
         }
     }
@@ -407,13 +406,11 @@ private extension PrefixMaterializer {
     ) throws -> (Output, ChoiceTree)? {
         let branchIDs = choices.map(\.id)
 
-        let selectedChoice: ReflectiveOperation.PickTuple?
-
-        if let prefixBranch = context.cursor.tryConsumeBranch() {
+        let selectedChoice: ReflectiveOperation.PickTuple? = if let prefixBranch = context.cursor.tryConsumeBranch() {
             // Use the branch ID from the prefix to select the choice
-            selectedChoice = choices.first(where: { $0.id == prefixBranch.id })
+            choices.first(where: { $0.id == prefixBranch.id })
         } else {
-            selectedChoice = WeightedPickSelection.draw(from: choices, using: &context.prng)
+            WeightedPickSelection.draw(from: choices, using: &context.prng)
         }
 
         guard let selectedChoice else { return nil }
@@ -562,4 +559,3 @@ private extension PrefixMaterializer {
         )
     }
 }
-

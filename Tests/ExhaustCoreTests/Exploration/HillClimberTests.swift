@@ -122,11 +122,10 @@ struct HillClimberTests {
             prng: &prng,
         )
 
-        let probesUsed: Int
-        switch result {
-        case let .improved(_, _, p): probesUsed = p
-        case let .unchanged(p): probesUsed = p
-        case let .counterexample(_, _, p): probesUsed = p
+        let probesUsed: Int = switch result {
+        case let .improved(_, _, p): p
+        case let .unchanged(p): p
+        case let .counterexample(_, _, p): p
         }
         #expect(probesUsed <= budget + 1, "Probes used should not greatly exceed budget")
     }
@@ -138,7 +137,7 @@ struct HillClimberTests {
         let sequence = ChoiceSequence(tree)
         let initialSeed = Seed(
             sequence: sequence, tree: tree,
-            noveltyScore: 0, fitness: Double(value.height), generation: 0
+            noveltyScore: 0, fitness: Double(value.height), generation: 0,
         )
         var prng = Xoshiro256(seed: 7)
 

@@ -18,7 +18,7 @@ public extension ReflectiveGenerator {
         Gen.choose(in: UInt8(0) ... 1)
             .mapped(
                 forward: { $0 == 1 },
-                backward: { $0 ? 1 : 0 }
+                backward: { $0 ? 1 : 0 },
             )
     }
 

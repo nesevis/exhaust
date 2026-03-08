@@ -1,5 +1,5 @@
-import ExhaustCore
 import CustomDump
+import ExhaustCore
 import IssueReporting
 
 // MARK: - Types
@@ -16,7 +16,9 @@ public struct ValidationReport: Sendable, CustomStringConvertible {
     public let elapsedTime: Double
 
     /// Whether the validation passed with no failures.
-    public var passed: Bool { failures.isEmpty }
+    public var passed: Bool {
+        failures.isEmpty
+    }
 
     /// The fraction of generated values that survived reflection round-trip.
     public var reflectionSuccessRate: Double {
@@ -103,7 +105,7 @@ public extension ReflectiveGenerator where Operation == ReflectiveOperation {
         fileID: StaticString = #fileID,
         filePath: StaticString = #filePath,
         line: UInt = #line,
-        column: UInt = #column
+        column: UInt = #column,
     ) -> ValidationReport {
         _validate(samples: samples, seed: seed, differ: nil, fileID: fileID, filePath: filePath, line: line, column: column)
     }
@@ -127,7 +129,7 @@ public extension ReflectiveGenerator where Operation == ReflectiveOperation, Val
         fileID: StaticString = #fileID,
         filePath: StaticString = #filePath,
         line: UInt = #line,
-        column: UInt = #column
+        column: UInt = #column,
     ) -> ValidationReport {
         _validate(
             samples: samples,
@@ -142,7 +144,7 @@ public extension ReflectiveGenerator where Operation == ReflectiveOperation, Val
             fileID: fileID,
             filePath: filePath,
             line: line,
-            column: column
+            column: column,
         )
     }
 }
@@ -170,7 +172,7 @@ private extension ReflectiveGenerator where Operation == ReflectiveOperation {
         fileID: StaticString,
         filePath: StaticString,
         line: UInt,
-        column: UInt
+        column: UInt,
     ) -> ValidationReport {
         let maxFailures = 20
         var failures: [ValidationFailure] = []
@@ -210,7 +212,7 @@ private extension ReflectiveGenerator where Operation == ReflectiveOperation {
                             case let .notEqual(detail):
                                 failures.append(.reflectionRoundTripMismatch(
                                     sampleIndex: sampleIndex,
-                                    detail: detail
+                                    detail: detail,
                                 ))
                             }
                         } else {
@@ -224,7 +226,7 @@ private extension ReflectiveGenerator where Operation == ReflectiveOperation {
                         } else {
                             failures.append(.reflectionRoundTripMismatch(
                                 sampleIndex: sampleIndex,
-                                detail: "choice sequences differ: \(generatedSequence.shortString) vs \(reflectedSequence.shortString)"
+                                detail: "choice sequences differ: \(generatedSequence.shortString) vs \(reflectedSequence.shortString)",
                             ))
                         }
                     }

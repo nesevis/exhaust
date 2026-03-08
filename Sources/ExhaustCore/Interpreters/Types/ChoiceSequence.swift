@@ -6,6 +6,7 @@
 //
 
 // MARK: - Academic Provenance
+
 //
 // Corresponds to the dissertation's bracketed choice sequences (Goldstein §4.6). Shortlex ordering — shorter sequences are always simpler, with lexicographic comparison as tiebreaker — is from MacIver & Donaldson (ECOOP 2020, §2.2). Exhaust adds Zobrist hashing for O(1) incremental duplicate detection during reduction.
 
@@ -42,9 +43,9 @@ public extension Collection<ChoiceSequenceValue> {
 extension ChoiceSequence {
     /// Computes a Zobrist hash: XOR of position-dependent contributions for each element.
     /// Enables O(1) incremental updates when single elements change.
-    internal var zobristHash: UInt64 {
+    var zobristHash: UInt64 {
         var hash: UInt64 = 0
-        for (i, element) in self.enumerated() {
+        for (i, element) in enumerated() {
             hash ^= Self.zobristContribution(at: i, element)
         }
         return hash
@@ -52,43 +53,42 @@ extension ChoiceSequence {
 
     /// Position-dependent hash contribution of a single element.
     /// Uses splitmix64 mixing for good avalanche with XOR combination.
-    internal static func zobristContribution(at position: Int, _ value: ChoiceSequenceValue) -> UInt64 {
-        var bits: UInt64
-        switch value {
+    static func zobristContribution(at position: Int, _ value: ChoiceSequenceValue) -> UInt64 {
+        var bits: UInt64 = switch value {
         case let .value(v):
-            bits = v.choice.bitPattern64 ^ (zobristTagBits(v.choice.tag) << 48)
+            v.choice.bitPattern64 ^ (zobristTagBits(v.choice.tag) << 48)
         case let .reduced(v):
-            bits = v.choice.bitPattern64 ^ (zobristTagBits(v.choice.tag) << 48) ^ 0xFF00FF00FF00FF00
+            v.choice.bitPattern64 ^ (zobristTagBits(v.choice.tag) << 48) ^ 0xFF00_FF00_FF00_FF00
         case .sequence(true, isLengthExplicit: true):
-            bits = 1
+            1
         case .sequence(true, isLengthExplicit: false):
-            bits = 2
+            2
         case .sequence(false, isLengthExplicit: true):
-            bits = 3
+            3
         case .sequence(false, isLengthExplicit: false):
-            bits = 4
+            4
         case .group(true):
-            bits = 5
+            5
         case .group(false):
-            bits = 6
+            6
         case let .branch(b):
-            bits = b.id ^ 0xDEADBEEFCAFEBABE
+            b.id ^ 0xDEAD_BEEF_CAFE_BABE
         case .just:
-            bits = 7
+            7
         }
-        bits ^= UInt64(position) &* 0x9E3779B97F4A7C15
-        bits = (bits ^ (bits >> 30)) &* 0xBF58476D1CE4E5B9
-        bits = (bits ^ (bits >> 27)) &* 0x94D049BB133111EB
+        bits ^= UInt64(position) &* 0x9E37_79B9_7F4A_7C15
+        bits = (bits ^ (bits >> 30)) &* 0xBF58_476D_1CE4_E5B9
+        bits = (bits ^ (bits >> 27)) &* 0x94D0_49BB_1331_11EB
         bits ^= bits >> 31
         return bits
     }
 
     /// Updates a Zobrist hash in O(1) after replacing the element at `position`.
-    internal static func zobristHashUpdating(
+    static func zobristHashUpdating(
         _ hash: UInt64,
         at position: Int,
         replacing oldValue: ChoiceSequenceValue,
-        with newValue: ChoiceSequenceValue
+        with newValue: ChoiceSequenceValue,
     ) -> UInt64 {
         hash ^ zobristContribution(at: position, oldValue) ^ zobristContribution(at: position, newValue)
     }
@@ -116,7 +116,6 @@ extension ChoiceSequence {
 // MARK: - Helper functions
 
 public extension ChoiceSequence {
-
     /// Creates a flat ``ChoiceSequence`` by flattening the given ``ChoiceTree``.
     init(_ tree: ChoiceTree) {
         self = Self.flatten(tree)
@@ -135,14 +134,14 @@ public extension ChoiceSequence {
     private static func flatten(
         _ tree: ChoiceTree,
         includingAllBranches: Bool,
-        into output: inout ChoiceSequence
+        into output: inout ChoiceSequence,
     ) {
         switch tree {
         case let .choice(value, meta):
             output.append(.value(.init(
                 choice: value,
                 validRange: meta.validRange,
-                isRangeExplicit: meta.isRangeExplicit
+                isRangeExplicit: meta.isRangeExplicit,
             )))
         case .just:
             output.append(.just)

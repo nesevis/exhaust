@@ -25,9 +25,9 @@ public enum DateSpan: Sendable, Comparable, Equatable {
         case let .minutes(n): n * 60
         case let .hours(n): n * 3600
         case let .days(n): n * 86400
-        case let .weeks(n): n * 604800
-        case let .months(n): n * 2_592_000   // 30 days
-        case let .years(n): n * 31_536_000   // 365 days
+        case let .weeks(n): n * 604_800
+        case let .months(n): n * 2_592_000 // 30 days
+        case let .years(n): n * 31_536_000 // 365 days
         }
     }
 
@@ -57,7 +57,7 @@ public extension ReflectiveGenerator {
     static func date(
         between range: ClosedRange<Date>,
         interval: DateSpan,
-        timeZone: TimeZone = .current
+        timeZone: TimeZone = .current,
     ) -> ReflectiveGenerator<Date> {
         let lowerSeconds = Int64(range.lowerBound.timeIntervalSinceReferenceDate)
         let upperSeconds = Int64(range.upperBound.timeIntervalSinceReferenceDate)
@@ -72,8 +72,8 @@ public extension ReflectiveGenerator {
                 min: lowerSeconds.bitPattern64,
                 max: upperSeconds.bitPattern64,
                 tag: .date(intervalSeconds: intervalSeconds, timeZoneID: timeZone.identifier),
-                isRangeExplicit: true
-            )
+                isRangeExplicit: true,
+            ),
         ) { .pure(Int64(bitPattern64: ($0 as! any BitPatternConvertible).bitPattern64)) }
 
         return inner.mapped(
@@ -84,7 +84,7 @@ public extension ReflectiveGenerator {
             },
             backward: { date in
                 Int64(date.timeIntervalSinceReferenceDate)
-            }
+            },
         )
     }
 
@@ -97,7 +97,7 @@ public extension ReflectiveGenerator {
         within span: DateSpan,
         of anchor: Date,
         interval: DateSpan,
-        timeZone: TimeZone = .current
+        timeZone: TimeZone = .current,
     ) -> ReflectiveGenerator<Date> {
         let offsetSeconds = TimeInterval(span.fixedSeconds)
         let range = anchor.addingTimeInterval(-offsetSeconds) ... anchor.addingTimeInterval(offsetSeconds)
@@ -115,7 +115,7 @@ public extension ReflectiveGenerator {
         within span: ClosedRange<DateSpan>,
         of anchor: Date,
         interval: DateSpan,
-        timeZone: TimeZone = .current
+        timeZone: TimeZone = .current,
     ) -> ReflectiveGenerator<Date> {
         let lower = anchor.addingTimeInterval(TimeInterval(span.lowerBound.fixedSeconds))
         let upper = anchor.addingTimeInterval(TimeInterval(span.upperBound.fixedSeconds))

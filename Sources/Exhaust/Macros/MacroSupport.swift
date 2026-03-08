@@ -355,12 +355,12 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
         column: UInt = #column,
         property: @Sendable @escaping (Output) -> Bool,
     ) -> Output? {
-        var maxIterations: UInt64 = 10_000
+        var maxIterations: UInt64 = 10000
         var seed: UInt64?
         var shrinkConfig: ShrinkBudget = .fast
         var suppressIssueReporting = false
-        var poolCapacity: Int = 256
-        var generateRatio: Double = 0.2
+        var poolCapacity = 256
+        var generateRatio = 0.2
 
         for setting in settings {
             switch setting {
@@ -387,7 +387,7 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
             poolCapacity: poolCapacity,
             generateRatio: generateRatio,
             seed: seed,
-            scorer: scorer
+            scorer: scorer,
         )
         let actualSeed = runner.baseSeed
 
@@ -499,8 +499,8 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
 
     /// Validates a generator's reflection, replay, and health. Runtime target of `#examine` expansion.
     @discardableResult
-    public static func __examine<Output>(
-        _ gen: ReflectiveGenerator<Output>,
+    public static func __examine(
+        _ gen: ReflectiveGenerator<some Any>,
         samples: Int,
         seed: UInt64?,
         fileID: StaticString,

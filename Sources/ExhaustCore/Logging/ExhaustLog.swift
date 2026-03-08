@@ -280,7 +280,7 @@ public enum ExhaustLog {
     }
 
     private static let subsystem = "com.exhaust"
-    nonisolated(unsafe) private static var _configuration = Configuration()
+    private nonisolated(unsafe) static var _configuration = Configuration()
 
     private static let coreLogger = Logger(subsystem: subsystem, category: Category.core.rawValue)
     private static let extensionsLogger = Logger(subsystem: subsystem, category: Category.extensions.rawValue)
@@ -387,4 +387,3 @@ public enum ExhaustLog {
         return escaped
     }
 }
-

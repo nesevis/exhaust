@@ -33,7 +33,7 @@ public struct ExploreRunner<Output>: ~Copyable {
     public init(
         gen: ReflectiveGenerator<Output>,
         property: @escaping (Output) -> Bool,
-        maxIterations: UInt64 = 10_000,
+        maxIterations: UInt64 = 10000,
         shrinkConfig: Interpreters.ShrinkConfiguration = .fast,
         poolCapacity: Int = 256,
         generateRatio: Double = 0.2,
@@ -45,21 +45,23 @@ public struct ExploreRunner<Output>: ~Copyable {
         self.maxIterations = maxIterations
         self.shrinkConfig = shrinkConfig
         self.scorer = scorer
-        self.pool = DefaultSeedPool(
+        pool = DefaultSeedPool(
             capacity: poolCapacity,
             generateRatio: generateRatio,
-            useFitness: true
+            useFitness: true,
         )
-        self.tracker = NoveltyTracker()
-        self.schedule = LogarithmicSchedule()
+        tracker = NoveltyTracker()
+        schedule = LogarithmicSchedule()
         if let seed {
-            self.prng = Xoshiro256(seed: seed)
+            prng = Xoshiro256(seed: seed)
         } else {
-            self.prng = Xoshiro256()
+            prng = Xoshiro256()
         }
     }
 
-    public var baseSeed: UInt64 { prng.seed }
+    public var baseSeed: UInt64 {
+        prng.seed
+    }
 
     // MARK: - Run
 
@@ -91,7 +93,7 @@ public struct ExploreRunner<Output>: ~Copyable {
                     tree: tree,
                     noveltyScore: novelty,
                     fitness: fitness,
-                    generation: iteration
+                    generation: iteration,
                 ))
             }
         }
@@ -112,7 +114,7 @@ public struct ExploreRunner<Output>: ~Copyable {
                 let energy = schedule.energy(
                     for: seed,
                     poolSize: pool.count,
-                    averagePoolFitness: pool.averageFitness
+                    averagePoolFitness: pool.averageFitness,
                 )
 
                 let climbBudget = min(energy * 4, Int(maxIterations - iteration))
@@ -173,7 +175,7 @@ public struct ExploreRunner<Output>: ~Copyable {
                 tree: tree,
                 noveltyScore: novelty,
                 fitness: fitness,
-                generation: iteration
+                generation: iteration,
             ))
         }
 
@@ -187,27 +189,26 @@ public struct ExploreRunner<Output>: ~Copyable {
         value: Output,
         tree: ChoiceTree,
         iteration: UInt64,
-        fromMutation: Bool = false,
+        fromMutation _: Bool = false,
     ) -> ExploreResult<Output> {
         do {
-            let shrinkTree: ChoiceTree
-            if let reflected = try Interpreters.reflect(gen, with: value) {
-                shrinkTree = reflected
+            let shrinkTree: ChoiceTree = if let reflected = try Interpreters.reflect(gen, with: value) {
+                reflected
             } else {
-                shrinkTree = tree
+                tree
             }
 
             if let (shrunkSequence, shrunkValue) = try Interpreters.reduce(
                 gen: gen,
                 tree: shrinkTree,
                 config: shrinkConfig,
-                property: property
+                property: property,
             ) {
                 return .failure(
                     counterexample: shrunkValue,
                     shrunkSequence: shrunkSequence,
                     original: value,
-                    iteration: iteration
+                    iteration: iteration,
                 )
             }
         } catch {

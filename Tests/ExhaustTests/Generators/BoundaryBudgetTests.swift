@@ -6,13 +6,12 @@
 //  to measure how long boundary analysis takes at different scales.
 //
 
+import Foundation
 import Testing
 @testable import Exhaust
-import Foundation
 
 @Suite("Boundary Budget Stress Tests")
 struct BoundaryBudgetTests {
-
     // MARK: - Date Ranges
 
     // Full year 2024
@@ -20,11 +19,11 @@ struct BoundaryBudgetTests {
     static let year2024End = Date(timeIntervalSinceReferenceDate: 725_760_000 + 86400 * 366)
     static let year2024 = year2024Start ... year2024End
 
-    // Q1 2024 (Jan–Mar, captures US spring forward)
+    /// Q1 2024 (Jan–Mar, captures US spring forward)
     static let q1_2024 = year2024Start
         ... Date(timeIntervalSinceReferenceDate: 725_760_000 + 91 * 86400)
 
-    // Q4 2024 (Oct–Dec, captures US fall back)
+    /// Q4 2024 (Oct–Dec, captures US fall back)
     static let q4_2024 = Date(timeIntervalSinceReferenceDate: 725_760_000 + 274 * 86400)
         ... year2024End
 
@@ -39,7 +38,7 @@ struct BoundaryBudgetTests {
             // Property: every date in 2024 has a valid weekday (1–7)
             let calendar = Calendar(identifier: .gregorian)
             let weekday = calendar.component(.weekday, from: date)
-            return (1...7).contains(weekday)
+            return (1 ... 7).contains(weekday)
         }
 
         #expect(counterExample == nil)
@@ -65,7 +64,7 @@ struct BoundaryBudgetTests {
     func twoParamSchedulingOverlap() {
         let gen = #gen(
             .date(between: Self.q1_2024, interval: .hours(1)),
-            .date(between: Self.q1_2024, interval: .hours(1))
+            .date(between: Self.q1_2024, interval: .hours(1)),
         )
 
         // Property: if eventEnd > eventStart, the duration is positive
@@ -82,7 +81,7 @@ struct BoundaryBudgetTests {
     func twoParamCrossQuarter() {
         let gen = #gen(
             .date(between: Self.q1_2024, interval: .hours(1)),
-            .date(between: Self.q4_2024, interval: .hours(1))
+            .date(between: Self.q4_2024, interval: .hours(1)),
         )
 
         // Property: Q4 date is always after Q1 date
@@ -93,17 +92,17 @@ struct BoundaryBudgetTests {
         #expect(counterExample == nil)
     }
 
-    // Flaky — why is this flaky
+    /// Flaky — why is this flaky
     @Test("2-param: day-of-week consistency across DST", .disabled("FIXME"))
     func twoParamDayOfWeekConsistency() {
         let gen = #gen(
             .date(between: Self.year2024, interval: .hours(1)),
-            .date(between: Self.year2024, interval: .hours(1))
+            .date(between: Self.year2024, interval: .hours(1)),
         )
 
         // Property: if two dates are exactly 7 calendar days apart,
         // they fall on the same weekday
-        let counterExample = #exhaust(gen, .suppressIssueReporting, .replay(9233197236318045878)) { date1, date2 in
+        let counterExample = #exhaust(gen, .suppressIssueReporting, .replay(9_233_197_236_318_045_878)) { date1, date2 in
             var calendar = Calendar(identifier: .gregorian)
             calendar.timeZone = Self.usEastern
             let dayDiff = calendar.dateComponents([.day], from: date1, to: date2).day!
@@ -123,7 +122,7 @@ struct BoundaryBudgetTests {
         let gen = #gen(
             .date(between: Self.q1_2024, interval: .hours(1)),
             .date(between: Self.q1_2024, interval: .hours(1)),
-            .date(between: Self.q1_2024, interval: .hours(1))
+            .date(between: Self.q1_2024, interval: .hours(1)),
         )
 
         // Property: date comparison is transitive (a < b && b < c → a < c)
@@ -140,7 +139,7 @@ struct BoundaryBudgetTests {
         let gen = #gen(
             .date(between: Self.q1_2024, interval: .hours(1)),
             .date(between: Self.q1_2024, interval: .hours(1)),
-            .date(between: Self.q1_2024, interval: .hours(1))
+            .date(between: Self.q1_2024, interval: .hours(1)),
         )
 
         // Property: if a and c are on the same calendar day, and a <= b <= c,
@@ -170,7 +169,7 @@ struct BoundaryBudgetTests {
             .date(between: Self.q1_2024, interval: .hours(1)),
             .date(between: Self.q1_2024, interval: .hours(1)),
             .date(between: Self.q1_2024, interval: .hours(1)),
-            .date(between: Self.q1_2024, interval: .hours(1))
+            .date(between: Self.q1_2024, interval: .hours(1)),
         )
 
         // Property: overlap is symmetric — if A overlaps B, then B overlaps A
@@ -191,7 +190,7 @@ struct BoundaryBudgetTests {
     func mixedDateAndOffset() {
         let gen = #gen(
             .date(between: Self.year2024, interval: .hours(1)),
-            .int(in: -168 ... 168)  // ±1 week in hours
+            .int(in: -168 ... 168), // ±1 week in hours
         )
 
         // Property: adding N hours via seconds matches Calendar.date(byAdding:)
@@ -215,13 +214,13 @@ struct BoundaryBudgetTests {
         let gen = #gen(
             .date(between: Self.year2024, interval: .hours(1)),
             .int(in: -72 ... 72),
-            .int(in: -72 ... 72)
+            .int(in: -72 ... 72),
         )
 
         // Property: adding hours is associative — (date + a) + b == date + (a + b)
         let counterExample = #exhaust(gen, .suppressIssueReporting) { date, a, b in
             let stepwise = date.addingTimeInterval(Double(a) * 3600)
-                                .addingTimeInterval(Double(b) * 3600)
+                .addingTimeInterval(Double(b) * 3600)
             let combined = date.addingTimeInterval(Double(a + b) * 3600)
             return abs(stepwise.timeIntervalSince(combined)) < 1.0
         }
@@ -238,13 +237,13 @@ struct BoundaryBudgetTests {
             .date(between: Self.q1_2024, interval: .hours(1)),
             .date(between: Self.q1_2024, interval: .hours(1)),
             .date(between: Self.q1_2024, interval: .hours(1)),
-            .date(between: Self.q1_2024, interval: .hours(1))
+            .date(between: Self.q1_2024, interval: .hours(1)),
         )
 
         // Property: createdDate <= modifiedDate (treating params as: start, end, modified, created, due)
-        let counterExample = #exhaust(gen, .suppressIssueReporting) { start, end, modified, created, due in
+        let counterExample = #exhaust(gen, .suppressIssueReporting) { start, end, modified, created, _ in
             guard created <= modified else { return true } // precondition
-            guard start <= end else { return true }        // precondition
+            guard start <= end else { return true } // precondition
             // Trivially true — just exercising the covering array
             return created <= modified
         }
@@ -255,16 +254,16 @@ struct BoundaryBudgetTests {
     @Test("6-param: record with dates + status enum + priority int")
     func sixParamMixedRecord() {
         let gen = #gen(
-            .date(between: Self.q1_2024, interval: .hours(1)),  // startDate
-            .date(between: Self.q1_2024, interval: .hours(1)),  // endDate
-            .date(between: Self.q1_2024, interval: .hours(1)),  // modifiedDate
-            .date(between: Self.q1_2024, interval: .hours(1)),  // createdDate
-            .int(in: 0 ... 4),                                   // status
-            .int(in: 1 ... 5)                                    // priority
+            .date(between: Self.q1_2024, interval: .hours(1)), // startDate
+            .date(between: Self.q1_2024, interval: .hours(1)), // endDate
+            .date(between: Self.q1_2024, interval: .hours(1)), // modifiedDate
+            .date(between: Self.q1_2024, interval: .hours(1)), // createdDate
+            .int(in: 0 ... 4), // status
+            .int(in: 1 ... 5), // priority
         )
 
-        let counterExample = #exhaust(gen, .suppressIssueReporting) { start, end, modified, created, status, priority in
-            (1...5).contains(priority) && (0...4).contains(status)
+        let counterExample = #exhaust(gen, .suppressIssueReporting) { _, _, _, _, status, priority in
+            (1 ... 5).contains(priority) && (0 ... 4).contains(status)
         }
 
         #expect(counterExample == nil)
@@ -276,7 +275,7 @@ struct BoundaryBudgetTests {
     func budgetCeiling() {
         let gen = #gen(
             .date(between: Self.year2024, interval: .minutes(15)),
-            .date(between: Self.year2024, interval: .minutes(15))
+            .date(between: Self.year2024, interval: .minutes(15)),
         )
 
         // Property: dates preserve their relative ordering through Calendar

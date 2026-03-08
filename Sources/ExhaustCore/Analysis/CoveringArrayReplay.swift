@@ -5,7 +5,6 @@
 
 /// Converts covering array rows into `ChoiceTree` structures for replay.
 public enum CoveringArrayReplay {
-
     /// Builds a `ChoiceTree` from a covering array row that can be replayed through the original generator via `Interpreters.replay`.
     ///
     /// - Parameters:
@@ -58,7 +57,7 @@ public enum CoveringArrayReplay {
                 weight: chosen.weight,
                 id: chosen.id,
                 branchIDs: branchIDs,
-                choice: subTree
+                choice: subTree,
             )
             return .group([.selected(branch)])
         }
@@ -68,16 +67,16 @@ public enum CoveringArrayReplay {
     private static func buildSubTree(for gen: ReflectiveGenerator<Any>) -> ChoiceTree? {
         switch gen {
         case .pure:
-            return .just("")
+            .just("")
 
         case let .impure(operation, _):
             switch operation {
             case .just:
-                return .just("")
+                .just("")
             case let .contramap(_, next), let .prune(next):
-                return buildSubTree(for: next)
+                buildSubTree(for: next)
             default:
-                return nil
+                nil
             }
         }
     }

@@ -28,13 +28,12 @@ public struct LogarithmicSchedule: PowerSchedule {
         poolSize: Int,
         averagePoolFitness: Double = 0,
     ) -> Int {
-        let scoreFactor: Double
-        if averagePoolFitness > 0 {
+        let scoreFactor: Double = if averagePoolFitness > 0 {
             // Fitness mode: seeds with above-average fitness get more energy
-            scoreFactor = max(1.0, seed.fitness / averagePoolFitness)
+            max(1.0, seed.fitness / averagePoolFitness)
         } else {
             // Novelty mode: scale by novelty (1.0 = baseline)
-            scoreFactor = max(seed.noveltyScore, 0.25)
+            max(seed.noveltyScore, 0.25)
         }
         // Reduce energy as pool grows (log dampening)
         let poolFactor = 1.0 / max(1.0, log2(Double(poolSize)))

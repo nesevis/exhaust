@@ -60,7 +60,6 @@ struct ReductionTargetTests {
         #expect(target == minus10BP)
         #expect(target != zeroBP)
     }
-
 }
 
 // MARK: - Reducer Pass 5 Tests
@@ -250,7 +249,7 @@ struct ReducerReduceValuesTests {
         var found: ((UInt64, UInt64, UInt64), ChoiceTree)?
         while let pair = try iterator.next() {
             let value = pair.0
-            if value.0 > 0 && property(value) == false {
+            if value.0 > 0, property(value) == false {
                 found = pair
                 break
             }
@@ -265,5 +264,4 @@ struct ReducerReduceValuesTests {
         // p <= left, p <= right, and left < right  ==>  (0, 0, 1)
         #expect(result.1 == (0, 0, 1))
     }
-
 }

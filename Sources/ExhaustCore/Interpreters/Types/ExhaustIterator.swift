@@ -11,9 +11,9 @@ public protocol ExhaustIterator<Element>: ~Copyable {
     mutating func next() throws -> Element?
 }
 
-extension ExhaustIterator where Self: ~Copyable {
+public extension ExhaustIterator where Self: ~Copyable {
     /// Return the first `n` elements as an array.
-    public mutating func prefix(_ n: Int) throws -> [Element] {
+    mutating func prefix(_ n: Int) throws -> [Element] {
         var result = [Element]()
         result.reserveCapacity(n)
         for _ in 0 ..< n {
@@ -24,9 +24,9 @@ extension ExhaustIterator where Self: ~Copyable {
     }
 }
 
-extension Array {
+public extension Array {
     /// Collect all elements from a `~Copyable` iterator.
-    public init(collecting iterator: inout some ExhaustIterator<Element> & ~Copyable) throws {
+    init(collecting iterator: inout some ExhaustIterator<Element> & ~Copyable) throws {
         self = []
         while let element = try iterator.next() {
             append(element)

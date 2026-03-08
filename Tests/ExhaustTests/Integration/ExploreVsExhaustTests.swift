@@ -3,9 +3,9 @@
 //  ExhaustTests
 //
 
+import ExhaustCore
 import Testing
 @testable import Exhaust
-import ExhaustCore
 
 @Suite("Explore vs Exhaust")
 struct ExploreVsExhaustTests {
@@ -16,7 +16,7 @@ struct ExploreVsExhaustTests {
         let gen = BST.arbitrary(maxDepth: 8, valueRange: 0 ... 18)
             .filter { $0.isValidBST() }
             .unique()
-        let result = #exhaust(gen, .maxIterations(20_000), .suppressIssueReporting, .replay(13183411771408542277)) { bst in
+        let result = #exhaust(gen, .maxIterations(20000), .suppressIssueReporting, .replay(13_183_411_771_408_542_277)) { bst in
             !(bst.height == 5)
         }
         let bst = try #require(result)
@@ -34,9 +34,9 @@ struct ExploreVsExhaustTests {
 
         // Composite scorer: reward height
         // Height alone doesn't guide toward valid BSTs — most tall trees violate ordering.
-        let result = #explore(gen, .maxIterations(200_000), .replay(15190352305301843617), .suppressIssueReporting,
-            scorer: { Double($0.height) }
-        ) { bst in
+        let result = #explore(gen, .maxIterations(200_000), .replay(15_190_352_305_301_843_617), .suppressIssueReporting,
+                              scorer: { Double($0.height) })
+        { bst in
             !(bst.height >= 5)
         }
 
@@ -51,8 +51,8 @@ struct ExploreVsExhaustTests {
     func exploreWithScorerWorks() {
         let gen = #gen(.int(in: 0 ... 1000))
         let result = #explore(gen, .maxIterations(500), .suppressIssueReporting,
-            scorer: { Double($0) }
-        ) { value in
+                              scorer: { Double($0) })
+        { value in
             value < 500
         }
         #expect(result != nil)

@@ -42,17 +42,16 @@ public struct BoundaryDomainProfile: @unchecked Sendable {
 
 /// Boundary value selection functions used by `ChoiceTreeAnalysis`.
 public enum BoundaryDomainAnalysis {
-
     static func computeBoundaryValues(min: UInt64, max: UInt64, tag: TypeTag) -> [UInt64] {
         switch tag {
         case .double, .float:
-            return computeFloatBoundaryValues(min: min, max: max, tag: tag)
+            computeFloatBoundaryValues(min: min, max: max, tag: tag)
         case let .date(intervalSeconds, timeZoneID):
-            return computeDateBoundaryValues(min: min, max: max, intervalSeconds: intervalSeconds, timeZoneID: timeZoneID)
+            computeDateBoundaryValues(min: min, max: max, intervalSeconds: intervalSeconds, timeZoneID: timeZoneID)
         case .bits:
-            return [min, max]
+            [min, max]
         default:
-            return computeIntegerBoundaryValues(min: min, max: max, tag: tag)
+            computeIntegerBoundaryValues(min: min, max: max, tag: tag)
         }
     }
 
@@ -71,14 +70,13 @@ public enum BoundaryDomainAnalysis {
 
     private static func computeFloatBoundaryValues(min: UInt64, max: UInt64, tag: TypeTag) -> [UInt64] {
         // For float types, check if range is the full type range
-        let isFullRange: Bool
-        switch tag {
+        let isFullRange: Bool = switch tag {
         case .double:
-            isFullRange = min == UInt64.min && max == UInt64.max
+            min == UInt64.min && max == UInt64.max
         case .float:
-            isFullRange = min == UInt64(UInt32.min) && max == UInt64(UInt32.max)
+            min == UInt64(UInt32.min) && max == UInt64(UInt32.max)
         default:
-            isFullRange = false
+            false
         }
 
         if isFullRange {
@@ -119,25 +117,25 @@ public enum BoundaryDomainAnalysis {
     private static func zeroBitPatternFor(tag: TypeTag) -> UInt64? {
         switch tag {
         case .uint, .uint64, .uint32, .uint16, .uint8:
-            return 0
+            0
         case .int:
-            return Int(0).bitPattern64
+            Int(0).bitPattern64
         case .int64:
-            return Int64(0).bitPattern64
+            Int64(0).bitPattern64
         case .int32:
-            return Int32(0).bitPattern64
+            Int32(0).bitPattern64
         case .int16:
-            return Int16(0).bitPattern64
+            Int16(0).bitPattern64
         case .int8:
-            return Int8(0).bitPattern64
+            Int8(0).bitPattern64
         case .double:
-            return Double(0.0).bitPattern64
+            Double(0.0).bitPattern64
         case .float:
-            return Float(0.0).bitPattern64
-        case .date(_, _):
-            return Int64(0).bitPattern64
+            Float(0.0).bitPattern64
+        case .date:
+            Int64(0).bitPattern64
         case .bits:
-            return 0
+            0
         }
     }
 
@@ -145,10 +143,10 @@ public enum BoundaryDomainAnalysis {
 
     /// Seconds since reference date for well-known epoch points where date-handling bugs tend to cluster.
     private static let interestingDateEpochs: [Int64] = [
-        0,                  // Reference date (2001-01-01 00:00:00 UTC)
-        -978_307_200,       // Unix epoch (1970-01-01 00:00:00 UTC)
-        1_169_176_447,      // Y2038 32-bit overflow (2038-01-19 03:14:07 UTC)
-        -31_622_400,        // Y2K (2000-01-01 00:00:00 UTC)
+        0, // Reference date (2001-01-01 00:00:00 UTC)
+        -978_307_200, // Unix epoch (1970-01-01 00:00:00 UTC)
+        1_169_176_447, // Y2038 32-bit overflow (2038-01-19 03:14:07 UTC)
+        -31_622_400, // Y2K (2000-01-01 00:00:00 UTC)
     ]
 
     /// Computes boundary values for dates stored as seconds since reference date.
@@ -164,8 +162,8 @@ public enum BoundaryDomainAnalysis {
 
         var values = Set<UInt64>()
 
-        // Snap a seconds value to the nearest interval step from lowerSeconds.
-        // Returns nil if the value falls outside the range.
+        /// Snap a seconds value to the nearest interval step from lowerSeconds.
+        /// Returns nil if the value falls outside the range.
         func snap(_ seconds: Int64) -> Int64? {
             let offset = seconds - lowerSeconds
             guard offset >= 0 else { return nil }
@@ -174,14 +172,14 @@ public enum BoundaryDomainAnalysis {
             return snapped
         }
 
-        // Insert a snapped seconds value if it falls within the range.
+        /// Insert a snapped seconds value if it falls within the range.
         func insert(_ seconds: Int64) {
             if let snapped = snap(seconds) {
                 values.insert(snapped.bitPattern64)
             }
         }
 
-        // Insert a value and its ±1 step neighbors.
+        /// Insert a value and its ±1 step neighbors.
         func insertWithNeighbors(_ seconds: Int64) {
             guard let snapped = snap(seconds) else { return }
             values.insert(snapped.bitPattern64)
@@ -210,9 +208,9 @@ public enum BoundaryDomainAnalysis {
         }
 
         // 5. Calendar boundaries (first and last within range, snapped, with neighbors)
-        let secondsPerDay: Int64 = 86_400
-        let secondsPerMonth: Int64 = 2_592_000    // 30 days
-        let secondsPerYear: Int64 = 31_536_000     // 365 days
+        let secondsPerDay: Int64 = 86400
+        let secondsPerMonth: Int64 = 2_592_000 // 30 days
+        let secondsPerYear: Int64 = 31_536_000 // 365 days
 
         for unitSeconds in [secondsPerDay, secondsPerMonth, secondsPerYear] {
             guard unitSeconds <= rangeSeconds else { continue }
@@ -260,7 +258,6 @@ public enum BoundaryDomainAnalysis {
 
 /// Computes DST transition times using Foundation's `TimeZone.nextDaylightSavingTimeTransition`.
 enum DSTTransitions {
-
     /// Returns DST transition times (seconds since reference date) that fall within [lower, upper] for the given timezone.
     ///
     /// Only the first and last transitions within [lower, upper] are included to keep boundary value counts small for large ranges. Each transition includes the transition moment itself plus the start and end of its calendar day.

@@ -8,6 +8,7 @@
 import Foundation
 
 // MARK: - Academic Provenance
+
 //
 // Implements the `parse` interpretation P⟦·⟧ (Goldstein §3.3.3) from a hierarchical ChoiceTree. The dissertation parses from flat choice sequences; Exhaust adds tree-structured replay for precise structural matching.
 
@@ -105,10 +106,7 @@ extension Interpreters {
                 choices: &choices,
             )
         case let .filter(gen, _, _, predicate):
-            guard
-                let inner = try replayWithChoicesHelper(gen, choices: &choices),
-                predicate(inner)
-            else {
+            guard let inner = try replayWithChoicesHelper(gen, choices: &choices), predicate(inner) else {
                 return nil
             }
             return inner as? Output

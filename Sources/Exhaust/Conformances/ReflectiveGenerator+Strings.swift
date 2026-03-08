@@ -5,8 +5,8 @@
 //  Created by Chris Kolbu on 22/2/2026.
 //
 
-import Foundation
 import ExhaustCore
+import Foundation
 
 public extension ReflectiveGenerator {
     /// Generates a random Unicode character, optionally within the given range.
