@@ -1,0 +1,391 @@
+import SwiftDiagnostics
+import SwiftSyntax
+import SwiftSyntaxBuilder
+import SwiftSyntaxMacros
+
+/// Attached macro that synthesizes `StateMachineSpec` conformance from a struct annotated with `@StateMachine`.
+///
+/// Scans the struct for `@Model`, `@SUT`, `@Command`, and `@Invariant` annotations, then generates:
+/// - A `Command` enum with one case per `@Command` method.
+/// - A `commandGenerator` static property using `Gen.pick`.
+/// - A `run(_:)` method dispatching commands to their methods.
+/// - A `checkInvariants()` method calling all `@Invariant` methods.
+/// - `modelDescription` and `sutDescription` computed properties.
+public struct StateMachineDeclarationMacro: MemberMacro, ExtensionMacro {
+
+    // MARK: - ExtensionMacro
+
+    public static func expansion(
+        of node: AttributeSyntax,
+        attachedTo declaration: some DeclGroupSyntax,
+        providingExtensionsOf type: some TypeSyntaxProtocol,
+        conformingTo protocols: [TypeSyntax],
+        in context: some MacroExpansionContext,
+    ) throws -> [ExtensionDeclSyntax] {
+        let ext: DeclSyntax = "extension \(type.trimmed): StateMachineSpec {}"
+        return [ext.cast(ExtensionDeclSyntax.self)]
+    }
+
+    // MARK: - MemberMacro
+
+    public static func expansion(
+        of node: AttributeSyntax,
+        providingMembersOf declaration: some DeclGroupSyntax,
+        conformingTo protocols: [TypeSyntax],
+        in context: some MacroExpansionContext,
+    ) throws -> [DeclSyntax] {
+        let members = declaration.memberBlock.members
+
+        let modelProps = extractModelProperties(from: members)
+        let sutProps = extractSUTProperties(from: members)
+        let commands = extractCommands(from: members)
+        let invariants = extractInvariants(from: members)
+
+        // Validate
+        if commands.isEmpty {
+            context.diagnose(Diagnostic(
+                node: Syntax(node),
+                message: StateMachineDiagnostic.noCommands,
+            ))
+        }
+        if sutProps.isEmpty {
+            context.diagnose(Diagnostic(
+                node: Syntax(node),
+                message: StateMachineDiagnostic.noSUT,
+            ))
+        }
+
+        var decls: [DeclSyntax] = []
+
+        // 1. Command enum
+        decls.append(synthesizeCommandEnum(commands: commands))
+
+        // 2. SystemUnderTest typealias + sut accessor
+        if let sutProp = sutProps.first, let sutType = sutProp.type {
+            decls.append("typealias SystemUnderTest = \(raw: sutType)")
+            decls.append("var sut: SystemUnderTest { \(raw: sutProp.name) }")
+        } else if let sutProp = sutProps.first {
+            // No type available — use Never as a placeholder and emit a note.
+            // The compiler will produce a type mismatch if the user accesses .sut,
+            // which is better than a confusing "could not infer" error.
+            context.diagnose(Diagnostic(
+                node: Syntax(node),
+                message: StateMachineDiagnostic.sutTypeNotInferred,
+            ))
+            decls.append("var sut: Never { fatalError(\"SUT type could not be inferred — add an explicit type annotation to the @SUT property\") }")
+        }
+
+        // 3. commandGenerator
+        decls.append(synthesizeCommandGenerator(commands: commands))
+
+        // 4. run(_:)
+        decls.append(synthesizeRunMethod(commands: commands))
+
+        // 5. checkInvariants()
+        decls.append(synthesizeCheckInvariants(invariants: invariants))
+
+        // 6. modelDescription
+        decls.append(synthesizeModelDescription(modelProps: modelProps))
+
+        // 7. sutDescription
+        decls.append(synthesizeSUTDescription(sutProps: sutProps))
+
+        return decls
+    }
+}
+
+// MARK: - Extraction
+
+private struct CommandInfo {
+    let methodName: String
+    let parameters: [(label: String, type: String)]
+    let weight: String
+    let generatorExprs: [String]
+}
+
+private struct InvariantInfo {
+    let methodName: String
+}
+
+private func extractModelProperties(from members: MemberBlockItemListSyntax) -> [String] {
+    members.compactMap { member in
+        guard let varDecl = member.decl.as(VariableDeclSyntax.self),
+              hasAttribute("Model", on: varDecl)
+        else { return nil }
+        return varDecl.bindings.first?.pattern.trimmedDescription
+    }
+}
+
+private struct SUTProperty {
+    let name: String
+    let type: String?
+}
+
+private func extractSUTProperties(from members: MemberBlockItemListSyntax) -> [SUTProperty] {
+    members.compactMap { member in
+        guard let varDecl = member.decl.as(VariableDeclSyntax.self),
+              hasAttribute("SUT", on: varDecl),
+              let binding = varDecl.bindings.first
+        else { return nil }
+
+        let name = binding.pattern.trimmedDescription
+
+        // Try explicit type annotation first: `@SUT var queue: BoundedQueue<Int>`
+        if let typeAnnotation = binding.typeAnnotation {
+            return SUTProperty(name: name, type: typeAnnotation.type.trimmedDescription)
+        }
+
+        // Fall back to inferring from initializer: `@SUT var queue = BoundedQueue<Int>(capacity: 3)`
+        // Extract the type name from the initializer expression if it's a function call.
+        if let initializer = binding.initializer,
+           let call = initializer.value.as(FunctionCallExprSyntax.self)
+        {
+            let callee = call.calledExpression.trimmedDescription
+            return SUTProperty(name: name, type: callee)
+        }
+
+        // Array literal: `@SUT var stack = [Int]()`
+        if let initializer = binding.initializer,
+           let call = initializer.value.as(FunctionCallExprSyntax.self),
+           let arrayType = call.calledExpression.as(ArrayExprSyntax.self)
+        {
+            return SUTProperty(name: name, type: arrayType.trimmedDescription)
+        }
+
+        // Array sugar: `@SUT var stack: [Int] = []`
+        // Already covered by the typeAnnotation path above.
+
+        return SUTProperty(name: name, type: nil)
+    }
+}
+
+private func extractCommands(from members: MemberBlockItemListSyntax) -> [CommandInfo] {
+    members.compactMap { member in
+        guard let funcDecl = member.decl.as(FunctionDeclSyntax.self),
+              let commandAttr = findAttribute("Command", on: funcDecl)
+        else { return nil }
+
+        let methodName = funcDecl.name.trimmedDescription
+        let parameters = funcDecl.signature.parameterClause.parameters.map { param in
+            let label = param.firstName.trimmedDescription
+            let type = param.type.trimmedDescription
+            return (label: label, type: type)
+        }
+
+        // Extract weight and generator expressions from @Command(weight:, #gen(...))
+        var weight = "1"
+        var generatorExprs: [String] = []
+
+        if let argList = commandAttr.arguments?.as(LabeledExprListSyntax.self) {
+            for arg in argList {
+                if arg.label?.trimmedDescription == "weight" {
+                    weight = arg.expression.trimmedDescription
+                } else {
+                    // Unlabeled arguments are generator expressions
+                    generatorExprs.append(arg.expression.trimmedDescription)
+                }
+            }
+        }
+
+        return CommandInfo(
+            methodName: methodName,
+            parameters: parameters,
+            weight: weight,
+            generatorExprs: generatorExprs,
+        )
+    }
+}
+
+private func extractInvariants(from members: MemberBlockItemListSyntax) -> [InvariantInfo] {
+    members.compactMap { member in
+        guard let funcDecl = member.decl.as(FunctionDeclSyntax.self),
+              hasAttribute("Invariant", on: funcDecl)
+        else { return nil }
+        return InvariantInfo(methodName: funcDecl.name.trimmedDescription)
+    }
+}
+
+private func hasAttribute(_ name: String, on decl: some WithAttributesSyntax) -> Bool {
+    decl.attributes.contains { attr in
+        attr.as(AttributeSyntax.self)?.attributeName.trimmedDescription == name
+    }
+}
+
+private func findAttribute(_ name: String, on decl: some WithAttributesSyntax) -> AttributeSyntax? {
+    decl.attributes.compactMap { attr in
+        attr.as(AttributeSyntax.self)
+    }.first { $0.attributeName.trimmedDescription == name }
+}
+
+// MARK: - Synthesis
+
+private func synthesizeCommandEnum(commands: [CommandInfo]) -> DeclSyntax {
+    var cases: [String] = []
+    var descriptionCases: [String] = []
+
+    for cmd in commands {
+        if cmd.parameters.isEmpty {
+            cases.append("        case \(cmd.methodName)")
+            descriptionCases.append("            case .\(cmd.methodName): \"\(cmd.methodName)\"")
+        } else {
+            let assocValues = cmd.parameters.map { "\($0.label): \($0.type)" }.joined(separator: ", ")
+            cases.append("        case \(cmd.methodName)(\(assocValues))")
+
+            let bindings = cmd.parameters.map(\.label).joined(separator: ", ")
+            let formatParts = cmd.parameters.map { "\\(\($0.label))" }.joined(separator: ", ")
+            descriptionCases.append("            case let .\(cmd.methodName)(\(bindings)): \"\(cmd.methodName)(\(formatParts))\"")
+        }
+    }
+
+    let casesBlock = cases.joined(separator: "\n")
+    let descriptionBlock = descriptionCases.joined(separator: "\n")
+
+    return """
+    enum Command: CustomStringConvertible, Sendable {
+    \(raw: casesBlock)
+
+        var description: String {
+            switch self {
+    \(raw: descriptionBlock)
+            }
+        }
+    }
+    """
+}
+
+private func synthesizeCommandGenerator(commands: [CommandInfo]) -> DeclSyntax {
+    var choices: [String] = []
+
+    for cmd in commands {
+        if cmd.parameters.isEmpty {
+            choices.append("            (\(cmd.weight), Gen.just(Command.\(cmd.methodName)))")
+        } else if cmd.generatorExprs.count == 1, cmd.parameters.count == 1 {
+            // Single parameter — map directly
+            let param = cmd.parameters[0]
+            let genExpr = qualifyGenExpression(cmd.generatorExprs[0], paramType: param.type)
+            choices.append("            (\(cmd.weight), \(genExpr).map { Command.\(cmd.methodName)(\(param.label): $0) })")
+        } else if cmd.generatorExprs.count > 1 {
+            // Multiple parameters — zip then map
+            let qualifiedGens = zip(cmd.generatorExprs, cmd.parameters).map { qualifyGenExpression($0.0, paramType: $0.1.type) }
+            let zipArgs = qualifiedGens.joined(separator: ", ")
+            let labels = cmd.parameters.enumerated().map { i, p in "\(p.label): $0.\(i)" }.joined(separator: ", ")
+            choices.append("            (\(cmd.weight), Gen.zip(\(zipArgs)).map { Command.\(cmd.methodName)(\(labels)) })")
+        } else {
+            // No generators specified — use Gen.just for parameterless, error otherwise
+            choices.append("            (\(cmd.weight), Gen.just(Command.\(cmd.methodName)))")
+        }
+    }
+
+    let choicesBlock = choices.joined(separator: ",\n")
+
+    return """
+    static var commandGenerator: ReflectiveGenerator<Command> {
+        Gen.pick(choices: [
+    \(raw: choicesBlock)
+        ])
+    }
+    """
+}
+
+private func synthesizeRunMethod(commands: [CommandInfo]) -> DeclSyntax {
+    var cases: [String] = []
+
+    for cmd in commands {
+        if cmd.parameters.isEmpty {
+            cases.append("        case .\(cmd.methodName): try self.\(cmd.methodName)()")
+        } else {
+            let bindings = cmd.parameters.map { "let \($0.label)" }.joined(separator: ", ")
+            let args = cmd.parameters.map { "\($0.label): \($0.label)" }.joined(separator: ", ")
+            cases.append("        case .\(cmd.methodName)(\(bindings)): try self.\(cmd.methodName)(\(args))")
+        }
+    }
+
+    let casesBlock = cases.joined(separator: "\n")
+
+    return """
+    mutating func run(_ command: Command) throws {
+        switch command {
+    \(raw: casesBlock)
+        }
+    }
+    """
+}
+
+private func synthesizeCheckInvariants(invariants: [InvariantInfo]) -> DeclSyntax {
+    if invariants.isEmpty {
+        return """
+        func checkInvariants() throws {}
+        """
+    }
+
+    var checks: [String] = []
+    for inv in invariants {
+        checks.append("        try check(\(inv.methodName)(), \"\(inv.methodName)\")")
+    }
+    let checksBlock = checks.joined(separator: "\n")
+
+    return """
+    func checkInvariants() throws {
+    \(raw: checksBlock)
+    }
+    """
+}
+
+private func synthesizeModelDescription(modelProps: [String]) -> DeclSyntax {
+    if modelProps.isEmpty {
+        return """
+        var modelDescription: String { "(no model properties)" }
+        """
+    }
+
+    let parts = modelProps.map { "\"\($0): \\(\($0))\"" }.joined(separator: " + \", \" + ")
+
+    return """
+    var modelDescription: String { \(raw: parts) }
+    """
+}
+
+private func synthesizeSUTDescription(sutProps: [SUTProperty]) -> DeclSyntax {
+    if sutProps.isEmpty {
+        return """
+        var sutDescription: String { "(no SUT)" }
+        """
+    }
+
+    let parts = sutProps.map { "\"\($0.name): \\(\($0.name))\"" }.joined(separator: " + \", \" + ")
+
+    return """
+    var sutDescription: String { \(raw: parts) }
+    """
+}
+
+/// Wraps a generator expression with a type cast to provide type context for implicit member syntax.
+///
+/// User writes `@Command(weight: 3, .int(in: 0...9))` — the expression `.int(in: 0...9)` has no base type in the synthesized context. Casting to `ReflectiveGenerator<ParamType>` resolves the member lookup.
+private func qualifyGenExpression(_ expr: String, paramType: String) -> String {
+    if expr.hasPrefix(".") {
+        return "(\(expr) as ReflectiveGenerator<\(paramType)>)"
+    }
+    return expr
+}
+
+// MARK: - Diagnostics
+
+enum StateMachineDiagnostic: String, DiagnosticMessage {
+    case noCommands = "@StateMachine requires at least one @Command method"
+    case noSUT = "@StateMachine requires exactly one @SUT property"
+    case sutTypeNotInferred = "@SUT property type could not be inferred — add an explicit type annotation"
+
+    var message: String { rawValue }
+
+    var diagnosticID: MessageID {
+        MessageID(domain: "ExhaustMacros", id: "\(self)")
+    }
+
+    var severity: DiagnosticSeverity {
+        switch self {
+        case .noCommands, .noSUT: .error
+        case .sutTypeNotInferred: .warning
+        }
+    }
+}
