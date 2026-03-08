@@ -11,6 +11,11 @@ public struct ExploreMacro: ExpressionMacro {
         of node: some FreestandingMacroExpansionSyntax,
         in context: some MacroExpansionContext,
     ) throws -> ExprSyntax {
+        context.diagnose(Diagnostic(
+            node: Syntax(node),
+            message: ExhaustMacroDiagnostic.exploreUnderDevelopment,
+        ))
+
         let args = node.arguments.map(\.self)
 
         if let trailingClosure = node.trailingClosure {

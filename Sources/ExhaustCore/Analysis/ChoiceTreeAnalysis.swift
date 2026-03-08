@@ -7,15 +7,15 @@
 ///
 /// ## What It Does
 ///
-/// Runs a generator through VACTI with `materializePicks = true` to produce a complete ``ChoiceTree`` — a data structure that records every choice the generator made, including all branches of pick sites (not just the selected one). Walks the tree to identify independent parameters: numeric choices, branch selections (picks), and sequence lengths/elements. Classifies the generator as finite-domain (all parameters have at most 256 values) or boundary-domain (some parameters have large ranges, requiring synthetic boundary value representatives). Returns a ``FiniteDomainProfile`` or ``BoundaryDomainProfile`` that downstream code uses to build covering arrays via the IPOG algorithm.
+/// Runs a generator through the ``ValueAndChoiceTreeInterpreter`` (VACTI) with `materializePicks = true` to produce a complete ``ChoiceTree`` — a data structure that records every choice the generator made, including all branches points. Walks the tree to identify independent parameters: numeric choices, branch selections (picks), and sequence lengths/elements. Classifies the generator as finite-domain (all parameters have at most 256 values) or boundary-domain (some parameters have large ranges, requiring synthetic boundary value representatives). Returns a ``FiniteDomainProfile`` or ``BoundaryDomainProfile`` that downstream code uses to build covering arrays via the IPOG algorithm.
 ///
 /// ## Why This Matters
 ///
 /// Standard random testing misses systematic parameter interactions. A generator with three booleans and a 4-way enum has 32 combinations — random sampling at 100 iterations will likely miss some. t-way combinatorial testing guarantees that every t-tuple of parameter values appears in at least one test case. Strength t=2 (pairwise) catches all two-parameter interactions; t=3 catches all three-parameter interactions. The covering array approach produces far fewer test cases than exhaustive enumeration. For example, pairwise coverage of five boolean parameters needs only four test cases instead of 32. ChoiceTreeAnalysis is what makes this possible: it decomposes an opaque generator into a parameter model suitable for combinatorial construction.
 ///
-/// ## Why VACTI Instead of Recursive Walking
+/// ## How Exhaust Enables Deep Analysis
 ///
-/// Earlier versions (``FiniteDomainAnalysis``, ``BoundaryDomainAnalysis``) recursively walked the generator's AST. This fails on bind chains: `gen.flatMap { ... }` produces an opaque closure the walker cannot inspect. VACTI with `materializePicks = true` executes the generator once, producing a concrete ``ChoiceTree`` that captures every choice — including those hidden behind binds. The tree walk then extracts parameters from the execution trace rather than the generator structure. Trade-off: the analysis reflects one execution path. Different PRNG seeds can produce different sequence lengths. The analysis tries three seeds and keeps the result with the most parameters.
+/// Generators built by composing closures are resistant to analysis because each closure boundary is opaque — a static walker cannot inspect what a `bind` continuation will do until it runs. Exhaust's Freer Monad architecture sidesteps this: instead of embedding decisions in closures, every generator choice is reified as an inspectable ``ReflectiveOperation`` node. When VACTI interprets the generator with `materializePicks = true`, it executes the full generator pipeline once and produces a concrete ``ChoiceTree`` that records every decision — including those produced by bind continuations, nested picks, and recursive layers. The analysis then walks this execution trace rather than the generator structure, extracting a complete parameter model from a single run. Trade-off: the analysis reflects one execution path. Different PRNG seeds can produce different sequence lengths. The analysis tries three seeds and keeps the result with the most parameters.
 ///
 /// ## Parameter Classification
 ///
@@ -49,9 +49,9 @@ public enum ChoiceTreeAnalysis {
     private static let finiteDomainThreshold: UInt64 = 256
 
     private static let seeds: [UInt64] = [
-        0x600D_F00D_600D_E665, // good food good eggs
-        0xF165_BEEF_C0D5_A6E0, // figs beef cod sage
-        0xF0CC_AC1A_C0FF_EE50, // focaccia coffees
+        0x600D_F00D_600D_E665,
+        0xF165_BEEF_C0D5_A6E0,
+        0xF0CC_AC1A_C0FF_EE50,
     ]
 
     /// Analyzes a generator by running it through VACTI and walking the resulting ChoiceTree.

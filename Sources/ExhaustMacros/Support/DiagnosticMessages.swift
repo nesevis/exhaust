@@ -15,6 +15,7 @@ enum ExhaustMacroDiagnostic: String, DiagnosticMessage {
     case exploreMissingScorer = "#explore requires a 'scorer:' argument"
     case extractMissingGenerator = "#extract requires a generator as its first argument"
     case examineMissingGenerator = "#examine requires a generator as its first argument"
+    case exploreUnderDevelopment = "#explore is under active development and its API may change without notice"
 
     var message: String {
         rawValue
@@ -31,7 +32,8 @@ enum ExhaustMacroDiagnostic: String, DiagnosticMessage {
              .forwardOnlyNotFunctionCall,
              .forwardOnlyUnlabeledArguments,
              .forwardOnlyComplexArguments,
-             .forwardOnlyParamMismatch:
+             .forwardOnlyParamMismatch,
+             .exploreUnderDevelopment:
             .warning
         case .noGeneratorArguments,
              .exhaustMissingProperty,
