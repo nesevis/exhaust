@@ -167,7 +167,7 @@ public extension ReflectiveGenerator where Operation == ReflectiveOperation {
     /// - ``FilterType/choiceGradientSampling``: Runs a CGS (Choice Gradient Sampling) warmup pass to learn pick weights conditioned on upstream choices, then bakes them with fitness sharing to prevent overcommitting to the dominant cluster. Produces the best balance of validity rate and output diversity for recursive generators like BST/AVL. Incurs a slight penalty for generators with few branching points.
     /// - ``FilterType/auto`` (default): Uses ``FilterType/choiceGradientSampling``.
     ///
-    /// All strategies maintain deterministic behaviour — given the same seed, the generator will produce the same sequence of values.
+    /// All strategies maintain deterministic behavior — given the same seed, the generator will produce the same sequence of values.
     ///
     /// ```swift
     /// // Auto strategy (default) — in this case uses .choiceGradientSampling

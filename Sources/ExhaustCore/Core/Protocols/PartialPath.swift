@@ -18,18 +18,6 @@ public protocol PartialPath<Root, Value> {
     /// - Parameter root: The root value to extract from.
     /// - Returns: The `Value` if extraction is successful, otherwise `nil`.
     func extract(from root: Any) throws -> Value?
-
-    // Attempts to embed a `Value` back into a `Root` structure.
-    //
-    // This function's primary role is in transformation and shrinking, allowing
-    // a modified sub-value to be placed back into its containing structure.
-    //
-    // - Parameters:
-    //   - value: The new `Value` to embed.
-    //   - root: An `inout` instance of the root value to be modified.
-    // - Returns: `true` if the embedding was successful, otherwise `false`.
-    // func embed(_ value: Value, into root: inout Root) -> Bool
-    // Not needed for our reflective case?
 }
 
 extension KeyPath: PartialPath {

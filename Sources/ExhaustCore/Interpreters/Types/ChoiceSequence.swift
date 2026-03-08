@@ -5,6 +5,7 @@
 //  Created by Chris Kolbu on 8/2/2026.
 //
 
+/// A contiguous region of a ``ChoiceSequence``, identified by its kind, index range, and nesting depth.
 public struct ChoiceSpan: CustomDebugStringConvertible {
     public init(kind: ChoiceSequenceValue, range: ClosedRange<Int>, depth: Int) {
         self.kind = kind
@@ -12,8 +13,11 @@ public struct ChoiceSpan: CustomDebugStringConvertible {
         self.depth = depth
     }
 
+    /// The ``ChoiceSequenceValue`` that opened this span.
     public let kind: ChoiceSequenceValue
+    /// The index range within the ``ChoiceSequence`` that this span covers.
     public let range: ClosedRange<Int>
+    /// The nesting depth of this span (0 = top level).
     public let depth: Int
 
     public var debugDescription: String {
@@ -109,7 +113,7 @@ extension ChoiceSequence {
 
 public extension ChoiceSequence {
 
-    /// Creates a projection of a `ChoiceTree` to a flat list
+    /// Creates a flat ``ChoiceSequence`` by flattening the given ``ChoiceTree``.
     init(_ tree: ChoiceTree) {
         self = Self.flatten(tree)
     }

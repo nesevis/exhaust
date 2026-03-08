@@ -8,7 +8,9 @@
 import Foundation
 
 public extension Interpreters {
+    /// Configuration presets for the reducer's shrink strategies.
     enum ShrinkConfiguration {
+        /// Per-strategy probe budgets controlling how many candidates each strategy evaluates.
         struct ProbeBudgets {
             let deleteAlignedSiblingWindows: Int
             let redistributeNumericPairs: Int
@@ -27,6 +29,7 @@ public extension Interpreters {
             )
         }
 
+        /// Tuning parameters for the beam search used by aligned sibling deletion.
         struct AlignedDeletionBeamSearchTuning {
             let minBeamWidth: Int
             let beamWidthScale: Int

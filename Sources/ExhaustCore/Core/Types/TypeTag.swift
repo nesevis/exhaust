@@ -5,26 +5,38 @@
 //  Created by Chris Kolbu on 12/8/2025.
 //
 
+/// Identifies the numeric type of a ``ChoiceValue``, used for reconstruction, display, and boundary analysis.
 public enum TypeTag: Equatable, Hashable, Sendable {
+    /// Platform-width unsigned integer (`UInt`).
     case uint
+    /// 64-bit unsigned integer.
     case uint64
+    /// 32-bit unsigned integer.
     case uint32
+    /// 16-bit unsigned integer.
     case uint16
+    /// 8-bit unsigned integer.
     case uint8
+    /// Platform-width signed integer (`Int`).
     case int
+    /// 64-bit signed integer.
     case int64
+    /// 32-bit signed integer.
     case int32
+    /// 16-bit signed integer.
     case int16
+    /// 8-bit signed integer.
     case int8
+    /// Double-precision floating point.
     case double
+    /// Single-precision floating point.
     case float
-    /// Date steps: the underlying integer represents step indices, where each step is `intervalSeconds` seconds. Used by boundary analysis to compute calendar-meaningful boundary values (month/year boundaries, DST transitions).
-    /// The `timeZoneID` limits DST boundary values to a single timezone.
+    /// Date steps: the underlying integer represents step indices, where each step is `intervalSeconds` seconds. Used by boundary analysis to compute calendar-meaningful boundary values (month/year boundaries, DST transitions). The `timeZoneID` limits DST boundary values to a single timezone.
     case date(intervalSeconds: Int64, timeZoneID: String)
-    /// Raw bit storage used by composite generators (UUID, Int128, UInt128).
-    /// Boundary analysis produces only all-low / all-high values.
+    /// Raw bit storage used by composite generators (UUID, Int128, UInt128). Boundary analysis produces only all-low / all-high values.
     case bits
 
+    /// Creates a type tag by matching the metatype of the given value against known numeric types.
     @inlinable
     public init<T>(type: T) {
         self = switch type {
