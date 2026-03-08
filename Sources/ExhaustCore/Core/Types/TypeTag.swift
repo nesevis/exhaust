@@ -23,6 +23,9 @@ public enum TypeTag: Equatable, Hashable, Sendable {
     /// calendar-meaningful boundary values (month/year boundaries, DST transitions).
     /// The `timeZoneID` limits DST boundary values to a single timezone.
     case date(intervalSeconds: Int64, timeZoneID: String)
+    /// Raw bit storage used by composite generators (UUID, Int128, UInt128).
+    /// Boundary analysis produces only all-low / all-high values.
+    case bits
 
     @inlinable
     public init<T>(type: T) {
@@ -75,6 +78,7 @@ extension TypeTag {
         case .double: Double(bitPattern64: bitPattern64)
         case .float: Float(bitPattern64: bitPattern64)
         case .date: Int64(bitPattern64: bitPattern64)
+        case .bits: UInt64(bitPattern64: bitPattern64)
         }
     }
 }
@@ -95,6 +99,7 @@ extension TypeTag: CustomStringConvertible {
         case .double: "Double"
         case .float: "Float"
         case .date: "Date"
+        case .bits: "Bits"
         }
     }
 }

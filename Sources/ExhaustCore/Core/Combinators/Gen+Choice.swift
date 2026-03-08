@@ -239,4 +239,24 @@ public extension Gen {
             return .pure(Output(bitPattern64: convertible.bitPattern64))
         }
     }
+
+    /// Generates a raw `UInt64` value within a bit range, tagged as `.bits`.
+    ///
+    /// Use this for composite generators (UUID, Int128, UInt128) where the
+    /// individual UInt64 halves are not semantically meaningful on their own.
+    /// Boundary analysis will produce only all-low / all-high values.
+    static func chooseBits(
+        in range: ClosedRange<UInt64>? = nil
+    ) -> ReflectiveGenerator<UInt64> {
+        let resolvedRange = range ?? UInt64.min ... .max
+        return .impure(operation: .chooseBits(min: resolvedRange.lowerBound, max: resolvedRange.upperBound, tag: .bits, isRangeExplicit: range != nil)) { result in
+            guard let convertible = result as? any BitPatternConvertible else {
+                throw GeneratorError.typeMismatch(
+                    expected: "any BitPatternConvertible",
+                    actual: String(describing: Swift.type(of: result)),
+                )
+            }
+            return .pure(UInt64(bitPattern64: convertible.bitPattern64))
+        }
+    }
 }
