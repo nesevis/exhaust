@@ -10,7 +10,7 @@ import ExhaustCore
 //
 // These are composite generators built from two UInt64 halves using `Gen.chooseBits`.
 // Limitations:
-// - Shrinking operates on each half independently (high half first, then low)
+// - Test case reduction operates on each half independently (high half first, then low)
 // - Range-constrained generation is not supported
 // - Size scaling is not supported
 
@@ -33,7 +33,7 @@ public extension ReflectiveGenerator {
 
     /// Generates arbitrary `Int128` values from two `UInt64` halves.
     ///
-    /// The high half uses sign-bit XOR so that shrinking naturally drives toward zero: the mapped bit pattern orders negative → zero → positive.
+    /// The high half uses sign-bit XOR so that test case reduction naturally drives toward zero: the mapped bit pattern orders negative → zero → positive.
     static func int128() -> ReflectiveGenerator<Int128> {
         Gen.zip(
             Gen.chooseBits(),

@@ -44,10 +44,10 @@ struct PropertyTestFailure<Output> {
         }
 
         if let original {
-            if let shrinkDiff = diff(original, counterexample) {
+            if let reductionDiff = diff(original, counterexample) {
                 lines.append("")
-                lines.append("Shrink diff:")
-                for line in shrinkDiff.split(separator: "\n", omittingEmptySubsequences: false) {
+                lines.append("Reduction diff:")
+                for line in reductionDiff.split(separator: "\n", omittingEmptySubsequences: false) {
                     lines.append("  \(line)")
                 }
             }

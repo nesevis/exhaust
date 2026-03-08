@@ -20,7 +20,7 @@ import ExhaustCore
 /// - `.maxIterations(_)`: upper bound on random sampling iterations (default 100). Additive with the coverage budget.
 /// - `.coverageBudget(_)`: maximum test cases for structured coverage (default 2000).
 /// - `.replay(_)`: fixed seed for deterministic reproduction. Skips structured coverage.
-/// - `.shrinkBudget(_)`: controls test case reduction aggressiveness (`.fast` or `.slow`).
+/// - `.reductionBudget(_)`: controls test case reduction aggressiveness (`.fast` or `.slow`).
 /// - `.reflecting(_)`: skips generation, reflects an existing value through the generator, and reduces it.
 /// - `.randomOnly`: disables structured coverage analysis.
 /// - `.suppressIssueReporting`: skips `reportIssue()` — useful when the caller asserts on the returned value instead.

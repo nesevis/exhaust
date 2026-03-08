@@ -368,7 +368,7 @@ public extension ReflectiveGenerator where Operation == ReflectiveOperation {
     /// Chains this generator with a dependent generator.
     ///
     /// Use `bind` when the next generator depends on the value produced by this one.
-    /// This is more powerful than `map` but **breaks reflection** — the backward pass cannot see through the dependency, so shrinking will not work through `bind` chains.
+    /// This is more powerful than `map` but **breaks reflection** — the backward pass cannot see through the dependency, so test case reduction will not work through `bind` chains.
     ///
     /// Prefer `map`, `zip`, or `#gen(a, b) { ... }` when possible. Use `bind` only when you genuinely need dependent generation.
     ///

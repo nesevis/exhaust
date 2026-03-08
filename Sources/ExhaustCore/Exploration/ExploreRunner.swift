@@ -22,7 +22,7 @@ public struct ExploreRunner<Output>: ~Copyable {
     private let gen: ReflectiveGenerator<Output>
     private let property: (Output) -> Bool
     private let maxIterations: UInt64
-    private let shrinkConfig: Interpreters.ShrinkConfiguration
+    private let reductionConfig: Interpreters.TCRConfiguration
     private let scorer: (Output) -> Double
 
     private var pool: DefaultSeedPool
@@ -34,7 +34,7 @@ public struct ExploreRunner<Output>: ~Copyable {
         gen: ReflectiveGenerator<Output>,
         property: @escaping (Output) -> Bool,
         maxIterations: UInt64 = 10000,
-        shrinkConfig: Interpreters.ShrinkConfiguration = .fast,
+        reductionConfig: Interpreters.TCRConfiguration = .fast,
         poolCapacity: Int = 256,
         generateRatio: Double = 0.2,
         seed: UInt64? = nil,
@@ -43,7 +43,7 @@ public struct ExploreRunner<Output>: ~Copyable {
         self.gen = gen
         self.property = property
         self.maxIterations = maxIterations
-        self.shrinkConfig = shrinkConfig
+        self.reductionConfig = reductionConfig
         self.scorer = scorer
         pool = DefaultSeedPool(
             capacity: poolCapacity,
@@ -201,7 +201,7 @@ public struct ExploreRunner<Output>: ~Copyable {
             if let (shrunkSequence, shrunkValue) = try Interpreters.reduce(
                 gen: gen,
                 tree: shrinkTree,
-                config: shrinkConfig,
+                config: reductionConfig,
                 property: property,
             ) {
                 return .failure(

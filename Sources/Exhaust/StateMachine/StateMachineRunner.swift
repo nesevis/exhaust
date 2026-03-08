@@ -12,7 +12,7 @@ import IssueReporting
 ///
 /// - Parameters:
 ///   - specType: The `@StateMachine`-annotated specification type.
-///   - settings: Configuration options controlling sequence length, iteration count, coverage, and shrinking.
+///   - settings: Configuration options controlling sequence length, iteration count, coverage, and reduction.
 ///   - fileID: The file ID of the call site (injected by macro expansion).
 ///   - filePath: The file path of the call site (injected by macro expansion).
 ///   - line: The line number of the call site (injected by macro expansion).
@@ -30,7 +30,7 @@ public func __runStateMachine<Spec: StateMachineSpec>(
     var maxIterations: UInt64 = 100
     var coverageBudget: UInt64 = 2000
     var seed: UInt64?
-    var shrinkConfig: ShrinkBudget = .fast
+    var reductionConfig: TCRBudget = .fast
     var suppressIssueReporting = false
     var useRandomOnly = false
 
@@ -44,8 +44,8 @@ public func __runStateMachine<Spec: StateMachineSpec>(
             coverageBudget = n
         case let .replay(s):
             seed = s
-        case let .shrinkBudget(config):
-            shrinkConfig = config
+        case let .reductionBudget(config):
+            reductionConfig = config
         case .suppressIssueReporting:
             suppressIssueReporting = true
         case .randomOnly:
@@ -54,9 +54,11 @@ public func __runStateMachine<Spec: StateMachineSpec>(
     }
 
     // Build the sequence generator: an array of commands with bounded length.
+    // Use 0 as the lower bound so the reducer can shrink sequences below the
+    // user's minimum — the minimum is a generation hint, not a shrinking floor.
     let commandGen = Spec.commandGenerator
     let seqGen: ReflectiveGenerator<[Spec.Command]> = commandGen.array(
-        length: sequenceLength,
+        length: 0 ... sequenceLength.upperBound,
     )
 
     // The property: execute the command sequence against a fresh spec and check for failures.
@@ -84,7 +86,7 @@ public func __runStateMachine<Spec: StateMachineSpec>(
             maxIterations: maxIterations,
             coverageBudget: coverageBudget,
             seed: seed,
-            shrinkConfig: shrinkConfig,
+            reductionConfig: reductionConfig,
             suppressIssueReporting: true,
             useRandomOnly: useRandomOnly,
         ),
@@ -210,14 +212,14 @@ private func buildExhaustSettings<Output>(
     maxIterations: UInt64,
     coverageBudget: UInt64,
     seed: UInt64?,
-    shrinkConfig: ShrinkBudget,
+    reductionConfig: TCRBudget,
     suppressIssueReporting: Bool,
     useRandomOnly: Bool,
 ) -> [ExhaustSettings<Output>] {
     var settings: [ExhaustSettings<Output>] = [
         .maxIterations(maxIterations),
         .coverageBudget(coverageBudget),
-        .shrinkBudget(shrinkConfig),
+        .reductionBudget(reductionConfig),
     ]
     if let seed {
         settings.append(.replay(seed))

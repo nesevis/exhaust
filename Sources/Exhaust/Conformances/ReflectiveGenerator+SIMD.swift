@@ -108,7 +108,7 @@ public extension ReflectiveGenerator {
 public extension ReflectiveGenerator {
     /// Generates arbitrary `SIMD8` vectors by generating each lane with the same scalar generator.
     ///
-    /// Each lane shrinks independently.
+    /// Each lane reduces independently.
     ///
     /// ```swift
     /// let gen = #gen(.simd8(.int32(in: 0...255)))
@@ -125,7 +125,7 @@ public extension ReflectiveGenerator {
 public extension ReflectiveGenerator {
     /// Generates arbitrary `SIMD16` vectors by generating each lane with the same scalar generator.
     ///
-    /// Each lane shrinks independently.
+    /// Each lane reduces independently.
     ///
     /// ```swift
     /// let gen = #gen(.simd16(.uint8()))
@@ -142,7 +142,7 @@ public extension ReflectiveGenerator {
 public extension ReflectiveGenerator {
     /// Generates arbitrary `SIMD32` vectors by generating each lane with the same scalar generator.
     ///
-    /// Each lane shrinks independently.
+    /// Each lane reduces independently.
     ///
     /// ```swift
     /// let gen = #gen(.simd32(.uint8()))
@@ -159,7 +159,7 @@ public extension ReflectiveGenerator {
 public extension ReflectiveGenerator {
     /// Generates arbitrary `SIMD64` vectors by generating each lane with the same scalar generator.
     ///
-    /// Each lane shrinks independently.
+    /// Each lane reduces independently.
     ///
     /// ```swift
     /// let gen = #gen(.simd64(.uint8()))

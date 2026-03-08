@@ -8,8 +8,8 @@
 import Foundation
 
 public extension Interpreters {
-    /// Configuration presets for the reducer's shrink strategies.
-    enum ShrinkConfiguration {
+    /// Configuration presets for the reducer's test case reduction strategies.
+    enum TCRConfiguration {
         /// Per-strategy probe budgets controlling how many candidates each strategy evaluates.
         struct ProbeBudgets {
             let deleteAlignedSiblingWindows: Int
@@ -191,7 +191,7 @@ public extension Interpreters {
     static func reduce<Output>(
         gen: ReflectiveGenerator<Output>,
         tree: ChoiceTree,
-        config: ShrinkConfiguration,
+        config: TCRConfiguration,
         property: (Output) -> Bool,
     ) throws -> (ChoiceSequence, Output)? {
         // Mutable variables

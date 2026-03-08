@@ -9,7 +9,7 @@ public struct StateMachineSkip: Error, Sendable {
 
 /// Signals that a postcondition check failed inside a `@Command` method.
 ///
-/// Thrown by ``check(_:_:)`` when a condition is `false`. The state-machine runner treats the current command sequence as a counterexample and proceeds to shrinking.
+/// Thrown by ``check(_:_:)`` when a condition is `false`. The state-machine runner treats the current command sequence as a counterexample and proceeds to test case reduction.
 public struct StateMachineCheckFailure: Error, Sendable {
     /// A description of the failed check, if available.
     public let message: String?

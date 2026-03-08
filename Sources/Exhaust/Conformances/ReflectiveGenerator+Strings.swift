@@ -48,7 +48,7 @@ public extension ReflectiveGenerator {
     /// Generates a random character from the given `CharacterSet`.
     ///
     /// Uses `ScalarRangeSet` to flatten the character set into a single contiguous index space, then picks via `Gen.choose(in: 0...n-1)` with O(log n) lookup.
-    /// Shrinks toward the first scalar in the set (e.g. '0' for `.decimalDigits`).
+    /// Reduces toward the first scalar in the set (e.g. '0' for `.decimalDigits`).
     static func character(from characterSet: CharacterSet) -> ReflectiveGenerator<Character> {
         characterGenerator(from: characterSet.scalarRangeSet())
     }
@@ -114,7 +114,7 @@ private func stringGenerator(
 // MARK: - Pre-computed ScalarRangeSets
 
 /// All assigned Unicode scalars minus control characters and illegals.
-/// First scalar is U+0020 (space) — shrinking produces readable counterexamples.
+/// First scalar is U+0020 (space) — test case reduction produces readable counterexamples.
 private let defaultScalarRangeSet: ScalarRangeSet =
     CharacterSet.illegalCharacters.inverted.subtracting(.controlCharacters).scalarRangeSet()
 

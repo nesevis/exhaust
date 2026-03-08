@@ -3,7 +3,7 @@ import ExhaustCore
 
 /// Holds values produced by earlier commands so that later commands can reference them.
 ///
-/// Use `Bundle` when a command needs to operate on an entity created by a prior command (for example, deleting a user that was previously created). The drawing mechanism records a `chooseBits` effect in the Freer Monad, making bundle indices shrinkable by the Reducer.
+/// Use `Bundle` when a command needs to operate on an entity created by a prior command (for example, deleting a user that was previously created). The drawing mechanism records a `chooseBits` effect in the Freer Monad, making bundle indices reducable by the Reducer.
 ///
 /// ## Example
 ///
