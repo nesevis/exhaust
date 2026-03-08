@@ -102,9 +102,12 @@ extension Interpreters {
                 choices: &choices,
             )
         case let .filter(gen, _, _, predicate):
-            guard let inner = try replayWithChoicesHelper(gen, choices: &choices),
-                  predicate(inner)
-            else { return nil }
+            guard
+                let inner = try replayWithChoicesHelper(gen, choices: &choices),
+                predicate(inner)
+            else {
+                return nil
+            }
             return inner as? Output
         case let .classify(gen, _, _), let .unique(gen, _, _):
             return try replayWithChoicesHelper(gen, choices: &choices) as? Output

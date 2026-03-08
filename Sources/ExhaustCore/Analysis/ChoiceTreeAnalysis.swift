@@ -57,6 +57,7 @@ public enum ChoiceTreeAnalysis {
                 bestParameters = parameters
             }
 
+            // FIXME: Harsh syntax, rewrite
             // If we have no sequences, or all sequences produced enough elements, stop early
             let hasIncompleteSequence = parameters.contains { param in
                 if case .sequenceLength = param.kind { return true }
