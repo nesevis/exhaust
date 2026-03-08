@@ -3,17 +3,45 @@
 //  Exhaust
 //
 
-/// Unified coverage analysis that walks a VACTI-generated `ChoiceTree` to extract
-/// parameter domains for covering array construction.
+/// Extracts parameter domains from a generator's choice tree for t-way covering array construction.
 ///
-/// This replaces the recursive generator walk in `FiniteDomainAnalysis` and
-/// `BoundaryDomainAnalysis`. By running the generator through VACTI with
-/// `materializePicks = true`, the analysis sees through opaque bind chains
-/// that the recursive walker cannot follow.
+/// ## What It Does
+///
+/// Runs a generator through VACTI with `materializePicks = true` to produce a complete ``ChoiceTree`` — a data structure that records every choice the generator made, including all branches of pick sites (not just the selected one). Walks the tree to identify independent parameters: numeric choices, branch selections (picks), and sequence lengths/elements. Classifies the generator as finite-domain (all parameters have at most 256 values) or boundary-domain (some parameters have large ranges, requiring synthetic boundary value representatives). Returns a ``FiniteDomainProfile`` or ``BoundaryDomainProfile`` that downstream code uses to build covering arrays via the IPOG algorithm.
+///
+/// ## Why This Matters
+///
+/// Standard random testing misses systematic parameter interactions. A generator with three booleans and a 4-way enum has 32 combinations — random sampling at 100 iterations will likely miss some. t-way combinatorial testing guarantees that every t-tuple of parameter values appears in at least one test case. Strength t=2 (pairwise) catches all two-parameter interactions; t=3 catches all three-parameter interactions. The covering array approach produces far fewer test cases than exhaustive enumeration. For example, pairwise coverage of five boolean parameters needs only four test cases instead of 32. ChoiceTreeAnalysis is what makes this possible: it decomposes an opaque generator into a parameter model suitable for combinatorial construction.
+///
+/// ## Why VACTI Instead of Recursive Walking
+///
+/// Earlier versions (``FiniteDomainAnalysis``, ``BoundaryDomainAnalysis``) recursively walked the generator's AST. This fails on bind chains: `gen.flatMap { ... }` produces an opaque closure the walker cannot inspect. VACTI with `materializePicks = true` executes the generator once, producing a concrete ``ChoiceTree`` that captures every choice — including those hidden behind binds. The tree walk then extracts parameters from the execution trace rather than the generator structure. Trade-off: the analysis reflects one execution path. Different PRNG seeds can produce different sequence lengths. The analysis tries three seeds and keeps the result with the most parameters.
+///
+/// ## Parameter Classification
+///
+/// Five ``BoundaryParameterKind`` cases:
+/// - `.finiteChooseBits`: domain size is 256 or smaller — enumerates all values.
+/// - `.chooseBits`: domain size exceeds 256 — synthesizes boundary values {min, min+1, midpoint, max-1, max, zero if in range}. Floats and dates have type-specific boundary sets.
+/// - `.sequenceLength`: sequence node — tests lengths {0, 1, 2} (intersection with the declared length range). Capped at 2 elements to keep parameter count tractable.
+/// - `.sequenceElement`: element within a sequence — boundary values for the element's range, tagged with its position index.
+/// - `.pick`: multi-way branch — values are branch indices. Only analyzable if the branch count is 256 or fewer and all branches are parameter-free (no nested choices).
+///
+/// ## Analyzability Constraints
+///
+/// The ``analyze(_:)`` method returns `nil` when:
+/// - The generator uses `getSize` or `resize` (size-scaled generation is not analyzable).
+/// - A branch within a pick contains nested choices (parameters inside branches).
+/// - No explicit range metadata exists on a choice node (non-explicit ranges come from size scaling).
+/// - More than 20 parameters are extracted (covering array construction cost grows combinatorially).
+/// - Zero parameters are extracted.
+///
+/// - SeeAlso: ``CoveringArray``, ``CoverageRunner``, ``BoundaryDomainAnalysis``
 public enum ChoiceTreeAnalysis {
 
     public enum AnalysisResult {
+        /// All parameters have at most 256 values. Eligible for exhaustive enumeration or t-way covering.
         case finite(FiniteDomainProfile)
+        /// At least one parameter has a large domain. Uses synthetic boundary values for covering array construction.
         case boundary(BoundaryDomainProfile)
     }
 
@@ -109,6 +137,11 @@ public enum ChoiceTreeAnalysis {
     }
 
     // MARK: - Tree Walk
+    //
+    // Dispatches on ChoiceTree node type. Returns false if the node
+    // is unanalyzable (getSize, resize, bare branch). For groups,
+    // detects pick patterns (group containing a .selected child) and
+    // routes to walkPick; otherwise recurses into children.
 
     private static func walkTree(
         _ tree: ChoiceTree,
@@ -139,6 +172,13 @@ public enum ChoiceTreeAnalysis {
     }
 
     // MARK: - Choice
+    //
+    // Processes a single numeric choice node. Requires explicit range
+    // metadata (non-explicit ranges come from size scaling and are not
+    // analyzable). Computes domain size via subtractingReportingOverflow
+    // to handle full-range UInt64. Small domains (< 256) enumerate all
+    // values; large domains delegate to BoundaryDomainAnalysis for
+    // synthetic boundary values.
 
     private static func walkChoice(
         value: ChoiceValue,
@@ -176,6 +216,22 @@ public enum ChoiceTreeAnalysis {
     }
 
     // MARK: - Group / Pick
+    //
+    // A group is classified as a pick when it contains at least one
+    // .selected child and all children are .selected or .branch — the
+    // pattern VACTI produces with materializePicks = true.
+    //
+    // Pick analysis requires: ≤ 256 branches, and each branch's
+    // sub-tree must contain no additional parameters (walkTree on the
+    // branch's choice tree must produce zero parameters). This ensures
+    // the pick is a simple multi-way selection, not a nested generator
+    // tree.
+    //
+    // Synthetic PickTuples are created with .pure(()) generators because
+    // the original branch generators are not available from the ChoiceTree.
+    // The siteID, weight, id, and branchIDs metadata is preserved for
+    // replay compatibility — CoveringArrayReplay uses these to reconstruct
+    // the branch selection.
 
     private static func walkGroup(
         _ children: [ChoiceTree],
@@ -238,6 +294,13 @@ public enum ChoiceTreeAnalysis {
     }
 
     // MARK: - Sequence
+    //
+    // Extracts a length parameter and up to two element parameters from
+    // a sequence node. The length parameter tests {0, 1, 2} (intersected
+    // with the declared length range). Element analysis is capped at two
+    // slots to keep the total parameter count tractable — a 4-element
+    // sequence would add 1 length + 4×N element parameters, making IPOG
+    // prohibitively expensive.
 
     private static func walkSequence(
         length: UInt64,
@@ -274,6 +337,16 @@ public enum ChoiceTreeAnalysis {
     }
 
     // MARK: - Element Walk
+    //
+    // Same as walkTree but for elements within a sequence. Rejects
+    // nested sequences, getSize, resize, and bare branches — these
+    // are not supported inside sequence elements. Picks within elements
+    // are supported and route to the shared walkPick logic.
+    //
+    // walkElementChoice differs from walkChoice only in the parameter
+    // kind: large-domain elements use .sequenceElement (with elementIndex)
+    // instead of .chooseBits, so that BoundaryCoveringArrayReplay can
+    // reconstruct the sequence structure during replay.
 
     private static func walkElementTree(
         _ tree: ChoiceTree,
