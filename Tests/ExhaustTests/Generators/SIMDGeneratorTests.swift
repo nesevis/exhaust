@@ -55,4 +55,16 @@ struct SIMDGeneratorTests {
     func simd64ExplicitRange() {
         #examine(.simd64(.uint8(in: 0 ... 127)), samples: 30)
     }
+
+    // MARK: - Size-scaled scalars (multi-node lanes)
+
+    @Test("simd2 with size-scaled uint8")
+    func simd2SizeScaled() {
+        #examine(.simd2(.uint8()), samples: 50)
+    }
+
+    @Test("simd4 with size-scaled int32")
+    func simd4SizeScaledInt32() {
+        #examine(.simd4(.int32()), samples: 50)
+    }
 }

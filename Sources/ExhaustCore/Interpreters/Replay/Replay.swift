@@ -201,8 +201,8 @@ extension Interpreters {
         continuation: @escaping (Any) throws -> ReflectiveGenerator<Output>,
         choices: inout [ChoiceTree],
     ) throws -> Output? {
-        // Unwrap a single non-branch group wrapper (produced by reflect's
-        // reflectZipOperation which wraps flat choices in .group(...)).
+        // Unwrap a single non-branch group wrapper that encloses per-lane
+        // subtrees (produced by reflect's reflectZipOperation).
         if choices.count == 1,
            case let .group(children, _) = choices[0],
            children.allSatisfy({ $0.isBranch || $0.isSelected }) == false
@@ -210,13 +210,28 @@ extension Interpreters {
             choices = children
         }
 
-        // Each generator consumes sequentially from the shared choices.
+        // Each generator consumes its lane. If the next choice is a
+        // non-branch group, it's a per-lane subtree — unwrap it so the
+        // generator consumes from within. Otherwise consume directly.
         var subResults = [Any]()
         for gen in generators {
-            guard let result = try replayWithChoicesHelper(gen, choices: &choices) else {
-                return nil
+            guard choices.isEmpty == false else { return nil }
+
+            if case let .group(laneChoices, _) = choices[0],
+               laneChoices.allSatisfy({ !$0.isBranch && !$0.isSelected })
+            {
+                choices.removeFirst()
+                var laneChoicesMut = laneChoices
+                guard let result = try replayWithChoicesHelper(gen, choices: &laneChoicesMut) else {
+                    return nil
+                }
+                subResults.append(result)
+            } else {
+                guard let result = try replayWithChoicesHelper(gen, choices: &choices) else {
+                    return nil
+                }
+                subResults.append(result)
             }
-            subResults.append(result)
         }
         let nextGen = try continuation(subResults)
         return try replayWithChoicesHelper(nextGen, choices: &choices)
