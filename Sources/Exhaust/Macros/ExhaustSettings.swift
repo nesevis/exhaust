@@ -8,6 +8,7 @@
 // ```
 import ExhaustCore
 
+/// Configuration options for `#exhaust` property tests, passed as variadic arguments to control test behavior.
 public enum ExhaustSettings<Output> {
     /// The upper bound on the number of test iterations to run.
     case maxIterations(UInt64)

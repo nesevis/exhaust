@@ -4,7 +4,7 @@ import IssueReporting
 
 // MARK: - Types
 
-/// A report summarising the results of generator validation.
+/// A report summarizing the results of generator validation.
 public struct ValidationReport: Sendable, CustomStringConvertible {
     public let sampleCount: Int
     public let valuesGenerated: Int
@@ -15,13 +15,16 @@ public struct ValidationReport: Sendable, CustomStringConvertible {
     /// Total wall-clock time for the validation run, in seconds.
     public let elapsedTime: Double
 
+    /// Whether the validation passed with no failures.
     public var passed: Bool { failures.isEmpty }
 
+    /// The fraction of generated values that survived reflection round-trip.
     public var reflectionSuccessRate: Double {
         guard valuesGenerated > 0 else { return 0 }
         return Double(reflectionRoundTripSuccesses) / Double(valuesGenerated)
     }
 
+    /// The fraction of generated values with distinct choice sequences.
     public var uniquenessRate: Double {
         guard valuesGenerated > 0 else { return 0 }
         return Double(uniqueChoiceSequences) / Double(valuesGenerated)
@@ -92,7 +95,7 @@ public extension ReflectiveGenerator where Operation == ReflectiveOperation {
     /// - Parameters:
     ///   - samples: Number of values to generate and test. Defaults to 200.
     ///   - seed: Optional seed for deterministic validation runs.
-    /// - Returns: A ``ValidationReport`` summarising the results.
+    /// - Returns: A ``ValidationReport`` summarizing the results.
     @discardableResult
     func validate(
         samples: Int = 200,
@@ -116,7 +119,7 @@ public extension ReflectiveGenerator where Operation == ReflectiveOperation, Val
     /// - Parameters:
     ///   - samples: Number of values to generate and test. Defaults to 200.
     ///   - seed: Optional seed for deterministic validation runs.
-    /// - Returns: A ``ValidationReport`` summarising the results.
+    /// - Returns: A ``ValidationReport`` summarizing the results.
     @discardableResult
     func validate(
         samples: Int = 200,

@@ -9,7 +9,7 @@
 ///   - gen: The generator to validate.
 ///   - samples: Number of values to generate and test. Defaults to 200.
 ///   - seed: Optional seed for deterministic validation runs.
-/// - Returns: A ``ValidationReport`` summarising the results.
+/// - Returns: A ``ValidationReport`` summarizing the results.
 import ExhaustCore
 
 @freestanding(expression)

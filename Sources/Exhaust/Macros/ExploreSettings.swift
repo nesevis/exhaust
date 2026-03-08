@@ -10,6 +10,7 @@
 // ```
 import ExhaustCore
 
+/// Configuration options for `#explore` feedback-guided property tests, passed as variadic arguments to control test behavior.
 public enum ExploreSettings {
     /// The upper bound on the number of test iterations to run.
     case maxIterations(UInt64)

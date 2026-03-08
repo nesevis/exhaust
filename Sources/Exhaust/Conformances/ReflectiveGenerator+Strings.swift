@@ -9,6 +9,7 @@ import Foundation
 import ExhaustCore
 
 public extension ReflectiveGenerator {
+    /// Generates a random Unicode character, optionally within the given range.
     static func character(in range: ClosedRange<Character>? = nil) -> ReflectiveGenerator<Character> {
         guard let range else { return characterGenerator(from: defaultScalarRangeSet) }
         let lower = range.lowerBound.unicodeScalars.min()!
@@ -16,19 +17,27 @@ public extension ReflectiveGenerator {
         return .character(from: CharacterSet(charactersIn: lower ... upper))
     }
 
+    /// Generates a random Unicode string with size-scaled or fixed length.
+    ///
+    /// ```swift
+    /// let gen = #gen(.string(length: 1...20))
+    /// ```
     static func string(length: ClosedRange<UInt64>? = nil, scaling: SizeScaling<UInt64> = .linear) -> ReflectiveGenerator<String> {
         stringGenerator(from: defaultScalarRangeSet, length: length, scaling: scaling)
     }
 
+    /// Generates a random printable ASCII string (U+0020--U+007E) with size-scaled or fixed length.
     static func asciiString(length: ClosedRange<UInt64>? = nil, scaling: SizeScaling<UInt64> = .linear) -> ReflectiveGenerator<String> {
         stringGenerator(from: asciiScalarRangeSet, length: length, scaling: scaling)
     }
 
+    /// Convenience overload accepting `ClosedRange<Int>` for string length.
     static func string(length: ClosedRange<Int>, scaling: SizeScaling<UInt64> = .linear) -> ReflectiveGenerator<String> {
         precondition(length.lowerBound >= 0, "Length must be non-negative")
         return string(length: UInt64(length.lowerBound) ... UInt64(length.upperBound), scaling: scaling)
     }
 
+    /// Convenience overload accepting `ClosedRange<Int>` for ASCII string length.
     static func asciiString(length: ClosedRange<Int>, scaling: SizeScaling<UInt64> = .linear) -> ReflectiveGenerator<String> {
         precondition(length.lowerBound >= 0, "Length must be non-negative")
         return asciiString(length: UInt64(length.lowerBound) ... UInt64(length.upperBound), scaling: scaling)
