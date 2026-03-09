@@ -19,7 +19,7 @@ public extension ReflectiveGenerator where Operation == ReflectiveOperation {
         forward: @Sendable @escaping (Value) throws -> NewOutput,
         backward: @Sendable @escaping (NewOutput) throws -> Value,
     ) rethrows -> ReflectiveGenerator<NewOutput> {
-        try Gen.contramap(backward, map(forward))
+        try Gen.contramap(backward, _map(forward))
     }
 
     /// Creates a bidirectional transformation using a forward function and a partial path for backward.
@@ -39,7 +39,7 @@ public extension ReflectiveGenerator where Operation == ReflectiveOperation {
         let erasedBackward: (Any) throws -> Any = { newOutput in
             try backward.extract(from: newOutput)!
         }
-        let erasedGen = try map(forward)
+        let erasedGen = try _map(forward)
 
         return Gen.contramap(erasedBackward, erasedGen)
     }
@@ -98,7 +98,14 @@ public extension ReflectiveGenerator where Operation == ReflectiveOperation {
     func map<NewOutput>(
         _ path: some PartialPath<Value, NewOutput>,
     ) throws -> ReflectiveGenerator<NewOutput?> {
-        try _map { try path.extract(from: $0) }
+        Gen.liftF(.transform(
+            kind: .map(
+                forward: { try path.extract(from: $0) as Any },
+                inputType: String(describing: Value.self),
+                outputType: String(describing: NewOutput.self)
+            ),
+            inner: self.erase()
+        ))
     }
 
     /// Converts this generator to produce optional values, enabling nil/non-nil choice patterns.
@@ -358,11 +365,14 @@ public extension ReflectiveGenerator where Operation == ReflectiveOperation {
     /// - Returns: A generator producing the transformed values
     @inlinable
     func map<NewValue>(_ transform: @Sendable @escaping (Value) throws -> NewValue) rethrows -> ReflectiveGenerator<NewValue> {
-        switch self {
-        case let .pure(value): try .pure(transform(value))
-        case let .impure(operation, continuation):
-            .impure(operation: operation) { try continuation($0).map(transform) }
-        }
+        Gen.liftF(.transform(
+            kind: .map(
+                forward: { try transform($0 as! Value) },
+                inputType: String(describing: Value.self),
+                outputType: String(describing: NewValue.self)
+            ),
+            inner: self.erase()
+        ))
     }
 
     /// Chains this generator with a dependent generator.
@@ -382,11 +392,13 @@ public extension ReflectiveGenerator where Operation == ReflectiveOperation {
     /// - Returns: A generator that sequences the two computations
     @inlinable
     func bind<NewValue>(_ transform: @Sendable @escaping (Value) throws -> ReflectiveGenerator<NewValue>) rethrows -> ReflectiveGenerator<NewValue> {
-        switch self {
-        case let .pure(value):
-            try transform(value)
-        case let .impure(operation, continuation):
-            .impure(operation: operation) { try continuation($0).bind(transform) }
-        }
+        Gen.liftF(.transform(
+            kind: .bind(
+                forward: { try transform($0 as! Value).erase() },
+                inputType: String(describing: Value.self),
+                outputType: String(describing: NewValue.self)
+            ),
+            inner: self.erase()
+        ))
     }
 }

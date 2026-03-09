@@ -215,7 +215,7 @@ struct CompositionTests {
             let nestedGen = #gen(.int(in: 1 ... 100)).array(length: 1 ... 10).array(length: 1 ... 5)
             let pickedGen = #gen(.oneOf(weighted:
                 (1, nestedGen),
-                (1, nestedGen.map { $0.reversed() })))
+                (1, nestedGen.mapped(forward: { $0.reversed() }, backward: { $0.reversed() }))))
 
             // Generate many values to test stability
             for iteration in 0 ..< 100 {

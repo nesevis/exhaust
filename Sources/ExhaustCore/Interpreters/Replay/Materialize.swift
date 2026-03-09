@@ -392,6 +392,8 @@ extension Interpreters {
             try materializeRecursiveClassify(gen: gen, tree: tree, context: &context)
         case let .unique(gen, _, _):
             try materializeRecursiveClassify(gen: gen, tree: tree, context: &context)
+        case let .transform(kind, inner):
+            try materializeRecursiveTransform(kind: kind, inner: inner, continuation: continuation, tree: tree, context: &context)
         }
     }
 
@@ -527,6 +529,28 @@ extension Interpreters {
             return nil
         }
         return result
+    }
+
+    @inline(__always)
+    private static func materializeRecursiveTransform<Output>(
+        kind: TransformKind,
+        inner: ReflectiveGenerator<Any>,
+        continuation: @escaping (Any) throws -> ReflectiveGenerator<Output>,
+        tree: ChoiceTree,
+        context: inout Context,
+    ) throws -> Output? {
+        guard let innerValue = try materializeRecursive(inner, with: tree, context: &context) else { return nil }
+        let result: Any
+        switch kind {
+        case let .map(forward, _, _):
+            result = try forward(innerValue)
+        case let .bind(forward, _, _):
+            let boundGen = try forward(innerValue)
+            guard let boundValue = try materializeRecursive(boundGen, with: tree, context: &context) else { return nil }
+            result = boundValue
+        }
+        let nextGen = try continuation(result)
+        return try materializeRecursive(nextGen, with: tree, context: &context)
     }
 
     @inline(__always)
@@ -733,6 +757,8 @@ extension Interpreters {
                 choices: &choices,
                 context: &context,
             )
+        case let .transform(kind, inner):
+            try materializeWithChoicesTransform(kind: kind, inner: inner, continuation: continuation, choices: &choices, context: &context)
         }
     }
 
@@ -1008,6 +1034,28 @@ extension Interpreters {
             return nil
         }
         return result
+    }
+
+    @inline(__always)
+    private static func materializeWithChoicesTransform<Output>(
+        kind: TransformKind,
+        inner: ReflectiveGenerator<Any>,
+        continuation: @escaping (Any) throws -> ReflectiveGenerator<Output>,
+        choices: inout ChoiceCursor,
+        context: inout Context,
+    ) throws -> Output? {
+        guard let innerValue = try materializeWithChoicesHelper(inner, with: &choices, context: &context) else { return nil }
+        let result: Any
+        switch kind {
+        case let .map(forward, _, _):
+            result = try forward(innerValue)
+        case let .bind(forward, _, _):
+            let boundGen = try forward(innerValue)
+            guard let boundValue = try materializeWithChoicesHelper(boundGen, with: &choices, context: &context) else { return nil }
+            result = boundValue
+        }
+        let nextGen = try continuation(result)
+        return try materializeWithChoicesHelper(nextGen, with: &choices, context: &context)
     }
 
     @inline(__always)

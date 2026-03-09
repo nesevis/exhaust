@@ -227,6 +227,15 @@ public struct ValueInterpreter<Element>: ~Copyable, ExhaustIterator {
                     runContinuation: runContinuation,
                 )
 
+            case let .transform(kind, inner):
+                return try handleTransform(
+                    kind: kind,
+                    inner: inner,
+                    inputValue: inputValue,
+                    context: &context,
+                    runContinuation: runContinuation,
+                )
+
             case let .unique(gen, fingerprint, keyExtractor):
                 var attempts = 0 as UInt64
                 while attempts < GenerationContext.maxFilterRuns {
@@ -378,6 +387,27 @@ public struct ValueInterpreter<Element>: ~Copyable, ExhaustIterator {
         context.sizeOverride = newSize
         guard let result = try generateRecursive(nextGen, with: inputValue, context: &context) else {
             return nil
+        }
+        return try runContinuation(result, &context)
+    }
+
+    @inline(__always)
+    private static func handleTransform<Output>(
+        kind: TransformKind,
+        inner: ReflectiveGenerator<Any>,
+        inputValue: some Any,
+        context: inout GenerationContext,
+        runContinuation: (Any, inout GenerationContext) throws -> Output?,
+    ) throws -> Output? {
+        guard let innerValue = try generateRecursive(inner, with: inputValue, context: &context) else { return nil }
+        let result: Any
+        switch kind {
+        case let .map(forward, _, _):
+            result = try forward(innerValue)
+        case let .bind(forward, _, _):
+            let boundGen = try forward(innerValue)
+            guard let boundValue = try generateRecursive(boundGen, with: inputValue, context: &context) else { return nil }
+            result = boundValue
         }
         return try runContinuation(result, &context)
     }

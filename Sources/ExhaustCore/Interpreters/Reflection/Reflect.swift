@@ -138,6 +138,14 @@ public enum Interpreters {
 
         case let .unique(gen, _, _):
             return try reflectPassthroughOperation(gen: gen, finalOutput: finalOutput)
+
+        case let .transform(kind, _):
+            switch kind {
+            case let .map(_, inputType, outputType):
+                throw ReflectionError.forwardOnlyMap(inputType: inputType, outputType: outputType)
+            case let .bind(_, inputType, outputType):
+                throw ReflectionError.forwardOnlyBind(inputType: inputType, outputType: outputType)
+            }
         }
     }
 
@@ -342,5 +350,21 @@ public enum Interpreters {
         case couldNotReflectOnSequenceElement(String)
         case pickValueIsNotEquatable(String)
         case inputWasOutOfGeneratorRange(String, ClosedRange<UInt64>)
+        /// Reflection failed because a forward-only `map` was detected.
+        /// Use `.mapped(forward:backward:)` instead to enable bidirectional operation.
+        case forwardOnlyMap(inputType: String, outputType: String)
+        /// Reflection failed because a forward-only `bind` was detected.
+        case forwardOnlyBind(inputType: String, outputType: String)
+
+        public var errorDescription: String? {
+            switch self {
+            case let .forwardOnlyMap(inputType, outputType):
+                "Reflection failed — forward-only map (\(inputType) → \(outputType)) detected. Consider using .mapped(forward:backward:) instead."
+            case let .forwardOnlyBind(inputType, outputType):
+                "Reflection failed — forward-only bind (\(inputType) → \(outputType)) detected."
+            default:
+                nil
+            }
+        }
     }
 }

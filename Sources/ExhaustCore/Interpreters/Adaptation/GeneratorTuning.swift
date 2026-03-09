@@ -245,6 +245,18 @@ public enum GeneratorTuning {
                     continuation: continuation,
                 )
 
+            case let .transform(kind, inner):
+                let tunedInner = try tuneRecursive(
+                    inner,
+                    context: context,
+                    insideSubdividedChooseBits: insideSubdividedChooseBits,
+                    predicate: { _ in true },
+                )
+                return .impure(
+                    operation: .transform(kind: kind, inner: tunedInner),
+                    continuation: continuation,
+                )
+
             case .just, .prune, .classify:
                 return gen
             }
@@ -1013,6 +1025,9 @@ public enum GeneratorTuning {
                 keyExtractor: keyExtractor,
             )
 
+        case let .transform(kind, inner):
+            return .transform(kind: kind, inner: smoothGenerator(inner, epsilon: epsilon, temperature: temperature))
+
         case .chooseBits, .just, .getSize:
             return op
         }
@@ -1149,6 +1164,9 @@ public enum GeneratorTuning {
 
         case let .unique(gen, _, _):
             profileGenerator(gen, depth: depth, sites: &sites)
+
+        case let .transform(_, inner):
+            profileGenerator(inner, depth: depth, sites: &sites)
 
         case .chooseBits, .just, .getSize:
             return
@@ -1427,6 +1445,12 @@ public enum GeneratorTuning {
                 gen: smoothAdaptiveGenerator(gen, epsilon: epsilon, baseTemperature: baseTemperature, maxTemperature: maxTemperature),
                 fingerprint: fingerprint,
                 keyExtractor: keyExtractor,
+            )
+
+        case let .transform(kind, inner):
+            return .transform(
+                kind: kind,
+                inner: smoothAdaptiveGenerator(inner, epsilon: epsilon, baseTemperature: baseTemperature, maxTemperature: maxTemperature),
             )
 
         case .chooseBits, .just, .getSize:

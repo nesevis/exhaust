@@ -112,6 +112,20 @@ extension Interpreters {
             return inner as? Output
         case let .classify(gen, _, _), let .unique(gen, _, _):
             return try replayWithChoicesHelper(gen, choices: &choices) as? Output
+
+        case let .transform(kind, inner):
+            guard let innerValue = try replayWithChoicesHelper(inner, choices: &choices) else { return nil }
+            let result: Any
+            switch kind {
+            case let .map(forward, _, _):
+                result = try forward(innerValue)
+            case let .bind(forward, _, _):
+                let boundGen = try forward(innerValue)
+                guard let boundValue = try replayWithChoicesHelper(boundGen, choices: &choices) else { return nil }
+                result = boundValue
+            }
+            let nextGen = try continuation(result)
+            return try replayWithChoicesHelper(nextGen, choices: &choices)
         }
     }
 
@@ -396,6 +410,19 @@ extension Interpreters {
             return inner as? Output
         case let .classify(gen, _, _), let .unique(gen, _, _):
             return try replayRecursive(gen, with: script) as? Output
+
+        case let .transform(kind, inner):
+            guard let innerValue = try replayRecursive(inner, with: script) else { return nil }
+            let result: Any
+            switch kind {
+            case let .map(forward, _, _):
+                result = try forward(innerValue)
+            case let .bind(forward, _, _):
+                let boundGen = try forward(innerValue)
+                guard let boundValue = try replayRecursive(boundGen, with: script) else { return nil }
+                result = boundValue
+            }
+            return try runContinuation(result)
         }
     }
 

@@ -498,6 +498,46 @@ public struct OnlineCGSInterpreter<FinalOutput>: ~Copyable, ExhaustIterator {
                     derivativeContext: derivativeContext,
                 )
 
+            // MARK: - Transform
+
+            case let .transform(kind, inner):
+                guard let innerValue = try generateRecursive(
+                    inner,
+                    with: inputValue,
+                    context: &context,
+                    predicate: predicate,
+                    sampleCount: sampleCount,
+                    cgsState: &cgsState,
+                    derivativeContext: derivativeContext,
+                ) else { return nil }
+                let result: Any
+                switch kind {
+                case let .map(forward, _, _):
+                    result = try forward(innerValue)
+                case let .bind(forward, _, _):
+                    let boundGen = try forward(innerValue)
+                    guard let boundValue = try generateRecursive(
+                        boundGen,
+                        with: inputValue,
+                        context: &context,
+                        predicate: predicate,
+                        sampleCount: sampleCount,
+                        cgsState: &cgsState,
+                        derivativeContext: derivativeContext,
+                    ) else { return nil }
+                    result = boundValue
+                }
+                return try runContinuation(
+                    result: result,
+                    continuation: continuation,
+                    inputValue: inputValue,
+                    context: &context,
+                    predicate: predicate,
+                    sampleCount: sampleCount,
+                    cgsState: &cgsState,
+                    derivativeContext: derivativeContext,
+                )
+
             // MARK: - Unique
 
             case let .unique(gen, fingerprint, keyExtractor):

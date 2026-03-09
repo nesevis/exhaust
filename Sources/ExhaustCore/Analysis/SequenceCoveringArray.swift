@@ -290,6 +290,8 @@ public enum SequenceCoveringArray {
                 return isParameterFree(inner)
             case let .prune(inner):
                 return isParameterFree(inner)
+            case let .transform(_, inner):
+                return isParameterFree(inner)
             default:
                 return false
             }
