@@ -14,7 +14,7 @@ private enum HypothesisFloatParityHelpers {
     static func reduce<Output>(
         _ gen: ReflectiveGenerator<Output>,
         startingAt value: Output,
-        config: Interpreters.ShrinkConfiguration = .fast,
+        config: Interpreters.TCRConfiguration = .fast,
         property: (Output) -> Bool,
     ) throws -> Output {
         let tree = try #require(try Interpreters.reflect(gen, with: value))

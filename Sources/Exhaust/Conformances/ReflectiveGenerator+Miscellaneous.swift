@@ -13,7 +13,7 @@ public extension ReflectiveGenerator {
         Gen.just(value)
     }
 
-    /// Generates arbitrary `Bool` values. Shrinks toward `false`.
+    /// Generates arbitrary `Bool` values. Reduces toward `false`.
     static func bool() -> ReflectiveGenerator<Bool> {
         Gen.choose(in: UInt8(0) ... 1)
             .mapped(

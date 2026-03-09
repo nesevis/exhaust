@@ -3,7 +3,7 @@
 //  ExhaustTests
 //
 
-@testable import ExhaustCore
+import ExhaustCore
 
 /// A simplified JSON-like recursive data type for testing `Gen.recursive`.
 ///

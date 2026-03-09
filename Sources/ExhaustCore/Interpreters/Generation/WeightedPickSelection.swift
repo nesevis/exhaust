@@ -7,9 +7,9 @@
 
 import Foundation
 
-enum WeightedPickSelection {
+public enum WeightedPickSelection {
     @inline(__always)
-    static func draw(
+    public static func draw(
         from choices: ContiguousArray<ReflectiveOperation.PickTuple>,
         using prng: inout Xoshiro256,
     ) -> ReflectiveOperation.PickTuple? {

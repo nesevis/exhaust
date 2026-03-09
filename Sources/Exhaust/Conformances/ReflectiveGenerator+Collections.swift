@@ -232,7 +232,7 @@ public extension ReflectiveGenerator where Operation == ReflectiveOperation {
 
     /// Picks a random element from a fixed collection.
     ///
-    /// This is fully reflective — the collection is known at construction time, so the backward pass can find the element's index for reflection and shrinking.
+    /// This is fully reflective — the collection is known at construction time, so the backward pass can find the element's index for reflection and test case reduction.
     ///
     /// ```swift
     /// let suit = ReflectiveGenerator.element(from: ["♠", "♥", "♦", "♣"])
@@ -248,7 +248,7 @@ public extension ReflectiveGenerator where Operation == ReflectiveOperation {
 
     /// Picks a random element from a fixed collection (non-Hashable variant).
     ///
-    /// This is fully reflective — the collection is known at construction time, so the backward pass can find the element's index for reflection and shrinking.
+    /// This is fully reflective — the collection is known at construction time, so the backward pass can find the element's index for reflection and test case reduction.
     ///
     /// - Parameter collection: The collection to pick elements from
     /// - Returns: A generator that produces random elements from the collection

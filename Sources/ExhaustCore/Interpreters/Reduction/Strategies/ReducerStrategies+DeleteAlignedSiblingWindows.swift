@@ -6,7 +6,7 @@
 //
 
 extension ReducerStrategies {
-    typealias AlignedDeletionBeamSearchTuning = Interpreters.ShrinkConfiguration.AlignedDeletionBeamSearchTuning
+    typealias AlignedDeletionBeamSearchTuning = Interpreters.TCRConfiguration.AlignedDeletionBeamSearchTuning
 
     private struct AlignedDeletionSlot {
         let ranges: [ClosedRange<Int>]

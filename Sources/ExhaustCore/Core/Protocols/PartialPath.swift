@@ -29,6 +29,6 @@ extension KeyPath: PartialPath {
     }
 }
 
-enum PartialPathError: LocalizedError {
+public enum PartialPathError: LocalizedError {
     case wrongRootType(expected: String, actual: String)
 }

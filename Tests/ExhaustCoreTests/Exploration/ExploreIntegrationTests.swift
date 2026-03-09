@@ -7,7 +7,7 @@
 //
 
 import Testing
-@testable import ExhaustCore
+import ExhaustCore
 
 @Suite("ExploreRunner Integration")
 struct ExploreIntegrationTests {
@@ -97,7 +97,7 @@ struct ExploreIntegrationTests {
             gen: gen,
             property: { $0 < 500 },
             maxIterations: 500,
-            shrinkConfig: .fast,
+            reductionConfig: .fast,
             seed: 42,
             scorer: { Double($0) },
         )

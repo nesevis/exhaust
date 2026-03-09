@@ -8,7 +8,7 @@
 //
 
 import Testing
-@testable import ExhaustCore
+import ExhaustCore
 
 @Suite("BitPattern Conversion")
 struct BitPatternConvertibleTests {

@@ -5,9 +5,9 @@
 //  Created by Codex on 21/2/2026.
 //
 
-enum InterpreterWrapperHandlers {
+public enum InterpreterWrapperHandlers {
     @inline(__always)
-    static func continueAfterSubgenerator<SubResult, Output>(
+    public static func continueAfterSubgenerator<SubResult, Output>(
         runSubgenerator: () throws -> SubResult?,
         runContinuation: (SubResult) throws -> Output?,
     ) throws -> Output? {
@@ -18,7 +18,7 @@ enum InterpreterWrapperHandlers {
     }
 
     @inline(__always)
-    static func unwrapPruneInput(_ inputValue: some Any) -> Any? {
+    public static func unwrapPruneInput(_ inputValue: some Any) -> Any? {
         guard let optional = .some(inputValue as Any?), let wrappedValue = optional else {
             return nil
         }

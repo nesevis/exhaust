@@ -73,7 +73,7 @@ public enum TypeTag: Equatable, Hashable, Sendable {
 
 extension TypeTag {
     /// Creates a ``BitPatternConvertible`` value from a raw bit pattern using this tag's type.
-    func makeConvertible(bitPattern64: UInt64) -> any BitPatternConvertible {
+    public func makeConvertible(bitPattern64: UInt64) -> any BitPatternConvertible {
         switch self {
         case .uint: UInt(bitPattern64: bitPattern64)
         case .uint64: UInt64(bitPattern64: bitPattern64)

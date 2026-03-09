@@ -5,15 +5,15 @@
 //  Created by Codex on 21/2/2026.
 //
 
-enum PickBranchResolution {
-    struct Branch {
-        let id: UInt64
-        let choice: ChoiceTree
-        let isSelected: Bool
+public enum PickBranchResolution {
+    public struct Branch {
+        public let id: UInt64
+        public let choice: ChoiceTree
+        public let isSelected: Bool
     }
 
     @inline(__always)
-    static func unpack(_ branch: ChoiceTree) -> Branch? {
+    public static func unpack(_ branch: ChoiceTree) -> Branch? {
         switch branch {
         case let .branch(_, _, id, _, choice):
             Branch(id: id, choice: choice, isSelected: false)
@@ -25,7 +25,7 @@ enum PickBranchResolution {
     }
 
     @inline(__always)
-    static func generator(
+    public static func generator(
         for id: UInt64,
         in choices: ContiguousArray<ReflectiveOperation.PickTuple>,
     ) -> ReflectiveGenerator<Any>? {
@@ -33,7 +33,7 @@ enum PickBranchResolution {
     }
 
     @inline(__always)
-    static func normalizeReplayBranches(_ branches: [ChoiceTree]) -> [ChoiceTree] {
+    public static func normalizeReplayBranches(_ branches: [ChoiceTree]) -> [ChoiceTree] {
         if branches.contains(where: \.isSelected) {
             return branches.filter(\.isSelected)
         }
@@ -41,7 +41,7 @@ enum PickBranchResolution {
     }
 
     @inline(__always)
-    static func firstSelectedBranch(in branches: [ChoiceTree]) -> ChoiceTree? {
+    public static func firstSelectedBranch(in branches: [ChoiceTree]) -> ChoiceTree? {
         branches.first(where: \.isSelected)
     }
 }

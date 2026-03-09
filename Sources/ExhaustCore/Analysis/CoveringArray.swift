@@ -7,6 +7,10 @@
 public struct CoveringArrayRow: @unchecked Sendable {
     /// `values[i]` is a value index in `0..<parameters[i].domainSize`.
     public var values: [UInt64]
+
+    public init(values: [UInt64]) {
+        self.values = values
+    }
 }
 
 /// A t-way covering array guaranteeing that every t-tuple of parameter values appears in at least one row.
@@ -25,12 +29,14 @@ public struct CoveringArray: @unchecked Sendable {
     ///
     /// Searches bottom-up (t=2, 3, …) so it can stop as soon as a strength exceeds the budget, avoiding unnecessary IPOG runs at high strengths.
     /// Also skips strengths whose initial seed rows alone exceed the budget (the seed is the exhaustive product of the first `t` parameters).
-    public static func bestFitting(budget: UInt64, profile: FiniteDomainProfile) -> CoveringArray? {
+    ///
+    /// - Parameter maxStrength: Upper bound on the interaction strength to try. Defaults to 6. Callers with large per-parameter domains (for example, SCA with argument-aware domains) should pass a lower cap to avoid combinatorially expensive IPOG runs at high strengths.
+    public static func bestFitting(budget: UInt64, profile: FiniteDomainProfile, maxStrength: Int = 6) -> CoveringArray? {
         let paramCount = profile.parameters.count
         guard paramCount >= 2 else { return nil }
 
         var best: CoveringArray?
-        for t in 2 ... min(paramCount, 6) {
+        for t in 2 ... min(paramCount, maxStrength) {
             // Quick reject: the initial seed is the product of the first t domains.
             // If that alone exceeds the budget, higher strengths will only be worse.
             var seedSize: UInt64 = 1
@@ -143,6 +149,11 @@ public struct CoveringArray: @unchecked Sendable {
 /// Internal builder implementing the IPOG algorithm (Lei & Kacker, ECBS 2007).
 ///
 /// Uses `Optional<UInt64>` for don't-care tracking during vertical growth, which the paper denotes as wildcard positions that can be freely assigned.
+///
+/// Performance optimizations:
+/// - Combinations are pre-computed once in `init` instead of regenerated per call.
+/// - "Must-include" combos are generated directly (e.g. for t=2, combos including i are `{(j,i) | j<i}`) instead of filtering all C(n,t) combos.
+/// - Dictionary keys use packed inline value types instead of heap-allocated arrays.
 private struct IPOGBuilder {
     let params: [FiniteParameter]
     let strength: Int
@@ -154,12 +165,35 @@ private struct IPOGBuilder {
     /// Tracks covered t-way combinations.
     var covered: CoveredSet
 
+    /// Pre-computed: `allCombos[upToParam]` = all combinations(of: upToParam, choose: strength).
+    let allCombos: [[[Int]]]
+
+    /// Pre-computed: `combosIncluding[i]` = t-combos from `0..<(i+1)` that contain `i`.
+    /// Generated directly as (t-1)-combos from `0..<i` with `i` appended.
+    let combosIncluding: [[[Int]]]
+
     init(params: [FiniteParameter], strength: Int) {
         self.params = params
         self.strength = strength
         n = params.count
         rows = []
         covered = CoveredSet()
+
+        var allCombos = Array(repeating: [[Int]](), count: n + 1)
+        for upTo in strength ... n {
+            allCombos[upTo] = combinations(of: upTo, choose: strength)
+        }
+        self.allCombos = allCombos
+
+        var combosIncluding = Array(repeating: [[Int]](), count: n)
+        for i in (strength - 1) ..< n {
+            if strength == 1 {
+                combosIncluding[i] = [[i]]
+            } else {
+                combosIncluding[i] = combinations(of: i, choose: strength - 1).map { $0 + [i] }
+            }
+        }
+        self.combosIncluding = combosIncluding
     }
 
     mutating func run() {
@@ -200,8 +234,9 @@ private struct IPOGBuilder {
         }
 
         // Register all t-way combos from initial rows
+        let combos = allCombos[strength]
         for row in rows {
-            covered.addAll(row: row, strength: strength, upToParam: strength)
+            covered.addAll(row: row, combos: combos)
         }
     }
 
@@ -209,6 +244,7 @@ private struct IPOGBuilder {
 
     private mutating func horizontalGrowth(paramIndex i: Int) {
         let domainI = params[i].domainSize
+        let combos = combosIncluding[i]
 
         for rowIdx in rows.indices {
             // Choose value for parameter i that covers the most new combinations
@@ -217,12 +253,7 @@ private struct IPOGBuilder {
 
             for v in 0 ..< domainI {
                 rows[rowIdx][i] = v
-                let count = covered.countUncovered(
-                    row: rows[rowIdx],
-                    mustInclude: i,
-                    strength: strength,
-                    upToParam: i + 1,
-                )
+                let count = covered.countUncovered(row: rows[rowIdx], combos: combos)
                 if count > bestCount {
                     bestCount = count
                     bestValue = v
@@ -230,24 +261,15 @@ private struct IPOGBuilder {
             }
 
             rows[rowIdx][i] = bestValue
-            covered.addIncluding(
-                row: rows[rowIdx],
-                mustInclude: i,
-                strength: strength,
-                upToParam: i + 1,
-            )
+            covered.addAll(row: rows[rowIdx], combos: combos)
         }
     }
 
     // MARK: - Vertical Growth
 
     private mutating func verticalGrowth(paramIndex i: Int) {
-        let uncoveredTuples = covered.findUncovered(
-            mustInclude: i,
-            strength: strength,
-            upToParam: i + 1,
-            params: params,
-        )
+        let combos = combosIncluding[i]
+        let uncoveredTuples = covered.findUncovered(combos: combos, params: params)
 
         for tuple in uncoveredTuples {
             // Try to fit into an existing row
@@ -266,7 +288,7 @@ private struct IPOGBuilder {
                 for (paramIdx, value) in zip(tuple.paramIndices, tuple.values) {
                     newRow[paramIdx] = value
                 }
-                covered.addAll(row: newRow, strength: strength, upToParam: i + 1)
+                covered.addAll(row: newRow, combos: allCombos[i + 1])
                 rows.append(newRow)
             }
         }
@@ -295,70 +317,91 @@ private struct IPOGBuilder {
 private struct CoveredSet {
     private var sets: [ComboKey: Set<ValueKey>] = [:]
 
+    /// Packs up to 8 parameter indices (each < 256) into a single `UInt64`, 8 bits per index.
     private struct ComboKey: Hashable {
-        let indices: [Int]
+        let packed: UInt64
+
+        init(_ indices: [Int]) {
+            var p: UInt64 = 0
+            for (i, idx) in indices.enumerated() {
+                p |= UInt64(idx) << (i &* 8)
+            }
+            packed = p
+        }
     }
 
+    /// Packs up to 8 domain values (each < 65536) into two `UInt64`s, 16 bits per value.
     private struct ValueKey: Hashable {
-        let values: [UInt64]
+        let lo: UInt64
+        let hi: UInt64
+
+        init(_ values: [UInt64]) {
+            var lo: UInt64 = 0
+            var hi: UInt64 = 0
+            for (i, v) in values.enumerated() {
+                if i < 4 {
+                    lo |= v << (i &* 16)
+                } else {
+                    hi |= v << ((i &- 4) &* 16)
+                }
+            }
+            self.lo = lo
+            self.hi = hi
+        }
+
+        init(lo: UInt64, hi: UInt64) {
+            self.lo = lo
+            self.hi = hi
+        }
     }
 
     mutating func addTuple(_ tuple: IndexedTuple) {
-        let key = ComboKey(indices: tuple.paramIndices)
-        let valueKey = ValueKey(values: tuple.values)
+        let key = ComboKey(tuple.paramIndices)
+        let valueKey = ValueKey(tuple.values)
         sets[key, default: []].insert(valueKey)
     }
 
-    mutating func addAll(row: [UInt64?], strength: Int, upToParam: Int) {
-        for combo in combinations(of: upToParam, choose: strength) {
-            // Only add if all values in the combo are non-nil
-            var values: [UInt64] = []
+    mutating func addAll(row: [UInt64?], combos: [[Int]]) {
+        for combo in combos {
+            // Pack values inline to avoid temporary array allocation
+            var lo: UInt64 = 0
+            var hi: UInt64 = 0
             var allPresent = true
-            for idx in combo {
+            for (i, idx) in combo.enumerated() {
                 guard let v = row[idx] else { allPresent = false; break }
-                values.append(v)
+                if i < 4 {
+                    lo |= v << (i &* 16)
+                } else {
+                    hi |= v << ((i &- 4) &* 16)
+                }
             }
             guard allPresent else { continue }
 
-            let key = ComboKey(indices: combo)
-            let valueKey = ValueKey(values: values)
+            let key = ComboKey(combo)
+            let valueKey = ValueKey(lo: lo, hi: hi)
             sets[key, default: []].insert(valueKey)
         }
     }
 
-    mutating func addIncluding(row: [UInt64?], mustInclude: Int, strength: Int, upToParam: Int) {
-        for combo in combinations(of: upToParam, choose: strength) {
-            guard combo.contains(mustInclude) else { continue }
-
-            var values: [UInt64] = []
-            var allPresent = true
-            for idx in combo {
-                guard let v = row[idx] else { allPresent = false; break }
-                values.append(v)
-            }
-            guard allPresent else { continue }
-
-            let key = ComboKey(indices: combo)
-            let valueKey = ValueKey(values: values)
-            sets[key, default: []].insert(valueKey)
-        }
-    }
-
-    func countUncovered(row: [UInt64?], mustInclude: Int, strength: Int, upToParam: Int) -> Int {
+    func countUncovered(row: [UInt64?], combos: [[Int]]) -> Int {
         var count = 0
-        for combo in combinations(of: upToParam, choose: strength) {
-            guard combo.contains(mustInclude) else { continue }
-
-            var values: [UInt64] = []
+        for combo in combos {
+            // Pack values inline to avoid temporary array allocation
+            var lo: UInt64 = 0
+            var hi: UInt64 = 0
             var allPresent = true
-            for idx in combo {
+            for (i, idx) in combo.enumerated() {
                 guard let v = row[idx] else { allPresent = false; break }
-                values.append(v)
+                if i < 4 {
+                    lo |= v << (i &* 16)
+                } else {
+                    hi |= v << ((i &- 4) &* 16)
+                }
             }
             guard allPresent else { continue }
 
-            let key = ComboKey(indices: combo)
-            let valueKey = ValueKey(values: values)
+            let key = ComboKey(combo)
+            let valueKey = ValueKey(lo: lo, hi: hi)
             if sets[key]?.contains(valueKey) != true {
                 count += 1
             }
@@ -366,16 +409,10 @@ private struct CoveredSet {
         return count
     }
 
-    func findUncovered(
-        mustInclude: Int,
-        strength: Int,
-        upToParam: Int,
-        params: [FiniteParameter],
-    ) -> [IndexedTuple] {
+    func findUncovered(combos: [[Int]], params: [FiniteParameter]) -> [IndexedTuple] {
         var result: [IndexedTuple] = []
-        for combo in combinations(of: upToParam, choose: strength) {
-            guard combo.contains(mustInclude) else { continue }
-            let key = ComboKey(indices: combo)
+        for combo in combos {
+            let key = ComboKey(combo)
             let coveredValues = sets[key] ?? []
 
             let domains = combo.map { params[$0].domainSize }
@@ -395,7 +432,7 @@ private struct CoveredSet {
                 }
                 values.reverse()
 
-                let valueKey = ValueKey(values: values)
+                let valueKey = ValueKey(values)
                 if !coveredValues.contains(valueKey) {
                     result.append(IndexedTuple(paramIndices: combo, values: values))
                 }

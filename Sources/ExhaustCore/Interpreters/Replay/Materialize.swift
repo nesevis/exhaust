@@ -346,9 +346,14 @@ extension Interpreters {
     ) throws -> Output? {
         switch operation {
         case .zip(_, _), .pick:
-            nil
-        case .chooseBits:
-            try materializeRecursiveChooseBits(continuation: continuation, tree: tree, context: &context)
+            nil as Output?
+        case let .chooseBits(min, max, _, isRangeExplicit):
+            try materializeRecursiveChooseBits(
+                continuation: continuation,
+                tree: tree,
+                context: &context,
+                validRange: isRangeExplicit ? min ... max : nil,
+            )
         case let .just(value):
             try materializeRecursiveJust(value: value, continuation: continuation, tree: tree, context: &context)
         case .getSize:
@@ -395,8 +400,16 @@ extension Interpreters {
         continuation: @escaping (Any) throws -> ReflectiveGenerator<Output>,
         tree: ChoiceTree,
         context: inout Context,
+        validRange: ClosedRange<UInt64>?,
     ) throws -> Output? {
         guard let value = context.consumeValueIfPresent() else {
+            return nil
+        }
+        // Reject values outside the generator's explicit range. The reducer's
+        // redistributeNumericPairs pass can move bit patterns across parameters
+        // without range-gating integers, relying on materialize as the source of
+        // truth. Without this check, out-of-range values pass through silently.
+        if let validRange, value.choice.fits(in: validRange) == false {
             return nil
         }
         let nextGen = try continuation(value.choice.convertible)
@@ -646,11 +659,12 @@ extension Interpreters {
         context: inout Context,
     ) throws -> Output? {
         switch operation {
-        case .chooseBits:
+        case let .chooseBits(min, max, _, isRangeExplicit):
             try materializeWithChoicesChooseBits(
                 continuation: continuation,
                 choices: &choices,
                 context: &context,
+                validRange: isRangeExplicit ? min ... max : nil,
             )
         case let .pick(pickChoices):
             try materializeWithChoicesPick(
@@ -727,12 +741,16 @@ extension Interpreters {
         continuation: @escaping (Any) throws -> ReflectiveGenerator<Output>,
         choices: inout ChoiceCursor,
         context: inout Context,
+        validRange: ClosedRange<UInt64>?,
     ) throws -> Output? {
         guard choices.isEmpty == false else {
             return nil
         }
         _ = choices.removeFirst()
         guard let value = context.consumeValueIfPresent() else {
+            return nil
+        }
+        if let validRange, value.choice.fits(in: validRange) == false {
             return nil
         }
 

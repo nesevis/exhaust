@@ -48,10 +48,10 @@ public enum ChoiceTree: Hashable, Equatable, Sendable {
 }
 
 extension ChoiceTree {
-    static let emptyJust = Self.just("")
+    public static let emptyJust = Self.just("")
 
     /// Whether this node is a `.choice` leaf.
-    var isChoice: Bool {
+    public var isChoice: Bool {
         if case .choice = self {
             return true
         }
@@ -67,7 +67,7 @@ extension ChoiceTree {
     }
 
     /// Whether this node is a `.branch` pick site.
-    var isBranch: Bool {
+    public var isBranch: Bool {
         if case .branch = self {
             return true
         }
@@ -75,7 +75,7 @@ extension ChoiceTree {
     }
 
     /// Whether this node is a `.just` constant.
-    var isJust: Bool {
+    public var isJust: Bool {
         if case .just = self {
             return true
         }
@@ -102,7 +102,7 @@ extension ChoiceTree {
     }
 
     /// Returns the maximum `breadth × 2^pickDepth` across all pick sites, where pickDepth counts nested `.branch` levels.
-    var pickComplexity: UInt64 {
+    public var pickComplexity: UInt64 {
         pickComplexityHelper(pickDepth: 0)
     }
 
@@ -131,7 +131,7 @@ extension ChoiceTree {
     ///
     /// - Parameter transform: A closure that takes a ``ChoiceTree`` and returns a transformed ``ChoiceTree``.
     /// - Returns: A new ``ChoiceTree`` with the transform applied to all its nodes and their children.
-    func map(_ transform: (ChoiceTree) throws -> ChoiceTree) rethrows -> ChoiceTree {
+    public func map(_ transform: (ChoiceTree) throws -> ChoiceTree) rethrows -> ChoiceTree {
         let transformedNode = try transform(self)
 
         switch transformedNode {
@@ -160,7 +160,7 @@ extension ChoiceTree {
     ///
     /// After structural passes like `deleteSequenceBoundaries` merge inner sequences, the tree's recorded length ranges can become stale. This method relaxes those ranges so subsequent materialization passes don't reject valid candidates.
     /// Only affects sequence nodes whose `isRangeExplicit` is `false`.
-    func relaxingNonExplicitSequenceLengthRanges() -> ChoiceTree {
+    public func relaxingNonExplicitSequenceLengthRanges() -> ChoiceTree {
         map { node in
             guard case let .sequence(length, elements, metadata) = node,
                   metadata.isRangeExplicit == false
@@ -176,7 +176,7 @@ extension ChoiceTree {
     }
 
     /// Returns whether any node in this tree satisfies the given predicate. Short-circuits on the first match.
-    func contains(_ predicate: (ChoiceTree) -> Bool) -> Bool {
+    public func contains(_ predicate: (ChoiceTree) -> Bool) -> Bool {
         let selfResult = predicate(self)
         guard selfResult == false else {
             return true
@@ -200,7 +200,7 @@ extension ChoiceTree {
 }
 
 extension ChoiceTree: CustomDebugStringConvertible {
-    var prettyPrint: NSString {
+    public var prettyPrint: NSString {
         NSString(string: debugDescription)
     }
 
@@ -266,7 +266,7 @@ extension ChoiceTree: CustomDebugStringConvertible {
         }
     }
 
-    var elementDescription: String {
+    public var elementDescription: String {
         switch self {
         case let .choice(choiceValue, _):
             switch choiceValue {
@@ -304,7 +304,7 @@ extension ChoiceTree: CustomDebugStringConvertible {
         }
     }
 
-    var branchId: UInt64? {
+    public var branchId: UInt64? {
         if case let .branch(_, _, id, _, _) = unwrapped {
             return id
         }

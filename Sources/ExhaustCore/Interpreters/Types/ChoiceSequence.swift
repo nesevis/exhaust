@@ -43,7 +43,7 @@ public extension Collection<ChoiceSequenceValue> {
 extension ChoiceSequence {
     /// Computes a Zobrist hash: XOR of position-dependent contributions for each element.
     /// Enables O(1) incremental updates when single elements change.
-    var zobristHash: UInt64 {
+    public var zobristHash: UInt64 {
         var hash: UInt64 = 0
         for (i, element) in enumerated() {
             hash ^= Self.zobristContribution(at: i, element)
@@ -53,7 +53,7 @@ extension ChoiceSequence {
 
     /// Position-dependent hash contribution of a single element.
     /// Uses splitmix64 mixing for good avalanche with XOR combination.
-    static func zobristContribution(at position: Int, _ value: ChoiceSequenceValue) -> UInt64 {
+    public static func zobristContribution(at position: Int, _ value: ChoiceSequenceValue) -> UInt64 {
         var bits: UInt64 = switch value {
         case let .value(v):
             v.choice.bitPattern64 ^ (zobristTagBits(v.choice.tag) << 48)
@@ -84,7 +84,7 @@ extension ChoiceSequence {
     }
 
     /// Updates a Zobrist hash in O(1) after replacing the element at `position`.
-    static func zobristHashUpdating(
+    public static func zobristHashUpdating(
         _ hash: UInt64,
         at position: Int,
         replacing oldValue: ChoiceSequenceValue,
@@ -258,6 +258,49 @@ public extension ChoiceSequence {
         })
     }
 
+    /// Returns group spans that are direct children of a sequence span, sorted by depth then position.
+    ///
+    /// These represent individual array elements. Deleting them changes the array length, so materialization should use `.relaxed` strictness to tolerate the structural shift.
+    static func extractSequenceElementSpans(from sequence: ChoiceSequence) -> [ChoiceSpan] {
+        var spans: [ChoiceSpan] = []
+        var stack: [(kind: ChoiceSequenceValue, start: Int)] = []
+
+        for (i, entry) in sequence.enumerated() {
+            switch entry {
+            case .sequence(true, isLengthExplicit: _):
+                stack.append((entry, i))
+
+            case .group(true):
+                stack.append((.group(true), i))
+
+            case .group(false):
+                guard let frame = stack.popLast() else { continue }
+                guard case .group(true) = frame.kind else { continue }
+                // Check if the parent frame (if any) is a sequence
+                if let parent = stack.last, case .sequence(true, isLengthExplicit: _) = parent.kind {
+                    spans.append(ChoiceSpan(
+                        kind: frame.kind,
+                        range: frame.start ... i,
+                        depth: stack.count,
+                    ))
+                }
+
+            case .sequence(false, isLengthExplicit: _):
+                guard let _ = stack.popLast() else { continue }
+
+            case .value, .reduced, .branch, .just:
+                break
+            }
+        }
+
+        return spans.sorted(by: { lhs, rhs in
+            if lhs.depth == rhs.depth {
+                return lhs.range.lowerBound < rhs.range.lowerBound
+            }
+            return lhs.depth < rhs.depth
+        })
+    }
+
     /// Returns balanced group spans strictly contained within `range`, sorted longest-first.
     static func extractDescendantGroupSpans(
         from sequence: ChoiceSequence,
@@ -385,7 +428,7 @@ public extension ChoiceSequence {
         return spans.reversed()
     }
 
-    internal mutating func removeSubranges(_ ranges: [ClosedRange<Int>]) {
+    public mutating func removeSubranges(_ ranges: [ClosedRange<Int>]) {
         let set = RangeSet(ranges.map(\.asRange))
         removeSubranges(set)
     }
@@ -448,7 +491,7 @@ public extension ChoiceSequence {
 
     /// Extracts immediate children of a single container range.
     /// Children are returned in-order and include bare values and immediate nested containers.
-    internal static func extractImmediateChildren(
+    public static func extractImmediateChildren(
         from sequence: ChoiceSequence,
         in containerRange: ClosedRange<Int>,
     ) -> [(range: ClosedRange<Int>, kind: SiblingChildKind)] {
@@ -519,7 +562,7 @@ public extension ChoiceSequence {
 
     /// Returns the flattened `ChoiceValue`s within the given range, ignoring structural markers.
     /// Used as a lexicographic comparison key for sibling reordering.
-    internal static func siblingComparisonKey(
+    public static func siblingComparisonKey(
         from sequence: ChoiceSequence,
         range: ClosedRange<Int>,
     ) -> [ChoiceValue] {
@@ -535,7 +578,7 @@ public extension ChoiceSequence {
         return keys
     }
 
-    func shortLexPrecedes(_ other: ChoiceSequence) -> Bool {
+    public func shortLexPrecedes(_ other: ChoiceSequence) -> Bool {
         // Shorter sequences are always better
         if count != other.count {
             return count < other.count

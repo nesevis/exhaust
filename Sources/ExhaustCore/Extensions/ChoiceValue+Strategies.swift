@@ -172,7 +172,7 @@ extension ChoiceValue {
         return range.contains(bitPattern)
     }
 
-    var fundamentalValues: [ChoiceValue] {
+    public var fundamentalValues: [ChoiceValue] {
         switch self {
         case .unsigned:
             let values: [UInt64] = [0, 1, 2]

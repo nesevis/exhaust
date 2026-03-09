@@ -9,5 +9,11 @@ struct ExhaustMacrosPlugin: CompilerPlugin {
         ExtractMacro.self,
         ExamineMacro.self,
         ExploreMacro.self,
+        ExhaustContractMacro.self,
+        ContractDeclarationMacro.self,
+        ModelMacro.self,
+        SUTMacro.self,
+        CommandMacro.self,
+        InvariantMacro.self,
     ]
 }

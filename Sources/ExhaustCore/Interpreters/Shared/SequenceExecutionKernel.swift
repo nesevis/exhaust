@@ -5,9 +5,9 @@
 //  Created by Codex on 21/2/2026.
 //
 
-enum SequenceExecutionKernel {
+public enum SequenceExecutionKernel {
     @inline(__always)
-    static func run(
+    public static func run(
         count: UInt64,
         step: () throws -> Bool,
     ) throws -> Bool {
@@ -22,7 +22,7 @@ enum SequenceExecutionKernel {
     }
 
     @inline(__always)
-    static func run<Script>(
+    public static func run<Script>(
         over scripts: [Script],
         step: (Script) throws -> Bool,
     ) throws -> Bool {

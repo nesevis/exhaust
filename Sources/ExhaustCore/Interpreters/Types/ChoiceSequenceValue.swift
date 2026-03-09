@@ -24,7 +24,7 @@ public enum ChoiceSequenceValue: Hashable, Equatable, Sendable {
     /// A marker for a `.just` node. Carries no data but makes `.just` elements visible in the flat sequence (needed for element counting in ``PrefixMaterializer``).
     case just
 
-    var value: Value? {
+    public var value: Value? {
         switch self {
         case let .value(value):
             value
@@ -70,7 +70,7 @@ public enum ChoiceSequenceValue: Hashable, Equatable, Sendable {
         }
     }
 
-    var shortString: String {
+    public var shortString: String {
         switch self {
         case .just:
             return "J"
@@ -104,7 +104,7 @@ public enum ChoiceSequenceValue: Hashable, Equatable, Sendable {
             self.validIDs = validIDs
         }
 
-        func shortLexCompare(_ other: Branch) -> ShortlexOrder {
+        public func shortLexCompare(_ other: Branch) -> ShortlexOrder {
             if validIDs == other.validIDs,
                let lhsIndex = validIDs.firstIndex(of: id),
                let rhsIndex = other.validIDs.firstIndex(of: other.id)
@@ -131,7 +131,7 @@ public enum ChoiceSequenceValue: Hashable, Equatable, Sendable {
             self.isRangeExplicit = isRangeExplicit
         }
 
-        func shortLexCompare(_ other: Value) -> ShortlexOrder {
+        public func shortLexCompare(_ other: Value) -> ShortlexOrder {
             let lhs = choice.shortlexKey
             let rhs = other.choice.shortlexKey
             if lhs < rhs { return .lt }

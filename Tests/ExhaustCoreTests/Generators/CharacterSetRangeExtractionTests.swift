@@ -9,7 +9,7 @@
 
 import Foundation
 import Testing
-@testable import ExhaustCore
+import ExhaustCore
 
 @Suite("CharacterSet Range Extraction")
 struct CharacterSetRangeExtractionTests {

@@ -33,7 +33,7 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
         var maxIterations: UInt64 = 100
         var coverageBudget: UInt64 = 2000
         var seed: UInt64?
-        var shrinkConfig: ShrinkBudget = .fast
+        var reductionConfig: TCRBudget = .fast
         var suppressIssueReporting = false
         var reflectingValue: Output?
         var useRandomOnly = false
@@ -46,8 +46,8 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
                 coverageBudget = n
             case let .replay(s):
                 seed = s
-            case let .shrinkBudget(config):
-                shrinkConfig = config
+            case let .reductionBudget(config):
+                reductionConfig = config
             case .suppressIssueReporting:
                 suppressIssueReporting = true
             case let .reflecting(value):
@@ -62,7 +62,7 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
                 return try __reduceReflected(
                     gen,
                     value: reflectingValue,
-                    shrinkConfig: shrinkConfig,
+                    reductionConfig: reductionConfig,
                     suppressIssueReporting: suppressIssueReporting,
                     sourceCode: sourceCode,
                     fileID: fileID,
@@ -98,7 +98,7 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
                     if let (shrunkSequence, shrunkValue) = try Interpreters.reduce(
                         gen: gen,
                         tree: tree,
-                        config: shrinkConfig,
+                        config: reductionConfig,
                         property: countingProperty,
                     ) {
                         var failure = PropertyTestFailure(
@@ -140,7 +140,7 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
                     return value
                 }
 
-                // Shrinking failed — report original
+                // Reduction failed — report original
                 var failure = PropertyTestFailure(
                     counterexample: value,
                     original: nil as Output?,
@@ -235,7 +235,7 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
                     if let (shrunkSequence, shrunkValue) = try Interpreters.reduce(
                         gen: gen,
                         tree: tree,
-                        config: shrinkConfig,
+                        config: reductionConfig,
                         property: countingProperty,
                     ) {
                         let failure = PropertyTestFailure(
@@ -281,7 +281,7 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
                     return next
                 }
 
-                // Shrinking failed — report the original counterexample
+                // Reduction failed — report the original counterexample
                 let failure = PropertyTestFailure(
                     counterexample: next,
                     original: nil as Output?,
@@ -357,7 +357,7 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
     ) -> Output? {
         var maxIterations: UInt64 = 10000
         var seed: UInt64?
-        var shrinkConfig: ShrinkBudget = .fast
+        var reductionConfig: TCRBudget = .fast
         var suppressIssueReporting = false
         var poolCapacity = 256
         var generateRatio = 0.2
@@ -368,8 +368,8 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
                 maxIterations = n
             case let .replay(s):
                 seed = s
-            case let .shrinkBudget(config):
-                shrinkConfig = config
+            case let .reductionBudget(config):
+                reductionConfig = config
             case .suppressIssueReporting:
                 suppressIssueReporting = true
             case let .poolCapacity(n):
@@ -383,7 +383,7 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
             gen: gen,
             property: property,
             maxIterations: maxIterations,
-            shrinkConfig: shrinkConfig,
+            reductionConfig: reductionConfig,
             poolCapacity: poolCapacity,
             generateRatio: generateRatio,
             seed: seed,
@@ -524,7 +524,7 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
     private static func __reduceReflected<Output>(
         _ gen: ReflectiveGenerator<Output>,
         value: Output,
-        shrinkConfig: ShrinkBudget,
+        reductionConfig: TCRBudget,
         suppressIssueReporting: Bool,
         sourceCode: String?,
         fileID: StaticString,
@@ -579,7 +579,7 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
         if let (shrunkSequence, shrunkValue) = try Interpreters.reduce(
             gen: gen,
             tree: tree,
-            config: shrinkConfig,
+            config: reductionConfig,
             property: countingProperty,
         ) {
             let failure = PropertyTestFailure(

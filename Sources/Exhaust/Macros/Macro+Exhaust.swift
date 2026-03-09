@@ -20,7 +20,7 @@ import ExhaustCore
 /// - `.maxIterations(_)`: upper bound on random sampling iterations (default 100). Additive with the coverage budget.
 /// - `.coverageBudget(_)`: maximum test cases for structured coverage (default 2000).
 /// - `.replay(_)`: fixed seed for deterministic reproduction. Skips structured coverage.
-/// - `.shrinkBudget(_)`: controls test case reduction aggressiveness (`.fast` or `.slow`).
+/// - `.reductionBudget(_)`: controls test case reduction aggressiveness (`.fast` or `.slow`).
 /// - `.reflecting(_)`: skips generation, reflects an existing value through the generator, and reduces it.
 /// - `.randomOnly`: disables structured coverage analysis.
 /// - `.suppressIssueReporting`: skips `reportIssue()` — useful when the caller asserts on the returned value instead.
@@ -47,3 +47,41 @@ public macro exhaust<T>(
     _ settings: ExhaustSettings<T>...,
     property: (T) throws -> Bool,
 ) -> T? = #externalMacro(module: "ExhaustMacros", type: "ExhaustTestMacro")
+
+/// Runs a contract property test that generates command sequences, executes them against the system under test, and verifies that contracts (invariants, postconditions, and optional model comparisons) hold after every step.
+///
+/// ## How It Works
+///
+/// Three phases, executed in order:
+///
+/// **1. Structured coverage** (default budget: 2000 test cases). Builds a covering array over the command-type domain — each parameter is a position in the command sequence, each domain value is a command type. IPOG generates rows that guarantee every t-way ordered permutation of command types is tested.
+///
+/// **2. Random sampling** (default: 100 iterations). Generates random command sequences with weighted command selection.
+///
+/// **3. Test case reduction**. When a failing sequence is found, the existing Reducer strategies apply — deleting commands, simplifying arguments, reordering steps — until a minimal counterexample is found.
+///
+/// ## Settings
+///
+/// - `.sequenceLength(5...20)`: range of command sequence lengths (default 5...20).
+/// - `.maxIterations(_)`: upper bound on random sampling iterations (default 100).
+/// - `.coverageBudget(_)`: maximum test cases for structured coverage (default 2000).
+/// - `.replay(_)`: fixed seed for deterministic reproduction.
+/// - `.reductionBudget(_)`: controls reduction aggressiveness.
+/// - `.randomOnly`: disables structured coverage analysis.
+/// - `.argumentAwareCoverage`: includes command argument values in SCA domain construction.
+///
+/// ## Example
+///
+/// ```swift
+/// @Test func boundedQueueBehavior() {
+///     #exhaust(BoundedQueueSpec.self, .sequenceLength(5...20))
+/// }
+/// ```
+///
+/// - Returns: A ``ContractResult`` containing the shrunk command sequence, execution trace, and SUT state if a violation is found, or `nil` if all sequences pass.
+@freestanding(expression)
+@discardableResult
+public macro exhaust<Spec: ContractSpec>(
+    _ specType: Spec.Type,
+    _ settings: ContractSettings...
+) -> ContractResult<Spec>? = #externalMacro(module: "ExhaustMacros", type: "ExhaustContractMacro")

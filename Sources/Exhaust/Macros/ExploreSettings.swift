@@ -18,8 +18,8 @@ public enum ExploreSettings {
     /// A fixed seed for deterministic replay (reproduction, benchmarking, regression).
     case replay(UInt64)
 
-    /// The shrink configuration to use when a counterexample is found.
-    case shrinkBudget(ShrinkBudget)
+    /// The test case reduction configuration to use when a counterexample is found.
+    case reductionBudget(TCRBudget)
 
     /// Suppresses test-framework issue reporting (`reportIssue`) on failure.
     ///

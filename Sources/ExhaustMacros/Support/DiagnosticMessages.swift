@@ -16,6 +16,7 @@ enum ExhaustMacroDiagnostic: String, DiagnosticMessage {
     case extractMissingGenerator = "#extract requires a generator as its first argument"
     case examineMissingGenerator = "#examine requires a generator as its first argument"
     case exploreUnderDevelopment = "#explore is under active development and its API may change without notice"
+    case exhaustContractMissingSpec = "#exhaust requires a spec type argument"
 
     var message: String {
         rawValue
@@ -42,7 +43,8 @@ enum ExhaustMacroDiagnostic: String, DiagnosticMessage {
              .exploreMissingGenerator,
              .exploreMissingScorer,
              .extractMissingGenerator,
-             .examineMissingGenerator:
+             .examineMissingGenerator,
+             .exhaustContractMissingSpec:
             .error
         }
     }

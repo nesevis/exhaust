@@ -16,8 +16,8 @@ public enum ExhaustSettings<Output> {
     /// A fixed seed for deterministic replay (reproduction, benchmarking, regression).
     case replay(UInt64)
 
-    /// The shrink configuration to use when a counterexample is found.
-    case shrinkBudget(ShrinkBudget)
+    /// The test case reduction configuration to use when a counterexample is found.
+    case reductionBudget(TCRBudget)
 
     /// Suppresses test-framework issue reporting (`reportIssue`) on failure.
     ///
@@ -26,7 +26,7 @@ public enum ExhaustSettings<Output> {
 
     /// Reflects an existing value through the generator and attempts to reduce it.
     ///
-    /// Skips random generation entirely. The value is reflected into a choice tree and then reduced using the property as the shrinking oracle.
+    /// Skips random generation entirely. The value is reflected into a choice tree and then reduced using the property as the test case reduction oracle.
     ///
     /// The value must fail the property — if it passes, an issue is reported.
     case reflecting(Output)

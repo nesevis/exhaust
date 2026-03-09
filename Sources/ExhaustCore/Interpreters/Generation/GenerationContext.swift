@@ -7,29 +7,29 @@
 
 public struct GenerationContext: ~Copyable {
     // Constants
-    let maxRuns: UInt64
-    let baseSeed: UInt64
-    static let maxFilterRuns: UInt64 = 500
+    public let maxRuns: UInt64
+    public let baseSeed: UInt64
+    public static let maxFilterRuns: UInt64 = 500
 
     // Mutable generation state
-    var isFixed: Bool
-    var size: UInt64
-    var sizeOverride: UInt64?
-    var prng: Xoshiro256
+    public var isFixed: Bool
+    public var size: UInt64
+    public var sizeOverride: UInt64?
+    public var prng: Xoshiro256
 
     // Caches
-    var tunedFilterCache: [UInt64: ReflectiveGenerator<Any>] = [:]
-    var uniqueSeenKeys: [UInt64: Set<AnyHashable>] = [:]
-    var uniqueSeenSequences: [UInt64: Set<ChoiceSequence>] = [:]
+    public var tunedFilterCache: [UInt64: ReflectiveGenerator<Any>] = [:]
+    public var uniqueSeenKeys: [UInt64: Set<AnyHashable>] = [:]
+    public var uniqueSeenSequences: [UInt64: Set<ChoiceSequence>] = [:]
 
     // VaCT/CGS tracking (harmless defaults for ValueInterpreter)
-    var materializePicks: Bool = false
-    var runs: UInt64 = 0
-    var classifications: [UInt64: [String: Set<UInt64>]] = [:]
+    public var materializePicks: Bool = false
+    public var runs: UInt64 = 0
+    public var classifications: [UInt64: [String: Set<UInt64>]] = [:]
 
     // MARK: - Jump
 
-    func jump(seed: UInt64) -> GenerationContext {
+    public func jump(seed: UInt64) -> GenerationContext {
         GenerationContext(
             maxRuns: maxRuns,
             baseSeed: baseSeed,
@@ -43,7 +43,7 @@ public struct GenerationContext: ~Copyable {
 
     // MARK: - Classifications
 
-    func printClassifications() {
+    public func printClassifications() {
         for (_, classifications) in classifications {
             ExhaustLog.info(
                 category: .generation,

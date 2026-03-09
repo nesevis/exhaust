@@ -8,7 +8,7 @@
 //
 
 import Testing
-@testable import ExhaustCore
+import ExhaustCore
 
 // MARK: - Recipe Type (output type tracking)
 

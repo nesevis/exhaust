@@ -6,14 +6,14 @@
 //
 
 import Testing
-@testable import ExhaustCore
+import ExhaustCore
 
 @Suite("Reducer Float Shrinking")
 struct ReducerFloatShrinkingTests {
     private func reduce<Output>(
         _ gen: ReflectiveGenerator<Output>,
         startingAt value: Output,
-        config: Interpreters.ShrinkConfiguration = .fast,
+        config: Interpreters.TCRConfiguration = .fast,
         property: (Output) -> Bool,
     ) throws -> Output {
         let tree = try #require(try Interpreters.reflect(gen, with: value))

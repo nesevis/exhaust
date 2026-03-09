@@ -10,7 +10,7 @@
 /// Each step in the path is a child index at the corresponding depth.
 /// For example, `[1, 0]` means "second child of root, then first child of that node".
 public struct Fingerprint: Hashable, Sendable {
-    private(set) var steps: [Int]
+    public private(set) var steps: [Int]
 
     public static let root = Fingerprint(steps: [])
 
@@ -30,7 +30,7 @@ public struct Fingerprint: Hashable, Sendable {
 
 extension ChoiceTree {
     /// The immediate children of this node in traversal order.
-    var children: [ChoiceTree] {
+    public var children: [ChoiceTree] {
         switch self {
         case .choice, .just, .getSize:
             []
@@ -48,7 +48,7 @@ extension ChoiceTree {
     }
 
     /// Returns a copy of this node with the child at `index` replaced by `newChild`.
-    func replacingChild(at index: Int, with newChild: ChoiceTree) -> ChoiceTree {
+    public func replacingChild(at index: Int, with newChild: ChoiceTree) -> ChoiceTree {
         switch self {
         case .choice, .just, .getSize:
             preconditionFailure("Leaf nodes have no children to replace")

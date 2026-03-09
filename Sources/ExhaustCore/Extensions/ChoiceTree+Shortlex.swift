@@ -6,7 +6,7 @@
 ////
 
 extension ChoiceTree {
-    var metadata: ChoiceMetadata {
+    public var metadata: ChoiceMetadata {
         switch self {
         case let .choice(_, meta), let .sequence(_, _, meta):
             return meta

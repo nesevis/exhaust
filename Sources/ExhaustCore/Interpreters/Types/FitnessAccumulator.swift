@@ -22,7 +22,7 @@ public final class FitnessAccumulator {
 
     public init() {}
 
-    func record(siteID: UInt64, choiceID: UInt64, fitness: UInt64, observations: UInt64) {
+    public func record(siteID: UInt64, choiceID: UInt64, fitness: UInt64, observations: UInt64) {
         let key = SiteChoiceKey(siteID: siteID, choiceID: choiceID)
         records[key, default: FitnessRecord()].totalFitness += fitness
         records[key, default: FitnessRecord()].observationCount += observations
@@ -36,7 +36,7 @@ public final class FitnessAccumulator {
     /// Checks if the normalized weight distribution has stabilized across all observed pick sites. Computes current shares and compares to the previous snapshot; returns `true` when the maximum absolute shift across all sites and choices is below `threshold`.
     ///
     /// Each call captures a new snapshot, so call at regular intervals (e.g., every 20 warmup runs) rather than on every run.
-    func hasConverged(threshold: Double = 0.05) -> Bool {
+    public func hasConverged(threshold: Double = 0.05) -> Bool {
         // Group records by siteID
         var siteFitnesses: [UInt64: ContiguousArray<(choiceID: UInt64, fitness: Double)>] = [:]
         for (key, record) in records {

@@ -5,10 +5,10 @@
 //  Created by Chris Kolbu on 28/2/2026.
 //
 
-enum ChoiceTreeHandlers {
+public enum ChoiceTreeHandlers {
     /// Resolves the generator to use for a filter operation, using the tuning cache.
     @inline(__always)
-    static func resolveFilterGenerator(
+    public static func resolveFilterGenerator(
         gen: ReflectiveGenerator<Any>,
         fingerprint: UInt64,
         filterType: FilterType,
@@ -44,7 +44,7 @@ enum ChoiceTreeHandlers {
     /// Checks whether a generated result is a duplicate for a unique combinator.
     /// Returns `true` if duplicate.
     @inline(__always)
-    static func checkDuplicate(
+    public static func checkDuplicate(
         result: Any,
         tree: ChoiceTree,
         fingerprint: UInt64,
