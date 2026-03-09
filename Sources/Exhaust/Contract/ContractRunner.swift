@@ -27,7 +27,7 @@ public func __runContract<Spec: ContractSpec>(
     line: UInt = #line,
     column: UInt = #column,
 ) -> ContractResult<Spec>? {
-    var maxIterations: UInt64 = 100
+    var maxIterations: UInt64 = 2000
     var coverageBudget: UInt64 = 2000
     var seed: UInt64?
     var reductionConfig: TCRBudget = .fast
