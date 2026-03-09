@@ -362,16 +362,41 @@ public enum SequenceCoveringArray {
     }
 
     /// Finds the slot that contains the given flat domain index.
+    ///
+    /// Slots are sorted by `flatOffset` by construction. Uses `AdaptiveProbe.binarySearchWithGuess`
+    /// with a linear-interpolation guess, giving O(log|guess − answer|) cost — nearly O(1) when
+    /// slots have similar contribution sizes.
     private static func findSlot(
         for value: UInt64,
         in slots: [SCADomainSlot],
     ) -> SCADomainSlot? {
-        for slot in slots {
-            if value >= slot.flatOffset && value < slot.flatOffset + slot.contribution {
-                return slot
-            }
+        guard !slots.isEmpty else { return nil }
+        guard value >= slots[0].flatOffset else { return nil }
+
+        let lastIdx = slots.count - 1
+        let lastSlot = slots[lastIdx]
+        guard value < lastSlot.flatOffset &+ lastSlot.contribution else { return nil }
+
+        if slots.count == 1 { return slots[0] }
+
+        // Linear interpolation guess: assume roughly uniform contribution sizes.
+        let totalDomain = lastSlot.flatOffset &+ lastSlot.contribution
+        let guess = totalDomain > 0
+            ? min(Int(value &* UInt64(lastIdx) / totalDomain), lastIdx - 1)
+            : 0
+
+        let idx = AdaptiveProbe.binarySearchWithGuess(
+            { slots[Int($0)].flatOffset <= value },
+            low: 0,
+            high: Int64(slots.count),
+            guess: Int64(guess),
+        )
+
+        let slot = slots[Int(idx)]
+        guard value >= slot.flatOffset, value < slot.flatOffset &+ slot.contribution else {
+            return nil
         }
-        return nil
+        return slot
     }
 
     /// Decomposes a local index via mixed-radix into per-parameter value indices, then delegates to `BoundaryCoveringArrayReplay` to build the sub-tree.
