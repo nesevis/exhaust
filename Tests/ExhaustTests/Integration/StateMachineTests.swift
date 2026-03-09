@@ -114,28 +114,28 @@ struct ALUSpec {
     }
 
     // store: 5 arg values  → 5 domain slots
-    @Command(weight: 2, Gen.int(in: 0...4))
+    @Command(weight: 2, #gen(.int(in: 0...4)))
     mutating func store(value: Int) throws {
         expected = value
         alu.store(value)
     }
 
     // add: 4 arg values    → 4 domain slots
-    @Command(weight: 2, Gen.int(in: 1...4))
+    @Command(weight: 2, #gen(.int(in: 1...4)))
     mutating func add(operand: Int) throws {
         expected = (expected + operand) & 0xF
         alu.add(operand)
     }
 
     // multiply: 2 arg values → 2 domain slots  (the buggy operation)
-    @Command(weight: 1, Gen.int(in: 2...3))
+    @Command(weight: 1, #gen(.int(in: 2...3)))
     mutating func multiply(factor: Int) throws {
         expected = (expected * factor) & 0xF
         alu.multiply(factor)
     }
 
     // subtract: 3 arg values → 3 domain slots
-    @Command(weight: 1, Gen.int(in: 1...3))
+    @Command(weight: 1, #gen(.int(in: 1...3)))
     mutating func subtract(amount: Int) throws {
         expected = (expected - amount) & 0xF
         alu.subtract(amount)
@@ -148,8 +148,8 @@ struct ALUSpec {
         alu.increment()
     }
 
-    // clear: param-free      → 1 domain slot
-    //                    total: 16 domain values per position
+    // clear: param-free → 1 domain slot
+    // total: 16 domain values per position
     @Command(weight: 1)
     mutating func clear() throws {
         expected = 0

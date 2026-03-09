@@ -277,7 +277,14 @@ private func runSCACoverage<Command>(
         branchProfiles: branchProfiles,
     )
 
-    guard let covering = CoveringArray.bestFitting(budget: coverageBudget, profile: profile) else {
+    // When branches have analyzed arguments, the per-position domain is the
+    // sum of all branch contributions — potentially much larger than the
+    // command count alone. Cap at t=2 to avoid combinatorially expensive
+    // IPOG runs. For parameter-free domains (domain == command count),
+    // allow bestFitting to try higher strengths as before.
+    let hasArgumentDomains = branchProfiles.contains { if case .analyzed = $0 { return true }; return false }
+    let maxStrength = hasArgumentDomains ? 2 : 6
+    guard let covering = CoveringArray.bestFitting(budget: coverageBudget, profile: profile, maxStrength: maxStrength) else {
         return nil
     }
 
