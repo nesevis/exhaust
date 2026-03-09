@@ -5,29 +5,29 @@
 //  Created by Chris Kolbu on 20/2/2026.
 //
 
-struct ProbeBudget {
-    let passName: String
-    let limit: Int
-    private(set) var consumed: Int = 0
+public struct ProbeBudget {
+    public let passName: String
+    public let limit: Int
+    public private(set) var consumed: Int = 0
 
-    init(passName: String, limit: Int) {
+    public init(passName: String, limit: Int) {
         self.passName = passName
         self.limit = max(0, limit)
     }
 
-    var remaining: Int {
+    public var remaining: Int {
         max(0, limit - consumed)
     }
 
-    var isExhausted: Bool {
+    public var isExhausted: Bool {
         consumed >= limit
     }
 
-    var exhaustionReason: String {
+    public var exhaustionReason: String {
         "\(passName) probe budget exhausted after \(consumed)/\(limit) materialization attempts."
     }
 
-    mutating func consume() -> Bool {
+    public mutating func consume() -> Bool {
         guard consumed < limit else {
             return false
         }

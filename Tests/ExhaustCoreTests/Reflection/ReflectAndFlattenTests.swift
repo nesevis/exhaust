@@ -7,7 +7,7 @@
 //
 
 import Testing
-@testable import ExhaustCore
+import ExhaustCore
 
 @Suite("Reflect and Flatten Integration Tests")
 struct ReflectAndFlattenTests {

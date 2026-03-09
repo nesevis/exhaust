@@ -6,7 +6,7 @@
 //
 
 import Testing
-@testable import ExhaustCore
+import ExhaustCore
 
 @Suite("FloatShortlex")
 struct FloatShortlexTests {

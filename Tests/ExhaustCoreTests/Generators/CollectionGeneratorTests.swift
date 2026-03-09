@@ -4,7 +4,7 @@
 //
 
 import Testing
-@testable import ExhaustCore
+import ExhaustCore
 
 @Suite("Gen Collection Combinators")
 struct CollectionGeneratorTests {

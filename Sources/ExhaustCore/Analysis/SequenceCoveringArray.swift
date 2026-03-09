@@ -267,6 +267,15 @@ public enum SequenceCoveringArray {
         )
     }
 
+    /// Returns true if every branch in the pick has no parameters (no choices in sub-generators).
+    ///
+    /// Command-type-only SCA produces `.just("")` sub-trees that can't satisfy parameterized branches during replay. Use this to gate command-type-only SCA on parameter-free branches.
+    public static func allBranchesParameterFree(
+        _ pickChoices: ContiguousArray<ReflectiveOperation.PickTuple>,
+    ) -> Bool {
+        pickChoices.allSatisfy { isParameterFree($0.generator) }
+    }
+
     // MARK: - Private Helpers
 
     private static func isParameterFree(_ gen: ReflectiveGenerator<Any>) -> Bool {

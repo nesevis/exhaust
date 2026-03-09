@@ -6,7 +6,7 @@
 //
 
 import Testing
-@testable import ExhaustCore
+import ExhaustCore
 
 @Suite("Reducer Float Shrinking")
 struct ReducerFloatShrinkingTests {

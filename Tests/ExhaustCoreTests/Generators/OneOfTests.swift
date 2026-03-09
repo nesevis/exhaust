@@ -6,7 +6,7 @@
 //
 
 import Testing
-@testable import ExhaustCore
+import ExhaustCore
 
 @Suite("oneOf combinator")
 struct OneOfTests {

@@ -7,7 +7,7 @@
 //
 
 import Testing
-@testable import ExhaustCore
+import ExhaustCore
 
 @Suite("ExploreRunner Integration")
 struct ExploreIntegrationTests {

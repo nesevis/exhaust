@@ -122,6 +122,7 @@ public extension Interpreters {
         case promoteBranches
         case pivotBranches
         case deleteContainerSpans
+        case deleteSequenceElements
         case deleteSequenceBoundaries
         case deleteFreeStandingValues
         case deleteAlignedSiblingWindows
@@ -141,6 +142,7 @@ public extension Interpreters {
         private var allValueSpans: [ChoiceSpan]?
         private var siblingGroups: [SiblingGroup]?
         private var containerSpans: [ChoiceSpan]?
+        private var sequenceElementSpans: [ChoiceSpan]?
         private var freeStandingValueSpans: [ChoiceSpan]?
         private var sequenceBoundarySpans: [ChoiceSpan]?
 
@@ -148,6 +150,7 @@ public extension Interpreters {
             allValueSpans = nil
             siblingGroups = nil
             containerSpans = nil
+            sequenceElementSpans = nil
             freeStandingValueSpans = nil
             sequenceBoundarySpans = nil
         }
@@ -170,6 +173,13 @@ public extension Interpreters {
             if let cached = containerSpans { return cached }
             let spans = ChoiceSequence.extractContainerSpans(from: sequence)
             containerSpans = spans
+            return spans
+        }
+
+        mutating func getSequenceElementSpans(from sequence: ChoiceSequence) -> [ChoiceSpan] {
+            if let cached = sequenceElementSpans { return cached }
+            let spans = ChoiceSequence.extractSequenceElementSpans(from: sequence)
+            sequenceElementSpans = spans
             return spans
         }
 
@@ -291,6 +301,17 @@ public extension Interpreters {
                     // Adaptive container span deletion, ie the […] and (…) spans in [(V)(V)]
                     let containerSpans = spanCache.getContainerSpans(from: currentSequence)
                     if containerSpans.isEmpty == false, let (newSequence, output) = try ReducerStrategies.adaptiveDeleteSpans(gen, tree: currentTree, property: property, sequence: currentSequence, spans: containerSpans, rejectCache: &rejectCache) {
+                        currentSequence = newSequence
+                        spanCache.invalidate()
+                        currentOutput = output
+                        passImproved = true
+                    }
+                case .deleteSequenceElements:
+                    // Delete group spans that are direct children of a sequence (array elements).
+                    // Uses .relaxed strictness because removing elements shifts entries out of
+                    // alignment with the tree's per-position structure.
+                    let seqElemSpans = spanCache.getSequenceElementSpans(from: currentSequence)
+                    if seqElemSpans.isEmpty == false, let (newSequence, output) = try ReducerStrategies.adaptiveDeleteSpans(gen, tree: currentTree, property: property, sequence: currentSequence, spans: seqElemSpans, rejectCache: &rejectCache, strictness: .relaxed) {
                         currentSequence = newSequence
                         spanCache.invalidate()
                         currentOutput = output

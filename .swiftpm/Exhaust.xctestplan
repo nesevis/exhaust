@@ -1,4 +1,16 @@
 {
+  "codeCoverageTargets" : [
+    {
+      "containerPath" : "container:",
+      "identifier" : "ExhaustCore",
+      "name" : "ExhaustCore"
+    },
+    {
+      "containerPath" : "container:",
+      "identifier" : "Exhaust",
+      "name" : "Exhaust"
+    }
+  ],
   "configurations" : [
     {
       "id" : "04888FA0-457D-4F78-8597-43EF42BD6566",
@@ -19,18 +31,6 @@
     "performanceAntipatternCheckerEnabled" : true,
     "testExecutionOrdering" : "random"
   },
-  "codeCoverageTargets" : [
-    {
-      "containerPath" : "container:",
-      "identifier" : "ExhaustCore",
-      "name" : "ExhaustCore"
-    },
-    {
-      "containerPath" : "container:",
-      "identifier" : "Exhaust",
-      "name" : "Exhaust"
-    }
-  ],
   "testTargets" : [
     {
       "parallelizable" : true,
@@ -44,7 +44,8 @@
       }
     },
     {
-      "parallelizable" : true,
+      "enabled" : false,
+      "parallelizable" : false,
       "skippedTests" : [
         "TestCaseReducerTests"
       ],

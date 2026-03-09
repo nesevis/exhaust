@@ -13,7 +13,7 @@ public struct SiblingGroup: Equatable {
     public let depth: Int
     public let kind: SiblingChildKind
 
-    var valueRanges: [ClosedRange<Int>]? {
+    public var valueRanges: [ClosedRange<Int>]? {
         switch kind {
         case .bareValue:
             ranges
@@ -31,9 +31,16 @@ public enum SiblingChildKind: Equatable {
     case group
 }
 
-struct SiblingFrame {
-    var children: [(range: ClosedRange<Int>, kind: SiblingChildKind)] = []
-    let depth: Int
-    let startIndex: Int
-    let isSequence: Bool
+public struct SiblingFrame {
+    public var children: [(range: ClosedRange<Int>, kind: SiblingChildKind)] = []
+    public let depth: Int
+    public let startIndex: Int
+    public let isSequence: Bool
+
+    public init(children: [(range: ClosedRange<Int>, kind: SiblingChildKind)] = [], depth: Int, startIndex: Int, isSequence: Bool) {
+        self.children = children
+        self.depth = depth
+        self.startIndex = startIndex
+        self.isSequence = isSequence
+    }
 }

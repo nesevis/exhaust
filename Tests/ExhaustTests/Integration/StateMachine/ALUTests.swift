@@ -87,7 +87,7 @@ struct ALUTests {
             #stateMachine(
                 ALUSpec.self,
                 .sequenceLength(5...8),
-                .maxIterations(0),
+                .argumentAwareCoverage,
                 .suppressIssueReporting
             )
         )

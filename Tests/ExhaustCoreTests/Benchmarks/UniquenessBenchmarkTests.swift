@@ -10,7 +10,7 @@
 
 import Foundation
 import Testing
-@testable import ExhaustCore
+import ExhaustCore
 
 // MARK: - Benchmark Problem
 

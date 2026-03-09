@@ -3,7 +3,7 @@
 //  ExhaustTests
 //
 
-@testable import ExhaustCore
+import ExhaustCore
 
 enum BST: Equatable, Hashable, CustomStringConvertible {
     case leaf

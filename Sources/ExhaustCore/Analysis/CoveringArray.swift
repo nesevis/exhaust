@@ -7,6 +7,10 @@
 public struct CoveringArrayRow: @unchecked Sendable {
     /// `values[i]` is a value index in `0..<parameters[i].domainSize`.
     public var values: [UInt64]
+
+    public init(values: [UInt64]) {
+        self.values = values
+    }
 }
 
 /// A t-way covering array guaranteeing that every t-tuple of parameter values appears in at least one row.

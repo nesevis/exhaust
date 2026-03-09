@@ -87,7 +87,7 @@ public enum ChoiceValue: Comparable, Hashable, Equatable, Sendable {
     }
 
     /// Returns a shortlex complexity score: the absolute magnitude of this value as a `UInt64`.
-    var complexity: UInt64 {
+    public var complexity: UInt64 {
         switch self {
         case let .unsigned(value, _):
             return value

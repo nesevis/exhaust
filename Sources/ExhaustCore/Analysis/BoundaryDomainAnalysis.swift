@@ -42,7 +42,7 @@ public struct BoundaryDomainProfile: @unchecked Sendable {
 
 /// Boundary value selection functions used by `ChoiceTreeAnalysis`.
 public enum BoundaryDomainAnalysis {
-    static func computeBoundaryValues(min: UInt64, max: UInt64, tag: TypeTag) -> [UInt64] {
+    public static func computeBoundaryValues(min: UInt64, max: UInt64, tag: TypeTag) -> [UInt64] {
         switch tag {
         case .double, .float:
             computeFloatBoundaryValues(min: min, max: max, tag: tag)
@@ -257,11 +257,11 @@ public enum BoundaryDomainAnalysis {
 // MARK: - DST Transition Computation
 
 /// Computes DST transition times using Foundation's `TimeZone.nextDaylightSavingTimeTransition`.
-enum DSTTransitions {
+public enum DSTTransitions {
     /// Returns DST transition times (seconds since reference date) that fall within [lower, upper] for the given timezone.
     ///
     /// Only the first and last transitions within [lower, upper] are included to keep boundary value counts small for large ranges. Each transition includes the transition moment itself plus the start and end of its calendar day.
-    static func inRange(lower: Int64, upper: Int64, timeZoneID: String) -> [Int64] {
+    public static func inRange(lower: Int64, upper: Int64, timeZoneID: String) -> [Int64] {
         guard let zone = TimeZone(identifier: timeZoneID) else { return [] }
 
         let startDate = Date(timeIntervalSinceReferenceDate: TimeInterval(lower))

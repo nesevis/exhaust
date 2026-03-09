@@ -5,11 +5,11 @@
 //  Created by Chris Kolbu on 20/2/2026.
 //
 
-struct SequenceSemanticStats {
+public struct SequenceSemanticStats {
     private var nonSemanticFlags: [Bool]
-    private(set) var nonSemanticCount: Int
+    public private(set) var nonSemanticCount: Int
 
-    init(sequence: ChoiceSequence) {
+    public init(sequence: ChoiceSequence) {
         nonSemanticFlags = [Bool]()
         nonSemanticFlags.reserveCapacity(sequence.count)
 
@@ -24,14 +24,14 @@ struct SequenceSemanticStats {
         nonSemanticCount = count
     }
 
-    func nonSemanticCount(
+    public func nonSemanticCount(
         afterReplacing index: Int,
         with replacement: ChoiceSequenceValue,
     ) -> Int {
         nonSemanticCount + deltaForReplacement(at: index, with: replacement)
     }
 
-    func nonSemanticCount(
+    public func nonSemanticCount(
         afterReplacing first: (index: Int, replacement: ChoiceSequenceValue),
         and second: (index: Int, replacement: ChoiceSequenceValue),
     ) -> Int {
@@ -43,7 +43,7 @@ struct SequenceSemanticStats {
             + deltaForReplacement(at: second.index, with: second.replacement)
     }
 
-    mutating func applyReplacement(
+    public mutating func applyReplacement(
         at index: Int,
         with replacement: ChoiceSequenceValue,
     ) {
@@ -54,7 +54,7 @@ struct SequenceSemanticStats {
         nonSemanticCount += after ? 1 : -1
     }
 
-    mutating func applyReplacements(
+    public mutating func applyReplacements(
         _ first: (index: Int, replacement: ChoiceSequenceValue),
         _ second: (index: Int, replacement: ChoiceSequenceValue),
     ) {
@@ -66,7 +66,7 @@ struct SequenceSemanticStats {
         applyReplacement(at: second.index, with: second.replacement)
     }
 
-    static func fullNonSemanticCount(in sequence: ChoiceSequence) -> Int {
+    public static func fullNonSemanticCount(in sequence: ChoiceSequence) -> Int {
         sequence.reduce(into: 0) { count, entry in
             if isNonSemantic(entry) {
                 count += 1

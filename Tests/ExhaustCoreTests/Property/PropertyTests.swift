@@ -12,7 +12,7 @@
 
 import Foundation
 import Testing
-@testable import ExhaustCore
+import ExhaustCore
 
 // MARK: - Roundtrip Properties
 

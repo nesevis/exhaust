@@ -1,4 +1,4 @@
-extension ClosedRange where Bound == UInt64 {
+public extension ClosedRange where Bound == UInt64 {
     func split(into chunks: Int) -> [ClosedRange<UInt64>] {
         guard chunks > 0 else { return [] }
         guard chunks > 1 else { return [self] }

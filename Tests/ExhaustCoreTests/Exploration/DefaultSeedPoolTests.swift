@@ -4,7 +4,7 @@
 //
 
 import Testing
-@testable import ExhaustCore
+import ExhaustCore
 
 @Suite("DefaultSeedPool")
 struct DefaultSeedPoolTests {

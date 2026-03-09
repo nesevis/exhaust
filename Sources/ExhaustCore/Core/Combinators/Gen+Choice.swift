@@ -116,7 +116,7 @@ public extension Gen {
     ///
     /// These ranges should not be treated as strict during reflection because the contextual value that produced them may be opaque from the reflected output.
     @inlinable
-    internal static func chooseDerived<Output: BitPatternConvertible>(
+    public static func chooseDerived<Output: BitPatternConvertible>(
         in range: ClosedRange<Output>,
         type _: Output.Type = Output.self,
     ) -> ReflectiveGenerator<Output> {
@@ -153,8 +153,7 @@ public extension Gen {
     }
 
     /// Computes the effective range for a given size by interpolating from the origin toward the bounds using the specified scaling strategy.
-    @usableFromInline
-    internal static func scaledRange<Output: BitPatternConvertible>(
+    public static func scaledRange<Output: BitPatternConvertible>(
         _ range: ClosedRange<Output>,
         scaling: SizeScaling<Output>,
         size: UInt64,
@@ -192,8 +191,7 @@ public extension Gen {
     }
 
     /// Scales a distance from origin to bound by the given fraction (0–1).
-    @usableFromInline
-    internal static func scaledDistance(_ distance: UInt64, fraction: Double, isExponential: Bool) -> UInt64 {
+    public static func scaledDistance(_ distance: UInt64, fraction: Double, isExponential: Bool) -> UInt64 {
         guard distance > 0, fraction > 0 else { return 0 }
 
         if isExponential {
@@ -206,8 +204,7 @@ public extension Gen {
         }
     }
 
-    @usableFromInline
-    internal static func choose<Output: BitPatternConvertible>(
+    public static func choose<Output: BitPatternConvertible>(
         in range: ClosedRange<Output>? = nil,
         type _: Output.Type = Output.self,
         isRangeExplicit: Bool,

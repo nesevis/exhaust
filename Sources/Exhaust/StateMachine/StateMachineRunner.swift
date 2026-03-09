@@ -31,6 +31,7 @@ public func __runStateMachine<Spec: StateMachineSpec>(
     var reductionConfig: TCRBudget = .fast
     var suppressIssueReporting = false
     var useRandomOnly = false
+    var useArgumentAwareCoverage = false
 
     for setting in settings {
         switch setting {
@@ -48,6 +49,8 @@ public func __runStateMachine<Spec: StateMachineSpec>(
             suppressIssueReporting = true
         case .randomOnly:
             useRandomOnly = true
+        case .argumentAwareCoverage:
+            useArgumentAwareCoverage = true
         }
     }
 
@@ -86,6 +89,7 @@ public func __runStateMachine<Spec: StateMachineSpec>(
             sequenceLength: sequenceLength,
             coverageBudget: coverageBudget,
             reductionConfig: reductionConfig,
+            argumentAware: useArgumentAwareCoverage,
             property: property,
         )
     }
@@ -240,15 +244,16 @@ private func extractPickChoices<Command>(
 
 /// Runs SCA coverage for state-machine command sequences.
 ///
-/// Builds a covering array where each position in the sequence is a parameter with the combined domain of command types × argument values. Returns the reduced failing sequence if a violation is found.
+/// By default, builds a covering array over command-type orderings only, keeping domains small enough for higher interaction strengths (t=3, t=4). When `argumentAware` is true, each position's domain is the flattened union of `(commandType × argumentCombinations)`, giving pairwise coverage of argument value interactions at the cost of capping at t=2.
 ///
-/// Branches with analyzable arguments contribute their argument combinations to the domain. Unanalyzable branches contribute 1 domain value and receive random arguments at replay. If `bestFitting` rejects the domain as too large, SCA is skipped and the caller falls through to random sampling.
+/// If `bestFitting` rejects the domain as too large, SCA is skipped and the caller falls through to random sampling.
 private func runSCACoverage<Command>(
     seqGen: ReflectiveGenerator<[Command]>,
     commandGen: ReflectiveGenerator<Command>,
     sequenceLength: ClosedRange<Int>,
     coverageBudget: UInt64,
     reductionConfig: TCRBudget,
+    argumentAware: Bool,
     property: @escaping @Sendable ([Command]) -> Bool,
 ) -> [Command]? {
     guard let pickChoices = extractPickChoices(from: commandGen) else { return nil }
@@ -256,20 +261,35 @@ private func runSCACoverage<Command>(
     let seqLen = sequenceLength.upperBound
     guard seqLen >= 2, pickChoices.count >= 2 else { return nil }
 
-    let threshold = SequenceCoveringArray.computeThreshold(
-        budget: coverageBudget, sequenceLength: seqLen, branchCount: pickChoices.count,
-    )
-    let branchProfiles = SequenceCoveringArray.analyzeBranches(pickChoices, threshold: threshold)
+    let profile: FiniteDomainProfile
+    let mapping: SCADomainMapping?
+    let maxStrength: Int
 
-    let (profile, mapping) = SequenceCoveringArray.buildProfile(
-        sequenceLength: seqLen,
-        pickChoices: pickChoices,
-        branchProfiles: branchProfiles,
-    )
+    if argumentAware {
+        let threshold = SequenceCoveringArray.computeThreshold(
+            budget: coverageBudget, sequenceLength: seqLen, branchCount: pickChoices.count,
+        )
+        let branchProfiles = SequenceCoveringArray.analyzeBranches(pickChoices, threshold: threshold)
+        let (p, m) = SequenceCoveringArray.buildProfile(
+            sequenceLength: seqLen,
+            pickChoices: pickChoices,
+            branchProfiles: branchProfiles,
+        )
+        profile = p
+        mapping = m
+        // Cap at t=2 for argument-aware domains to avoid combinatorially expensive IPOG runs.
+        let hasArgumentDomains = branchProfiles.contains { if case .analyzed = $0 { return true }; return false }
+        maxStrength = hasArgumentDomains ? 2 : 6
+    } else {
+        // Command-type-only SCA produces .just("") sub-trees that can't replay parameterized branches.
+        guard SequenceCoveringArray.allBranchesParameterFree(pickChoices) else { return nil }
+        profile = SequenceCoveringArray.buildProfile(
+            sequenceLength: seqLen, pickChoices: pickChoices,
+        )
+        mapping = nil
+        maxStrength = 6
+    }
 
-    // When branches have analyzed arguments, the per-position domain is the sum of all branch contributions — potentially much larger than the command count alone. Cap at t=2 to avoid combinatorially expensive IPOG runs. For parameter-free domains (domain == command count), allow bestFitting to try higher strengths as before.
-    let hasArgumentDomains = branchProfiles.contains { if case .analyzed = $0 { return true }; return false }
-    let maxStrength = hasArgumentDomains ? 2 : 6
     guard let covering = CoveringArray.bestFitting(budget: coverageBudget, profile: profile, maxStrength: maxStrength) else {
         return nil
     }
@@ -277,12 +297,22 @@ private func runSCACoverage<Command>(
     let lengthRange = UInt64(0) ... UInt64(sequenceLength.upperBound)
 
     for row in covering.rows {
-        guard let tree = SequenceCoveringArray.buildTree(
-            row: row,
-            profile: profile,
-            mapping: mapping,
-            sequenceLengthRange: lengthRange,
-        ) else { continue }
+        let tree: ChoiceTree?
+        if let mapping {
+            tree = SequenceCoveringArray.buildTree(
+                row: row,
+                profile: profile,
+                mapping: mapping,
+                sequenceLengthRange: lengthRange,
+            )
+        } else {
+            tree = SequenceCoveringArray.buildTree(
+                row: row,
+                profile: profile,
+                sequenceLengthRange: lengthRange,
+            )
+        }
+        guard let tree else { continue }
 
         guard let value: [Command] = try? Interpreters.replay(seqGen, using: tree) else {
             continue

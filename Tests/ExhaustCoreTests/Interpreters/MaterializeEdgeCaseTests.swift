@@ -4,7 +4,7 @@
 //
 
 import Testing
-@testable import ExhaustCore
+import ExhaustCore
 
 @Suite("Materialize edge cases")
 struct MaterializeEdgeCaseTests {

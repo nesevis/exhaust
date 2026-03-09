@@ -7,7 +7,7 @@
 //
 
 import Testing
-@testable import ExhaustCore
+import ExhaustCore
 
 @Suite("Generator Composition Edge Cases")
 struct GeneratorCompositionEdgeCaseTests {
