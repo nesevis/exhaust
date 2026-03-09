@@ -22,56 +22,57 @@ import Testing
 import Exhaust
 import ExhaustCore
 
-// MARK: - Domain types
-//
-// Minimal exam domain: an `Exam` defines the answer key (correct answers numbered 1 through 5), and an `ExamInstance` pairs a student's response sheet with the exam it belongs to. Answers are optional — nil represents a blank or skipped question.
+// MARK: - Tests
 
-struct Exam {
-    let name: String
-    let answerKey: [Int]  // correct answers, values 1...5
-}
-
-struct ExamInstance {
-    let student: String
-    let exam: Exam
-    let answers: [Int?]  // nil = blank/skipped
-}
-
-// MARK: - SUT: BuggyExamGrader
-//
-// A stateful exam management system with two deliberate bugs.
-//
-// Bug 1 (length validation): `submitAnswers` blindly stores whatever answer array it receives without checking that its length matches the exam's answer key. In a correct implementation, this would be a precondition failure or a silent truncation/padding.
-//
-// Bug 2 (grading denominator): `grade()` uses the total number of questions as the denominator. A correct grader would exclude blanks from the denominator so that skipping a question does not penalize the score.
-
-struct BuggyExamGrader {
-    private(set) var exams: [String: Exam] = [:]
-    private(set) var submissions: [ExamInstance] = []
-
-    mutating func createExam(name: String, answerKey: [Int]) {
-        exams[name] = Exam(name: name, answerKey: answerKey)
+@Suite("Exam grader contract tests")
+struct ExamGraderTests {
+    /// Runs the contract and verifies that Exhaust detects at least one of the two embedded bugs. With sequence lengths of 3 to 8 commands, the contract reliably triggers either the invariant failure (mismatched answer length) or the postcondition failure (grading penalizes blanks). The test passes when the trace contains a failure — meaning the contract successfully caught the bug.
+    @Test("Detects answer length mismatch or grading bug")
+    func examGraderBugs() throws {
+        let result = try #require(
+            #exhaust(
+                ExamGraderContract.self,
+                commandLimit: 8,
+                .suppressIssueReporting
+            )
+        )
+        #expect(result.trace.contains { step in
+            switch step.outcome {
+            case .invariantFailed, .checkFailed: return true
+            default: return false
+            }
+        })
     }
 
-    mutating func submitAnswers(student: String, examName: String, answers: [Int?]) {
-        guard let exam = exams[examName] else { return }
-        // Bug 1: no length validation — accepts any answer count
-        submissions.append(ExamInstance(student: student, exam: exam, answers: answers))
-    }
+    /// Uses a dependent generator (the Exhaust equivalent of Hypothesis's `@composite`) to isolate the grading bug. The generator binds the answer key length into the answers generator, so lengths always match — bug 1 is structurally impossible. The property then checks that when every non-blank answer is correct, the grade is 1.0. The buggy grader counts blanks in the denominator, deflating the score, so this property fails.
+    ///
+    /// This is written as a standalone property test rather than a `@Contract` because dependent generation requires `bind` — monadic chaining where one generated value determines the shape of the next generator. `@Command` attribute arguments are resolved at macro expansion time, so they cannot express inter-parameter dependencies. Hypothesis solves this with `@composite`, which provides an imperative `draw()` function that executes generators within the current choice-recording context. Without equivalent syntax sugar, the `bind`-based generator cannot be embedded in a `@Command` declaration, so a standalone `#exhaust` property test is the natural home for it.
+    @Test("Dependent generator isolates grading bug via @composite pattern")
+    func gradingBugWithDependentGenerator() throws {
+        let grader = BuggyExamGrader()
+        let gen = examWithMatchingAnswers()
 
-    func grade(_ instance: ExamInstance) -> Double {
-        // Bug 2: denominator is answerKey.count (all questions), not the count of non-nil answers. Blanks inflate the denominator, making partial attempts score lower than they should.
-        let total = instance.exam.answerKey.count
-        guard total > 0 else { return 1.0 }
-        let correct = zip(instance.answers, instance.exam.answerKey)
-            .filter { $0.0 == $0.1 }
-            .count
-        return Double(correct) / Double(total)
+        let counterExample = #exhaust(gen, .suppressIssueReporting) { exam, answers in
+            let instance = ExamInstance(student: "student", exam: exam, answers: answers)
+            let score = grader.grade(instance)
+
+            // If every non-blank answer is correct, the score must be 1.0.
+            let nonBlankCorrect = zip(answers, exam.answerKey)
+                .allSatisfy { answer, key in answer == nil || answer == key }
+            let hasAttempted = answers.contains(where: { $0 != nil })
+            let hasBlanks = answers.contains(where: { $0 == nil })
+
+            // Only check the interesting case: some correct answers + some blanks
+            guard nonBlankCorrect && hasAttempted && hasBlanks else { return true }
+            return score == 1.0
+        }
+
+        #expect(counterExample != nil, "should find a case where blanks deflate the grade")
     }
 }
 
-// MARK: - Contract spec
-//
+// MARK: - Contract
+
 // Three commands model the lifecycle of the exam system:
 //
 // 1. `createExam(keyLength:)` — generates an answer key of 1 to 5 questions, all with a fixed exam name so that later commands always reference the most recent exam.
@@ -143,47 +144,48 @@ private func examWithMatchingAnswers() -> ReflectiveGenerator<(Exam, [Int?])> {
         }
 }
 
-// MARK: - Tests
+// MARK: - Types
 
-@Suite("Exam grader contract tests")
-struct ExamGraderTests {
-    /// Runs the contract and verifies that Exhaust detects at least one of the two embedded bugs. With sequence lengths of 3 to 8 commands, the contract reliably triggers either the invariant failure (mismatched answer length) or the postcondition failure (grading penalizes blanks). The test passes when the trace contains a failure — meaning the contract successfully caught the bug.
-    @Test("Detects answer length mismatch or grading bug")
-    func examGraderBugs() throws {
-        let result = try #require(
-            #exhaust(ExamGraderContract.self, commandLimit: 8, .suppressIssueReporting)
-        )
-        #expect(result.trace.contains { step in
-            switch step.outcome {
-            case .invariantFailed, .checkFailed: return true
-            default: return false
-            }
-        })
+// Minimal exam domain: an `Exam` defines the answer key (correct answers numbered 1 through 5), and an `ExamInstance` pairs a student's response sheet with the exam it belongs to. Answers are optional — nil represents a blank or skipped question.
+
+struct Exam {
+    let name: String
+    let answerKey: [Int]  // correct answers, values 1...5
+}
+
+struct ExamInstance {
+    let student: String
+    let exam: Exam
+    let answers: [Int?]  // nil = blank/skipped
+}
+
+// A stateful exam management system with two deliberate bugs.
+//
+// Bug 1 (length validation): `submitAnswers` blindly stores whatever answer array it receives without checking that its length matches the exam's answer key. In a correct implementation, this would be a precondition failure or a silent truncation/padding.
+//
+// Bug 2 (grading denominator): `grade()` uses the total number of questions as the denominator. A correct grader would exclude blanks from the denominator so that skipping a question does not penalize the score.
+
+struct BuggyExamGrader {
+    private(set) var exams: [String: Exam] = [:]
+    private(set) var submissions: [ExamInstance] = []
+
+    mutating func createExam(name: String, answerKey: [Int]) {
+        exams[name] = Exam(name: name, answerKey: answerKey)
     }
 
-    /// Uses a dependent generator (the Exhaust equivalent of Hypothesis's `@composite`) to isolate the grading bug. The generator binds the answer key length into the answers generator, so lengths always match — bug 1 is structurally impossible. The property then checks that when every non-blank answer is correct, the grade is 1.0. The buggy grader counts blanks in the denominator, deflating the score, so this property fails.
-    ///
-    /// This is written as a standalone property test rather than a `@Contract` because dependent generation requires `bind` — monadic chaining where one generated value determines the shape of the next generator. `@Command` attribute arguments are resolved at macro expansion time, so they cannot express inter-parameter dependencies. Hypothesis solves this with `@composite`, which provides an imperative `draw()` function that executes generators within the current choice-recording context. Without equivalent syntax sugar, the `bind`-based generator cannot be embedded in a `@Command` declaration, so a standalone `#exhaust` property test is the natural home for it.
-    @Test("Dependent generator isolates grading bug via @composite pattern")
-    func gradingBugWithDependentGenerator() throws {
-        let grader = BuggyExamGrader()
-        let gen = examWithMatchingAnswers()
+    mutating func submitAnswers(student: String, examName: String, answers: [Int?]) {
+        guard let exam = exams[examName] else { return }
+        // Bug 1: no length validation — accepts any answer count
+        submissions.append(ExamInstance(student: student, exam: exam, answers: answers))
+    }
 
-        let counterExample = #exhaust(gen, .suppressIssueReporting) { exam, answers in
-            let instance = ExamInstance(student: "student", exam: exam, answers: answers)
-            let score = grader.grade(instance)
-
-            // If every non-blank answer is correct, the score must be 1.0.
-            let nonBlankCorrect = zip(answers, exam.answerKey)
-                .allSatisfy { answer, key in answer == nil || answer == key }
-            let hasAttempted = answers.contains(where: { $0 != nil })
-            let hasBlanks = answers.contains(where: { $0 == nil })
-
-            // Only check the interesting case: some correct answers + some blanks
-            guard nonBlankCorrect && hasAttempted && hasBlanks else { return true }
-            return score == 1.0
-        }
-
-        #expect(counterExample != nil, "should find a case where blanks deflate the grade")
+    func grade(_ instance: ExamInstance) -> Double {
+        // Bug 2: denominator is answerKey.count (all questions), not the count of non-nil answers. Blanks inflate the denominator, making partial attempts score lower than they should.
+        let total = instance.exam.answerKey.count
+        guard total > 0 else { return 1.0 }
+        let correct = zip(instance.answers, instance.exam.answerKey)
+            .filter { $0.0 == $0.1 }
+            .count
+        return Double(correct) / Double(total)
     }
 }

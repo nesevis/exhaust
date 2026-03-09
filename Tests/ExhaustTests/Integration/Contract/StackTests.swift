@@ -2,7 +2,23 @@ import Testing
 import Exhaust
 import ExhaustCore
 
-// MARK: - State Machine Spec: Simple stack
+// MARK: - Tests
+
+@Suite("Stack state machine tests")
+struct StackTests {
+    @Test("Passing spec produces no counterexample")
+    func passingStack() {
+        let result = #exhaust(
+            StackSpec.self,
+            commandLimit: 15,
+            .maxIterations(50),
+            .suppressIssueReporting
+        )
+        #expect(result == nil, "Stack spec should pass — model and SUT are identical")
+    }
+}
+
+// MARK: - Contract
 
 @Contract
 struct StackSpec {
@@ -31,16 +47,5 @@ struct StackSpec {
     @Command(weight: 1)
     mutating func count() throws {
         try check(expected.count == stack.count, "counts should match")
-    }
-}
-
-// MARK: - Tests
-
-@Suite("Stack state machine tests")
-struct StackTests {
-    @Test("Passing spec produces no counterexample")
-    func passingStack() {
-        let result = #exhaust(StackSpec.self, commandLimit: 15, .maxIterations(50), .suppressIssueReporting)
-        #expect(result == nil, "Stack spec should pass — model and SUT are identical")
     }
 }
