@@ -1,42 +1,25 @@
 // Sequence Covering Array (SCA) construction for state-machine property testing.
 //
-// An SCA guarantees every t-way ordered permutation of command types appears in
-// at least one test sequence. Mathematically equivalent to a standard covering
-// array where each parameter is a sequence position and each domain value is a
-// command type. See Kuhn, Raunak & Kacker, "Ordered t-way Combinations for
-// Testing State-based Systems".
+// An SCA guarantees every t-way ordered permutation of command types appears in at least one test sequence. Mathematically equivalent to a standard covering array where each parameter is a sequence position and each domain value is a command type. See Kuhn, Raunak & Kacker, "Ordered t-way Combinations for Testing State-based Systems".
 //
-// With argument-aware domains, each position's domain is the flattened union of
-// (commandType × argumentCombinations), giving IPOG the ability to cover both
-// command ordering AND argument value interactions across positions.
+// With argument-aware domains, each position's domain is the flattened union of (commandType × argumentCombinations), giving IPOG the ability to cover both command ordering AND argument value interactions across positions.
 
 /// Builds covering arrays over command-type orderings for state-machine testing.
 ///
-/// Each position in the command sequence becomes a parameter whose domain is the
-/// set of command types (pick branches). IPOG generates rows that guarantee every
-/// t-way ordered permutation of command types is tested.
+/// Each position in the command sequence becomes a parameter whose domain is the set of command types (pick branches). IPOG generates rows that guarantee every t-way ordered permutation of command types is tested.
 ///
-/// When branches have analyzable arguments, the domain per position is the
-/// flattened union of `(commandType × argumentCombinations)`. Branches with
-/// small finite parameters contribute all values; branches with large ranges
-/// contribute boundary-value representatives. Unanalyzable branches fall back
-/// to 1 domain value with random arguments at replay.
+/// When branches have analyzable arguments, the domain per position is the flattened union of `(commandType × argumentCombinations)`. Branches with small finite parameters contribute all values; branches with large ranges contribute boundary-value representatives. Unanalyzable branches fall back to 1 domain value with random arguments at replay.
 ///
-/// For `c` command types, sequence length `L`, strength `t`:
-/// IPOG produces roughly `c^t × log(L)` rows.
+/// For `c` command types, sequence length `L`, strength `t`, IPOG produces roughly `c^t × log(L)` rows.
 /// - 5 commands, length 10, t=2: ~40–50 rows
 /// - 10 commands, length 15, t=2: ~150–200 rows
 public enum SequenceCoveringArray {
-    /// SCA-specific finite threshold. Parameters with domain size above this are
-    /// converted to boundary-value representatives. Lower than the 256 threshold
-    /// in ``ChoiceTreeAnalysis`` because SCA domain sizes are the *sum* of all
-    /// branch contributions — even "small" finite domains compound quickly.
+    /// SCA-specific finite threshold. Parameters with domain size above this are converted to boundary-value representatives. Lower than the 256 threshold in ``ChoiceTreeAnalysis`` because SCA domain sizes are the *sum* of all branch contributions — even "small" finite domains compound quickly.
     private static let scaFiniteThreshold: UInt64 = 10
 
     // MARK: - Legacy API (parameter-free branches only)
 
-    /// Builds a `FiniteDomainProfile` where each parameter represents one position
-    /// in the command sequence, with domain values being command type indices.
+    /// Builds a `FiniteDomainProfile` where each parameter represents one position in the command sequence, with domain values being command type indices.
     ///
     /// - Parameters:
     ///   - sequenceLength: Number of positions in each test sequence.
@@ -65,11 +48,9 @@ public enum SequenceCoveringArray {
         return FiniteDomainProfile(parameters: parameters, totalSpace: totalSpace)
     }
 
-    /// Converts a covering array row into a `ChoiceTree` representing a command
-    /// sequence that can be replayed through the array generator.
+    /// Converts a covering array row into a `ChoiceTree` representing a command sequence that can be replayed through the array generator.
     ///
-    /// Each row value selects a command type (pick branch) at the corresponding
-    /// sequence position. The result is a `.sequence` node wrapping pick-site groups.
+    /// Each row value selects a command type (pick branch) at the corresponding sequence position. The result is a `.sequence` node wrapping pick-site groups.
     ///
     /// - Parameters:
     ///   - row: The covering array row with command type indices per position.
@@ -123,8 +104,7 @@ public enum SequenceCoveringArray {
     /// - Analyzable branches → `.analyzed([BoundaryParameter])` with SCA-threshold normalization
     /// - Unanalyzable branches (uses `getSize`, etc.) → `.unanalyzable` (1 domain value, random at replay)
     ///
-    /// Parameters with domain size above ``scaFiniteThreshold`` are converted to
-    /// boundary-value representatives to keep the per-position domain tractable.
+    /// Parameters with domain size above ``scaFiniteThreshold`` are converted to boundary-value representatives to keep the per-position domain tractable.
     public static func analyzeBranches(
         _ pickChoices: ContiguousArray<ReflectiveOperation.PickTuple>,
     ) -> [BranchArgProfile] {
@@ -152,8 +132,7 @@ public enum SequenceCoveringArray {
     /// - `.analyzed(params)` → product of parameter domain sizes
     /// - `.unanalyzable` → 1
     ///
-    /// The mapping records the cumulative offsets so ``buildTree(row:profile:mapping:sequenceLengthRange:)``
-    /// can decompose flat domain indices back into branch + argument values.
+    /// The mapping records the cumulative offsets so ``buildTree(row:profile:mapping:sequenceLengthRange:)`` can decompose flat domain indices back into branch + argument values.
     public static func buildProfile(
         sequenceLength: Int,
         pickChoices: ContiguousArray<ReflectiveOperation.PickTuple>,
@@ -214,11 +193,7 @@ public enum SequenceCoveringArray {
 
     /// Converts a covering array row into a `ChoiceTree` using the SCA domain mapping.
     ///
-    /// For each position, decomposes the flat domain index into a branch selection
-    /// plus concrete argument values. Branches with analyzed arguments get sub-trees
-    /// encoding specific parameter values; parameter-free and unanalyzable branches
-    /// get `.just("")` sub-trees (unanalyzable branches will receive random arguments
-    /// during replay since the sub-tree carries no argument constraints).
+    /// For each position, decomposes the flat domain index into a branch selection plus concrete argument values. Branches with analyzed arguments get sub-trees encoding specific parameter values; parameter-free and unanalyzable branches get `.just("")` sub-trees (unanalyzable branches will receive random arguments during replay since the sub-tree carries no argument constraints).
     ///
     /// - Parameters:
     ///   - row: The covering array row with flat domain indices per position.
@@ -302,9 +277,7 @@ public enum SequenceCoveringArray {
 
     /// Normalizes an analysis result to `[BoundaryParameter]` with SCA-specific thresholds.
     ///
-    /// For `.finite` results, converts `FiniteParameter` → `BoundaryParameter`.
-    /// For both result types, parameters with domain size above ``scaFiniteThreshold``
-    /// are recomputed as boundary-value representatives.
+    /// For `.finite` results, converts `FiniteParameter` → `BoundaryParameter`. For both result types, parameters with domain size above ``scaFiniteThreshold`` are recomputed as boundary-value representatives.
     private static func normalizeToBoundaryParameters(
         _ result: ChoiceTreeAnalysis.AnalysisResult,
     ) -> [BoundaryParameter] {
@@ -379,8 +352,7 @@ public enum SequenceCoveringArray {
         return nil
     }
 
-    /// Decomposes a local index via mixed-radix into per-parameter value indices,
-    /// then delegates to `BoundaryCoveringArrayReplay` to build the sub-tree.
+    /// Decomposes a local index via mixed-radix into per-parameter value indices, then delegates to `BoundaryCoveringArrayReplay` to build the sub-tree.
     private static func buildArgTree(
         localIndex: UInt64,
         params: [BoundaryParameter],
@@ -403,24 +375,19 @@ public enum SequenceCoveringArray {
 
 /// Per-branch analysis result for SCA domain construction.
 ///
-/// Determines how many domain values a branch contributes to each position's
-/// combined domain in the covering array.
+/// Determines how many domain values a branch contributes to each position's combined domain in the covering array.
 public enum BranchArgProfile {
     /// Branch generator has no parameters — contributes 1 domain value.
     case parameterFree
-    /// Branch generator has analyzable parameters — contributes
-    /// product-of-domainSizes domain values.
+    /// Branch generator has analyzable parameters — contributes product-of-domainSizes domain values.
     case analyzed([BoundaryParameter])
-    /// Branch generator is not analyzable — contributes 1 domain value
-    /// (random args at replay).
+    /// Branch generator is not analyzable — contributes 1 domain value (random args at replay).
     case unanalyzable
 }
 
 /// Maps a range of flat domain indices to a branch and its argument decomposition.
 ///
-/// Each slot covers `[flatOffset, flatOffset + contribution)` in the flat domain.
-/// Used by ``SequenceCoveringArray/buildTree(row:profile:mapping:sequenceLengthRange:)``
-/// to decompose a flat index into branch selection + argument values.
+/// Each slot covers `[flatOffset, flatOffset + contribution)` in the flat domain. Used by ``SequenceCoveringArray/buildTree(row:profile:mapping:sequenceLengthRange:)`` to decompose a flat index into branch selection + argument values.
 public struct SCADomainSlot {
     public let branchIndex: Int
     public let flatOffset: UInt64
@@ -430,8 +397,7 @@ public struct SCADomainSlot {
 
 /// Lookup structure for converting flat domain indices to branch + argument values.
 ///
-/// Shared between ``SequenceCoveringArray/buildProfile(sequenceLength:pickChoices:branchProfiles:)``
-/// and ``SequenceCoveringArray/buildTree(row:profile:mapping:sequenceLengthRange:)``.
+/// Shared between ``SequenceCoveringArray/buildProfile(sequenceLength:pickChoices:branchProfiles:)`` and ``SequenceCoveringArray/buildTree(row:profile:mapping:sequenceLengthRange:)``.
 public struct SCADomainMapping {
     public let slots: [SCADomainSlot]
     public let totalDomainSize: UInt64

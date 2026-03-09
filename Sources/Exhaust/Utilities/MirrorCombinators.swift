@@ -156,7 +156,7 @@ public extension __ExhaustRuntime {
         _ generator: ReflectiveGenerator<Input>,
         forward: @Sendable @escaping (Input) -> Output,
     ) -> ReflectiveGenerator<Output> {
-        generator.mapped(forward: forward, backward: { Input($0) })
+        generator._mapped(forward: forward, backward: { Input($0) })
     }
 
     /// Scalar conversion for `BinaryFloatingPoint` → `BinaryFloatingPoint` (e.g. `Double` → `Float`).
@@ -165,7 +165,7 @@ public extension __ExhaustRuntime {
         _ generator: ReflectiveGenerator<Input>,
         forward: @Sendable @escaping (Input) -> Output,
     ) -> ReflectiveGenerator<Output> {
-        generator.mapped(forward: forward, backward: { Input($0) })
+        generator._mapped(forward: forward, backward: { Input($0) })
     }
 
     /// Unconstrained fallback — forward-only when no numeric protocol matches.

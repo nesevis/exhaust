@@ -1,8 +1,6 @@
 // Runtime execution engine for state-machine property tests.
 //
-// Generates command sequences, executes them against a fresh spec instance,
-// and detects postcondition / invariant violations. Integrates with the
-// existing coverage + random + reduction pipeline.
+// Generates command sequences, executes them against a fresh spec instance, and detects postcondition / invariant violations. Integrates with the existing coverage + random + reduction pipeline.
 import ExhaustCore
 import IssueReporting
 
@@ -53,9 +51,7 @@ public func __runStateMachine<Spec: StateMachineSpec>(
         }
     }
 
-    // Build the sequence generator: an array of commands with bounded length.
-    // Use 0 as the lower bound so the reducer can shrink sequences below the
-    // user's minimum — the minimum is a generation hint, not a shrinking floor.
+    // Build the sequence generator: an array of commands with bounded length. Use 0 as the lower bound so the reducer can shrink sequences below the user's minimum — the minimum is a generation hint, not a shrinking floor.
     let commandGen = Spec.commandGenerator
     let seqGen: ReflectiveGenerator<[Spec.Command]> = commandGen.array(
         length: 0 ... sequenceLength.upperBound,
@@ -81,10 +77,7 @@ public func __runStateMachine<Spec: StateMachineSpec>(
 
     // --- Phase 1: Sequence Covering Array (SCA) coverage ---
     //
-    // If the command generator is a simple pick with parameter-free branches,
-    // build a covering array where each sequence position is a parameter and
-    // each command type is a domain value. This guarantees every t-way ordered
-    // permutation of command types is tested.
+    // If the command generator is a simple pick with parameter-free branches, build a covering array where each sequence position is a parameter and each command type is a domain value. This guarantees every t-way ordered permutation of command types is tested.
     var scaFoundFailure: [Spec.Command]?
     if !useRandomOnly, seed == nil {
         scaFoundFailure = runSCACoverage(
@@ -161,8 +154,7 @@ public func __runStateMachine<Spec: StateMachineSpec>(
 
 /// Re-executes the failing command sequence to build a step-by-step trace.
 ///
-/// Returns the trace and the spec instance in the state it was in when the failure occurred
-/// (or after running all commands if the sequence passes on re-execution).
+/// Returns the trace and the spec instance in the state it was in when the failure occurred (or after running all commands if the sequence passes on re-execution).
 private func buildTrace<Spec: StateMachineSpec>(
     _ commands: [Spec.Command],
     specType _: Spec.Type,
@@ -248,14 +240,9 @@ private func extractPickChoices<Command>(
 
 /// Runs SCA coverage for state-machine command sequences.
 ///
-/// Builds a covering array where each position in the sequence is a parameter
-/// with the combined domain of command types × argument values. Returns the
-/// reduced failing sequence if a violation is found.
+/// Builds a covering array where each position in the sequence is a parameter with the combined domain of command types × argument values. Returns the reduced failing sequence if a violation is found.
 ///
-/// Branches with analyzable arguments contribute their argument combinations
-/// to the domain. Unanalyzable branches contribute 1 domain value and receive
-/// random arguments at replay. If `bestFitting` rejects the domain as too
-/// large, SCA is skipped and the caller falls through to random sampling.
+/// Branches with analyzable arguments contribute their argument combinations to the domain. Unanalyzable branches contribute 1 domain value and receive random arguments at replay. If `bestFitting` rejects the domain as too large, SCA is skipped and the caller falls through to random sampling.
 private func runSCACoverage<Command>(
     seqGen: ReflectiveGenerator<[Command]>,
     commandGen: ReflectiveGenerator<Command>,
@@ -277,11 +264,7 @@ private func runSCACoverage<Command>(
         branchProfiles: branchProfiles,
     )
 
-    // When branches have analyzed arguments, the per-position domain is the
-    // sum of all branch contributions — potentially much larger than the
-    // command count alone. Cap at t=2 to avoid combinatorially expensive
-    // IPOG runs. For parameter-free domains (domain == command count),
-    // allow bestFitting to try higher strengths as before.
+    // When branches have analyzed arguments, the per-position domain is the sum of all branch contributions — potentially much larger than the command count alone. Cap at t=2 to avoid combinatorially expensive IPOG runs. For parameter-free domains (domain == command count), allow bestFitting to try higher strengths as before.
     let hasArgumentDomains = branchProfiles.contains { if case .analyzed = $0 { return true }; return false }
     let maxStrength = hasArgumentDomains ? 2 : 6
     guard let covering = CoveringArray.bestFitting(budget: coverageBudget, profile: profile, maxStrength: maxStrength) else {
