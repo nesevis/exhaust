@@ -114,15 +114,29 @@ extension Interpreters {
             return try replayWithChoicesHelper(gen, choices: &choices) as? Output
 
         case let .transform(kind, inner):
-            guard let innerValue = try replayWithChoicesHelper(inner, choices: &choices) else { return nil }
             let result: Any
             switch kind {
             case let .map(forward, _, _):
+                guard let innerValue = try replayWithChoicesHelper(inner, choices: &choices) else { return nil }
                 result = try forward(innerValue)
             case let .bind(forward, _, _):
-                let boundGen = try forward(innerValue)
-                guard let boundValue = try replayWithChoicesHelper(boundGen, choices: &choices) else { return nil }
-                result = boundValue
+                // VACTI produces .group([innerTree, boundTree]) for bind.
+                // Scope inner replay to innerTree so its zip doesn't consume boundTree's groups.
+                if case let .group(innerChoices, _) = choices.first,
+                   innerChoices.allSatisfy({ !$0.isBranch && !$0.isSelected })
+                {
+                    choices.removeFirst()
+                    var scopedChoices = innerChoices
+                    guard let innerValue = try replayWithChoicesHelper(inner, choices: &scopedChoices) else { return nil }
+                    let boundGen = try forward(innerValue)
+                    guard let boundValue = try replayWithChoicesHelper(boundGen, choices: &choices) else { return nil }
+                    result = boundValue
+                } else {
+                    guard let innerValue = try replayWithChoicesHelper(inner, choices: &choices) else { return nil }
+                    let boundGen = try forward(innerValue)
+                    guard let boundValue = try replayWithChoicesHelper(boundGen, choices: &choices) else { return nil }
+                    result = boundValue
+                }
             }
             let nextGen = try continuation(result)
             return try replayWithChoicesHelper(nextGen, choices: &choices)
@@ -412,15 +426,25 @@ extension Interpreters {
             return try replayRecursive(gen, with: script) as? Output
 
         case let .transform(kind, inner):
-            guard let innerValue = try replayRecursive(inner, with: script) else { return nil }
             let result: Any
             switch kind {
             case let .map(forward, _, _):
+                guard let innerValue = try replayRecursive(inner, with: script) else { return nil }
                 result = try forward(innerValue)
             case let .bind(forward, _, _):
-                let boundGen = try forward(innerValue)
-                guard let boundValue = try replayRecursive(boundGen, with: script) else { return nil }
-                result = boundValue
+                // VACTI produces .group([innerTree, boundTree]) for bind.
+                // Split the script so inner and bound each get their own tree.
+                if case let .group(children, _) = script, children.count >= 2 {
+                    guard let innerValue = try replayRecursive(inner, with: children[0]) else { return nil }
+                    let boundGen = try forward(innerValue)
+                    guard let boundValue = try replayRecursive(boundGen, with: children[1]) else { return nil }
+                    result = boundValue
+                } else {
+                    guard let innerValue = try replayRecursive(inner, with: script) else { return nil }
+                    let boundGen = try forward(innerValue)
+                    guard let boundValue = try replayRecursive(boundGen, with: script) else { return nil }
+                    result = boundValue
+                }
             }
             return try runContinuation(result)
         }
