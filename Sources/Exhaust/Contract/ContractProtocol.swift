@@ -9,7 +9,7 @@ import ExhaustCore
 ///
 /// ## How It Works
 ///
-/// Each test iteration generates a sequence of commands, executes them against both the model (properties marked `@Model`) and the system under test (the property marked `@SUT`), and verifies that `@Invariant` methods hold after every step.
+/// Each test iteration generates a sequence of commands and executes them against the system under test (the property marked `@SUT`). After every command, `@Invariant` methods are checked. Contracts can optionally include `@Model` properties as a reference oracle, or rely solely on invariants and `check()` postconditions.
 ///
 /// ## Example
 ///

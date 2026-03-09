@@ -1,15 +1,25 @@
-// Macro declarations for state-machine property testing.
+// Macro declarations for contract-based property testing.
 //
 // `@Contract` synthesizes protocol conformance from annotated structs.
-// `#exhaust(Spec.self)` runs a state-machine property test at the call site.
+// `#exhaust(Spec.self)` runs a contract property test at the call site.
+//
+// The contract testing model draws on Hillel Wayne's work connecting
+// contracts (preconditions, postconditions, invariants) with property-based
+// testing. See: https://www.hillelwayne.com/post/pbt-contracts/
 import ExhaustCore
 
-/// Marks a struct as a state-machine specification, synthesizing protocol conformance, a command enum, and a command generator.
+/// Marks a struct as a contract specification, synthesizing protocol conformance, a command enum, and a command generator.
+///
+/// A contract defines the rules a system must obey under arbitrary sequences of operations. Three styles of contract are supported:
+///
+/// - **Model-based**: Compare the SUT against a reference model using `@Model` properties and `@Invariant` methods that assert equivalence.
+/// - **Invariant-only**: Check structural properties of the SUT alone (e.g., "the tree is always balanced") without a reference model.
+/// - **Postcondition-only**: Use `check()` inside `@Command` methods to verify per-operation guarantees (e.g., "after `add(x)`, `contains(x)` is true").
 ///
 /// The struct must contain:
-/// - At least one `@Model` property (abstract state).
 /// - Exactly one `@SUT` property (system under test).
 /// - At least one `@Command` method (operations to test).
+/// - Zero or more `@Model` properties (abstract state for model-based contracts).
 /// - Zero or more `@Invariant` methods (postconditions checked after every step).
 ///
 /// The macro synthesizes:
@@ -19,11 +29,11 @@ import ExhaustCore
 /// - A `checkInvariants()` method that calls all `@Invariant` methods.
 /// - Protocol conformance to ``ContractSpec``.
 ///
-/// ## Example
+/// ## Model-Based Contract
 ///
 /// ```swift
 /// @Contract
-/// struct BoundedQueueSpec {
+/// struct BoundedQueueContract {
 ///     @Model var contents: [Int] = []
 ///     @SUT   var queue = BoundedQueue<Int>(capacity: 4)
 ///
@@ -40,13 +50,32 @@ import ExhaustCore
 ///     }
 /// }
 /// ```
+///
+/// ## Invariant-Only Contract
+///
+/// ```swift
+/// @Contract
+/// struct SortedListContract {
+///     @SUT var list = SortedList()
+///
+///     @Invariant
+///     func alwaysSorted() -> Bool {
+///         list.elements == list.elements.sorted()
+///     }
+///
+///     @Command(weight: 3, #gen(.int(in: 0...99)))
+///     mutating func insert(value: Int) throws {
+///         list.insert(value)
+///     }
+/// }
+/// ```
 @attached(member, names: named(Command), named(SystemUnderTest), named(commandGenerator), named(run), named(checkInvariants), named(sut), named(modelDescription), named(sutDescription))
 @attached(extension, conformances: ContractSpec)
 public macro Contract() = #externalMacro(module: "ExhaustMacros", type: "ContractDeclarationMacro")
 
 /// Marks a property as model state in a `@Contract` struct.
 ///
-/// Model properties represent the abstract state used to verify the system under test. They are included in `modelDescription` for failure reports.
+/// Model properties represent the abstract state used to verify the system under test. They are included in `modelDescription` for failure reports. Model properties are optional — contracts can also use `@Invariant` and `check()` without a reference model.
 @attached(peer)
 public macro Model() = #externalMacro(module: "ExhaustMacros", type: "ModelMacro")
 
