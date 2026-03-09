@@ -1,6 +1,6 @@
 // Macro declarations for state-machine property testing.
 //
-// `@StateMachine` synthesizes protocol conformance from annotated structs.
+// `@Contract` synthesizes protocol conformance from annotated structs.
 // `#exhaust(Spec.self)` runs a state-machine property test at the call site.
 import ExhaustCore
 
@@ -17,12 +17,12 @@ import ExhaustCore
 /// - A `commandGenerator` static property using `Gen.pick` with specified weights.
 /// - A `run(_:)` method that dispatches commands to their methods.
 /// - A `checkInvariants()` method that calls all `@Invariant` methods.
-/// - Protocol conformance to ``StateMachineSpec``.
+/// - Protocol conformance to ``ContractSpec``.
 ///
 /// ## Example
 ///
 /// ```swift
-/// @StateMachine
+/// @Contract
 /// struct BoundedQueueSpec {
 ///     @Model var contents: [Int] = []
 ///     @SUT   var queue = BoundedQueue<Int>(capacity: 4)
@@ -41,22 +41,22 @@ import ExhaustCore
 /// }
 /// ```
 @attached(member, names: named(Command), named(SystemUnderTest), named(commandGenerator), named(run), named(checkInvariants), named(sut), named(modelDescription), named(sutDescription))
-@attached(extension, conformances: StateMachineSpec)
-public macro StateMachine() = #externalMacro(module: "ExhaustMacros", type: "StateMachineDeclarationMacro")
+@attached(extension, conformances: ContractSpec)
+public macro Contract() = #externalMacro(module: "ExhaustMacros", type: "ContractDeclarationMacro")
 
-/// Marks a property as model state in a `@StateMachine` struct.
+/// Marks a property as model state in a `@Contract` struct.
 ///
 /// Model properties represent the abstract state used to verify the system under test. They are included in `modelDescription` for failure reports.
 @attached(peer)
 public macro Model() = #externalMacro(module: "ExhaustMacros", type: "ModelMacro")
 
-/// Marks a property as the system under test in a `@StateMachine` struct.
+/// Marks a property as the system under test in a `@Contract` struct.
 ///
 /// Exactly one `@SUT` property is required per state-machine specification. It is included in `sutDescription` for failure reports.
 @attached(peer)
 public macro SUT() = #externalMacro(module: "ExhaustMacros", type: "SUTMacro")
 
-/// Marks a method as a command in a `@StateMachine` struct.
+/// Marks a method as a command in a `@Contract` struct.
 ///
 /// Each `@Command` method becomes a case in the synthesized `Command` enum. The macro's arguments control command generation:
 ///
@@ -74,7 +74,7 @@ public macro SUT() = #externalMacro(module: "ExhaustMacros", type: "SUTMacro")
 @attached(peer)
 public macro Command(weight: Int = 1) = #externalMacro(module: "ExhaustMacros", type: "CommandMacro")
 
-/// Marks a method as a command with argument generators in a `@StateMachine` struct.
+/// Marks a method as a command with argument generators in a `@Contract` struct.
 ///
 /// - Parameters:
 ///   - weight: Relative frequency for command selection (default 1).
@@ -82,7 +82,7 @@ public macro Command(weight: Int = 1) = #externalMacro(module: "ExhaustMacros", 
 @attached(peer)
 public macro Command(weight: Int = 1, _ generators: Any...) = #externalMacro(module: "ExhaustMacros", type: "CommandMacro")
 
-/// Marks a method as a global postcondition in a `@StateMachine` struct.
+/// Marks a method as a global postcondition in a `@Contract` struct.
 ///
 /// Invariant methods are called after every command execution. They must return `Bool` — `true` for passing, `false` for failure. The method must be non-mutating.
 ///

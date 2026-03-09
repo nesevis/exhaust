@@ -48,7 +48,7 @@ public macro exhaust<T>(
     property: (T) throws -> Bool,
 ) -> T? = #externalMacro(module: "ExhaustMacros", type: "ExhaustTestMacro")
 
-/// Runs a state-machine property test that generates command sequences, executes them against the system under test, and verifies model/SUT consistency.
+/// Runs a contract property test that generates command sequences, executes them against the system under test, and verifies model/SUT consistency.
 ///
 /// ## How It Works
 ///
@@ -78,10 +78,10 @@ public macro exhaust<T>(
 /// }
 /// ```
 ///
-/// - Returns: A ``StateMachineResult`` containing the shrunk command sequence, execution trace, and SUT state if a violation is found, or `nil` if all sequences pass.
+/// - Returns: A ``ContractResult`` containing the shrunk command sequence, execution trace, and SUT state if a violation is found, or `nil` if all sequences pass.
 @freestanding(expression)
 @discardableResult
-public macro exhaust<Spec: StateMachineSpec>(
+public macro exhaust<Spec: ContractSpec>(
     _ specType: Spec.Type,
-    _ settings: StateMachineSettings...
-) -> StateMachineResult<Spec>? = #externalMacro(module: "ExhaustMacros", type: "ExhaustStateMachineMacro")
+    _ settings: ContractSettings...
+) -> ContractResult<Spec>? = #externalMacro(module: "ExhaustMacros", type: "ExhaustContractMacro")

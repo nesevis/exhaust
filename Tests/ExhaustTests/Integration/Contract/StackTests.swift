@@ -4,7 +4,7 @@ import ExhaustCore
 
 // MARK: - State Machine Spec: Simple stack
 
-@StateMachine
+@Contract
 struct StackSpec {
     @Model var expected: [Int] = []
     @SUT var stack: [Int] = []

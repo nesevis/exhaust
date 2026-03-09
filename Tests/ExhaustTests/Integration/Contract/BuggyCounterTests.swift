@@ -20,7 +20,7 @@ struct BuggyCounter {
 
 // MARK: - State Machine Spec
 
-@StateMachine
+@Contract
 struct BuggyCounterSpec {
     @Model var expectedValue: Int = 0
     @SUT var counter = BuggyCounter(capacity: 3)

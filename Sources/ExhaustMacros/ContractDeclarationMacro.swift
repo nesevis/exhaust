@@ -3,7 +3,7 @@ import SwiftSyntax
 import SwiftSyntaxBuilder
 import SwiftSyntaxMacros
 
-/// Attached macro that synthesizes `StateMachineSpec` conformance from a struct annotated with `@StateMachine`.
+/// Attached macro that synthesizes `ContractSpec` conformance from a struct annotated with `@Contract`.
 ///
 /// Scans the struct for `@Model`, `@SUT`, `@Command`, and `@Invariant` annotations, then generates:
 /// - A `Command` enum with one case per `@Command` method.
@@ -11,7 +11,7 @@ import SwiftSyntaxMacros
 /// - A `run(_:)` method dispatching commands to their methods.
 /// - A `checkInvariants()` method calling all `@Invariant` methods.
 /// - `modelDescription` and `sutDescription` computed properties.
-public struct StateMachineDeclarationMacro: MemberMacro, ExtensionMacro {
+public struct ContractDeclarationMacro: MemberMacro, ExtensionMacro {
 
     // MARK: - ExtensionMacro
 
@@ -22,7 +22,7 @@ public struct StateMachineDeclarationMacro: MemberMacro, ExtensionMacro {
         conformingTo protocols: [TypeSyntax],
         in context: some MacroExpansionContext,
     ) throws -> [ExtensionDeclSyntax] {
-        let ext: DeclSyntax = "extension \(type.trimmed): StateMachineSpec {}"
+        let ext: DeclSyntax = "extension \(type.trimmed): ContractSpec {}"
         return [ext.cast(ExtensionDeclSyntax.self)]
     }
 
@@ -45,13 +45,13 @@ public struct StateMachineDeclarationMacro: MemberMacro, ExtensionMacro {
         if commands.isEmpty {
             context.diagnose(Diagnostic(
                 node: Syntax(node),
-                message: StateMachineDiagnostic.noCommands,
+                message: ContractDiagnostic.noCommands,
             ))
         }
         if sutProps.isEmpty {
             context.diagnose(Diagnostic(
                 node: Syntax(node),
-                message: StateMachineDiagnostic.noSUT,
+                message: ContractDiagnostic.noSUT,
             ))
         }
 
@@ -70,7 +70,7 @@ public struct StateMachineDeclarationMacro: MemberMacro, ExtensionMacro {
             // which is better than a confusing "could not infer" error.
             context.diagnose(Diagnostic(
                 node: Syntax(node),
-                message: StateMachineDiagnostic.sutTypeNotInferred,
+                message: ContractDiagnostic.sutTypeNotInferred,
             ))
             decls.append("var sut: Never { fatalError(\"SUT type could not be inferred — add an explicit type annotation to the @SUT property\") }")
         }
@@ -371,9 +371,9 @@ private func qualifyGenExpression(_ expr: String, paramType: String) -> String {
 
 // MARK: - Diagnostics
 
-enum StateMachineDiagnostic: String, DiagnosticMessage {
-    case noCommands = "@StateMachine requires at least one @Command method"
-    case noSUT = "@StateMachine requires exactly one @SUT property"
+enum ContractDiagnostic: String, DiagnosticMessage {
+    case noCommands = "@Contract requires at least one @Command method"
+    case noSUT = "@Contract requires exactly one @SUT property"
     case sutTypeNotInferred = "@SUT property type could not be inferred — add an explicit type annotation"
 
     var message: String { rawValue }

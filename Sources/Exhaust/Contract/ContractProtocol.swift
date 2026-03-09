@@ -1,11 +1,11 @@
-// Defines the protocol that `@StateMachine`-annotated types conform to.
+// Defines the protocol that `@Contract`-annotated types conform to.
 //
 // The macro synthesizes conformance — users never implement this directly.
 import ExhaustCore
 
-/// A state-machine specification that drives sequential, stateful property tests.
+/// A contract specification that drives sequential, stateful property tests.
 ///
-/// Users annotate a struct with `@StateMachine` rather than conforming manually. The macro synthesizes the `Command` enum, the `commandGenerator` property, and the `run(_:)` method from the `@Command`-annotated methods on the struct.
+/// Users annotate a struct with `@Contract` rather than conforming manually. The macro synthesizes the `Command` enum, the `commandGenerator` property, and the `run(_:)` method from the `@Command`-annotated methods on the struct.
 ///
 /// ## How It Works
 ///
@@ -14,7 +14,7 @@ import ExhaustCore
 /// ## Example
 ///
 /// ```swift
-/// @StateMachine
+/// @Contract
 /// struct BoundedQueueSpec {
 ///     @Model var contents: [Int] = []
 ///     @SUT   var queue = BoundedQueue<Int>(capacity: 4)
@@ -27,7 +27,7 @@ import ExhaustCore
 ///     }
 /// }
 /// ```
-public protocol StateMachineSpec {
+public protocol ContractSpec {
     /// Creates a fresh instance with default model and SUT state.
     init()
 
@@ -45,12 +45,12 @@ public protocol StateMachineSpec {
     /// Executes a command against the model and SUT, applying preconditions, postconditions, and invariants.
     ///
     /// - Parameter command: The command to execute.
-    /// - Throws: ``StateMachineSkip`` if a precondition fails, ``StateMachineCheckFailure`` if a postcondition or invariant fails.
+    /// - Throws: ``ContractSkip`` if a precondition fails, ``ContractCheckFailure`` if a postcondition or invariant fails.
     mutating func run(_ command: Command) throws
 
     /// Checks all `@Invariant`-annotated methods. Called after every command execution.
     ///
-    /// - Throws: ``StateMachineCheckFailure`` if any invariant returns `false`.
+    /// - Throws: ``ContractCheckFailure`` if any invariant returns `false`.
     func checkInvariants() throws
 
     /// The system under test instance, for typed access in results and failure reports.

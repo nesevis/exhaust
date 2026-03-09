@@ -1,10 +1,10 @@
 // Result type returned by `#exhaust` on failure, carrying the shrunk
 // command sequence, a human-readable execution trace, and the SUT state.
 
-/// The result of a failed state-machine property test.
+/// The result of a failed contract property test.
 ///
 /// Contains the shrunk command sequence, a step-by-step execution trace showing what happened at each step, and the typed SUT state at the point of failure.
-public struct StateMachineResult<Spec: StateMachineSpec> {
+public struct ContractResult<Spec: ContractSpec> {
     /// The shrunk command sequence that triggered the failure.
     public let commands: [Spec.Command]
 
@@ -18,7 +18,7 @@ public struct StateMachineResult<Spec: StateMachineSpec> {
     public let seed: UInt64?
 }
 
-/// A single step in a state-machine execution trace.
+/// A single step in a contract execution trace.
 public struct TraceStep: CustomStringConvertible, Sendable {
     /// 1-based step number.
     public let index: Int

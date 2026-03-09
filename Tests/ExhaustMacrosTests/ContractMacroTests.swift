@@ -4,24 +4,24 @@ import Testing
 @testable import ExhaustMacros
 
 private let testMacros: [String: any Macro.Type] = [
-    "exhaust": ExhaustStateMachineMacro.self,
-    "StateMachine": StateMachineDeclarationMacro.self,
+    "exhaust": ExhaustContractMacro.self,
+    "Contract": ContractDeclarationMacro.self,
     "Model": ModelMacro.self,
     "SUT": SUTMacro.self,
     "Command": CommandMacro.self,
     "Invariant": InvariantMacro.self,
 ]
 
-@Suite("#exhaust state-machine macro expansion tests")
-struct StateMachineMacroTests {
-    @Test("Basic #exhaust state-machine expansion")
-    func basicStateMachine() {
+@Suite("#exhaust contract macro expansion tests")
+struct ContractMacroTests {
+    @Test("Basic #exhaust contract expansion")
+    func basicContract() {
         assertMacroExpansion(
             """
             #exhaust(BoundedQueueSpec.self)
             """,
             expandedSource: """
-            __runStateMachine(
+            __runContract(
                 BoundedQueueSpec.self,
                 settings: [],
                 fileID: #fileID,
@@ -34,14 +34,14 @@ struct StateMachineMacroTests {
         )
     }
 
-    @Test("#exhaust state-machine with settings")
-    func stateMachineWithSettings() {
+    @Test("#exhaust contract with settings")
+    func contractWithSettings() {
         assertMacroExpansion(
             """
             #exhaust(Spec.self, .sequenceLength(5...20), .maxIterations(500))
             """,
             expandedSource: """
-            __runStateMachine(
+            __runContract(
                 Spec.self,
                 settings: [.sequenceLength(5...20), .maxIterations(500)],
                 fileID: #fileID,
@@ -55,13 +55,13 @@ struct StateMachineMacroTests {
     }
 }
 
-@Suite("@StateMachine declaration macro tests")
-struct StateMachineDeclarationMacroTests {
+@Suite("@Contract declaration macro tests")
+struct ContractDeclarationMacroTests {
     @Test("Synthesizes Command enum, SUT typealias, and conformance")
     func synthesizesFullSpec() {
         assertMacroExpansion(
             """
-            @StateMachine
+            @Contract
             struct QueueSpec {
                 @Model var contents: [Int] = []
                 @SUT var queue: MyQueue
@@ -140,7 +140,7 @@ struct StateMachineDeclarationMacroTests {
                 }
             }
 
-            extension QueueSpec: StateMachineSpec {
+            extension QueueSpec: ContractSpec {
             }
             """,
             macros: testMacros,

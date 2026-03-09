@@ -1,16 +1,16 @@
-// Sentinel errors for state-machine command preconditions and postconditions.
+// Sentinel errors for contract command preconditions and postconditions.
 
 /// Signals that a command's precondition is not met and this step should be skipped.
 ///
-/// Thrown by ``skip()`` inside `@Command` methods when the current model state does not support the command. The state-machine runner catches this and skips the step.
-public struct StateMachineSkip: Error, Sendable {
+/// Thrown by ``skip()`` inside `@Command` methods when the current model state does not support the command. The contract runner catches this and skips the step.
+public struct ContractSkip: Error, Sendable {
     public init() {}
 }
 
 /// Signals that a postcondition check failed inside a `@Command` method.
 ///
-/// Thrown by ``check(_:_:)`` when a condition is `false`. The state-machine runner treats the current command sequence as a counterexample and proceeds to test case reduction.
-public struct StateMachineCheckFailure: Error, Sendable {
+/// Thrown by ``check(_:_:)`` when a condition is `false`. The contract runner treats the current command sequence as a counterexample and proceeds to test case reduction.
+public struct ContractCheckFailure: Error, Sendable {
     /// A description of the failed check, if available.
     public let message: String?
 
@@ -21,7 +21,7 @@ public struct StateMachineCheckFailure: Error, Sendable {
 
 /// Skips the current command step because its precondition is not met.
 ///
-/// Call this inside a `@Command` method when the model state does not support the command. The state-machine runner catches ``StateMachineSkip`` and continues with the next command in the sequence.
+/// Call this inside a `@Command` method when the model state does not support the command. The contract runner catches ``ContractSkip`` and continues with the next command in the sequence.
 ///
 /// Since `@Command` methods are implicitly `throws`, use this in a `guard` statement:
 ///
@@ -33,14 +33,14 @@ public struct StateMachineCheckFailure: Error, Sendable {
 /// }
 /// ```
 ///
-/// - Returns: A ``StateMachineSkip`` error. Typical usage: `throw skip()`.
-public func skip() -> StateMachineSkip {
-    StateMachineSkip()
+/// - Returns: A ``ContractSkip`` error. Typical usage: `throw skip()`.
+public func skip() -> ContractSkip {
+    ContractSkip()
 }
 
 /// Verifies a postcondition inside a `@Command` method.
 ///
-/// When the condition is `false`, throws ``StateMachineCheckFailure``, causing the state-machine runner to treat the current command sequence as a failing counterexample.
+/// When the condition is `false`, throws ``ContractCheckFailure``, causing the contract runner to treat the current command sequence as a failing counterexample.
 ///
 /// ```swift
 /// @Command(weight: 2)
@@ -56,6 +56,6 @@ public func skip() -> StateMachineSkip {
 ///   - message: An optional description included in failure reports.
 public func check(_ condition: @autoclosure () -> Bool, _ message: String? = nil) throws {
     guard condition() else {
-        throw StateMachineCheckFailure(message: message)
+        throw ContractCheckFailure(message: message)
     }
 }

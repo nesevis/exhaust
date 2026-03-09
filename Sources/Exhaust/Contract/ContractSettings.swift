@@ -1,8 +1,8 @@
 // Configuration options for `#exhaust` tests.
 import ExhaustCore
 
-/// Configuration options for `#exhaust` state-machine property tests, passed as variadic arguments to control test behavior.
-public enum StateMachineSettings {
+/// Configuration options for `#exhaust` contract property tests, passed as variadic arguments to control test behavior.
+public enum ContractSettings {
     /// The range of command sequence lengths to generate.
     case sequenceLength(ClosedRange<Int>)
 

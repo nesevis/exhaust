@@ -1,29 +1,29 @@
-// Runtime execution engine for state-machine property tests.
+// Runtime execution engine for contract property tests.
 //
 // Generates command sequences, executes them against a fresh spec instance, and detects postcondition / invariant violations. Integrates with the existing coverage + random + reduction pipeline.
 import ExhaustCore
 import IssueReporting
 
-/// Runs a state-machine property test for the given specification type.
+/// Runs a contract property test for the given specification type.
 ///
 /// Generates command sequences using the spec's synthesized `commandGenerator`, executes each sequence against a fresh instance, and verifies that invariants hold after every step. When a violation is found, the failing command sequence is reduced to a minimal counterexample.
 ///
 /// - Parameters:
-///   - specType: The `@StateMachine`-annotated specification type.
+///   - specType: The `@Contract`-annotated specification type.
 ///   - settings: Configuration options controlling sequence length, iteration count, coverage, and reduction.
 ///   - fileID: The file ID of the call site (injected by macro expansion).
 ///   - filePath: The file path of the call site (injected by macro expansion).
 ///   - line: The line number of the call site (injected by macro expansion).
 ///   - column: The column number of the call site (injected by macro expansion).
 @discardableResult
-public func __runStateMachine<Spec: StateMachineSpec>(
+public func __runContract<Spec: ContractSpec>(
     _ specType: Spec.Type,
-    settings: [StateMachineSettings],
+    settings: [ContractSettings],
     fileID: StaticString = #fileID,
     filePath: StaticString = #filePath,
     line: UInt = #line,
     column: UInt = #column,
-) -> StateMachineResult<Spec>? {
+) -> ContractResult<Spec>? {
     var sequenceLength: ClosedRange<Int> = 5 ... 20
     var maxIterations: UInt64 = 100
     var coverageBudget: UInt64 = 2000
@@ -67,9 +67,9 @@ public func __runStateMachine<Spec: StateMachineSpec>(
             do {
                 try spec.run(command)
                 try spec.checkInvariants()
-            } catch is StateMachineSkip {
+            } catch is ContractSkip {
                 continue
-            } catch is StateMachineCheckFailure {
+            } catch is ContractCheckFailure {
                 return false
             } catch {
                 return false
@@ -128,7 +128,7 @@ public func __runStateMachine<Spec: StateMachineSpec>(
     // Re-execute the shrunk sequence to build the trace and capture SUT state.
     let (trace, spec) = buildTrace(failingSequence, specType: specType)
 
-    let result = StateMachineResult<Spec>(
+    let result = ContractResult<Spec>(
         commands: failingSequence,
         trace: trace,
         sut: spec.sut,
@@ -139,7 +139,7 @@ public func __runStateMachine<Spec: StateMachineSpec>(
         let rendered = renderFailure(result, modelDescription: spec.modelDescription)
         ExhaustLog.error(
             category: .propertyTest,
-            event: "state_machine_failed",
+            event: "contract_failed",
             rendered,
         )
         reportIssue(
@@ -159,7 +159,7 @@ public func __runStateMachine<Spec: StateMachineSpec>(
 /// Re-executes the failing command sequence to build a step-by-step trace.
 ///
 /// Returns the trace and the spec instance in the state it was in when the failure occurred (or after running all commands if the sequence passes on re-execution).
-private func buildTrace<Spec: StateMachineSpec>(
+private func buildTrace<Spec: ContractSpec>(
     _ commands: [Spec.Command],
     specType _: Spec.Type,
 ) -> ([TraceStep], Spec) {
@@ -173,10 +173,10 @@ private func buildTrace<Spec: StateMachineSpec>(
 
         do {
             try spec.run(command)
-        } catch is StateMachineSkip {
+        } catch is ContractSkip {
             trace.append(TraceStep(index: step, command: description, outcome: .skipped))
             continue
-        } catch let failure as StateMachineCheckFailure {
+        } catch let failure as ContractCheckFailure {
             trace.append(TraceStep(index: step, command: description, outcome: .checkFailed(message: failure.message)))
             return (trace, spec)
         } catch {
@@ -186,7 +186,7 @@ private func buildTrace<Spec: StateMachineSpec>(
 
         do {
             try spec.checkInvariants()
-        } catch let failure as StateMachineCheckFailure {
+        } catch let failure as ContractCheckFailure {
             let name = failure.message ?? "unknown"
             trace.append(TraceStep(index: step, command: description, outcome: .invariantFailed(name: name)))
             return (trace, spec)
@@ -203,12 +203,12 @@ private func buildTrace<Spec: StateMachineSpec>(
 
 // MARK: - Failure rendering
 
-private func renderFailure<Spec: StateMachineSpec>(
-    _ result: StateMachineResult<Spec>,
+private func renderFailure<Spec: ContractSpec>(
+    _ result: ContractResult<Spec>,
     modelDescription: String,
 ) -> String {
     var lines: [String] = []
-    lines.append("State machine failure")
+    lines.append("Contract failure")
     lines.append("")
 
     lines.append("Command sequence (\(result.commands.count) steps):")
@@ -242,7 +242,7 @@ private func extractPickChoices<Command>(
     return choices
 }
 
-/// Runs SCA coverage for state-machine command sequences.
+/// Runs SCA coverage for contract command sequences.
 ///
 /// By default, builds a covering array over command-type orderings only, keeping domains small enough for higher interaction strengths (t=3, t=4). When `argumentAware` is true, each position's domain is the flattened union of `(commandType × argumentCombinations)`, giving pairwise coverage of argument value interactions at the cost of capping at t=2.
 ///

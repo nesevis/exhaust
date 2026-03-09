@@ -1,4 +1,4 @@
-// A container for referencing entities produced by prior commands in state-machine tests.
+// A container for referencing entities produced by prior commands in contract tests.
 import ExhaustCore
 
 /// Holds values produced by earlier commands so that later commands can reference them.
@@ -8,7 +8,7 @@ import ExhaustCore
 /// ## Example
 ///
 /// ```swift
-/// @StateMachine
+/// @Contract
 /// struct DatabaseSpec {
 ///     let userIDs = Bundle<UserID>()
 ///
@@ -27,7 +27,7 @@ import ExhaustCore
 /// ```
 public final class Bundle<Element>: @unchecked Sendable {
     // @unchecked Sendable: Bundle is only accessed sequentially within a single
-    // state-machine execution. Concurrent access across threads is not supported
+    // contract execution. Concurrent access across threads is not supported
     // and would require external synchronization.
 
     private var elements: [Element] = []
