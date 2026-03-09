@@ -11,7 +11,8 @@ import IssueReporting
 ///
 /// - Parameters:
 ///   - specType: The `@Contract`-annotated specification type.
-///   - settings: Configuration options controlling sequence length, iteration count, coverage, and reduction.
+///   - commandLimit: The maximum number of commands per generated sequence.
+///   - settings: Configuration options controlling iteration count, coverage, and reduction.
 ///   - fileID: The file ID of the call site (injected by macro expansion).
 ///   - filePath: The file path of the call site (injected by macro expansion).
 ///   - line: The line number of the call site (injected by macro expansion).
@@ -19,13 +20,13 @@ import IssueReporting
 @discardableResult
 public func __runContract<Spec: ContractSpec>(
     _ specType: Spec.Type,
+    commandLimit: Int,
     settings: [ContractSettings],
     fileID: StaticString = #fileID,
     filePath: StaticString = #filePath,
     line: UInt = #line,
     column: UInt = #column,
 ) -> ContractResult<Spec>? {
-    var sequenceLength: ClosedRange<Int> = 5 ... 20
     var maxIterations: UInt64 = 100
     var coverageBudget: UInt64 = 2000
     var seed: UInt64?
@@ -36,8 +37,6 @@ public func __runContract<Spec: ContractSpec>(
 
     for setting in settings {
         switch setting {
-        case let .sequenceLength(range):
-            sequenceLength = range
         case let .maxIterations(n):
             maxIterations = n
         case let .coverageBudget(n):
@@ -58,7 +57,7 @@ public func __runContract<Spec: ContractSpec>(
     // Build the sequence generator: an array of commands with bounded length. Use 0 as the lower bound so the reducer can shrink sequences below the user's minimum — the minimum is a generation hint, not a shrinking floor.
     let commandGen = Spec.commandGenerator
     let seqGen: ReflectiveGenerator<[Spec.Command]> = commandGen.array(
-        length: 0 ... sequenceLength.upperBound,
+        length: 0 ... commandLimit,
     )
 
     // The property: execute the command sequence against a fresh spec and check for failures.
@@ -87,7 +86,7 @@ public func __runContract<Spec: ContractSpec>(
         scaResult = runSCACoverage(
             seqGen: seqGen,
             commandGen: commandGen,
-            sequenceLength: sequenceLength,
+            commandLimit: commandLimit,
             coverageBudget: coverageBudget,
             reductionConfig: reductionConfig,
             argumentAware: useArgumentAwareCoverage,
@@ -294,7 +293,7 @@ typealias SCAResult<Command> = (commands: [Command], original: [Command])
 func runSCACoverage<Command>(
     seqGen: ReflectiveGenerator<[Command]>,
     commandGen: ReflectiveGenerator<Command>,
-    sequenceLength: ClosedRange<Int>,
+    commandLimit: Int,
     coverageBudget: UInt64,
     reductionConfig: TCRBudget,
     argumentAware: Bool,
@@ -302,7 +301,7 @@ func runSCACoverage<Command>(
 ) -> SCAResult<Command>? {
     guard let pickChoices = extractPickChoices(from: commandGen) else { return nil }
 
-    let seqLen = sequenceLength.upperBound
+    let seqLen = commandLimit
     guard seqLen >= 2, pickChoices.count >= 2 else { return nil }
 
     let profile: FiniteDomainProfile
@@ -355,7 +354,7 @@ func runSCACoverage<Command>(
         return nil
     }
 
-    let lengthRange = UInt64(0) ... UInt64(sequenceLength.upperBound)
+    let lengthRange = UInt64(0) ... UInt64(commandLimit)
 
     for row in covering.rows {
         let tree: ChoiceTree?

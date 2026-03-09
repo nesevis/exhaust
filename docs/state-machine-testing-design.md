@@ -66,7 +66,7 @@ struct BoundedQueueSpec {
 }
 
 @Test func boundedQueueBehavior() {
-    #exhaust(BoundedQueueSpec.self, .sequenceLength(5...20))
+    #exhaust(BoundedQueueSpec.self, commandLimit: 20)
 }
 ```
 
@@ -290,7 +290,7 @@ Bundles solve the "reference existing entities" problem without model-dependent 
 
 ## 8. Open Questions
 
-1. ~~**Macro form for invocation**: `#stateMachine(Spec.self)` vs `#exhaust(Spec.self)` overload vs something else.~~ **Resolved**: `#exhaust(Spec.self)` overload.
+1. ~~**Macro form for invocation**: `#stateMachine(Spec.self)` vs `#exhaust(Spec.self)` overload vs something else.~~ **Resolved**: `#exhaust(Spec.self, commandLimit: N)` overload.
 
 2. **Async execution**: Supporting `async` command methods. Deferred but worth considering early.
 

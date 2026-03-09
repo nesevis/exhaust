@@ -13,7 +13,7 @@ It tests in two phases — combinatorial analysis of boundary values and paramet
 When a failure is found, Exhaust automatically reduces it to the smallest possible counterexample, usually within 100ms.
 
 - **Property tests** — generate values and check that a rule holds: `#exhaust(generator) { value in Bool }`.
-- **Contract tests** — generate sequences of interactions against a stateful system and verify that nothing breaks: `#exhaust(MyContract.self)`.
+- **Contract tests** — generate sequences of interactions against a stateful system and verify that nothing breaks: `#exhaust(MyContract.self, commandLimit: 20)`.
 
 ```swift
 @Test func arraySortIsIdempotent() {
@@ -215,7 +215,7 @@ Run the contract with `#exhaust`:
 
 ```swift
 @Test func counterObeysSpec() {
-    #exhaust(CounterSpec.self, .sequenceLength(3...10))
+    #exhaust(CounterSpec.self, commandLimit: 10)
 }
 ```
 
@@ -266,7 +266,7 @@ Run it the same way — the test function must be `async`:
 
 ```swift
 @Test func accountBehavior() async {
-    #exhaust(AccountSpec.self, .sequenceLength(5...15))
+    #exhaust(AccountSpec.self, commandLimit: 15)
 }
 ```
 
@@ -276,7 +276,7 @@ Sync and async commands can be mixed freely in the same contract.
 
 | Setting | Default | Effect |
 |---|---|---|
-| `.sequenceLength(range)` | `3...10` | Number of commands per test iteration. |
+| `commandLimit:` | (required) | Maximum number of commands per test iteration. |
 
 ## How It Works
 

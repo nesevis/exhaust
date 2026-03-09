@@ -51,7 +51,7 @@ struct BuggyCounterTests {
     @Test("Detects model/SUT divergence in buggy counter")
     func detectsBuggyCounter() throws {
         let result = try #require(
-            #exhaust(BuggyCounterSpec.self, .sequenceLength(3...10), .suppressIssueReporting)
+            #exhaust(BuggyCounterSpec.self, commandLimit: 10, .suppressIssueReporting)
         )
         print()
         // The trace should end with a failing step
@@ -67,7 +67,7 @@ struct BuggyCounterTests {
     @Test("Trace steps have correct structure")
     func traceSteps() throws {
         let result = try #require(
-            #exhaust(BuggyCounterSpec.self, .sequenceLength(3...10), .suppressIssueReporting)
+            #exhaust(BuggyCounterSpec.self, commandLimit: 10, .suppressIssueReporting)
         )
 
         // Every step should have a 1-based index

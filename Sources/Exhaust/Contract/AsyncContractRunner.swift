@@ -22,13 +22,13 @@ final class SpecBox<Spec>: @unchecked Sendable {
 @discardableResult
 public func __runContractAsync<Spec: AsyncContractSpec>(
     _ specType: Spec.Type,
+    commandLimit: Int,
     settings: [ContractSettings],
     fileID: StaticString = #fileID,
     filePath: StaticString = #filePath,
     line: UInt = #line,
     column: UInt = #column,
 ) async -> ContractResult<Spec>? {
-    var sequenceLength: ClosedRange<Int> = 5 ... 20
     var maxIterations: UInt64 = 100
     var coverageBudget: UInt64 = 2000
     var seed: UInt64?
@@ -39,8 +39,6 @@ public func __runContractAsync<Spec: AsyncContractSpec>(
 
     for setting in settings {
         switch setting {
-        case let .sequenceLength(range):
-            sequenceLength = range
         case let .maxIterations(n):
             maxIterations = n
         case let .coverageBudget(n):
@@ -60,7 +58,7 @@ public func __runContractAsync<Spec: AsyncContractSpec>(
 
     let commandGen = Spec.commandGenerator
     let seqGen: ReflectiveGenerator<[Spec.Command]> = commandGen.array(
-        length: 0 ... sequenceLength.upperBound,
+        length: 0 ... commandLimit,
     )
 
     // The sync property closure runs async spec methods via Task + semaphore.
@@ -94,7 +92,6 @@ public func __runContractAsync<Spec: AsyncContractSpec>(
     }
 
     // Snapshot mutable settings into let bindings for Sendable capture.
-    let seqLength = sequenceLength
     let maxIter = maxIterations
     let covBudget = coverageBudget
     let replaySeed = seed
@@ -111,7 +108,7 @@ public func __runContractAsync<Spec: AsyncContractSpec>(
                 scaResult = runSCACoverage(
                     seqGen: seqGen,
                     commandGen: commandGen,
-                    sequenceLength: seqLength,
+                    commandLimit: commandLimit,
                     coverageBudget: covBudget,
                     reductionConfig: reduction,
                     argumentAware: argAwareCoverage,

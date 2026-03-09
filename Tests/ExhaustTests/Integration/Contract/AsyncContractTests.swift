@@ -152,13 +152,13 @@ struct MixedAsyncSpec {
 struct AsyncContractTests {
     @Test("Passing async spec produces no counterexample")
     func passingAsyncContract() async {
-        let result = #exhaust(AsyncCounterSpec.self, .sequenceLength(3...8), .maxIterations(30), .suppressIssueReporting)
+        let result = #exhaust(AsyncCounterSpec.self, commandLimit: 8, .maxIterations(30), .suppressIssueReporting)
         #expect(result == nil, "Async counter spec should pass — model and SUT are identical")
     }
 
     @Test("Failing async spec produces a counterexample")
     func failingAsyncContract() async {
-        let result = #exhaust(BuggyAsyncCounterSpec.self, .sequenceLength(3...10), .maxIterations(100), .suppressIssueReporting)
+        let result = #exhaust(BuggyAsyncCounterSpec.self, commandLimit: 10, .maxIterations(100), .suppressIssueReporting)
         #expect(result != nil, "Buggy async counter should fail")
         if let result {
             #expect(!result.trace.isEmpty)
@@ -172,23 +172,23 @@ struct AsyncContractTests {
 
     @Test("Async contract with skip() works correctly")
     func asyncContractWithSkip() async {
-        let result = #exhaust(AsyncSkipSpec.self, .sequenceLength(3...8), .maxIterations(30), .suppressIssueReporting)
+        let result = #exhaust(AsyncSkipSpec.self, commandLimit: 8, .maxIterations(30), .suppressIssueReporting)
         #expect(result == nil, "Async skip spec should pass")
     }
 
     @Test("Mixed sync+async commands produce AsyncContractSpec conformance")
     func mixedAsyncContract() async {
-        let result = #exhaust(MixedAsyncSpec.self, .sequenceLength(3...8), .maxIterations(30), .suppressIssueReporting)
+        let result = #exhaust(MixedAsyncSpec.self, commandLimit: 8, .maxIterations(30), .suppressIssueReporting)
         #expect(result == nil, "Mixed async spec should pass")
     }
 
     @Test("Async contract replay reproduces failure with seed through shrinking")
     func asyncReplayWithSeed() async {
         // Use a fixed seed that produces a failure
-        let result1 = #exhaust(BuggyAsyncCounterSpec.self, .replay(42), .suppressIssueReporting)
+        let result1 = #exhaust(BuggyAsyncCounterSpec.self, commandLimit: 10, .replay(42), .suppressIssueReporting)
         #expect(result1 != nil, "Replay with seed 42 should produce a failure")
 
-        let result2 = #exhaust(BuggyAsyncCounterSpec.self, .replay(42), .suppressIssueReporting)
+        let result2 = #exhaust(BuggyAsyncCounterSpec.self, commandLimit: 10, .replay(42), .suppressIssueReporting)
         #expect(result2 != nil, "Same seed should reproduce the failure")
         if let result1, let result2 {
             #expect(result1.commands.count == result2.commands.count, "Same seed should produce same command count")
@@ -199,6 +199,7 @@ struct AsyncContractTests {
     func asyncWithCoverage() async {
         let result = #exhaust(
             BuggyAsyncCounterSpec.self,
+            commandLimit: 20,
             .suppressIssueReporting,
             .argumentAwareCoverage,
         )
@@ -214,6 +215,7 @@ struct AsyncContractTests {
         // Use a fixed seed that produces a failure
         let result1 = #exhaust(
             BuggyCounterSpec.self,
+            commandLimit: 20,
             .suppressIssueReporting,
             .argumentAwareCoverage,
         )

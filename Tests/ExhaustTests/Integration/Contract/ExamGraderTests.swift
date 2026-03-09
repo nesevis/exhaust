@@ -151,7 +151,7 @@ struct ExamGraderTests {
     @Test("Detects answer length mismatch or grading bug")
     func examGraderBugs() throws {
         let result = try #require(
-            #exhaust(ExamGraderContract.self, .sequenceLength(3...8), .suppressIssueReporting)
+            #exhaust(ExamGraderContract.self, commandLimit: 8, .suppressIssueReporting)
         )
         #expect(result.trace.contains { step in
             switch step.outcome {

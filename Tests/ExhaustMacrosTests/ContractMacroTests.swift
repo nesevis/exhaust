@@ -27,11 +27,12 @@ struct ContractMacroTests {
     func basicContract() {
         assertMacroExpansion(
             """
-            #exhaust(BoundedQueueSpec.self)
+            #exhaust(BoundedQueueSpec.self, commandLimit: 20)
             """,
             expandedSource: """
             __runContract(
                 BoundedQueueSpec.self,
+                commandLimit: 20,
                 settings: [],
                 fileID: #fileID,
                 filePath: #filePath,
@@ -47,12 +48,13 @@ struct ContractMacroTests {
     func contractWithSettings() {
         assertMacroExpansion(
             """
-            #exhaust(Spec.self, .sequenceLength(5...20), .maxIterations(500))
+            #exhaust(Spec.self, commandLimit: 20, .maxIterations(500))
             """,
             expandedSource: """
             __runContract(
                 Spec.self,
-                settings: [.sequenceLength(5...20), .maxIterations(500)],
+                commandLimit: 20,
+                settings: [.maxIterations(500)],
                 fileID: #fileID,
                 filePath: #filePath,
                 line: #line,
@@ -409,11 +411,12 @@ struct AsyncContractMacroTests {
     func asyncContractExpansion() {
         assertMacroExpansion(
             """
-            #exhaust(AsyncSpec.self)
+            #exhaust(AsyncSpec.self, commandLimit: 20)
             """,
             expandedSource: """
             await __runContractAsync(
                 AsyncSpec.self,
+                commandLimit: 20,
                 settings: [],
                 fileID: #fileID,
                 filePath: #filePath,
@@ -429,12 +432,13 @@ struct AsyncContractMacroTests {
     func asyncContractWithSettings() {
         assertMacroExpansion(
             """
-            #exhaust(AsyncSpec.self, .sequenceLength(3...10), .maxIterations(50))
+            #exhaust(AsyncSpec.self, commandLimit: 10, .maxIterations(50))
             """,
             expandedSource: """
             await __runContractAsync(
                 AsyncSpec.self,
-                settings: [.sequenceLength(3...10), .maxIterations(50)],
+                commandLimit: 10,
+                settings: [.maxIterations(50)],
                 fileID: #fileID,
                 filePath: #filePath,
                 line: #line,

@@ -60,9 +60,12 @@ public macro exhaust<T>(
 ///
 /// **3. Test case reduction**. When a failing sequence is found, the existing Reducer strategies apply — deleting commands, simplifying arguments, reordering steps — until a minimal counterexample is found.
 ///
+/// ## Parameters
+///
+/// - `commandLimit`: The maximum number of commands per generated sequence. The reducer can shrink below this value.
+///
 /// ## Settings
 ///
-/// - `.sequenceLength(5...20)`: range of command sequence lengths (default 5...20).
 /// - `.maxIterations(_)`: upper bound on random sampling iterations (default 100).
 /// - `.coverageBudget(_)`: maximum test cases for structured coverage (default 2000).
 /// - `.replay(_)`: fixed seed for deterministic reproduction.
@@ -74,7 +77,7 @@ public macro exhaust<T>(
 ///
 /// ```swift
 /// @Test func boundedQueueBehavior() {
-///     #exhaust(BoundedQueueSpec.self, .sequenceLength(5...20))
+///     #exhaust(BoundedQueueSpec.self, commandLimit: 20)
 /// }
 /// ```
 ///
@@ -83,17 +86,19 @@ public macro exhaust<T>(
 @discardableResult
 public macro exhaust<Spec: ContractSpec>(
     _ specType: Spec.Type,
+    commandLimit: Int,
     _ settings: ContractSettings...
 ) -> ContractResult<Spec>? = #externalMacro(module: "ExhaustMacros", type: "ExhaustContractMacro")
 
 /// Runs an async contract property test that generates command sequences, executes them against an async system under test, and verifies that contracts hold after every step.
 ///
-/// Identical to the synchronous `#exhaust(Spec.self)` overload but for types conforming to ``AsyncContractSpec``. The synchronous core (coverage, reduction, PRNG) runs on a GCD thread; async `run`/`checkInvariants` calls are bridged via `Task` + semaphore.
+/// Identical to the synchronous `#exhaust(Spec.self, commandLimit:)` overload but for types conforming to ``AsyncContractSpec``. The synchronous core (coverage, reduction, PRNG) runs on a GCD thread; async `run`/`checkInvariants` calls are bridged via `Task` + semaphore.
 ///
 /// - Returns: A ``ContractResult`` containing the shrunk command sequence, execution trace, and SUT state if a violation is found, or `nil` if all sequences pass.
 @freestanding(expression)
 @discardableResult
 public macro exhaust<Spec: AsyncContractSpec>(
     _ specType: Spec.Type,
+    commandLimit: Int,
     _ settings: ContractSettings...
 ) -> ContractResult<Spec>? = #externalMacro(module: "ExhaustMacros", type: "ExhaustAsyncContractMacro")

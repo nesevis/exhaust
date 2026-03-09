@@ -86,7 +86,7 @@ struct ALUTests {
         let result = try #require(
             #exhaust(
                 ALUSpec.self,
-                .sequenceLength(5...8),
+                commandLimit: 8,
                 .argumentAwareCoverage,
                 .suppressIssueReporting
             )

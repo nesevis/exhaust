@@ -132,7 +132,7 @@ struct InvariantOnlyTests {
     @Test("Circular buffer capacity invariant detects overflow")
     func circularBufferOverflow() throws {
         let result = try #require(
-            #exhaust(CircularBufferContract.self, .sequenceLength(3...6), .suppressIssueReporting)
+            #exhaust(CircularBufferContract.self, commandLimit: 6, .suppressIssueReporting)
         )
 
         #expect(result.trace.contains { step in
@@ -144,7 +144,7 @@ struct InvariantOnlyTests {
     @Test("Sorted backing invariant detects unsorted insert")
     func sortedBackingViolation() throws {
         let result = try #require(
-            #exhaust(SortedBackingContract.self, .sequenceLength(2...5), .suppressIssueReporting)
+            #exhaust(SortedBackingContract.self, commandLimit: 5, .suppressIssueReporting)
         )
 
         #expect(result.trace.contains { step in

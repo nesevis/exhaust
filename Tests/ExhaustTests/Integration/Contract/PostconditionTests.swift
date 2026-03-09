@@ -162,7 +162,7 @@ struct PostconditionTests {
     @Test("Set uniqueness postcondition detects duplicate add")
     func setDuplicateDetection() throws {
         let result = try #require(
-            #exhaust(SetUniquenessContract.self, .sequenceLength(2...5), .suppressIssueReporting)
+            #exhaust(SetUniquenessContract.self, commandLimit: 5, .suppressIssueReporting)
         )
 
         #expect(result.trace.contains { step in
@@ -174,7 +174,7 @@ struct PostconditionTests {
     @Test("Stack LIFO postcondition detects wrong peek")
     func stackLIFOViolation() throws {
         let result = try #require(
-            #exhaust(StackLIFOContract.self, .sequenceLength(2...4), .suppressIssueReporting)
+            #exhaust(StackLIFOContract.self, commandLimit: 4, .suppressIssueReporting)
         )
 
         #expect(result.trace.contains { step in
@@ -186,7 +186,7 @@ struct PostconditionTests {
     @Test("Dictionary consistency detects count drift")
     func dictionaryCountDrift() throws {
         let result = try #require(
-            #exhaust(DictionaryConsistencyContract.self, .sequenceLength(3...6), .suppressIssueReporting)
+            #exhaust(DictionaryConsistencyContract.self, commandLimit: 6, .suppressIssueReporting)
         )
 
         // Could be either invariant failure (count mismatch) or check failure

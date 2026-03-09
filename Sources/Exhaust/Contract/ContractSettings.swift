@@ -3,9 +3,6 @@ import ExhaustCore
 
 /// Configuration options for `#exhaust` contract property tests, passed as variadic arguments to control test behavior.
 public enum ContractSettings {
-    /// The range of command sequence lengths to generate.
-    case sequenceLength(ClosedRange<Int>)
-
     /// The upper bound on random sampling iterations (default 100). Additive with the coverage budget.
     case maxIterations(UInt64)
 
