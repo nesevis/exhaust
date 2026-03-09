@@ -318,15 +318,22 @@ public extension Gen {
         from collection: AnyCollection,
     ) -> ReflectiveGenerator<AnyCollection.Element> where AnyCollection.Element: Hashable {
         precondition(collection.isEmpty == false, "Cannot return random element from empty collection")
-        let enumerated = collection.enumerated()
-        let elementDict = Dictionary(grouping: enumerated, by: \.element)
-            .mapValues { $0[0].offset }
-        let intDict = Dictionary(grouping: enumerated, by: \.offset)
-            .mapValues { $0[0].element }
+        var elementToOffset: [AnyCollection.Element: Int] = [:]
+        var offsetToElement: [Int: AnyCollection.Element] = [:]
+        offsetToElement.reserveCapacity(collection.count)
+        elementToOffset.reserveCapacity(collection.count)
+        
+        for (offset, element) in collection.enumerated() {
+            offsetToElement[offset] = element
+            // Keep only the first occurrence for backward mapping
+            if elementToOffset[element] == nil {
+                elementToOffset[element] = offset
+            }
+        }
 
         return Gen.contramap(
-            { (element: AnyCollection.Element) -> Int in elementDict[element]! },
-            Gen.choose(in: 0 ... (collection.count - 1))._map { intDict[$0]! },
+            { (element: AnyCollection.Element) -> Int in elementToOffset[element]! },
+            Gen.choose(in: 0 ... (collection.count - 1))._map { offsetToElement[$0]! },
         )
     }
 }
