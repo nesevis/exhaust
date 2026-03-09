@@ -3,8 +3,8 @@ import SwiftSyntax
 import SwiftSyntaxBuilder
 import SwiftSyntaxMacros
 
-/// Expression macro that expands `#stateMachine(Spec.self, .settings...)` into a call to `__runStateMachine(...)`.
-public struct StateMachineMacro: ExpressionMacro {
+/// Expression macro that expands `#exhaust(Spec.self, .settings...)` into a call to `__runStateMachine(...)` for state-machine property tests.
+public struct ExhaustStateMachineMacro: ExpressionMacro {
     public static func expansion(
         of node: some FreestandingMacroExpansionSyntax,
         in context: some MacroExpansionContext,
@@ -14,9 +14,9 @@ public struct StateMachineMacro: ExpressionMacro {
         guard !args.isEmpty else {
             context.diagnose(Diagnostic(
                 node: Syntax(node),
-                message: ExhaustMacroDiagnostic.stateMachineMissingSpec,
+                message: ExhaustMacroDiagnostic.exhaustStateMachineMissingSpec,
             ))
-            return "fatalError(\"#stateMachine requires a spec type argument\")"
+            return "fatalError(\"#exhaust requires a spec type argument\")"
         }
 
         let specExpr = args[0].expression.trimmedDescription

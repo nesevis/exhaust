@@ -9,7 +9,7 @@ struct ExhaustMacrosPlugin: CompilerPlugin {
         ExtractMacro.self,
         ExamineMacro.self,
         ExploreMacro.self,
-        StateMachineMacro.self,
+        ExhaustStateMachineMacro.self,
         StateMachineDeclarationMacro.self,
         ModelMacro.self,
         SUTMacro.self,

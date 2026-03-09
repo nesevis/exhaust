@@ -40,7 +40,7 @@ struct StackSpec {
 struct StackTests {
     @Test("Passing spec produces no counterexample")
     func passingStack() {
-        let result = #stateMachine(StackSpec.self, .sequenceLength(5...15), .maxIterations(50), .suppressIssueReporting)
+        let result = #exhaust(StackSpec.self, .sequenceLength(5...15), .maxIterations(50), .suppressIssueReporting)
         #expect(result == nil, "Stack spec should pass — model and SUT are identical")
     }
 }

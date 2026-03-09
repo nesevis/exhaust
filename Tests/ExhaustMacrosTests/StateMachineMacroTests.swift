@@ -4,7 +4,7 @@ import Testing
 @testable import ExhaustMacros
 
 private let testMacros: [String: any Macro.Type] = [
-    "stateMachine": StateMachineMacro.self,
+    "exhaust": ExhaustStateMachineMacro.self,
     "StateMachine": StateMachineDeclarationMacro.self,
     "Model": ModelMacro.self,
     "SUT": SUTMacro.self,
@@ -12,13 +12,13 @@ private let testMacros: [String: any Macro.Type] = [
     "Invariant": InvariantMacro.self,
 ]
 
-@Suite("#stateMachine macro expansion tests")
+@Suite("#exhaust state-machine macro expansion tests")
 struct StateMachineMacroTests {
-    @Test("Basic #stateMachine expansion")
+    @Test("Basic #exhaust state-machine expansion")
     func basicStateMachine() {
         assertMacroExpansion(
             """
-            #stateMachine(BoundedQueueSpec.self)
+            #exhaust(BoundedQueueSpec.self)
             """,
             expandedSource: """
             __runStateMachine(
@@ -34,11 +34,11 @@ struct StateMachineMacroTests {
         )
     }
 
-    @Test("#stateMachine with settings")
+    @Test("#exhaust state-machine with settings")
     func stateMachineWithSettings() {
         assertMacroExpansion(
             """
-            #stateMachine(Spec.self, .sequenceLength(5...20), .maxIterations(500))
+            #exhaust(Spec.self, .sequenceLength(5...20), .maxIterations(500))
             """,
             expandedSource: """
             __runStateMachine(

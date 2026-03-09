@@ -1,4 +1,4 @@
-// Result type returned by `#stateMachine` on failure, carrying the shrunk
+// Result type returned by `#exhaust` on failure, carrying the shrunk
 // command sequence, a human-readable execution trace, and the SUT state.
 
 /// The result of a failed state-machine property test.

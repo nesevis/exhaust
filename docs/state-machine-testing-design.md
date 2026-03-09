@@ -66,7 +66,7 @@ struct BoundedQueueSpec {
 }
 
 @Test func boundedQueueBehavior() {
-    #stateMachine(BoundedQueueSpec.self, .sequenceLength(5...20))
+    #exhaust(BoundedQueueSpec.self, .sequenceLength(5...20))
 }
 ```
 
@@ -270,7 +270,7 @@ Bundles solve the "reference existing entities" problem without model-dependent 
 - `StateMachine` protocol — `Sources/Exhaust/StateMachine/`
 - `Bundle<T>` type — `Sources/Exhaust/StateMachine/` or `Sources/ExhaustCore/`
 - `StateMachineCoverageRunner` — `Sources/Exhaust/Macros/`
-- `#stateMachine` freestanding macro — `Sources/Exhaust/Macros/`
+- `#exhaust` state-machine overload — `Sources/Exhaust/Macros/`
 - `skip()`, `check()` runtime functions — `Sources/Exhaust/StateMachine/`
 
 ### Unchanged
@@ -290,7 +290,7 @@ Bundles solve the "reference existing entities" problem without model-dependent 
 
 ## 8. Open Questions
 
-1. **Macro form for invocation**: `#stateMachine(Spec.self)` vs `#exhaust(Spec.self)` overload vs something else.
+1. ~~**Macro form for invocation**: `#stateMachine(Spec.self)` vs `#exhaust(Spec.self)` overload vs something else.~~ **Resolved**: `#exhaust(Spec.self)` overload.
 
 2. **Async execution**: Supporting `async` command methods. Deferred but worth considering early.
 
