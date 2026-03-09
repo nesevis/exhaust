@@ -6,9 +6,14 @@
 
 ## Why `#expect` when you can `#exhaust`?
 
-Exhaust is a property-based testing framework for Swift. Instead of writing individual test cases by hand, you describe the rules your code must obey and let Exhaust find the violations. It tests in two phases — combinatorial analysis of boundary values and parameter interactions first, then random sampling — so edge cases are covered systematically rather than by luck. When a failure is found, Exhaust automatically reduces it to the smallest possible counterexample, usually within 100ms.
+Exhaust is a property-based testing framework for Swift. Instead of writing individual test cases by hand, you describe the rules your code must obey and let Exhaust find the violations. 
 
-Test values against properties with `#exhaust(generator) { value in Bool }`, or test stateful systems with `@Contract` — define commands, invariants, and postconditions, and Exhaust generates minimal failing sequences of interactions.
+It tests in two phases — combinatorial analysis of boundary values and parameter interactions first, then random sampling — so edge cases are covered systematically rather than by luck. 
+
+When a failure is found, Exhaust automatically reduces it to the smallest possible counterexample, usually within 100ms.
+
+- **Property tests** — generate values and check that a rule holds: `#exhaust(generator) { value in Bool }`.
+- **Contract tests** — generate sequences of interactions against a stateful system and verify that nothing breaks: `#exhaust(MyContract.self)`.
 
 ```swift
 @Test func arraySortIsIdempotent() {
@@ -226,6 +231,46 @@ Exhaust generates sequences of `increment` and `reset` commands, executes them a
 | `@Invariant` | A boolean check run after every command. |
 
 Commands can also assert postconditions inline with `try check(condition, "message")`, and skip inapplicable states with `throw skip()`.
+
+### Async Contracts
+
+When your system under test is an actor, uses `async` methods, or interacts with async APIs, mark the relevant `@Command` or `@Invariant` methods as `async`. The macro detects this and generates an `AsyncContractSpec` conformance automatically — no separate macro or annotation needed.
+
+```swift
+@Contract
+struct AccountSpec {
+    @Model var expected: Decimal = 0
+    @SUT var account = BankAccount()
+
+    @Invariant
+    func balanceMatches() async -> Bool {
+        await account.balance == expected
+    }
+
+    @Command(weight: 3, Gen.int(in: 1...1000))
+    mutating func deposit(amount: Int) async throws {
+        expected += Decimal(amount)
+        await account.deposit(amount)
+    }
+
+    @Command(weight: 1)
+    mutating func close() async throws {
+        guard expected > 0 else { throw skip() }
+        expected = 0
+        await account.close()
+    }
+}
+```
+
+Run it the same way — the test function must be `async`:
+
+```swift
+@Test func accountBehavior() async {
+    #exhaust(AccountSpec.self, .sequenceLength(5...15))
+}
+```
+
+Sync and async commands can be mixed freely in the same contract.
 
 ### Settings
 

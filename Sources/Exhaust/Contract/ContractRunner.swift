@@ -309,14 +309,21 @@ func runSCACoverage<Command>(
     let mapping: SCADomainMapping?
     let maxStrength: Int
 
-    // Cap interaction strength based on parameter count to avoid combinatorial explosion
-    // in IPOG's combo enumeration. C(n, t) grows fast: C(20, 6) = 38,760 but C(12, 6) = 924.
+    // Cap interaction strength so IPOG stays under ~100ms for any sequence length.
+    // IPOG's vertical growth enumerates C(seqLen, t) parameter combinations, which
+    // explodes at high t: C(20, 6) = 38,760 vs C(20, 3) = 1,140.
+    //
+    // Measured on M4 with 2 command types (BuggyCounterSpec):
+    //   seqLen  5 @ t≤6:  2ms    seqLen 15 @ t≤3: 35ms
+    //   seqLen  8 @ t≤5: 31ms    seqLen 20 @ t≤3: 94ms
+    //   seqLen 10 @ t≤4: 40ms    seqLen 30 @ t≤2: 18ms
     let strengthCap: Int
     switch seqLen {
     case ...6:  strengthCap = 6
-    case ...10: strengthCap = 5
-    case ...15: strengthCap = 4
-    default:    strengthCap = 3
+    case ...8:  strengthCap = 5
+    case ...12: strengthCap = 4
+    case ...20: strengthCap = 3
+    default:    strengthCap = 2
     }
 
     if argumentAware {
