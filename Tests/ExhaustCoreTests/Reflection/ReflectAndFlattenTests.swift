@@ -490,7 +490,7 @@ struct ReflectAndFlattenTests {
     func materializationWithPick() throws {
         let gen = Gen.pick(choices: [
             (1, Gen.choose(in: UInt64(0) ... 10)),
-            (1, Gen.choose(in: UInt64(11) ... 12)),
+            (1, Gen.choose(in: UInt64(11) ... 64)),
         ])
 
         // Reflect the generator with the value
@@ -508,6 +508,7 @@ struct ReflectAndFlattenTests {
 
         let materialized = try Interpreters.materialize(gen, with: tree, using: flattened)
 
+        #expect(value != 64)
         #expect(materialized == 64)
     }
 
