@@ -40,7 +40,6 @@ extension ReducerStrategies {
                 let source = sorted[sourceIdx]
 
                 let targetFP = target.branch.fingerprint
-                let sourceFP = source.branch.fingerprint
 
                 // Skip if source and target have the same selected branch ID —
                 // the replacement would only change values, not structure.

@@ -58,6 +58,7 @@ public func __runContract<Spec: ContractSpec>(
     let commandGen = Spec.commandGenerator
     let seqGen: ReflectiveGenerator<[Spec.Command]> = commandGen.array(
         length: 0 ... commandLimit,
+        scaling: .constant
     )
 
     // The property: execute the command sequence against a fresh spec and check for failures.
@@ -379,10 +380,13 @@ func runSCACoverage<Command>(
         }
 
         if property(value) == false {
+            // Reflect to get a structurally correct tree with materialized picks,
+            // since coverage-built trees lack unselected branches needed by reducer strategies.
+            let shrinkTree = (try? Interpreters.reflect(seqGen, with: value)) ?? tree
             // Reduce the failing sequence
-            if let (_, shrunkValue) = try? Interpreters.reduce(
+            if let (_, shrunkValue) = try! Interpreters.reduce( // swiftlint:disable:this force_try
                 gen: seqGen,
-                tree: tree,
+                tree: shrinkTree,
                 config: reductionConfig,
                 property: property,
             ) {
