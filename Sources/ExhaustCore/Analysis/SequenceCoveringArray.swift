@@ -1,3 +1,5 @@
+import Foundation
+
 // Sequence Covering Array (SCA) construction for state-machine property testing.
 //
 // An SCA guarantees every t-way ordered permutation of command types appears in at least one test sequence. Mathematically equivalent to a standard covering array where each parameter is a sequence position and each domain value is a command type. See Kuhn, Raunak & Kacker, "Ordered t-way Combinations for Testing State-based Systems".
@@ -14,8 +16,17 @@
 /// - 5 commands, length 10, t=2: ~40–50 rows
 /// - 10 commands, length 15, t=2: ~150–200 rows
 public enum SequenceCoveringArray {
-    /// SCA-specific finite threshold. Parameters with domain size above this are converted to boundary-value representatives. Lower than the 256 threshold in ``ChoiceTreeAnalysis`` because SCA domain sizes are the *sum* of all branch contributions — even "small" finite domains compound quickly.
-    private static let scaFiniteThreshold: UInt64 = 10
+    /// Computes the per-parameter finite threshold for SCA domain construction, derived from the covering array budget.
+    ///
+    /// At strength t=2, IPOG produces roughly `d² × log₂(k)` rows where `d` is the per-position domain size and `k` is the sequence length. Solving for `d` gives `d ≤ sqrt(budget / log₂(k))`. Dividing evenly across branches gives each branch's per-parameter cap. Parameters with domain size above this threshold are converted to boundary-value representatives.
+    ///
+    /// The floor of 2 ensures every parameter retains at least its extremes. Param-free and unanalyzable branches use only 1 slot each, so analyzed branches effectively inherit leftover capacity — `bestFitting` provides the final rejection if the heuristic overshoots.
+    public static func computeThreshold(budget: UInt64, sequenceLength: Int, branchCount: Int) -> UInt64 {
+        let logLen = max(1.0, log2(Double(sequenceLength)))
+        let maxDomain = sqrt(Double(budget) / logLen)
+        let perBranch = maxDomain / Double(branchCount)
+        return max(2, UInt64(perBranch))
+    }
 
     // MARK: - Legacy API (parameter-free branches only)
 
@@ -101,12 +112,13 @@ public enum SequenceCoveringArray {
     ///
     /// For each pick branch:
     /// - Parameter-free branches (no choices in the sub-generator) → `.parameterFree` (1 domain value)
-    /// - Analyzable branches → `.analyzed([BoundaryParameter])` with SCA-threshold normalization
+    /// - Analyzable branches → `.analyzed([BoundaryParameter])` with threshold normalization
     /// - Unanalyzable branches (uses `getSize`, etc.) → `.unanalyzable` (1 domain value, random at replay)
     ///
-    /// Parameters with domain size above ``scaFiniteThreshold`` are converted to boundary-value representatives to keep the per-position domain tractable.
+    /// Parameters with domain size above `threshold` are converted to boundary-value representatives to keep the per-position domain tractable. Use ``computeThreshold(budget:sequenceLength:branchCount:)`` to derive the threshold from the covering array budget.
     public static func analyzeBranches(
         _ pickChoices: ContiguousArray<ReflectiveOperation.PickTuple>,
+        threshold: UInt64,
     ) -> [BranchArgProfile] {
         pickChoices.map { choice in
             if isParameterFree(choice.generator) {
@@ -117,7 +129,7 @@ public enum SequenceCoveringArray {
                 return .unanalyzable
             }
 
-            let normalized = normalizeToBoundaryParameters(result)
+            let normalized = normalizeToBoundaryParameters(result, threshold: threshold)
             if normalized.isEmpty {
                 return .unanalyzable
             }
@@ -275,18 +287,19 @@ public enum SequenceCoveringArray {
         }
     }
 
-    /// Normalizes an analysis result to `[BoundaryParameter]` with SCA-specific thresholds.
+    /// Normalizes an analysis result to `[BoundaryParameter]` with a budget-derived threshold.
     ///
-    /// For `.finite` results, converts `FiniteParameter` → `BoundaryParameter`. For both result types, parameters with domain size above ``scaFiniteThreshold`` are recomputed as boundary-value representatives.
+    /// For `.finite` results, converts `FiniteParameter` → `BoundaryParameter`. For both result types, parameters with domain size above `threshold` are recomputed as boundary-value representatives.
     private static func normalizeToBoundaryParameters(
         _ result: ChoiceTreeAnalysis.AnalysisResult,
+        threshold: UInt64,
     ) -> [BoundaryParameter] {
         switch result {
         case let .finite(profile):
             return profile.parameters.enumerated().map { i, param in
                 switch param.kind {
                 case let .chooseBits(range, tag):
-                    if param.domainSize <= scaFiniteThreshold {
+                    if param.domainSize <= threshold {
                         return BoundaryParameter(
                             index: i,
                             values: Array(range.lowerBound ... range.upperBound),
@@ -317,7 +330,7 @@ public enum SequenceCoveringArray {
         case let .boundary(profile):
             return profile.parameters.enumerated().map { i, param in
                 switch param.kind {
-                case let .finiteChooseBits(range, tag) where param.domainSize > scaFiniteThreshold:
+                case let .finiteChooseBits(range, tag) where param.domainSize > threshold:
                     let boundaryValues = BoundaryDomainAnalysis.computeBoundaryValues(
                         min: range.lowerBound, max: range.upperBound, tag: tag,
                     )

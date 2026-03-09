@@ -256,7 +256,10 @@ private func runSCACoverage<Command>(
     let seqLen = sequenceLength.upperBound
     guard seqLen >= 2, pickChoices.count >= 2 else { return nil }
 
-    let branchProfiles = SequenceCoveringArray.analyzeBranches(pickChoices)
+    let threshold = SequenceCoveringArray.computeThreshold(
+        budget: coverageBudget, sequenceLength: seqLen, branchCount: pickChoices.count,
+    )
+    let branchProfiles = SequenceCoveringArray.analyzeBranches(pickChoices, threshold: threshold)
 
     let (profile, mapping) = SequenceCoveringArray.buildProfile(
         sequenceLength: seqLen,
