@@ -25,12 +25,17 @@ public struct CoveringArray: @unchecked Sendable {
     ///
     /// Searches bottom-up (t=2, 3, …) so it can stop as soon as a strength exceeds the budget, avoiding unnecessary IPOG runs at high strengths.
     /// Also skips strengths whose initial seed rows alone exceed the budget (the seed is the exhaustive product of the first `t` parameters).
-    public static func bestFitting(budget: UInt64, profile: FiniteDomainProfile) -> CoveringArray? {
+    ///
+    /// - Parameter maxStrength: Upper bound on the interaction strength to try.
+    ///   Defaults to 6. Callers with large per-parameter domains (e.g. SCA with
+    ///   argument-aware domains) should pass a lower cap to avoid combinatorially
+    ///   expensive IPOG runs at high strengths.
+    public static func bestFitting(budget: UInt64, profile: FiniteDomainProfile, maxStrength: Int = 6) -> CoveringArray? {
         let paramCount = profile.parameters.count
         guard paramCount >= 2 else { return nil }
 
         var best: CoveringArray?
-        for t in 2 ... min(paramCount, 6) {
+        for t in 2 ... min(paramCount, maxStrength) {
             // Quick reject: the initial seed is the product of the first t domains.
             // If that alone exceeds the budget, higher strengths will only be worse.
             var seedSize: UInt64 = 1
