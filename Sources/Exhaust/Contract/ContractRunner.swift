@@ -1,6 +1,7 @@
 // Runtime execution engine for contract property tests.
 //
 // Generates command sequences, executes them against a fresh spec instance, and detects postcondition / invariant violations. Integrates with the existing coverage + random + reduction pipeline.
+import CustomDump
 import ExhaustCore
 import IssueReporting
 
@@ -81,9 +82,9 @@ public func __runContract<Spec: ContractSpec>(
     // --- Phase 1: Sequence Covering Array (SCA) coverage ---
     //
     // If the command generator is a simple pick with parameter-free branches, build a covering array where each sequence position is a parameter and each command type is a domain value. This guarantees every t-way ordered permutation of command types is tested.
-    var scaFoundFailure: [Spec.Command]?
+    var scaResult: SCAResult<Spec.Command>?
     if !useRandomOnly, seed == nil {
-        scaFoundFailure = runSCACoverage(
+        scaResult = runSCACoverage(
             seqGen: seqGen,
             commandGen: commandGen,
             sequenceLength: sequenceLength,
@@ -96,8 +97,10 @@ public func __runContract<Spec: ContractSpec>(
 
     // --- Phase 2: Random sampling (full budget) ---
     let failingSequence: [Spec.Command]?
-    if let scaFoundFailure {
-        failingSequence = scaFoundFailure
+    let failureInfo: ContractFailureInfo<Spec.Command>
+    if let scaResult {
+        failingSequence = scaResult.commands
+        failureInfo = ContractFailureInfo(originalCommands: scaResult.original, phase: .scaCoverage)
     } else {
         // Skip generic coverage — SCA already covered command orderings.
         // If SCA wasn't applicable, __exhaust's generic coverage runs.
@@ -119,6 +122,10 @@ public func __runContract<Spec: ContractSpec>(
             column: column,
             property: property,
         )
+        failureInfo = ContractFailureInfo(
+            originalCommands: nil,
+            phase: seed != nil ? .replay : .randomSampling,
+        )
     }
 
     guard let failingSequence else {
@@ -136,7 +143,7 @@ public func __runContract<Spec: ContractSpec>(
     )
 
     if !suppressIssueReporting {
-        let rendered = renderFailure(result, modelDescription: spec.modelDescription)
+        let rendered = renderFailure(result, failureInfo: failureInfo, modelDescription: spec.modelDescription)
         ExhaustLog.error(
             category: .propertyTest,
             event: "contract_failed",
@@ -203,17 +210,37 @@ private func buildTrace<Spec: ContractSpec>(
 
 // MARK: - Failure rendering
 
-private func renderFailure<Spec: ContractSpec>(
+func renderFailure<Spec: ContractSpecBase>(
     _ result: ContractResult<Spec>,
+    failureInfo: ContractFailureInfo<Spec.Command>,
     modelDescription: String,
 ) -> String {
     var lines: [String] = []
     lines.append("Contract failure")
     lines.append("")
 
-    lines.append("Command sequence (\(result.commands.count) steps):")
+    // Show sequence header with reduction info when available.
+    if let original = failureInfo.originalCommands, original.count > result.commands.count {
+        lines.append("Command sequence (\(result.commands.count) steps, reduced from \(original.count)):")
+    } else {
+        lines.append("Command sequence (\(result.commands.count) steps):")
+    }
+
     for step in result.trace {
         lines.append("  \(step)")
+    }
+
+    // Show reduction diff when the original sequence is available and differs.
+    if let original = failureInfo.originalCommands, original.count > result.commands.count {
+        let originalDescriptions = original.map { "\($0)" }
+        let shrunkDescriptions = result.commands.map { "\($0)" }
+        if let reductionDiff = diff(originalDescriptions, shrunkDescriptions) {
+            lines.append("")
+            lines.append("Reduction diff:")
+            for line in reductionDiff.split(separator: "\n", omittingEmptySubsequences: false) {
+                lines.append("  \(line)")
+            }
+        }
     }
 
     lines.append("")
@@ -228,12 +255,26 @@ private func renderFailure<Spec: ContractSpec>(
     return lines.joined(separator: "\n")
 }
 
-// MARK: - Helpers
+// MARK: - Failure metadata
+
+/// Metadata about how a failing contract sequence was found, for reporting.
+struct ContractFailureInfo<Command> {
+    /// The original failing command sequence before reduction, if available.
+    var originalCommands: [Command]?
+    /// The phase that found the failure.
+    var phase: Phase
+
+    enum Phase {
+        case scaCoverage
+        case randomSampling
+        case replay
+    }
+}
 
 // MARK: - Sequence Covering Array (SCA) coverage
 
 /// Extracts pick choices from a command generator if it's a top-level `Gen.pick`.
-private func extractPickChoices<Command>(
+func extractPickChoices<Command>(
     from gen: ReflectiveGenerator<Command>,
 ) -> ContiguousArray<ReflectiveOperation.PickTuple>? {
     guard case let .impure(operation, _) = gen,
@@ -247,7 +288,10 @@ private func extractPickChoices<Command>(
 /// By default, builds a covering array over command-type orderings only, keeping domains small enough for higher interaction strengths (t=3, t=4). When `argumentAware` is true, each position's domain is the flattened union of `(commandType × argumentCombinations)`, giving pairwise coverage of argument value interactions at the cost of capping at t=2.
 ///
 /// If `bestFitting` rejects the domain as too large, SCA is skipped and the caller falls through to random sampling.
-private func runSCACoverage<Command>(
+/// Return type for SCA coverage: the shrunk (or unshrunk) failing sequence plus the original.
+typealias SCAResult<Command> = (commands: [Command], original: [Command])
+
+func runSCACoverage<Command>(
     seqGen: ReflectiveGenerator<[Command]>,
     commandGen: ReflectiveGenerator<Command>,
     sequenceLength: ClosedRange<Int>,
@@ -255,7 +299,7 @@ private func runSCACoverage<Command>(
     reductionConfig: TCRBudget,
     argumentAware: Bool,
     property: @escaping @Sendable ([Command]) -> Bool,
-) -> [Command]? {
+) -> SCAResult<Command>? {
     guard let pickChoices = extractPickChoices(from: commandGen) else { return nil }
 
     let seqLen = sequenceLength.upperBound
@@ -264,6 +308,16 @@ private func runSCACoverage<Command>(
     let profile: FiniteDomainProfile
     let mapping: SCADomainMapping?
     let maxStrength: Int
+
+    // Cap interaction strength based on parameter count to avoid combinatorial explosion
+    // in IPOG's combo enumeration. C(n, t) grows fast: C(20, 6) = 38,760 but C(12, 6) = 924.
+    let strengthCap: Int
+    switch seqLen {
+    case ...6:  strengthCap = 6
+    case ...10: strengthCap = 5
+    case ...15: strengthCap = 4
+    default:    strengthCap = 3
+    }
 
     if argumentAware {
         let threshold = SequenceCoveringArray.computeThreshold(
@@ -279,7 +333,7 @@ private func runSCACoverage<Command>(
         mapping = m
         // Cap at t=2 for argument-aware domains to avoid combinatorially expensive IPOG runs.
         let hasArgumentDomains = branchProfiles.contains { if case .analyzed = $0 { return true }; return false }
-        maxStrength = hasArgumentDomains ? 2 : 6
+        maxStrength = hasArgumentDomains ? 2 : strengthCap
     } else {
         // Command-type-only SCA produces .just("") sub-trees that can't replay parameterized branches.
         guard SequenceCoveringArray.allBranchesParameterFree(pickChoices) else { return nil }
@@ -287,7 +341,7 @@ private func runSCACoverage<Command>(
             sequenceLength: seqLen, pickChoices: pickChoices,
         )
         mapping = nil
-        maxStrength = 6
+        maxStrength = strengthCap
     }
 
     guard let covering = CoveringArray.bestFitting(budget: coverageBudget, profile: profile, maxStrength: maxStrength) else {
@@ -326,9 +380,9 @@ private func runSCACoverage<Command>(
                 config: reductionConfig,
                 property: property,
             ) {
-                return shrunkValue
+                return (shrunkValue, value)
             }
-            return value
+            return (value, value)
         }
     }
 
@@ -346,7 +400,7 @@ private func runSCACoverage<Command>(
     return nil
 }
 
-private func buildExhaustSettings<Output>(
+func buildExhaustSettings<Output>(
     maxIterations: UInt64,
     coverageBudget: UInt64,
     seed: UInt64?,

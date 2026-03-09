@@ -85,3 +85,15 @@ public macro exhaust<Spec: ContractSpec>(
     _ specType: Spec.Type,
     _ settings: ContractSettings...
 ) -> ContractResult<Spec>? = #externalMacro(module: "ExhaustMacros", type: "ExhaustContractMacro")
+
+/// Runs an async contract property test that generates command sequences, executes them against an async system under test, and verifies that contracts hold after every step.
+///
+/// Identical to the synchronous `#exhaust(Spec.self)` overload but for types conforming to ``AsyncContractSpec``. The synchronous core (coverage, reduction, PRNG) runs on a GCD thread; async `run`/`checkInvariants` calls are bridged via `Task` + semaphore.
+///
+/// - Returns: A ``ContractResult`` containing the shrunk command sequence, execution trace, and SUT state if a violation is found, or `nil` if all sequences pass.
+@freestanding(expression)
+@discardableResult
+public macro exhaust<Spec: AsyncContractSpec>(
+    _ specType: Spec.Type,
+    _ settings: ContractSettings...
+) -> ContractResult<Spec>? = #externalMacro(module: "ExhaustMacros", type: "ExhaustAsyncContractMacro")

@@ -12,6 +12,15 @@ private let testMacros: [String: any Macro.Type] = [
     "Invariant": InvariantMacro.self,
 ]
 
+private let asyncTestMacros: [String: any Macro.Type] = [
+    "exhaust": ExhaustAsyncContractMacro.self,
+    "Contract": ContractDeclarationMacro.self,
+    "Model": ModelMacro.self,
+    "SUT": SUTMacro.self,
+    "Command": CommandMacro.self,
+    "Invariant": InvariantMacro.self,
+]
+
 @Suite("#exhaust contract macro expansion tests")
 struct ContractMacroTests {
     @Test("Basic #exhaust contract expansion")
@@ -157,6 +166,282 @@ struct ContractDeclarationMacroTests {
             var x: Int = 0
             """,
             macros: testMacros,
+        )
+    }
+
+    @Test("Async command produces AsyncContractSpec conformance and async run/checkInvariants")
+    func asyncCommandSynthesizesAsyncConformance() {
+        assertMacroExpansion(
+            """
+            @Contract
+            struct AsyncSpec {
+                @SUT var counter: MyCounter
+
+                @Command(weight: 1)
+                mutating func increment() async throws {
+                }
+
+                @Command(weight: 1)
+                mutating func decrement() throws {
+                }
+
+                @Invariant
+                func isValid() -> Bool {
+                    true
+                }
+            }
+            """,
+            expandedSource: """
+            struct AsyncSpec {
+                var counter: MyCounter
+
+                mutating func increment() async throws {
+                }
+
+                mutating func decrement() throws {
+                }
+
+                func isValid() -> Bool {
+                    true
+                }
+
+                enum Command: CustomStringConvertible, Sendable {
+                    case increment
+                    case decrement
+
+                    var description: String {
+                        switch self {
+                            case .increment: "increment"
+                            case .decrement: "decrement"
+                        }
+                    }
+                }
+
+                typealias SystemUnderTest = MyCounter
+
+                var sut: SystemUnderTest {
+                    counter
+                }
+
+                static var commandGenerator: ReflectiveGenerator<Command> {
+                    Gen.pick(choices: [
+                        (1, Gen.just(Command.increment)),
+                        (1, Gen.just(Command.decrement))
+                    ])
+                }
+
+                mutating func run(_ command: Command) async throws {
+                    switch command {
+                        case .increment: try await self.increment()
+                        case .decrement: try await self.decrement()
+                    }
+                }
+
+                func checkInvariants() async throws {
+                    try check(isValid(), "isValid")
+                }
+
+                var modelDescription: String {
+                    "(no model properties)"
+                }
+
+                var sutDescription: String {
+                    "counter: \\(counter)"
+                }
+            }
+
+            extension AsyncSpec: AsyncContractSpec {
+            }
+            """,
+            macros: testMacros,
+        )
+    }
+
+    @Test("Async invariant produces AsyncContractSpec conformance")
+    func asyncInvariantSynthesizesAsyncConformance() {
+        assertMacroExpansion(
+            """
+            @Contract
+            struct AsyncInvSpec {
+                @SUT var counter: MyCounter
+
+                @Command(weight: 1)
+                mutating func increment() throws {
+                }
+
+                @Invariant
+                func isValid() async -> Bool {
+                    true
+                }
+            }
+            """,
+            expandedSource: """
+            struct AsyncInvSpec {
+                var counter: MyCounter
+
+                mutating func increment() throws {
+                }
+
+                func isValid() async -> Bool {
+                    true
+                }
+
+                enum Command: CustomStringConvertible, Sendable {
+                    case increment
+
+                    var description: String {
+                        switch self {
+                            case .increment: "increment"
+                        }
+                    }
+                }
+
+                typealias SystemUnderTest = MyCounter
+
+                var sut: SystemUnderTest {
+                    counter
+                }
+
+                static var commandGenerator: ReflectiveGenerator<Command> {
+                    Gen.pick(choices: [
+                        (1, Gen.just(Command.increment))
+                    ])
+                }
+
+                mutating func run(_ command: Command) async throws {
+                    switch command {
+                        case .increment: try await self.increment()
+                    }
+                }
+
+                func checkInvariants() async throws {
+                    let isValidResult = await isValid()
+                    try check(isValidResult, "isValid")
+                }
+
+                var modelDescription: String {
+                    "(no model properties)"
+                }
+
+                var sutDescription: String {
+                    "counter: \\(counter)"
+                }
+            }
+
+            extension AsyncInvSpec: AsyncContractSpec {
+            }
+            """,
+            macros: testMacros,
+        )
+    }
+
+    @Test("All-sync commands still produce ContractSpec conformance")
+    func allSyncCommandsProduceSyncConformance() {
+        assertMacroExpansion(
+            """
+            @Contract
+            struct SyncSpec {
+                @SUT var counter: MyCounter
+
+                @Command(weight: 1)
+                mutating func increment() throws {
+                }
+            }
+            """,
+            expandedSource: """
+            struct SyncSpec {
+                var counter: MyCounter
+
+                mutating func increment() throws {
+                }
+
+                enum Command: CustomStringConvertible, Sendable {
+                    case increment
+
+                    var description: String {
+                        switch self {
+                            case .increment: "increment"
+                        }
+                    }
+                }
+
+                typealias SystemUnderTest = MyCounter
+
+                var sut: SystemUnderTest {
+                    counter
+                }
+
+                static var commandGenerator: ReflectiveGenerator<Command> {
+                    Gen.pick(choices: [
+                        (1, Gen.just(Command.increment))
+                    ])
+                }
+
+                mutating func run(_ command: Command) throws {
+                    switch command {
+                        case .increment: try self.increment()
+                    }
+                }
+
+                func checkInvariants() throws {
+                }
+
+                var modelDescription: String {
+                    "(no model properties)"
+                }
+
+                var sutDescription: String {
+                    "counter: \\(counter)"
+                }
+            }
+
+            extension SyncSpec: ContractSpec {
+            }
+            """,
+            macros: testMacros,
+        )
+    }
+}
+
+@Suite("#exhaust async contract macro expansion tests")
+struct AsyncContractMacroTests {
+    @Test("#exhaust async contract expansion")
+    func asyncContractExpansion() {
+        assertMacroExpansion(
+            """
+            #exhaust(AsyncSpec.self)
+            """,
+            expandedSource: """
+            await __runContractAsync(
+                AsyncSpec.self,
+                settings: [],
+                fileID: #fileID,
+                filePath: #filePath,
+                line: #line,
+                column: #column
+            )
+            """,
+            macros: asyncTestMacros,
+        )
+    }
+
+    @Test("#exhaust async contract with settings")
+    func asyncContractWithSettings() {
+        assertMacroExpansion(
+            """
+            #exhaust(AsyncSpec.self, .sequenceLength(3...10), .maxIterations(50))
+            """,
+            expandedSource: """
+            await __runContractAsync(
+                AsyncSpec.self,
+                settings: [.sequenceLength(3...10), .maxIterations(50)],
+                fileID: #fileID,
+                filePath: #filePath,
+                line: #line,
+                column: #column
+            )
+            """,
+            macros: asyncTestMacros,
         )
     }
 }

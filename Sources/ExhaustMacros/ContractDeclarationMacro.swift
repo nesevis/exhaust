@@ -22,7 +22,13 @@ public struct ContractDeclarationMacro: MemberMacro, ExtensionMacro {
         conformingTo protocols: [TypeSyntax],
         in context: some MacroExpansionContext,
     ) throws -> [ExtensionDeclSyntax] {
-        let ext: DeclSyntax = "extension \(type.trimmed): ContractSpec {}"
+        let members = declaration.memberBlock.members
+        let commands = extractCommands(from: members)
+        let invariants = extractInvariants(from: members)
+        let hasAnyAsync = commands.contains(where: \.isAsync) || invariants.contains(where: \.isAsync)
+
+        let proto = hasAnyAsync ? "AsyncContractSpec" : "ContractSpec"
+        let ext: DeclSyntax = "extension \(type.trimmed): \(raw: proto) {}"
         return [ext.cast(ExtensionDeclSyntax.self)]
     }
 
@@ -55,6 +61,8 @@ public struct ContractDeclarationMacro: MemberMacro, ExtensionMacro {
             ))
         }
 
+        let hasAnyAsync = commands.contains(where: \.isAsync) || invariants.contains(where: \.isAsync)
+
         var decls: [DeclSyntax] = []
 
         // 1. Command enum
@@ -79,10 +87,10 @@ public struct ContractDeclarationMacro: MemberMacro, ExtensionMacro {
         decls.append(synthesizeCommandGenerator(commands: commands))
 
         // 4. run(_:)
-        decls.append(synthesizeRunMethod(commands: commands))
+        decls.append(synthesizeRunMethod(commands: commands, hasAnyAsync: hasAnyAsync))
 
         // 5. checkInvariants()
-        decls.append(synthesizeCheckInvariants(invariants: invariants))
+        decls.append(synthesizeCheckInvariants(invariants: invariants, hasAnyAsync: hasAnyAsync))
 
         // 6. modelDescription
         decls.append(synthesizeModelDescription(modelProps: modelProps))
@@ -101,10 +109,12 @@ private struct CommandInfo {
     let parameters: [(label: String, type: String)]
     let weight: String
     let generatorExprs: [String]
+    let isAsync: Bool
 }
 
 private struct InvariantInfo {
     let methodName: String
+    let isAsync: Bool
 }
 
 private func extractModelProperties(from members: MemberBlockItemListSyntax) -> [String] {
@@ -187,11 +197,14 @@ private func extractCommands(from members: MemberBlockItemListSyntax) -> [Comman
             }
         }
 
+        let isAsync = funcDecl.signature.effectSpecifiers?.asyncSpecifier != nil
+
         return CommandInfo(
             methodName: methodName,
             parameters: parameters,
             weight: weight,
             generatorExprs: generatorExprs,
+            isAsync: isAsync,
         )
     }
 }
@@ -201,7 +214,8 @@ private func extractInvariants(from members: MemberBlockItemListSyntax) -> [Inva
         guard let funcDecl = member.decl.as(FunctionDeclSyntax.self),
               hasAttribute("Invariant", on: funcDecl)
         else { return nil }
-        return InvariantInfo(methodName: funcDecl.name.trimmedDescription)
+        let isAsync = funcDecl.signature.effectSpecifiers?.asyncSpecifier != nil
+        return InvariantInfo(methodName: funcDecl.name.trimmedDescription, isAsync: isAsync)
     }
 }
 
@@ -287,23 +301,27 @@ private func synthesizeCommandGenerator(commands: [CommandInfo]) -> DeclSyntax {
     """
 }
 
-private func synthesizeRunMethod(commands: [CommandInfo]) -> DeclSyntax {
+private func synthesizeRunMethod(commands: [CommandInfo], hasAnyAsync: Bool) -> DeclSyntax {
+    let tryKeyword = hasAnyAsync ? "try await" : "try"
     var cases: [String] = []
 
     for cmd in commands {
         if cmd.parameters.isEmpty {
-            cases.append("        case .\(cmd.methodName): try self.\(cmd.methodName)()")
+            cases.append("        case .\(cmd.methodName): \(tryKeyword) self.\(cmd.methodName)()")
         } else {
             let bindings = cmd.parameters.map { "let \($0.label)" }.joined(separator: ", ")
             let args = cmd.parameters.map { "\($0.label): \($0.label)" }.joined(separator: ", ")
-            cases.append("        case .\(cmd.methodName)(\(bindings)): try self.\(cmd.methodName)(\(args))")
+            cases.append("        case .\(cmd.methodName)(\(bindings)): \(tryKeyword) self.\(cmd.methodName)(\(args))")
         }
     }
 
     let casesBlock = cases.joined(separator: "\n")
+    let signature = hasAnyAsync
+        ? "mutating func run(_ command: Command) async throws"
+        : "mutating func run(_ command: Command) throws"
 
     return """
-    mutating func run(_ command: Command) throws {
+    \(raw: signature) {
         switch command {
     \(raw: casesBlock)
         }
@@ -311,21 +329,31 @@ private func synthesizeRunMethod(commands: [CommandInfo]) -> DeclSyntax {
     """
 }
 
-private func synthesizeCheckInvariants(invariants: [InvariantInfo]) -> DeclSyntax {
+private func synthesizeCheckInvariants(invariants: [InvariantInfo], hasAnyAsync: Bool) -> DeclSyntax {
+    let signature = hasAnyAsync
+        ? "func checkInvariants() async throws"
+        : "func checkInvariants() throws"
+
     if invariants.isEmpty {
         return """
-        func checkInvariants() throws {}
+        \(raw: signature) {}
         """
     }
 
     var checks: [String] = []
     for inv in invariants {
-        checks.append("        try check(\(inv.methodName)(), \"\(inv.methodName)\")")
+        if hasAnyAsync && inv.isAsync {
+            // Evaluate async invariant before passing to check() since @autoclosure doesn't support async.
+            checks.append("        let \(inv.methodName)Result = await \(inv.methodName)()")
+            checks.append("        try check(\(inv.methodName)Result, \"\(inv.methodName)\")")
+        } else {
+            checks.append("        try check(\(inv.methodName)(), \"\(inv.methodName)\")")
+        }
     }
     let checksBlock = checks.joined(separator: "\n")
 
     return """
-    func checkInvariants() throws {
+    \(raw: signature) {
     \(raw: checksBlock)
     }
     """

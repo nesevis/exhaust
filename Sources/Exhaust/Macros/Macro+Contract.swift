@@ -70,7 +70,7 @@ import ExhaustCore
 /// }
 /// ```
 @attached(member, names: named(Command), named(SystemUnderTest), named(commandGenerator), named(run), named(checkInvariants), named(sut), named(modelDescription), named(sutDescription))
-@attached(extension, conformances: ContractSpec)
+@attached(extension, conformances: ContractSpec, AsyncContractSpec)
 public macro Contract() = #externalMacro(module: "ExhaustMacros", type: "ContractDeclarationMacro")
 
 /// Marks a property as model state in a `@Contract` struct.

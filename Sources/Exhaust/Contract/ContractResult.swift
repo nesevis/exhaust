@@ -4,7 +4,7 @@
 /// The result of a failed contract property test.
 ///
 /// Contains the shrunk command sequence, a step-by-step execution trace showing what happened at each step, and the typed SUT state at the point of failure.
-public struct ContractResult<Spec: ContractSpec> {
+public struct ContractResult<Spec: ContractSpecBase> {
     /// The shrunk command sequence that triggered the failure.
     public let commands: [Spec.Command]
 
