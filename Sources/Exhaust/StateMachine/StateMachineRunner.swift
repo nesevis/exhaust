@@ -246,36 +246,16 @@ private func extractPickChoices<Command>(
     return choices
 }
 
-/// Checks whether all pick branches are parameter-free (pure/just generators).
-private func allBranchesParameterFree(
-    _ choices: ContiguousArray<ReflectiveOperation.PickTuple>,
-) -> Bool {
-    choices.allSatisfy { isParameterFree($0.generator) }
-}
-
-private func isParameterFree(_ gen: ReflectiveGenerator<Any>) -> Bool {
-    switch gen {
-    case .pure:
-        return true
-    case let .impure(op, _):
-        switch op {
-        case .just:
-            return true
-        case let .contramap(_, inner):
-            return isParameterFree(inner)
-        case let .prune(inner):
-            return isParameterFree(inner)
-        default:
-            return false
-        }
-    }
-}
-
 /// Runs SCA coverage for state-machine command sequences.
 ///
 /// Builds a covering array where each position in the sequence is a parameter
-/// with the set of command types as its domain. Returns the reduced failing
-/// sequence if a violation is found.
+/// with the combined domain of command types × argument values. Returns the
+/// reduced failing sequence if a violation is found.
+///
+/// Branches with analyzable arguments contribute their argument combinations
+/// to the domain. Unanalyzable branches contribute 1 domain value and receive
+/// random arguments at replay. If `bestFitting` rejects the domain as too
+/// large, SCA is skipped and the caller falls through to random sampling.
 private func runSCACoverage<Command>(
     seqGen: ReflectiveGenerator<[Command]>,
     commandGen: ReflectiveGenerator<Command>,
@@ -284,16 +264,17 @@ private func runSCACoverage<Command>(
     reductionConfig: TCRBudget,
     property: @escaping @Sendable ([Command]) -> Bool,
 ) -> [Command]? {
-    guard let pickChoices = extractPickChoices(from: commandGen),
-          allBranchesParameterFree(pickChoices)
-    else { return nil }
+    guard let pickChoices = extractPickChoices(from: commandGen) else { return nil }
 
     let seqLen = sequenceLength.upperBound
     guard seqLen >= 2, pickChoices.count >= 2 else { return nil }
 
-    let profile = SequenceCoveringArray.buildProfile(
+    let branchProfiles = SequenceCoveringArray.analyzeBranches(pickChoices)
+
+    let (profile, mapping) = SequenceCoveringArray.buildProfile(
         sequenceLength: seqLen,
         pickChoices: pickChoices,
+        branchProfiles: branchProfiles,
     )
 
     guard let covering = CoveringArray.bestFitting(budget: coverageBudget, profile: profile) else {
@@ -306,6 +287,7 @@ private func runSCACoverage<Command>(
         guard let tree = SequenceCoveringArray.buildTree(
             row: row,
             profile: profile,
+            mapping: mapping,
             sequenceLengthRange: lengthRange,
         ) else { continue }
 
