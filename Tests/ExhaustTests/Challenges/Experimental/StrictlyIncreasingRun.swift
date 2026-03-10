@@ -34,7 +34,7 @@ struct StrictlyIncreasingRunChallenge {
     func strictlyIncreasingRun() throws {
         let gen = #gen(.uint64(in: 0 ... 10000)).array(length: 1 ... 50)
 
-        let property: ([UInt64]) -> Bool = { arr in
+        let property: @Sendable ([UInt64]) -> Bool = { arr in
             guard arr.count >= 3 else { return true }
             return arr
                 .dropFirst()
@@ -48,15 +48,8 @@ struct StrictlyIncreasingRunChallenge {
 
         let counterExample: [UInt64] = [0, 1, 2]
         #expect(property(counterExample) == false)
-
-        let startingValue: [UInt64] = [6000, 344, 3750]
-        let tree = try #require(try Interpreters.reflect(gen, with: startingValue))
-        let initialSeq = ChoiceSequence.flatten(tree)
-        let initialValueSpans = ChoiceSequence.extractAllValueSpans(from: initialSeq)
-
-        let (seq, output) = try #require(try Interpreters.reduce(
-            gen: gen, tree: tree, config: .slow, property: property,
-        ))
+        
+        let output = #exhaust(gen, .suppressIssueReporting, property: property)
 
         // Should be the minimal strictly increasing triple
         #expect(output == counterExample)

@@ -43,26 +43,22 @@ struct StringAnagramChallenge {
             .filter { $0.count >= 2 }
         let gen = #gen(charGen, charGen)
 
-        let property: (String, String) -> Bool = { a, b in
+        let property: @Sendable (String, String) -> Bool = { a, b in
             guard a != b, a.count == b.count else { return true }
             return a.sorted() != b.sorted()
         }
+        
+//        ExhaustLog.setConfiguration(.init(isEnabled: true, minimumLevel: .info, categoryMinimumLevels: [.reducer: .debug], format: .human))
 
         // "dcba" and "abcd" as byte arrays — a known anagram pair
         let value = ("dcba", "abcd")
         #expect(property(value.0, value.1) == false)
+        
+        let result = #exhaust(gen, .suppressIssueReporting, .reflecting(value), property: property)
+        let output = try #require(result)
 
-        let tree = try #require(try Interpreters.reflect(gen, with: value))
-        let (_, output) = try #require(try Interpreters.reduce(
-            gen: gen, tree: tree, config: .slow, property: property,
-        ))
-
-        print("Shrunk to: \(output)")
-
-        // Both arrays should be length 2 (minimum for distinct anagrams)
-        #expect(output.0.count == 2)
-        #expect(output.1.count == 2)
-        #expect(output.0 != output.1)
-        #expect(output.0.sorted() == output.1.sorted())
+        // Both arrays should be length 2, using the two smallest printable ASCII chars
+        #expect(output.0 == " !")
+        #expect(output.1 == "! ")
     }
 }
