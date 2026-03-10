@@ -1,7 +1,7 @@
 # Exhaust
 
-[![Swift 6.0+](https://img.shields.io/badge/Swift-6.0%2B-orange)](https://swift.org)
-[![Platforms](https://img.shields.io/badge/Platforms-macOS%2026%20%7C%20iOS%2013%20%7C%20tvOS%2013%20%7C%20watchOS%206-blue)](https://developer.apple.com)
+[![Swift 6.1+](https://img.shields.io/badge/Swift-6.1%2B-orange)](https://swift.org)
+[![Platforms](https://img.shields.io/badge/Platforms-macOS%2015%20%7C%20iOS%2018%20%7C%20Mac%20Catalyst%2018%20%7C%20tvOS%2018%20%7C%20visionOS%202%20%7C%20watchOS%2011-blue)](https://developer.apple.com)
 [![SPM](https://img.shields.io/badge/Swift%20Package%20Manager-compatible-brightgreen)](https://swift.org/package-manager/)
 
 ## Why `#expect` when you can `#exhaust`?
@@ -420,5 +420,5 @@ Reduction operates on the recorded sequences and trees of choices rather than th
 
 ## Requirements
 
-- Swift 6.0+
-- macOS 26+, iOS 13+, tvOS 13+, watchOS 6+
+- Swift 6.1+
+- macOS 15+, iOS 18+, Mac Catalyst 18+, tvOS 18+, visionOS 2+, watchOS 11+

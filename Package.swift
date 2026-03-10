@@ -1,4 +1,4 @@
-// swift-tools-version: 6.0
+// swift-tools-version: 6.1
 // The swift-tools-version declares the minimum version of Swift required to build this package.
 
 import CompilerPluginSupport
@@ -24,10 +24,12 @@ let coreTarget: Target = usePrecompiled
 let package = Package(
     name: "Exhaust",
     platforms: [
-        .macOS(.v26),
-        .iOS(.v13),
-        .tvOS(.v13),
-        .watchOS(.v6)
+        .macOS(.v15),
+        .iOS(.v18),
+        .macCatalyst(.v18),
+        .tvOS(.v18),
+        .watchOS(.v11),
+        .visionOS(.v2),
     ],
     products: [
         .library(

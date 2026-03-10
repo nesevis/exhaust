@@ -244,7 +244,7 @@ struct ReducerReduceValuesTests {
             triple.1 >= triple.2
         }
 
-        // Ensure we start from a non-trivial parent so stale validRanges would matter.
+        // Ensure we start from a non-trivial parent so stale validRange would matter.
         var iterator = ValueAndChoiceTreeInterpreter(gen, materializePicks: false, seed: 1337, maxRuns: 500)
         var found: ((UInt64, UInt64, UInt64), ChoiceTree)?
         while let pair = try iterator.next() {
