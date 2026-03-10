@@ -111,9 +111,9 @@ public extension Interpreters {
     //   ──────────────   ──────────────────────────────
     //   subTrees       → promoteBranches
     //   zeroDraws      → naiveSimplifyValuesToSemanticSimplest + simplifyValuesToSemanticSimplest
-    //   swapBits       → reduceValues
+    //   swapBits       → reduceIntegralValues + reduceFloatValues
     //
-    // Exhaust extends the reducer with nine additional passes: pivotBranches, deleteContainerSpans, deleteSequenceBoundaries, deleteFreeStandingValues, deleteAlignedSiblingWindows, reduceValuesInTandem, redistributeNumericPairs, speculativeDeleteAndRepair, normaliseSiblingOrder.
+    // Exhaust extends the reducer with ten additional passes: pivotBranches, deleteContainerSpans, deleteSequenceBoundaries, deleteFreeStandingValues, deleteAlignedSiblingWindows, reduceValuesInTandem, redistributeNumericPairs, speculativeDeleteAndRepair, normaliseSiblingOrder.
     //
     // Shortlex ordering (MacIver & Donaldson §2.2) is the reduction order: shorter choice sequences are always preferred, with lexicographic comparison as tiebreaker. The adaptive `findInteger` and `binarySearchWithGuess` probes used throughout are from MacIver's Hypothesis (see AdaptiveProbe.swift).
 
@@ -128,7 +128,8 @@ public extension Interpreters {
         case deleteAlignedSiblingWindows
         case simplifyValuesToSemanticSimplest
         case reduceValuesInTandem
-        case reduceValues
+        case reduceIntegralValues
+        case reduceFloatValues
         case redistributeNumericPairs
         case speculativeDeleteAndRepair
         case normaliseSiblingOrder
@@ -145,6 +146,7 @@ public extension Interpreters {
         private var sequenceElementSpans: [ChoiceSpan]?
         private var freeStandingValueSpans: [ChoiceSpan]?
         private var sequenceBoundarySpans: [ChoiceSpan]?
+        private var floatValueSpans: [ChoiceSpan]?
 
         mutating func invalidate() {
             allValueSpans = nil
@@ -153,6 +155,7 @@ public extension Interpreters {
             sequenceElementSpans = nil
             freeStandingValueSpans = nil
             sequenceBoundarySpans = nil
+            floatValueSpans = nil
         }
 
         mutating func getAllValueSpans(from sequence: ChoiceSequence) -> [ChoiceSpan] {
@@ -194,6 +197,17 @@ public extension Interpreters {
             if let cached = sequenceBoundarySpans { return cached }
             let spans = ChoiceSequence.extractSequenceBoundarySpans(from: sequence)
             sequenceBoundarySpans = spans
+            return spans
+        }
+
+        mutating func getFloatValueSpans(from sequence: ChoiceSequence) -> [ChoiceSpan] {
+            if let cached = floatValueSpans { return cached }
+            let all = getAllValueSpans(from: sequence)
+            let spans = all.filter { span in
+                guard let v = sequence[span.range.lowerBound].value else { return false }
+                return v.choice.tag == .double || v.choice.tag == .float
+            }
+            floatValueSpans = spans
             return spans
         }
     }
@@ -368,9 +382,17 @@ public extension Interpreters {
                         currentOutput = output
                         passImproved = true
                     }
-                case .reduceValues:
+                case .reduceIntegralValues:
                     let valueSpans = spanCache.getAllValueSpans(from: currentSequence)
-                    if valueSpans.isEmpty == false, let (newSequence, output) = try ReducerStrategies.reduceValues(gen, tree: currentTree, property: property, sequence: currentSequence, valueSpans: valueSpans, rejectCache: &rejectCache) {
+                    if valueSpans.isEmpty == false, let (newSequence, output) = try ReducerStrategies.reduceIntegralValues(gen, tree: currentTree, property: property, sequence: currentSequence, valueSpans: valueSpans, rejectCache: &rejectCache) {
+                        currentSequence = newSequence
+                        spanCache.invalidate()
+                        currentOutput = output
+                        passImproved = true
+                    }
+                case .reduceFloatValues:
+                    let floatSpans = spanCache.getFloatValueSpans(from: currentSequence)
+                    if floatSpans.isEmpty == false, let (newSequence, output) = try ReducerStrategies.reduceFloatValues(gen, tree: currentTree, property: property, sequence: currentSequence, valueSpans: floatSpans, rejectCache: &rejectCache) {
                         currentSequence = newSequence
                         spanCache.invalidate()
                         currentOutput = output
