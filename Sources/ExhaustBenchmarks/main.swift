@@ -9,8 +9,7 @@ benchmark("Int Generation") {
     let generator = Gen.choose(in: 0 ... 1000)
     var iterator = ValueInterpreter(generator, seed: 1, maxRuns: 100)
     while let next = try iterator.next() {
-        let bla = next
-        let bla2 = bla
+        _ = next
     }
 }
 
@@ -18,7 +17,7 @@ benchmark("String generation") {
     let generator = #gen(.string())
     var iterator = ValueInterpreter(generator, seed: 1, maxRuns: 100)
     while let next = try iterator.next() {
-        let next = next
+        _ = next
     }
 }
 
@@ -26,7 +25,7 @@ benchmark("String generation with reflection") {
     let generator = #gen(.string())
     var iterator = ValueInterpreter(generator, seed: 1, maxRuns: 100)
     while let next = try iterator.next() {
-        let reflection = try Interpreters.reflect(generator, with: next)
+        _ = try Interpreters.reflect(generator, with: next)
     }
 }
 
@@ -34,8 +33,8 @@ benchmark("String generation with choiceTree") {
     let generator = #gen(.string())
     var iterator = ValueAndChoiceTreeInterpreter(generator, seed: 1, maxRuns: 100)
     while let (value, tree) = try iterator.next() {
-        let value = value
-        let tree = tree
+        _ = value
+        _ = tree
     }
 }
 
@@ -45,17 +44,15 @@ benchmark("Double generation with choiceTree materialised") {
     let generator = #gen(.oneOf(weighted: (1, .double()), (2, .double()), (4, .double())))
     var iterator = ValueAndChoiceTreeInterpreter(generator, materializePicks: true, seed: 1, maxRuns: 100)
     while let (value, tree) = try iterator.next() {
-        let value = value
-        let tree = tree
+        _ = value
+        _ = tree
     }
 }
 
 benchmark("String generation with choiceTree materialised") {
     let generator = #gen(.string())
     var iterator = ValueAndChoiceTreeInterpreter(generator, materializePicks: true, seed: 1, maxRuns: 100)
-    while let (value, tree) = try iterator.next() {
-//        let value = value
-//        let tree = tree
+    while let _ = try iterator.next() {
     }
 }
 
@@ -70,7 +67,7 @@ benchmark("Zipped person") {
         .mapped(forward: { Person(name: $0.0, age: $0.1, height: $0.2) }, backward: { ($0.name, $0.age, $0.height) })
     var iterator = ValueInterpreter(generator, seed: 1, maxRuns: 100)
     while let next = try iterator.next() {
-        let next = next
+        _ = next
     }
 }
 
@@ -79,7 +76,7 @@ benchmark("Zipped person with reflection") {
         .mapped(forward: { Person(name: $0.0, age: $0.1, height: $0.2) }, backward: { ($0.name, $0.age, $0.height) })
     var iterator = ValueInterpreter(generator, seed: 1, maxRuns: 100)
     while let next = try iterator.next() {
-        let reflection = try Interpreters.reflect(generator, with: next)
+        _ = try Interpreters.reflect(generator, with: next)
     }
 }
 
@@ -92,8 +89,8 @@ benchmark("Zipped person with ChoiceTree") {
     .mapped(forward: { Person(name: $0.0, age: $0.1, height: $0.2) }, backward: { ($0.name, $0.age, $0.height) })
     var iterator = ValueAndChoiceTreeInterpreter(generator, materializePicks: true, seed: 1, maxRuns: 100)
     while let (value, tree) = try iterator.next() {
-        let value = value
-        let tree = tree
+        _ = value
+        _ = tree
     }
 }
 
@@ -188,7 +185,7 @@ benchmark("Bound 5 single, random") {
         Bound5(a: $0, b: $1, c: $2, d: $3, e: $4)
     }
 
-    let counter = #exhaust(gen, .suppressIssueReporting, .replay(0xF0_CACC_1AC0_FFEE)) {
+    _ = #exhaust(gen, .suppressIssueReporting, .replay(0xF0_CACC_1AC0_FFEE)) {
         $0.arr.isEmpty || $0.arr.dropFirst().reduce($0.arr[0], &+) < 5 * 256
     }
 }
@@ -378,3 +375,5 @@ Benchmark.main()
 //        }
 //    }
 // }
+
+// swiftlint:enable force_try

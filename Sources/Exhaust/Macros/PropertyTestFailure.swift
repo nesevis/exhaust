@@ -8,6 +8,7 @@ struct PropertyTestFailure<Output> {
     let seed: UInt64?
     let iteration: Int
     let samplingBudget: UInt64
+    /// The ChoiceSequence shortString
     let blueprint: String?
     let propertyInvocations: Int?
     var replayHint: String?

@@ -53,8 +53,6 @@ struct StringAnagramChallenge {
         #expect(property(value.0, value.1) == false)
 
         let tree = try #require(try Interpreters.reflect(gen, with: value))
-        let sequence = ChoiceSequence.flatten(tree)
-        print()
         let (_, output) = try #require(try Interpreters.reduce(
             gen: gen, tree: tree, config: .slow, property: property,
         ))

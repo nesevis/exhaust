@@ -172,10 +172,10 @@ struct AdvancedFeatureTests {
                     if let replayed = try Interpreters.replay(graphGen, using: recipe) {
                         #expect(graph == replayed)
                     } else {
-                        #expect(false, "Replay failed for graph")
+                        Issue.record("Replay failed for graph")
                     }
                 } else {
-                    #expect(false, "Reflection failed for graph")
+                    Issue.record("Reflection failed for graph")
                 }
             }
         }
@@ -202,10 +202,10 @@ struct AdvancedFeatureTests {
                         if let replayed = try Interpreters.replay(gen, using: recipe) {
                             #expect(value == replayed, "Extreme generator \(index) failed round-trip")
                         } else {
-                            #expect(false, "Replay failed for extreme generator \(index)")
+                            Issue.record("Replay failed for extreme generator \(index)")
                         }
                     } else {
-                        #expect(false, "Reflection failed for extreme generator \(index)")
+                        Issue.record("Reflection failed for extreme generator \(index)")
                     }
                 }
             }
@@ -236,10 +236,10 @@ struct AdvancedFeatureTests {
                 if let replayed = try Interpreters.replay(largeNestedGen, using: recipe) {
                     #expect(large == replayed)
                 } else {
-                    #expect(false, "Replay failed for large nested structure")
+                    Issue.record("Replay failed for large nested structure")
                 }
             } else {
-                #expect(false, "Reflection failed for large nested structure")
+                Issue.record("Reflection failed for large nested structure")
             }
         }
     }

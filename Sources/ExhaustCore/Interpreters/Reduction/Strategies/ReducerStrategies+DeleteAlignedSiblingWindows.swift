@@ -45,14 +45,6 @@ extension ReducerStrategies {
             rangeSet.subtract(prefixUnions[slotStart])
             return rangeSet
         }
-
-        func subsetRangeSet(mask: Int) -> RangeSet<Int> {
-            var rangeSet = RangeSet<Int>()
-            for slotIndex in 0 ..< slotRangeSets.count where (mask & (1 << slotIndex)) != 0 {
-                rangeSet.formUnion(slotRangeSets[slotIndex])
-            }
-            return rangeSet
-        }
     }
 
     private struct AlignedDeletionContext<Output> {

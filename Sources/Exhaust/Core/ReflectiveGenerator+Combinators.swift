@@ -254,7 +254,7 @@ public extension ReflectiveGenerator where Operation == ReflectiveOperation {
     /// - Returns: A generator that only yields values with unique keys.
     @inlinable
     func unique(
-        by keyPath: KeyPath<Value, some Hashable>,
+        by keyPath: KeyPath<Value, some Hashable & Sendable>,
         fileID: String = #fileID,
         line: UInt = #line,
     ) -> ReflectiveGenerator<Value> {

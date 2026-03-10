@@ -58,7 +58,6 @@ struct Bound5ShrinkingChallenge {
         let tree = try #require(try Interpreters.reflect(Self.gen, with: value))
         let sequence = ChoiceSequence.flatten(tree)
 
-        let smokeTest = try #require(try Interpreters.materialize(Self.gen, with: tree, using: sequence))
         let (_, output) = try #require(try Interpreters.reduce(gen: Self.gen, tree: tree, config: .fast, property: Self.property))
 
         let arr = (output.0 + output.1 + output.2 + output.3 + output.4).sorted()

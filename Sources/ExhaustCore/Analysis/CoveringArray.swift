@@ -165,11 +165,6 @@ private struct ComboKey: Hashable {
 private struct ValueKey: Hashable {
     let lo: UInt64
     let hi: UInt64
-
-    init(lo: UInt64, hi: UInt64) {
-        self.lo = lo
-        self.hi = hi
-    }
 }
 
 // MARK: - IPOG Builder
@@ -325,15 +320,17 @@ private struct IPOGBuilder {
         for tuple in uncoveredTuples {
             // Try to fit into an existing row
             var fitted = false
-            for rowIdx in rows.indices {
+            var rowIdx = 0
+            while rowIdx < rows.indices.endIndex {
                 if canFit(rowIdx: rowIdx, tuple: tuple) {
                     applyTuple(rowIdx: rowIdx, tuple: tuple)
                     covered.addTuple(tuple)
                     fitted = true
                     break
                 }
+                rowIdx += 1
             }
-
+            
             if !fitted {
                 var newRow = [UInt64?](repeating: nil, count: n)
                 let tupleCount = tuple.paramIndices.count
