@@ -117,7 +117,7 @@ public func __runContractAsync<Spec: AsyncContractSpec>(
             }
 
             if let scaResult {
-                let info = ContractFailureInfo(originalCommands: scaResult.original, phase: .scaCoverage)
+                let info = ContractFailureInfo(originalCommands: scaResult.original, discoveryMethod: .coverage)
                 continuation.resume(returning: (scaResult.commands, info))
             } else {
                 let skipGenericCoverage = !randomOnly && replaySeed == nil && extractPickChoices(from: commandGen) != nil
@@ -141,7 +141,7 @@ public func __runContractAsync<Spec: AsyncContractSpec>(
                 if let exhaustResult {
                     let info: ContractFailureInfo<Spec.Command> = ContractFailureInfo(
                         originalCommands: nil,
-                        phase: replaySeed != nil ? .replay : .randomSampling,
+                        discoveryMethod: replaySeed != nil ? .replay : .randomSampling,
                     )
                     continuation.resume(returning: (exhaustResult, info))
                 } else {
@@ -163,6 +163,7 @@ public func __runContractAsync<Spec: AsyncContractSpec>(
         trace: trace,
         sut: spec.sut,
         seed: seed,
+        discoveryMethod: failureInfo.discoveryMethod,
     )
 
     if !suppressIssueReporting {

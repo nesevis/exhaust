@@ -100,7 +100,7 @@ public func __runContract<Spec: ContractSpec>(
     let failureInfo: ContractFailureInfo<Spec.Command>
     if let scaResult {
         failingSequence = scaResult.commands
-        failureInfo = ContractFailureInfo(originalCommands: scaResult.original, phase: .scaCoverage)
+        failureInfo = ContractFailureInfo(originalCommands: scaResult.original, discoveryMethod: .coverage)
     } else {
         // Skip generic coverage — SCA already covered command orderings.
         // If SCA wasn't applicable, __exhaust's generic coverage runs.
@@ -124,7 +124,7 @@ public func __runContract<Spec: ContractSpec>(
         )
         failureInfo = ContractFailureInfo(
             originalCommands: nil,
-            phase: seed != nil ? .replay : .randomSampling,
+            discoveryMethod: seed != nil ? .replay : .randomSampling,
         )
     }
 
@@ -140,6 +140,7 @@ public func __runContract<Spec: ContractSpec>(
         trace: trace,
         sut: spec.sut,
         seed: seed,
+        discoveryMethod: failureInfo.discoveryMethod,
     )
 
     if !suppressIssueReporting {
@@ -216,7 +217,7 @@ func renderFailure<Spec: ContractSpecBase>(
     modelDescription: String,
 ) -> String {
     var lines: [String] = []
-    lines.append("Contract failure")
+    lines.append("Contract failure (found via \(failureInfo.discoveryMethod))")
     lines.append("")
 
     // Show sequence header with reduction info when available.
@@ -261,14 +262,8 @@ func renderFailure<Spec: ContractSpecBase>(
 struct ContractFailureInfo<Command> {
     /// The original failing command sequence before reduction, if available.
     var originalCommands: [Command]?
-    /// The phase that found the failure.
-    var phase: Phase
-
-    enum Phase {
-        case scaCoverage
-        case randomSampling
-        case replay
-    }
+    /// How the failure was discovered.
+    var discoveryMethod: ContractDiscoveryMethod
 }
 
 // MARK: - Sequence Covering Array (SCA) coverage

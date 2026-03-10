@@ -1,6 +1,6 @@
 # Exhaust
 
-[![Swift 6.2+](https://img.shields.io/badge/Swift-6.2%2B-orange)](https://swift.org)
+[![Swift 6.0+](https://img.shields.io/badge/Swift-6.0%2B-orange)](https://swift.org)
 [![Platforms](https://img.shields.io/badge/Platforms-macOS%2026%20%7C%20iOS%2013%20%7C%20tvOS%2013%20%7C%20watchOS%206-blue)](https://developer.apple.com)
 [![SPM](https://img.shields.io/badge/Swift%20Package%20Manager-compatible-brightgreen)](https://swift.org/package-manager/)
 
@@ -394,7 +394,7 @@ Run it the same way — the test function must be `async`:
 
 ```swift
 @Test func accountBehavior() async {
-    #exhaust(AccountSpec.self, commandLimit: 15)
+    await #exhaust(AccountSpec.self, commandLimit: 15)
 }
 ```
 
@@ -420,5 +420,5 @@ Reduction operates on the recorded sequences and trees of choices rather than th
 
 ## Requirements
 
-- Swift 6.2+
+- Swift 6.0+
 - macOS 26+, iOS 13+, tvOS 13+, watchOS 6+

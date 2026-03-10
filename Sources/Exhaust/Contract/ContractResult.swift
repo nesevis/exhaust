@@ -16,6 +16,27 @@ public struct ContractResult<Spec: ContractSpecBase> {
 
     /// The seed for deterministic replay, if available.
     public let seed: UInt64?
+
+    /// How the failing example was discovered.
+    public let discoveryMethod: ContractDiscoveryMethod
+}
+
+/// Describes how a failing contract example was found.
+public enum ContractDiscoveryMethod: Equatable, Sendable, CustomStringConvertible {
+    /// Found during sequence covering array coverage.
+    case coverage
+    /// Found during random sampling.
+    case randomSampling
+    /// Reproduced from a saved seed.
+    case replay
+
+    public var description: String {
+        switch self {
+        case .coverage: "coverage"
+        case .randomSampling: "random sampling"
+        case .replay: "replay"
+        }
+    }
 }
 
 /// A single step in a contract execution trace.
