@@ -71,6 +71,42 @@ extension ReducerStrategies {
                         break groupLoop
                     }
 
+                    // Try target directly first for value-matched plans (all entries
+                    // share the same bit pattern). The binary search assumes monotonicity
+                    // (predicate(high) is false), but for cross-container value-matched
+                    // groups the predicate can be non-monotonic: intermediate deltas may
+                    // break coupling constraints while the full target delta preserves them.
+                    let allEntriesSameValue = plan.originalEntries.dropFirst().allSatisfy {
+                        $0.entry.value?.choice.bitPattern64 == plan.originalEntries.first?.entry.value?.choice.bitPattern64
+                    }
+                    if allEntriesSameValue, let targetCandidate = tandemCandidate(
+                        plan: plan,
+                        current: current,
+                        delta: plan.distance,
+                    ) {
+                        let probe = targetCandidate.sequence
+                        if rejectCache.contains(probe) == false {
+                            if budget.consume() {
+                                if let output = try? Interpreters.materialize(gen, with: tree, using: probe),
+                                   property(output) == false
+                                {
+                                    for (idx, entry) in targetCandidate.changedEntries {
+                                        current[idx] = entry
+                                    }
+                                    latestOutput = output
+                                    progress = true
+                                    continue
+                                } else {
+                                    rejectCache.insert(probe)
+                                }
+                            } else {
+                                budgetExhausted = true
+                                reportBudgetExhaustionIfNeeded()
+                                break groupLoop
+                            }
+                        }
+                    }
+
                     var lastProbeEntries: [(index: Int, entry: ChoiceSequenceValue)]?
                     var lastProbeOutput: Output?
                     var lastProbeDelta: UInt64 = 0
@@ -255,7 +291,7 @@ extension ReducerStrategies {
             distance = searchUpward
                 ? targetBP - currentBP
                 : currentBP - targetBP
-            guard distance > 1 else { return nil }
+            guard distance >= 1 else { return nil }
         }
 
         let originalEntries: [(index: Int, entry: ChoiceSequenceValue)] = windowIndices.map { idx in
@@ -394,6 +430,28 @@ extension ReducerStrategies {
                 alignedSets.append(aligned)
             }
         }
+
+        // Value-matched grouping: find entries with the same (tag, bitPattern) across
+        // all siblings and reduce them in lockstep. This handles cross-container coupling
+        // where the same logical value appears at different offsets in sibling containers
+        // (e.g. anagram strings where 'd' at position 1 in one string must shrink together
+        // with 'd' at position 0 in another string).
+        let alignedAsSets = Set(alignedSets.map { Set($0) })
+        var byTagAndValue = [TypeTag: [UInt64: [Int]]]()
+        for indices in perSiblingValueIndices {
+            for idx in indices {
+                guard let value = sequence[idx].value else { continue }
+                byTagAndValue[value.choice.tag, default: [:]][value.choice.bitPattern64, default: []].append(idx)
+            }
+        }
+        for (_, byBitPattern) in byTagAndValue {
+            for (_, indices) in byBitPattern where indices.count >= 2 {
+                if !alignedAsSets.contains(Set(indices)) {
+                    alignedSets.append(indices)
+                }
+            }
+        }
+
         return alignedSets
     }
 
