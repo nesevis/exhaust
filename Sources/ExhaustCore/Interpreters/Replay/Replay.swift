@@ -119,7 +119,7 @@ extension Interpreters {
             case let .map(forward, _, _):
                 guard let innerValue = try replayWithChoicesHelper(inner, choices: &choices) else { return nil }
                 result = try forward(innerValue)
-            case let .bind(forward, _, _):
+            case let .bind(forward, _, _, _):
                 // VACTI produces .group([innerTree, boundTree]) for bind.
                 // Scope inner replay to innerTree so its zip doesn't consume boundTree's groups.
                 if case let .group(innerChoices, _) = choices.first,
@@ -431,7 +431,7 @@ extension Interpreters {
             case let .map(forward, _, _):
                 guard let innerValue = try replayRecursive(inner, with: script) else { return nil }
                 result = try forward(innerValue)
-            case let .bind(forward, _, _):
+            case let .bind(forward, _, _, _):
                 // VACTI produces .group([innerTree, boundTree]) for bind.
                 // Split the script so inner and bound each get their own tree.
                 if case let .group(children, _) = script, children.count >= 2 {

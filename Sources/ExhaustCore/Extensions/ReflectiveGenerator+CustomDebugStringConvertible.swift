@@ -133,8 +133,9 @@ extension ReflectiveGenerator: CustomDebugStringConvertible where Operation == R
             switch kind {
             case let .map(_, inputType, outputType):
                 kindDesc = "map: \(inputType) → \(outputType)"
-            case let .bind(_, inputType, outputType):
-                kindDesc = "bind: \(inputType) → \(outputType)"
+            case let .bind(_, backward, inputType, outputType):
+                let direction = backward != nil ? "bind↔" : "bind→"
+                kindDesc = "\(direction): \(inputType) → \(outputType)"
             }
             let innerDesc = inner.treeDescription(prefix: childPrefix, isLast: true, depth: depth + 1)
             return "transform(\(kindDesc))\n" + innerDesc

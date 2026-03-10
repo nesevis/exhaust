@@ -404,7 +404,7 @@ public struct ValueInterpreter<Element>: ~Copyable, ExhaustIterator {
         switch kind {
         case let .map(forward, _, _):
             result = try forward(innerValue)
-        case let .bind(forward, _, _):
+        case let .bind(forward, _, _, _):
             let boundGen = try forward(innerValue)
             guard let boundValue = try generateRecursive(boundGen, with: inputValue, context: &context) else { return nil }
             result = boundValue

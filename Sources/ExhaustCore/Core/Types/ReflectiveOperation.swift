@@ -344,7 +344,9 @@ public enum TransformKind {
     ///
     /// - Parameters:
     ///   - forward: A function that takes the inner generator's output and returns a new generator.
+    ///   - backward: Optional extraction function `(B) -> A` for reflection. When non-nil, enables
+    ///     the reflector to decompose the output back through the bind. `nil` = forward-only.
     ///   - inputType: String representation of the input type, captured at the call site.
     ///   - outputType: String representation of the output type, captured at the call site.
-    case bind(forward: (Any) throws -> ReflectiveGenerator<Any>, inputType: String, outputType: String)
+    case bind(forward: (Any) throws -> ReflectiveGenerator<Any>, backward: ((Any) throws -> Any)?, inputType: String, outputType: String)
 }

@@ -115,7 +115,7 @@ public enum LightweightSampler {
                 switch kind {
                 case let .map(forward, _, _):
                     result = try forward(innerValue)
-                case let .bind(forward, _, _):
+                case let .bind(forward, _, _, _):
                     let boundGen = try forward(innerValue)
                     guard let boundValue = try eval(boundGen, with: inputValue, rng: &rng, size: size) else { return nil }
                     result = boundValue

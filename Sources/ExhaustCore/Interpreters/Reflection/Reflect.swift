@@ -139,12 +139,27 @@ public enum Interpreters {
         case let .unique(gen, _, _):
             return try reflectPassthroughOperation(gen: gen, finalOutput: finalOutput)
 
-        case let .transform(kind, _):
+        case let .transform(kind, inner):
             switch kind {
             case let .map(_, inputType, outputType):
                 throw ReflectionError.forwardOnlyMap(inputType: inputType, outputType: outputType)
-            case let .bind(_, inputType, outputType):
-                throw ReflectionError.forwardOnlyBind(inputType: inputType, outputType: outputType)
+            case let .bind(forward, backward, inputType, outputType):
+                guard let backward else {
+                    throw ReflectionError.forwardOnlyBind(inputType: inputType, outputType: outputType)
+                }
+                // Xia et al.'s comap at bind sites: extract the inner value from the final output.
+                let innerValue = try backward(finalOutput)
+                // Reconstruct the bound generator from the extracted inner value.
+                let boundGen = try forward(innerValue)
+                // Reflect both: inner against the extracted value, bound against the final output.
+                let innerResults = try reflectRecursive(inner, onFinalOutput: innerValue)
+                let boundResults = try reflectRecursive(boundGen, onFinalOutput: finalOutput)
+                // Combine paths: inner choices followed by bound choices.
+                return innerResults.flatMap { innerResult in
+                    boundResults.map { boundResult in
+                        (value: boundResult.value, path: [.group(innerResult.path + boundResult.path)])
+                    }
+                }
             }
         }
     }

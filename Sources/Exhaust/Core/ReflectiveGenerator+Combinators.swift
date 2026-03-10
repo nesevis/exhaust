@@ -1,5 +1,9 @@
 import ExhaustCore
 
+// MARK: - Academic Provenance
+
+// The bidirectional combinators `mapped(forward:backward:)` and `bound(forward:backward:)` implement the `comap` annotation pattern from partial monadic profunctors (Xia et al., "Composing Bidirectional Programs Monadically", ESOP 2019). At each monadic bind site, the backward function `(B) -> A` provides the contravariant annotation that aligns the forward and backward interpretations — Goldstein §4.3.1 calls this "focusing on a part of the b that contains an a". `mapped` pairs `contramap(backward)` with an invisible `_map(forward)`; `bound` reifies the pair as a `.transform(.bind)` so interpreters can see through it.
+
 public extension ReflectiveGenerator where Operation == ReflectiveOperation {
     /// Creates a bidirectional transformation of this generator using forward and backward functions.
     /// Note that ``#gen`` with a closure will attempt to synthesize the backward mapping during macro expansion.
@@ -395,10 +399,57 @@ public extension ReflectiveGenerator where Operation == ReflectiveOperation {
         Gen.liftF(.transform(
             kind: .bind(
                 forward: { try transform($0 as! Value).erase() },
+                backward: nil,
                 inputType: String(describing: Value.self),
                 outputType: String(describing: NewValue.self)
             ),
             inner: self.erase()
         ))
+    }
+
+    /// Chains this generator with a dependent generator, with a backward extraction function for reflection.
+    ///
+    /// This is the bind-level analogue of ``mapped(forward:backward:)``. The `backward` function
+    /// extracts the inner generator's input from the final output, enabling reflection (and therefore
+    /// shrinking) through the bind.
+    ///
+    /// - **Forward**: Takes the inner value `A` and returns a dependent generator over `B`
+    /// - **Backward**: Extracts `A` from a `B` — the `comap` annotation at bind sites (Xia et al. ESOP 2019)
+    ///
+    /// ```swift
+    /// let sized = #gen(.int(in: 1...10)).bound(
+    ///     forward: { n in .string(length: n) },
+    ///     backward: { str in str.count }
+    /// )
+    /// ```
+    ///
+    /// - Parameters:
+    ///   - forward: Function that takes the generated value and returns a new generator
+    ///   - backward: Function that extracts the inner value from the final output
+    /// - Returns: A generator that sequences the two computations with bidirectional support
+    @inlinable
+    func bound<NewValue>(
+        forward: @Sendable @escaping (Value) throws -> ReflectiveGenerator<NewValue>,
+        backward: @Sendable @escaping (NewValue) throws -> Value,
+    ) rethrows -> ReflectiveGenerator<NewValue> {
+        try _bound(forward: forward, backward: backward)
+    }
+
+    /// Chains this generator with a dependent generator, using a partial path for backward extraction.
+    ///
+    /// This overload uses a `PartialPath` for the backward transformation, which can fail gracefully
+    /// when the reflection target doesn't contain the expected structure. If extraction fails,
+    /// that reflection branch is pruned.
+    ///
+    /// - Parameters:
+    ///   - forward: Function that takes the generated value and returns a new generator
+    ///   - backward: Partial path to extract the inner value from the final output
+    /// - Returns: A generator that sequences the two computations with bidirectional support
+    @inlinable
+    func bound<NewValue>(
+        forward: @Sendable @escaping (Value) throws -> ReflectiveGenerator<NewValue>,
+        backward: some PartialPath<NewValue, Value>,
+    ) rethrows -> ReflectiveGenerator<NewValue> {
+        try _bound(forward: forward, backward: { try backward.extract(from: $0)! })
     }
 }

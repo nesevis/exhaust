@@ -544,7 +544,7 @@ extension Interpreters {
         switch kind {
         case let .map(forward, _, _):
             result = try forward(innerValue)
-        case let .bind(forward, _, _):
+        case let .bind(forward, _, _, _):
             let boundGen = try forward(innerValue)
             guard let boundValue = try materializeRecursive(boundGen, with: tree, context: &context) else { return nil }
             result = boundValue
@@ -1049,7 +1049,7 @@ extension Interpreters {
         switch kind {
         case let .map(forward, _, _):
             result = try forward(innerValue)
-        case let .bind(forward, _, _):
+        case let .bind(forward, _, _, _):
             let boundGen = try forward(innerValue)
             guard let boundValue = try materializeWithChoicesHelper(boundGen, with: &choices, context: &context) else { return nil }
             result = boundValue
