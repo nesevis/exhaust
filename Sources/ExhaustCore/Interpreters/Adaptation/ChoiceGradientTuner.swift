@@ -14,7 +14,7 @@ import Foundation
 /// ## Stage 1: Online CGS warmup
 ///
 /// Runs the generator through `OnlineCGSInterpreter` for a fixed number of warmup passes, collecting per-site, per-choice fitness data into a `FitnessAccumulator`.
-/// Unlike `GeneratorTuning.tune()` which samples each site independently, CGS conditions on upstream choices via `DerivativeContext`, producing better weights for recursive generators where the validity of a subtree depends on ancestors.
+/// Unlike probe-based tuning which samples each site independently, CGS conditions on upstream choices via `DerivativeContext`, producing better weights for recursive generators where the validity of a subtree depends on ancestors.
 ///
 /// The warmup is the only expensive phase. All subsequent generation uses the cheap `ValueAndChoiceTreeInterpreter` with the baked weights — same quality signal,
 /// ~100x cheaper per sample.
@@ -29,7 +29,7 @@ import Foundation
 ///
 /// ## Stage 3: Adaptive smoothing
 ///
-/// After baking, per-site entropy analysis identifies bottleneck sites — picks where one choice dominates — and applies higher temperature there to prevent any single site from becoming a chokepoint. Well-distributed sites keep low temperature to preserve the tuned distribution. This is the same `GeneratorTuning.smoothAdaptively` used by the probe-based tuner.
+/// After baking, per-site entropy analysis identifies bottleneck sites — picks where one choice dominates — and applies higher temperature there to prevent any single site from becoming a chokepoint. Well-distributed sites keep low temperature to preserve the tuned distribution. This uses ``AdaptiveSmoothing/smooth(_:epsilon:baseTemperature:maxTemperature:)`` (also used by the probe-based tuner).
 ///
 /// ## Result
 ///
@@ -140,7 +140,7 @@ public enum ChoiceGradientTuner<FinalOutput> {
         // bottleneck sites (where one choice dominates) and applies higher
         // temperature there to prevent chokepoints, while leaving well-distributed
         // sites alone to preserve the tuned distribution.
-        return GeneratorTuning.smoothAdaptively(baked, baseTemperature: 2.0, maxTemperature: 8.0)
+        return AdaptiveSmoothing.smooth(baked, baseTemperature: 2.0, maxTemperature: 8.0)
     }
 
     /// Recursively walks the generator tree, replacing pick weights with accumulated fitness data from the online CGS tuning pass.

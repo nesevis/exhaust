@@ -267,7 +267,7 @@ struct UniquenessBenchmarkTests {
             seed: 12345,
             predicate: problem.predicate,
         )
-        let smoothed = GeneratorTuning.smooth(tuned, epsilon: 1.0, temperature: 2.0)
+        let smoothed = AdaptiveSmoothing.smooth(tuned)
 
         var unique = Set<Value>()
         var total = 0

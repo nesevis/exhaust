@@ -359,7 +359,7 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
         column: UInt = #column,
         property: @Sendable @escaping (Output) -> Bool,
     ) -> Output? {
-        var maxIterations: UInt64 = 10000
+        var samplingBudget: UInt64 = 10000
         var seed: UInt64?
         var reductionConfig: TCRBudget = .fast
         var suppressIssueReporting = false
@@ -369,7 +369,7 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
         for setting in settings {
             switch setting {
             case let .samplingBudget(n):
-                maxIterations = n
+                samplingBudget = n
             case let .replay(s):
                 seed = s
             case let .reductionBudget(config):
@@ -386,7 +386,7 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
         var runner = ExploreRunner(
             gen: gen,
             property: property,
-            maxIterations: maxIterations,
+            samplingBudget: samplingBudget,
             reductionConfig: reductionConfig,
             poolCapacity: poolCapacity,
             generateRatio: generateRatio,
@@ -405,7 +405,7 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
                 sourceCode: sourceCode,
                 seed: actualSeed,
                 iteration: Int(iteration),
-                samplingBudget: maxIterations,
+                samplingBudget: samplingBudget,
                 blueprint: shrunkSequence.shortString,
                 propertyInvocations: nil,
             )
@@ -433,7 +433,7 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
                 sourceCode: sourceCode,
                 seed: actualSeed,
                 iteration: Int(iteration),
-                samplingBudget: maxIterations,
+                samplingBudget: samplingBudget,
                 blueprint: nil,
                 propertyInvocations: nil,
             )
