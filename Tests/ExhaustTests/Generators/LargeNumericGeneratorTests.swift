@@ -39,7 +39,7 @@ struct LargeNumericGeneratorTests {
     func int128Negatives() {
         let gen = #gen(.int128())
 
-        let counterExample = #exhaust(gen, .maxIterations(200), .suppressIssueReporting) { value in
+        let counterExample = #exhaust(gen, .samplingBudget(200), .suppressIssueReporting) { value in
             value >= 0
         }
 

@@ -7,7 +7,7 @@ struct PropertyTestFailure<Output> {
     let sourceCode: String?
     let seed: UInt64?
     let iteration: Int
-    let maxIterations: UInt64
+    let samplingBudget: UInt64
     let blueprint: String?
     let propertyInvocations: Int?
     var replayHint: String?
@@ -27,9 +27,9 @@ struct PropertyTestFailure<Output> {
         var lines: [String] = []
 
         if let seed {
-            lines.append("Property failed (iteration \(iteration)/\(maxIterations), seed \(seed))")
+            lines.append("Property failed (iteration \(iteration)/\(samplingBudget), seed \(seed))")
         } else {
-            lines.append("Property failed (iteration \(iteration)/\(maxIterations))")
+            lines.append("Property failed (iteration \(iteration)/\(samplingBudget))")
         }
         if let sourceCode {
             lines.append("  \(sourceCode)")
@@ -81,7 +81,7 @@ struct PropertyTestFailure<Output> {
             parts.append("\"seed\":\(seed)")
         }
         parts.append("\"iteration\":\(iteration)")
-        parts.append("\"maxIterations\":\(maxIterations)")
+        parts.append("\"samplingBudget\":\(samplingBudget)")
 
         if let sourceCode {
             parts.append("\"source\":\"\(escapeJSON(sourceCode))\"")

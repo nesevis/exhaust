@@ -2,7 +2,7 @@
 //
 // Pass these as variadic arguments to `#explore` to control test behavior:
 // ```swift
-// let counterexample = #explore(personGen, .maxIterations(10_000),
+// let counterexample = #explore(personGen, .samplingBudget(10_000),
 //     scorer: { Double($0.age) }
 // ) { person in
 //     person.age >= 0
@@ -13,7 +13,7 @@ import ExhaustCore
 /// Configuration options for `#explore` feedback-guided property tests, passed as variadic arguments to control test behavior.
 public enum ExploreSettings {
     /// The upper bound on the number of test iterations to run.
-    case maxIterations(UInt64)
+    case samplingBudget(UInt64)
 
     /// A fixed seed for deterministic replay (reproduction, benchmarking, regression).
     case replay(UInt64)

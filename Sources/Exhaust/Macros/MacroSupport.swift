@@ -30,7 +30,7 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
         column: UInt = #column,
         property: @Sendable (Output) -> Bool,
     ) -> Output? {
-        var maxIterations: UInt64 = 100
+        var samplingBudget: UInt64 = 100
         var coverageBudget: UInt64 = 2000
         var seed: UInt64?
         var reductionConfig: TCRBudget = .fast
@@ -40,8 +40,8 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
 
         for setting in settings {
             switch setting {
-            case let .maxIterations(n):
-                maxIterations = n
+            case let .samplingBudget(n):
+                samplingBudget = n
             case let .coverageBudget(n):
                 coverageBudget = n
             case let .replay(s):
@@ -110,7 +110,7 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
                             sourceCode: sourceCode,
                             seed: nil,
                             iteration: iteration,
-                            maxIterations: maxIterations,
+                            samplingBudget: samplingBudget,
                             blueprint: shrunkSequence.shortString,
                             propertyInvocations: propertyInvocationCount,
                         )
@@ -150,7 +150,7 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
                     sourceCode: sourceCode,
                     seed: nil,
                     iteration: iteration,
-                    maxIterations: maxIterations,
+                    samplingBudget: samplingBudget,
                     blueprint: nil,
                     propertyInvocations: propertyInvocationCount,
                 )
@@ -222,7 +222,7 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
             gen,
             materializePicks: true,
             seed: seed,
-            maxRuns: maxIterations,
+            maxRuns: samplingBudget,
         )
         let actualSeed = generator.baseSeed
 
@@ -248,7 +248,7 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
                             sourceCode: sourceCode,
                             seed: actualSeed,
                             iteration: iterations,
-                            maxIterations: maxIterations,
+                            samplingBudget: samplingBudget,
                             blueprint: shrunkSequence.shortString,
                             propertyInvocations: propertyInvocationCount,
                         )
@@ -292,7 +292,7 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
                     sourceCode: sourceCode,
                     seed: actualSeed,
                     iteration: iterations,
-                    maxIterations: maxIterations,
+                    samplingBudget: samplingBudget,
                     blueprint: nil,
                     propertyInvocations: propertyInvocationCount,
                 )
@@ -325,7 +325,7 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
 
         let totalPropertyCalls = coverageIterations + iterations
         var passMetadata = [
-            "iterations": "\(maxIterations)",
+            "iterations": "\(samplingBudget)",
             "property_invocations": "\(totalPropertyCalls)",
         ]
         if coverageIterations > 0 {
@@ -368,7 +368,7 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
 
         for setting in settings {
             switch setting {
-            case let .maxIterations(n):
+            case let .samplingBudget(n):
                 maxIterations = n
             case let .replay(s):
                 seed = s
@@ -405,7 +405,7 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
                 sourceCode: sourceCode,
                 seed: actualSeed,
                 iteration: Int(iteration),
-                maxIterations: maxIterations,
+                samplingBudget: maxIterations,
                 blueprint: shrunkSequence.shortString,
                 propertyInvocations: nil,
             )
@@ -433,7 +433,7 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
                 sourceCode: sourceCode,
                 seed: actualSeed,
                 iteration: Int(iteration),
-                maxIterations: maxIterations,
+                samplingBudget: maxIterations,
                 blueprint: nil,
                 propertyInvocations: nil,
             )
@@ -592,7 +592,7 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
                 sourceCode: sourceCode,
                 seed: nil,
                 iteration: 1,
-                maxIterations: 1,
+                samplingBudget: 1,
                 blueprint: shrunkSequence.shortString,
                 propertyInvocations: propertyInvocationCount,
             )
@@ -621,7 +621,7 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
             sourceCode: sourceCode,
             seed: nil,
             iteration: 1,
-            maxIterations: 1,
+            samplingBudget: 1,
             blueprint: nil,
             propertyInvocations: propertyInvocationCount,
         )

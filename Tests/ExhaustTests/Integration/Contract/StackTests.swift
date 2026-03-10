@@ -11,7 +11,7 @@ struct StackTests {
         let result = #exhaust(
             StackSpec.self,
             commandLimit: 15,
-            .maxIterations(50),
+            .samplingBudget(50),
             .suppressIssueReporting
         )
         #expect(result == nil, "Stack spec should pass — model and SUT are identical")

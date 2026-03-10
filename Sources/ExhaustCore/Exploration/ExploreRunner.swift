@@ -21,7 +21,7 @@ public enum ExploreResult<Output> {
 public struct ExploreRunner<Output>: ~Copyable {
     private let gen: ReflectiveGenerator<Output>
     private let property: (Output) -> Bool
-    private let maxIterations: UInt64
+    private let samplingBudget: UInt64
     private let reductionConfig: Interpreters.TCRConfiguration
     private let scorer: (Output) -> Double
 
@@ -33,7 +33,7 @@ public struct ExploreRunner<Output>: ~Copyable {
     public init(
         gen: ReflectiveGenerator<Output>,
         property: @escaping (Output) -> Bool,
-        maxIterations: UInt64 = 10000,
+        samplingBudget: UInt64 = 10000,
         reductionConfig: Interpreters.TCRConfiguration = .fast,
         poolCapacity: Int = 256,
         generateRatio: Double = 0.2,
@@ -42,7 +42,7 @@ public struct ExploreRunner<Output>: ~Copyable {
     ) {
         self.gen = gen
         self.property = property
-        self.maxIterations = maxIterations
+        self.samplingBudget = samplingBudget
         self.reductionConfig = reductionConfig
         self.scorer = scorer
         pool = DefaultSeedPool(
@@ -69,7 +69,7 @@ public struct ExploreRunner<Output>: ~Copyable {
         var iteration: UInt64 = 0
 
         // Phase 1: Generate an initial batch of fresh values to seed the pool
-        let initialBatch = min(maxIterations, 100)
+        let initialBatch = min(samplingBudget, 100)
         var interpreter = ValueAndChoiceTreeInterpreter(
             gen,
             materializePicks: false,
@@ -99,7 +99,7 @@ public struct ExploreRunner<Output>: ~Copyable {
         }
 
         // Phase 2: Main exploration loop
-        while iteration < maxIterations {
+        while iteration < samplingBudget {
             let directive = pool.sample(using: &prng)
 
             switch directive {
@@ -117,7 +117,7 @@ public struct ExploreRunner<Output>: ~Copyable {
                     averagePoolFitness: pool.averageFitness,
                 )
 
-                let climbBudget = min(energy * 4, Int(maxIterations - iteration))
+                let climbBudget = min(energy * 4, Int(samplingBudget - iteration))
                 guard climbBudget > 0 else { continue }
 
                 let result = HillClimber.climb(

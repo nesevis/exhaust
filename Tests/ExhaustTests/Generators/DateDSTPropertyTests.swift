@@ -143,7 +143,7 @@ struct DateDSTPropertyTests {
         //
         // With .randomOnly, hitting this requires BOTH dates to land on the
         // fall-back day's ~1h window — roughly (1/672)^2 ≈ 0.0002% per sample.
-        let counterExample = #exhaust(gen, .suppressIssueReporting, .randomOnly, .maxIterations(200)) { now, target in
+        let counterExample = #exhaust(gen, .suppressIssueReporting, .randomOnly, .samplingBudget(200)) { now, target in
             var calendar = Calendar(identifier: .gregorian)
             calendar.timeZone = Self.usEastern
 

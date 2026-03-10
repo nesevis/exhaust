@@ -172,7 +172,7 @@ Configure behavior with settings:
 
 | Setting | Default | Effect |
 |---|---|---|
-| `.maxIterations(n)` | 100 | Random sampling budget (runs after structured coverage) |
+| `.samplingBudget(n)` | 100 | Random sampling budget (runs after structured coverage) |
 | `.coverageBudget(n)` | 2000 | Maximum test cases for structured coverage |
 | `.randomOnly` | off | Skip structured coverage, use only random sampling |
 | `.replay(seed)` | — | Deterministic reproduction of a specific run |
@@ -256,8 +256,10 @@ let small = #gen(.int().filter(.rejectionSampling) { $0 < 10 })
 
 | Strategy | Behavior |
 |---|---|
-| `.auto` | Analyzes generator structure and tunes branch weights to favor valid outputs. Best for complex predicates. |
+| `.auto` | Default. Currently selects `.choiceGradientSampling`. |
 | `.rejectionSampling` | Generate-and-discard. Simple and predictable, but slow when valid values are sparse. |
+| `.probeSampling` | Probes each branching point to measure how often each choice satisfies the predicate, then biases weights before generation begins. One-shot analysis. |
+| `.choiceGradientSampling` | Online derivative sampling that conditions branch weights on upstream choices, with fitness sharing to maintain output diversity. Best for recursive generators. |
 
 Track value distributions with `.classify`:
 
@@ -271,7 +273,7 @@ let classified = #gen(.int().classify(
 
 ## Validating Generators
 
-Verify that a generator's reflection and replay are working correctly with `#examine`:
+A subtle bug in a generator — a backward mapping that doesn't round-trip, or a replay that produces a different value — can cause confusing failures that look like property violations but are really generator issues. This is a common source of frustration with property-based testing frameworks. `#examine` catches these problems early:
 
 ```swift
 @Test func personGeneratorIsHealthy() {

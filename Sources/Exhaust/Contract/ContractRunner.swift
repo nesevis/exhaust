@@ -27,7 +27,7 @@ public func __runContract<Spec: ContractSpec>(
     line: UInt = #line,
     column: UInt = #column,
 ) -> ContractResult<Spec>? {
-    var maxIterations: UInt64 = 2000
+    var samplingBudget: UInt64 = 2000
     var coverageBudget: UInt64 = 2000
     var seed: UInt64?
     var reductionConfig: TCRBudget = .fast
@@ -37,8 +37,8 @@ public func __runContract<Spec: ContractSpec>(
 
     for setting in settings {
         switch setting {
-        case let .maxIterations(n):
-            maxIterations = n
+        case let .samplingBudget(n):
+            samplingBudget = n
         case let .coverageBudget(n):
             coverageBudget = n
         case let .replay(s):
@@ -108,7 +108,7 @@ public func __runContract<Spec: ContractSpec>(
         failingSequence = __ExhaustRuntime.__exhaust(
             seqGen,
             settings: buildExhaustSettings(
-                maxIterations: maxIterations,
+                samplingBudget: samplingBudget,
                 coverageBudget: coverageBudget,
                 seed: seed,
                 reductionConfig: reductionConfig,
@@ -411,7 +411,7 @@ func runSCACoverage<Command>(
 }
 
 func buildExhaustSettings<Output>(
-    maxIterations: UInt64,
+    samplingBudget: UInt64,
     coverageBudget: UInt64,
     seed: UInt64?,
     reductionConfig: TCRBudget,
@@ -419,7 +419,7 @@ func buildExhaustSettings<Output>(
     useRandomOnly: Bool,
 ) -> [ExhaustSettings<Output>] {
     var settings: [ExhaustSettings<Output>] = [
-        .maxIterations(maxIterations),
+        .samplingBudget(samplingBudget),
         .coverageBudget(coverageBudget),
         .reductionBudget(reductionConfig),
     ]

@@ -17,7 +17,7 @@ struct ExploreIntegrationTests {
         var runner = ExploreRunner(
             gen: gen,
             property: { $0 < 50 },
-            maxIterations: 500,
+            samplingBudget: 500,
             seed: 42,
             scorer: { Double($0) },
         )
@@ -35,7 +35,7 @@ struct ExploreIntegrationTests {
         var runner = ExploreRunner(
             gen: gen,
             property: { $0 >= 0 },
-            maxIterations: 200,
+            samplingBudget: 200,
             seed: 42,
             scorer: { _ in 0 },
         )
@@ -56,7 +56,7 @@ struct ExploreIntegrationTests {
         var runner = ExploreRunner(
             gen: gen,
             property: { array in array.reduce(0, +) < 400 },
-            maxIterations: 10000,
+            samplingBudget: 10000,
             seed: 42,
             scorer: { array in Double(array.reduce(0, +)) },
         )
@@ -78,7 +78,7 @@ struct ExploreIntegrationTests {
         var runner = ExploreRunner(
             gen: gen,
             property: { $0 < 90 },
-            maxIterations: 1000,
+            samplingBudget: 1000,
             seed: 42,
             scorer: { Double($0) },
         )
@@ -96,7 +96,7 @@ struct ExploreIntegrationTests {
         var runner = ExploreRunner(
             gen: gen,
             property: { $0 < 500 },
-            maxIterations: 500,
+            samplingBudget: 500,
             reductionConfig: .fast,
             seed: 42,
             scorer: { Double($0) },
@@ -116,7 +116,7 @@ struct ExploreIntegrationTests {
         var runner = ExploreRunner(
             gen: gen,
             property: { _ in true }, // Always passes — just check pool grows
-            maxIterations: 200,
+            samplingBudget: 200,
             seed: 42,
             scorer: { _ in 0 },
         )
@@ -133,7 +133,7 @@ struct ExploreIntegrationTests {
         var runner = ExploreRunner(
             gen: gen,
             property: { $0 < 50 },
-            maxIterations: 500,
+            samplingBudget: 500,
             seed: nil,
             scorer: { Double($0) },
         )
@@ -155,7 +155,7 @@ struct ExploreIntegrationTests {
         var runner = ExploreRunner(
             gen: gen,
             property: { $0 >= 0 },
-            maxIterations: 200,
+            samplingBudget: 200,
             seed: nil,
             scorer: { _ in 0.0 },
         )
@@ -173,14 +173,14 @@ struct ExploreIntegrationTests {
         var runner1 = ExploreRunner(
             gen: gen,
             property: { $0 < 500 },
-            maxIterations: 200,
+            samplingBudget: 200,
             seed: 42,
             scorer: { Double($0) },
         )
         var runner2 = ExploreRunner(
             gen: gen,
             property: { $0 < 500 },
-            maxIterations: 200,
+            samplingBudget: 200,
             seed: 42,
             scorer: { Double($0) },
         )
@@ -212,7 +212,7 @@ struct ExploreIntegrationTests {
                 // Fails when all three are above 90
                 !(a > 90 && b > 90 && c > 90)
             },
-            maxIterations: 10000,
+            samplingBudget: 10000,
             seed: nil,
             scorer: { a, b, c in Double(a + b + c) },
         )
@@ -236,7 +236,7 @@ struct ExploreIntegrationTests {
         var runner = ExploreRunner(
             gen: gen,
             property: { $0 < 950 },
-            maxIterations: 2000,
+            samplingBudget: 2000,
             seed: 42,
             scorer: { Double($0) },
         )
@@ -254,7 +254,7 @@ struct ExploreIntegrationTests {
         var runner = ExploreRunner(
             gen: gen,
             property: { $0 < 900 },
-            maxIterations: 2000,
+            samplingBudget: 2000,
             seed: nil,
             scorer: { Double($0) },
         )

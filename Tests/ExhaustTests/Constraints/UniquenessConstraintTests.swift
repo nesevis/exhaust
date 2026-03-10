@@ -204,7 +204,7 @@ struct UniquenessConstraintTests {
     func propertyTestPassthrough() {
         let gen = #gen(.bool()).unique()
 
-        #exhaust(gen, .maxIterations(100), .replay(42)) { _ in
+        #exhaust(gen, .samplingBudget(100), .replay(42)) { _ in
             true
         }
     }

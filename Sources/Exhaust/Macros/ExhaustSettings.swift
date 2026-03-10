@@ -2,7 +2,7 @@
 //
 // Pass these as variadic arguments to `#exhaust` to control test behavior:
 // ```swift
-// #exhaust(personGen, .maxIterations(1000), .replay(42)) { person in
+// #exhaust(personGen, .samplingBudget(1000), .replay(42)) { person in
 //     person.age >= 0
 // }
 // ```
@@ -10,8 +10,8 @@ import ExhaustCore
 
 /// Configuration options for `#exhaust` property tests, passed as variadic arguments to control test behavior.
 public enum ExhaustSettings<Output> {
-    /// The upper bound on the number of test iterations to run.
-    case maxIterations(UInt64)
+    /// The upper bound on the number of randomly generated instances to test.
+    case samplingBudget(UInt64)
 
     /// A fixed seed for deterministic replay (reproduction, benchmarking, regression).
     case replay(UInt64)
@@ -33,7 +33,7 @@ public enum ExhaustSettings<Output> {
 
     /// The iteration budget for structured coverage analysis (exhaustive enumeration, t-way covering arrays, boundary value covering arrays).
     ///
-    /// This budget is *additive* with `maxIterations` — structured coverage runs first, then random sampling runs for `maxIterations` iterations. The default is 2000.
+    /// This budget is *additive* with `samplingBudget` — structured coverage runs first, then random sampling runs for `samplingBudget` iterations. The default is 2000.
     ///
     /// When the generator's total space fits within this budget, `#exhaust` performs exhaustive enumeration and skips the random phase entirely.
     case coverageBudget(UInt64)

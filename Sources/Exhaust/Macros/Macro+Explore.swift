@@ -5,7 +5,7 @@
 //
 // ## Trailing closure (source code captured)
 // ```swift
-// let counterexample = #explore(personGen, .maxIterations(10_000),
+// let counterexample = #explore(personGen, .samplingBudget(10_000),
 //     scorer: { Double($0.age) }
 // ) { person in
 //     person.age >= 0

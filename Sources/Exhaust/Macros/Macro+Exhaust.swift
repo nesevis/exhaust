@@ -17,7 +17,7 @@ import ExhaustCore
 ///
 /// ## Settings
 ///
-/// - `.maxIterations(_)`: upper bound on random sampling iterations (default 100). Additive with the coverage budget.
+/// - `.samplingBudget(_)`: upper bound on random sampling iterations (default 100). Additive with the coverage budget.
 /// - `.coverageBudget(_)`: maximum test cases for structured coverage (default 2000).
 /// - `.replay(_)`: fixed seed for deterministic reproduction. Skips structured coverage.
 /// - `.reductionBudget(_)`: controls test case reduction aggressiveness (`.fast` or `.slow`).
@@ -29,7 +29,7 @@ import ExhaustCore
 ///
 /// Trailing closure (source code captured):
 /// ```swift
-/// let counterexample = #exhaust(personGen, .maxIterations(1000)) { person in
+/// let counterexample = #exhaust(personGen, .samplingBudget(1000)) { person in
 ///     person.age >= 0
 /// }
 /// ```
@@ -66,7 +66,7 @@ public macro exhaust<T>(
 ///
 /// ## Settings
 ///
-/// - `.maxIterations(_)`: upper bound on random sampling iterations (default 100).
+/// - `.samplingBudget(_)`: upper bound on random sampling iterations (default 100).
 /// - `.coverageBudget(_)`: maximum test cases for structured coverage (default 2000).
 /// - `.replay(_)`: fixed seed for deterministic reproduction.
 /// - `.reductionBudget(_)`: controls reduction aggressiveness.

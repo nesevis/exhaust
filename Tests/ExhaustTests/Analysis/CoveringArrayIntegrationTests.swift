@@ -11,8 +11,8 @@ import Testing
 struct CoveringArrayIntegrationTests {
     @Test("Exhaustive mode covers full space for small generator")
     func exhaustiveCoversFullSpace() {
-        // 2 * 2 * 3 = 12 total space, maxIterations = 50 → exhaustive
-        #exhaust(#gen(.bool(), .bool(), .int(in: 0 ... 2)), .maxIterations(50)) { _, _, _ in
+        // 2 * 2 * 3 = 12 total space, samplingBudget = 50 → exhaustive
+        #exhaust(#gen(.bool(), .bool(), .int(in: 0 ... 2)), .samplingBudget(50)) { _, _, _ in
             true
         }
     }
@@ -20,7 +20,7 @@ struct CoveringArrayIntegrationTests {
     @Test("Property failure on finite generator is detected and shrunk")
     func propertyFailureDetected() {
         let gen = #gen(.bool(), .int(in: 0 ... 4))
-        let result = #exhaust(gen, .maxIterations(50), .suppressIssueReporting) { a, b in
+        let result = #exhaust(gen, .samplingBudget(50), .suppressIssueReporting) { a, b in
             // Fails when a == true and b == 3
             !(a == true && b == 3)
         }
@@ -32,7 +32,7 @@ struct CoveringArrayIntegrationTests {
         // With randomOnly, the covering array path is skipped
         // This should still work via random sampling
         let gen = #gen(.bool(), .bool())
-        #exhaust(gen, .maxIterations(50), .randomOnly) { _, _ in
+        #exhaust(gen, .samplingBudget(50), .randomOnly) { _, _ in
             true
         }
     }
@@ -58,7 +58,7 @@ struct CoveringArrayIntegrationTests {
 
         let result = #exhaust(
             gen,
-            .maxIterations(100),
+            .samplingBudget(100),
             .suppressIssueReporting,
         ) { p0, p1, _, p3, _ in
             !(p0 == 2 && p1 == 3 && p3 == 1)
@@ -83,7 +83,7 @@ struct CoveringArrayIntegrationTests {
         for _ in 0 ..< 40 {
             let result = #exhaust(
                 gen,
-                .maxIterations(100),
+                .samplingBudget(100),
                 .randomOnly,
                 .suppressIssueReporting,
             ) { p0, p1, _, p3, _ in

@@ -4,7 +4,7 @@ import ExhaustCore
 /// Configuration options for `#exhaust` contract property tests, passed as variadic arguments to control test behavior.
 public enum ContractSettings {
     /// The upper bound on random sampling iterations (default 100). Additive with the coverage budget.
-    case maxIterations(UInt64)
+    case samplingBudget(UInt64)
 
     /// Maximum test cases for structured coverage of command orderings (default 2000).
     case coverageBudget(UInt64)

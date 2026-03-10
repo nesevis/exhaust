@@ -11,7 +11,7 @@ struct AsyncContractTests {
         let result = #exhaust(
             AsyncCounterSpec.self,
             commandLimit: 8,
-            .maxIterations(30),
+            .samplingBudget(30),
             .suppressIssueReporting
         )
         #expect(result == nil, "Async counter spec should pass — model and SUT are identical")
@@ -22,7 +22,7 @@ struct AsyncContractTests {
         let result = #exhaust(
             BuggyAsyncCounterSpec.self,
             commandLimit: 10,
-            .maxIterations(100),
+            .samplingBudget(100),
             .suppressIssueReporting
         )
         #expect(result != nil, "Buggy async counter should fail")
@@ -41,7 +41,7 @@ struct AsyncContractTests {
         let result = #exhaust(
             AsyncSkipSpec.self,
             commandLimit: 8,
-            .maxIterations(30),
+            .samplingBudget(30),
             .suppressIssueReporting
         )
         #expect(result == nil, "Async skip spec should pass")
@@ -49,7 +49,7 @@ struct AsyncContractTests {
 
     @Test("Mixed sync+async commands produce AsyncContractSpec conformance")
     func mixedAsyncContract() async {
-        let result = #exhaust(MixedAsyncSpec.self, commandLimit: 8, .maxIterations(30), .suppressIssueReporting)
+        let result = #exhaust(MixedAsyncSpec.self, commandLimit: 8, .samplingBudget(30), .suppressIssueReporting)
         #expect(result == nil, "Mixed async spec should pass")
     }
 

@@ -39,7 +39,7 @@ struct MaterializeTests {
         }
 
         let boolGen = #gen(.bool())
-        #exhaust(boolGen, .maxIterations(10)) { value in
+        #exhaust(boolGen, .samplingBudget(10)) { value in
             materializeViaReflection(boolGen, value) == value
         }
 
@@ -49,12 +49,12 @@ struct MaterializeTests {
         }
 
         let justIntGen = #gen(.just(42))
-        #exhaust(justIntGen, .maxIterations(10)) { value in
+        #exhaust(justIntGen, .samplingBudget(10)) { value in
             materializeViaReflection(justIntGen, value) == value
         }
 
         let justStrGen = #gen(.just("hello"))
-        #exhaust(justStrGen, .maxIterations(10)) { value in
+        #exhaust(justStrGen, .samplingBudget(10)) { value in
             materializeViaReflection(justStrGen, value) == value
         }
     }

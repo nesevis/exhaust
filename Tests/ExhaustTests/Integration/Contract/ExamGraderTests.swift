@@ -52,7 +52,7 @@ struct ExamGraderTests {
         let grader = BuggyExamGrader()
         let gen = examWithMatchingAnswers()
 
-        let counterExample = #exhaust(gen, .suppressIssueReporting) { exam, answers in
+        let counterExample = #exhaust(gen, .samplingBudget(500), .suppressIssueReporting) { exam, answers in
             let instance = ExamInstance(student: "student", exam: exam, answers: answers)
             let score = grader.grade(instance)
 

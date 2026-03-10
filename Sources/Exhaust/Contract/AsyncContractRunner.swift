@@ -29,7 +29,7 @@ public func __runContractAsync<Spec: AsyncContractSpec>(
     line: UInt = #line,
     column: UInt = #column,
 ) async -> ContractResult<Spec>? {
-    var maxIterations: UInt64 = 2000
+    var samplingBudget: UInt64 = 2000
     var coverageBudget: UInt64 = 2000
     var seed: UInt64?
     var reductionConfig: TCRBudget = .fast
@@ -39,8 +39,8 @@ public func __runContractAsync<Spec: AsyncContractSpec>(
 
     for setting in settings {
         switch setting {
-        case let .maxIterations(n):
-            maxIterations = n
+        case let .samplingBudget(n):
+            samplingBudget = n
         case let .coverageBudget(n):
             coverageBudget = n
         case let .replay(s):
@@ -92,7 +92,7 @@ public func __runContractAsync<Spec: AsyncContractSpec>(
     }
 
     // Snapshot mutable settings into let bindings for Sendable capture.
-    let maxIter = maxIterations
+    let maxIter = samplingBudget
     let covBudget = coverageBudget
     let replaySeed = seed
     nonisolated(unsafe) let reduction = reductionConfig
@@ -124,7 +124,7 @@ public func __runContractAsync<Spec: AsyncContractSpec>(
                 let exhaustResult = __ExhaustRuntime.__exhaust(
                     seqGen,
                     settings: buildExhaustSettings(
-                        maxIterations: maxIter,
+                        samplingBudget: maxIter,
                         coverageBudget: covBudget,
                         seed: replaySeed,
                         reductionConfig: reduction,

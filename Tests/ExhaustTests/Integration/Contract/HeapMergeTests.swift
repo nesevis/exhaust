@@ -28,7 +28,7 @@ struct HeapMergeTests {
             #exhaust(
                 HeapMergeContract.self,
                 commandLimit: 12,
-                .maxIterations(2000),
+                .samplingBudget(2000),
 //                .argumentAwareCoverage,
                 .suppressIssueReporting
             )

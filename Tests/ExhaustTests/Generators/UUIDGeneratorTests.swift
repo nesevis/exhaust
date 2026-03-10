@@ -30,7 +30,7 @@ struct UUIDGeneratorTests {
     func uniqueness() {
         let gen = #gen(.uuid(), .uuid())
 
-        let counterExample = #exhaust(gen, .maxIterations(1000)) { a, b in
+        let counterExample = #exhaust(gen, .samplingBudget(1000)) { a, b in
             a != b
         }
 

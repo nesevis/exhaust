@@ -14,7 +14,7 @@ struct CoverageBudgetTests {
 //    func exhaustiveSkipsRandom() {
 //        // 2 * 2 = 4 combinations, well within default budget
     ////        var seen = Set<String>()
-//        #exhaust(#gen(.bool(), .bool()), .maxIterations(50)) { a, b in
+//        #exhaust(#gen(.bool(), .bool()), .samplingBudget(50)) { a, b in
     ////            seen.insert("\(a),\(b)")
 //            return true
 //        }
@@ -25,7 +25,7 @@ struct CoverageBudgetTests {
     @Test("randomOnly skips coverage phase entirely")
     func randomOnlySkipsCoverage() {
         let gen = #gen(.bool(), .bool())
-        #exhaust(gen, .maxIterations(50), .randomOnly) { _, _ in
+        #exhaust(gen, .samplingBudget(50), .randomOnly) { _, _ in
             true
         }
     }
@@ -34,7 +34,7 @@ struct CoverageBudgetTests {
     func coverageBudgetParsed() {
         // This should compile and run without issues
         let gen = #gen(.bool(), .bool(), .int(in: 0 ... 2))
-        #exhaust(gen, .coverageBudget(50), .maxIterations(50)) { _, _, _ in
+        #exhaust(gen, .coverageBudget(50), .samplingBudget(50)) { _, _, _ in
             true
         }
     }
