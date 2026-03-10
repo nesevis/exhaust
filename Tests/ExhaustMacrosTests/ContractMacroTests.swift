@@ -414,7 +414,7 @@ struct AsyncContractMacroTests {
             #exhaust(AsyncSpec.self, commandLimit: 20)
             """,
             expandedSource: """
-            await __runContractAsync(
+            __runContractAsync(
                 AsyncSpec.self,
                 commandLimit: 20,
                 settings: [],
@@ -435,7 +435,7 @@ struct AsyncContractMacroTests {
             #exhaust(AsyncSpec.self, commandLimit: 10, .maxIterations(50))
             """,
             expandedSource: """
-            await __runContractAsync(
+            __runContractAsync(
                 AsyncSpec.self,
                 commandLimit: 10,
                 settings: [.maxIterations(50)],

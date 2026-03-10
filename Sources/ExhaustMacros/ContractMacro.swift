@@ -38,7 +38,7 @@ public struct ExhaustContractMacro: ExpressionMacro {
     }
 }
 
-/// Expression macro that expands `#exhaust(AsyncSpec.self, commandLimit: N, .settings...)` into a call to `await __runContractAsync(...)` for async contract property tests.
+/// Expression macro that expands `#exhaust(AsyncSpec.self, commandLimit: N, .settings...)` into a call to `__runContractAsync(...)` for async contract property tests.
 public struct ExhaustAsyncContractMacro: ExpressionMacro {
     public static func expansion(
         of node: some FreestandingMacroExpansionSyntax,
@@ -60,7 +60,7 @@ public struct ExhaustAsyncContractMacro: ExpressionMacro {
         let settingsArray = settingsExprs.isEmpty ? "[]" : "[\(settingsExprs.joined(separator: ", "))]"
 
         return """
-        await __runContractAsync(
+        __runContractAsync(
             \(raw: specExpr),
             commandLimit: \(raw: commandLimitExpr),
             settings: \(raw: settingsArray),

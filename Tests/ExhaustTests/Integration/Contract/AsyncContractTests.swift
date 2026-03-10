@@ -8,7 +8,7 @@ import ExhaustCore
 struct AsyncContractTests {
     @Test("Passing async spec produces no counterexample")
     func passingAsyncContract() async {
-        let result = #exhaust(
+        let result = await #exhaust(
             AsyncCounterSpec.self,
             commandLimit: 8,
             .samplingBudget(30),
@@ -19,7 +19,7 @@ struct AsyncContractTests {
 
     @Test("Failing async spec produces a counterexample")
     func failingAsyncContract() async {
-        let result = #exhaust(
+        let result = await #exhaust(
             BuggyAsyncCounterSpec.self,
             commandLimit: 10,
             .samplingBudget(100),
@@ -38,7 +38,7 @@ struct AsyncContractTests {
 
     @Test("Async contract with skip() works correctly")
     func asyncContractWithSkip() async {
-        let result = #exhaust(
+        let result = await #exhaust(
             AsyncSkipSpec.self,
             commandLimit: 8,
             .samplingBudget(30),
@@ -49,14 +49,14 @@ struct AsyncContractTests {
 
     @Test("Mixed sync+async commands produce AsyncContractSpec conformance")
     func mixedAsyncContract() async {
-        let result = #exhaust(MixedAsyncSpec.self, commandLimit: 8, .samplingBudget(30), .suppressIssueReporting)
+        let result = await #exhaust(MixedAsyncSpec.self, commandLimit: 8, .samplingBudget(30), .suppressIssueReporting)
         #expect(result == nil, "Mixed async spec should pass")
     }
 
     @Test("Async contract replay reproduces failure with seed through shrinking")
     func asyncReplayWithSeed() async {
         // Use a fixed seed that produces a failure
-        let result1 = #exhaust(
+        let result1 = await #exhaust(
             BuggyAsyncCounterSpec.self,
             commandLimit: 10,
             .replay(42),
@@ -64,7 +64,7 @@ struct AsyncContractTests {
         )
         #expect(result1 != nil, "Replay with seed 42 should produce a failure")
 
-        let result2 = #exhaust(
+        let result2 = await #exhaust(
             BuggyAsyncCounterSpec.self,
             commandLimit: 10,
             .replay(42),
@@ -78,7 +78,7 @@ struct AsyncContractTests {
 
     @Test("Async contract with argumentAwareCoverage finds and shrinks failure")
     func asyncWithCoverage() async {
-        let result = #exhaust(
+        let result = await #exhaust(
             BuggyAsyncCounterSpec.self,
             commandLimit: 20,
             .suppressIssueReporting,

@@ -92,7 +92,7 @@ public macro exhaust<Spec: ContractSpec>(
 
 /// Runs an async contract property test that generates command sequences, executes them against an async system under test, and verifies that contracts hold after every step.
 ///
-/// Identical to the synchronous `#exhaust(Spec.self, commandLimit:)` overload but for types conforming to ``AsyncContractSpec``. The synchronous core (coverage, reduction, PRNG) runs on a GCD thread; async `run`/`checkInvariants` calls are bridged via `Task` + semaphore.
+/// Identical to the synchronous `#exhaust(Spec.self, commandLimit:)` overload but for types conforming to ``AsyncContractSpec``. Must be called with `await` since the expanded function is `async`. The synchronous core (coverage, reduction, PRNG) runs on a GCD thread; async `run`/`checkInvariants` calls are bridged via `Task` + semaphore.
 ///
 /// - Returns: A ``ContractResult`` containing the shrunk command sequence, execution trace, and SUT state if a violation is found, or `nil` if all sequences pass.
 @freestanding(expression)
