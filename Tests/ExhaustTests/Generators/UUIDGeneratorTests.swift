@@ -54,5 +54,10 @@ struct UUIDGeneratorTests {
     func examine() {
         let gen = #gen(.uuid())
         #examine(gen, samples: 50)
+        
+        let gen2 = #gen(.uuid()).bind { _ in gen }
+        withKnownIssue("Forward-only bind is correctly detected by #examine") {
+            #examine(gen2, samples: 1)
+        }
     }
 }

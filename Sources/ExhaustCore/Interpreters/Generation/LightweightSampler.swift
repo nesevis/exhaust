@@ -109,6 +109,19 @@ public enum LightweightSampler {
                 guard let result = try eval(gen, with: inputValue, rng: &rng, size: size) else { return nil }
                 return try cont(result, continuation, inputValue: inputValue, rng: &rng, size: size)
 
+            case let .transform(kind, inner):
+                guard let innerValue = try eval(inner, with: inputValue, rng: &rng, size: size) else { return nil }
+                let result: Any
+                switch kind {
+                case let .map(forward, _, _):
+                    result = try forward(innerValue)
+                case let .bind(forward, _, _, _):
+                    let boundGen = try forward(innerValue)
+                    guard let boundValue = try eval(boundGen, with: inputValue, rng: &rng, size: size) else { return nil }
+                    result = boundValue
+                }
+                return try cont(result, continuation, inputValue: inputValue, rng: &rng, size: size)
+
             case let .unique(gen, _, keyExtractor):
                 // Lightweight: skip dedup entirely — this is just for fitness estimation
                 guard let result = try eval(gen, with: inputValue, rng: &rng, size: size) else { return nil }

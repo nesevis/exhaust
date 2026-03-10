@@ -22,7 +22,7 @@ public extension __ExhaustRuntime {
     ) -> ReflectiveGenerator<Output> {
         Gen.contramap(
             { _mirrorExtract($0, label: label) },
-            generator.map(forward),
+            generator._map(forward),
         )
     }
 
@@ -49,7 +49,7 @@ public extension __ExhaustRuntime {
                 }
                 return input
             },
-            generator.map(forward),
+            generator._map(forward),
         )
     }
 

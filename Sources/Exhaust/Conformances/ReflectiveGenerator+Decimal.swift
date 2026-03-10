@@ -23,7 +23,6 @@ public extension ReflectiveGenerator {
     /// - Parameters:
     ///   - range: The closed range of `Decimal` values to generate within.
     ///   - precision: The number of decimal places. Must be non-negative. Zero produces integer `Decimal` values.
-    /// - Precondition: `precision` must be non-negative.
     /// - Precondition: The range scaled by `10^precision` must fit within `Int64`.
     ///
     /// ```swift
@@ -31,11 +30,9 @@ public extension ReflectiveGenerator {
     /// ```
     static func decimal(
         in range: ClosedRange<Decimal>,
-        precision: Int,
+        precision: UInt8,
     ) -> ReflectiveGenerator<Decimal> {
-        precondition(precision >= 0, "Precision must be non-negative")
-
-        let multiplier = pow(10, precision) as Decimal
+        let multiplier = pow(10, Int(precision)) as Decimal
         let lowerStep = Int64(truncating: (range.lowerBound * multiplier) as NSDecimalNumber)
         let upperStep = Int64(truncating: (range.upperBound * multiplier) as NSDecimalNumber)
 

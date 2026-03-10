@@ -2,23 +2,60 @@ import Testing
 import Exhaust
 import ExhaustCore
 
-// MARK: - Test SUT: Simple counter with a known bug
+// MARK: - Tests
 
-/// A counter that wraps to zero after reaching a threshold. The bug: it wraps at 3 instead of the stated capacity of 5.
-struct BuggyCounter {
-    private(set) var value: Int = 0
-    let capacity: Int
+@Suite("Buggy counter state machine tests")
+struct BuggyCounterTests {
+    @Test("Detects model/SUT divergence in buggy counter")
+    func detectsBuggyCounter() throws {
+        let result = try #require(
+            #exhaust(
+                BuggyCounterSpec.self,
+                commandLimit: 10,
+                .suppressIssueReporting
+            )
+        )
+        print()
+        // The trace should end with a failing step
+        #expect(result.trace.last.map { step in
+            if case .invariantFailed = step.outcome { return true }
+            return false
+        } == true)
 
-    mutating func increment() {
-        value = (value + 1) % capacity
+        // The SUT should be a BuggyCounter with capacity 3
+        #expect(result.sut.capacity == 3)
     }
 
-    mutating func reset() {
-        value = 0
+    @Test("Trace steps have correct structure")
+    func traceSteps() throws {
+        let result = try #require(
+            #exhaust(
+                BuggyCounterSpec.self,
+                commandLimit: 10,
+                .suppressIssueReporting
+            )
+        )
+
+        // Every step should have a 1-based index
+        for (offset, step) in result.trace.enumerated() {
+            #expect(step.index == offset + 1)
+        }
+
+        // At least the last step should not be .ok (it's the failing step)
+        if let lastStep = result.trace.last {
+            if case .ok = lastStep.outcome {
+                Issue.record("Last trace step should be a failure, not .ok")
+            }
+        }
+
+        // Trace descriptions should be non-empty
+        for step in result.trace {
+            #expect(!step.description.isEmpty)
+        }
     }
 }
 
-// MARK: - State Machine Spec
+// MARK: - Contract
 
 @Contract
 struct BuggyCounterSpec {
@@ -44,47 +81,18 @@ struct BuggyCounterSpec {
     }
 }
 
-// MARK: - Tests
+// MARK: - Types
 
-@Suite("Buggy counter state machine tests")
-struct BuggyCounterTests {
-    @Test("Detects model/SUT divergence in buggy counter")
-    func detectsBuggyCounter() throws {
-        let result = try #require(
-            #exhaust(BuggyCounterSpec.self, commandLimit: 10, .suppressIssueReporting)
-        )
-        print()
-        // The trace should end with a failing step
-        #expect(result.trace.last.map { step in
-            if case .invariantFailed = step.outcome { return true }
-            return false
-        } == true)
+/// A counter that wraps to zero after reaching a threshold. The bug: it wraps at 3 instead of the stated capacity of 5.
+struct BuggyCounter {
+    private(set) var value: Int = 0
+    let capacity: Int
 
-        // The SUT should be a BuggyCounter with capacity 3
-        #expect(result.sut.capacity == 3)
+    mutating func increment() {
+        value = (value + 1) % capacity
     }
 
-    @Test("Trace steps have correct structure")
-    func traceSteps() throws {
-        let result = try #require(
-            #exhaust(BuggyCounterSpec.self, commandLimit: 10, .suppressIssueReporting)
-        )
-
-        // Every step should have a 1-based index
-        for (offset, step) in result.trace.enumerated() {
-            #expect(step.index == offset + 1)
-        }
-
-        // At least the last step should not be .ok (it's the failing step)
-        if let lastStep = result.trace.last {
-            if case .ok = lastStep.outcome {
-                Issue.record("Last trace step should be a failure, not .ok")
-            }
-        }
-
-        // Trace descriptions should be non-empty
-        for step in result.trace {
-            #expect(!step.description.isEmpty)
-        }
+    mutating func reset() {
+        value = 0
     }
 }

@@ -243,6 +243,7 @@ public extension Interpreters {
                     metadata: [
                         "loop": "\(loops)",
                         "stall_budget": "\(stallBudget)",
+                        "sequence": currentSequence.shortString
                     ],
                 )
             }

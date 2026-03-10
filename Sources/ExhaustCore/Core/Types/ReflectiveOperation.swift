@@ -311,4 +311,42 @@ public enum ReflectiveOperation {
     ///   - keyExtractor: Optional function to extract a hashable key from generated values.
     ///     When `nil`, deduplication uses the choice sequence instead.
     case unique(gen: ReflectiveGenerator<Any>, fingerprint: UInt64, keyExtractor: ((Any) -> AnyHashable)?)
+
+    /// Forward-only transformation of the inner generator's output.
+    ///
+    /// This operation reifies `map` and `bind` calls as inspectable data, making them visible to interpreters, debuggers, and analysis passes. The transform function is forward-only — it cannot be inverted during reflection.
+    ///
+    /// **Forward pass**: Interpret `inner`, apply the transform function to the result
+    /// **Backward pass**: Fails with a diagnostic error — the transform is not invertible
+    /// **Replay pass**: Replay `inner`, apply the transform function to the result
+    ///
+    /// **Structural dual of `contramap`**: `contramap` transforms backward/input; `transform` transforms forward/output.
+    ///
+    /// For bidirectional transforms, use `mapped(forward:backward:)` which pairs a `contramap` with an invisible `_map` — no `.transform` operation is created.
+    ///
+    /// - Parameters:
+    ///   - kind: Whether this is a `map` (pure function) or `bind` (dependent generator)
+    ///   - inner: The generator whose output is being transformed
+    case transform(kind: TransformKind, inner: ReflectiveGenerator<Any>)
+}
+
+/// Describes the kind of forward-only transformation applied by a `.transform` operation.
+public enum TransformKind {
+    /// A pure function applied to the inner generator's output.
+    ///
+    /// - Parameters:
+    ///   - forward: The transform function (type-erased). Throws if the transformation fails.
+    ///   - inputType: String representation of the input type, captured at the call site.
+    ///   - outputType: String representation of the output type, captured at the call site.
+    case map(forward: (Any) throws -> Any, inputType: String, outputType: String)
+
+    /// A dependent generator derived from the inner generator's output.
+    ///
+    /// - Parameters:
+    ///   - forward: A function that takes the inner generator's output and returns a new generator.
+    ///   - backward: Optional extraction function `(B) -> A` for reflection. When non-nil, enables
+    ///     the reflector to decompose the output back through the bind. `nil` = forward-only.
+    ///   - inputType: String representation of the input type, captured at the call site.
+    ///   - outputType: String representation of the output type, captured at the call site.
+    case bind(forward: (Any) throws -> ReflectiveGenerator<Any>, backward: ((Any) throws -> Any)?, inputType: String, outputType: String)
 }

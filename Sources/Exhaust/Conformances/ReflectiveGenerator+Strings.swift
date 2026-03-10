@@ -83,7 +83,7 @@ private func characterGenerator(from srs: ScalarRangeSet) -> ReflectiveGenerator
             return srs.index(of: scalar)
         },
         Gen.choose(in: 0 ... srs.scalarCount - 1)
-            .map { Character(srs.scalar(at: $0)) },
+            ._map { Character(srs.scalar(at: $0)) },
     )
 }
 

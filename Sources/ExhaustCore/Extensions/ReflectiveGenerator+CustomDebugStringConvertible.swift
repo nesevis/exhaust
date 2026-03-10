@@ -127,6 +127,18 @@ extension ReflectiveGenerator: CustomDebugStringConvertible where Operation == R
             let mode = keyExtractor != nil ? "by key" : "by choice sequence"
             let genDesc = gen.treeDescription(prefix: childPrefix, isLast: true, depth: depth + 1)
             return "unique(fingerprint: \(fingerprintShort), \(mode))\n" + genDesc
+
+        case let .transform(kind, inner):
+            let kindDesc: String
+            switch kind {
+            case let .map(_, inputType, outputType):
+                kindDesc = "map: \(inputType) → \(outputType)"
+            case let .bind(_, backward, inputType, outputType):
+                let direction = backward != nil ? "bind↔" : "bind→"
+                kindDesc = "\(direction): \(inputType) → \(outputType)"
+            }
+            let innerDesc = inner.treeDescription(prefix: childPrefix, isLast: true, depth: depth + 1)
+            return "transform(\(kindDesc))\n" + innerDesc
         }
     }
 

@@ -167,6 +167,8 @@ public enum BoundaryCoveringArrayReplay {
                 .just("")
             case let .contramap(_, next), let .prune(next):
                 buildSubTree(for: next)
+            case let .transform(_, inner):
+                buildSubTree(for: inner)
             default:
                 nil
             }

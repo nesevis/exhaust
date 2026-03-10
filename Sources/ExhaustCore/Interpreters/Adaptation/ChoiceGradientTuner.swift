@@ -264,6 +264,12 @@ public enum ChoiceGradientTuner<FinalOutput> {
                     continuation: continuation,
                 )
 
+            case let .transform(kind, inner):
+                return .impure(
+                    operation: .transform(kind: kind, inner: bakeWeights(inner, from: accumulator, strategy: strategy)),
+                    continuation: continuation,
+                )
+
             case .chooseBits, .just, .getSize:
                 return gen
             }
@@ -540,6 +546,12 @@ public enum ChoiceGradientTuner<FinalOutput> {
                         fingerprint: fingerprint,
                         keyExtractor: keyExtractor,
                     ),
+                    continuation: continuation,
+                )
+
+            case let .transform(kind, inner):
+                return try .impure(
+                    operation: .transform(kind: kind, inner: subdivideSequenceLengths(inner, context: context)),
                     continuation: continuation,
                 )
 

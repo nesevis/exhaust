@@ -292,6 +292,31 @@ private extension PrefixMaterializer {
                     inputValue: inputValue,
                     context: &context,
                 )
+
+            case let .transform(kind, inner):
+                guard let (innerValue, innerTree) = try generateRecursive(inner, with: inputValue, context: &context) else {
+                    return nil
+                }
+                let result: Any
+                var resultTree = innerTree
+                switch kind {
+                case let .map(forward, _, _):
+                    result = try forward(innerValue)
+                case let .bind(forward, _, _, _):
+                    let boundGen = try forward(innerValue)
+                    guard let (boundValue, boundTree) = try generateRecursive(boundGen, with: inputValue, context: &context) else {
+                        return nil
+                    }
+                    result = boundValue
+                    resultTree = .group([innerTree, boundTree])
+                }
+                return try runContinuation(
+                    result: result,
+                    calleeChoiceTree: resultTree,
+                    continuation: continuation,
+                    inputValue: inputValue,
+                    context: &context,
+                )
             }
         }
     }

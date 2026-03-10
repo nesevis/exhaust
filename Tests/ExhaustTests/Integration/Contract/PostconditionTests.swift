@@ -2,28 +2,63 @@ import Testing
 import Exhaust
 import ExhaustCore
 
-// MARK: - Postcondition-only contract: Set uniqueness
+// MARK: - Tests
 
-/// A "set" backed by an array. The bug: `add` doesn't check for duplicates,
-/// so repeated adds of the same value violate the uniqueness postcondition.
-struct BuggySet<Element: Equatable> {
-    private(set) var elements: [Element] = []
+@Suite("Postcondition-only contract tests")
+struct PostconditionTests {
+    @Test("Set uniqueness postcondition detects duplicate add")
+    func setDuplicateDetection() throws {
+        let result = try #require(
+            #exhaust(
+                SetUniquenessContract.self,
+                commandLimit: 5,
+                .suppressIssueReporting
+            )
+        )
 
-    mutating func add(_ element: Element) {
-        // Bug: doesn't check for duplicates
-        elements.append(element)
+        #expect(result.trace.contains { step in
+            if case .checkFailed = step.outcome { return true }
+            return false
+        })
     }
 
-    mutating func remove(_ element: Element) {
-        elements.removeAll { $0 == element }
+    @Test("Stack LIFO postcondition detects wrong peek")
+    func stackLIFOViolation() throws {
+        let result = try #require(
+            #exhaust(
+                StackLIFOContract.self,
+                commandLimit: 4,
+                .suppressIssueReporting
+            )
+        )
+
+        #expect(result.trace.contains { step in
+            if case .checkFailed = step.outcome { return true }
+            return false
+        })
     }
 
-    func contains(_ element: Element) -> Bool {
-        elements.contains(element)
-    }
+    @Test("Dictionary consistency detects count drift")
+    func dictionaryCountDrift() throws {
+        let result = try #require(
+            #exhaust(
+                DictionaryConsistencyContract.self,
+                commandLimit: 6,
+                .suppressIssueReporting
+            )
+        )
 
-    var count: Int { elements.count }
+        // Could be either invariant failure (count mismatch) or check failure
+        #expect(result.trace.contains { step in
+            switch step.outcome {
+            case .invariantFailed, .checkFailed: return true
+            default: return false
+            }
+        })
+    }
 }
+
+// MARK: - Contract: Set uniqueness
 
 @Contract
 struct SetUniquenessContract {
@@ -54,30 +89,7 @@ struct SetUniquenessContract {
     }
 }
 
-// MARK: - Postcondition-only contract: Stack LIFO ordering
-
-/// A stack that should obey LIFO ordering. The bug: `push` inserts at the
-/// front instead of appending, so `peek` returns the wrong element.
-struct BuggyStack<Element: Equatable> {
-    private(set) var elements: [Element] = []
-
-    mutating func push(_ element: Element) {
-        // Bug: inserts at front instead of end
-        elements.insert(element, at: 0)
-    }
-
-    mutating func pop() -> Element? {
-        guard !elements.isEmpty else { return nil }
-        return elements.removeLast()
-    }
-
-    func peek() -> Element? {
-        elements.last
-    }
-
-    var isEmpty: Bool { elements.isEmpty }
-    var count: Int { elements.count }
-}
+// MARK: - Contract: Stack LIFO ordering
 
 @Contract
 struct StackLIFOContract {
@@ -103,33 +115,7 @@ struct StackLIFOContract {
     }
 }
 
-// MARK: - Self-consistency contract: Dictionary consistency
-
-/// A dictionary wrapper. The bug: `remove` decrements count even when the
-/// key doesn't exist, causing count to drift from the actual element count.
-struct TrackedDictionary {
-    private var storage: [Int: Int] = [:]
-    private(set) var trackedCount = 0
-
-    mutating func set(_ key: Int, _ value: Int) {
-        if storage[key] == nil {
-            trackedCount += 1
-        }
-        storage[key] = value
-    }
-
-    mutating func remove(_ key: Int) {
-        storage.removeValue(forKey: key)
-        // Bug: decrements count unconditionally, even if key didn't exist
-        trackedCount -= 1
-    }
-
-    func get(_ key: Int) -> Int? {
-        storage[key]
-    }
-
-    var actualCount: Int { storage.count }
-}
+// MARK: - Contract: Dictionary consistency
 
 @Contract
 struct DictionaryConsistencyContract {
@@ -155,46 +141,74 @@ struct DictionaryConsistencyContract {
     }
 }
 
-// MARK: - Tests
+// MARK: - Types
 
-@Suite("Postcondition-only contract tests")
-struct PostconditionTests {
-    @Test("Set uniqueness postcondition detects duplicate add")
-    func setDuplicateDetection() throws {
-        let result = try #require(
-            #exhaust(SetUniquenessContract.self, commandLimit: 5, .suppressIssueReporting)
-        )
+/// A "set" backed by an array. The bug: `add` doesn't check for duplicates,
+/// so repeated adds of the same value violate the uniqueness postcondition.
+struct BuggySet<Element: Equatable> {
+    private(set) var elements: [Element] = []
 
-        #expect(result.trace.contains { step in
-            if case .checkFailed = step.outcome { return true }
-            return false
-        })
+    mutating func add(_ element: Element) {
+        // Bug: doesn't check for duplicates
+        elements.append(element)
     }
 
-    @Test("Stack LIFO postcondition detects wrong peek")
-    func stackLIFOViolation() throws {
-        let result = try #require(
-            #exhaust(StackLIFOContract.self, commandLimit: 4, .suppressIssueReporting)
-        )
-
-        #expect(result.trace.contains { step in
-            if case .checkFailed = step.outcome { return true }
-            return false
-        })
+    mutating func remove(_ element: Element) {
+        elements.removeAll { $0 == element }
     }
 
-    @Test("Dictionary consistency detects count drift")
-    func dictionaryCountDrift() throws {
-        let result = try #require(
-            #exhaust(DictionaryConsistencyContract.self, commandLimit: 6, .suppressIssueReporting)
-        )
-
-        // Could be either invariant failure (count mismatch) or check failure
-        #expect(result.trace.contains { step in
-            switch step.outcome {
-            case .invariantFailed, .checkFailed: return true
-            default: return false
-            }
-        })
+    func contains(_ element: Element) -> Bool {
+        elements.contains(element)
     }
+
+    var count: Int { elements.count }
+}
+
+/// A stack that should obey LIFO ordering. The bug: `push` inserts at the
+/// front instead of appending, so `peek` returns the wrong element.
+struct BuggyStack<Element: Equatable> {
+    private(set) var elements: [Element] = []
+
+    mutating func push(_ element: Element) {
+        // Bug: inserts at front instead of end
+        elements.insert(element, at: 0)
+    }
+
+    mutating func pop() -> Element? {
+        guard !elements.isEmpty else { return nil }
+        return elements.removeLast()
+    }
+
+    func peek() -> Element? {
+        elements.last
+    }
+
+    var isEmpty: Bool { elements.isEmpty }
+    var count: Int { elements.count }
+}
+
+/// A dictionary wrapper. The bug: `remove` decrements count even when the
+/// key doesn't exist, causing count to drift from the actual element count.
+struct TrackedDictionary {
+    private var storage: [Int: Int] = [:]
+    private(set) var trackedCount = 0
+
+    mutating func set(_ key: Int, _ value: Int) {
+        if storage[key] == nil {
+            trackedCount += 1
+        }
+        storage[key] = value
+    }
+
+    mutating func remove(_ key: Int) {
+        storage.removeValue(forKey: key)
+        // Bug: decrements count unconditionally, even if key didn't exist
+        trackedCount -= 1
+    }
+
+    func get(_ key: Int) -> Int? {
+        storage[key]
+    }
+
+    var actualCount: Int { storage.count }
 }

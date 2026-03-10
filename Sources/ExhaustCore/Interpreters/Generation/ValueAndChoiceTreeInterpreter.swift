@@ -259,6 +259,17 @@ public struct ValueAndChoiceTreeInterpreter<FinalOutput>: ~Copyable, ExhaustIter
                     context: &context,
                 )
 
+            // MARK: - Transform
+
+            case let .transform(kind, inner):
+                return try handleTransform(
+                    kind: kind,
+                    inner: inner,
+                    continuation: continuation,
+                    inputValue: inputValue,
+                    context: &context,
+                )
+
             case let .unique(gen, fingerprint, keyExtractor):
                 var attempts = 0 as UInt64
                 while attempts < GenerationContext.maxFilterRuns {
@@ -568,6 +579,39 @@ public struct ValueAndChoiceTreeInterpreter<FinalOutput>: ~Copyable, ExhaustIter
         return try runContinuation(
             result: result.0,
             calleeChoiceTree: .resize(newSize: newSize, choices: [result.1]),
+            continuation: continuation,
+            inputValue: inputValue,
+            context: &context,
+        )
+    }
+
+    @inline(__always)
+    private static func handleTransform<Output>(
+        kind: TransformKind,
+        inner: ReflectiveGenerator<Any>,
+        continuation: (Any) throws -> ReflectiveGenerator<Output>,
+        inputValue: some Any,
+        context: inout GenerationContext,
+    ) throws -> (Output, ChoiceTree)? {
+        guard let (innerValue, innerTree) = try generateRecursive(inner, with: inputValue, context: &context) else {
+            return nil
+        }
+        let result: Any
+        var resultTree = innerTree
+        switch kind {
+        case let .map(forward, _, _):
+            result = try forward(innerValue)
+        case let .bind(forward, _, _, _):
+            let boundGen = try forward(innerValue)
+            guard let (boundValue, boundTree) = try generateRecursive(boundGen, with: inputValue, context: &context) else {
+                return nil
+            }
+            result = boundValue
+            resultTree = .group([innerTree, boundTree])
+        }
+        return try runContinuation(
+            result: result,
+            calleeChoiceTree: resultTree,
             continuation: continuation,
             inputValue: inputValue,
             context: &context,

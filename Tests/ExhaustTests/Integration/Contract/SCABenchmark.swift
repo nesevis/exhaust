@@ -3,7 +3,7 @@ import Exhaust
 import ExhaustCore
 import Foundation
 
-@Suite("SCA sequence length benchmark", .serialized, .disabled("Manual benchmark — enable to measure"))
+@Suite("SCA sequence length benchmark", .serialized)
 struct SCABenchmark {
     @Test("Sequence length timing", arguments: [5, 8, 10, 15, 20, 25, 30])
     func sequenceLengthTiming(length: Int) {
@@ -18,7 +18,7 @@ struct SCABenchmark {
         var times: [Duration] = []
         for _ in 0..<5 {
             let start = ContinuousClock.now
-            let _ = #exhaust(
+            _ = #exhaust(
                 BuggyCounterSpec.self,
                 commandLimit: length,
                 .suppressIssueReporting,

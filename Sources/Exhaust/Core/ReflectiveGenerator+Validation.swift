@@ -70,6 +70,8 @@ public enum ValidationFailure: Sendable, CustomStringConvertible {
     case replayFailed(sampleIndex: Int)
     case replayNonDeterministic(sampleIndex: Int, detail: String?)
     case noValuesGenerated
+    /// Reflection failed because the generator contains a forward-only `map` or `bind`.
+    case forwardOnlyTransform(inputType: String, outputType: String, kind: String)
 
     public var description: String {
         switch self {
@@ -83,6 +85,10 @@ public enum ValidationFailure: Sendable, CustomStringConvertible {
             "Sample \(index): replay produced different results" + (detail.map { " — \($0)" } ?? "")
         case .noValuesGenerated:
             "Generator produced no values"
+        case let .forwardOnlyTransform(inputType, outputType, "map"):
+            "Reflection blocked by forward-only map (\(inputType) → \(outputType)). Use .mapped(forward:backward:) to provide an inverse."
+        case let .forwardOnlyTransform(inputType, outputType, _):
+            "Reflection blocked by bind (\(inputType) → \(outputType)). This will prevent replay and reduction of externally created values of \(outputType)."
         }
     }
 }
@@ -176,6 +182,7 @@ private extension ReflectiveGenerator where Operation == ReflectiveOperation {
     ) -> ValidationReport {
         let maxFailures = 20
         var failures: [ValidationFailure] = []
+        var forwardOnlyDetected = false
         var valuesGenerated = 0
         var roundTripSuccesses = 0
         var determinismSuccesses = 0
@@ -196,16 +203,14 @@ private extension ReflectiveGenerator where Operation == ReflectiveOperation {
             uniqueSequences.insert(generatedSequence)
 
             // -- Round-trip check --
-            if failures.count < maxFailures {
+            if !forwardOnlyDetected, failures.count < maxFailures {
                 do {
-                    guard let reflectedTree = try Interpreters.reflect(self, with: value) else {
-                        failures.append(.reflectionFailed(sampleIndex: sampleIndex, errorDescription: "reflect returned nil"))
-                        continue
-                    }
+                    let reflectedTree = try Interpreters.reflect(self, with: value)
+                    let tree = reflectedTree ?? tree
 
                     if let differ {
                         // Equatable path: replay the reflected tree and compare values
-                        if let replayedValue = try Interpreters.replay(self, using: reflectedTree) {
+                        if let replayedValue = try Interpreters.replay(self, using: tree) {
                             switch differ(value, replayedValue) {
                             case .equal:
                                 roundTripSuccesses += 1
@@ -220,7 +225,7 @@ private extension ReflectiveGenerator where Operation == ReflectiveOperation {
                         }
                     } else {
                         // Non-Equatable path: compare via choice sequences
-                        let reflectedSequence = ChoiceSequence.flatten(reflectedTree)
+                        let reflectedSequence = ChoiceSequence.flatten(tree)
                         if generatedSequence == reflectedSequence {
                             roundTripSuccesses += 1
                         } else {
@@ -229,6 +234,17 @@ private extension ReflectiveGenerator where Operation == ReflectiveOperation {
                                 detail: "choice sequences differ: \(generatedSequence.shortString) vs \(reflectedSequence.shortString)",
                             ))
                         }
+                    }
+                } catch let error as Interpreters.ReflectionError {
+                    switch error {
+                    case let .forwardOnlyMap(inputType, outputType):
+                        failures.append(.forwardOnlyTransform(inputType: inputType, outputType: outputType, kind: "map"))
+                        forwardOnlyDetected = true
+                    case let .forwardOnlyBind(inputType, outputType):
+                        failures.append(.forwardOnlyTransform(inputType: inputType, outputType: outputType, kind: "bind"))
+                        forwardOnlyDetected = true
+                    default:
+                        failures.append(.reflectionFailed(sampleIndex: sampleIndex, errorDescription: "\(error)"))
                     }
                 } catch {
                     failures.append(.reflectionFailed(sampleIndex: sampleIndex, errorDescription: "\(error)"))

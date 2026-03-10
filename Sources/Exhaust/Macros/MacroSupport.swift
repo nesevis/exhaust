@@ -89,6 +89,9 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
             let coverageResult = CoverageRunner.run(gen, coverageBudget: coverageBudget, property: property)
             switch coverageResult {
             case let .failure(value, tree, iteration):
+                // Reflect to get a structurally correct tree with materialized picks,
+                // since coverage-built trees lack unselected branches needed by reducer strategies.
+                let shrinkTree = (try? Interpreters.reflect(gen, with: value)) ?? tree
                 var propertyInvocationCount = 0
                 let countingProperty: (Output) -> Bool = { value in
                     propertyInvocationCount += 1
@@ -97,7 +100,7 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
                 do {
                     if let (shrunkSequence, shrunkValue) = try Interpreters.reduce(
                         gen: gen,
-                        tree: tree,
+                        tree: shrinkTree,
                         config: reductionConfig,
                         property: countingProperty,
                     ) {
@@ -217,6 +220,7 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
         var iterations = 0
         var generator = ValueAndChoiceTreeInterpreter(
             gen,
+            materializePicks: true,
             seed: seed,
             maxRuns: maxIterations,
         )
