@@ -11,40 +11,6 @@ import ExhaustCore
 
 @Suite("Online CGS Interpreter")
 struct OnlineCGSInterpreterTests {
-    // MARK: - BST Height Diversity
-
-    @Test("BST: online CGS produces valid BSTs at heights >= 2", .disabled("Takes 21 seconds to run"))
-    func bstHeightDiversity() throws {
-        let gen = BST.arbitrary()
-        let isValidNonLeafBST: (BST) -> Bool = { $0 != .leaf && $0.isValidBST() }
-
-        var iterator = OnlineCGSInterpreter(
-            gen,
-            predicate: isValidNonLeafBST,
-            sampleCount: 50,
-            seed: 42,
-            maxRuns: 500,
-        )
-
-        var validTrees = [BST]()
-        while let value = try iterator.next() {
-            if isValidNonLeafBST(value) {
-                validTrees.append(value)
-            }
-        }
-
-        let heights = Dictionary(grouping: validTrees, by: \.height).mapValues(\.count)
-        let uniqueTrees = Set(validTrees)
-
-        print("Online CGS BST: \(validTrees.count) valid, \(uniqueTrees.count) unique")
-        print("Heights: \(heights.sorted(by: { $0.key < $1.key }))")
-
-        // The key test: online CGS should produce trees at height >= 2
-        let tallTreeCount = validTrees.count { $0.height >= 2 }
-        #expect(tallTreeCount > 0, "Online CGS should produce BSTs at height >= 2, got heights: \(heights)")
-        #expect(uniqueTrees.count > 20, "Should produce diverse valid BSTs, got \(uniqueTrees.count) unique")
-    }
-
     // MARK: - Simple Pick Guidance
 
     @Test("Pick guidance: CGS favours branch matching predicate")

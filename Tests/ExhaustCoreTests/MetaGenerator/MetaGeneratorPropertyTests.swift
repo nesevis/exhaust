@@ -388,7 +388,7 @@ struct MetaGeneratorPropertyTests {
 
     // MARK: 13. Random Recipes with Just/Zip
 
-    @Test("Random recipes with just and zip round-trip through reflect and replay", .disabled("Flaky?"))
+    @Test("Random recipes with just and zip round-trip through reflect and replay", .disabled("This blows the stack when ran repeatedly"))
     func randomJustZipRecipesRoundTrip() throws {
         // Use depth 2 to get combinations of just, zip, and other combinators
         let recipeGen = recipeGenerator(producing: .int, maxDepth: 2)

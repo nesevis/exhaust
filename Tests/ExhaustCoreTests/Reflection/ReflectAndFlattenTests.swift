@@ -268,7 +268,7 @@ struct ReflectAndFlattenTests {
         #expect(flattened.isEmpty == false)
     }
 
-    @Test("Reflect and flatten String", .disabled("No more character use in shrinking"))
+    @Test("Reflect and flatten String")
     func reflectAndFlattenString() throws {
         let gen = Gen.resize(3, stringGen())
         let value = "abc"

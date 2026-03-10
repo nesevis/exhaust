@@ -92,8 +92,7 @@ struct BoundaryBudgetTests {
         #expect(counterExample == nil)
     }
 
-    /// Flaky — why is this flaky
-    @Test("2-param: day-of-week consistency across DST", .disabled("FIXME"))
+    @Test("2-param: day-of-week consistency across DST", .disabled("This fails and finds two dates in August. Need to figure out what that is"))
     func twoParamDayOfWeekConsistency() {
         let gen = #gen(
             .date(between: Self.year2024, interval: .hours(1)),

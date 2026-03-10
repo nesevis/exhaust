@@ -26,17 +26,6 @@ struct UUIDGeneratorTests {
         #expect(counterExample == nil)
     }
 
-    @Test("Generated UUIDs are unique", .disabled())
-    func uniqueness() {
-        let gen = #gen(.uuid(), .uuid())
-
-        let counterExample = #exhaust(gen, .samplingBudget(1000)) { a, b in
-            a != b
-        }
-
-        #expect(counterExample == nil)
-    }
-
     @Test("UUID round-trips through string")
     func stringRoundTrip() {
         let gen = #gen(.uuid())
