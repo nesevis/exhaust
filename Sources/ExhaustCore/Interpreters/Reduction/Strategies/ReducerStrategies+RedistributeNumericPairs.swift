@@ -14,8 +14,20 @@ extension ReducerStrategies {
         let distance: UInt64
     }
 
+    private struct MixedRedistributionContext {
+        let lhsNumerator: Int64
+        let rhsNumerator: Int64
+        let denominator: UInt64
+        let intStepSize: UInt64
+        let lhsMovesUpward: Bool
+        let distanceInSteps: UInt64
+        let lhsTag: TypeTag
+        let rhsTag: TypeTag
+    }
+
     /// Pass 5b: Cross-container value redistribution.
-    /// For each pair of numeric values with the same tag, tries to decrease the earlier value (toward its reduction target) while increasing the later value by the same amount k.
+    /// For each pair of numeric values, tries to decrease one value (toward its reduction target) while increasing the other by the same amount k.
+    /// Supports same-tag pairs (integer or float) and cross-type pairs (float + integer) via rational arithmetic.
     /// This enables reduction when values in different containers are coupled.
     ///
     /// - Complexity: O(*s* + *v*² · log *d* · *M*), where *s* is the sequence length,
@@ -30,7 +42,7 @@ extension ReducerStrategies {
         onBudgetExhausted: ((String) -> Void)? = nil,
     ) throws -> (ChoiceSequence, Output)? {
         typealias Candidate = (index: Int, value: ChoiceSequenceValue.Value)
-        var candidatesByTag = [TypeTag: [Candidate]]()
+        var allNumericCandidates = [Candidate]()
         var budget = ProbeBudget(passName: "redistributeNumericPairs", limit: probeBudget)
         var didReportBudgetExhaustion = false
 
@@ -50,7 +62,7 @@ extension ReducerStrategies {
             case let .value(v), let .reduced(v):
                 switch v.choice {
                 case .unsigned, .signed, .floating:
-                    candidatesByTag[v.choice.tag, default: []].append((i, v))
+                    allNumericCandidates.append((i, v))
                 }
             default:
                 break
@@ -65,19 +77,16 @@ extension ReducerStrategies {
         var currentNonSemanticCount = semanticStats.nonSemanticCount
         var budgetExhausted = false
 
-        candidateLoop: for (_, candidates) in candidatesByTag {
-            guard candidates.count >= 2 else { continue }
+        candidateLoop: for ci in 0 ..< allNumericCandidates.count {
+            for cj in (ci + 1) ..< allNumericCandidates.count {
+                // Try both orientations so index ordering does not block useful redistributions.
+                for (lhs, rhs) in [(ci, cj), (cj, ci)] {
+                    if budgetExhausted {
+                        break candidateLoop
+                    }
 
-            for ci in 0 ..< candidates.count {
-                for cj in (ci + 1) ..< candidates.count {
-                    // Try both orientations so index ordering does not block useful redistributions.
-                    for (lhs, rhs) in [(ci, cj), (cj, ci)] {
-                        if budgetExhausted {
-                            break candidateLoop
-                        }
-
-                        let (idx1, _) = candidates[lhs]
-                        let (idx2, _) = candidates[rhs]
+                    let (idx1, _) = allNumericCandidates[lhs]
+                    let (idx2, _) = allNumericCandidates[rhs]
 
                         // Use current values (may have been updated by prior iterations)
                         guard let fresh1 = current[idx1].value,
@@ -90,12 +99,25 @@ extension ReducerStrategies {
                             rhs: fresh2.choice,
                             lhsTargetBitPattern: target1,
                         )
+                        let mixedContext: MixedRedistributionContext? = floatContext == nil
+                            ? makeMixedRedistributionContext(
+                                lhs: fresh1.choice,
+                                rhs: fresh2.choice,
+                                lhsTargetBitPattern: target1,
+                            )
+                            : nil
+
+
                         let decrease1Upward: Bool
                         let distance1: UInt64
                         if let floatContext {
                             decrease1Upward = floatContext.lhsMovesUpward
                             distance1 = floatContext.distance
+                        } else if let mixedContext {
+                            decrease1Upward = mixedContext.lhsMovesUpward
+                            distance1 = mixedContext.distanceInSteps
                         } else {
+                            guard fresh1.choice.tag == fresh2.choice.tag else { continue }
                             guard bp1 != target1 else { continue }
                             decrease1Upward = target1 > bp1
                             distance1 = decrease1Upward
@@ -127,7 +149,7 @@ extension ReducerStrategies {
                         var lastProbeEntry1: ChoiceSequenceValue?
                         var lastProbeEntry2: ChoiceSequenceValue?
                         var lastProbeNonSemanticCount = Int.max
-                        let beforePair = [fresh1.choice.shortlexKey, fresh2.choice.shortlexKey].sorted()
+                        let beforePair = sortedPairKeys(fresh1.choice, fresh2.choice)
 
                         _ = AdaptiveProbe.findInteger { (k: UInt64) -> Bool in
                             if budgetExhausted {
@@ -136,16 +158,26 @@ extension ReducerStrategies {
                             guard k > 0 else { return true }
                             guard k <= distance1 else { return false }
 
-                            guard let (newChoice1, newChoice2) = redistributedPairChoices(
-                                lhs: fresh1.choice,
-                                rhs: fresh2.choice,
-                                delta: k,
-                                lhsMovesUpward: decrease1Upward,
-                                floatContext: floatContext,
-                            ) else {
+                            guard let (newChoice1, newChoice2) = {
+                                if let mixedContext {
+                                    return mixedRedistributedPairChoices(
+                                        lhs: fresh1.choice,
+                                        rhs: fresh2.choice,
+                                        delta: k,
+                                        context: mixedContext,
+                                    )
+                                }
+                                return redistributedPairChoices(
+                                    lhs: fresh1.choice,
+                                    rhs: fresh2.choice,
+                                    delta: k,
+                                    lhsMovesUpward: decrease1Upward,
+                                    floatContext: floatContext,
+                                )
+                            }() else {
                                 return false
                             }
-                            if floatContext != nil {
+                            if floatContext != nil || mixedContext != nil {
                                 if fresh1.isRangeExplicit, newChoice1.fits(in: fresh1.validRange) == false {
                                     return false
                                 }
@@ -184,7 +216,7 @@ extension ReducerStrategies {
                                 )
                             #endif
 
-                            let afterPair = [newChoice1.shortlexKey, newChoice2.shortlexKey].sorted()
+                            let afterPair = sortedPairKeys(newChoice1, newChoice2)
                             let improvesStructure = probe.shortLexPrecedes(current)
                                 || probeNonSemanticCount < currentNonSemanticCount
                                 || afterPair.lexicographicallyPrecedes(beforePair)
@@ -231,7 +263,7 @@ extension ReducerStrategies {
                             if distance1 > 1 { fallbackKs.append(distance1 - 1) }
                             fallbackKs.append(max(1, distance1 / 2))
                             fallbackKs.append(max(1, distance1 / 4))
-                            if floatContext == nil,
+                            if floatContext == nil, mixedContext == nil,
                                let wrapK = wrappingBoundaryDelta(for: fresh2.choice.tag, bitPattern: fresh2.choice.bitPattern64),
                                wrapK > 0,
                                wrapK <= distance1
@@ -249,16 +281,26 @@ extension ReducerStrategies {
                             var bestFallbackEntry2: ChoiceSequenceValue?
                             var bestFallbackNonSemantic = Int.max
                             for k in uniqueFallbackKs {
-                                guard let (newChoice1, newChoice2) = redistributedPairChoices(
-                                    lhs: fresh1.choice,
-                                    rhs: fresh2.choice,
-                                    delta: k,
-                                    lhsMovesUpward: decrease1Upward,
-                                    floatContext: floatContext,
-                                ) else {
+                                guard let (newChoice1, newChoice2) = {
+                                    if let mixedContext {
+                                        return mixedRedistributedPairChoices(
+                                            lhs: fresh1.choice,
+                                            rhs: fresh2.choice,
+                                            delta: k,
+                                            context: mixedContext,
+                                        )
+                                    }
+                                    return redistributedPairChoices(
+                                        lhs: fresh1.choice,
+                                        rhs: fresh2.choice,
+                                        delta: k,
+                                        lhsMovesUpward: decrease1Upward,
+                                        floatContext: floatContext,
+                                    )
+                                }() else {
                                     continue
                                 }
-                                if floatContext != nil {
+                                if floatContext != nil || mixedContext != nil {
                                     if fresh1.isRangeExplicit, newChoice1.fits(in: fresh1.validRange) == false {
                                         continue
                                     }
@@ -294,7 +336,7 @@ extension ReducerStrategies {
                                         "SequenceSemanticStats delta mismatch in redistributeNumericPairs fallback",
                                     )
                                 #endif
-                                let afterPair = [newChoice1.shortlexKey, newChoice2.shortlexKey].sorted()
+                                let afterPair = sortedPairKeys(newChoice1, newChoice2)
                                 let improvesStructure = probe.shortLexPrecedes(current)
                                     || probeNonSemanticCount < currentNonSemanticCount
                                     || afterPair.lexicographicallyPrecedes(beforePair)
@@ -345,7 +387,7 @@ extension ReducerStrategies {
                            let probeEntry1 = lastProbeEntry1,
                            let probeEntry2 = lastProbeEntry2
                         {
-                            let afterPairSorted = [probeEntry1.value!.choice.shortlexKey, probeEntry2.value!.choice.shortlexKey].sorted()
+                            let afterPairSorted = sortedPairKeys(probeEntry1.value!.choice, probeEntry2.value!.choice)
                             guard probe.shortLexPrecedes(current)
                                 || lastProbeNonSemanticCount < currentNonSemanticCount
                                 || afterPairSorted.lexicographicallyPrecedes(beforePair)
@@ -360,7 +402,6 @@ extension ReducerStrategies {
                             )
                             currentNonSemanticCount = semanticStats.nonSemanticCount
                         }
-                    }
                 }
             }
         }
@@ -434,6 +475,180 @@ extension ReducerStrategies {
         )
     }
 
+    private static func rationalForChoice(
+        _ choice: ChoiceValue,
+    ) -> (numerator: Int64, denominator: UInt64)? {
+        switch choice {
+        case let .floating(value, _, tag):
+            guard value.isFinite else { return nil }
+            return FloatShrink.integerRatio(for: value, tag: tag)
+        case let .signed(value, _, _):
+            return (value, 1)
+        case let .unsigned(value, _):
+            guard value <= UInt64(Int64.max) else { return nil }
+            return (Int64(value), 1)
+        }
+    }
+
+    private static func rationalForTarget(
+        _ choice: ChoiceValue,
+        targetBitPattern: UInt64,
+    ) -> (numerator: Int64, denominator: UInt64)? {
+        switch choice {
+        case let .floating(_, _, tag):
+            let targetChoice = ChoiceValue(
+                tag.makeConvertible(bitPattern64: targetBitPattern),
+                tag: tag,
+            )
+            guard case let .floating(targetValue, _, _) = targetChoice,
+                  targetValue.isFinite
+            else { return nil }
+            return FloatShrink.integerRatio(for: targetValue, tag: tag)
+        case let .signed(_, _, tag):
+            let targetChoice = ChoiceValue(
+                tag.makeConvertible(bitPattern64: targetBitPattern),
+                tag: tag,
+            )
+            guard case let .signed(targetValue, _, _) = targetChoice else { return nil }
+            return (targetValue, 1)
+        case let .unsigned(_, tag):
+            let targetChoice = ChoiceValue(
+                tag.makeConvertible(bitPattern64: targetBitPattern),
+                tag: tag,
+            )
+            guard case let .unsigned(targetValue, _) = targetChoice else { return nil }
+            guard targetValue <= UInt64(Int64.max) else { return nil }
+            return (Int64(targetValue), 1)
+        }
+    }
+
+    private static func isIntegerTag(_ tag: TypeTag) -> Bool {
+        switch tag {
+        case .int, .int8, .int16, .int32, .int64,
+             .uint, .uint8, .uint16, .uint32, .uint64:
+            true
+        default:
+            false
+        }
+    }
+
+    private static func makeMixedRedistributionContext(
+        lhs: ChoiceValue,
+        rhs: ChoiceValue,
+        lhsTargetBitPattern: UInt64,
+    ) -> MixedRedistributionContext? {
+        // Only applies to cross-tag pairs where at least one is floating-point.
+        guard lhs.tag != rhs.tag else { return nil }
+        let lhsIsFloat = lhs.tag == .double || lhs.tag == .float
+        let rhsIsFloat = rhs.tag == .double || rhs.tag == .float
+        guard lhsIsFloat || rhsIsFloat else { return nil }
+
+        guard let lhsRatio = rationalForChoice(lhs),
+              let rhsRatio = rationalForChoice(rhs),
+              let targetRatio = rationalForTarget(lhs, targetBitPattern: lhsTargetBitPattern),
+              let lhsAndRhsDenominator = leastCommonMultiple(lhsRatio.denominator, rhsRatio.denominator),
+              let denominator = leastCommonMultiple(lhsAndRhsDenominator, targetRatio.denominator),
+              denominator > 0
+        else { return nil }
+
+        guard let lhsNumerator = scaledNumerator(lhsRatio, to: denominator),
+              let rhsNumerator = scaledNumerator(rhsRatio, to: denominator),
+              let targetNumerator = scaledNumerator(targetRatio, to: denominator)
+        else { return nil }
+
+        let lhsIsInteger = isIntegerTag(lhs.tag)
+        let rhsIsInteger = isIntegerTag(rhs.tag)
+        let intStepSize: UInt64 = (lhsIsInteger || rhsIsInteger) ? denominator : 1
+
+        guard intStepSize > 0 else { return nil }
+
+        let lhsMovesUpward = targetNumerator > lhsNumerator
+        let rawDistance = absDiff(lhsNumerator, targetNumerator)
+        guard rawDistance > 0 else { return nil }
+
+        let distanceInSteps = rawDistance / intStepSize
+        guard distanceInSteps > 0 else { return nil }
+
+        return .init(
+            lhsNumerator: lhsNumerator,
+            rhsNumerator: rhsNumerator,
+            denominator: denominator,
+            intStepSize: intStepSize,
+            lhsMovesUpward: lhsMovesUpward,
+            distanceInSteps: distanceInSteps,
+            lhsTag: lhs.tag,
+            rhsTag: rhs.tag,
+        )
+    }
+
+    private static func mixedRedistributedPairChoices(
+        lhs: ChoiceValue,
+        rhs: ChoiceValue,
+        delta: UInt64,
+        context: MixedRedistributionContext,
+    ) -> (ChoiceValue, ChoiceValue)? {
+        guard delta <= context.distanceInSteps else { return nil }
+
+        let (actualDelta, stepOverflow) = delta.multipliedReportingOverflow(by: context.intStepSize)
+        guard stepOverflow == false, actualDelta <= UInt64(Int64.max) else { return nil }
+        let signedDelta = Int64(actualDelta)
+
+        let newLhsNum: Int64
+        let newRhsNum: Int64
+        if context.lhsMovesUpward {
+            let (lhsCandidate, lhsOverflow) = context.lhsNumerator.addingReportingOverflow(signedDelta)
+            let (rhsCandidate, rhsOverflow) = context.rhsNumerator.subtractingReportingOverflow(signedDelta)
+            guard lhsOverflow == false, rhsOverflow == false else { return nil }
+            newLhsNum = lhsCandidate
+            newRhsNum = rhsCandidate
+        } else {
+            let (lhsCandidate, lhsOverflow) = context.lhsNumerator.subtractingReportingOverflow(signedDelta)
+            let (rhsCandidate, rhsOverflow) = context.rhsNumerator.addingReportingOverflow(signedDelta)
+            guard lhsOverflow == false, rhsOverflow == false else { return nil }
+            newLhsNum = lhsCandidate
+            newRhsNum = rhsCandidate
+        }
+
+        guard let newChoice1 = choiceFromNumerator(newLhsNum, denominator: context.denominator, original: lhs),
+              let newChoice2 = choiceFromNumerator(newRhsNum, denominator: context.denominator, original: rhs)
+        else { return nil }
+
+        return (newChoice1, newChoice2)
+    }
+
+    private static func choiceFromNumerator(
+        _ numerator: Int64,
+        denominator: UInt64,
+        original: ChoiceValue,
+    ) -> ChoiceValue? {
+        switch original {
+        case let .floating(_, _, tag):
+            let value = Double(numerator) / Double(denominator)
+            return floatingChoice(from: value, tag: tag)
+        case let .signed(_, _, tag):
+            let denom = Int64(denominator)
+            guard denom > 0, numerator % denom == 0 else { return nil }
+            let intValue = numerator / denom
+            let narrowed = ChoiceValue(intValue, tag: tag)
+            guard case let .signed(narrowedValue, _, _) = narrowed,
+                  narrowedValue == intValue
+            else { return nil }
+            return narrowed
+        case let .unsigned(_, tag):
+            let denom = Int64(denominator)
+            guard denom > 0, numerator % denom == 0 else { return nil }
+            let intValue = numerator / denom
+            guard intValue >= 0 else { return nil }
+            let uintValue = UInt64(intValue)
+            let narrowed = ChoiceValue(uintValue, tag: tag)
+            guard case let .unsigned(narrowedValue, _) = narrowed,
+                  narrowedValue == uintValue
+            else { return nil }
+            return narrowed
+        }
+    }
+
+
     private static func scaledNumerator(
         _ ratio: (numerator: Int64, denominator: UInt64),
         to denominator: UInt64,
@@ -487,6 +702,33 @@ extension ReducerStrategies {
             return ChoiceValue(narrowed, tag: .float)
         default:
             return nil
+        }
+    }
+
+    /// Returns a sorted pair of complexity keys for two `ChoiceValue`s.
+    ///
+    /// Same-tag pairs use the native `shortlexKey` (zigzag for integers,
+    /// `FloatShortlex` for floats). Cross-type pairs map both values onto
+    /// the `FloatShortlex` scale via their absolute `Double` magnitude so
+    /// that `Int(1)` and `Double(1.0)` produce the same key (`1`).
+    private static func sortedPairKeys(
+        _ a: ChoiceValue,
+        _ b: ChoiceValue,
+    ) -> [UInt64] {
+        if a.tag == b.tag {
+            return [a.shortlexKey, b.shortlexKey].sorted()
+        }
+        return [crossTypeKey(a), crossTypeKey(b)].sorted()
+    }
+
+    private static func crossTypeKey(_ choice: ChoiceValue) -> UInt64 {
+        switch choice {
+        case let .floating(value, _, _):
+            FloatShortlex.shortlexKey(for: value)
+        case let .signed(value, _, _):
+            FloatShortlex.shortlexKey(for: Double(value))
+        case let .unsigned(value, _):
+            FloatShortlex.shortlexKey(for: Double(value))
         }
     }
 

@@ -258,22 +258,19 @@ struct ExamineFirstPartyGeneratorsTests {
     // MARK: - Collections: set
 
     @Test func setDefaultCount() {
-        withKnownIssue("Set element ordering is non-deterministic — replay fails") {
-            let report = #examine(.int(in: 0 ... 100).set(), samples: 1)
-            #expect(report.passed)
-        }
+        let report = #examine(.int(in: 0 ... 100).set(), samples: 1)
+        #expect(report.passed)
     }
 
     @Test func setWithCountRange() {
-        withKnownIssue("Set element ordering is non-deterministic — replay fails") {
-            let report = #examine(.int(in: 0 ... 100).set(count: 1 ... 5), samples: 1)
-            #expect(report.passed)
-        }
+        // Why is this passing?
+        let report = #examine(.int(in: 0 ... 100).set(count: 1 ... 5), samples: 10)
+        #expect(report.passed)
     }
 
     @Test func setWithFixedCount() {
         withKnownIssue("Set element ordering is non-deterministic — replay fails") {
-            let report = #examine(.int(in: 0 ... 100).set(count: 3), samples: 1)
+            let report = #examine(.int(in: 0 ... 100).set(count: 3), samples: 10)
             #expect(report.passed)
         }
     }

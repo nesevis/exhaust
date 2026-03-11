@@ -38,7 +38,7 @@ struct HypothesisShrinkQualityParityTests {
         return (0, gap)
     }
 
-    @Test("Hypothesis::test_sum_of_pair_mixed", .disabled("Known parity gap: mixed numeric pairs are not yet jointly minimized to Hypothesis target"))
+    @Test("Hypothesis::test_sum_of_pair_mixed")
     func sumOfPairMixed() throws {
         let floatIntGen = #gen(
             .double(in: 0.0 ... 1000.0),
