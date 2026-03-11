@@ -177,7 +177,7 @@ struct HypothesisShrinkQualityParityTests {
         }
     }
 
-    @Test("Hypothesis::test_lowering_together_positive", .disabled("Known parity gap: pair lowering stalls one step above Hypothesis target near distance-1 windows"))
+    @Test("Hypothesis::test_lowering_together_positive")
     func loweringTogetherPositive() throws {
         let gen = #gen(
             .int(in: 0 ... 20),
@@ -188,6 +188,7 @@ struct HypothesisShrinkQualityParityTests {
             let property: ((Int, Int)) -> Bool = { pair in
                 pair.0 + gap != pair.1
             }
+            ExhaustLog.setConfiguration(.init(isEnabled: true, minimumLevel: .info, categoryMinimumLevels: [.reducer: .debug], format: .human))
             let output = try reduce(gen, startingAt: start, property: property)
             #expect(property(output) == false)
             #expect(output == (0, gap))
@@ -211,7 +212,7 @@ struct HypothesisShrinkQualityParityTests {
         }
     }
 
-    @Test("Hypothesis::test_lowering_together_mixed", .disabled("Known parity gap: mixed-sign pair lowering stalls one step above Hypothesis target near distance-1 windows"))
+    @Test("Hypothesis::test_lowering_together_mixed")
     func loweringTogetherMixed() throws {
         let gen = #gen(
             .int(in: -10 ... 10),
@@ -228,7 +229,7 @@ struct HypothesisShrinkQualityParityTests {
         }
     }
 
-    @Test("Hypothesis::test_lowering_together_with_gap", .disabled("Known parity gap: separated-value tandem lowering across unrelated draws"))
+    @Test("Hypothesis::test_lowering_together_with_gap")
     func loweringTogetherWithGap() throws {
         let gen = #gen(
             .int(in: -10 ... 10),

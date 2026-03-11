@@ -461,6 +461,20 @@ public extension ChoiceSequence {
                             depth: frame.depth,
                             kind: frame.children[0].kind,
                         ))
+                    } else {
+                        // Mixed-kind children: extract same-kind subsets so values of the
+                        // same type can still be reduced in tandem across unrelated draws.
+                        var byKind = [SiblingChildKind: [(range: ClosedRange<Int>, kind: SiblingChildKind)]]()
+                        for child in frame.children {
+                            byKind[child.kind, default: []].append(child)
+                        }
+                        for (kind, children) in byKind where children.count >= 2 {
+                            result.append(SiblingGroup(
+                                ranges: children.map(\.range),
+                                depth: frame.depth,
+                                kind: kind,
+                            ))
+                        }
                     }
                 }
 

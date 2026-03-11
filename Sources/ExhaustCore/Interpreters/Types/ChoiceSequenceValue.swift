@@ -136,6 +136,9 @@ public enum ChoiceSequenceValue: Hashable, Equatable, Sendable {
             let rhs = other.choice.shortlexKey
             if lhs < rhs { return .lt }
             if lhs > rhs { return .gt }
+            // Tiebreak: prefer smaller bit pattern (non-negative for same-magnitude floats)
+            if choice.bitPattern64 < other.choice.bitPattern64 { return .lt }
+            if choice.bitPattern64 > other.choice.bitPattern64 { return .gt }
             return .eq
         }
 

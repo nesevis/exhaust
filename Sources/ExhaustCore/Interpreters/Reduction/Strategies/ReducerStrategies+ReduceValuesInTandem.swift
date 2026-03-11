@@ -71,15 +71,12 @@ extension ReducerStrategies {
                         break groupLoop
                     }
 
-                    // Try target directly first for value-matched plans (all entries
-                    // share the same bit pattern). The binary search assumes monotonicity
-                    // (predicate(high) is false), but for cross-container value-matched
-                    // groups the predicate can be non-monotonic: intermediate deltas may
-                    // break coupling constraints while the full target delta preserves them.
-                    let allEntriesSameValue = plan.originalEntries.dropFirst().allSatisfy {
-                        $0.entry.value?.choice.bitPattern64 == plan.originalEntries.first?.entry.value?.choice.bitPattern64
-                    }
-                    if allEntriesSameValue, let targetCandidate = tandemCandidate(
+                    // Try target directly first. The binary search assumes monotonicity
+                    // (predicate(high) is false) and never probes the full distance, but
+                    // the predicate can be non-monotonic: intermediate deltas may break
+                    // coupling constraints while the full target delta preserves them.
+                    // Always attempting the direct shot covers this case.
+                    if let targetCandidate = tandemCandidate(
                         plan: plan,
                         current: current,
                         delta: plan.distance,
@@ -309,7 +306,7 @@ extension ReducerStrategies {
             tag: tag,
             originalEntries: originalEntries,
             originalSemanticDistances: originalSemanticDistances,
-            disallowAwayMoves: groupKind == .bareValue && windowIndices.count > 2,
+            disallowAwayMoves: groupKind != .bareValue,
             usesFloatingSteps: usesFloatingSteps,
             searchUpward: searchUpward,
             distance: distance,
@@ -430,6 +427,25 @@ extension ReducerStrategies {
                 alignedSets.append(aligned)
             }
         }
+
+        // Tag-based grouping: aligned sets often mix tags (e.g. [int, string_val, double, int])
+        // when siblings have different generator types. Break each aligned set into per-tag
+        // subsets so same-type values can be reduced in tandem even when separated by unrelated draws.
+        let alignedAsSetsBeforeTagGrouping = Set(alignedSets.map { Set($0) })
+        var tagGroupedSets = [[Int]]()
+        for aligned in alignedSets {
+            var byTag = [TypeTag: [Int]]()
+            for idx in aligned {
+                guard let value = sequence[idx].value else { continue }
+                byTag[value.choice.tag, default: []].append(idx)
+            }
+            for (_, indices) in byTag where indices.count >= 2 {
+                if !alignedAsSetsBeforeTagGrouping.contains(Set(indices)) {
+                    tagGroupedSets.append(indices)
+                }
+            }
+        }
+        alignedSets.append(contentsOf: tagGroupedSets)
 
         // Value-matched grouping: find entries with the same (tag, bitPattern) across
         // all siblings and reduce them in lockstep. This handles cross-container coupling

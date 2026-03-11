@@ -162,6 +162,7 @@ struct HypothesisFloatShrinkingParityTests {
             #expect(output.count(where: { $0 == 0.0 }) == n - 1)
             #expect(output.contains(1.0))
         }
+        
     }
 
     @Test("Shrinks bounded values down to ceil(minValue)")
