@@ -46,8 +46,8 @@ public enum BoundaryDomainAnalysis {
         switch tag {
         case .double, .float:
             computeFloatBoundaryValues(min: min, max: max, tag: tag)
-        case let .date(intervalSeconds, timeZoneID):
-            computeDateBoundaryValues(min: min, max: max, intervalSeconds: intervalSeconds, timeZoneID: timeZoneID)
+        case let .date(lowerSeconds, intervalSeconds, timeZoneID):
+            computeDateBoundaryValues(min: min, max: max, lowerSeconds: lowerSeconds, intervalSeconds: intervalSeconds, timeZoneID: timeZoneID)
         case .bits:
             [min, max]
         default:
@@ -133,7 +133,7 @@ public enum BoundaryDomainAnalysis {
         case .float:
             Float(0.0).bitPattern64
         case .date:
-            Int64(0).bitPattern64
+            0 // Step index 0 = lowerSeconds
         case .bits:
             0
         }
@@ -149,65 +149,64 @@ public enum BoundaryDomainAnalysis {
         -31_622_400, // Y2K (2000-01-01 00:00:00 UTC)
     ]
 
-    /// Computes boundary values for dates stored as seconds since reference date.
+    /// Computes boundary values for date step indices.
     ///
-    /// Values are produced in the *step domain* — every value is snapped to an integral multiple of `intervalSeconds` from `lowerSeconds` so that each boundary maps to a distinct output date after quantization. For each interesting point the ±1 step neighbors are also included.
-    private static func computeDateBoundaryValues(min: UInt64, max: UInt64, intervalSeconds: Int64, timeZoneID: String) -> [UInt64] {
-        let lowerSeconds = Int64(bitPattern64: min)
-        let upperSeconds = Int64(bitPattern64: max)
-        let rangeSeconds = upperSeconds - lowerSeconds
-        guard rangeSeconds > 0, intervalSeconds > 0 else {
+    /// `min`/`max` are step indices in `[0, numSteps]`. Each step maps to real seconds as `lowerSeconds + step * intervalSeconds`. Boundary computation identifies interesting real-seconds values (epochs, calendar boundaries, DST transitions), then converts them to step indices. For each interesting point the ±1 step neighbors are also included.
+    private static func computeDateBoundaryValues(min: UInt64, max: UInt64, lowerSeconds: Int64, intervalSeconds: Int64, timeZoneID: String) -> [UInt64] {
+        let minStep = Int64(bitPattern64: min)
+        let maxStep = Int64(bitPattern64: max)
+        guard maxStep > minStep, intervalSeconds > 0 else {
             return min == max ? [min] : [min, max].sorted()
         }
 
+        let upperSeconds = lowerSeconds + maxStep * intervalSeconds
+        let rangeSeconds = upperSeconds - lowerSeconds
+
         var values = Set<UInt64>()
 
-        /// Snap a seconds value to the nearest interval step from lowerSeconds.
-        /// Returns nil if the value falls outside the range.
-        func snap(_ seconds: Int64) -> Int64? {
+        /// Convert a real-seconds value to a step index.
+        /// Returns nil if the seconds value falls outside the range.
+        func toStep(_ seconds: Int64) -> Int64? {
             let offset = seconds - lowerSeconds
             guard offset >= 0 else { return nil }
-            let snapped = lowerSeconds + (offset / intervalSeconds) * intervalSeconds
-            guard snapped <= upperSeconds else { return nil }
-            return snapped
+            let step = offset / intervalSeconds
+            guard step <= maxStep else { return nil }
+            return step
         }
 
-        /// Insert a snapped seconds value if it falls within the range.
+        /// Insert a step index derived from a real-seconds value.
         func insert(_ seconds: Int64) {
-            if let snapped = snap(seconds) {
-                values.insert(snapped.bitPattern64)
+            if let step = toStep(seconds) {
+                values.insert(step.bitPattern64)
             }
         }
 
-        /// Insert a value and its ±1 step neighbors.
+        /// Insert a step and its ±1 step neighbors.
         func insertWithNeighbors(_ seconds: Int64) {
-            guard let snapped = snap(seconds) else { return }
-            values.insert(snapped.bitPattern64)
-            insert(snapped + intervalSeconds)
-            insert(snapped - intervalSeconds)
+            guard let step = toStep(seconds) else { return }
+            values.insert(step.bitPattern64)
+            if step + 1 <= maxStep { values.insert((step + 1).bitPattern64) }
+            if step - 1 >= minStep { values.insert((step - 1).bitPattern64) }
         }
 
-        // 1. Domain edges (first and last interval-aligned steps)
-        insert(lowerSeconds)
-        let lastAligned = lowerSeconds + (rangeSeconds / intervalSeconds) * intervalSeconds
-        insert(lastAligned)
+        // 1. Domain edges
+        values.insert(minStep.bitPattern64)
+        values.insert(maxStep.bitPattern64)
 
         // 2. BVA ±1 in the step domain
-        insert(lowerSeconds + intervalSeconds)
-        if lastAligned > lowerSeconds {
-            insert(lastAligned - intervalSeconds)
-        }
+        if minStep + 1 <= maxStep { values.insert((minStep + 1).bitPattern64) }
+        if maxStep - 1 >= minStep { values.insert((maxStep - 1).bitPattern64) }
 
         // 3. Midpoint step
-        let midStep = rangeSeconds / intervalSeconds / 2
-        insert(lowerSeconds + midStep * intervalSeconds)
+        let midStep = minStep + (maxStep - minStep) / 2
+        values.insert(midStep.bitPattern64)
 
-        // 4. Key epoch points (snapped, with neighbors)
+        // 4. Key epoch points (converted to steps, with neighbors)
         for epoch in interestingDateEpochs where epoch >= lowerSeconds && epoch <= upperSeconds {
             insertWithNeighbors(epoch)
         }
 
-        // 5. Calendar boundaries (first and last within range, snapped, with neighbors)
+        // 5. Calendar boundaries (first and last within range, with neighbors)
         let secondsPerDay: Int64 = 86400
         let secondsPerMonth: Int64 = 2_592_000 // 30 days
         let secondsPerYear: Int64 = 31_536_000 // 365 days
@@ -220,7 +219,6 @@ public enum BoundaryDomainAnalysis {
             if lowerSeconds >= 0 {
                 firstBoundary = ((lowerSeconds + unitSeconds - 1) / unitSeconds) * unitSeconds
             } else {
-                // For negative values, round toward zero (i.e. toward the next boundary)
                 let divided = lowerSeconds / unitSeconds
                 let remainder = lowerSeconds - divided * unitSeconds
                 firstBoundary = remainder == 0 ? lowerSeconds : (divided + 1) * unitSeconds
@@ -245,7 +243,7 @@ public enum BoundaryDomainAnalysis {
             }
         }
 
-        // 6. DST transition times for the specified timezone (snapped, with neighbors)
+        // 6. DST transition times for the specified timezone (converted to steps, with neighbors)
         for transition in DSTTransitions.inRange(lower: lowerSeconds, upper: upperSeconds, timeZoneID: timeZoneID) {
             insertWithNeighbors(transition)
         }

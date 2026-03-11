@@ -304,45 +304,44 @@ struct DateBoundaryValueTests {
     func stepDomainBoundaries() {
         // Range: 1000 seconds, interval: 100 seconds → 10 steps
         let lower: Int64 = 725_760_000 // 2024-01-01
-        let upper: Int64 = lower + 1000
         let interval: Int64 = 100
+        let numSteps: Int64 = 10 // 1000 / 100
 
         let values = BoundaryDomainAnalysis.computeBoundaryValues(
-            min: lower.bitPattern64,
-            max: upper.bitPattern64,
-            tag: .date(intervalSeconds: interval, timeZoneID: "GMT"),
+            min: Int64(0).bitPattern64,
+            max: numSteps.bitPattern64,
+            tag: .date(lowerSeconds: lower, intervalSeconds: interval, timeZoneID: "GMT"),
         )
 
-        // First step
-        #expect(values.contains(lower.bitPattern64))
-        // Last aligned step (1000 / 100 * 100 = 1000)
-        #expect(values.contains(upper.bitPattern64))
-        // Second step
-        #expect(values.contains((lower + interval).bitPattern64))
-        // Second-to-last step
-        #expect(values.contains((upper - interval).bitPattern64))
-        // Midpoint step (step 5 → lower + 500)
-        #expect(values.contains((lower + 500).bitPattern64))
+        // First step (0)
+        #expect(values.contains(Int64(0).bitPattern64))
+        // Last step (10)
+        #expect(values.contains(numSteps.bitPattern64))
+        // Second step (1)
+        #expect(values.contains(Int64(1).bitPattern64))
+        // Second-to-last step (9)
+        #expect(values.contains(Int64(numSteps - 1).bitPattern64))
+        // Midpoint step (5)
+        #expect(values.contains(Int64(5).bitPattern64))
     }
 
-    @Test("Values are snapped to interval (no off-grid values)")
-    func valuesAreSnapped() {
+    @Test("All values are valid step indices")
+    func valuesAreValidSteps() {
         let lower: Int64 = 0
-        let upper: Int64 = 86400 * 365 // 1 year
         let interval: Int64 = 3600 // 1 hour
+        let numSteps: Int64 = 86400 * 365 / interval // 1 year in hours
 
         let values = BoundaryDomainAnalysis.computeBoundaryValues(
-            min: lower.bitPattern64,
-            max: upper.bitPattern64,
-            tag: .date(intervalSeconds: interval, timeZoneID: "GMT"),
+            min: Int64(0).bitPattern64,
+            max: numSteps.bitPattern64,
+            tag: .date(lowerSeconds: lower, intervalSeconds: interval, timeZoneID: "GMT"),
         )
 
         for bp in values {
-            let seconds = Int64(bitPattern64: bp)
-            let offset = seconds - lower
+            let step = Int64(bitPattern64: bp)
             #expect(
-                offset >= 0 && offset % interval == 0,
-                "Value \(seconds) is not aligned to interval \(interval) from lower \(lower)",
+                step >= 0 && step <= numSteps,
+                "Step \(step) is outside valid range [0, \(numSteps)]",
             )
         }
     }
@@ -351,49 +350,59 @@ struct DateBoundaryValueTests {
     func referenceDate() {
         // Range spanning the reference date (0 seconds since ref)
         let lower: Int64 = -86400
-        let upper: Int64 = 86400
         let interval: Int64 = 1
+        let numSteps: Int64 = 172800 // 2 * 86400
 
         let values = BoundaryDomainAnalysis.computeBoundaryValues(
-            min: lower.bitPattern64,
-            max: upper.bitPattern64,
-            tag: .date(intervalSeconds: interval, timeZoneID: "GMT"),
+            min: Int64(0).bitPattern64,
+            max: numSteps.bitPattern64,
+            tag: .date(lowerSeconds: lower, intervalSeconds: interval, timeZoneID: "GMT"),
         )
 
-        #expect(values.contains(Int64(0).bitPattern64))
+        // Reference date (0 seconds) is at step (0 - lower) / interval = 86400
+        let refStep = (Int64(0) - lower) / interval
+        #expect(values.contains(refStep.bitPattern64))
     }
 
     @Test("Unix epoch appears when in range")
     func unixEpoch() {
         let unixEpoch: Int64 = -978_307_200
         let lower = unixEpoch - 86400
-        let upper = unixEpoch + 86400
+        let interval: Int64 = 1
+        let numSteps: Int64 = 172800 // 2 * 86400
 
         let values = BoundaryDomainAnalysis.computeBoundaryValues(
-            min: lower.bitPattern64,
-            max: upper.bitPattern64,
-            tag: .date(intervalSeconds: 1, timeZoneID: "GMT"),
+            min: Int64(0).bitPattern64,
+            max: numSteps.bitPattern64,
+            tag: .date(lowerSeconds: lower, intervalSeconds: interval, timeZoneID: "GMT"),
         )
 
-        #expect(values.contains(unixEpoch.bitPattern64))
+        // Unix epoch is at step (unixEpoch - lower) / interval = 86400
+        let epochStep = (unixEpoch - lower) / interval
+        #expect(values.contains(epochStep.bitPattern64))
     }
 
     @Test("Epochs outside range are excluded")
     func epochsOutsideRange() {
         // Range entirely in 2024 — Unix epoch (1970) and Y2038 should not appear
         let lower: Int64 = 725_760_000 // ~2024-01-01
-        let upper: Int64 = lower + 86400 * 30
+        let interval: Int64 = 1
+        let numSteps: Int64 = 86400 * 30
 
         let values = BoundaryDomainAnalysis.computeBoundaryValues(
-            min: lower.bitPattern64,
-            max: upper.bitPattern64,
-            tag: .date(intervalSeconds: 1, timeZoneID: "GMT"),
+            min: Int64(0).bitPattern64,
+            max: numSteps.bitPattern64,
+            tag: .date(lowerSeconds: lower, intervalSeconds: interval, timeZoneID: "GMT"),
         )
 
+        // These epochs are outside [lower, lower + numSteps], so no valid step index exists
         let unixEpoch: Int64 = -978_307_200
         let y2038: Int64 = 1_169_176_447
-        #expect(!values.contains(unixEpoch.bitPattern64))
-        #expect(!values.contains(y2038.bitPattern64))
+        // If they mapped to steps, they'd be negative or > numSteps
+        let unixStep = (unixEpoch - lower) / interval
+        let y2038Step = (y2038 - lower) / interval
+        #expect(!values.contains(unixStep.bitPattern64))
+        #expect(!values.contains(y2038Step.bitPattern64))
     }
 }
 
@@ -453,17 +462,19 @@ struct DateDSTBoundaryTests {
 
         // Range spanning ±7 days around the transition, 1-second interval
         let lower = expectedSeconds - 7 * 86400
-        let upper = expectedSeconds + 7 * 86400
+        let interval: Int64 = 1
+        let numSteps: Int64 = 14 * 86400 // 14 days in seconds
 
         let values = BoundaryDomainAnalysis.computeBoundaryValues(
-            min: lower.bitPattern64,
-            max: upper.bitPattern64,
-            tag: .date(intervalSeconds: 1, timeZoneID: transition.timeZoneID),
+            min: Int64(0).bitPattern64,
+            max: numSteps.bitPattern64,
+            tag: .date(lowerSeconds: lower, intervalSeconds: interval, timeZoneID: transition.timeZoneID),
         )
 
+        let expectedStep = (expectedSeconds - lower) / interval
         #expect(
-            values.contains(expectedSeconds.bitPattern64),
-            "\(transition.label): expected \(expectedSeconds) in boundary values",
+            values.contains(expectedStep.bitPattern64),
+            "\(transition.label): expected step \(expectedStep) in boundary values",
         )
     }
 
@@ -482,22 +493,21 @@ struct DateDSTBoundaryTests {
 
         let interval: Int64 = 3600 // 1 hour
         let lower = expectedSeconds - 7 * 86400
-        let upper = expectedSeconds + 7 * 86400
+        let numSteps: Int64 = 14 * 86400 / interval // 14 days in hours
 
         let values = BoundaryDomainAnalysis.computeBoundaryValues(
-            min: lower.bitPattern64,
-            max: upper.bitPattern64,
-            tag: .date(intervalSeconds: interval, timeZoneID: transition.timeZoneID),
+            min: Int64(0).bitPattern64,
+            max: numSteps.bitPattern64,
+            tag: .date(lowerSeconds: lower, intervalSeconds: interval, timeZoneID: transition.timeZoneID),
         )
 
-        // The snapped transition and at least one neighbor should be present
-        let snappedOffset = ((expectedSeconds - lower) / interval) * interval
-        let snapped = lower + snappedOffset
-        #expect(values.contains(snapped.bitPattern64), "Snapped transition value missing")
+        // The transition step and at least one neighbor should be present
+        let transitionStep = (expectedSeconds - lower) / interval
+        #expect(values.contains(transitionStep.bitPattern64), "Transition step value missing")
         #expect(
-            values.contains((snapped + interval).bitPattern64)
-                || values.contains((snapped - interval).bitPattern64),
-            "At least one neighbor of snapped transition should be present",
+            values.contains((transitionStep + 1).bitPattern64)
+                || values.contains((transitionStep - 1).bitPattern64),
+            "At least one neighbor of transition step should be present",
         )
     }
 }

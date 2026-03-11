@@ -67,23 +67,23 @@ public extension ReflectiveGenerator {
         precondition(intervalSeconds > 0, "Interval must be non-zero")
         precondition(intervalSeconds <= upperSeconds - lowerSeconds, "Interval must not exceed the date range")
 
+        let numSteps = (upperSeconds - lowerSeconds) / intervalSeconds
+
         let inner: ReflectiveGenerator<Int64> = .impure(
             operation: .chooseBits(
-                min: lowerSeconds.bitPattern64,
-                max: upperSeconds.bitPattern64,
-                tag: .date(intervalSeconds: intervalSeconds, timeZoneID: timeZone.identifier),
+                min: Int64(0).bitPattern64,
+                max: numSteps.bitPattern64,
+                tag: .date(lowerSeconds: lowerSeconds, intervalSeconds: intervalSeconds, timeZoneID: timeZone.identifier),
                 isRangeExplicit: true,
             ),
         ) { .pure(Int64(bitPattern64: ($0 as! any BitPatternConvertible).bitPattern64)) }
 
         return inner.mapped(
-            forward: { seconds in
-                // Quantize to interval
-                let step = (seconds - lowerSeconds) / intervalSeconds
-                return Date(timeIntervalSinceReferenceDate: Double(lowerSeconds) + Double(step) * Double(intervalSeconds))
+            forward: { step in
+                Date(timeIntervalSinceReferenceDate: Double(lowerSeconds + step * intervalSeconds))
             },
             backward: { date in
-                Int64(date.timeIntervalSinceReferenceDate)
+                Int64(floor((date.timeIntervalSinceReferenceDate - Double(lowerSeconds)) / Double(intervalSeconds)))
             },
         )
     }
