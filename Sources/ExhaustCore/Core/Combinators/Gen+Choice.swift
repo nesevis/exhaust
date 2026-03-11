@@ -153,7 +153,7 @@ public extension Gen {
     }
 
     /// Computes the effective range for a given size by interpolating from the origin toward the bounds using the specified scaling strategy.
-    public static func scaledRange<Output: BitPatternConvertible>(
+    static func scaledRange<Output: BitPatternConvertible>(
         _ range: ClosedRange<Output>,
         scaling: SizeScaling<Output>,
         size: UInt64,
@@ -191,7 +191,7 @@ public extension Gen {
     }
 
     /// Scales a distance from origin to bound by the given fraction (0–1).
-    public static func scaledDistance(_ distance: UInt64, fraction: Double, isExponential: Bool) -> UInt64 {
+    static func scaledDistance(_ distance: UInt64, fraction: Double, isExponential: Bool) -> UInt64 {
         guard distance > 0, fraction > 0 else { return 0 }
 
         if isExponential {
@@ -204,7 +204,7 @@ public extension Gen {
         }
     }
 
-    public static func choose<Output: BitPatternConvertible>(
+    static func choose<Output: BitPatternConvertible>(
         in range: ClosedRange<Output>? = nil,
         type _: Output.Type = Output.self,
         isRangeExplicit: Bool,

@@ -63,8 +63,7 @@ public extension Gen {
         )
         // Lift the operation. The continuation will decode the `[Any]` result.
         return .impure(operation: sequenceOperation) { result in
-            let array = result as! [Output]
-            return .pure(array)
+            return .pure(result as! [Output])
         }
     }
 
@@ -119,9 +118,9 @@ public extension Gen {
         )
     }
 
-    /// Creates a generator for a set of unique random values.
+    /// Creates a generator for a set of random values.
     ///
-    /// This implementation generates an array of elements, filters out any with duplicates, and converts to a set. The filter operation ensures deterministic reproducibility through seeds while leveraging CGS optimization to minimize wasted generation cycles.
+    /// Generates an array and converts it to a set. Duplicate elements are collapsed, so the resulting set may be smaller than the requested length.
     ///
     /// - Parameters:
     ///   - elementGenerator: A generator for the elements of the set (must be Hashable)
@@ -132,7 +131,7 @@ public extension Gen {
         _ elementGenerator: ReflectiveGenerator<Element>,
         _ length: ReflectiveGenerator<UInt64>? = nil,
     ) -> ReflectiveGenerator<Set<Element>> {
-        _setOfArray(arrayOf(elementGenerator, length))
+        arrayOf(elementGenerator, length)._map { Set($0) }
     }
 
     /// Creates a generator for a set with size constrained to a specific range.
@@ -148,7 +147,7 @@ public extension Gen {
         within range: ClosedRange<UInt64>,
         scaling: SizeScaling<UInt64> = .linear,
     ) -> ReflectiveGenerator<Set<Element>> {
-        _setOfArray(arrayOf(elementGenerator, within: range, scaling: scaling))
+        arrayOf(elementGenerator, within: range, scaling: scaling)._map { Set($0) }
     }
 
     /// Creates a generator for a set with exactly the specified number of elements.
@@ -162,7 +161,7 @@ public extension Gen {
         _ elementGenerator: ReflectiveGenerator<Element>,
         exactly: UInt64,
     ) -> ReflectiveGenerator<Set<Element>> {
-        _setOfArray(arrayOf(elementGenerator, exactly: exactly))
+        arrayOf(elementGenerator, exactly: exactly)._map { Set($0) }
     }
 
     /// Shuffles the output of an array generator into a random permutation.
@@ -270,7 +269,7 @@ public extension Gen {
     /// - Returns: A generator that produces a contiguous subrange of the generated collection
     @inlinable
     static func slice<C: Collection>(
-        _ gen: ReflectiveGenerator<C>,
+        of gen: ReflectiveGenerator<C>,
     ) -> ReflectiveGenerator<C.SubSequence> {
         gen._bind { collection in
             slice(of: collection)
@@ -338,29 +337,3 @@ public extension Gen {
     }
 }
 
-// MARK: - Internal helpers
-
-extension Gen {
-    /// Shared implementation for all `setOf` overloads: filter for unique elements, then convert to Set.
-    @usableFromInline
-    static func _setOfArray<Element: Hashable>(
-        _ arrayGen: ReflectiveGenerator<[Element]>,
-    ) -> ReflectiveGenerator<Set<Element>> {
-        let filtered: ReflectiveGenerator<[Element]> = .impure(
-            operation: .filter(
-                gen: arrayGen.erase(),
-                fingerprint: 0,
-                filterType: .auto,
-                predicate: { value in
-                    let array = value as! [Element]
-                    return Set(array).count == array.count
-                },
-            ),
-            continuation: { .pure($0 as! [Element]) },
-        )
-        return Gen.contramap(
-            { (set: Set<Element>) -> [Element] in Array(set) },
-            filtered._map { Set($0) },
-        )
-    }
-}

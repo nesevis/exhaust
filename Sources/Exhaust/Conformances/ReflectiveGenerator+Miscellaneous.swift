@@ -33,13 +33,6 @@ public extension ReflectiveGenerator {
     }
 }
 
-public extension ReflectiveGenerator where Value: CaseIterable, Value.AllCases.Index == Int {
-    /// Creates a generator that randomly selects from all cases of a `CaseIterable` type.
-    static func oneOf(_ type: Value.Type) -> ReflectiveGenerator<Value> {
-        Gen.choose(from: type.allCases)
-    }
-}
-
 public extension ReflectiveGenerator where Operation == ReflectiveOperation {
     /// Wraps this generator to produce optional values, choosing between `nil` and a generated value.
     func optional() -> ReflectiveGenerator<Value?> {

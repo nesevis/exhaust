@@ -466,7 +466,7 @@ struct ConformanceTests {
 
         @Test("oneOf for CaseIterable produces all cases")
         func oneOfCaseIterable() throws {
-            let gen: ReflectiveGenerator<ConformanceDirection> = .oneOf(ConformanceDirection.self)
+            let gen = #gen(.element(from: ConformanceDirection.allCases))
             var seen: Set<String> = []
 
             for seed in UInt64(1) ... 50 {

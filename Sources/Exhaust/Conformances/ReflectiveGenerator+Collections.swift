@@ -136,7 +136,7 @@ public extension ReflectiveGenerator {
     static func slice<C: Collection>(
         _ gen: ReflectiveGenerator<C>,
     ) -> ReflectiveGenerator<C.SubSequence> where Value == C.SubSequence {
-        Gen.slice(gen)
+        Gen.slice(of: gen)
     }
 
     /// Creates a generator that produces randomly shuffled versions of a generated collection.

@@ -5,7 +5,7 @@ import ExhaustCore
 struct SliceCombinatorTests {
     @Test("Gen.slice generates valid subranges of arrays")
     func sliceGeneratesValidArraySubranges() throws {
-        let gen = Gen.slice(Gen.arrayOf(Gen.choose(in: 0 ... 100) as ReflectiveGenerator<Int>))
+        let gen = Gen.slice(of: Gen.arrayOf(Gen.choose(in: Int(0) ... 100)))
         var iterator = ValueInterpreter(gen, seed: 42)
 
         var generated = 0
@@ -50,7 +50,7 @@ struct SliceCombinatorTests {
 
     @Test("Gen.slice works via Gen.slice static method")
     func staticSlice() throws {
-        let gen = Gen.slice(Gen.arrayOf(Gen.choose(in: Int.min ... Int.max, scaling: Int.defaultScaling)))
+        let gen = Gen.slice(of: Gen.arrayOf(Gen.choose(in: Int.min ... Int.max, scaling: Int.defaultScaling)))
         var iterator = ValueInterpreter(gen, seed: 7)
 
         var generated = 0
