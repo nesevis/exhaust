@@ -32,7 +32,7 @@ extension ReducerStrategies {
     ) throws -> Output? {
         if let bindIndex, bindIndex.bindRegionForInnerIndex(mutatedIndex) != nil {
             let seed = candidate.zobristHash
-            switch GuidedMaterializer.materialize(gen, prefix: candidate, seed: seed) {
+            switch GuidedMaterializer.materialize(gen, prefix: candidate, seed: seed, fallbackTree: tree) {
             case let .success(value, _, _):
                 return value
             case .filterEncountered, .failed:
@@ -65,7 +65,7 @@ extension ReducerStrategies {
            mutatedIndices.contains(where: { bindIndex.bindRegionForInnerIndex($0) != nil })
         {
             let seed = candidate.zobristHash
-            switch GuidedMaterializer.materialize(gen, prefix: candidate, seed: seed) {
+            switch GuidedMaterializer.materialize(gen, prefix: candidate, seed: seed, fallbackTree: tree) {
             case let .success(value, _, _):
                 return value
             case .filterEncountered, .failed:

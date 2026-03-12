@@ -7,9 +7,13 @@
 
 /// Interpreter that replays recorded choices where available and generates fresh via PRNG elsewhere.
 ///
-/// Supports two modes of partial replay:
-/// 1. **Prefix mode** (HillClimber): replays a choice sequence prefix, then falls back to PRNG beyond the modification point.
-/// 2. **Bind-aware mode** (CoverageRunner): replays inner parameter choices from a covering array while generating bound subtrees fresh, preserving cursor alignment for sibling parameters.
+/// Supports three tiers of value selection at each choice point:
+/// 1. **Prefix cursor** — consume from the ChoiceSequence (highest priority).
+/// 2. **Fallback tree** — extract the value from the corresponding ChoiceTree node.
+/// 3. **PRNG** — generate fresh (lowest priority).
+///
+/// The fallback tree tier is used during shrinking to preserve bound subtree values at their last
+/// known-good state instead of randomizing them via PRNG.
 public enum GuidedMaterializer {
     /// Result of a guided materialization attempt.
     public enum Result<Output> {
@@ -23,6 +27,7 @@ public enum GuidedMaterializer {
         prefix: ChoiceSequence,
         seed: UInt64,
         abortOnFilter: Bool = false,
+        fallbackTree: ChoiceTree? = nil,
     ) -> Result<Output> {
         var context = GuidedContext(
             cursor: GuidedCursor(from: prefix),
@@ -30,7 +35,7 @@ public enum GuidedMaterializer {
             abortOnFilter: abortOnFilter,
         )
         do {
-            guard let (value, tree) = try generateRecursive(gen, with: (), context: &context) else {
+            guard let (value, tree) = try generateRecursive(gen, with: (), context: &context, fallbackTree: fallbackTree) else {
                 return .failed
             }
             let sequence = ChoiceSequence(tree)
@@ -49,16 +54,31 @@ public enum GuidedMaterializer {
 // MARK: - Recursive Engine
 
 private extension GuidedMaterializer {
+    /// Split a fallback tree into the callee portion and continuation portion.
+    /// ChoiceTree uses `.group([callee, continuation])` when a continuation exists.
+    static func decomposeFallback(_ tree: ChoiceTree?) -> (callee: ChoiceTree?, continuation: ChoiceTree?) {
+        guard let tree else { return (nil, nil) }
+        switch tree {
+        case let .group(children, _) where children.count == 2:
+            return (children[0], children[1])
+        default:
+            return (tree, nil)
+        }
+    }
+
     static func generateRecursive<Output>(
         _ gen: ReflectiveGenerator<Output>,
         with inputValue: some Any,
         context: inout GuidedContext,
+        fallbackTree: ChoiceTree? = nil,
     ) throws -> (Output, ChoiceTree)? {
         switch gen {
         case let .pure(value):
             return (value, .emptyJust)
 
         case let .impure(operation, continuation):
+            let (calleeFallback, continuationFallback) = decomposeFallback(fallbackTree)
+
             switch operation {
             case let .contramap(_, nextGen):
                 return try handleContramap(
@@ -66,6 +86,8 @@ private extension GuidedMaterializer {
                     continuation: continuation,
                     inputValue: inputValue,
                     context: &context,
+                    calleeFallback: calleeFallback,
+                    continuationFallback: continuationFallback,
                 )
 
             case let .prune(nextGen):
@@ -74,6 +96,8 @@ private extension GuidedMaterializer {
                     continuation: continuation,
                     inputValue: inputValue,
                     context: &context,
+                    calleeFallback: calleeFallback,
+                    continuationFallback: continuationFallback,
                 )
 
             case let .pick(choices):
@@ -82,6 +106,8 @@ private extension GuidedMaterializer {
                     continuation: continuation,
                     inputValue: inputValue,
                     context: &context,
+                    calleeFallback: calleeFallback,
+                    continuationFallback: continuationFallback,
                 )
 
             case let .chooseBits(min, max, tag, isRangeExplicit):
@@ -93,6 +119,8 @@ private extension GuidedMaterializer {
                     continuation: continuation,
                     inputValue: inputValue,
                     context: &context,
+                    calleeFallback: calleeFallback,
+                    continuationFallback: continuationFallback,
                 )
 
             case let .sequence(lengthGen, elementGen):
@@ -102,6 +130,8 @@ private extension GuidedMaterializer {
                     continuation: continuation,
                     inputValue: inputValue,
                     context: &context,
+                    calleeFallback: calleeFallback,
+                    continuationFallback: continuationFallback,
                 )
 
             case let .zip(generators, _):
@@ -110,6 +140,8 @@ private extension GuidedMaterializer {
                     continuation: continuation,
                     inputValue: inputValue,
                     context: &context,
+                    calleeFallback: calleeFallback,
+                    continuationFallback: continuationFallback,
                 )
 
             case let .just(value):
@@ -119,6 +151,7 @@ private extension GuidedMaterializer {
                     continuation: continuation,
                     inputValue: inputValue,
                     context: &context,
+                    continuationFallback: continuationFallback,
                 )
 
             case .getSize:
@@ -130,6 +163,7 @@ private extension GuidedMaterializer {
                     continuation: continuation,
                     inputValue: inputValue,
                     context: &context,
+                    continuationFallback: continuationFallback,
                 )
 
             case let .resize(newSize, gen):
@@ -139,13 +173,15 @@ private extension GuidedMaterializer {
                     continuation: continuation,
                     inputValue: inputValue,
                     context: &context,
+                    calleeFallback: calleeFallback,
+                    continuationFallback: continuationFallback,
                 )
 
             case let .filter(gen, _, _, predicate):
                 if context.abortOnFilter {
                     throw FilterAbort()
                 }
-                guard let (result, tree) = try generateRecursive(gen, with: inputValue, context: &context) else {
+                guard let (result, tree) = try generateRecursive(gen, with: inputValue, context: &context, fallbackTree: calleeFallback) else {
                     return nil
                 }
                 guard predicate(result) else {
@@ -157,10 +193,11 @@ private extension GuidedMaterializer {
                     continuation: continuation,
                     inputValue: inputValue,
                     context: &context,
+                    continuationFallback: continuationFallback,
                 )
 
             case let .classify(gen, _, _):
-                guard let (result, tree) = try generateRecursive(gen, with: inputValue, context: &context) else {
+                guard let (result, tree) = try generateRecursive(gen, with: inputValue, context: &context, fallbackTree: calleeFallback) else {
                     return nil
                 }
                 return try runContinuation(
@@ -169,10 +206,11 @@ private extension GuidedMaterializer {
                     continuation: continuation,
                     inputValue: inputValue,
                     context: &context,
+                    continuationFallback: continuationFallback,
                 )
 
             case let .unique(gen, _, _):
-                guard let (result, tree) = try generateRecursive(gen, with: inputValue, context: &context) else {
+                guard let (result, tree) = try generateRecursive(gen, with: inputValue, context: &context, fallbackTree: calleeFallback) else {
                     return nil
                 }
                 return try runContinuation(
@@ -181,38 +219,56 @@ private extension GuidedMaterializer {
                     continuation: continuation,
                     inputValue: inputValue,
                     context: &context,
+                    continuationFallback: continuationFallback,
                 )
 
             case let .transform(kind, inner):
-                guard let (innerValue, innerTree) = try generateRecursive(inner, with: inputValue, context: &context) else {
-                    return nil
-                }
-                let result: Any
-                var resultTree = innerTree
                 switch kind {
                 case let .map(forward, _, _):
-                    result = try forward(innerValue)
+                    guard let (innerValue, innerTree) = try generateRecursive(inner, with: inputValue, context: &context, fallbackTree: calleeFallback) else {
+                        return nil
+                    }
+                    let result = try forward(innerValue)
+                    return try runContinuation(
+                        result: result,
+                        calleeChoiceTree: innerTree,
+                        continuation: continuation,
+                        inputValue: inputValue,
+                        context: &context,
+                        continuationFallback: continuationFallback,
+                    )
                 case let .bind(forward, _, _, _):
+                    let innerFallback: ChoiceTree?
+                    let boundFallback: ChoiceTree?
+                    if let calleeFallback, case let .bind(inner: iFB, bound: bFB) = calleeFallback {
+                        innerFallback = iFB
+                        boundFallback = bFB
+                    } else {
+                        innerFallback = nil
+                        boundFallback = nil
+                    }
+                    guard let (innerValue, innerTree) = try generateRecursive(inner, with: inputValue, context: &context, fallbackTree: innerFallback) else {
+                        return nil
+                    }
                     let boundGen = try forward(innerValue)
-                    // Skip past the bind's bound content in the prefix and suspend prefix consumption so the bound subtree is generated via PRNG.
-                    // This preserves cursor alignment for sibling parameters after the bind.
+                    // Skip past the bind's bound content in the prefix and suspend prefix consumption.
+                    // The bound subtree now falls back to the fallback tree instead of pure PRNG.
                     context.cursor.skipBindBound()
                     context.cursor.suspendForBind()
-                    let boundResult = try generateRecursive(boundGen, with: inputValue, context: &context)
+                    let boundResult = try generateRecursive(boundGen, with: inputValue, context: &context, fallbackTree: boundFallback)
                     context.cursor.resumeAfterBind()
                     guard let (boundValue, boundTree) = boundResult else {
                         return nil
                     }
-                    result = boundValue
-                    resultTree = .bind(inner: innerTree, bound: boundTree)
+                    return try runContinuation(
+                        result: boundValue,
+                        calleeChoiceTree: .bind(inner: innerTree, bound: boundTree),
+                        continuation: continuation,
+                        inputValue: inputValue,
+                        context: &context,
+                        continuationFallback: continuationFallback,
+                    )
                 }
-                return try runContinuation(
-                    result: result,
-                    calleeChoiceTree: resultTree,
-                    continuation: continuation,
-                    inputValue: inputValue,
-                    context: &context,
-                )
             }
         }
     }
@@ -226,6 +282,7 @@ private extension GuidedMaterializer {
         continuation: (Any) throws -> ReflectiveGenerator<Output>,
         inputValue: some Any,
         context: inout GuidedContext,
+        continuationFallback: ChoiceTree? = nil,
     ) throws -> (Output, ChoiceTree)? {
         let nextGen = try continuation(result)
 
@@ -236,6 +293,7 @@ private extension GuidedMaterializer {
             nextGen,
             with: inputValue,
             context: &context,
+            fallbackTree: continuationFallback,
         ) {
             if nextGen.isPure {
                 return (continuationResult, calleeChoiceTree)
@@ -254,14 +312,17 @@ private extension GuidedMaterializer {
         continuation: (Any) throws -> ReflectiveGenerator<Output>,
         inputValue: some Any,
         context: inout GuidedContext,
+        calleeFallback: ChoiceTree? = nil,
+        continuationFallback: ChoiceTree? = nil,
     ) throws -> (Output, ChoiceTree)? {
-        guard let (result, tree) = try generateRecursive(nextGen, with: inputValue, context: &context) else { return nil }
+        guard let (result, tree) = try generateRecursive(nextGen, with: inputValue, context: &context, fallbackTree: calleeFallback) else { return nil }
         return try runContinuation(
             result: result,
             calleeChoiceTree: tree,
             continuation: continuation,
             inputValue: inputValue,
             context: &context,
+            continuationFallback: continuationFallback,
         )
     }
 
@@ -271,17 +332,20 @@ private extension GuidedMaterializer {
         continuation: (Any) throws -> ReflectiveGenerator<Output>,
         inputValue: some Any,
         context: inout GuidedContext,
+        calleeFallback: ChoiceTree? = nil,
+        continuationFallback: ChoiceTree? = nil,
     ) throws -> (Output, ChoiceTree)? {
         guard let wrappedValue = InterpreterWrapperHandlers.unwrapPruneInput(inputValue) else {
             return nil
         }
-        guard let (result, tree) = try generateRecursive(nextGen, with: wrappedValue, context: &context) else { return nil }
+        guard let (result, tree) = try generateRecursive(nextGen, with: wrappedValue, context: &context, fallbackTree: calleeFallback) else { return nil }
         return try runContinuation(
             result: result,
             calleeChoiceTree: tree,
             continuation: continuation,
             inputValue: inputValue,
             context: &context,
+            continuationFallback: continuationFallback,
         )
     }
 
@@ -294,6 +358,8 @@ private extension GuidedMaterializer {
         continuation: (Any) throws -> ReflectiveGenerator<Output>,
         inputValue: some Any,
         context: inout GuidedContext,
+        calleeFallback: ChoiceTree? = nil,
+        continuationFallback: ChoiceTree? = nil,
     ) throws -> (Output, ChoiceTree)? {
         let randomBits: UInt64
 
@@ -301,6 +367,9 @@ private extension GuidedMaterializer {
             // Clamp the prefix value's bit pattern to the valid range
             let bp = prefixValue.choice.bitPattern64
             randomBits = Swift.min(Swift.max(bp, min), max)
+        } else if let calleeFallback, case let .choice(value, _) = calleeFallback {
+            // Fallback: use tree value, clamped to valid range
+            randomBits = Swift.min(Swift.max(value.bitPattern64, min), max)
         } else {
             randomBits = context.prng.next(in: min ... max)
         }
@@ -315,6 +384,7 @@ private extension GuidedMaterializer {
             continuation: continuation,
             inputValue: inputValue,
             context: &context,
+            continuationFallback: continuationFallback,
         )
     }
 
@@ -324,23 +394,47 @@ private extension GuidedMaterializer {
         continuation: (Any) throws -> ReflectiveGenerator<Output>,
         inputValue: some Any,
         context: inout GuidedContext,
+        calleeFallback: ChoiceTree? = nil,
+        continuationFallback: ChoiceTree? = nil,
     ) throws -> (Output, ChoiceTree)? {
         let branchIDs = choices.map(\.id)
+
+        // Extract branch fallback info from calleeFallback
+        let fbBranchId: UInt64?
+        let branchChoiceTree: ChoiceTree?
+        if let calleeFallback,
+           case let .group(children, _) = calleeFallback,
+           let selected = children.first,
+           case let .selected(inner) = selected,
+           case let .branch(_, _, id, _, choice) = inner
+        {
+            fbBranchId = id
+            branchChoiceTree = choice
+        } else {
+            fbBranchId = nil
+            branchChoiceTree = nil
+        }
 
         let selectedChoice: ReflectiveOperation.PickTuple? = if let prefixBranch = context.cursor.tryConsumeBranch() {
             // Use the branch ID from the prefix to select the choice
             choices.first(where: { $0.id == prefixBranch.id })
+        } else if let fbBranchId {
+            choices.first(where: { $0.id == fbBranchId })
         } else {
             WeightedPickSelection.draw(from: choices, using: &context.prng)
         }
 
         guard let selectedChoice else { return nil }
 
+        // Decompose branch choice tree into body and continuation fallbacks
+        let (branchBodyFallback, branchContFallback) = decomposeFallback(branchChoiceTree)
+
         // Execute only the selected branch (materializePicks: false)
         guard let (result, branchTree) = try generateRecursive(
             selectedChoice.generator,
             with: inputValue,
             context: &context,
+            fallbackTree: branchBodyFallback,
         ) else { return nil }
 
         guard let (finalValue, contTree) = try runContinuation(
@@ -349,6 +443,7 @@ private extension GuidedMaterializer {
             continuation: continuation,
             inputValue: inputValue,
             context: &context,
+            continuationFallback: branchContFallback ?? continuationFallback,
         ) else { return nil }
 
         let branch = ChoiceTree.branch(
@@ -369,9 +464,19 @@ private extension GuidedMaterializer {
         continuation: (Any) throws -> ReflectiveGenerator<Output>,
         inputValue: some Any,
         context: inout GuidedContext,
+        calleeFallback: ChoiceTree? = nil,
+        continuationFallback: ChoiceTree? = nil,
     ) throws -> (Output, ChoiceTree)? {
         let length: UInt64
         let lengthMeta: ChoiceMetadata
+        var elementFallbacks: [ChoiceTree]?
+
+        // Extract element fallbacks from the fallback tree. The sequence LENGTH is always
+        // determined by the generator (not the tree) so that bound generators whose length
+        // depends on the inner value produce the correct count.
+        if let calleeFallback, case let .sequence(_, fbElements, _) = calleeFallback {
+            elementFallbacks = fbElements
+        }
 
         if let seqInfo = context.cursor.tryConsumeSequenceOpen() {
             // Replaying from prefix: derive length from element count
@@ -398,12 +503,15 @@ private extension GuidedMaterializer {
         results.reserveCapacity(Int(length))
         elements.reserveCapacity(Int(length))
 
+        var elementIndex = 0
         let didSucceed = try SequenceExecutionKernel.run(count: length) {
-            guard let (result, element) = try generateRecursive(elementGen, with: inputValue, context: &context) else {
+            let elFB = elementFallbacks.flatMap { $0.indices.contains(elementIndex) ? $0[elementIndex] : nil }
+            guard let (result, element) = try generateRecursive(elementGen, with: inputValue, context: &context, fallbackTree: elFB) else {
                 return false
             }
             results.append(result)
             elements.append(element)
+            elementIndex += 1
             return true
         }
         guard didSucceed else {
@@ -425,6 +533,7 @@ private extension GuidedMaterializer {
             continuation: continuation,
             inputValue: inputValue,
             context: &context,
+            continuationFallback: continuationFallback,
         ) {
             return (result, choiceTree)
         }
@@ -437,14 +546,25 @@ private extension GuidedMaterializer {
         continuation: (Any) throws -> ReflectiveGenerator<Output>,
         inputValue: some Any,
         context: inout GuidedContext,
+        calleeFallback: ChoiceTree? = nil,
+        continuationFallback: ChoiceTree? = nil,
     ) throws -> (Output, ChoiceTree)? {
+        let childFallbacks: [ChoiceTree?]
+        if let calleeFallback, case let .group(children, _) = calleeFallback,
+           children.count == generators.count
+        {
+            childFallbacks = children.map { Optional($0) }
+        } else {
+            childFallbacks = Array(repeating: nil, count: generators.count)
+        }
+
         var results = [Any]()
         results.reserveCapacity(generators.count)
         var choiceTrees = [ChoiceTree]()
         choiceTrees.reserveCapacity(generators.count)
 
-        for gen in generators {
-            guard let (result, tree) = try generateRecursive(gen, with: inputValue, context: &context) else {
+        for (gen, fb) in zip(generators, childFallbacks) {
+            guard let (result, tree) = try generateRecursive(gen, with: inputValue, context: &context, fallbackTree: fb) else {
                 return nil
             }
             results.append(result)
@@ -456,6 +576,7 @@ private extension GuidedMaterializer {
             continuation: continuation,
             inputValue: inputValue,
             context: &context,
+            continuationFallback: continuationFallback,
         )
     }
 
@@ -466,9 +587,17 @@ private extension GuidedMaterializer {
         continuation: (Any) throws -> ReflectiveGenerator<Output>,
         inputValue: some Any,
         context: inout GuidedContext,
+        calleeFallback: ChoiceTree? = nil,
+        continuationFallback: ChoiceTree? = nil,
     ) throws -> (Output, ChoiceTree)? {
+        let innerFallback: ChoiceTree?
+        if let calleeFallback, case let .resize(_, choices) = calleeFallback, let inner = choices.first {
+            innerFallback = inner
+        } else {
+            innerFallback = nil
+        }
         context.sizeOverride = newSize
-        guard let result = try generateRecursive(gen, with: inputValue, context: &context) else {
+        guard let result = try generateRecursive(gen, with: inputValue, context: &context, fallbackTree: innerFallback) else {
             return nil
         }
         return try runContinuation(
@@ -477,6 +606,7 @@ private extension GuidedMaterializer {
             continuation: continuation,
             inputValue: inputValue,
             context: &context,
+            continuationFallback: continuationFallback,
         )
     }
 }

@@ -552,16 +552,17 @@ public extension Interpreters {
                 } else {
                     if nextDepth == 0 { depthCyclesRemaining -= 1 }
                     // Rebuild consistent (sequence, tree) and advance depth.
+                    // The fallback tree preserves bound values where possible, with a
+                    // merge step as safety net for stale tree entries.
                     let beforeSeq = currentSequence
                     let seed = currentSequence.zobristHash
                     if case let .success(value, seq, newTree) =
-                        GuidedMaterializer.materialize(gen, prefix: currentSequence, seed: seed),
+                        GuidedMaterializer.materialize(gen, prefix: currentSequence, seed: seed, fallbackTree: currentTree),
                        property(value) == false
                     {
-                        // GuidedMaterializer regenerates bound content from PRNG, discarding
-                        // any progress made shrinking at deeper bind depths. Restore the
-                        // shortlex-smaller of the two choices at each bound position so that
-                        // shrinking work from previous depth passes is not lost.
+                        // Restore the shortlex-smaller of the two choices at each bound
+                        // position so that shrinking work from previous depth passes is
+                        // not lost if the fallback tree was stale.
                         var mergedSeq = seq
                         var didMerge = false
                         if let bi = bindSpanIndex {
