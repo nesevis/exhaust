@@ -24,7 +24,7 @@ public enum ChoiceSequenceValue: Hashable, Equatable, Sendable {
     /// Bind scope markers (`true` = open, `false` = close).
     /// The first child is the inner subtree; the second is the bound subtree.
     case bind(Bool)
-    /// A marker for a `.just` node. Carries no data but makes `.just` elements visible in the flat sequence (needed for element counting in ``PrefixMaterializer``).
+    /// A marker for a `.just` node. Carries no data but makes `.just` elements visible in the flat sequence (needed for element counting in ``GuidedMaterializer``).
     case just
 
     public var value: Value? {

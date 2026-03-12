@@ -10,7 +10,7 @@ import Foundation
 // MARK: - Academic Provenance
 
 //
-// Implements parse from flat choice sequences, closer to the dissertation's P⟦·⟧ (Goldstein §3.3.3). Used by PrefixMaterializer for exploration and by the reducer for candidate evaluation during shrinking.
+// Implements parse from flat choice sequences, closer to the dissertation's P⟦·⟧ (Goldstein §3.3.3). Used by GuidedMaterializer for exploration and by the reducer for candidate evaluation during shrinking.
 
 extension Interpreters {
     private struct Context {

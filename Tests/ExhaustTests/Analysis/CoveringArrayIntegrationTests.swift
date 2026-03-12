@@ -14,7 +14,7 @@ struct CoveringArrayIntegrationTests {
         // Gen.zip(bindGen, b, c) where bindGen has a bind.
         // Coverage analysis extracts only the inner parameter from the bind,
         // plus b and c — 3 finite parameters total.
-        // PrefixMaterializer must replay b and c from the covering array,
+        // GuidedMaterializer must replay b and c from the covering array,
         // not consume their prefix entries into the bind's bound subtree.
         let bindGen = #gen(.int(in: 0 ... 2)).bind { n in
             Gen.just(Array(repeating: n, count: n))
@@ -40,12 +40,10 @@ struct CoveringArrayIntegrationTests {
                 continue
             }
             let prefix = ChoiceSequence(tree)
-            guard let result = PrefixMaterializer.materialize(gen, prefix: prefix, seed: UInt64(rowIndex)) else {
+            guard case let .success(resultValue, _, _) = GuidedMaterializer.materialize(gen, prefix: prefix, seed: UInt64(rowIndex)) else {
                 continue
             }
-            // PrefixMaterializer.materialize returns the generator's Output type directly,
-            // but Gen.zip erases to [Any] internally — cast to the concrete tuple.
-            guard let value = result.value as? ([Int], Int, Int) else {
+            guard let value = resultValue as? ([Int], Int, Int) else {
                 Issue.record("Unexpected output type for row \(rowIndex)")
                 continue
             }

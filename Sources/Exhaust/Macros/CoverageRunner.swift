@@ -62,6 +62,8 @@ enum CoverageRunner {
             return .notApplicable
         }
 
+        let skipFilterCheck = covering.rows.count >= 100
+
         var iterations = 0
         for (rowIndex, row) in covering.rows.enumerated() {
             guard let tree = CoveringArrayReplay.buildTree(row: row, profile: profile) else {
@@ -71,11 +73,18 @@ enum CoverageRunner {
             let value: Output?
             if hasBinds {
                 // Bind-aware replay: flatten the full tree (including bind markers) to a prefix
-                // and use PrefixMaterializer. The cursor skips bind-bound content and suspends
+                // and use GuidedMaterializer. The cursor skips bind-bound content and suspends
                 // prefix consumption so the bound subtree is generated fresh via PRNG, while
                 // sibling parameters after the bind stay correctly aligned.
                 let prefix = ChoiceSequence(tree)
-                value = PrefixMaterializer.materialize(gen, prefix: prefix, seed: UInt64(rowIndex))?.value as? Output
+                switch GuidedMaterializer.materialize(gen, prefix: prefix, seed: UInt64(rowIndex), abortOnFilter: skipFilterCheck) {
+                case let .success(v, _, _):
+                    value = v as? Output
+                case .filterEncountered:
+                    return .notApplicable
+                case .failed:
+                    value = nil
+                }
             } else {
                 value = try? Interpreters.replay(gen, using: tree)
             }
@@ -118,9 +127,10 @@ enum CoverageRunner {
         }
 
         let hasBinds = profile.originalTree?.containsBind ?? false
+        let skipFilterCheck = covering.rows.count >= 100
 
         var iterations = 0
-        for row in covering.rows {
+        for (rowIndex, row) in covering.rows.enumerated() {
             guard let tree = BoundaryCoveringArrayReplay.buildTree(row: row, profile: profile) else {
                 continue
             }
@@ -128,7 +138,14 @@ enum CoverageRunner {
             let value: Output?
             if hasBinds {
                 let prefix = ChoiceSequence(tree)
-                value = PrefixMaterializer.materialize(gen, prefix: prefix, seed: UInt64(iterations))?.value as? Output
+                switch GuidedMaterializer.materialize(gen, prefix: prefix, seed: UInt64(rowIndex), abortOnFilter: skipFilterCheck) {
+                case let .success(v, _, _):
+                    value = v as? Output
+                case .filterEncountered:
+                    return .notApplicable
+                case .failed:
+                    value = nil
+                }
             } else {
                 value = try? Interpreters.replay(gen, using: tree)
             }

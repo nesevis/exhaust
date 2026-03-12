@@ -1,44 +1,63 @@
 //
-//  PrefixMaterializer.swift
+//  GuidedMaterializer.swift
 //  Exhaust
 //
 
 // swiftlint:disable function_parameter_count
 
-/// Interpreter that consumes from a choice sequence prefix, then falls back to PRNG generation when the prefix is exhausted or mismatched.
+/// Interpreter that replays recorded choices where available and generates fresh via PRNG elsewhere.
 ///
-/// This enables Hypothesis-style "extend=full" probing: modify one entry in a flat sequence, replay the prefix, and let fresh random choices fill in beyond the modification point. No pre-materialized branches needed.
-public enum PrefixMaterializer {
+/// Supports two modes of partial replay:
+/// 1. **Prefix mode** (HillClimber): replays a choice sequence prefix, then falls back to PRNG beyond the modification point.
+/// 2. **Bind-aware mode** (CoverageRunner): replays inner parameter choices from a covering array while generating bound subtrees fresh, preserving cursor alignment for sibling parameters.
+public enum GuidedMaterializer {
+    /// Result of a guided materialization attempt.
+    public enum Result<Output> {
+        case success(value: Output, sequence: ChoiceSequence, tree: ChoiceTree)
+        case filterEncountered
+        case failed
+    }
+
     public static func materialize<Output>(
         _ gen: ReflectiveGenerator<Output>,
         prefix: ChoiceSequence,
         seed: UInt64,
-    ) -> (value: Output, sequence: ChoiceSequence, tree: ChoiceTree)? {
-        var context = PrefixContext(
-            cursor: PrefixCursor(from: prefix),
+        abortOnFilter: Bool = false,
+    ) -> Result<Output> {
+        var context = GuidedContext(
+            cursor: GuidedCursor(from: prefix),
             prng: Xoshiro256(seed: seed),
-            size: GenerationContext.scaledSize(forRun: 0),
+            abortOnFilter: abortOnFilter,
         )
-        guard let (value, tree) = try? generateRecursive(gen, with: (), context: &context) else {
-            return nil
+        do {
+            guard let (value, tree) = try generateRecursive(gen, with: (), context: &context) else {
+                return .failed
+            }
+            let sequence = ChoiceSequence(tree)
+            return .success(value: value, sequence: sequence, tree: tree)
+        } catch is FilterAbort {
+            return .filterEncountered
+        } catch {
+            return .failed
         }
-        let sequence = ChoiceSequence(tree)
-        return (value, sequence, tree)
     }
+
+    /// Sentinel error thrown when `abortOnFilter` is set and a filter is encountered.
+    struct FilterAbort: Error {}
 }
 
 // MARK: - Internal State
 
-private extension PrefixMaterializer {
+private extension GuidedMaterializer {
     /// Position-based cursor that traverses the full `ChoiceSequence` including structural markers (`.group`, `.sequence`).
     ///
     /// Group markers (from `runContinuation` grouping and pick sites) are transparently skipped. Sequence markers are handled explicitly by `tryConsumeSequenceOpen()` / `skipSequenceClose()`.
-    struct PrefixCursor: ~Copyable {
+    struct GuidedCursor: ~Copyable {
         private let entries: ChoiceSequence
         private(set) var position: Int = 0
         var exhausted: Bool = false
         /// When > 0, the cursor is inside a bind's bound subtree and should
-        /// behave as exhausted so PrefixMaterializer falls back to PRNG.
+        /// behave as exhausted so GuidedMaterializer falls back to PRNG.
         private var bindSuspendDepth: Int = 0
 
         init(from sequence: ChoiceSequence) {
@@ -194,21 +213,22 @@ private extension PrefixMaterializer {
         }
     }
 
-    struct PrefixContext: ~Copyable {
-        var cursor: PrefixCursor
+    struct GuidedContext: ~Copyable {
+        var cursor: GuidedCursor
         var prng: Xoshiro256
-        var size: UInt64
+        var size: UInt64 = GenerationContext.scaledSize(forRun: 0)
         var sizeOverride: UInt64?
+        var abortOnFilter: Bool = false
     }
 }
 
 // MARK: - Recursive Engine
 
-private extension PrefixMaterializer {
+private extension GuidedMaterializer {
     static func generateRecursive<Output>(
         _ gen: ReflectiveGenerator<Output>,
         with inputValue: some Any,
-        context: inout PrefixContext,
+        context: inout GuidedContext,
     ) throws -> (Output, ChoiceTree)? {
         switch gen {
         case let .pure(value):
@@ -298,6 +318,9 @@ private extension PrefixMaterializer {
                 )
 
             case let .filter(gen, _, _, predicate):
+                if context.abortOnFilter {
+                    throw FilterAbort()
+                }
                 guard let (result, tree) = try generateRecursive(gen, with: inputValue, context: &context) else {
                     return nil
                 }
@@ -379,7 +402,7 @@ private extension PrefixMaterializer {
         calleeChoiceTree: ChoiceTree,
         continuation: (Any) throws -> ReflectiveGenerator<Output>,
         inputValue: some Any,
-        context: inout PrefixContext,
+        context: inout GuidedContext,
     ) throws -> (Output, ChoiceTree)? {
         let nextGen = try continuation(result)
 
@@ -407,7 +430,7 @@ private extension PrefixMaterializer {
         _ nextGen: ReflectiveGenerator<Any>,
         continuation: (Any) throws -> ReflectiveGenerator<Output>,
         inputValue: some Any,
-        context: inout PrefixContext,
+        context: inout GuidedContext,
     ) throws -> (Output, ChoiceTree)? {
         guard let (result, tree) = try generateRecursive(nextGen, with: inputValue, context: &context) else { return nil }
         return try runContinuation(
@@ -424,7 +447,7 @@ private extension PrefixMaterializer {
         _ nextGen: ReflectiveGenerator<Any>,
         continuation: (Any) throws -> ReflectiveGenerator<Output>,
         inputValue: some Any,
-        context: inout PrefixContext,
+        context: inout GuidedContext,
     ) throws -> (Output, ChoiceTree)? {
         guard let wrappedValue = InterpreterWrapperHandlers.unwrapPruneInput(inputValue) else {
             return nil
@@ -447,7 +470,7 @@ private extension PrefixMaterializer {
         isRangeExplicit: Bool,
         continuation: (Any) throws -> ReflectiveGenerator<Output>,
         inputValue: some Any,
-        context: inout PrefixContext,
+        context: inout GuidedContext,
     ) throws -> (Output, ChoiceTree)? {
         let randomBits: UInt64
 
@@ -477,7 +500,7 @@ private extension PrefixMaterializer {
         _ choices: ContiguousArray<ReflectiveOperation.PickTuple>,
         continuation: (Any) throws -> ReflectiveGenerator<Output>,
         inputValue: some Any,
-        context: inout PrefixContext,
+        context: inout GuidedContext,
     ) throws -> (Output, ChoiceTree)? {
         let branchIDs = choices.map(\.id)
 
@@ -522,7 +545,7 @@ private extension PrefixMaterializer {
         elementGen: ReflectiveGenerator<Any>,
         continuation: (Any) throws -> ReflectiveGenerator<Output>,
         inputValue: some Any,
-        context: inout PrefixContext,
+        context: inout GuidedContext,
     ) throws -> (Output, ChoiceTree)? {
         let length: UInt64
         let lengthMeta: ChoiceMetadata
@@ -590,7 +613,7 @@ private extension PrefixMaterializer {
         _ generators: ContiguousArray<ReflectiveGenerator<Any>>,
         continuation: (Any) throws -> ReflectiveGenerator<Output>,
         inputValue: some Any,
-        context: inout PrefixContext,
+        context: inout GuidedContext,
     ) throws -> (Output, ChoiceTree)? {
         var results = [Any]()
         results.reserveCapacity(generators.count)
@@ -619,7 +642,7 @@ private extension PrefixMaterializer {
         gen: ReflectiveGenerator<Any>,
         continuation: (Any) throws -> ReflectiveGenerator<Output>,
         inputValue: some Any,
-        context: inout PrefixContext,
+        context: inout GuidedContext,
     ) throws -> (Output, ChoiceTree)? {
         context.sizeOverride = newSize
         guard let result = try generateRecursive(gen, with: inputValue, context: &context) else {

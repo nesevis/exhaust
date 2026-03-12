@@ -88,26 +88,6 @@ extension ChoiceTree {
         return false
     }
 
-    /// Returns a copy of the tree with `.bind` nodes replaced by their inner subtrees only,
-    /// discarding the bound subtrees. Used to build a prefix for PrefixMaterializer so that
-    /// only inner parameter choices are replayed and the bound subtree is generated fresh.
-    public var strippingBinds: ChoiceTree {
-        switch self {
-        case let .bind(inner, _):
-            inner.strippingBinds
-        case .choice, .just, .getSize, .branch:
-            self
-        case let .selected(inner):
-            .selected(inner.strippingBinds)
-        case let .sequence(length, elements, metadata):
-            .sequence(length: length, elements: elements.map(\.strippingBinds), metadata)
-        case let .group(array, isOpaque):
-            .group(array.map(\.strippingBinds), isOpaque: isOpaque)
-        case let .resize(newSize, choices):
-            .resize(newSize: newSize, choices: choices.map(\.strippingBinds))
-        }
-    }
-
     /// Whether this tree contains any `.bind` nodes.
     public var containsBind: Bool {
         switch self {
