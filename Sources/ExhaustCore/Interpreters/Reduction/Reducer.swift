@@ -265,7 +265,8 @@ public extension Interpreters {
                     metadata: [
                         "loop": "\(loops)",
                         "stall_budget": "\(stallBudget)",
-                        "sequence": currentSequence.shortString
+                        "sequence": currentSequence.shortString,
+                        "current_bind_depth": currentBindDepth.description
                     ],
                 )
             }
@@ -551,14 +552,40 @@ public extension Interpreters {
                 } else {
                     if nextDepth == 0 { depthCyclesRemaining -= 1 }
                     // Rebuild consistent (sequence, tree) and advance depth.
+                    let beforeSeq = currentSequence
                     let seed = currentSequence.zobristHash
                     if case let .success(value, seq, newTree) =
                         GuidedMaterializer.materialize(gen, prefix: currentSequence, seed: seed),
                        property(value) == false
                     {
-                        currentSequence = seq
+                        // GuidedMaterializer regenerates bound content from PRNG, discarding
+                        // any progress made shrinking at deeper bind depths. Restore the
+                        // shortlex-smaller of the two choices at each bound position so that
+                        // shrinking work from previous depth passes is not lost.
+                        var mergedSeq = seq
+                        var didMerge = false
+                        if let bi = bindSpanIndex {
+                            let newBi = BindSpanIndex(from: seq)
+                            for (oldRegion, newRegion) in zip(bi.regions, newBi.regions) {
+                                for (oldIdx, newIdx) in zip(oldRegion.boundRange, newRegion.boundRange) {
+                                    if beforeSeq[oldIdx].shortLexCompare(seq[newIdx]) == .lt {
+                                        mergedSeq[newIdx] = beforeSeq[oldIdx]
+                                        didMerge = true
+                                    }
+                                }
+                            }
+                        }
+                        if didMerge, mergedSeq.shortLexPrecedes(seq),
+                           let mergedResult = try? materialize(gen, with: newTree, using: mergedSeq),
+                           property(mergedResult) == false
+                        {
+                            currentSequence = mergedSeq
+                            currentOutput = mergedResult
+                        } else {
+                            currentSequence = seq
+                            currentOutput = value
+                        }
                         currentTree = newTree
-                        currentOutput = value
                         bindSpanIndex = BindSpanIndex(from: currentSequence)
                         spanCache.invalidate()
                         rejectCache = ReducerCache()
@@ -569,6 +596,7 @@ public extension Interpreters {
                     }
                 }
             }
+            
             stallBudget -= 1
         }
 

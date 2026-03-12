@@ -46,182 +46,6 @@ public enum GuidedMaterializer {
     struct FilterAbort: Error {}
 }
 
-// MARK: - Internal State
-
-private extension GuidedMaterializer {
-    /// Position-based cursor that traverses the full `ChoiceSequence` including structural markers (`.group`, `.sequence`).
-    ///
-    /// Group markers (from `runContinuation` grouping and pick sites) are transparently skipped. Sequence markers are handled explicitly by `tryConsumeSequenceOpen()` / `skipSequenceClose()`.
-    struct GuidedCursor: ~Copyable {
-        private let entries: ChoiceSequence
-        private(set) var position: Int = 0
-        var exhausted: Bool = false
-        /// When > 0, the cursor is inside a bind's bound subtree and should
-        /// behave as exhausted so GuidedMaterializer falls back to PRNG.
-        private var bindSuspendDepth: Int = 0
-
-        init(from sequence: ChoiceSequence) {
-            entries = sequence
-        }
-
-        /// Skip consecutive `.group(true/false)` and `.just` markers at the current position.
-        /// Groups are transparent wrappers from `runContinuation` and pick sites.
-        /// Just markers carry no data and are purely structural.
-        private mutating func skipGroups() {
-            while position < entries.count {
-                switch entries[position] {
-                case .group, .bind, .just:
-                    position += 1
-                default:
-                    return
-                }
-            }
-        }
-
-        /// Advance the cursor past the bound content of a `.bind` node.
-        ///
-        /// After inner content has been consumed, the cursor sits somewhere inside the
-        /// bind's span. This method scans forward to the matching `.bind(false)` marker,
-        /// skipping nested bind/group/sequence structures, so that subsequent prefix
-        /// entries (e.g. sibling parameters in a zip) are correctly aligned.
-        mutating func skipBindBound() {
-            var depth = 0
-            while position < entries.count {
-                switch entries[position] {
-                case .bind(true):
-                    depth += 1
-                    position += 1
-                case .bind(false):
-                    if depth == 0 {
-                        // Found the outer bind-close; skip it and stop.
-                        position += 1
-                        return
-                    }
-                    depth -= 1
-                    position += 1
-                default:
-                    position += 1
-                }
-            }
-        }
-
-        /// Suspend prefix consumption so the cursor reports exhausted.
-        /// Used when generating a bind's bound subtree via PRNG.
-        mutating func suspendForBind() {
-            bindSuspendDepth += 1
-        }
-
-        /// Resume prefix consumption after the bound subtree has been generated.
-        mutating func resumeAfterBind() {
-            bindSuspendDepth -= 1
-        }
-
-        var isSuspended: Bool { bindSuspendDepth > 0 }
-
-        mutating func tryConsumeValue() -> ChoiceSequenceValue.Value? {
-            guard !exhausted, !isSuspended else { return nil }
-            skipGroups()
-            guard position < entries.count else {
-                exhausted = true
-                return nil
-            }
-            switch entries[position] {
-            case let .value(v), let .reduced(v):
-                position += 1
-                return v
-            default:
-                exhausted = true
-                return nil
-            }
-        }
-
-        mutating func tryConsumeBranch() -> ChoiceSequenceValue.Branch? {
-            guard !exhausted, !isSuspended else { return nil }
-            skipGroups()
-            guard position < entries.count else {
-                exhausted = true
-                return nil
-            }
-            switch entries[position] {
-            case let .branch(b):
-                position += 1
-                return b
-            default:
-                exhausted = true
-                return nil
-            }
-        }
-
-        /// Try to consume a `.sequence(true)` marker and return info about the sequence found in the prefix: element count and `isLengthExplicit`.
-        ///
-        /// On success, position advances past the `.sequence(true)` marker.
-        /// Returns `nil` if cursor is exhausted or not at a sequence marker.
-        mutating func tryConsumeSequenceOpen() -> (elementCount: Int, isLengthExplicit: Bool)? {
-            guard !exhausted, !isSuspended else { return nil }
-            skipGroups()
-            guard position < entries.count else {
-                exhausted = true
-                return nil
-            }
-            guard case let .sequence(true, isLengthExplicit: isExplicit) = entries[position] else {
-                // Not at a sequence marker — structural mismatch
-                exhausted = true
-                return nil
-            }
-            position += 1
-
-            guard let count = countTopLevelElements(from: position) else {
-                exhausted = true
-                return nil
-            }
-            return (elementCount: count, isLengthExplicit: isExplicit)
-        }
-
-        /// Skip past the matching `.sequence(false)` marker after all elements have been consumed.
-        mutating func skipSequenceClose() {
-            guard !exhausted else { return }
-            skipGroups()
-            guard position < entries.count else { return }
-            if case .sequence(false, _) = entries[position] {
-                position += 1
-            }
-        }
-
-        /// Count top-level balanced elements from the given position until the matching `.sequence(false)` at depth 0.
-        private func countTopLevelElements(from startPos: Int) -> Int? {
-            var pos = startPos
-            var depth = 0
-            var count = 0
-
-            while pos < entries.count {
-                switch entries[pos] {
-                case .sequence(false, _) where depth == 0:
-                    return count
-                case .group(true), .bind(true), .sequence(true, _):
-                    if depth == 0 { count += 1 }
-                    depth += 1
-                case .group(false), .bind(false), .sequence(false, _):
-                    depth -= 1
-                case .value, .reduced, .just:
-                    if depth == 0 { count += 1 }
-                case .branch:
-                    break // Branch markers are inside groups, not standalone
-                }
-                pos += 1
-            }
-            return nil // Malformed: no matching close
-        }
-    }
-
-    struct GuidedContext: ~Copyable {
-        var cursor: GuidedCursor
-        var prng: Xoshiro256
-        var size: UInt64 = GenerationContext.scaledSize(forRun: 0)
-        var sizeOverride: UInt64?
-        var abortOnFilter: Bool = false
-    }
-}
-
 // MARK: - Recursive Engine
 
 private extension GuidedMaterializer {
@@ -370,8 +194,7 @@ private extension GuidedMaterializer {
                     result = try forward(innerValue)
                 case let .bind(forward, _, _, _):
                     let boundGen = try forward(innerValue)
-                    // Skip past the bind's bound content in the prefix and suspend
-                    // prefix consumption so the bound subtree is generated via PRNG.
+                    // Skip past the bind's bound content in the prefix and suspend prefix consumption so the bound subtree is generated via PRNG.
                     // This preserves cursor alignment for sibling parameters after the bind.
                     context.cursor.skipBindBound()
                     context.cursor.suspendForBind()
@@ -559,15 +382,15 @@ private extension GuidedMaterializer {
             )
         } else {
             // Cursor exhausted or mismatched — generate fresh
-            guard let (l, lt) = try generateRecursive(
+            guard let (freshLength, lengthTree) = try generateRecursive(
                 lengthGen,
                 with: inputValue,
                 context: &context,
             ) else {
                 return nil
             }
-            length = l
-            lengthMeta = lt.metadata
+            length = freshLength
+            lengthMeta = lengthTree.metadata
         }
 
         var results: [Any] = []
@@ -655,5 +478,181 @@ private extension GuidedMaterializer {
             inputValue: inputValue,
             context: &context,
         )
+    }
+}
+
+// MARK: - Internal State
+
+private extension GuidedMaterializer {
+    /// Position-based cursor that traverses the full `ChoiceSequence` including structural markers (`.group`, `.sequence`).
+    ///
+    /// Group markers (from `runContinuation` grouping and pick sites) are transparently skipped. Sequence markers are handled explicitly by `tryConsumeSequenceOpen()` / `skipSequenceClose()`.
+    struct GuidedCursor: ~Copyable {
+        private let entries: ChoiceSequence
+        private(set) var position: Int = 0
+        var exhausted: Bool = false
+        /// When > 0, the cursor is inside a bind's bound subtree and should
+        /// behave as exhausted so GuidedMaterializer falls back to PRNG.
+        private var bindSuspendDepth: Int = 0
+
+        init(from sequence: ChoiceSequence) {
+            entries = sequence
+        }
+
+        /// Skip consecutive `.group(true/false)` and `.just` markers at the current position.
+        /// Groups are transparent wrappers from `runContinuation` and pick sites.
+        /// Just markers carry no data and are purely structural.
+        private mutating func skipGroups() {
+            while position < entries.count {
+                switch entries[position] {
+                case .group, .bind, .just:
+                    position += 1
+                default:
+                    return
+                }
+            }
+        }
+
+        /// Advance the cursor past the bound content of a `.bind` node.
+        ///
+        /// After inner content has been consumed, the cursor sits somewhere inside the
+        /// bind's span. This method scans forward to the matching `.bind(false)` marker,
+        /// skipping nested bind/group/sequence structures, so that subsequent prefix
+        /// entries (e.g. sibling parameters in a zip) are correctly aligned.
+        mutating func skipBindBound() {
+            var depth = 0
+            while position < entries.count {
+                switch entries[position] {
+                case .bind(true):
+                    depth += 1
+                    position += 1
+                case .bind(false):
+                    if depth == 0 {
+                        // Found the outer bind-close; skip it and stop.
+                        position += 1
+                        return
+                    }
+                    depth -= 1
+                    position += 1
+                default:
+                    position += 1
+                }
+            }
+        }
+
+        /// Suspend prefix consumption so the cursor reports exhausted.
+        /// Used when generating a bind's bound subtree via PRNG.
+        mutating func suspendForBind() {
+            bindSuspendDepth += 1
+        }
+
+        /// Resume prefix consumption after the bound subtree has been generated.
+        mutating func resumeAfterBind() {
+            bindSuspendDepth -= 1
+        }
+
+        var isSuspended: Bool { bindSuspendDepth > 0 }
+
+        mutating func tryConsumeValue() -> ChoiceSequenceValue.Value? {
+            guard !exhausted, !isSuspended else { return nil }
+            skipGroups()
+            guard position < entries.count else {
+                exhausted = true
+                return nil
+            }
+            switch entries[position] {
+            case let .value(v), let .reduced(v):
+                position += 1
+                return v
+            default:
+                exhausted = true
+                return nil
+            }
+        }
+
+        mutating func tryConsumeBranch() -> ChoiceSequenceValue.Branch? {
+            guard !exhausted, !isSuspended else { return nil }
+            skipGroups()
+            guard position < entries.count else {
+                exhausted = true
+                return nil
+            }
+            switch entries[position] {
+            case let .branch(b):
+                position += 1
+                return b
+            default:
+                exhausted = true
+                return nil
+            }
+        }
+
+        /// Try to consume a `.sequence(true)` marker and return info about the sequence found in the prefix: element count and `isLengthExplicit`.
+        ///
+        /// On success, position advances past the `.sequence(true)` marker.
+        /// Returns `nil` if cursor is exhausted or not at a sequence marker.
+        mutating func tryConsumeSequenceOpen() -> (elementCount: Int, isLengthExplicit: Bool)? {
+            guard !exhausted, !isSuspended else { return nil }
+            skipGroups()
+            guard position < entries.count else {
+                exhausted = true
+                return nil
+            }
+            guard case let .sequence(true, isLengthExplicit: isExplicit) = entries[position] else {
+                // Not at a sequence marker — structural mismatch
+                exhausted = true
+                return nil
+            }
+            position += 1
+
+            guard let count = countTopLevelElements(from: position) else {
+                exhausted = true
+                return nil
+            }
+            return (elementCount: count, isLengthExplicit: isExplicit)
+        }
+
+        /// Skip past the matching `.sequence(false)` marker after all elements have been consumed.
+        mutating func skipSequenceClose() {
+            guard !exhausted else { return }
+            skipGroups()
+            guard position < entries.count else { return }
+            if case .sequence(false, _) = entries[position] {
+                position += 1
+            }
+        }
+
+        /// Count top-level balanced elements from the given position until the matching `.sequence(false)` at depth 0.
+        private func countTopLevelElements(from startPos: Int) -> Int? {
+            var pos = startPos
+            var depth = 0
+            var count = 0
+
+            while pos < entries.count {
+                switch entries[pos] {
+                case .sequence(false, _) where depth == 0:
+                    return count
+                case .group(true), .bind(true), .sequence(true, _):
+                    if depth == 0 { count += 1 }
+                    depth += 1
+                case .group(false), .bind(false), .sequence(false, _):
+                    depth -= 1
+                case .value, .reduced, .just:
+                    if depth == 0 { count += 1 }
+                case .branch:
+                    break // Branch markers are inside groups, not standalone
+                }
+                pos += 1
+            }
+            return nil // Malformed: no matching close
+        }
+    }
+
+    struct GuidedContext: ~Copyable {
+        var cursor: GuidedCursor
+        var prng: Xoshiro256
+        var size: UInt64 = GenerationContext.scaledSize(forRun: 0)
+        var sizeOverride: UInt64?
+        var abortOnFilter: Bool = false
     }
 }
