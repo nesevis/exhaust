@@ -254,9 +254,8 @@ struct MaterializeCandidateTests {
         let (_, tree) = try #require(try iterator.next())
         let sequence = ChoiceSequence.flatten(tree)
 
-        var corrected: ChoiceSequence?
         let result = try ReducerStrategies.materializeCandidate(
-            gen, tree: tree, candidate: sequence, bindIndex: nil, mutatedIndex: 0, correctedSequence: &corrected
+            gen, tree: tree, candidate: sequence, bindIndex: nil, mutatedIndex: 0
         )
         #expect(result != nil)
     }
@@ -269,9 +268,8 @@ struct MaterializeCandidateTests {
         let sequence = ChoiceSequence.flatten(tree)
         let emptyIndex = BindSpanIndex(from: sequence)
 
-        var corrected: ChoiceSequence?
         let result = try ReducerStrategies.materializeCandidate(
-            gen, tree: tree, candidate: sequence, bindIndex: emptyIndex, mutatedIndex: 0, correctedSequence: &corrected
+            gen, tree: tree, candidate: sequence, bindIndex: emptyIndex, mutatedIndex: 0
         )
         #expect(result != nil)
     }
@@ -291,11 +289,9 @@ struct MaterializeCandidateTests {
 
         #expect(genBindIndex.isEmpty == false)
         let genInnerIdx = genBindIndex.regions[0].innerRange.lowerBound
-        var corrected: ChoiceSequence?
         let result = try ReducerStrategies.materializeCandidate(
-            gen, tree: genTree, candidate: genSequence, bindIndex: genBindIndex, mutatedIndex: genInnerIdx, correctedSequence: &corrected
+            gen, tree: genTree, candidate: genSequence, bindIndex: genBindIndex, mutatedIndex: genInnerIdx
         )
         #expect(result != nil)
-        #expect(corrected != nil)
     }
 }

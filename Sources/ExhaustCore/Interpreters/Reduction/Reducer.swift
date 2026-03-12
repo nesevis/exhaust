@@ -243,6 +243,9 @@ public extension Interpreters {
         var bindSpanIndex: BindSpanIndex? = hasBind
             ? BindSpanIndex(from: currentSequence)
             : nil
+        let maxBindDepth = bindSpanIndex?.maxBindDepth ?? 0
+        var currentBindDepth = 0
+        var depthCycleImproved = false
         var didNaivelyMinimise = false
         var loops = 0
         var passes = ShrinkPass.allCases
@@ -266,15 +269,15 @@ public extension Interpreters {
                 )
             }
             for pass in passes {
+                let property = isInstrumented == false
+                ? property
+                : { v in
+                    propertyInvocations[pass, default: 0] += 1
+                    return property(v)
+                }
                 // The order of shrink passes to take next turn
                 var passImproved = false
 
-                let property = isInstrumented == false
-                    ? property
-                    : { v in
-                        propertyInvocations[pass, default: 0] += 1
-                        return property(v)
-                    }
                 switch pass {
                 case .naiveSimplifyValuesToSemanticSimplest:
                     guard didNaivelyMinimise == false else {
@@ -282,7 +285,7 @@ public extension Interpreters {
                     }
                     var valueSpans = spanCache.getAllValueSpans(from: currentSequence)
                     if let bi = bindSpanIndex {
-                        valueSpans = valueSpans.filter { bi.isInBoundSubtree($0.range.lowerBound) == false }
+                        valueSpans = valueSpans.filter { bi.bindDepth(at: $0.range.lowerBound) == currentBindDepth }
                     }
                     if valueSpans.isEmpty == false, let (newSequence, output) = try ReducerStrategies.naiveSimplifyValues(gen, tree: currentTree, property: property, sequence: currentSequence, valueSpans: valueSpans, rejectCache: &rejectCache, bindIndex: bindSpanIndex) {
                         currentSequence = newSequence
@@ -387,7 +390,7 @@ public extension Interpreters {
                 case .simplifyValuesToSemanticSimplest:
                     var valueSpans = spanCache.getAllValueSpans(from: currentSequence)
                     if let bi = bindSpanIndex {
-                        valueSpans = valueSpans.filter { bi.isInBoundSubtree($0.range.lowerBound) == false }
+                        valueSpans = valueSpans.filter { bi.bindDepth(at: $0.range.lowerBound) == currentBindDepth }
                     }
                     if valueSpans.isEmpty == false, let (newSequence, output) = try ReducerStrategies.simplifyValues(gen, tree: currentTree, property: property, sequence: currentSequence, valueSpans: valueSpans, rejectCache: &rejectCache, bindIndex: bindSpanIndex) {
                         currentSequence = newSequence
@@ -398,7 +401,7 @@ public extension Interpreters {
                 case .reduceIntegralValues:
                     var valueSpans = spanCache.getAllValueSpans(from: currentSequence)
                     if let bi = bindSpanIndex {
-                        valueSpans = valueSpans.filter { bi.isInBoundSubtree($0.range.lowerBound) == false }
+                        valueSpans = valueSpans.filter { bi.bindDepth(at: $0.range.lowerBound) == currentBindDepth }
                     }
                     if valueSpans.isEmpty == false, let (newSequence, output) = try ReducerStrategies.reduceIntegralValues(gen, tree: currentTree, property: property, sequence: currentSequence, valueSpans: valueSpans, rejectCache: &rejectCache, bindIndex: bindSpanIndex) {
                         currentSequence = newSequence
@@ -409,7 +412,7 @@ public extension Interpreters {
                 case .reduceFloatValues:
                     var floatSpans = spanCache.getFloatValueSpans(from: currentSequence)
                     if let bi = bindSpanIndex {
-                        floatSpans = floatSpans.filter { bi.isInBoundSubtree($0.range.lowerBound) == false }
+                        floatSpans = floatSpans.filter { bi.bindDepth(at: $0.range.lowerBound) == currentBindDepth }
                     }
                     if floatSpans.isEmpty == false, let (newSequence, output) = try ReducerStrategies.reduceFloatValues(gen, tree: currentTree, property: property, sequence: currentSequence, valueSpans: floatSpans, rejectCache: &rejectCache, bindIndex: bindSpanIndex) {
                         currentSequence = newSequence
@@ -494,6 +497,7 @@ public extension Interpreters {
                         )
                     }
                     didImprove = true
+                    depthCycleImproved = true
                     nextPasses.insert(pass, at: 0)
                 } else {
                     if isInstrumented {
@@ -536,7 +540,34 @@ public extension Interpreters {
                 continue
             }
 
-            // No pass improved the sequence — further iterations are deterministic, so stop.
+            // No pass improved at current depth — try advancing to next bind depth.
+            if maxBindDepth > 0 {
+                let nextDepth = (currentBindDepth + 1) % (maxBindDepth + 1)
+
+                // Full cycle with no improvement → fall through to stall decrement.
+                if nextDepth == 0, depthCycleImproved == false {
+                    // fall through
+                } else {
+                    // Rebuild consistent (sequence, tree) and advance depth.
+                    let seed = currentSequence.zobristHash
+                    if case let .success(value, seq, newTree) =
+                        GuidedMaterializer.materialize(gen, prefix: currentSequence, seed: seed),
+                       property(value) == false
+                    {
+                        currentSequence = seq
+                        currentTree = newTree
+                        currentOutput = value
+                        bindSpanIndex = BindSpanIndex(from: currentSequence)
+                        spanCache.invalidate()
+                        rejectCache = ReducerCache()
+                        currentBindDepth = nextDepth
+                        if nextDepth == 0 { depthCycleImproved = false }
+                        didNaivelyMinimise = false
+                        stallBudget = config.maxStalls
+                        continue
+                    }
+                }
+            }
             stallBudget -= 1
         }
 
