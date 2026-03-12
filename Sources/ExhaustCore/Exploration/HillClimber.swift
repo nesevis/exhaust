@@ -15,7 +15,7 @@ public enum HillClimbResult<Output> {
 
 /// Hill climber inspired by Hypothesis's `Optimiser`.
 ///
-/// Single backward loop over all sequence entries (values + branches), using `PrefixMaterializer` for each probe. Modify one entry in the flat sequence, replay the prefix, and let fresh PRNG choices fill in beyond the modification.
+/// Single backward loop over all sequence entries (values + branches), using `GuidedMaterializer` for each probe. Modify one entry in the flat sequence, replay the prefix, and let fresh PRNG choices fill in beyond the modification.
 ///
 /// **Acceptance criterion** (from Hypothesis):
 /// - Score improvement → accept
@@ -41,15 +41,15 @@ public enum HillClimber {
         )
         var probePRNG = Xoshiro256(seed: probePRNGSeed)
 
-        // Materialize the seed via PrefixMaterializer to get baseline
-        guard let baseline = PrefixMaterializer.materialize(
-            gen, prefix: currentSequence, seed: probePRNG.next(),
+        // Materialize the seed via GuidedMaterializer to get baseline
+        guard case let .success(baselineValue, _, _) = GuidedMaterializer.materialize(
+            gen, prefix: currentSequence, seed: probePRNG.next()
         ) else {
             return .unchanged(probesUsed: 0)
         }
         probesUsed += 1
-        var currentScore = scorer(baseline.value)
-        var bestOutput = baseline.value
+        var currentScore = scorer(baselineValue)
+        var bestOutput = baselineValue
         var improved = false
 
         // Single backward loop over all entries
@@ -59,7 +59,7 @@ public enum HillClimber {
 
             switch entry {
             // Skip structural markers
-            case .group, .sequence, .just:
+            case .group, .bind, .sequence, .just:
                 i -= 1
                 continue
 
@@ -111,28 +111,28 @@ public enum HillClimber {
                         var probe = currentSequence
                         probe[i] = newEntry
 
-                        guard let result = PrefixMaterializer.materialize(
-                            gen, prefix: probe, seed: probePRNG.next(),
+                        guard case let .success(value, sequence, tree) = GuidedMaterializer.materialize(
+                            gen, prefix: probe, seed: probePRNG.next()
                         ) else {
                             probesUsed += 1
                             return false
                         }
                         probesUsed += 1
 
-                        if property(result.value) == false {
-                            let ceTree = reflectOrFallback(gen: gen, value: result.value, fallback: result.tree)
-                            foundCounterexample = (result.value, ceTree)
+                        if property(value) == false {
+                            let ceTree = reflectOrFallback(gen: gen, value: value, fallback: tree)
+                            foundCounterexample = (value, ceTree)
                             return false
                         }
 
-                        let score = scorer(result.value)
+                        let score = scorer(value)
                         if accept(newScore: score, currentScore: currentScore,
-                                  newLength: result.sequence.count, currentLength: currentSequence.count)
+                                  newLength: sequence.count, currentLength: currentSequence.count)
                         {
                             if score > currentScore { improved = true }
                             currentScore = score
-                            bestOutput = result.value
-                            currentSequence = result.sequence
+                            bestOutput = value
+                            currentSequence = sequence
                             currentBP = newBP
                             didAccept = true
                             // Return false to stop findInteger — we've accepted and
@@ -175,27 +175,27 @@ public enum HillClimber {
                     var probe = currentSequence
                     probe[i] = .branch(.init(id: altID, validIDs: b.validIDs))
 
-                    guard let result = PrefixMaterializer.materialize(
-                        gen, prefix: probe, seed: probePRNG.next(),
+                    guard case let .success(value, sequence, tree) = GuidedMaterializer.materialize(
+                        gen, prefix: probe, seed: probePRNG.next()
                     ) else {
                         probesUsed += 1
                         continue
                     }
                     probesUsed += 1
 
-                    if property(result.value) == false {
-                        let ceTree = reflectOrFallback(gen: gen, value: result.value, fallback: result.tree)
-                        return .counterexample(value: result.value, tree: ceTree, probesUsed: probesUsed)
+                    if property(value) == false {
+                        let ceTree = reflectOrFallback(gen: gen, value: value, fallback: tree)
+                        return .counterexample(value: value, tree: ceTree, probesUsed: probesUsed)
                     }
 
-                    let score = scorer(result.value)
+                    let score = scorer(value)
                     if accept(newScore: score, currentScore: currentScore,
-                              newLength: result.sequence.count, currentLength: currentSequence.count)
+                              newLength: sequence.count, currentLength: currentSequence.count)
                     {
                         if score > currentScore { improved = true }
                         currentScore = score
-                        bestOutput = result.value
-                        currentSequence = result.sequence
+                        bestOutput = value
+                        currentSequence = sequence
                         branchAccepted = true
                         break
                     }

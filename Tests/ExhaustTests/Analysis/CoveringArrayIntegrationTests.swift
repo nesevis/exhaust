@@ -9,6 +9,62 @@ import Testing
 
 @Suite("Covering Array Integration")
 struct CoveringArrayIntegrationTests {
+    @Test("Bind-aware coverage: sibling parameters after bind are correctly replayed")
+    func bindAwareSiblingAlignment() throws {
+        // Gen.zip(bindGen, b, c) where bindGen has a bind.
+        // Coverage analysis extracts only the inner parameter from the bind,
+        // plus b and c — 3 finite parameters total.
+        // GuidedMaterializer must replay b and c from the covering array,
+        // not consume their prefix entries into the bind's bound subtree.
+        let bindGen = #gen(.int(in: 0 ... 2)).bind { n in
+            Gen.just(Array(repeating: n, count: n))
+        }
+        let gen = Gen.zip(bindGen, #gen(.int(in: 0 ... 3)), #gen(.int(in: 0 ... 3)))
+
+        guard case let .finite(profile) = ChoiceTreeAnalysis.analyze(gen) else {
+            Issue.record("Expected finite analysis for zip(bind, int, int)")
+            return
+        }
+
+        // inner(0...2), b(0...3), c(0...3) → 3 parameters
+        #expect(profile.parameters.count == 3)
+        #expect(profile.originalTree?.containsBind == true)
+
+        let covering = try #require(
+            CoveringArray.generate(profile: profile, strength: profile.parameters.count)
+        )
+
+        var replayedValues: [([Int], Int, Int)] = []
+        for (rowIndex, row) in covering.rows.enumerated() {
+            guard let tree = CoveringArrayReplay.buildTree(row: row, profile: profile) else {
+                continue
+            }
+            let prefix = ChoiceSequence(tree)
+            guard case let .success(resultValue, _, _) = GuidedMaterializer.materialize(gen, prefix: prefix, seed: UInt64(rowIndex)) else {
+                continue
+            }
+            guard let value = resultValue as? ([Int], Int, Int) else {
+                Issue.record("Unexpected output type for row \(rowIndex)")
+                continue
+            }
+            replayedValues.append(value)
+
+            // b and c must match the covering array parameter values exactly
+            let expectedB = Int(row.values[1])
+            let expectedC = Int(row.values[2])
+            #expect(value.1 == expectedB, "b should be \(expectedB) but got \(value.1) for row \(rowIndex)")
+            #expect(value.2 == expectedC, "c should be \(expectedC) but got \(value.2) for row \(rowIndex)")
+        }
+
+        // Every row should replay successfully (no nils)
+        #expect(replayedValues.count == covering.rows.count, "All \(covering.rows.count) rows should replay; got \(replayedValues.count)")
+
+        // Verify that all distinct (b, c) pairs appear — full pairwise coverage
+        let bcPairs = Set(replayedValues.map { "\($0.1),\($0.2)" })
+        let expectedPairs = 4 * 4 // 0...3 × 0...3
+        #expect(bcPairs.count == expectedPairs, "Expected all \(expectedPairs) (b,c) pairs; got \(bcPairs.count)")
+    }
+
     @Test("Exhaustive mode covers full space for small generator")
     func exhaustiveCoversFullSpace() {
         // 2 * 2 * 3 = 12 total space, samplingBudget = 50 → exhaustive

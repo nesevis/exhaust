@@ -120,11 +120,20 @@ extension Interpreters {
                 guard let innerValue = try replayWithChoicesHelper(inner, choices: &choices) else { return nil }
                 result = try forward(innerValue)
             case let .bind(forward, _, _, _):
-                // VACTI produces .group([innerTree, boundTree]) for bind.
-                // Scope inner replay to innerTree so its zip doesn't consume boundTree's groups.
-                if case let .group(innerChoices, _) = choices.first,
-                   innerChoices.allSatisfy({ !$0.isBranch && !$0.isSelected })
+                // VACTI produces .bind(inner:bound:) for bind.
+                // Scope inner replay to innerTree so its zip doesn't consume boundTree's choices.
+                if case let .bind(innerTree, boundTree) = choices.first {
+                    choices.removeFirst()
+                    var scopedChoices = [innerTree]
+                    guard let innerValue = try replayWithChoicesHelper(inner, choices: &scopedChoices) else { return nil }
+                    let boundGen = try forward(innerValue)
+                    var boundChoices = [boundTree]
+                    guard let boundValue = try replayWithChoicesHelper(boundGen, choices: &boundChoices) else { return nil }
+                    result = boundValue
+                } else if case let .group(innerChoices, _) = choices.first,
+                          innerChoices.allSatisfy({ !$0.isBranch && !$0.isSelected })
                 {
+                    // Legacy: support .group([innerTree, boundTree]) for backwards compatibility
                     choices.removeFirst()
                     var scopedChoices = innerChoices
                     guard let innerValue = try replayWithChoicesHelper(inner, choices: &scopedChoices) else { return nil }
@@ -432,9 +441,15 @@ extension Interpreters {
                 guard let innerValue = try replayRecursive(inner, with: script) else { return nil }
                 result = try forward(innerValue)
             case let .bind(forward, _, _, _):
-                // VACTI produces .group([innerTree, boundTree]) for bind.
+                // VACTI produces .bind(inner:bound:) for bind.
                 // Split the script so inner and bound each get their own tree.
-                if case let .group(children, _) = script, children.count >= 2 {
+                if case let .bind(innerTree, boundTree) = script {
+                    guard let innerValue = try replayRecursive(inner, with: innerTree) else { return nil }
+                    let boundGen = try forward(innerValue)
+                    guard let boundValue = try replayRecursive(boundGen, with: boundTree) else { return nil }
+                    result = boundValue
+                } else if case let .group(children, _) = script, children.count >= 2 {
+                    // Legacy: support .group([innerTree, boundTree]) for backwards compatibility
                     guard let innerValue = try replayRecursive(inner, with: children[0]) else { return nil }
                     let boundGen = try forward(innerValue)
                     guard let boundValue = try replayRecursive(boundGen, with: children[1]) else { return nil }

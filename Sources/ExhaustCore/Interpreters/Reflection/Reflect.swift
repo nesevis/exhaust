@@ -141,7 +141,22 @@ public enum Interpreters {
 
         case let .transform(kind, inner):
             switch kind {
-            case let .map(_, inputType, outputType):
+            case let .map(forward, inputType, outputType):
+                if let invert = HeuristicInverter.inverter(inputType: inputType, outputType: outputType) {
+                    do {
+                        let inverted = try invert(finalOutput)
+                        let roundTripped = try forward(inverted)
+                        if HeuristicInverter.areEquivalent(roundTripped, finalOutput) {
+                            // Reflect inner against the inverted value, but return the
+                            // forward-mapped value since that's what the continuation expects.
+                            return try reflectRecursive(inner, onFinalOutput: inverted).map { result in
+                                (value: roundTripped, path: result.path)
+                            }
+                        }
+                    } catch {
+                        // Inversion failed (e.g. lossy cast) — fall through to error
+                    }
+                }
                 throw ReflectionError.forwardOnlyMap(inputType: inputType, outputType: outputType)
             case let .bind(forward, backward, inputType, outputType):
                 guard let backward else {
@@ -157,7 +172,9 @@ public enum Interpreters {
                 // Combine paths: inner choices followed by bound choices.
                 return innerResults.flatMap { innerResult in
                     boundResults.map { boundResult in
-                        (value: boundResult.value, path: [.group(innerResult.path + boundResult.path)])
+                        let innerTree = innerResult.path.count == 1 ? innerResult.path[0] : .group(innerResult.path)
+                        let boundTree = boundResult.path.count == 1 ? boundResult.path[0] : .group(boundResult.path)
+                        return (value: boundResult.value, path: [.bind(inner: innerTree, bound: boundTree)])
                     }
                 }
             }

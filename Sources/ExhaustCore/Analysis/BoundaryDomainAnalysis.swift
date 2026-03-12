@@ -36,6 +36,15 @@ public enum BoundaryParameterKind: @unchecked Sendable {
 /// Result of boundary analysis — a synthetic finite domain suitable for IPOG.
 public struct BoundaryDomainProfile: @unchecked Sendable {
     public let parameters: [BoundaryParameter]
+    /// The original ChoiceTree from VACTI, used as a template for covering array replay.
+    /// When present, `BoundaryCoveringArrayReplay.buildTree` walks this tree and substitutes
+    /// parameter values at matching positions, preserving structural nodes like `.bind`.
+    public let originalTree: ChoiceTree?
+
+    public init(parameters: [BoundaryParameter], originalTree: ChoiceTree? = nil) {
+        self.parameters = parameters
+        self.originalTree = originalTree
+    }
 }
 
 // MARK: - Boundary Value Computation

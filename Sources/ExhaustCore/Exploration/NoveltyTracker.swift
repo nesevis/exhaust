@@ -61,6 +61,9 @@ public struct NoveltyTracker {
             for element in array {
                 branchPathHashHelper(element, hasher: &hasher)
             }
+        case let .bind(inner, bound):
+            branchPathHashHelper(inner, hasher: &hasher)
+            branchPathHashHelper(bound, hasher: &hasher)
         case let .resize(_, choices):
             for choice in choices {
                 branchPathHashHelper(choice, hasher: &hasher)

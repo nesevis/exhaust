@@ -607,7 +607,7 @@ public struct ValueAndChoiceTreeInterpreter<FinalOutput>: ~Copyable, ExhaustIter
                 return nil
             }
             result = boundValue
-            resultTree = .group([innerTree, boundTree])
+            resultTree = .bind(inner: innerTree, bound: boundTree)
         }
         return try runContinuation(
             result: result,

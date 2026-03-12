@@ -7,6 +7,10 @@
 public enum CoveringArrayReplay {
     /// Builds a `ChoiceTree` from a covering array row that can be replayed through the original generator via `Interpreters.replay`.
     ///
+    /// When the profile contains an original tree (from VACTI), walks the tree as a template and substitutes
+    /// parameter values at matching positions. This preserves structural nodes like `.bind` that the flat
+    /// parameter list doesn't capture. Falls back to flat construction when no original tree is available.
+    ///
     /// - Parameters:
     ///   - row: The covering array row with value indices for each parameter.
     ///   - profile: The finite domain profile describing parameter structure.
@@ -14,6 +18,12 @@ public enum CoveringArrayReplay {
     public static func buildTree(row: CoveringArrayRow, profile: FiniteDomainProfile) -> ChoiceTree? {
         guard row.values.count == profile.parameters.count else { return nil }
 
+        if let originalTree = profile.originalTree {
+            var paramIndex = 0
+            return substituteParameters(in: originalTree, row: row, profile: profile, paramIndex: &paramIndex)
+        }
+
+        // Fallback: flat construction (no original tree available)
         var trees: [ChoiceTree] = []
         trees.reserveCapacity(profile.parameters.count)
 
@@ -24,12 +34,76 @@ public enum CoveringArrayReplay {
             trees.append(tree)
         }
 
-        // If there's exactly one parameter, return its tree directly.
-        // Otherwise wrap in a group (matching what zip produces).
         if trees.count == 1 {
             return trees[0]
         }
         return .group(trees)
+    }
+
+    // MARK: - Template-Based Tree Substitution
+
+    private static func substituteParameters(
+        in tree: ChoiceTree,
+        row: CoveringArrayRow,
+        profile: FiniteDomainProfile,
+        paramIndex: inout Int,
+    ) -> ChoiceTree? {
+        switch tree {
+        case .choice:
+            guard paramIndex < profile.parameters.count else { return nil }
+            let param = profile.parameters[paramIndex]
+            let valueIndex = row.values[paramIndex]
+            paramIndex += 1
+            return buildParameterTree(param: param, valueIndex: valueIndex)
+
+        case .just, .getSize, .resize:
+            return tree
+
+        case .group(_, isOpaque: true):
+            return tree
+
+        case let .group(children, _):
+            if ChoiceTreeAnalysis.isPick(children) {
+                guard paramIndex < profile.parameters.count else { return nil }
+                let param = profile.parameters[paramIndex]
+                let valueIndex = row.values[paramIndex]
+                paramIndex += 1
+                return buildParameterTree(param: param, valueIndex: valueIndex)
+            }
+            var newChildren: [ChoiceTree] = []
+            for child in children {
+                guard let newChild = substituteParameters(in: child, row: row, profile: profile, paramIndex: &paramIndex) else {
+                    return nil
+                }
+                newChildren.append(newChild)
+            }
+            return .group(newChildren)
+
+        case let .bind(inner, bound):
+            // Substitute parameters in inner only; pass bound through unchanged.
+            guard let newInner = substituteParameters(in: inner, row: row, profile: profile, paramIndex: &paramIndex) else {
+                return nil
+            }
+            return .bind(inner: newInner, bound: bound)
+
+        case let .selected(inner):
+            guard let newInner = substituteParameters(in: inner, row: row, profile: profile, paramIndex: &paramIndex) else {
+                return nil
+            }
+            return .selected(newInner)
+
+        case .sequence:
+            // Sequences produce boundary parameters (sequenceLength/sequenceElement),
+            // not finite parameters. If we reach here, the sequence is not behind a
+            // bind — pass through unchanged as it shouldn't consume finite parameters.
+            return tree
+
+        case let .branch(siteID, weight, id, branchIDs, choice):
+            guard let newChoice = substituteParameters(in: choice, row: row, profile: profile, paramIndex: &paramIndex) else {
+                return nil
+            }
+            return .branch(siteID: siteID, weight: weight, id: id, branchIDs: branchIDs, choice: newChoice)
+        }
     }
 
     // MARK: - Per-Parameter Tree Construction

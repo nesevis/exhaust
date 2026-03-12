@@ -21,4 +21,14 @@ public struct FiniteDomainProfile: @unchecked Sendable {
     public let parameters: [FiniteParameter]
     /// Product of all domainSizes. Capped at UInt64.max on overflow.
     public let totalSpace: UInt64
+    /// The original ChoiceTree from VACTI, used as a template for covering array replay.
+    /// When present, `CoveringArrayReplay.buildTree` walks this tree and substitutes
+    /// parameter values at matching positions, preserving structural nodes like `.bind`.
+    public let originalTree: ChoiceTree?
+
+    public init(parameters: [FiniteParameter], totalSpace: UInt64, originalTree: ChoiceTree? = nil) {
+        self.parameters = parameters
+        self.totalSpace = totalSpace
+        self.originalTree = originalTree
+    }
 }
