@@ -71,6 +71,10 @@ extension ChoiceSequence {
             5
         case .group(false):
             6
+        case .bind(true):
+            8
+        case .bind(false):
+            9
         case let .branch(b):
             b.id ^ 0xDEAD_BEEF_CAFE_BABE
         case .just:
@@ -173,6 +177,11 @@ public extension ChoiceSequence {
                 }
                 output.append(.group(false))
             }
+        case let .bind(inner, bound):
+            output.append(.bind(true))
+            flatten(inner, includingAllBranches: includingAllBranches, into: &output)
+            flatten(bound, includingAllBranches: includingAllBranches, into: &output)
+            output.append(.bind(false))
         case let .resize(_, choices):
             output.append(.group(true))
             for choice in choices {
@@ -187,6 +196,7 @@ public extension ChoiceSequence {
     static func validate(_ sequence: ChoiceSequence) -> Bool {
         var sequenceCount = 0
         var groupCount = 0
+        var bindCount = 0
         for element in sequence {
             switch element {
             case .sequence(true, isLengthExplicit: _):
@@ -197,11 +207,15 @@ public extension ChoiceSequence {
                 groupCount += 1
             case .group(false):
                 groupCount -= 1
+            case .bind(true):
+                bindCount += 1
+            case .bind(false):
+                bindCount -= 1
             case .value, .reduced, .branch, .just:
                 break
             }
         }
-        return sequenceCount == 0 && groupCount == 0
+        return sequenceCount == 0 && groupCount == 0 && bindCount == 0
     }
 
     static func extractContainerSpans(from sequence: ChoiceSequence) -> [ChoiceSpan] {
@@ -221,7 +235,11 @@ public extension ChoiceSequence {
                 stack.append((.group(true), i))
                 childrenAtDepth.append([])
 
-            case .sequence(false, isLengthExplicit: _), .group(false):
+            case .bind(true):
+                stack.append((.bind(true), i))
+                childrenAtDepth.append([])
+
+            case .sequence(false, isLengthExplicit: _), .group(false), .bind(false):
                 guard let frame = stack.popLast() else { continue }
 
                 let spanIndex = spans.count
@@ -273,7 +291,10 @@ public extension ChoiceSequence {
             case .group(true):
                 stack.append((.group(true), i))
 
-            case .group(false):
+            case .bind(true):
+                stack.append((.bind(true), i))
+
+            case .group(false), .bind(false):
                 guard let frame = stack.popLast() else { continue }
                 guard case .group(true) = frame.kind else { continue }
                 // Check if the parent frame (if any) is a sequence
@@ -315,10 +336,10 @@ public extension ChoiceSequence {
 
         for idx in range {
             switch sequence[idx] {
-            case .group(true):
+            case .group(true), .bind(true):
                 stack.append((start: idx, depth: depth))
                 depth += 1
-            case .group(false):
+            case .group(false), .bind(false):
                 depth -= 1
                 guard let frame = stack.popLast() else { continue }
                 let spanRange = frame.start ... idx
@@ -387,9 +408,9 @@ public extension ChoiceSequence {
             switch entry {
             case .value, .reduced:
                 spans.append(ChoiceSpan(kind: entry, range: i ... i, depth: depth))
-            case .group(true), .sequence(true, isLengthExplicit: _):
+            case .group(true), .bind(true), .sequence(true, isLengthExplicit: _):
                 depth += 1
-            case .group(false), .sequence(false, isLengthExplicit: _):
+            case .group(false), .bind(false), .sequence(false, isLengthExplicit: _):
                 depth -= 1
             default:
                 continue
@@ -416,9 +437,9 @@ public extension ChoiceSequence {
                 spans.append(ChoiceSpan(kind: entry, range: i ... i, depth: depth))
             case (.sequence(true, isLengthExplicit: _), .value), (.sequence(true, isLengthExplicit: _), .reduced):
                 spans.append(ChoiceSpan(kind: entry, range: i ... i, depth: depth))
-            case (_, .group(true)), (_, .sequence(true, isLengthExplicit: _)):
+            case (_, .group(true)), (_, .bind(true)), (_, .sequence(true, isLengthExplicit: _)):
                 depth += 1
-            case (_, .group(false)), (_, .sequence(false, isLengthExplicit: _)):
+            case (_, .group(false)), (_, .bind(false)), (_, .sequence(false, isLengthExplicit: _)):
                 depth -= 1
             default:
                 continue
@@ -446,10 +467,10 @@ public extension ChoiceSequence {
             case .sequence(true, isLengthExplicit: _):
                 stack.append(SiblingFrame(depth: stack.count, startIndex: i, isSequence: true))
 
-            case .group(true):
+            case .group(true), .bind(true):
                 stack.append(SiblingFrame(depth: stack.count, startIndex: i, isSequence: false))
 
-            case .sequence(false, isLengthExplicit: _), .group(false):
+            case .sequence(false, isLengthExplicit: _), .group(false), .bind(false):
                 guard let frame = stack.popLast() else { continue }
 
                 // Emit a sibling group if there are >= 2 children of homogeneous kind
@@ -514,7 +535,7 @@ public extension ChoiceSequence {
 
         let open = sequence[containerRange.lowerBound]
         let close = sequence[containerRange.upperBound]
-        let isGroupContainer = open == .group(true) && close == .group(false)
+        let isGroupContainer = (open == .group(true) && close == .group(false)) || (open == .bind(true) && close == .bind(false))
         let isSequenceContainer = if case .sequence(true, isLengthExplicit: _) = open, case .sequence(false, isLengthExplicit: _) = close {
             true
         } else {
@@ -531,9 +552,10 @@ public extension ChoiceSequence {
                 children.append((range: index ... index, kind: .bareValue))
                 index += 1
 
-            case .group(true), .sequence(true, isLengthExplicit: _):
-                let isGroupChild = sequence[index] == .group(true)
+            case .group(true), .bind(true), .sequence(true, isLengthExplicit: _):
+                let isGroupChild = sequence[index] == .group(true) || sequence[index] == .bind(true)
                 let openEntry = sequence[index]
+                let isGroupOpen = openEntry == .group(true) || openEntry == .bind(true)
                 let isSequenceEntry = if case .sequence(true, isLengthExplicit: _) = openEntry { true } else { false }
                 let start = index
                 var depth = 1
@@ -541,9 +563,11 @@ public extension ChoiceSequence {
 
                 while index <= containerRange.upperBound, depth > 0 {
                     switch sequence[index] {
-                    case .group(true) where openEntry == .group(true):
+                    case .group(true) where openEntry == .group(true),
+                         .bind(true) where openEntry == .bind(true):
                         depth += 1
-                    case .group(false) where openEntry == .group(true):
+                    case .group(false) where openEntry == .group(true),
+                         .bind(false) where openEntry == .bind(true):
                         depth -= 1
                     case .sequence(true, isLengthExplicit: _) where isSequenceEntry:
                         depth += 1
@@ -565,7 +589,7 @@ public extension ChoiceSequence {
                 // Branch and just markers are structural and not standalone children.
                 index += 1
 
-            case .group(false), .sequence(false, isLengthExplicit: _):
+            case .group(false), .bind(false), .sequence(false, isLengthExplicit: _):
                 // Stray close marker inside the container; skip defensively.
                 index += 1
             }
@@ -585,7 +609,7 @@ public extension ChoiceSequence {
             switch sequence[idx] {
             case let .value(v), let .reduced(v):
                 keys.append(v.choice)
-            case .branch, .sequence, .group, .just:
+            case .branch, .sequence, .group, .bind, .just:
                 continue
             }
         }

@@ -37,6 +37,9 @@ private extension PrefixMaterializer {
         private let entries: ChoiceSequence
         private(set) var position: Int = 0
         var exhausted: Bool = false
+        /// When > 0, the cursor is inside a bind's bound subtree and should
+        /// behave as exhausted so PrefixMaterializer falls back to PRNG.
+        private var bindSuspendDepth: Int = 0
 
         init(from sequence: ChoiceSequence) {
             entries = sequence
@@ -48,7 +51,7 @@ private extension PrefixMaterializer {
         private mutating func skipGroups() {
             while position < entries.count {
                 switch entries[position] {
-                case .group, .just:
+                case .group, .bind, .just:
                     position += 1
                 default:
                     return
@@ -56,8 +59,48 @@ private extension PrefixMaterializer {
             }
         }
 
+        /// Advance the cursor past the bound content of a `.bind` node.
+        ///
+        /// After inner content has been consumed, the cursor sits somewhere inside the
+        /// bind's span. This method scans forward to the matching `.bind(false)` marker,
+        /// skipping nested bind/group/sequence structures, so that subsequent prefix
+        /// entries (e.g. sibling parameters in a zip) are correctly aligned.
+        mutating func skipBindBound() {
+            var depth = 0
+            while position < entries.count {
+                switch entries[position] {
+                case .bind(true):
+                    depth += 1
+                    position += 1
+                case .bind(false):
+                    if depth == 0 {
+                        // Found the outer bind-close; skip it and stop.
+                        position += 1
+                        return
+                    }
+                    depth -= 1
+                    position += 1
+                default:
+                    position += 1
+                }
+            }
+        }
+
+        /// Suspend prefix consumption so the cursor reports exhausted.
+        /// Used when generating a bind's bound subtree via PRNG.
+        mutating func suspendForBind() {
+            bindSuspendDepth += 1
+        }
+
+        /// Resume prefix consumption after the bound subtree has been generated.
+        mutating func resumeAfterBind() {
+            bindSuspendDepth -= 1
+        }
+
+        var isSuspended: Bool { bindSuspendDepth > 0 }
+
         mutating func tryConsumeValue() -> ChoiceSequenceValue.Value? {
-            guard !exhausted else { return nil }
+            guard !exhausted, !isSuspended else { return nil }
             skipGroups()
             guard position < entries.count else {
                 exhausted = true
@@ -74,7 +117,7 @@ private extension PrefixMaterializer {
         }
 
         mutating func tryConsumeBranch() -> ChoiceSequenceValue.Branch? {
-            guard !exhausted else { return nil }
+            guard !exhausted, !isSuspended else { return nil }
             skipGroups()
             guard position < entries.count else {
                 exhausted = true
@@ -95,7 +138,7 @@ private extension PrefixMaterializer {
         /// On success, position advances past the `.sequence(true)` marker.
         /// Returns `nil` if cursor is exhausted or not at a sequence marker.
         mutating func tryConsumeSequenceOpen() -> (elementCount: Int, isLengthExplicit: Bool)? {
-            guard !exhausted else { return nil }
+            guard !exhausted, !isSuspended else { return nil }
             skipGroups()
             guard position < entries.count else {
                 exhausted = true
@@ -135,10 +178,10 @@ private extension PrefixMaterializer {
                 switch entries[pos] {
                 case .sequence(false, _) where depth == 0:
                     return count
-                case .group(true), .sequence(true, _):
+                case .group(true), .bind(true), .sequence(true, _):
                     if depth == 0 { count += 1 }
                     depth += 1
-                case .group(false), .sequence(false, _):
+                case .group(false), .bind(false), .sequence(false, _):
                     depth -= 1
                 case .value, .reduced, .just:
                     if depth == 0 { count += 1 }
@@ -304,11 +347,18 @@ private extension PrefixMaterializer {
                     result = try forward(innerValue)
                 case let .bind(forward, _, _, _):
                     let boundGen = try forward(innerValue)
-                    guard let (boundValue, boundTree) = try generateRecursive(boundGen, with: inputValue, context: &context) else {
+                    // Skip past the bind's bound content in the prefix and suspend
+                    // prefix consumption so the bound subtree is generated via PRNG.
+                    // This preserves cursor alignment for sibling parameters after the bind.
+                    context.cursor.skipBindBound()
+                    context.cursor.suspendForBind()
+                    let boundResult = try generateRecursive(boundGen, with: inputValue, context: &context)
+                    context.cursor.resumeAfterBind()
+                    guard let (boundValue, boundTree) = boundResult else {
                         return nil
                     }
                     result = boundValue
-                    resultTree = .group([innerTree, boundTree])
+                    resultTree = .bind(inner: innerTree, bound: boundTree)
                 }
                 return try runContinuation(
                     result: result,

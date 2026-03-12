@@ -36,6 +36,8 @@ extension ChoiceTree {
             []
         case let .group(elements, _):
             elements
+        case let .bind(inner, bound):
+            [inner, bound]
         case let .sequence(_, elements, _):
             elements
         case let .branch(_, _, _, _, choice):
@@ -56,6 +58,9 @@ extension ChoiceTree {
             var copy = elements
             copy[index] = newChild
             return .group(copy)
+        case let .bind(inner, bound):
+            precondition(index < 2, "bind has exactly two children")
+            return index == 0 ? .bind(inner: newChild, bound: bound) : .bind(inner: inner, bound: newChild)
         case let .sequence(length, elements, metadata):
             var copy = elements
             copy[index] = newChild

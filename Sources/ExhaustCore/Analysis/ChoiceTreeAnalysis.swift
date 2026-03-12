@@ -60,6 +60,7 @@ public enum ChoiceTreeAnalysis {
     /// Tries multiple seeds to maximize element coverage for sequences.
     public static func analyze(_ gen: ReflectiveGenerator<some Any>) -> AnalysisResult? {
         var bestParameters: [BoundaryParameter]?
+        var bestTree: ChoiceTree?
 
         for seed in seeds {
             var interpreter = ValueAndChoiceTreeInterpreter(
@@ -80,6 +81,7 @@ public enum ChoiceTreeAnalysis {
 
             if bestParameters == nil || parameters.count > (bestParameters?.count ?? 0) {
                 bestParameters = parameters
+                bestTree = tree
             }
 
             // FIXME: Harsh syntax, rewrite
@@ -127,9 +129,9 @@ public enum ChoiceTreeAnalysis {
                 if overflow { totalSpace = .max; break }
                 totalSpace = product
             }
-            return .finite(FiniteDomainProfile(parameters: finiteParams, totalSpace: totalSpace))
+            return .finite(FiniteDomainProfile(parameters: finiteParams, totalSpace: totalSpace, originalTree: bestTree))
         } else {
-            return .boundary(BoundaryDomainProfile(parameters: parameters))
+            return .boundary(BoundaryDomainProfile(parameters: parameters, originalTree: bestTree))
         }
     }
 
@@ -147,28 +149,62 @@ public enum ChoiceTreeAnalysis {
     ) -> Bool {
         switch tree {
         case let .choice(value, metadata):
-            walkChoice(value: value, metadata: metadata, parameters: &parameters)
+            return walkChoice(value: value, metadata: metadata, parameters: &parameters)
 
         case .just:
-            true
+            return true
 
         case .group(_, isOpaque: true):
-            true
+            return true
 
         case let .group(children, _):
-            walkGroup(children, parameters: &parameters)
+            return walkGroup(children, parameters: &parameters)
+
+        case let .bind(inner, bound):
+            // Walk inner subtree normally; validate bound subtree without collecting
+            // parameters because bound parameters depend on the inner value —
+            // extracting them into covering arrays would produce invalid combinations.
+            // The bound subtree is preserved in the original tree for replay.
+            guard walkTree(inner, parameters: &parameters) else { return false }
+            return walkTreeValidateOnly(bound)
 
         case let .selected(inner):
-            walkTree(inner, parameters: &parameters)
+            return walkTree(inner, parameters: &parameters)
 
         case let .sequence(length, elements, metadata):
-            walkSequence(length: length, elements: elements, metadata: metadata, parameters: &parameters)
+            return walkSequence(length: length, elements: elements, metadata: metadata, parameters: &parameters)
 
         case .getSize, .resize:
-            false
+            return false
 
         case .branch:
-            false
+            return false
+        }
+    }
+
+    // MARK: - Validation-Only Walk
+
+    //
+    // Walks a subtree to check for unanalyzable nodes (getSize, resize)
+    // without extracting any parameters. Used for bound subtrees in bind
+    // nodes where the structure must be valid but parameters are opaque.
+
+    private static func walkTreeValidateOnly(_ tree: ChoiceTree) -> Bool {
+        switch tree {
+        case .choice, .just, .getSize, .resize:
+            return true
+        case .group(_, isOpaque: true):
+            return true
+        case let .group(children, _):
+            return children.allSatisfy { walkTreeValidateOnly($0) }
+        case let .bind(inner, bound):
+            return walkTreeValidateOnly(inner) && walkTreeValidateOnly(bound)
+        case let .selected(inner):
+            return walkTreeValidateOnly(inner)
+        case let .sequence(_, elements, _):
+            return elements.allSatisfy { walkTreeValidateOnly($0) }
+        case let .branch(_, _, _, _, choice):
+            return walkTreeValidateOnly(choice)
         }
     }
 
@@ -250,7 +286,7 @@ public enum ChoiceTreeAnalysis {
         return true
     }
 
-    private static func isPick(_ children: [ChoiceTree]) -> Bool {
+    static func isPick(_ children: [ChoiceTree]) -> Bool {
         guard !children.isEmpty else { return false }
         guard children.contains(where: \.isSelected) else { return false }
         return children.allSatisfy { child in
@@ -379,6 +415,10 @@ public enum ChoiceTreeAnalysis {
 
         case let .selected(inner):
             return walkElementTree(inner, elementIndex: elementIndex, parameters: &parameters)
+
+        case .bind:
+            // Bind inside a sequence element — treat as opaque (dependent parameters)
+            return true
 
         case .getSize, .resize, .sequence, .branch:
             return false

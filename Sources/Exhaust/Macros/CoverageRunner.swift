@@ -44,33 +44,50 @@ enum CoverageRunner {
         coverageBudget: UInt64,
         property: (Output) -> Bool,
     ) -> Result<Output> {
-        let isExhaustive = profile.totalSpace <= coverageBudget
+        // When the original tree contains bind nodes, coverage only exhausts the inner
+        // parameter space — the bound subtree varies per inner value and isn't covered.
+        // Never treat such generators as exhaustive so the random phase always runs.
+        let hasBinds = profile.originalTree?.containsBind ?? false
+        let isExhaustive = profile.totalSpace <= coverageBudget && hasBinds == false
 
         let covering: CoveringArray? = if isExhaustive {
             CoveringArray.generate(profile: profile, strength: profile.parameters.count)
         } else {
             CoveringArray.bestFitting(budget: coverageBudget, profile: profile)
+                // bestFitting requires ≥2 parameters; fall back to strength-1 for single-parameter profiles
+                ?? CoveringArray.generate(profile: profile, strength: 1)
         }
 
-        guard let covering, covering.strength >= 2 else {
+        guard let covering, covering.strength >= 1 else {
             return .notApplicable
         }
 
         var iterations = 0
-        for row in covering.rows {
+        for (rowIndex, row) in covering.rows.enumerated() {
             guard let tree = CoveringArrayReplay.buildTree(row: row, profile: profile) else {
                 continue
             }
-            guard let value: Output = try? Interpreters.replay(gen, using: tree) else {
-                continue
+
+            let value: Output?
+            if hasBinds {
+                // Bind-aware replay: flatten the full tree (including bind markers) to a prefix
+                // and use PrefixMaterializer. The cursor skips bind-bound content and suspends
+                // prefix consumption so the bound subtree is generated fresh via PRNG, while
+                // sibling parameters after the bind stay correctly aligned.
+                let prefix = ChoiceSequence(tree)
+                value = PrefixMaterializer.materialize(gen, prefix: prefix, seed: UInt64(rowIndex))?.value as? Output
+            } else {
+                value = try? Interpreters.replay(gen, using: tree)
             }
+
+            guard let value else { continue }
             iterations += 1
             if property(value) == false {
                 return .failure(value: value, tree: tree, iteration: iterations)
             }
         }
 
-        if isExhaustive {
+        if isExhaustive, iterations == covering.rows.count {
             return .exhaustive(iterations: iterations)
         }
 
@@ -100,14 +117,23 @@ enum CoverageRunner {
             return .notApplicable
         }
 
+        let hasBinds = profile.originalTree?.containsBind ?? false
+
         var iterations = 0
         for row in covering.rows {
             guard let tree = BoundaryCoveringArrayReplay.buildTree(row: row, profile: profile) else {
                 continue
             }
-            guard let value: Output = try? Interpreters.replay(gen, using: tree) else {
-                continue
+
+            let value: Output?
+            if hasBinds {
+                let prefix = ChoiceSequence(tree)
+                value = PrefixMaterializer.materialize(gen, prefix: prefix, seed: UInt64(iterations))?.value as? Output
+            } else {
+                value = try? Interpreters.replay(gen, using: tree)
             }
+
+            guard let value else { continue }
             iterations += 1
             if property(value) == false {
                 return .failure(value: value, tree: tree, iteration: iterations)

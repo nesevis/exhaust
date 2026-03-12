@@ -58,7 +58,11 @@ extension Interpreters {
 
         @discardableResult
         mutating func consumeGroup(_ isOpen: Bool, line: Int = #line) throws -> ChoiceSequenceValue {
-            guard case .group(isOpen) = peek else {
+            // Accept both .group and .bind markers — in Phase 1 they are interchangeable
+            let isMatch: Bool = if case .group(isOpen) = peek { true }
+            else if case .bind(isOpen) = peek { true }
+            else { false }
+            guard isMatch else {
                 switch strictness {
                 case .normal:
                     if isInstrumented {
@@ -175,10 +179,10 @@ extension Interpreters {
             var depth = 0
             while !isAtEnd {
                 switch peek {
-                case .group(true):
+                case .group(true), .bind(true):
                     depth += 1
                     index += 1
-                case .group(false):
+                case .group(false), .bind(false):
                     if depth == 0 {
                         return
                     }
@@ -305,6 +309,14 @@ extension Interpreters {
         with tree: ChoiceTree,
         context: inout Context,
     ) throws -> Output? {
+        // Handle bind scripts by distributing choices to the generator
+        if case let .bind(inner, bound) = tree {
+            try context.consumeGroup(true)
+            let result = try materializeWithChoices(gen, with: [inner, bound], context: &context)
+            try context.consumeGroup(false)
+            return result
+        }
+
         // Handle group scripts by distributing choices to the generator
         // Groups containing branches represent `picks` and are handled together
         if case let .group(choices, _) = tree {

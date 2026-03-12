@@ -7,13 +7,111 @@
 public enum BoundaryCoveringArrayReplay {
     /// Builds a `ChoiceTree` from a covering array row using boundary parameter values.
     ///
-    /// Unlike `CoveringArrayReplay` which maps value indices to sequential offsets, this maps value indices to concrete boundary bit patterns stored in each parameter.
+    /// When the profile contains an original tree (from VACTI), walks the tree as a template and substitutes
+    /// parameter values at matching positions. This preserves structural nodes like `.bind` that the flat
+    /// parameter list doesn't capture. Falls back to flat construction when no original tree is available.
     public static func buildTree(row: CoveringArrayRow, profile: BoundaryDomainProfile) -> ChoiceTree? {
         guard row.values.count == profile.parameters.count else { return nil }
 
+        if let originalTree = profile.originalTree {
+            var paramIndex = 0
+            return substituteParameters(in: originalTree, row: row, profile: profile, paramIndex: &paramIndex)
+        }
+
+        return buildTreeFlat(row: row, profile: profile)
+    }
+
+    // MARK: - Template-Based Tree Substitution
+
+    private static func substituteParameters(
+        in tree: ChoiceTree,
+        row: CoveringArrayRow,
+        profile: BoundaryDomainProfile,
+        paramIndex: inout Int,
+    ) -> ChoiceTree? {
+        switch tree {
+        case let .choice(_, metadata):
+            guard paramIndex < profile.parameters.count else { return nil }
+            let param = profile.parameters[paramIndex]
+            let valueIndex = row.values[paramIndex]
+            paramIndex += 1
+
+            guard let range = metadata.validRange else { return nil }
+            let tag = param.tag
+            return buildChooseBitsTree(param: param, valueIndex: valueIndex, range: range, tag: tag)
+
+        case .just, .getSize, .resize:
+            return tree
+
+        case .group(_, isOpaque: true):
+            return tree
+
+        case let .group(children, _):
+            if ChoiceTreeAnalysis.isPick(children) {
+                guard paramIndex < profile.parameters.count else { return nil }
+                let param = profile.parameters[paramIndex]
+                let valueIndex = row.values[paramIndex]
+                paramIndex += 1
+                if case let .pick(choices) = param.kind {
+                    return buildPickTree(param: param, valueIndex: valueIndex, choices: choices)
+                }
+                return nil
+            }
+            var newChildren: [ChoiceTree] = []
+            for child in children {
+                guard let newChild = substituteParameters(in: child, row: row, profile: profile, paramIndex: &paramIndex) else {
+                    return nil
+                }
+                newChildren.append(newChild)
+            }
+            return .group(newChildren)
+
+        case let .bind(inner, bound):
+            guard let newInner = substituteParameters(in: inner, row: row, profile: profile, paramIndex: &paramIndex) else {
+                return nil
+            }
+            return .bind(inner: newInner, bound: bound)
+
+        case let .selected(inner):
+            guard let newInner = substituteParameters(in: inner, row: row, profile: profile, paramIndex: &paramIndex) else {
+                return nil
+            }
+            return .selected(newInner)
+
+        case let .sequence(_, elements, metadata):
+            // Consume length parameter
+            guard paramIndex < profile.parameters.count else { return nil }
+            let lengthParam = profile.parameters[paramIndex]
+            let lengthValueIndex = row.values[paramIndex]
+            paramIndex += 1
+
+            guard Int(lengthValueIndex) < lengthParam.values.count else { return nil }
+            let newLength = lengthParam.values[Int(lengthValueIndex)]
+
+            // Substitute element parameters
+            var newElements: [ChoiceTree] = []
+            for element in elements {
+                guard let newElement = substituteParameters(in: element, row: row, profile: profile, paramIndex: &paramIndex) else {
+                    return nil
+                }
+                newElements.append(newElement)
+            }
+
+            return .sequence(length: newLength, elements: newElements, metadata)
+
+        case let .branch(siteID, weight, id, branchIDs, choice):
+            guard let newChoice = substituteParameters(in: choice, row: row, profile: profile, paramIndex: &paramIndex) else {
+                return nil
+            }
+            return .branch(siteID: siteID, weight: weight, id: id, branchIDs: branchIDs, choice: newChoice)
+        }
+    }
+
+    // MARK: - Flat Construction (Fallback)
+
+    private static func buildTreeFlat(row: CoveringArrayRow, profile: BoundaryDomainProfile) -> ChoiceTree? {
         var trees: [ChoiceTree] = []
 
-        // Group parameters by their structural role
         var i = 0
         while i < profile.parameters.count {
             let param = profile.parameters[i]
@@ -42,7 +140,6 @@ public enum BoundaryCoveringArrayReplay {
                 i += 1 + consumed
 
             case .sequenceElement:
-                // Should not appear at top level without a preceding sequenceLength
                 return nil
 
             case let .pick(choices):
@@ -87,12 +184,10 @@ public enum BoundaryCoveringArrayReplay {
         guard Int(lengthValueIndex) < lengthParam.values.count else { return nil }
         let length = lengthParam.values[Int(lengthValueIndex)]
 
-        // Count how many element parameters follow
         var elementParamCount = 0
         for param in remainingParams {
             switch param.kind {
             case .sequenceElement, .finiteChooseBits, .chooseBits:
-                // Check if this is still part of the same sequence's elements
                 if case .sequenceElement = param.kind {
                     elementParamCount += 1
                 } else {
@@ -107,7 +202,6 @@ public enum BoundaryCoveringArrayReplay {
             break
         }
 
-        // Build element trees for elements up to `length`
         var elementTrees: [ChoiceTree] = []
         for elementIdx in 0 ..< min(Int(length), elementParamCount) {
             let param = remainingParams[elementIdx]
@@ -172,6 +266,23 @@ public enum BoundaryCoveringArrayReplay {
             default:
                 nil
             }
+        }
+    }
+}
+
+// MARK: - BoundaryParameter tag helper
+
+extension BoundaryParameter {
+    var tag: TypeTag {
+        switch kind {
+        case let .chooseBits(_, tag), let .finiteChooseBits(_, tag):
+            return tag
+        case let .sequenceElement(_, _, tag):
+            return tag
+        case .sequenceLength:
+            return .uint64
+        case .pick:
+            return .uint64
         }
     }
 }

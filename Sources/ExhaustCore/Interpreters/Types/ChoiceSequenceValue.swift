@@ -21,6 +21,9 @@ public enum ChoiceSequenceValue: Hashable, Equatable, Sendable {
     case value(Value)
     /// A value that has been set to its semantically simplest form and should not be individually shrunk further.
     case reduced(Value)
+    /// Bind scope markers (`true` = open, `false` = close).
+    /// The first child is the inner subtree; the second is the bound subtree.
+    case bind(Bool)
     /// A marker for a `.just` node. Carries no data but makes `.just` elements visible in the flat sequence (needed for element counting in ``PrefixMaterializer``).
     case just
 
@@ -39,13 +42,17 @@ public enum ChoiceSequenceValue: Hashable, Equatable, Sendable {
 
     public func shortLexCompare(_ other: ChoiceSequenceValue) -> ShortlexOrder {
         switch (self, other) {
-        case (.group(true), .group(true)), (.sequence(true, isLengthExplicit: _), .sequence(true, isLengthExplicit: _)):
+        case (.group(true), .group(true)), (.sequence(true, isLengthExplicit: _), .sequence(true, isLengthExplicit: _)),
+             (.bind(true), .bind(true)):
             return .eq
-        case (.group(false), .group(false)), (.sequence(false, isLengthExplicit: _), .sequence(false, isLengthExplicit: _)):
+        case (.group(false), .group(false)), (.sequence(false, isLengthExplicit: _), .sequence(false, isLengthExplicit: _)),
+             (.bind(false), .bind(false)):
             return .eq
-        case (.group(false), .group(true)), (.sequence(false, isLengthExplicit: _), .sequence(true, isLengthExplicit: _)):
+        case (.group(false), .group(true)), (.sequence(false, isLengthExplicit: _), .sequence(true, isLengthExplicit: _)),
+             (.bind(false), .bind(true)):
             return .lt
-        case (.group(true), .group(false)), (.sequence(true, isLengthExplicit: _), .sequence(false, isLengthExplicit: _)):
+        case (.group(true), .group(false)), (.sequence(true, isLengthExplicit: _), .sequence(false, isLengthExplicit: _)),
+             (.bind(true), .bind(false)):
             return .gt
         case let (.branch(a), .branch(b)):
             return a.shortLexCompare(b)
@@ -63,6 +70,7 @@ public enum ChoiceSequenceValue: Hashable, Equatable, Sendable {
         switch self {
         case .just: 0
         case .group: 1
+        case .bind: 1
         case .sequence: 2
         case .branch: 3
         case .value: 4
@@ -78,6 +86,10 @@ public enum ChoiceSequenceValue: Hashable, Equatable, Sendable {
             return "("
         case .group(false):
             return ")"
+        case .bind(true):
+            return "{"
+        case .bind(false):
+            return "}"
         case .sequence(true, isLengthExplicit: _):
             return "["
         case .sequence(false, isLengthExplicit: _):
