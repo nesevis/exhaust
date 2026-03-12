@@ -16,6 +16,7 @@ extension ReducerStrategies {
         sequence: ChoiceSequence,
         valueSpans: [ChoiceSpan],
         rejectCache: inout ReducerCache,
+        bindIndex: BindSpanIndex? = nil,
     ) throws -> (ChoiceSequence, Output)? {
         var updatedSequence = sequence
         for span in valueSpans {
@@ -28,7 +29,14 @@ extension ReducerStrategies {
         guard updatedSequence != sequence, rejectCache.contains(updatedSequence) == false else {
             return nil
         }
-        let output = try? Interpreters.materialize(gen, with: tree, using: updatedSequence)
+        let modifiedIndices = valueSpans.compactMap { span -> Int? in
+            let seqIdx = span.range.lowerBound
+            guard case let .value(v) = sequence[seqIdx] else { return nil }
+            let simplified = v.choice.semanticSimplest
+            guard simplified != v.choice, !v.isRangeExplicit || simplified.fits(in: v.validRange) else { return nil }
+            return seqIdx
+        }
+        let output = try? ReducerStrategies.materializeCandidate(gen, tree: tree, candidate: updatedSequence, bindIndex: bindIndex, mutatedIndices: modifiedIndices)
         if let output, property(output) == false {
             return (updatedSequence, output)
         }

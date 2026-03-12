@@ -40,6 +40,7 @@ extension ReducerStrategies {
         rejectCache: inout ReducerCache,
         probeBudget: Int,
         onBudgetExhausted: ((String) -> Void)? = nil,
+        bindIndex: BindSpanIndex? = nil,
     ) throws -> (ChoiceSequence, Output)? {
         typealias Candidate = (index: Int, value: ChoiceSequenceValue.Value)
         var allNumericCandidates = [Candidate]()
@@ -230,7 +231,7 @@ extension ReducerStrategies {
                                 reportBudgetExhaustionIfNeeded()
                                 return false
                             }
-                            guard let output = try? Interpreters.materialize(gen, with: tree, using: probe) else {
+                            guard let output = try? ReducerStrategies.materializeCandidate(gen, tree: tree, candidate: probe, bindIndex: bindIndex, mutatedIndices: [idx1, idx2]) else {
                                 rejectCache.insert(probe, zobristHash: probeHash)
                                 return false
                             }
@@ -348,7 +349,7 @@ extension ReducerStrategies {
                                     reportBudgetExhaustionIfNeeded()
                                     break
                                 }
-                                guard let output = try? Interpreters.materialize(gen, with: tree, using: probe) else {
+                                guard let output = try? ReducerStrategies.materializeCandidate(gen, tree: tree, candidate: probe, bindIndex: bindIndex, mutatedIndices: [idx1, idx2]) else {
                                     rejectCache.insert(probe, zobristHash: probeHash)
                                     continue
                                 }

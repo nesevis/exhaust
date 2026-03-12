@@ -19,6 +19,7 @@ extension ReducerStrategies {
         sequence: ChoiceSequence,
         spans: [ChoiceSpan],
         rejectCache: inout ReducerCache,
+        bindIndex: BindSpanIndex? = nil,
     ) throws -> (ChoiceSequence, Output)? {
         guard rejectCache.contains(sequence) == false else {
             return nil

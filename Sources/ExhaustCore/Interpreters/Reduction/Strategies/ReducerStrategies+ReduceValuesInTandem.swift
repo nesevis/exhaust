@@ -36,6 +36,7 @@ extension ReducerStrategies {
         rejectCache: inout ReducerCache,
         probeBudget: Int,
         onBudgetExhausted: ((String) -> Void)? = nil,
+        bindIndex: BindSpanIndex? = nil,
     ) throws -> (ChoiceSequence, Output)? {
         var current = sequence
         var progress = false
@@ -84,7 +85,7 @@ extension ReducerStrategies {
                         let probe = targetCandidate.sequence
                         if rejectCache.contains(probe) == false {
                             if budget.consume() {
-                                if let output = try? Interpreters.materialize(gen, with: tree, using: probe),
+                                if let output = try? ReducerStrategies.materializeCandidate(gen, tree: tree, candidate: probe, bindIndex: bindIndex, mutatedIndices: plan.windowIndices),
                                    property(output) == false
                                 {
                                     for (idx, entry) in targetCandidate.changedEntries {
@@ -131,7 +132,7 @@ extension ReducerStrategies {
                                 reportBudgetExhaustionIfNeeded()
                                 return false
                             }
-                            guard let output = try? Interpreters.materialize(gen, with: tree, using: probe) else {
+                            guard let output = try? ReducerStrategies.materializeCandidate(gen, tree: tree, candidate: probe, bindIndex: bindIndex, mutatedIndices: plan.windowIndices) else {
                                 rejectCache.insert(probe)
                                 return false
                             }
@@ -184,7 +185,7 @@ extension ReducerStrategies {
                             reportBudgetExhaustionIfNeeded()
                             break groupLoop
                         }
-                        guard let output = try? Interpreters.materialize(gen, with: tree, using: candidate),
+                        guard let output = try? ReducerStrategies.materializeCandidate(gen, tree: tree, candidate: candidate, bindIndex: bindIndex, mutatedIndices: plan.windowIndices),
                               property(output) == false
                         else {
                             rejectCache.insert(candidate)

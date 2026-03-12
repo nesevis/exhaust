@@ -18,6 +18,7 @@ extension ReducerStrategies {
         sequence: ChoiceSequence,
         valueSpans: [ChoiceSpan],
         rejectCache: inout ReducerCache,
+        bindIndex: BindSpanIndex? = nil,
     ) throws -> (ChoiceSequence, Output)? {
         var current = sequence
         var currentHash = current.zobristHash
@@ -28,6 +29,7 @@ extension ReducerStrategies {
             let seqIdx = span.range.lowerBound
             guard let v = current[seqIdx].value else { continue }
 
+            let rederiveBound = bindIndex?.bindRegionForInnerIndex(seqIdx) != nil
             let validRange = v.validRange
             let isRangeExplicit = v.isRangeExplicit
             let choiceTag = v.choice.tag
@@ -61,6 +63,7 @@ extension ReducerStrategies {
                         latestOutput: &latestOutput,
                         progress: &progress,
                         rejectCache: &rejectCache,
+                        bindIndex: bindIndex,
                     ) {
                         currentHash = current.zobristHash
                     }
@@ -94,7 +97,7 @@ extension ReducerStrategies {
             var candidate = current
             candidate[seqIdx] = targetEntry
             if targetEntry.shortLexCompare(current[seqIdx]) == .lt, rejectCache.contains(candidate, zobristHash: targetHash) == false {
-                if let output = try? Interpreters.materialize(gen, with: tree, using: candidate),
+                if let output = try? ReducerStrategies.materializeCandidate(gen, tree: tree, candidate: candidate, bindIndex: bindIndex, mutatedIndex: seqIdx),
                    property(output) == false
                 {
                     current = candidate
@@ -134,6 +137,7 @@ extension ReducerStrategies {
                         latestOutput: &latestOutput,
                         progress: &progress,
                         rejectCache: &rejectCache,
+                        bindIndex: bindIndex,
                     ) {
                         currentHash = current.zobristHash
                     }
@@ -173,7 +177,7 @@ extension ReducerStrategies {
                     else {
                         return false
                     }
-                    guard let output = try? Interpreters.materialize(gen, with: tree, using: probe) else {
+                    guard let output = try? ReducerStrategies.materializeCandidate(gen, tree: tree, candidate: probe, bindIndex: bindIndex, mutatedIndex: seqIdx) else {
                         rejectCache.insert(probe, zobristHash: probeHash)
                         return false
                     }
@@ -212,7 +216,7 @@ extension ReducerStrategies {
                 var candidate = current
                 candidate[seqIdx] = candidateEntry
                 if candidateEntry.shortLexCompare(current[seqIdx]) == .lt,
-                   let output = try? Interpreters.materialize(gen, with: tree, using: candidate),
+                   let output = try? ReducerStrategies.materializeCandidate(gen, tree: tree, candidate: candidate, bindIndex: bindIndex, mutatedIndex: seqIdx),
                    property(output) == false
                 {
                     current = candidate
@@ -242,7 +246,7 @@ extension ReducerStrategies {
                         guard probeEntry.shortLexCompare(current[seqIdx]) == .lt else { continue }
                         crossZeroProbe[seqIdx] = probeEntry
                         guard rejectCache.contains(crossZeroProbe) == false else { continue }
-                        if let output = try? Interpreters.materialize(gen, with: tree, using: crossZeroProbe),
+                        if let output = try? ReducerStrategies.materializeCandidate(gen, tree: tree, candidate: crossZeroProbe, bindIndex: bindIndex, mutatedIndex: seqIdx),
                            property(output) == false
                         {
                             current = crossZeroProbe
@@ -283,7 +287,7 @@ extension ReducerStrategies {
                     boundary[seqIdx] = boundaryEntry
 
                     if rejectCache.contains(boundary) == false {
-                        if let output = try? Interpreters.materialize(gen, with: tree, using: boundary),
+                        if let output = try? ReducerStrategies.materializeCandidate(gen, tree: tree, candidate: boundary, bindIndex: bindIndex, mutatedIndex: seqIdx),
                            property(output) == false
                         {
                             latestOutput = output
@@ -322,6 +326,7 @@ extension ReducerStrategies {
                         latestOutput: &latestOutput,
                         progress: &progress,
                         rejectCache: &rejectCache,
+                        bindIndex: bindIndex,
                     ) {
                         currentHash = current.zobristHash
                         continue
@@ -363,6 +368,7 @@ extension ReducerStrategies {
         latestOutput: inout Output?,
         progress: inout Bool,
         rejectCache: inout ReducerCache,
+        bindIndex: BindSpanIndex? = nil,
     ) -> Bool {
         guard input.semanticTargetBP != input.targetBP else { return false }
         let unlockBP: UInt64? = if input.semanticTargetBP < input.targetBP {
@@ -392,7 +398,7 @@ extension ReducerStrategies {
             return false
         }
 
-        if let output = try? Interpreters.materialize(gen, with: tree, using: unlockCandidate),
+        if let output = try? ReducerStrategies.materializeCandidate(gen, tree: tree, candidate: unlockCandidate, bindIndex: bindIndex, mutatedIndex: input.seqIdx),
            property(output) == false
         {
             currentSequence = unlockCandidate

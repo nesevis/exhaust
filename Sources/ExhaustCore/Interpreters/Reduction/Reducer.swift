@@ -239,6 +239,10 @@ public extension Interpreters {
                 message,
             )
         } : nil
+        let hasBind = tree.containsBind
+        var bindSpanIndex: BindSpanIndex? = hasBind
+            ? BindSpanIndex(from: currentSequence)
+            : nil
         var didNaivelyMinimise = false
         var loops = 0
         var passes = ShrinkPass.allCases
@@ -276,8 +280,11 @@ public extension Interpreters {
                     guard didNaivelyMinimise == false else {
                         continue
                     }
-                    let valueSpans = spanCache.getAllValueSpans(from: currentSequence)
-                    if valueSpans.isEmpty == false, let (newSequence, output) = try ReducerStrategies.naiveSimplifyValues(gen, tree: currentTree, property: property, sequence: currentSequence, valueSpans: valueSpans, rejectCache: &rejectCache) {
+                    var valueSpans = spanCache.getAllValueSpans(from: currentSequence)
+                    if let bi = bindSpanIndex {
+                        valueSpans = valueSpans.filter { bi.isInBoundSubtree($0.range.lowerBound) == false }
+                    }
+                    if valueSpans.isEmpty == false, let (newSequence, output) = try ReducerStrategies.naiveSimplifyValues(gen, tree: currentTree, property: property, sequence: currentSequence, valueSpans: valueSpans, rejectCache: &rejectCache, bindIndex: bindSpanIndex) {
                         currentSequence = newSequence
                         spanCache.invalidate()
                         currentOutput = output
@@ -291,6 +298,7 @@ public extension Interpreters {
                         property: property,
                         sequence: currentSequence,
                         rejectCache: &rejectCache,
+                        bindIndex: bindSpanIndex,
                     ) {
                         currentTree = newTree
                         currentSequence = newSequence
@@ -305,6 +313,7 @@ public extension Interpreters {
                         property: property,
                         sequence: currentSequence,
                         rejectCache: &rejectCache,
+                        bindIndex: bindSpanIndex,
                     ) {
                         currentTree = newTree
                         currentSequence = newSequence
@@ -315,7 +324,7 @@ public extension Interpreters {
                 case .deleteContainerSpans:
                     // Adaptive container span deletion, ie the […] and (…) spans in [(V)(V)]
                     let containerSpans = spanCache.getContainerSpans(from: currentSequence)
-                    if containerSpans.isEmpty == false, let (newSequence, output) = try ReducerStrategies.adaptiveDeleteSpans(gen, tree: currentTree, property: property, sequence: currentSequence, spans: containerSpans, rejectCache: &rejectCache) {
+                    if containerSpans.isEmpty == false, let (newSequence, output) = try ReducerStrategies.adaptiveDeleteSpans(gen, tree: currentTree, property: property, sequence: currentSequence, spans: containerSpans, rejectCache: &rejectCache, bindIndex: bindSpanIndex) {
                         currentSequence = newSequence
                         spanCache.invalidate()
                         currentOutput = output
@@ -326,7 +335,7 @@ public extension Interpreters {
                     // Uses .relaxed strictness because removing elements shifts entries out of
                     // alignment with the tree's per-position structure.
                     let seqElemSpans = spanCache.getSequenceElementSpans(from: currentSequence)
-                    if seqElemSpans.isEmpty == false, let (newSequence, output) = try ReducerStrategies.adaptiveDeleteSpans(gen, tree: currentTree, property: property, sequence: currentSequence, spans: seqElemSpans, rejectCache: &rejectCache, strictness: .relaxed) {
+                    if seqElemSpans.isEmpty == false, let (newSequence, output) = try ReducerStrategies.adaptiveDeleteSpans(gen, tree: currentTree, property: property, sequence: currentSequence, spans: seqElemSpans, rejectCache: &rejectCache, strictness: .relaxed, bindIndex: bindSpanIndex) {
                         currentSequence = newSequence
                         spanCache.invalidate()
                         currentOutput = output
@@ -335,7 +344,7 @@ public extension Interpreters {
                 case .deleteSequenceBoundaries:
                     // Pass 2a: Collapse sequence boundaries, i.e [[V][V][V]] -> [[VVV]]
                     let boundarySpans = spanCache.getSequenceBoundarySpans(from: currentSequence)
-                    if boundarySpans.isEmpty == false, let (newSequence, output) = try ReducerStrategies.adaptiveDeleteSpans(gen, tree: currentTree, property: property, sequence: currentSequence, spans: boundarySpans, rejectCache: &rejectCache, strictness: .relaxed) {
+                    if boundarySpans.isEmpty == false, let (newSequence, output) = try ReducerStrategies.adaptiveDeleteSpans(gen, tree: currentTree, property: property, sequence: currentSequence, spans: boundarySpans, rejectCache: &rejectCache, strictness: .relaxed, bindIndex: bindSpanIndex) {
                         currentSequence = newSequence
                         spanCache.invalidate()
                         currentOutput = output
@@ -348,7 +357,7 @@ public extension Interpreters {
                 case .deleteFreeStandingValues:
                     // Pass 2b: Sequence element deletion, i.e the individual Vs in [VVVVV]
                     let freeStandingValueSpans = spanCache.getFreeStandingValueSpans(from: currentSequence)
-                    if freeStandingValueSpans.isEmpty == false, let (newSequence, output) = try ReducerStrategies.adaptiveDeleteSpans(gen, tree: currentTree, property: property, sequence: currentSequence, spans: freeStandingValueSpans, rejectCache: &rejectCache, strictness: .relaxed) {
+                    if freeStandingValueSpans.isEmpty == false, let (newSequence, output) = try ReducerStrategies.adaptiveDeleteSpans(gen, tree: currentTree, property: property, sequence: currentSequence, spans: freeStandingValueSpans, rejectCache: &rejectCache, strictness: .relaxed, bindIndex: bindSpanIndex) {
                         currentSequence = newSequence
                         spanCache.invalidate()
                         currentOutput = output
@@ -367,6 +376,7 @@ public extension Interpreters {
                            probeBudget: probeBudgets.deleteAlignedSiblingWindows,
                            subsetBeamSearchTuning: alignedDeletionBeamTuning,
                            onBudgetExhausted: budgetLogger,
+                           bindIndex: bindSpanIndex,
                        )
                     {
                         currentSequence = newSequence
@@ -375,24 +385,33 @@ public extension Interpreters {
                         passImproved = true
                     }
                 case .simplifyValuesToSemanticSimplest:
-                    let valueSpans = spanCache.getAllValueSpans(from: currentSequence)
-                    if valueSpans.isEmpty == false, let (newSequence, output) = try ReducerStrategies.simplifyValues(gen, tree: currentTree, property: property, sequence: currentSequence, valueSpans: valueSpans, rejectCache: &rejectCache) {
+                    var valueSpans = spanCache.getAllValueSpans(from: currentSequence)
+                    if let bi = bindSpanIndex {
+                        valueSpans = valueSpans.filter { bi.isInBoundSubtree($0.range.lowerBound) == false }
+                    }
+                    if valueSpans.isEmpty == false, let (newSequence, output) = try ReducerStrategies.simplifyValues(gen, tree: currentTree, property: property, sequence: currentSequence, valueSpans: valueSpans, rejectCache: &rejectCache, bindIndex: bindSpanIndex) {
                         currentSequence = newSequence
                         spanCache.invalidate()
                         currentOutput = output
                         passImproved = true
                     }
                 case .reduceIntegralValues:
-                    let valueSpans = spanCache.getAllValueSpans(from: currentSequence)
-                    if valueSpans.isEmpty == false, let (newSequence, output) = try ReducerStrategies.reduceIntegralValues(gen, tree: currentTree, property: property, sequence: currentSequence, valueSpans: valueSpans, rejectCache: &rejectCache) {
+                    var valueSpans = spanCache.getAllValueSpans(from: currentSequence)
+                    if let bi = bindSpanIndex {
+                        valueSpans = valueSpans.filter { bi.isInBoundSubtree($0.range.lowerBound) == false }
+                    }
+                    if valueSpans.isEmpty == false, let (newSequence, output) = try ReducerStrategies.reduceIntegralValues(gen, tree: currentTree, property: property, sequence: currentSequence, valueSpans: valueSpans, rejectCache: &rejectCache, bindIndex: bindSpanIndex) {
                         currentSequence = newSequence
                         spanCache.invalidate()
                         currentOutput = output
                         passImproved = true
                     }
                 case .reduceFloatValues:
-                    let floatSpans = spanCache.getFloatValueSpans(from: currentSequence)
-                    if floatSpans.isEmpty == false, let (newSequence, output) = try ReducerStrategies.reduceFloatValues(gen, tree: currentTree, property: property, sequence: currentSequence, valueSpans: floatSpans, rejectCache: &rejectCache) {
+                    var floatSpans = spanCache.getFloatValueSpans(from: currentSequence)
+                    if let bi = bindSpanIndex {
+                        floatSpans = floatSpans.filter { bi.isInBoundSubtree($0.range.lowerBound) == false }
+                    }
+                    if floatSpans.isEmpty == false, let (newSequence, output) = try ReducerStrategies.reduceFloatValues(gen, tree: currentTree, property: property, sequence: currentSequence, valueSpans: floatSpans, rejectCache: &rejectCache, bindIndex: bindSpanIndex) {
                         currentSequence = newSequence
                         spanCache.invalidate()
                         currentOutput = output
@@ -409,6 +428,7 @@ public extension Interpreters {
                            rejectCache: &rejectCache,
                            probeBudget: probeBudgets.redistributeNumericPairs,
                            onBudgetExhausted: budgetLogger,
+                           bindIndex: bindSpanIndex,
                        )
                     {
                         currentSequence = newSequence
@@ -421,7 +441,7 @@ public extension Interpreters {
                     let containerSpans = spanCache.getContainerSpans(from: currentSequence)
                     let deletableSpans = freeValueSpans + containerSpans
                     if !deletableSpans.isEmpty,
-                       let (newSequence, output) = try ReducerStrategies.speculativeDeleteAndRepair(gen, tree: currentTree, property: property, sequence: currentSequence, spans: deletableSpans, rejectCache: &rejectCache)
+                       let (newSequence, output) = try ReducerStrategies.speculativeDeleteAndRepair(gen, tree: currentTree, property: property, sequence: currentSequence, spans: deletableSpans, rejectCache: &rejectCache, bindIndex: bindSpanIndex)
                     {
                         currentSequence = newSequence
                         spanCache.invalidate()
@@ -441,6 +461,7 @@ public extension Interpreters {
                            rejectCache: &rejectCache,
                            probeBudget: probeBudgets.reduceValuesInTandem,
                            onBudgetExhausted: budgetLogger,
+                           bindIndex: bindSpanIndex,
                        )
                     {
                         currentSequence = newSequence
@@ -451,7 +472,7 @@ public extension Interpreters {
                 case .normaliseSiblingOrder:
                     let siblingGroups = spanCache.getSiblingGroups(from: currentSequence)
                     if siblingGroups.isEmpty == false,
-                       let (newSequence, output) = try ReducerStrategies.reorderSiblings(gen, tree: currentTree, property: property, sequence: currentSequence, siblingGroups: siblingGroups, rejectCache: &rejectCache)
+                       let (newSequence, output) = try ReducerStrategies.reorderSiblings(gen, tree: currentTree, property: property, sequence: currentSequence, siblingGroups: siblingGroups, rejectCache: &rejectCache, bindIndex: bindSpanIndex)
                     {
                         currentSequence = newSequence
                         spanCache.invalidate()
@@ -460,6 +481,7 @@ public extension Interpreters {
                     }
                 }
                 if passImproved {
+                    if hasBind { bindSpanIndex = BindSpanIndex(from: currentSequence) }
                     if isInstrumented {
                         ExhaustLog.debug(
                             category: .reducer,
