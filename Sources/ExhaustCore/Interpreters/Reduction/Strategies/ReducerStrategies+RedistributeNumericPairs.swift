@@ -94,7 +94,7 @@ extension ReducerStrategies {
                               let fresh2 = current[idx2].value else { continue }
 
                         let bp1 = fresh1.choice.bitPattern64
-                        let target1 = fresh1.choice.reductionTarget(in: fresh1.validRange)
+                        let target1 = fresh1.choice.reductionTarget(in: fresh1.isRangeExplicit ? fresh1.validRange : nil)
                         let floatContext = makeFloatRedistributionContext(
                             lhs: fresh1.choice,
                             rhs: fresh2.choice,
