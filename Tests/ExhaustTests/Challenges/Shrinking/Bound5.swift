@@ -38,10 +38,11 @@ struct Bound5ShrinkingChallenge {
 
     @Test("Bound5, Single")
     func bound5Single() throws {
+        ExhaustLog.setConfiguration(.init(isEnabled: true, minimumLevel: .info, categoryMinimumLevels: [.reducer: .debug], format: .human))
         let output = #exhaust(Self.gen, .suppressIssueReporting, .replay(1337), property: Self.property)
 
         #expect(output?.arr.count == 2)
-        #expect(output?.arr == [-32768, -1])
+        #expect(output?.arr == [-1, -32768])
     }
 
     @Test("Bound5, Pathological 1")

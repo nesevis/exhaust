@@ -24,6 +24,7 @@ extension ReducerStrategies {
         sequence: ChoiceSequence,
         valueSpans: [ChoiceSpan],
         rejectCache: inout ReducerCache,
+        bindIndex: BindSpanIndex? = nil,
     ) throws -> (ChoiceSequence, Output)? {
         var current = sequence
         var currentHash = current.zobristHash
@@ -58,7 +59,7 @@ extension ReducerStrategies {
             var candidate = current
             candidate[seqIdx] = targetEntry
             if targetEntry.shortLexCompare(current[seqIdx]) == .lt, rejectCache.contains(candidate, zobristHash: targetHash) == false {
-                if let output = try? Interpreters.materialize(gen, with: tree, using: candidate),
+                if let output = try? ReducerStrategies.materializeCandidate(gen, tree: tree, candidate: candidate, bindIndex: bindIndex, mutatedIndex: seqIdx),
                    property(output) == false
                 {
                     current = candidate
@@ -84,6 +85,7 @@ extension ReducerStrategies {
                 latestOutput: &latestOutput,
                 progress: &progress,
                 rejectCache: &rejectCache,
+                bindIndex: bindIndex,
             ) {
                 currentHash = current.zobristHash
                 continue
@@ -102,6 +104,7 @@ extension ReducerStrategies {
                 latestOutput: &latestOutput,
                 progress: &progress,
                 rejectCache: &rejectCache,
+                bindIndex: bindIndex,
             ) {
                 currentHash = current.zobristHash
                 continue
@@ -120,6 +123,7 @@ extension ReducerStrategies {
                 latestOutput: &latestOutput,
                 progress: &progress,
                 rejectCache: &rejectCache,
+                bindIndex: bindIndex,
             ) {
                 currentHash = current.zobristHash
                 continue
@@ -138,6 +142,7 @@ extension ReducerStrategies {
                 latestOutput: &latestOutput,
                 progress: &progress,
                 rejectCache: &rejectCache,
+                bindIndex: bindIndex,
             ) {
                 currentHash = current.zobristHash
                 continue
@@ -166,6 +171,7 @@ extension ReducerStrategies {
         latestOutput: inout Output?,
         progress: inout Bool,
         rejectCache: inout ReducerCache,
+        bindIndex: BindSpanIndex? = nil,
     ) -> Bool {
         guard case .floating = value.choice else {
             return false
@@ -187,6 +193,7 @@ extension ReducerStrategies {
                 latestOutput: &latestOutput,
                 progress: &progress,
                 rejectCache: &rejectCache,
+                bindIndex: bindIndex,
             ) {
                 return true
             }
@@ -209,6 +216,7 @@ extension ReducerStrategies {
         latestOutput: inout Output?,
         progress: inout Bool,
         rejectCache: inout ReducerCache,
+        bindIndex: BindSpanIndex? = nil,
     ) -> Bool {
         guard case let .floating(currentFloatingValue, _, _) = value.choice,
               currentFloatingValue.isFinite
@@ -250,6 +258,7 @@ extension ReducerStrategies {
                     latestOutput: &latestOutput,
                     progress: &progress,
                     rejectCache: &rejectCache,
+                    bindIndex: bindIndex,
                 ) {
                     return true
                 }
@@ -286,6 +295,7 @@ extension ReducerStrategies {
         latestOutput: inout Output?,
         progress: inout Bool,
         rejectCache: inout ReducerCache,
+        bindIndex: BindSpanIndex? = nil,
     ) -> Bool {
         guard candidateChoice.bitPattern64 != currentValue.choice.bitPattern64 else {
             return false
@@ -309,7 +319,7 @@ extension ReducerStrategies {
             return false
         }
 
-        if let output = try? Interpreters.materialize(gen, with: tree, using: candidate),
+        if let output = try? ReducerStrategies.materializeCandidate(gen, tree: tree, candidate: candidate, bindIndex: bindIndex, mutatedIndex: seqIdx),
            property(output) == false
         {
             currentSequence = candidate
@@ -335,6 +345,7 @@ extension ReducerStrategies {
         latestOutput: inout Output?,
         progress: inout Bool,
         rejectCache: inout ReducerCache,
+        bindIndex: BindSpanIndex? = nil,
     ) -> Bool {
         guard case let .floating(currentFloatingValue, _, _) = value.choice,
               currentFloatingValue.isFinite,
@@ -402,7 +413,7 @@ extension ReducerStrategies {
                 guard candidateEntry.shortLexCompare(currentSequence[seqIdx]) == .lt else { return false }
                 probe[seqIdx] = candidateEntry
                 guard rejectCache.contains(probe) == false else { return false }
-                guard let output = try? Interpreters.materialize(gen, with: tree, using: probe) else {
+                guard let output = try? ReducerStrategies.materializeCandidate(gen, tree: tree, candidate: probe, bindIndex: bindIndex, mutatedIndex: seqIdx) else {
                     rejectCache.insert(probe)
                     return false
                 }
@@ -450,6 +461,7 @@ extension ReducerStrategies {
         latestOutput: inout Output?,
         progress: inout Bool,
         rejectCache: inout ReducerCache,
+        bindIndex: BindSpanIndex? = nil,
     ) -> Bool {
         guard case let .floating(currentFloatingValue, _, _) = value.choice,
               currentFloatingValue.isFinite,
@@ -517,7 +529,7 @@ extension ReducerStrategies {
                 guard rejectCache.contains(probe) == false else {
                     return false
                 }
-                guard let output = try? Interpreters.materialize(gen, with: tree, using: probe) else {
+                guard let output = try? ReducerStrategies.materializeCandidate(gen, tree: tree, candidate: probe, bindIndex: bindIndex, mutatedIndex: seqIdx) else {
                     rejectCache.insert(probe)
                     return false
                 }

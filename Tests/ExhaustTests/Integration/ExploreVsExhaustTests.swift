@@ -13,10 +13,11 @@ struct ExploreVsExhaustTests {
 
     @Test("#exhaust finds a valid BST with height exactly 5")
     func exhaustFindsHeight5BST() throws {
-        let gen = BST.arbitrary(maxDepth: 8, valueRange: 0 ... 18)
-            .filter { $0.isValidBST() }
+        let gen = BST.arbitraryRecursive(valueRange: 0 ... 18)
             .unique()
-        let result = #exhaust(gen, .samplingBudget(20000), .suppressIssueReporting, .replay(13_183_411_771_408_542_277)) { bst in
+            .filter { $0.isValidBST() }
+//        ExhaustLog.setConfiguration(.init(isEnabled: true, minimumLevel: .info, categoryMinimumLevels: [.reducer: .debug], format: .human))
+        let result = #exhaust(gen, .samplingBudget(500), .suppressIssueReporting, .replay(13_183_411_771_408_542_277)) { bst in
             !(bst.height == 5)
         }
         let bst = try #require(result)

@@ -17,6 +17,7 @@ extension ReducerStrategies {
         sequence: ChoiceSequence,
         valueSpans: [ChoiceSpan],
         rejectCache: inout ReducerCache,
+        bindIndex: BindSpanIndex? = nil,
     ) throws -> (ChoiceSequence, Output)? {
         // Filter to spans whose values can actually be simplified
         var valueIndices: [Int] = []
@@ -56,7 +57,12 @@ extension ReducerStrategies {
                 guard rejectCache.contains(candidate) == false else {
                     return false
                 }
-                guard let output = try? Interpreters.materialize(gen, with: tree, using: candidate) else {
+                let mutatedIndices = (0..<size).compactMap { j -> Int? in
+                    let idx = i + j
+                    guard idx < valueIndices.count else { return nil }
+                    return valueIndices[idx]
+                }
+                guard let output = try? ReducerStrategies.materializeCandidate(gen, tree: tree, candidate: candidate, bindIndex: bindIndex, mutatedIndices: mutatedIndices) else {
                     rejectCache.insert(candidate)
                     return false
                 }
@@ -87,8 +93,9 @@ extension ReducerStrategies {
                         let simplified = v.choice.semanticSimplest
                         candidate[seqIdx] = .value(.init(choice: simplified, validRange: v.validRange, isRangeExplicit: v.isRangeExplicit))
                     }
+                    let fallbackIndices = (0..<k).map { j in valueIndices[i + j] }
                     if candidate.shortLexPrecedes(current),
-                       let output = try? Interpreters.materialize(gen, with: tree, using: candidate),
+                       let output = try? ReducerStrategies.materializeCandidate(gen, tree: tree, candidate: candidate, bindIndex: bindIndex, mutatedIndices: fallbackIndices),
                        property(output) == false
                     {
                         current = candidate

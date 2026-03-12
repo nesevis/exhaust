@@ -79,7 +79,7 @@ enum CoverageRunner {
                 let prefix = ChoiceSequence(tree)
                 switch GuidedMaterializer.materialize(gen, prefix: prefix, seed: UInt64(rowIndex), abortOnFilter: skipFilterCheck) {
                 case let .success(v, _, _):
-                    value = v as? Output
+                    value = v
                 case .filterEncountered:
                     return .notApplicable
                 case .failed:

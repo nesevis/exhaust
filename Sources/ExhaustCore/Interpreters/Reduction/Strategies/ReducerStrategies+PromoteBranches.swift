@@ -13,6 +13,7 @@ extension ReducerStrategies {
         property: (Output) -> Bool,
         sequence: ChoiceSequence,
         rejectCache: inout ReducerCache,
+        bindIndex: BindSpanIndex? = nil,
     ) throws -> (ChoiceTree, ChoiceSequence, Output)? {
         guard tree.contains(\.unwrapped.isBranch) else {
             return nil

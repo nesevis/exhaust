@@ -18,6 +18,7 @@ extension ReducerStrategies {
         sequence: ChoiceSequence,
         siblingGroups: [SiblingGroup],
         rejectCache: inout ReducerCache,
+        bindIndex: BindSpanIndex? = nil,
     ) throws -> (ChoiceSequence, Output)? {
         var current = sequence
         var progress = false
