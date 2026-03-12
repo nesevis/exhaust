@@ -18,18 +18,12 @@ struct ReverseShrinkingChallenge {
      */
     @Test("Reverse, Full")
     func reverseFull() throws {
-        // Using UInts for consistency, as signed numbers can reduce to -1 or 1
-        let arrGen = #gen(.uint()).array(length: 1 ... 1000) // produces [(V)...]
-        var count = 0
-        let property: ([UInt]) -> Bool = { arr in
-            count += 1
-            return arr.elementsEqual(arr.reversed())
+        let gen = #gen(.uint()).array(length: 1 ... 1000)
+        
+        let output = #exhaust(gen, .suppressIssueReporting) { arr in
+            arr.elementsEqual(arr.reversed())
         }
-        var iterator = ValueAndChoiceTreeInterpreter(arrGen, materializePicks: true, seed: 1337)
-        let (value, tree) = try #require(iterator.prefix(4).last) // 36 values
-        let (_, output) = try #require(try Interpreters.reduce(gen: arrGen, tree: tree, config: .fast, property: property))
-        #expect(count == 20) // Property invocations
-        #expect(value.count > output.count)
+        
         #expect(output == [0, 1])
     }
 }

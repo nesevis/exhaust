@@ -21,7 +21,7 @@ struct CouplingShrinkingChallenge {
      */
 
     /// This generator is not reflective due to the bind
-    static let gen: ReflectiveGenerator<[Int]> = #gen(.int(in: 0 ... 100))
+    static let gen = #gen(.int(in: 0 ... 100))
         .bind { n in
             Gen.arrayOf(Gen.choose(in: 0 ... n), within: 2 ... max(2, UInt64(n) + 1))
         }
@@ -39,7 +39,7 @@ struct CouplingShrinkingChallenge {
     }
 
     @Test("Coupling")
-    func couplingBatch() throws {
+    func couplingChallenge() throws {
         let value = try #require(#exhaust(Self.gen, .suppressIssueReporting, property: Self.property))
         #expect(value.count == 2)
         #expect(value == [1, 0])

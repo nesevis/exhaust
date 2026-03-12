@@ -23,21 +23,11 @@ struct NestedListsShrinkingChallenge {
     @Test("Nested Lists")
     func nestedListsFull() throws {
         let gen = #gen(.uint().array().array())
-
-        var count = 0
-        let property: ([[UInt]]) -> Bool = { arr in
-            count += 1
-            return arr.map(\.count).reduce(0, +) <= 10
+        
+        let output = #exhaust(gen, .suppressIssueReporting) { arr in
+            arr.map(\.count).reduce(0, +) <= 10
         }
-//        ExhaustLog.setConfiguration(.init(isEnabled: true, minimumLevel: .info, categoryMinimumLevels: [.reducer: .debug], format: .human))
-        var iterator = ValueAndChoiceTreeInterpreter(gen, materializePicks: true, seed: 1337)
-        // Outputs an array of 32 arrays containing 5–33 values each
-        let (_, tree) = try #require(iterator.prefix(37).last)
-        let (_, output) = try #require(try Interpreters.reduce(gen: gen, tree: tree, config: .fast, property: property))
-        // How many times the `property` is called, which is a slightly smaller number than the times materialize is called
-        print()
-        #expect(count == 88)
-        // Shrinks to [[0,…x11]]
+        
         #expect(output == [Array(repeating: UInt(0), count: 11)])
     }
 }

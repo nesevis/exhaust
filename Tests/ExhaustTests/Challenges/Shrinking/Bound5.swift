@@ -21,152 +21,128 @@ struct Bound5ShrinkingChallenge {
      The interesting thing about this example is the interdependence between separate parts of the sample data. A single list in the tuple will never break the invariant, but you need at least two lists together. This prevents most of trivial shrinking algorithms from getting close to a minimum example, which would look something like ([-32768], [-1], [], [], []).
      */
 
-    typealias Bound5 = ([Int16], [Int16], [Int16], [Int16], [Int16])
-
     private static let gen: ReflectiveGenerator<Bound5> = {
         let arr = #gen(.int16(scaling: .linear).array(length: 0 ... 10))
             .filter { $0.isEmpty || $0.dropFirst().reduce($0[0], &+) < 256 }
-        return #gen(arr, arr, arr, arr, arr)
+        return #gen(arr, arr, arr, arr, arr) { a, b, c, d, e in
+            Bound5(a: a, b: b, c: c, d: d, e: e)
+        }
     }()
 
-    private static let property: (Bound5) -> Bool = { arg in
-        let (a, b, c, d, e) = arg
-        let arr = a + b + c + d + e
-        if arr.isEmpty {
+    private static let property: (Bound5) -> Bool = { b5 in
+        if b5.arr.isEmpty {
             return true
         }
-        return arr.dropFirst().reduce(arr[0], &+) < 5 * 256
+        return b5.arr.dropFirst().reduce(b5.arr[0], &+) < 5 * 256
     }
 
     @Test("Bound5, Single")
     func bound5Single() throws {
-        var iterator = ValueAndChoiceTreeInterpreter(Self.gen, materializePicks: true, seed: 1337)
-        let (_, tree) = try #require(iterator.prefix(80).last)
-        let sequence = ChoiceSequence.flatten(tree)
-        _ = try #require(try Interpreters.materialize(Self.gen, with: tree, using: sequence))
-        let (_, output) = try #require(try Interpreters.reduce(gen: Self.gen, tree: tree, config: .fast, property: Self.property))
+        let output = #exhaust(Self.gen, .suppressIssueReporting, .replay(1337), property: Self.property)
 
-        // ([-1], [-32768], [], [], [])
-        let arr = (output.0 + output.1 + output.2 + output.3 + output.4).sorted()
-        #expect(arr.count == 2)
-        #expect(arr == [-32768, -1])
+        #expect(output?.arr.count == 2)
+        #expect(output?.arr == [-32768, -1])
     }
 
     @Test("Bound5, Pathological 1")
     func bound5Pathological() throws {
-        let value: Bound5 = ([-18914, -2906, 9816], [7672, 16087, 24512], [-11812, -5368, 8526, -24292, 21020, 14344, -1893, -22885], [25982, 8828, 5007, -6389], [12744, -11152, -18025, -29069, 30825])
-        let tree = try #require(try Interpreters.reflect(Self.gen, with: value))
-        let sequence = ChoiceSequence.flatten(tree)
+        let value: Bound5 = .init(
+            a: [-18914, -2906, 9816],
+            b: [7672, 16087, 24512],
+            c: [-11812, -5368, 8526, -24292, 21020, 14344, -1893, -22885],
+            d: [25982, 8828, 5007, -6389],
+            e: [12744, -11152, -18025, -29069, 30825]
+        )
+        
+        let output = #exhaust(
+            Self.gen,
+            .suppressIssueReporting,
+            .reflecting(value),
+            property: Self.property
+        )
 
-        let (_, output) = try #require(try Interpreters.reduce(gen: Self.gen, tree: tree, config: .fast, property: Self.property))
-
-        let arr = (output.0 + output.1 + output.2 + output.3 + output.4).sorted()
-        #expect(arr.count == 2)
-        #expect(arr == [-32768, -1])
+        #expect(output?.arr.count == 2)
+        #expect(output?.arr.sorted() == [-32768, -1])
     }
 
     @Test("Bound5, Pathological 2")
     func bound5Pathological2() throws {
-        let signPoster = OSSignposter(subsystem: "Bound5Pathological2", category: .pointsOfInterest)
-        let value: Bound5 = ([-10709], [29251, 31661], [-18678], [-2824, 15387, -15932, -23458, -6124, 3327, -21001, 16059, -21211, -27710], [16775, -32275, 813, 11044])
-        let tree = try #require(try Interpreters.reflect(Self.gen, with: value))
-        let interval = signPoster.beginInterval("reduce")
-        let (_, output) = try #require(try Interpreters.reduce(gen: Self.gen, tree: tree, config: .fast, property: Self.property))
-        signPoster.endInterval("reduce", interval)
+        let value: Bound5 = .init(
+            a: [-10709],
+            b: [29251, 31661],
+            c: [-18678],
+            d: [-2824, 15387, -15932, -23458, -6124, 3327, -21001, 16059, -21211, -27710],
+            e: [16775, -32275, 813, 11044]
+        )
+        
+        let output = #exhaust(
+            Self.gen,
+            .suppressIssueReporting,
+            .reflecting(value),
+            property: Self.property
+        )
 
-        let arr = (output.0 + output.1 + output.2 + output.3 + output.4).sorted()
-        #expect(arr.count == 2)
-        #expect(arr == [-32768, -1])
+        #expect(output?.arr.count == 2)
+        #expect(output?.arr.sorted() == [-32768, -1])
     }
 
     @Test("Bound5, Pathological 3")
     func bound5Pathological3() throws {
-        let value: Bound5 = ([-11954, 25609, -21279], [20837, 6773, -1304, -13732, -2626, -3440, 15253, 28268, -31908, 30491], [23543, -10339, -12447, 9150, 18335, -2103, 15547, 11124], [-32635, 18394, -23954, 13750, 27692, 25639, 23372, -27650, 18759, 17794], [-6525, 2724, -30958, 28797, -2409, -1095, 2335, -14856])
+        let value: Bound5 = .init(
+            a: [-11954, 25609, -21279],
+            b: [20837, 6773, -1304, -13732, -2626, -3440, 15253, 28268, -31908, 30491],
+            c: [23543, -10339, -12447, 9150, 18335, -2103, 15547, 11124],
+            d: [-32635, 18394, -23954, 13750, 27692, 25639, 23372, -27650, 18759, 17794],
+            e: [-6525, 2724, -30958, 28797, -2409, -1095, 2335, -14856]
+        )
+        
+        let output = #exhaust(
+            Self.gen,
+            .suppressIssueReporting,
+            .reflecting(value),
+            property: Self.property
+        )
 
-        let counterExample = #exhaust(Self.gen, .suppressIssueReporting, .reflecting(value), property: Self.property)
-        let output = try #require(counterExample)
-
-        let arr = (output.0 + output.1 + output.2 + output.3 + output.4).sorted()
-        #expect(arr.count == 2)
-        #expect(arr == [-32768, -1])
+        #expect(output?.arr.count == 2)
+        #expect(output?.arr.sorted() == [-32768, -1])
     }
 
     @Test("Bound5, 50")
     func bound5Many() throws {
-        struct Bound5: Equatable {
-            let a: [Int16]
-            let b: [Int16]
-            let c: [Int16]
-            let d: [Int16]
-            let e: [Int16]
+        let bound5s = #extract(Self.gen, count: 100, seed: 1337)
+            .filter { Self.property($0) == false }
+        
+        for bound5 in bound5s {
+            let output = #exhaust(
+                Self.gen,
+                .suppressIssueReporting,
+                .reflecting(bound5),
+                property: Self.property
+            )
 
-            let arr: [Int16]
-
-            init(a: [Int16], b: [Int16], c: [Int16], d: [Int16], e: [Int16]) {
-                self.a = a
-                self.b = b
-                self.c = c
-                self.d = d
-                self.e = e
-                arr = a + b + c + d + e
-            }
-        }
-        let arrGen = #gen(.int16(scaling: .linear).array(length: 0 ... 10))
-            .filter(.rejectionSampling) { $0.isEmpty || $0.dropFirst().reduce($0[0], &+) < 256 }
-        let gen = #gen(arrGen, arrGen, arrGen, arrGen, arrGen) { a, b, c, d, e in
-            Bound5(a: a, b: b, c: c, d: d, e: e)
-        }
-
-        let property: (Bound5) -> Bool = { b5 in
-            if b5.arr.isEmpty {
-                return true
-            }
-            return b5.arr.dropFirst().reduce(b5.arr[0], &+) < 5 * 256
-        }
-
-        do {
-            var iterator = ValueAndChoiceTreeInterpreter(gen, seed: 1337, maxRuns: 1000)
-            var count = 0
-            while let (value, tree) = try iterator.next() {
-                guard property(value) == false else { continue }
-                count += 1
-                _ = try Interpreters.reduce(gen: gen, tree: tree, config: .fast, property: property)
-                if count >= 50 {
-                    break
-                }
-            }
-        } catch {
-            print(error)
+            #expect(output?.arr.count == 2)
+            #expect(output?.arr.sorted() == [-32768, -1])
         }
     }
+    
+    // MARK: - Types
+    
+    struct Bound5: Equatable {
+        let a: [Int16]
+        let b: [Int16]
+        let c: [Int16]
+        let d: [Int16]
+        let e: [Int16]
 
-    @Test("Bound5, reflectMirror")
-    func bound5ReflectMirror() throws {
-        struct Bound5: Equatable {
-            let a: [Int16]
-            let b: [Int16]
-            let c: [Int16]
-            let d: [Int16]
-            let e: [Int16]
-        }
-        let arrGen = #gen(.array(.int16(), length: 0 ... 10))
+        let arr: [Int16]
 
-        let gen = #gen(arrGen, arrGen, arrGen, arrGen, arrGen) {
-            Bound5(a: $0, b: $1, c: $2, d: $3, e: $4)
-        }
-
-        let property: (Bound5) -> Bool = { b5 in
-            let arr = b5.a + b5.b + b5.c + b5.d + b5.e
-            if arr.isEmpty {
-                return true
-            }
-            return arr.dropFirst().reduce(arr[0], &+) < 5 * 256
-        }
-
-        var iterator = ValueAndChoiceTreeInterpreter(gen, seed: 1337, maxRuns: 100)
-        while let (value, tree) = try iterator.next() {
-            guard property(value) == false else { continue }
-            _ = try Interpreters.reduce(gen: gen, tree: tree, config: .fast, property: property)
+        init(a: [Int16], b: [Int16], c: [Int16], d: [Int16], e: [Int16]) {
+            self.a = a
+            self.b = b
+            self.c = c
+            self.d = d
+            self.e = e
+            arr = a + b + c + d + e
         }
     }
 }

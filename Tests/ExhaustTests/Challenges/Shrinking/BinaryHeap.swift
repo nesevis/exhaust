@@ -21,6 +21,18 @@ struct BinaryHeapShrinkingChallenge {
         (0, None, (0, (0, None, None), (1, None, None)))
      This is essentially because small examples are "too sparse", so it's very hard to find one by luck.
      */
+    
+    // MARK: - Tests
+
+    @Test("Binary heap, Full")
+    func binaryHeapFull() throws {
+        let output = try #require(#exhaust(Self.gen, .suppressIssueReporting, property: Self.property))
+        let outputValues = Self.toList(output).sorted()
+        // The shrunken result should have 4 values — the minimal failing heap
+        // The exact order and number of zeroes and ones (ie the size of the tree) isn't consistent
+        // Exhaust finds 4 and 5 value heaps
+        #expect(Set(outputValues) == [0, 1])
+    }
 
     // MARK: - Heap type
 
@@ -110,6 +122,7 @@ struct BinaryHeapShrinkingChallenge {
             return emptyGen
         }
 
+
         let nodeGen = #gen(.int(in: min ... maxVal))
             ._bind { value in
                 Gen.zip(
@@ -141,26 +154,6 @@ struct BinaryHeapShrinkingChallenge {
         let xs = toSortedList(heap)
         let sorted = toList(heap).sorted()
         return sorted == xs.sorted() && xs == xs.sorted()
-    }
-
-    // MARK: - Tests
-
-    /// Per-run seeding changed which initial counterexample seed 1337 finds.
-    /// The shrinker gets stuck in a local minimum:
-    ///   (0, (0, (0, None, None), None), (1, None, None))
-    /// which is shortlex-larger than the expected global minimum:
-    ///   (0, None, (0, (1, None, None), (0, None, None)))
-    /// The assertion is correct — it specifies the global shortlex-minimal 4-node
-    /// heap. The shrinker should reach it from any starting counterexample but
-    /// doesn't. This is a shrinking quality issue, not a seeding issue; finding a
-    /// different seed would only be a workaround.
-    @Test("Binary heap, Full")
-    func binaryHeapFull() throws {
-        let value = try #require(#exhaust(Self.gen, .suppressIssueReporting, property: Self.property))
-        let outputValues = Self.toList(value).sorted()
-        // The shrunken result should have 4 values — the minimal failing heap
-        // The exact order and number of zeroes and ones (ie the size of the tree) isn't consistent
-        #expect(Set(outputValues) == [0, 1])
     }
 }
 

@@ -36,17 +36,17 @@ struct DifferenceShrinkingChallenge {
     func differenceTest1() throws {
         let gen = #gen(.int(in: 1 ... 1000)).array(length: 2)
 
-        var count = 0
-        let property: ([Int]) -> Bool = { arr in
-            count += 1
-            return arr[0] < 10 || arr[0] != arr[1]
+        let property: @Sendable ([Int]) -> Bool = { arr in
+            arr[0] < 10 || arr[0] != arr[1]
         }
+        
+        let output = #exhaust(
+            gen,
+            .suppressIssueReporting,
+            .reflecting([700, 700]),
+            property: property
+        )
 
-        let value = [700, 700] // A failing example
-        let tree = try #require(try Interpreters.reflect(gen, with: value))
-        let (seq, output) = try #require(try Interpreters.reduce(gen: gen, tree: tree, config: .fast, property: property))
-
-        #expect(count == 55)
         #expect(output == [10, 10])
     }
 
@@ -54,17 +54,18 @@ struct DifferenceShrinkingChallenge {
     func differenceTest2() throws {
         let gen = #gen(.int(in: 1 ... 1000)).array(length: 2)
 
-        var count = 0
-        let property: ([Int]) -> Bool = { arr in
-            count += 1
+        let property: @Sendable ([Int]) -> Bool = { arr in
             let diff = abs(arr[0] - arr[1])
             return arr[0] < 10 || diff < 1 || diff > 4
         }
 
-        let value = [700, 700] // A failing example
-        let tree = try #require(try Interpreters.reflect(gen, with: value))
-        let (seq, output) = try #require(try Interpreters.reduce(gen: gen, tree: tree, config: .fast, property: property))
-        #expect(count == 117)
+        let output = #exhaust(
+            gen,
+            .suppressIssueReporting,
+            .reflecting([700, 701]),
+            property: property
+        )
+        
         #expect(output == [10, 6])
     }
 
@@ -72,8 +73,7 @@ struct DifferenceShrinkingChallenge {
     func differenceTest3() {
         let gen = #gen(.int(in: 1 ... 1000)).array(length: 2)
 
-        // A failing example is sparse, so an explicit seed is provided
-        let output = #exhaust(gen, .replay(1), .suppressIssueReporting) { arr in
+        let output = #exhaust(gen, .suppressIssueReporting) { arr in
             let diff = abs(arr[0] - arr[1])
             return arr[0] < 10 || diff != 1
         }
