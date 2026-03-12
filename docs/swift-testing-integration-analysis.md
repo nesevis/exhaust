@@ -107,13 +107,36 @@ Instruct users to always use `#require` inside `#exhaust` closures, and explain 
 
 ### Option B: Rewrite `#expect` to `#require` in macro expansion
 
-The `#exhaust` macro could perform AST rewriting on the property closure, replacing `#expect(...)` call sites with `#require(...)`.
+When `#exhaust` receives its trailing closure, `#expect` calls inside it have not yet been expanded — they appear as `MacroExpansionExprSyntax` nodes with `macroName.text == "expect"`. The `#exhaust` macro can walk the closure body, find those nodes, rename them to `"require"`, and wrap them with `try`. The rewritten `#require` calls then expand normally in the second macro expansion pass. All `#expect` overloads have direct `#require` equivalents with matching signatures, so the rewrite is structurally clean:
 
-**Pros:** Transparent to the user. Existing code that uses `#expect` inside `#exhaust` would work correctly without changes.
+```
+#expect(condition)              → try #require(condition)
+#expect(throws: E.self) { }     → try #require(throws: E.self) { }
+#expect(throws: Never.self) { } → try #require(throws: Never.self) { }
+```
 
-**Cons:** This is fragile. The `#exhaust` macro would need to walk the AST of the closure and identify `#expect` call expressions, which requires parsing macro invocations inside a macro's expansion context. It would miss `#expect` calls in functions called from the property body (only direct calls in the closure literal are rewritable). It would also be a semantic surprise in the opposite direction: the user wrote `#expect` and the framework silently changed the semantics to `#require`. The approach is too clever.
+**The semantic is correct, not a surprise.** In every property-based testing framework, a failed assertion means "stop this invocation and try to shrink." That is exactly `#require` semantics. `#expect` (record but continue) has no useful meaning inside a property body — reaching the second `#expect` with a value that already violated the first produces noise, not signal. Documenting that `#expect` inside `#exhaust` behaves like `#require` is accurate and defensible.
 
-**Verdict:** Not recommended.
+**The real limitation** is that the rewrite only covers direct call sites in the closure literal. Calls to helper functions are not visible to the macro:
+
+```swift
+func checkInvariant(_ n: Int) {
+    #expect(n > 0)  // not rewritten — invisible to #exhaust's expansion
+}
+
+#exhaust(#gen(.int(in: 1...100))) { n in
+    #expect(n > 0)       // rewritten: try #require(n > 0) ✓
+    checkInvariant(n)    // #expect inside is untouched ✗
+}
+```
+
+Helper functions called from property bodies should use `#require` directly. This needs to be documented clearly.
+
+**Pros:** Transparent for the common case. No new public API. The rewrite is the correct PBT semantic. Source locations are preserved because the arguments are passed through unchanged.
+
+**Cons:** Indirect `#expect` calls through helper functions are silently not rewritten, leaving the gap in place for that pattern. The behavior difference between direct and indirect calls is non-obvious.
+
+**Verdict:** Viable and worth implementing for the direct-call case. The limitation on indirect calls is real but acceptable — it reduces the footgun surface area significantly without claiming to eliminate it entirely. Should be paired with documentation that `#require` is the correct choice in helper functions called from property bodies.
 
 ### Option C: Intercept via Swift Testing internals
 
@@ -153,8 +176,64 @@ Outside a property body, `#check` degrades gracefully to `#expect` semantics (re
 
 ### Recommended path
 
-1. **Immediately:** Add documentation to `#exhaust` and `#explore` stating that `#require` is the correct assertion macro inside property closures, with an explanation of why `#expect` does not trigger reduction.
-2. **Longer term:** Implement `#check` (Option E) as an Exhaust-provided macro with explicit `try`. The two-macro split (`#check` for Exhaust-visible assertions, `#require` for hard preconditions) is a coherent API design that mirrors the existing soft/hard distinction in Swift Testing itself.
+1. **Immediately:** Add documentation to `#exhaust` and `#explore` stating that `#require` is the correct assertion macro in helper functions called from property bodies.
+2. **Short term:** Implement the Option B rewrite in `#exhaust` and `#explore` macro expansion — walk the closure literal, find `MacroExpansionExprSyntax` nodes with `macroName == "expect"`, rewrite to `try #require(...)`. This closes the gap for the common case with no new public API.
+3. **If Option E is still desired:** `#check` remains a coherent addition for users who want an explicit, indirect-call-safe assertion macro. It is not required to solve the core problem but would complete the API surface.
+
+---
+
+## XCTest Compatibility
+
+Exhaust can be used in XCTest-based projects. Most of the integration works without changes, but three areas need attention.
+
+### Failure reporting — already handled
+
+The `IssueReporting` package routes `reportIssue()` to `XCTFail()` when running under XCTest and to `Issue.record()` when running under Swift Testing. Exhaust's failure reporting works correctly in both contexts with no changes required.
+
+### `XCTAssert*` in property bodies — the same gap, no macro fix available
+
+`XCTAssertEqual(a, b)` has the same "records but does not throw" problem as `#expect` under Swift Testing. Unlike `#expect`, there is no macro rewrite available: `XCTAssert*` functions are plain call expressions, not macro invocations, so the `#exhaust` macro cannot distinguish them syntactically from any other function call in the closure body. The fix cannot be applied automatically.
+
+XCTest users writing property bodies must use assertion forms that throw on failure:
+
+- `XCTUnwrap` — throws on `nil`, works correctly with Exhaust
+- A custom throwing assertion wrapper, for example:
+
+```swift
+func assertEqual<T: Equatable>(_ a: T, _ b: T, file: StaticString = #file, line: UInt = #line) throws {
+    if a != b {
+        XCTFail("\(a) != \(b)", file: file, line: line)
+        throw PropertyCheckFailure()
+    }
+}
+```
+
+This should be documented alongside the `#require` guidance for Swift Testing users.
+
+### `XCTSkip` must propagate, not be caught as a counterexample
+
+If a property body throws `XCTSkip`, Exhaust's runner sees it as a thrown error and will treat the invocation as a property failure — potentially reporting it as a counterexample and attempting to shrink it. This is incorrect. A skip is control flow, not a falsified property.
+
+Swift Testing already handles this pattern: `withErrorRecording` checks `SkipInfo(error) != nil` and suppresses the error before it is recorded as an issue. Exhaust needs the equivalent check in its property invocation catch clause:
+
+```swift
+} catch let error where isSkipError(error) {
+    throw error  // propagate rather than treat as failure
+}
+```
+
+Where `isSkipError` detects both Swift Testing skips (`SkipInfo`) and `XCTSkip`. Because `XCTSkip` is an `NSError` subclass and XCTest may not be available at compile time, the check uses `NSClassFromString("XCTSkip")` to avoid a hard import dependency:
+
+```swift
+func isSkipError(_ error: any Error) -> Bool {
+    if let cls = NSClassFromString("XCTSkip") {
+        return (error as AnyObject).isKind(of: cls)
+    }
+    return false
+}
+```
+
+This is the only item in this section that requires implementation work.
 
 ---
 
