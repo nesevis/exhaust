@@ -9,6 +9,7 @@
 
 import Testing
 @testable import ExhaustCore
+@testable import Exhaust
 
 // MARK: - BindSpanIndex Unit Tests
 
@@ -60,7 +61,6 @@ struct BindSpanIndexTests {
         let sequence = ChoiceSequence.flatten(tree)
         let index = BindSpanIndex(from: sequence)
 
-        // Index 1 is the inner value
         let region = index.bindRegionForInnerIndex(1)
         #expect(region != nil)
     }
@@ -73,7 +73,6 @@ struct BindSpanIndexTests {
         let sequence = ChoiceSequence.flatten(tree)
         let index = BindSpanIndex(from: sequence)
 
-        // Index 2 is the bound value — not in any inner range
         let region = index.bindRegionForInnerIndex(2)
         #expect(region == nil)
     }
@@ -106,14 +105,12 @@ struct BindSpanIndexTests {
         #expect(index.isEmpty == false)
         #expect(index.regions.count == 1)
 
-        // The sibling value should not be in any bound subtree
-        let siblingIdx = sequence.count - 2 // last value before group close
+        let siblingIdx = sequence.count - 2
         #expect(index.isInBoundSubtree(siblingIdx) == false)
     }
 
     @Test("Bind with grouped bound subtree has correct children")
     func bindWithGroupedBound() {
-        // Inner: single value. Bound: group of two values.
         let inner = ChoiceTree.choice(.unsigned(5, .uint64), .init(validRange: 0 ... 10, isRangeExplicit: true))
         let boundChild1 = ChoiceTree.choice(.unsigned(10, .uint64), .init(validRange: 0 ... 100, isRangeExplicit: true))
         let boundChild2 = ChoiceTree.choice(.unsigned(20, .uint64), .init(validRange: 0 ... 100, isRangeExplicit: true))
@@ -127,21 +124,17 @@ struct BindSpanIndexTests {
         #expect(index.regions.count == 1)
 
         let region = index.regions[0]
-        // Inner is a bare value, bound is a group container
         #expect(region.innerRange.count == 1)
-        #expect(region.boundRange.count >= 3) // group(true), value, value, group(false)
+        #expect(region.boundRange.count >= 3)
 
-        // Values inside the bound group should be identified as bound
         for idx in region.boundRange {
             #expect(index.isInBoundSubtree(idx))
         }
     }
-}
 
     @Test("Nested binds produce two regions with correct nesting")
     func nestedBinds() {
-        // Outer bind: inner = value A, bound = inner bind
-        // Inner bind: inner = value B, bound = value C
+        // Outer bind: inner = A, bound = inner bind { B, C }
         // Flattened: { A { B C } }
         let valA = ChoiceTree.choice(.unsigned(10, .uint64), .init(validRange: 0 ... 100, isRangeExplicit: true))
         let valB = ChoiceTree.choice(.unsigned(20, .uint64), .init(validRange: 0 ... 100, isRangeExplicit: true))
@@ -150,114 +143,67 @@ struct BindSpanIndexTests {
         let outerBind = ChoiceTree.bind(inner: valA, bound: innerBind)
 
         let sequence = ChoiceSequence.flatten(outerBind)
-        // Expected: {outer A {inner B C }inner }outer
-        // Indices:   0     1  2      3 4  5      6
         let index = BindSpanIndex(from: sequence)
 
         #expect(index.regions.count == 2)
 
-        // Find outer and inner regions by span size
         let outer = index.regions.first { $0.bindSpanRange.count > 4 }
         let inner = index.regions.first { $0.bindSpanRange.count <= 4 }
         #expect(outer != nil)
         #expect(inner != nil)
 
-        // Outer bind: inner is A (bare value), bound is the inner bind container
         #expect(outer!.innerRange.count == 1)
-        #expect(outer!.boundRange.count > 1) // covers the entire inner bind span
+        #expect(outer!.boundRange.count > 1)
 
-        // Inner bind: inner is B, bound is C
         #expect(inner!.innerRange.count == 1)
         #expect(inner!.boundRange.count == 1)
 
-        // A (outer inner) is not in any bound subtree
+        // A (outer inner) — not in any bound subtree
         let aIdx = outer!.innerRange.lowerBound
         #expect(index.isInBoundSubtree(aIdx) == false)
         #expect(index.bindRegionForInnerIndex(aIdx) != nil)
 
-        // B (inner bind's inner) IS in the outer bound subtree
+        // B (inner bind's inner) — in outer's bound subtree, but also an inner
         let bIdx = inner!.innerRange.lowerBound
         #expect(index.isInBoundSubtree(bIdx) == true)
-        // But it's also an inner index for the inner bind
         #expect(index.bindRegionForInnerIndex(bIdx) != nil)
 
-        // C (inner bind's bound) is in both the outer bound and inner bound subtrees
+        // C (inner bind's bound) — in both bound subtrees, not any bind's inner
         let cIdx = inner!.boundRange.lowerBound
         #expect(index.isInBoundSubtree(cIdx) == true)
-        #expect(index.bindRegionForInnerIndex(cIdx) == nil) // C is not any bind's inner
+        #expect(index.bindRegionForInnerIndex(cIdx) == nil)
     }
+}
 
 // MARK: - Bind-Aware Reduction Integration Tests
 
 @Suite("Bind-Aware Reduction")
 struct BindAwareReductionTests {
-    @Test("Bind-dependent generator shrinks inner value correctly")
+    @Test("Bind-dependent array length shrinks correctly")
     func bindDependentShrink() throws {
-        // Inner: pick n from 1...10.
-        // Bound: array of n elements, each from 0...100.
-        // Property: array length <= 2 (fails when n >= 3).
-        // Minimal: n=3, array has 3 elements.
-        let gen: ReflectiveGenerator<[Int]> = Gen.liftF(.transform(
-            kind: .bind(
-                forward: { innerValue -> ReflectiveGenerator<Any> in
-                    let n = innerValue as! Int
-                    return Gen.arrayOf(
-                        Gen.choose(in: 0 ... 100 as ClosedRange<Int>),
-                        exactly: UInt64(max(0, n))
-                    ).erase()
-                },
-                backward: { finalOutput -> Any in
-                    (finalOutput as! [Int]).count
-                },
-                inputType: "Int",
-                outputType: "[Int]"
-            ),
-            inner: Gen.choose(in: 1 ... 10 as ClosedRange<Int>).erase()
-        ))
+        // Property: array.count <= 2 (fails when n >= 3). Minimal: n = 3.
+        let gen = #gen(.int(in: 1 ... 10))
+            .bound(
+                forward: { n in Gen.int(in: 0 ... 100).array(length: UInt64(n)) },
+                backward: { (arr: [Int]) in arr.count }
+            )
 
-        // Generate until we find a value with count > 2
-        var iterator = ValueAndChoiceTreeInterpreter(gen, materializePicks: true, seed: 42)
-        var failingTree: ChoiceTree?
-        while let (value, tree) = try iterator.next() {
-            if value.count > 2 {
-                failingTree = tree
-                break
-            }
+        let output = #exhaust(gen, .suppressIssueReporting, .replay(42)) { arr in
+            arr.count <= 2
         }
 
-        let tree = try #require(failingTree)
-        #expect(tree.containsBind)
-
-        let property: ([Int]) -> Bool = { $0.count <= 2 }
-        let (_, shrunk) = try #require(
-            try Interpreters.reduce(gen: gen, tree: tree, config: .fast, property: property)
-        )
-
-        // Minimal counterexample: array with exactly 3 elements
-        #expect(shrunk.count == 3)
+        #expect(output == [0, 0, 0])
     }
 
-    @Test("Bind-dependent range generator shrinks correctly")
+    @Test("Bind-dependent range shrinks correctly")
     func bindDependentRangeShrink() throws {
-        // Inner: pick n from 0...100.
-        // Bound: pick m from 0...max(1, n). Output is m (Int).
+        // .int(in: 0...100).bound { n in .int(in: 0...max(1, n)) }
         // Property: m < 5 (fails when m >= 5).
-        // When the reducer shrinks inner n, the bound range 0...n changes,
-        // so the reducer must re-derive m via GuidedMaterializer.
-        let gen: ReflectiveGenerator<Int> = Gen.liftF(.transform(
-            kind: .bind(
-                forward: { innerValue -> ReflectiveGenerator<Any> in
-                    let n = innerValue as! Int
-                    return Gen.choose(in: 0 ... max(1, n) as ClosedRange<Int>).erase()
-                },
-                backward: { finalOutput -> Any in
-                    finalOutput as! Int
-                },
-                inputType: "Int",
-                outputType: "Int"
-            ),
-            inner: Gen.choose(in: 0 ... 100 as ClosedRange<Int>).erase()
-        ))
+        let gen = #gen(.int(in: 0 ... 100))
+            .bound(
+                forward: { n in Gen.int(in: 0 ... max(1, n)) },
+                backward: { (m: Int) in m }
+            )
 
         var iterator = ValueAndChoiceTreeInterpreter(gen, materializePicks: true, seed: 42)
         var failingTree: ChoiceTree?
@@ -271,22 +217,16 @@ struct BindAwareReductionTests {
         let tree = try #require(failingTree)
         #expect(tree.containsBind)
 
-        let property: (Int) -> Bool = { $0 < 5 }
         let (_, shrunk) = try #require(
-            try Interpreters.reduce(gen: gen, tree: tree, config: .fast, property: property)
+            try Interpreters.reduce(gen: gen, tree: tree, config: .fast) { $0 < 5 }
         )
 
-        // The shrunk value must still fail the property (>= 5) and be significantly
-        // smaller than the original. The exact minimum depends on PRNG behavior when
-        // GuidedMaterializer re-derives the bound value.
         #expect(shrunk >= 5)
         #expect(shrunk <= 10)
     }
 
     @Test("Non-bind generator is unaffected by bind-aware infrastructure")
     func nonBindRegression() throws {
-        // Simple unsigned integer — no binds involved.
-        // This verifies zero overhead / no behavior change.
         let gen = Gen.choose(in: UInt64(0) ... 1000)
 
         var iterator = ValueAndChoiceTreeInterpreter(gen, materializePicks: true, seed: 42)
@@ -295,9 +235,8 @@ struct BindAwareReductionTests {
 
         #expect(tree.containsBind == false)
 
-        let property: (UInt64) -> Bool = { $0 < 5 }
         let (_, shrunk) = try #require(
-            try Interpreters.reduce(gen: gen, tree: tree, config: .fast, property: property)
+            try Interpreters.reduce(gen: gen, tree: tree, config: .fast) { $0 < 5 }
         )
 
         #expect(shrunk == 5)
@@ -315,8 +254,9 @@ struct MaterializeCandidateTests {
         let (_, tree) = try #require(try iterator.next())
         let sequence = ChoiceSequence.flatten(tree)
 
+        var corrected: ChoiceSequence?
         let result = try ReducerStrategies.materializeCandidate(
-            gen, tree: tree, candidate: sequence, bindIndex: nil, mutatedIndex: 0
+            gen, tree: tree, candidate: sequence, bindIndex: nil, mutatedIndex: 0, correctedSequence: &corrected
         )
         #expect(result != nil)
     }
@@ -329,51 +269,33 @@ struct MaterializeCandidateTests {
         let sequence = ChoiceSequence.flatten(tree)
         let emptyIndex = BindSpanIndex(from: sequence)
 
+        var corrected: ChoiceSequence?
         let result = try ReducerStrategies.materializeCandidate(
-            gen, tree: tree, candidate: sequence, bindIndex: emptyIndex, mutatedIndex: 0
+            gen, tree: tree, candidate: sequence, bindIndex: emptyIndex, mutatedIndex: 0, correctedSequence: &corrected
         )
         #expect(result != nil)
     }
 
     @Test("Routes through GuidedMaterializer for inner-range mutation")
     func guidedMaterializerRouting() throws {
-        // Use a bind generator where bound produces actual value entries
-        let gen: ReflectiveGenerator<Int> = Gen.liftF(.transform(
-            kind: .bind(
-                forward: { innerValue -> ReflectiveGenerator<Any> in
-                    let n = innerValue as! Int
-                    return Gen.choose(in: 0 ... max(1, n) as ClosedRange<Int>).erase()
-                },
-                backward: { finalOutput -> Any in
-                    finalOutput as! Int
-                },
-                inputType: "Int",
-                outputType: "Int"
-            ),
-            inner: Gen.choose(in: 0 ... 100 as ClosedRange<Int>).erase()
-        ))
+        let gen = #gen(.int(in: 0 ... 100))
+            .bound(
+                forward: { n in Gen.int(in: 0 ... max(1, n)) },
+                backward: { (m: Int) in m }
+            )
 
         var iterator = ValueAndChoiceTreeInterpreter(gen, materializePicks: true, seed: 42)
         let (_, genTree) = try #require(try iterator.next())
         let genSequence = ChoiceSequence.flatten(genTree)
         let genBindIndex = BindSpanIndex(from: genSequence)
 
-        // Verify bind regions exist and materializeCandidate produces a result
         #expect(genBindIndex.isEmpty == false)
         let genInnerIdx = genBindIndex.regions[0].innerRange.lowerBound
+        var corrected: ChoiceSequence?
         let result = try ReducerStrategies.materializeCandidate(
-            gen, tree: genTree, candidate: genSequence, bindIndex: genBindIndex, mutatedIndex: genInnerIdx
+            gen, tree: genTree, candidate: genSequence, bindIndex: genBindIndex, mutatedIndex: genInnerIdx, correctedSequence: &corrected
         )
         #expect(result != nil)
+        #expect(corrected != nil)
     }
-}
-
-// MARK: - Helpers
-
-private func generate<Output>(
-    _ gen: ReflectiveGenerator<Output>,
-    seed: UInt64 = 42,
-) throws -> (value: Output, tree: ChoiceTree) {
-    var iter = ValueAndChoiceTreeInterpreter(gen, materializePicks: true, seed: seed)
-    return try #require(try iter.prefix(1).last)
 }
