@@ -61,6 +61,7 @@ struct BindAwareReducerBenchmark {
         UInt64(42), UInt64(123), UInt64(999), UInt64(7777), UInt64(31415),
     ])
     func zipOfTwoBinds(seed: UInt64) throws {
+//        ExhaustLog.setConfiguration(.init(isEnabled: true, minimumLevel: .info, categoryMinimumLevels: [.reducer: .debug], format: .human))
         // Two independent bind generators zipped together.
         // Each: inner picks n from 0...50, bound picks m from 0...max(1,n).
         // Property: sum of both bound values < 20.
@@ -70,16 +71,13 @@ struct BindAwareReducerBenchmark {
                 backward: { (m: Int) in m }
             )
 
-        let gen = Gen.zip(singleBind, singleBind)
-
-        let result = try reduceAndMeasure(gen: gen, seed: seed) { pair in
+        let gen = #gen(singleBind, singleBind)
+        
+        let result = try #require(#exhaust(gen, .suppressIssueReporting) { pair in
             pair.0 + pair.1 < 20
-        }
-        guard let result else { return }
+        })
 
-        let (a, b) = result.output
-        let (origA, origB) = result.originalOutput
-        print("  [Scenario 3, seed=\(seed)] invocations=\(result.invocations), shrunk=(\(a),\(b)) sum=\(a + b), original=(\(origA),\(origB)) sum=\(origA + origB)")
+        #expect(result == (0, 20))
     }
 
     // MARK: - Scenario 4: Bind with array of bound values

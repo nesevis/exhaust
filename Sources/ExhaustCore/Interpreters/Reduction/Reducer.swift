@@ -246,6 +246,7 @@ public extension Interpreters {
         let maxBindDepth = bindSpanIndex?.maxBindDepth ?? 0
         var currentBindDepth = 0
         var depthCycleImproved = false
+        var depthCyclesRemaining = 2
         var didNaivelyMinimise = false
         var loops = 0
         var passes = ShrinkPass.allCases
@@ -541,13 +542,14 @@ public extension Interpreters {
             }
 
             // No pass improved at current depth — try advancing to next bind depth.
-            if maxBindDepth > 0 {
+            if maxBindDepth > 0, depthCyclesRemaining > 0 {
                 let nextDepth = (currentBindDepth + 1) % (maxBindDepth + 1)
 
                 // Full cycle with no improvement → fall through to stall decrement.
                 if nextDepth == 0, depthCycleImproved == false {
                     // fall through
                 } else {
+                    if nextDepth == 0 { depthCyclesRemaining -= 1 }
                     // Rebuild consistent (sequence, tree) and advance depth.
                     let seed = currentSequence.zobristHash
                     if case let .success(value, seq, newTree) =
@@ -563,7 +565,6 @@ public extension Interpreters {
                         currentBindDepth = nextDepth
                         if nextDepth == 0 { depthCycleImproved = false }
                         didNaivelyMinimise = false
-                        stallBudget = config.maxStalls
                         continue
                     }
                 }
