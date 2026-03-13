@@ -37,6 +37,7 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
         var suppressIssueReporting = false
         var reflectingValue: Output?
         var useRandomOnly = false
+        var useKleisliReducer = false
 
         for setting in settings {
             switch setting {
@@ -54,6 +55,8 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
                 reflectingValue = value
             case .randomOnly:
                 useRandomOnly = true
+            case .useKleisliReducer:
+                useKleisliReducer = true
             }
         }
 
@@ -63,6 +66,7 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
                     gen,
                     value: reflectingValue,
                     reductionConfig: reductionConfig,
+                    useKleisliReducer: useKleisliReducer,
                     suppressIssueReporting: suppressIssueReporting,
                     sourceCode: sourceCode,
                     fileID: fileID,
@@ -98,10 +102,11 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
                     return property(value)
                 }
                 do {
-                    if let (shrunkSequence, shrunkValue) = try Interpreters.reduce(
+                    if let (shrunkSequence, shrunkValue) = try Interpreters.dispatchReduce(
                         gen: gen,
                         tree: shrinkTree,
                         config: reductionConfig,
+                        useKleisli: useKleisliReducer,
                         property: countingProperty,
                     ) {
                         var failure = PropertyTestFailure(
@@ -236,10 +241,11 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
                     return property(value)
                 }
                 do {
-                    if let (shrunkSequence, shrunkValue) = try Interpreters.reduce(
+                    if let (shrunkSequence, shrunkValue) = try Interpreters.dispatchReduce(
                         gen: gen,
                         tree: tree,
                         config: reductionConfig,
+                        useKleisli: useKleisliReducer,
                         property: countingProperty,
                     ) {
                         let failure = PropertyTestFailure(
@@ -365,6 +371,7 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
         var suppressIssueReporting = false
         var poolCapacity = 256
         var generateRatio = 0.2
+        var useKleisliReducer = false
 
         for setting in settings {
             switch setting {
@@ -380,6 +387,8 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
                 poolCapacity = n
             case let .generateRatio(r):
                 generateRatio = r
+            case .useKleisliReducer:
+                useKleisliReducer = true
             }
         }
 
@@ -388,6 +397,7 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
             property: property,
             samplingBudget: samplingBudget,
             reductionConfig: reductionConfig,
+            useKleisliReducer: useKleisliReducer,
             poolCapacity: poolCapacity,
             generateRatio: generateRatio,
             seed: seed,
@@ -529,6 +539,7 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
         _ gen: ReflectiveGenerator<Output>,
         value: Output,
         reductionConfig: TCRBudget,
+        useKleisliReducer: Bool,
         suppressIssueReporting: Bool,
         sourceCode: String?,
         fileID: StaticString,
@@ -580,10 +591,11 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
             propertyInvocationCount += 1
             return property(value)
         }
-        if let (shrunkSequence, shrunkValue) = try Interpreters.reduce(
+        if let (shrunkSequence, shrunkValue) = try Interpreters.dispatchReduce(
             gen: gen,
             tree: tree,
             config: reductionConfig,
+            useKleisli: useKleisliReducer,
             property: countingProperty,
         ) {
             let failure = PropertyTestFailure(

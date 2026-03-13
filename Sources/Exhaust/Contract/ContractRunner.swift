@@ -34,6 +34,7 @@ public func __runContract<Spec: ContractSpec>(
     var suppressIssueReporting = false
     var useRandomOnly = false
     var useArgumentAwareCoverage = false
+    var useKleisliReducer = false
 
     for setting in settings {
         switch setting {
@@ -51,6 +52,8 @@ public func __runContract<Spec: ContractSpec>(
             useRandomOnly = true
         case .argumentAwareCoverage:
             useArgumentAwareCoverage = true
+        case .useKleisliReducer:
+            useKleisliReducer = true
         }
     }
 
@@ -90,6 +93,7 @@ public func __runContract<Spec: ContractSpec>(
             commandLimit: commandLimit,
             coverageBudget: coverageBudget,
             reductionConfig: reductionConfig,
+            useKleisliReducer: useKleisliReducer,
             argumentAware: useArgumentAwareCoverage,
             property: property,
         )
@@ -112,6 +116,7 @@ public func __runContract<Spec: ContractSpec>(
                 coverageBudget: coverageBudget,
                 seed: seed,
                 reductionConfig: reductionConfig,
+                useKleisliReducer: useKleisliReducer,
                 suppressIssueReporting: true,
                 useRandomOnly: useRandomOnly || skipGenericCoverage,
             ),
@@ -292,6 +297,7 @@ func runSCACoverage<Command>(
     commandLimit: Int,
     coverageBudget: UInt64,
     reductionConfig: TCRBudget,
+    useKleisliReducer: Bool,
     argumentAware: Bool,
     property: @escaping @Sendable ([Command]) -> Bool,
 ) -> SCAResult<Command>? {
@@ -379,10 +385,11 @@ func runSCACoverage<Command>(
             // since coverage-built trees lack unselected branches needed by reducer strategies.
             let shrinkTree = (try? Interpreters.reflect(seqGen, with: value)) ?? tree
             // Reduce the failing sequence
-            if let (_, shrunkValue) = try! Interpreters.reduce( // swiftlint:disable:this force_try
+            if let (_, shrunkValue) = try! Interpreters.dispatchReduce( // swiftlint:disable:this force_try
                 gen: seqGen,
                 tree: shrinkTree,
                 config: reductionConfig,
+                useKleisli: useKleisliReducer,
                 property: property,
             ) {
                 return (shrunkValue, value)
@@ -410,6 +417,7 @@ func buildExhaustSettings<Output>(
     coverageBudget: UInt64,
     seed: UInt64?,
     reductionConfig: TCRBudget,
+    useKleisliReducer: Bool,
     suppressIssueReporting: Bool,
     useRandomOnly: Bool,
 ) -> [ExhaustSettings<Output>] {
@@ -426,6 +434,9 @@ func buildExhaustSettings<Output>(
     }
     if useRandomOnly {
         settings.append(.randomOnly)
+    }
+    if useKleisliReducer {
+        settings.append(.useKleisliReducer)
     }
     return settings
 }

@@ -147,8 +147,7 @@ struct KleisliReducerIntegrationTests {
             try Interpreters.kleisliReduce(gen: gen, tree: tree, config: .fast) { $0.count <= 2 }
         )
 
-        #expect(shrunk.count == 3)
-        #expect(shrunk.allSatisfy { $0 == 0 })
+        #expect(shrunk == [0, 0, 0])
     }
 
     @Test("Non-bind degenerate case: maxBindDepth == 0, single coordinate")

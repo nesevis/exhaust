@@ -25,4 +25,9 @@ public enum ContractSettings {
     ///
     /// By default, SCA covers command-type orderings only, keeping the domain small enough for higher interaction strengths (t=3, t=4). With this setting, each position's domain is the flattened union of `(commandType × argumentCombinations)`, giving IPOG pairwise coverage of both command ordering and argument value interactions — at the cost of larger domains that typically cap at t=2.
     case argumentAwareCoverage
+
+    /// Uses the Kleisli reducer (cyclic coordinate descent over bind depths) instead of the default reducer.
+    ///
+    /// The Kleisli reducer treats each bind depth in the generator's Kleisli chain as a coordinate axis and applies shrink tactics ordered by a dominance lattice. This can produce better counterexamples for bind-dependent generators.
+    case useKleisliReducer
 }
