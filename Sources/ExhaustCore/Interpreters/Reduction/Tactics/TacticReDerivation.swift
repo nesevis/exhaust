@@ -63,8 +63,27 @@ enum TacticEvaluation {
             case .filterEncountered, .failed:
                 return nil
             }
+        } else if strictness == .relaxed {
+            // Structural changes (deletion, boundary merging) invalidate the tree's
+            // element scripts. GuidedMaterializer is sequence-driven — it rebuilds a
+            // fresh tree from the generator, using the candidate as a prefix. The
+            // returned (sequence, tree, output) triple is guaranteed consistent.
+            let seed = candidate.zobristHash
+            switch GuidedMaterializer.materialize(gen, prefix: candidate, seed: seed, fallbackTree: tree) {
+            case let .success(reDerivedOutput, reDerivedSequence, reDerivedTree):
+                guard reDerivedSequence.shortLexPrecedes(originalSequence) else { return nil }
+                guard property(reDerivedOutput) == false else { return nil }
+                return ShrinkResult(
+                    sequence: reDerivedSequence,
+                    tree: reDerivedTree,
+                    output: reDerivedOutput,
+                    evaluations: 1,
+                )
+            case .filterEncountered, .failed:
+                return nil
+            }
         } else {
-            // Depth > 0 or no binds: plain materialization (no re-derivation).
+            // Normal strictness, no binds: tree-driven materialization.
             guard let output = try Interpreters.materialize(
                 gen, with: tree, using: candidate, strictness: strictness
             ) else {

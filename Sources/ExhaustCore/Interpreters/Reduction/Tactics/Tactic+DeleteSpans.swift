@@ -5,14 +5,18 @@
 //  Created by Chris Kolbu on 13/3/2026.
 //
 
-/// Adaptively deletes container spans (sequence elements, boundaries).
-///
-/// Delegates to ``ReducerStrategies.adaptiveDeleteSpans`` and re-derives via
-/// ``TacticReDerivation`` for bind-consistent output.
-/// Adaptively deletes container spans (groups, sequences, binds).
+/// Adaptively deletes full container spans (groups, sequences, binds).
 ///
 /// Purpose-built deletion tactic: proposes mutations inline, evaluates via
 /// ``TacticEvaluation`` for depth-aware single-pass materialization.
+/// Uses `.relaxed` strictness so ``GuidedMaterializer`` rebuilds a consistent
+/// tree from the mutated sequence — necessary because deleting a container
+/// changes the parent's element count.
+///
+/// Only full spans (starting with an opener marker) are eligible. Content-only
+/// spans (inner elements without markers) are excluded because deleting them
+/// leaves an empty container that ``GuidedMaterializer`` interprets as
+/// zero-length, which is invalid for fixed-length generators.
 struct DeleteContainerSpansTactic: ShrinkTactic {
     let name = "deleteContainerSpans"
     let applicability = TacticApplicability.containers
@@ -26,7 +30,18 @@ struct DeleteContainerSpansTactic: ShrinkTactic {
         property: (Output) -> Bool,
         rejectCache: inout ReducerCache,
     ) throws -> ShrinkResult<Output>? {
-        let sortedSpans = targetSpans
+        // Filter to full spans only (those starting with an opener marker).
+        // Content-only spans start with a value or nested marker — deleting them
+        // leaves empty brackets that GuidedMaterializer interprets as zero-length.
+        let sortedSpans = targetSpans.filter { span in
+            switch sequence[span.range.lowerBound] {
+            case .sequence(true, isLengthExplicit: _), .group(true), .bind(true):
+                return true
+            default:
+                return false
+            }
+        }
+        guard sortedSpans.isEmpty == false else { return nil }
         var i = 0
         while i < sortedSpans.count {
             let span = sortedSpans[i]
@@ -58,7 +73,7 @@ struct DeleteContainerSpansTactic: ShrinkTactic {
                     gen: gen,
                     tree: tree,
                     context: context,
-                    strictness: .normal,
+                    strictness: .relaxed,
                     originalSequence: sequence,
                     property: property
                 ) {

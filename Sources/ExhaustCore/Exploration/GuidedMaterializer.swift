@@ -543,12 +543,28 @@ private extension GuidedMaterializer {
         }
 
         if let seqInfo = context.cursor.tryConsumeSequenceOpen() {
-            // Replaying from prefix: derive length from element count
-            length = UInt64(seqInfo.elementCount)
-            lengthMeta = ChoiceMetadata(
-                validRange: nil,
-                isRangeExplicit: seqInfo.isLengthExplicit,
-            )
+            if seqInfo.isLengthExplicit {
+                // Explicit-length sequence (e.g. .array(length: 2)): the generator
+                // determines the count, not the prefix. Deletion tactics may remove
+                // elements from the prefix, but the generator's fixed length is
+                // authoritative. Elements beyond the prefix are filled from fallback/PRNG.
+                guard let (genLength, lengthTree) = try generateRecursive(
+                    lengthGen,
+                    with: inputValue,
+                    context: &context,
+                ) else {
+                    return nil
+                }
+                length = genLength
+                lengthMeta = lengthTree.metadata
+            } else {
+                // Variable-length sequence: derive from prefix element count
+                length = UInt64(seqInfo.elementCount)
+                lengthMeta = ChoiceMetadata(
+                    validRange: nil,
+                    isRangeExplicit: false,
+                )
+            }
         } else {
             // Cursor exhausted or mismatched — generate fresh
             guard let (freshLength, lengthTree) = try generateRecursive(

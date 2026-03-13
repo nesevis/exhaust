@@ -33,7 +33,7 @@ public extension Interpreters {
         useKleisli: Bool,
         property: (Output) -> Bool,
     ) throws -> (ChoiceSequence, Output)? {
-        if useKleisli {
+        if true || useKleisli {
             return try kleisliReduce(gen: gen, tree: tree, config: .init(from: config), property: property)
         } else {
             return try reduce(gen: gen, tree: tree, config: config, property: property)

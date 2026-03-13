@@ -9,11 +9,8 @@
 ///
 /// Purpose-built deletion tactic: proposes mutations inline, evaluates via
 /// ``TacticEvaluation`` for depth-aware single-pass materialization.
-/// Strictness is `.relaxed` because boundary removal merges adjacent sequences.
-///
-/// After evaluation, applies ``ChoiceTree.relaxingNonExplicitSequenceLengthRanges()``
-/// to the result's tree — after merging sequences, inner lengths may exceed the tree's
-/// recorded ranges.
+/// Strictness is `.relaxed` because boundary removal merges adjacent sequences;
+/// ``GuidedMaterializer`` rebuilds a consistent tree from the mutated sequence.
 struct DeleteSequenceBoundariesTactic: ShrinkTactic {
     let name = "deleteSequenceBoundaries"
     let applicability = TacticApplicability.containers
@@ -75,14 +72,7 @@ struct DeleteSequenceBoundariesTactic: ShrinkTactic {
             }
 
             if k > 0, let result = bestResult {
-                // After merging sequences, inner lengths may exceed the tree's recorded ranges.
-                let relaxedTree = result.tree.relaxingNonExplicitSequenceLengthRanges()
-                return ShrinkResult(
-                    sequence: result.sequence,
-                    tree: relaxedTree,
-                    output: result.output,
-                    evaluations: result.evaluations,
-                )
+                return result
             }
             i += 1
         }
