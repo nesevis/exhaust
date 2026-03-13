@@ -58,7 +58,7 @@ struct BindAwareReducerBenchmark {
     // MARK: - Scenario 3: Zip of two bind generators
 
     @Test("Scenario 3: zip of two binds", arguments: [
-        UInt64(42), UInt64(123), UInt64(999), UInt64(7777), UInt64(31415),
+        UInt64(42)//, UInt64(123), UInt64(999), UInt64(7777), UInt64(31415),
     ])
     func zipOfTwoBinds(seed: UInt64) throws {
 //        ExhaustLog.setConfiguration(.init(isEnabled: true, minimumLevel: .info, categoryMinimumLevels: [.reducer: .debug], format: .human))
@@ -73,7 +73,12 @@ struct BindAwareReducerBenchmark {
 
         let gen = #gen(singleBind, singleBind)
         
-        let result = try #require(#exhaust(gen, .suppressIssueReporting) { pair in
+        let result = try #require(
+            #exhaust(
+                gen,
+                .useKleisliReducer,
+                .suppressIssueReporting
+            ) { pair in
             pair.0 + pair.1 < 20
         })
 

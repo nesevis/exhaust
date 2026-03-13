@@ -14,6 +14,11 @@ extension ReducerStrategies {
     /// Materializes a candidate sequence, using ``GuidedMaterializer`` when a single
     /// mutated index falls inside a bind's inner subtree (so bound content is re-derived fresh).
     ///
+    /// For bind-triggered materializations, the current choice tree is passed as the tier-2
+    /// fallback. When inner values change and bound ranges shift, GuidedMaterializer clamps
+    /// old bound values to the new ranges rather than randomizing them from PRNG. This
+    /// preserves reduction consistency — bound values stay close to their last known state.
+    ///
     /// - Parameters:
     ///   - gen: The generator to materialize.
     ///   - tree: The choice tree for standard materialization.
@@ -29,10 +34,11 @@ extension ReducerStrategies {
         bindIndex: BindSpanIndex?,
         mutatedIndex: Int,
         strictness: Interpreters.Strictness = .normal,
+        maximizeBoundValues: Bool = false,
     ) throws -> Output? {
         if let bindIndex, bindIndex.bindRegionForInnerIndex(mutatedIndex) != nil {
             let seed = candidate.zobristHash
-            switch GuidedMaterializer.materialize(gen, prefix: candidate, seed: seed, fallbackTree: tree) {
+            switch GuidedMaterializer.materialize(gen, prefix: candidate, seed: seed, fallbackTree: tree, maximizeBoundValues: maximizeBoundValues) {
             case let .success(value, _, _):
                 return value
             case .filterEncountered, .failed:
@@ -44,6 +50,8 @@ extension ReducerStrategies {
 
     /// Materializes a candidate sequence, using ``GuidedMaterializer`` when any of the
     /// mutated indices falls inside a bind's inner subtree.
+    ///
+    /// See the single-index overload for rationale on using the fallback tree.
     ///
     /// - Parameters:
     ///   - gen: The generator to materialize.
@@ -60,12 +68,13 @@ extension ReducerStrategies {
         bindIndex: BindSpanIndex?,
         mutatedIndices: some Collection<Int>,
         strictness: Interpreters.Strictness = .normal,
+        maximizeBoundValues: Bool = false,
     ) throws -> Output? {
         if let bindIndex, bindIndex.isEmpty == false,
            mutatedIndices.contains(where: { bindIndex.bindRegionForInnerIndex($0) != nil })
         {
             let seed = candidate.zobristHash
-            switch GuidedMaterializer.materialize(gen, prefix: candidate, seed: seed, fallbackTree: tree) {
+            switch GuidedMaterializer.materialize(gen, prefix: candidate, seed: seed, fallbackTree: tree, maximizeBoundValues: maximizeBoundValues) {
             case let .success(value, _, _):
                 return value
             case .filterEncountered, .failed:

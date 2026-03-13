@@ -41,6 +41,7 @@ extension ReducerStrategies {
         probeBudget: Int,
         onBudgetExhausted: ((String) -> Void)? = nil,
         bindIndex: BindSpanIndex? = nil,
+        maximizeBoundValues: Bool = false,
     ) throws -> (ChoiceSequence, Output)? {
         typealias Candidate = (index: Int, value: ChoiceSequenceValue.Value)
         var allNumericCandidates = [Candidate]()
@@ -108,7 +109,6 @@ extension ReducerStrategies {
                             )
                             : nil
 
-
                         let decrease1Upward: Bool
                         let distance1: UInt64
                         if let floatContext {
@@ -127,12 +127,6 @@ extension ReducerStrategies {
                         }
                         guard distance1 > 0 else { continue }
 
-                        // Use semantic shortlex distance for gating heuristics so signed values
-                        // near zero (e.g. -1) are treated as near, not "far" by raw bit patterns.
-                        let semanticDistance1 = absDiff(
-                            fresh1.choice.shortlexKey,
-                            fresh1.choice.semanticSimplest.shortlexKey,
-                        )
                         let semanticDistance2 = absDiff(
                             fresh2.choice.shortlexKey,
                             fresh2.choice.semanticSimplest.shortlexKey,
@@ -140,10 +134,6 @@ extension ReducerStrategies {
 
                         // Skip if node2 is already at its target — no point moving it away.
                         guard semanticDistance2 > 0 else { continue }
-
-                        // Only redistribute when node1 is far enough from its target to justify the
-                        // disruption to node2. Small distances are better handled by independent reduction.
-                        guard semanticDistance1 > 16 else { continue }
 
                         var lastProbe: ChoiceSequence?
                         var lastProbeOutput: Output?
@@ -231,7 +221,7 @@ extension ReducerStrategies {
                                 reportBudgetExhaustionIfNeeded()
                                 return false
                             }
-                            guard let output = try? ReducerStrategies.materializeCandidate(gen, tree: tree, candidate: probe, bindIndex: bindIndex, mutatedIndices: [idx1, idx2]) else {
+                            guard let output = try? ReducerStrategies.materializeCandidate(gen, tree: tree, candidate: probe, bindIndex: bindIndex, mutatedIndices: [idx1, idx2], maximizeBoundValues: maximizeBoundValues) else {
                                 rejectCache.insert(probe, zobristHash: probeHash)
                                 return false
                             }
@@ -349,7 +339,7 @@ extension ReducerStrategies {
                                     reportBudgetExhaustionIfNeeded()
                                     break
                                 }
-                                guard let output = try? ReducerStrategies.materializeCandidate(gen, tree: tree, candidate: probe, bindIndex: bindIndex, mutatedIndices: [idx1, idx2]) else {
+                                guard let output = try? ReducerStrategies.materializeCandidate(gen, tree: tree, candidate: probe, bindIndex: bindIndex, mutatedIndices: [idx1, idx2], maximizeBoundValues: maximizeBoundValues) else {
                                     rejectCache.insert(probe, zobristHash: probeHash)
                                     continue
                                 }

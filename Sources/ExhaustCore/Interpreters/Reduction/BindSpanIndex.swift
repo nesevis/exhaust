@@ -69,4 +69,18 @@ public struct BindSpanIndex {
         }
         return maxDepth
     }
+
+    /// Partition value spans into groups by bind depth (coordinate index).
+    ///
+    /// Returns an array indexed by depth (0 ... ``maxBindDepth``), where each element
+    /// contains the spans at that depth. Spans not inside any bound subtree have depth 0.
+    public func spansByDepth(_ spans: [ChoiceSpan]) -> [[ChoiceSpan]] {
+        let maxDepth = maxBindDepth
+        var result = [[ChoiceSpan]](repeating: [], count: maxDepth + 1)
+        for span in spans {
+            let depth = bindDepth(at: span.range.lowerBound)
+            result[depth].append(span)
+        }
+        return result
+    }
 }

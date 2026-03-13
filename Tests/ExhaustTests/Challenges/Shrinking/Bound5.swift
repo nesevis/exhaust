@@ -47,6 +47,7 @@ struct Bound5ShrinkingChallenge {
 
     @Test("Bound5, Pathological 1")
     func bound5Pathological() throws {
+        ExhaustLog.setConfiguration(.init(isEnabled: true, minimumLevel: .info, categoryMinimumLevels: [.reducer: .debug], format: .human))
         let value: Bound5 = .init(
             a: [-18914, -2906, 9816],
             b: [7672, 16087, 24512],
@@ -68,6 +69,7 @@ struct Bound5ShrinkingChallenge {
 
     @Test("Bound5, Pathological 2")
     func bound5Pathological2() throws {
+        ExhaustLog.setConfiguration(.init(isEnabled: true, minimumLevel: .info, categoryMinimumLevels: [.reducer: .debug], format: .human))
         let value: Bound5 = .init(
             a: [-10709],
             b: [29251, 31661],
@@ -96,11 +98,12 @@ struct Bound5ShrinkingChallenge {
             d: [-32635, 18394, -23954, 13750, 27692, 25639, 23372, -27650, 18759, 17794],
             e: [-6525, 2724, -30958, 28797, -2409, -1095, 2335, -14856]
         )
-        
+        ExhaustLog.setConfiguration(.init(isEnabled: true, minimumLevel: .info, categoryMinimumLevels: [.reducer: .debug], format: .human))
         let output = #exhaust(
             Self.gen,
             .suppressIssueReporting,
             .reflecting(value),
+//            .useKleisliReducer,
             property: Self.property
         )
 
@@ -112,12 +115,14 @@ struct Bound5ShrinkingChallenge {
     func bound5Many() throws {
         let bound5s = #extract(Self.gen, count: 100, seed: 1337)
             .filter { Self.property($0) == false }
+        ExhaustLog.setConfiguration(.init(isEnabled: true, minimumLevel: .info, categoryMinimumLevels: [.reducer: .debug], format: .human))
         
         for bound5 in bound5s {
             let output = #exhaust(
                 Self.gen,
                 .suppressIssueReporting,
                 .reflecting(bound5),
+//                .useKleisliReducer,
                 property: Self.property
             )
 

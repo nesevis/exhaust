@@ -276,7 +276,8 @@ public enum ExhaustLog {
             line: line,
             format: configuration.format,
         )
-        logger(for: category).log(level: level.osLogType, "\(rendered, privacy: .public)")
+        print(rendered)
+//        logger(for: category).log(level: level.osLogType, "\(rendered, privacy: .public)")
     }
 
     private static let subsystem = "com.exhaust"
