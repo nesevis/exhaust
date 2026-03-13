@@ -1,20 +1,21 @@
 //
-//  Tactic+DeleteSpans.swift
+//  Tactic+DeleteSequenceBoundaries.swift
 //  Exhaust
 //
 //  Created by Chris Kolbu on 13/3/2026.
 //
 
-/// Adaptively deletes container spans (sequence elements, boundaries).
-///
-/// Delegates to ``ReducerStrategies.adaptiveDeleteSpans`` and re-derives via
-/// ``TacticReDerivation`` for bind-consistent output.
-/// Adaptively deletes container spans (groups, sequences, binds).
+/// Adaptively deletes sequence boundary spans (`][` marker pairs).
 ///
 /// Purpose-built deletion tactic: proposes mutations inline, evaluates via
 /// ``TacticEvaluation`` for depth-aware single-pass materialization.
-struct DeleteContainerSpansTactic: ShrinkTactic {
-    let name = "deleteContainerSpans"
+/// Strictness is `.relaxed` because boundary removal merges adjacent sequences.
+///
+/// After evaluation, applies ``ChoiceTree.relaxingNonExplicitSequenceLengthRanges()``
+/// to the result's tree — after merging sequences, inner lengths may exceed the tree's
+/// recorded ranges.
+struct DeleteSequenceBoundariesTactic: ShrinkTactic {
+    let name = "deleteSequenceBoundaries"
     let applicability = TacticApplicability.containers
 
     func apply<Output>(
@@ -58,7 +59,7 @@ struct DeleteContainerSpansTactic: ShrinkTactic {
                     gen: gen,
                     tree: tree,
                     context: context,
-                    strictness: .normal,
+                    strictness: .relaxed,
                     originalSequence: sequence,
                     property: property
                 ) {
@@ -74,7 +75,14 @@ struct DeleteContainerSpansTactic: ShrinkTactic {
             }
 
             if k > 0, let result = bestResult {
-                return result
+                // After merging sequences, inner lengths may exceed the tree's recorded ranges.
+                let relaxedTree = result.tree.relaxingNonExplicitSequenceLengthRanges()
+                return ShrinkResult(
+                    sequence: result.sequence,
+                    tree: relaxedTree,
+                    output: result.output,
+                    evaluations: result.evaluations,
+                )
             }
             i += 1
         }

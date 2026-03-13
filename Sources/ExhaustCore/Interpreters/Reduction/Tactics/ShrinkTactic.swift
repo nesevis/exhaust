@@ -14,6 +14,43 @@ public struct ShrinkResult<Output> {
     public let evaluations: Int
 }
 
+/// Depth and bind context passed to every tactic.
+///
+/// At depth 0, mutations to inner values trigger re-derivation of all bound content via
+/// ``GuidedMaterializer``. At depth > 0, targeted spans are inside bound subtrees —
+/// mutations here don't change the inner generator, so re-derivation is unnecessary.
+public struct TacticContext {
+    /// The bind span index for the current sequence (`nil` when no binds present).
+    public let bindIndex: BindSpanIndex?
+    /// The bind depth this tactic is operating at.
+    /// - `0` means top-level (inner generator values).
+    /// - `> 0` means inside a bound subtree at the given nesting depth.
+    /// - `-1` is used for global tactics (branch, cross-stage) that don't target a specific depth.
+    public let depth: Int
+    /// Fallback tree for ``GuidedMaterializer`` re-derivation.
+    ///
+    /// Updated after each accepted tactic, providing the most recent consistent tree
+    /// for bound-value clamping. Used by ``TacticEvaluation.evaluate()`` when the
+    /// tree parameter is not directly available.
+    public let fallbackTree: ChoiceTree?
+}
+
+/// Categorizes which kind of spans a deletion tactic targets.
+enum DeletionSpanCategory {
+    case containerSpans
+    case sequenceElements
+    case sequenceBoundaries
+    case freeStandingValues
+    case siblingGroups
+    case mixed
+}
+
+/// Pairs a deletion tactic with its span category for lattice-aware span routing.
+struct DeletionTacticEntry {
+    let tactic: any ShrinkTactic
+    let spanCategory: DeletionSpanCategory
+}
+
 /// Categorizes which bind-stage content types a tactic applies to.
 public enum TacticApplicability: Hashable, Sendable {
     /// Integral value reduction (zero, binary search).
@@ -50,6 +87,7 @@ public protocol ShrinkTactic {
     ///   - tree: The current choice tree.
     ///   - targetSpans: The spans this tactic should operate on (pre-filtered by the caller to
     ///     the relevant bind depth and content type).
+    ///   - context: Depth and bind context for this tactic application.
     ///   - property: The property under test — returns `true` for passing inputs.
     ///   - rejectCache: Shared rejection cache for deduplication.
     /// - Returns: A ``ShrinkResult`` on improvement, or `nil` if no shrink was found.
@@ -58,7 +96,7 @@ public protocol ShrinkTactic {
         sequence: ChoiceSequence,
         tree: ChoiceTree,
         targetSpans: [ChoiceSpan],
-        bindIndex: BindSpanIndex?,
+        context: TacticContext,
         property: (Output) -> Bool,
         rejectCache: inout ReducerCache,
     ) throws -> ShrinkResult<Output>?
@@ -76,7 +114,7 @@ public protocol BranchShrinkTactic {
         gen: ReflectiveGenerator<Output>,
         sequence: ChoiceSequence,
         tree: ChoiceTree,
-        bindIndex: BindSpanIndex?,
+        context: TacticContext,
         property: (Output) -> Bool,
         rejectCache: inout ReducerCache,
     ) throws -> ShrinkResult<Output>?
@@ -92,7 +130,7 @@ public protocol SiblingGroupShrinkTactic {
         sequence: ChoiceSequence,
         tree: ChoiceTree,
         siblingGroups: [SiblingGroup],
-        bindIndex: BindSpanIndex?,
+        context: TacticContext,
         property: (Output) -> Bool,
         rejectCache: inout ReducerCache,
     ) throws -> ShrinkResult<Output>?
@@ -108,7 +146,7 @@ protocol CrossStageShrinkTactic {
         tree: ChoiceTree,
         siblingGroups: [SiblingGroup],
         allValueSpans: [ChoiceSpan],
-        bindIndex: BindSpanIndex?,
+        context: TacticContext,
         property: (Output) -> Bool,
         rejectCache: inout ReducerCache,
     ) throws -> ShrinkResult<Output>?

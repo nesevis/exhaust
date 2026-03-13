@@ -18,16 +18,20 @@ struct BinarySearchToTargetTactic: ShrinkTactic {
         sequence: ChoiceSequence,
         tree: ChoiceTree,
         targetSpans: [ChoiceSpan],
-        bindIndex: BindSpanIndex?,
+        context: TacticContext,
         property: (Output) -> Bool,
         rejectCache: inout ReducerCache,
     ) throws -> ShrinkResult<Output>? {
         let counter = EvaluationCounter()
         guard let (newSequence, output) = try counter.wrap(property, body: { counted in
             try ReducerStrategies.reduceIntegralValues(
-                gen, tree: tree, property: counted,
-                sequence: sequence, valueSpans: targetSpans,
-                rejectCache: &rejectCache, bindIndex: bindIndex
+                gen,
+                tree: tree,
+                property: counted,
+                sequence: sequence,
+                valueSpans: targetSpans,
+                rejectCache: &rejectCache,
+                bindIndex: context.bindIndex
             )
         }) else {
             return nil
@@ -36,8 +40,9 @@ struct BinarySearchToTargetTactic: ShrinkTactic {
             strategySequence: newSequence,
             strategyOutput: output,
             gen: gen,
+            originalSequence: sequence,
             originalTree: tree,
-            bindIndex: bindIndex,
+            context: context,
             property: property,
             evaluations: counter.count,
         )

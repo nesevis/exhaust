@@ -12,6 +12,7 @@
 struct ReduceInTandemTactic: CrossStageShrinkTactic {
     let name = "reduceInTandem"
     let probeBudget: Int
+    var onBudgetExhausted: ((String) -> Void)?
 
     func apply<Output>(
         gen: ReflectiveGenerator<Output>,
@@ -19,7 +20,7 @@ struct ReduceInTandemTactic: CrossStageShrinkTactic {
         tree: ChoiceTree,
         siblingGroups: [SiblingGroup],
         allValueSpans: [ChoiceSpan],
-        bindIndex: BindSpanIndex?,
+        context: TacticContext,
         property: (Output) -> Bool,
         rejectCache: inout ReducerCache,
     ) throws -> ShrinkResult<Output>? {
@@ -28,7 +29,9 @@ struct ReduceInTandemTactic: CrossStageShrinkTactic {
         guard let (newSequence, output) = try counter.wrap(property, body: { counted in
             try ReducerStrategies.reduceValuesInTandem(
                 gen, tree: tree, property: counted, sequence: sequence, siblingGroups: siblingGroups,
-                rejectCache: &rejectCache, probeBudget: probeBudget, bindIndex: bindIndex
+                rejectCache: &rejectCache, probeBudget: probeBudget,
+                onBudgetExhausted: onBudgetExhausted,
+                bindIndex: context.bindIndex
             )
         }) else {
             return nil
@@ -37,8 +40,9 @@ struct ReduceInTandemTactic: CrossStageShrinkTactic {
             strategySequence: newSequence,
             strategyOutput: output,
             gen: gen,
+            originalSequence: sequence,
             originalTree: tree,
-            bindIndex: bindIndex,
+            context: context,
             property: property,
             evaluations: counter.count,
         )

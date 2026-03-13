@@ -18,7 +18,7 @@ struct SpeculativeDeleteTactic: ShrinkTactic {
         sequence: ChoiceSequence,
         tree: ChoiceTree,
         targetSpans: [ChoiceSpan],
-        bindIndex: BindSpanIndex?,
+        context: TacticContext,
         property: (Output) -> Bool,
         rejectCache: inout ReducerCache,
     ) throws -> ShrinkResult<Output>? {
@@ -30,7 +30,7 @@ struct SpeculativeDeleteTactic: ShrinkTactic {
         guard let (newSequence, output) = try counter.wrap(property, body: { counted in
             try ReducerStrategies.speculativeDeleteAndRepair(
                 gen, tree: tree, property: counted, sequence: sequence, spans: deletableSpans,
-                rejectCache: &rejectCache, bindIndex: bindIndex
+                rejectCache: &rejectCache, bindIndex: context.bindIndex
             )
         }) else {
             return nil
@@ -39,8 +39,9 @@ struct SpeculativeDeleteTactic: ShrinkTactic {
             strategySequence: newSequence,
             strategyOutput: output,
             gen: gen,
+            originalSequence: sequence,
             originalTree: tree,
-            bindIndex: bindIndex,
+            context: context,
             property: property,
             evaluations: counter.count,
         )

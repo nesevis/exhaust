@@ -120,15 +120,10 @@ public extension Interpreters {
         let hasBind = tree.containsBind
         var bindSpanIndex: BindSpanIndex? = hasBind ? BindSpanIndex(from: currentSequence) : nil
         var recentSequences = [currentSequence]
+        var bestSequence = currentSequence
+        var bestOutput = currentOutput
         var loops = 0
-
-        // Build tactic lattices
-        let branchTactics = KleisliReducer.buildBranchTactics()
-        let containerLattice = KleisliReducer.buildContainerLattice()
-        let numericLattice = KleisliReducer.buildNumericLattice()
-        let floatLattice = KleisliReducer.buildFloatLattice()
-        let orderingTactics = KleisliReducer.buildOrderingTactics()
-        let crossStageTactics = KleisliReducer.buildCrossStageTactics(config: config)
+        var fallbackTree: ChoiceTree? = hasBind ? currentTree : nil
 
         let budgetLogger: ((String) -> Void)? = isInstrumented ? { message in
             ExhaustLog.notice(
@@ -137,9 +132,22 @@ public extension Interpreters {
                 message,
             )
         } : nil
-        _ = budgetLogger // suppress unused warning until Phase 3+
+
+        // Build tactic lattices
+        let branchTactics = KleisliReducer.buildBranchTactics()
+        let containerLattice = KleisliReducer.buildContainerLattice(config: config, budgetLogger: budgetLogger)
+        let numericLattice = KleisliReducer.buildNumericLattice()
+        let floatLattice = KleisliReducer.buildFloatLattice()
+        let orderingTactics = KleisliReducer.buildOrderingTactics()
+        let crossStageTactics = KleisliReducer.buildCrossStageTactics(config: config, budgetLogger: budgetLogger)
 
         // Helper: accept a successful tactic result and update all mutable state.
+        //
+        // For non-bind generators, also tracks the global best (shortlex-smallest)
+        // sequence seen. For bind generators, full-sequence shortlex comparison is
+        // meaningless because bound values are re-derived from inner values — a
+        // shortlex-smaller sequence can produce a worse output. Instead, the current
+        // state is always considered the best (tactics are monotonic within a cycle).
         func accept(
             _ result: ShrinkResult<Output>,
             _ sequence: inout ChoiceSequence,
@@ -153,7 +161,19 @@ public extension Interpreters {
             tree = result.tree
             output = result.output
             cache.invalidate()
-            if hasBind { bindIdx = BindSpanIndex(from: sequence) }
+            if hasBind {
+                bindIdx = BindSpanIndex(from: sequence)
+                fallbackTree = tree
+                // For bind generators, always update best to current — shortlex
+                // on the full sequence doesn't capture output quality.
+                bestSequence = sequence
+                bestOutput = output
+            } else {
+                if sequence.shortLexPrecedes(bestSequence) {
+                    bestSequence = sequence
+                    bestOutput = output
+                }
+            }
         }
 
         // Helper: log a tactic success.
@@ -189,12 +209,13 @@ public extension Interpreters {
             // ── Phase 1: Global structural tactics (branch manipulation) ──
             // These can change generator/tree shape at any depth, so they run
             // once per cycle, not per-depth.
+            let globalContext = TacticContext(bindIndex: bindSpanIndex, depth: -1, fallbackTree: fallbackTree)
             for branchTactic in branchTactics {
                 if let result = try branchTactic.apply(
                     gen: gen,
                     sequence: currentSequence,
                     tree: currentTree,
-                    bindIndex: bindSpanIndex,
+                    context: globalContext,
                     property: property,
                     rejectCache: &rejectCache,
                 ) {
@@ -207,7 +228,9 @@ public extension Interpreters {
             // ── Phase 2: Per-coordinate descent ──
             // After any tactic succeeds, spans are stale — break out and let the
             // outer cycle restart with fresh span extraction.
-            depthLoop: for depth in 0 ... maxBindDepth {
+            depthLoop: for depth in stride(from: maxBindDepth, through: 0, by: -1) {
+                let depthContext = TacticContext(bindIndex: bindSpanIndex, depth: depth, fallbackTree: fallbackTree)
+
                 // Filter spans to this bind depth
                 let allValueSpans = spanCache.getAllValueSpans(from: currentSequence)
                 let depthValueSpans: [ChoiceSpan]
@@ -222,32 +245,64 @@ public extension Interpreters {
                     return v.choice.tag == .double || v.choice.tag == .float
                 }
 
-                let containerSpans = spanCache.getContainerSpans(from: currentSequence)
-                let depthContainerSpans: [ChoiceSpan]
-                if let bi = bindSpanIndex {
-                    depthContainerSpans = containerSpans.filter { bi.bindDepth(at: $0.range.lowerBound) == depth }
-                } else {
-                    depthContainerSpans = containerSpans
-                }
-
                 let siblingGroups = spanCache.getSiblingGroups(from: currentSequence)
 
-                // Phase 2a: Deletion tactics (containers at this depth)
+                // Phase 2a: Deletion tactics with span routing
                 var containerTraversal = containerLattice.orderedTraversal()
-                while let tactic = containerTraversal.next() {
-                    guard depthContainerSpans.isEmpty == false else { continue }
-                    if let result = try tactic.apply(
+                while let entry = containerTraversal.next() {
+                    // Route the right spans to the right tactic based on span category
+                    let targetSpans: [ChoiceSpan]
+                    switch entry.spanCategory {
+                    case .containerSpans:
+                        let containerSpans = spanCache.getContainerSpans(from: currentSequence)
+                        if let bi = bindSpanIndex {
+                            targetSpans = containerSpans.filter { bi.bindDepth(at: $0.range.lowerBound) == depth }
+                        } else {
+                            targetSpans = containerSpans
+                        }
+                    case .sequenceElements:
+                        let seqElementSpans = spanCache.getSequenceElementSpans(from: currentSequence)
+                        if let bi = bindSpanIndex {
+                            targetSpans = seqElementSpans.filter { bi.bindDepth(at: $0.range.lowerBound) == depth }
+                        } else {
+                            targetSpans = seqElementSpans
+                        }
+                    case .sequenceBoundaries:
+                        let seqBoundarySpans = spanCache.getSequenceBoundarySpans(from: currentSequence)
+                        if let bi = bindSpanIndex {
+                            targetSpans = seqBoundarySpans.filter { bi.bindDepth(at: $0.range.lowerBound) == depth }
+                        } else {
+                            targetSpans = seqBoundarySpans
+                        }
+                    case .freeStandingValues:
+                        let freeValueSpans = spanCache.getFreeStandingValueSpans(from: currentSequence)
+                        if let bi = bindSpanIndex {
+                            targetSpans = freeValueSpans.filter { bi.bindDepth(at: $0.range.lowerBound) == depth }
+                        } else {
+                            targetSpans = freeValueSpans
+                        }
+                    case .siblingGroups, .mixed:
+                        let containerSpans = spanCache.getContainerSpans(from: currentSequence)
+                        if let bi = bindSpanIndex {
+                            targetSpans = containerSpans.filter { bi.bindDepth(at: $0.range.lowerBound) == depth }
+                        } else {
+                            targetSpans = containerSpans
+                        }
+                    }
+
+                    guard targetSpans.isEmpty == false else { continue }
+                    if let result = try entry.tactic.apply(
                         gen: gen,
                         sequence: currentSequence,
                         tree: currentTree,
-                        targetSpans: depthContainerSpans,
-                        bindIndex: bindSpanIndex,
+                        targetSpans: targetSpans,
+                        context: depthContext,
                         property: property,
                         rejectCache: &rejectCache,
                     ) {
                         accept(result, &currentSequence, &currentTree, &currentOutput, &spanCache, hasBind, &bindSpanIndex)
                         improved = true
-                        if isInstrumented { logTactic(tactic.name, depth: depth, evaluations: result.evaluations) }
+                        if isInstrumented { logTactic(entry.tactic.name, depth: depth, evaluations: result.evaluations) }
                         break depthLoop
                     }
                 }
@@ -261,7 +316,7 @@ public extension Interpreters {
                         sequence: currentSequence,
                         tree: currentTree,
                         targetSpans: depthValueSpans,
-                        bindIndex: bindSpanIndex,
+                        context: depthContext,
                         property: property,
                         rejectCache: &rejectCache,
                     ) {
@@ -281,7 +336,7 @@ public extension Interpreters {
                         sequence: currentSequence,
                         tree: currentTree,
                         targetSpans: depthFloatSpans,
-                        bindIndex: bindSpanIndex,
+                        context: depthContext,
                         property: property,
                         rejectCache: &rejectCache,
                     ) {
@@ -300,7 +355,7 @@ public extension Interpreters {
                         sequence: currentSequence,
                         tree: currentTree,
                         siblingGroups: siblingGroups,
-                        bindIndex: bindSpanIndex,
+                        context: depthContext,
                         property: property,
                         rejectCache: &rejectCache,
                     ) {
@@ -313,23 +368,28 @@ public extension Interpreters {
             } // End per-depth loop
 
             // ── Phase 3: Cross-stage tactics ──
-            let allValueSpans = spanCache.getAllValueSpans(from: currentSequence)
-            let siblingGroups = spanCache.getSiblingGroups(from: currentSequence)
-            for tactic in crossStageTactics {
-                if let result = try tactic.apply(
-                    gen: gen,
-                    sequence: currentSequence,
-                    tree: currentTree,
-                    siblingGroups: siblingGroups,
-                    allValueSpans: allValueSpans,
-                    bindIndex: bindSpanIndex,
-                    property: property,
-                    rejectCache: &rejectCache,
-                ) {
-                    accept(result, &currentSequence, &currentTree, &currentOutput, &spanCache, hasBind, &bindSpanIndex)
-                    improved = true
-                    if isInstrumented { logTactic(tactic.name, depth: -1) }
-                    break // restart cycle with fresh spans
+            // Only run when depth-level tactics made no progress, to prevent
+            // ping-pong between depth-0 and cross-stage tactics.
+            if improved == false {
+                let crossStageContext = TacticContext(bindIndex: bindSpanIndex, depth: -1, fallbackTree: fallbackTree)
+                let allValueSpans = spanCache.getAllValueSpans(from: currentSequence)
+                let siblingGroups = spanCache.getSiblingGroups(from: currentSequence)
+                for tactic in crossStageTactics {
+                    if let result = try tactic.apply(
+                        gen: gen,
+                        sequence: currentSequence,
+                        tree: currentTree,
+                        siblingGroups: siblingGroups,
+                        allValueSpans: allValueSpans,
+                        context: crossStageContext,
+                        property: property,
+                        rejectCache: &rejectCache,
+                    ) {
+                        accept(result, &currentSequence, &currentTree, &currentOutput, &spanCache, hasBind, &bindSpanIndex)
+                        improved = true
+                        if isInstrumented { logTactic(tactic.name, depth: -1) }
+                        break // restart cycle with fresh spans
+                    }
                 }
             }
 
@@ -361,7 +421,7 @@ public extension Interpreters {
             if hasBind {
                 let seed = currentSequence.zobristHash
                 if case let .success(value, seq, newTree) =
-                    GuidedMaterializer.materialize(gen, prefix: currentSequence, seed: seed, fallbackTree: currentTree),
+                    GuidedMaterializer.materialize(gen, prefix: currentSequence, seed: seed, fallbackTree: fallbackTree ?? currentTree),
                    property(value) == false
                 {
                     // Merge shortlex-smaller bound entries from old sequence
@@ -400,6 +460,12 @@ public extension Interpreters {
                         bindSpanIndex = BindSpanIndex(from: currentSequence)
                         spanCache.invalidate()
                         rejectCache = ReducerCache()
+                        // For bind generators, always update best (shortlex on full
+                        // sequence is unreliable). For non-bind, use shortlex guard.
+                        if hasBind || currentSequence.shortLexPrecedes(bestSequence) {
+                            bestSequence = currentSequence
+                            bestOutput = currentOutput
+                        }
                         continue
                     }
                 }
@@ -418,7 +484,7 @@ public extension Interpreters {
             )
         }
 
-        return (currentSequence, currentOutput)
+        return (bestSequence, bestOutput)
     }
 }
 
@@ -427,11 +493,17 @@ public extension Interpreters {
 private struct KleisliSpanCache {
     private var allValueSpans: [ChoiceSpan]?
     private var containerSpans: [ChoiceSpan]?
+    private var sequenceElementSpans: [ChoiceSpan]?
+    private var sequenceBoundarySpans: [ChoiceSpan]?
+    private var freeStandingValueSpans: [ChoiceSpan]?
     private var siblingGroups: [SiblingGroup]?
 
     mutating func invalidate() {
         allValueSpans = nil
         containerSpans = nil
+        sequenceElementSpans = nil
+        sequenceBoundarySpans = nil
+        freeStandingValueSpans = nil
         siblingGroups = nil
     }
 
@@ -446,6 +518,27 @@ private struct KleisliSpanCache {
         if let cached = containerSpans { return cached }
         let spans = ChoiceSequence.extractContainerSpans(from: sequence)
         containerSpans = spans
+        return spans
+    }
+
+    mutating func getSequenceElementSpans(from sequence: ChoiceSequence) -> [ChoiceSpan] {
+        if let cached = sequenceElementSpans { return cached }
+        let spans = ChoiceSequence.extractSequenceElementSpans(from: sequence)
+        sequenceElementSpans = spans
+        return spans
+    }
+
+    mutating func getSequenceBoundarySpans(from sequence: ChoiceSequence) -> [ChoiceSpan] {
+        if let cached = sequenceBoundarySpans { return cached }
+        let spans = ChoiceSequence.extractSequenceBoundarySpans(from: sequence)
+        sequenceBoundarySpans = spans
+        return spans
+    }
+
+    mutating func getFreeStandingValueSpans(from sequence: ChoiceSequence) -> [ChoiceSpan] {
+        if let cached = freeStandingValueSpans { return cached }
+        let spans = ChoiceSequence.extractFreeStandingValueSpans(from: sequence)
+        freeStandingValueSpans = spans
         return spans
     }
 
@@ -473,14 +566,51 @@ enum KleisliReducer {
 
     // MARK: Container / Deletion Lattice
 
+    /// 6-node deletion lattice with span-category routing:
     /// ```
-    /// DeleteSpans → DeleteAlignedWindows → { ReorderSiblings | SpeculativeDeleteAndRepair }
+    /// [0] DeleteContainerSpans     → dominates [4, 5]
+    /// [1] DeleteSequenceElements   → dominates [3, 5]
+    /// [2] DeleteSequenceBoundaries → dominates [5]
+    /// [3] DeleteFreeStandingValues → dominates [5]
+    /// [4] DeleteAlignedWindows     → dominates [5]
+    /// [5] SpeculativeDeleteAndRepair → dominates []
     /// ```
-    static func buildContainerLattice() -> TacticLattice<any ShrinkTactic> {
+    static func buildContainerLattice(
+        config: Interpreters.KleisliReducerConfiguration,
+        budgetLogger: ((String) -> Void)?,
+    ) -> TacticLattice<DeletionTacticEntry> {
         TacticLattice(nodes: [
-            .init(tactic: DeleteSpansTactic(), dominates: [1, 2]),
-            .init(tactic: DeleteAlignedWindowsTactic(), dominates: []),
-            .init(tactic: SpeculativeDeleteTactic(), dominates: []),
+            .init(
+                tactic: DeletionTacticEntry(tactic: DeleteContainerSpansTactic(), spanCategory: .containerSpans),
+                dominates: [4, 5]
+            ),
+            .init(
+                tactic: DeletionTacticEntry(tactic: DeleteSequenceElementsTactic(), spanCategory: .sequenceElements),
+                dominates: [3, 5]
+            ),
+            .init(
+                tactic: DeletionTacticEntry(tactic: DeleteSequenceBoundariesTactic(), spanCategory: .sequenceBoundaries),
+                dominates: [5]
+            ),
+            .init(
+                tactic: DeletionTacticEntry(tactic: DeleteFreeStandingValuesTactic(), spanCategory: .freeStandingValues),
+                dominates: [5]
+            ),
+            .init(
+                tactic: DeletionTacticEntry(
+                    tactic: DeleteAlignedWindowsTactic(
+                        probeBudget: config.probeBudgets.deleteAlignedSiblingWindows,
+                        subsetBeamSearchTuning: config.alignedDeletionBeamSearchTuning,
+                        onBudgetExhausted: budgetLogger
+                    ),
+                    spanCategory: .mixed
+                ),
+                dominates: [5]
+            ),
+            .init(
+                tactic: DeletionTacticEntry(tactic: SpeculativeDeleteTactic(), spanCategory: .mixed),
+                dominates: []
+            ),
         ])
     }
 
@@ -518,10 +648,19 @@ enum KleisliReducer {
 
     // MARK: Cross-Stage Tactics
 
-    static func buildCrossStageTactics(config: Interpreters.KleisliReducerConfiguration) -> [any CrossStageShrinkTactic] {
+    static func buildCrossStageTactics(
+        config: Interpreters.KleisliReducerConfiguration,
+        budgetLogger: ((String) -> Void)?,
+    ) -> [any CrossStageShrinkTactic] {
         [
-            ReduceInTandemTactic(probeBudget: config.probeBudgets.reduceValuesInTandem),
-            RedistributeTactic(probeBudget: config.probeBudgets.redistributeNumericPairs),
+            ReduceInTandemTactic(
+                probeBudget: config.probeBudgets.reduceValuesInTandem,
+                onBudgetExhausted: budgetLogger
+            ),
+            RedistributeTactic(
+                probeBudget: config.probeBudgets.redistributeNumericPairs,
+                onBudgetExhausted: budgetLogger
+            ),
         ]
     }
 }

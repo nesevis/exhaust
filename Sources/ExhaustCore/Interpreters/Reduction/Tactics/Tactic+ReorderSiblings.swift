@@ -18,7 +18,7 @@ struct ReorderSiblingsTactic: SiblingGroupShrinkTactic {
         sequence: ChoiceSequence,
         tree: ChoiceTree,
         siblingGroups: [SiblingGroup],
-        bindIndex: BindSpanIndex?,
+        context: TacticContext,
         property: (Output) -> Bool,
         rejectCache: inout ReducerCache,
     ) throws -> ShrinkResult<Output>? {
@@ -26,7 +26,7 @@ struct ReorderSiblingsTactic: SiblingGroupShrinkTactic {
         guard let (newSequence, output) = try counter.wrap(property, body: { counted in
             try ReducerStrategies.reorderSiblings(
                 gen, tree: tree, property: counted, sequence: sequence, siblingGroups: siblingGroups,
-                rejectCache: &rejectCache, bindIndex: bindIndex
+                rejectCache: &rejectCache, bindIndex: context.bindIndex
             )
         }) else {
             return nil
@@ -35,8 +35,9 @@ struct ReorderSiblingsTactic: SiblingGroupShrinkTactic {
             strategySequence: newSequence,
             strategyOutput: output,
             gen: gen,
+            originalSequence: sequence,
             originalTree: tree,
-            bindIndex: bindIndex,
+            context: context,
             property: property,
             evaluations: counter.count,
         )

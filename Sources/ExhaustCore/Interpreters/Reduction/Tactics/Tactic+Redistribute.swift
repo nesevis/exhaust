@@ -12,6 +12,7 @@
 struct RedistributeTactic: CrossStageShrinkTactic {
     let name = "redistribute"
     let probeBudget: Int
+    var onBudgetExhausted: ((String) -> Void)?
 
     func apply<Output>(
         gen: ReflectiveGenerator<Output>,
@@ -19,7 +20,7 @@ struct RedistributeTactic: CrossStageShrinkTactic {
         tree: ChoiceTree,
         siblingGroups: [SiblingGroup],
         allValueSpans: [ChoiceSpan],
-        bindIndex: BindSpanIndex?,
+        context: TacticContext,
         property: (Output) -> Bool,
         rejectCache: inout ReducerCache,
     ) throws -> ShrinkResult<Output>? {
@@ -29,7 +30,10 @@ struct RedistributeTactic: CrossStageShrinkTactic {
         guard let (newSequence, output) = try counter.wrap(property, body: { counted in
             try ReducerStrategies.redistributeNumericPairs(
                 gen, tree: tree, property: counted, sequence: sequence,
-                rejectCache: &rejectCache, probeBudget: probeBudget, bindIndex: bindIndex
+                rejectCache: &rejectCache, probeBudget: probeBudget,
+                onBudgetExhausted: onBudgetExhausted,
+                bindIndex: context.bindIndex,
+                maximizeBoundValues: true
             )
         }) else {
             return nil
@@ -38,10 +42,12 @@ struct RedistributeTactic: CrossStageShrinkTactic {
             strategySequence: newSequence,
             strategyOutput: output,
             gen: gen,
+            originalSequence: sequence,
             originalTree: tree,
-            bindIndex: bindIndex,
+            context: context,
             property: property,
             evaluations: counter.count,
+            maximizeBoundValues: true,
         )
     }
 }

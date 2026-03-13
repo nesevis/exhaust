@@ -96,11 +96,12 @@ struct Bound5ShrinkingChallenge {
             d: [-32635, 18394, -23954, 13750, 27692, 25639, 23372, -27650, 18759, 17794],
             e: [-6525, 2724, -30958, 28797, -2409, -1095, 2335, -14856]
         )
-        
+        ExhaustLog.setConfiguration(.init(isEnabled: true, minimumLevel: .info, categoryMinimumLevels: [.reducer: .debug], format: .human))
         let output = #exhaust(
             Self.gen,
             .suppressIssueReporting,
             .reflecting(value),
+//            .useKleisliReducer,
             property: Self.property
         )
 

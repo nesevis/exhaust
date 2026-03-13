@@ -18,7 +18,7 @@ struct BinarySearchToZeroTactic: ShrinkTactic {
         sequence: ChoiceSequence,
         tree: ChoiceTree,
         targetSpans: [ChoiceSpan],
-        bindIndex: BindSpanIndex?,
+        context: TacticContext,
         property: (Output) -> Bool,
         rejectCache: inout ReducerCache,
     ) throws -> ShrinkResult<Output>? {
@@ -27,7 +27,7 @@ struct BinarySearchToZeroTactic: ShrinkTactic {
             try ReducerStrategies.simplifyValues(
                 gen, tree: tree, property: counted,
                 sequence: sequence, valueSpans: targetSpans,
-                rejectCache: &rejectCache, bindIndex: bindIndex
+                rejectCache: &rejectCache, bindIndex: context.bindIndex
             )
         }) else {
             return nil
@@ -36,8 +36,9 @@ struct BinarySearchToZeroTactic: ShrinkTactic {
             strategySequence: newSequence,
             strategyOutput: output,
             gen: gen,
+            originalSequence: sequence,
             originalTree: tree,
-            bindIndex: bindIndex,
+            context: context,
             property: property,
             evaluations: counter.count,
         )

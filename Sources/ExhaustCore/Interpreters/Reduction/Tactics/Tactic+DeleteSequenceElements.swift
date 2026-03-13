@@ -1,20 +1,17 @@
 //
-//  Tactic+DeleteSpans.swift
+//  Tactic+DeleteSequenceElements.swift
 //  Exhaust
 //
 //  Created by Chris Kolbu on 13/3/2026.
 //
 
-/// Adaptively deletes container spans (sequence elements, boundaries).
-///
-/// Delegates to ``ReducerStrategies.adaptiveDeleteSpans`` and re-derives via
-/// ``TacticReDerivation`` for bind-consistent output.
-/// Adaptively deletes container spans (groups, sequences, binds).
+/// Adaptively deletes sequence element spans (groups that are direct children of sequences).
 ///
 /// Purpose-built deletion tactic: proposes mutations inline, evaluates via
 /// ``TacticEvaluation`` for depth-aware single-pass materialization.
-struct DeleteContainerSpansTactic: ShrinkTactic {
-    let name = "deleteContainerSpans"
+/// Strictness is `.relaxed` because removal shifts entries out of alignment with tree positions.
+struct DeleteSequenceElementsTactic: ShrinkTactic {
+    let name = "deleteSequenceElements"
     let applicability = TacticApplicability.containers
 
     func apply<Output>(
@@ -58,7 +55,7 @@ struct DeleteContainerSpansTactic: ShrinkTactic {
                     gen: gen,
                     tree: tree,
                     context: context,
-                    strictness: .normal,
+                    strictness: .relaxed,
                     originalSequence: sequence,
                     property: property
                 ) {

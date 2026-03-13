@@ -28,11 +28,13 @@ public enum GuidedMaterializer {
         seed: UInt64,
         abortOnFilter: Bool = false,
         fallbackTree: ChoiceTree? = nil,
+        maximizeBoundValues: Bool = false,
     ) -> Result<Output> {
         var context = GuidedContext(
             cursor: GuidedCursor(from: prefix),
             prng: Xoshiro256(seed: seed),
             abortOnFilter: abortOnFilter,
+            maximizeBoundValues: maximizeBoundValues,
         )
         do {
             guard let (value, tree) = try generateRecursive(gen, with: (), context: &context, fallbackTree: fallbackTree) else {
@@ -54,14 +56,57 @@ public enum GuidedMaterializer {
 // MARK: - Recursive Engine
 
 private extension GuidedMaterializer {
+    /// Describes the callee tree shape produced by an operation, used by ``decomposeFallback``
+    /// to distinguish a data group (e.g. zip's children) from a continuation-wrapped tree.
+    enum CalleeTreeKind {
+        /// Operations whose callee tree is never a `.group`: chooseBits, pick, bind, sequence, etc.
+        /// A 2-child `.group` unambiguously indicates `[callee, continuation]` wrapping.
+        case nonGroup
+        /// Zip: callee tree is `.group(children)` with a known child count.
+        /// Disambiguates by checking whether the first child is itself a `.group` matching
+        /// the expected child count (indicating continuation wrapping).
+        case group(childCount: Int)
+        /// Contramap / map: tree-transparent — no callee tree node of their own.
+        /// The full fallback belongs to the inner generator.
+        case transparent
+    }
+
     /// Split a fallback tree into the callee portion and continuation portion.
-    /// ChoiceTree uses `.group([callee, continuation])` when a continuation exists.
-    static func decomposeFallback(_ tree: ChoiceTree?) -> (callee: ChoiceTree?, continuation: ChoiceTree?) {
+    ///
+    /// `runContinuation` builds trees as:
+    /// - Pure continuation: returns `calleeTree` (no wrapping)
+    /// - Non-pure continuation: returns `.group([calleeTree, continuationTree])`
+    ///
+    /// The `calleeKind` parameter tells us the callee tree shape so we can avoid
+    /// misinterpreting a data group (e.g. zip of 2 generators) as continuation wrapping.
+    static func decomposeFallback(
+        _ tree: ChoiceTree?,
+        calleeKind: CalleeTreeKind
+    ) -> (callee: ChoiceTree?, continuation: ChoiceTree?) {
         guard let tree else { return (nil, nil) }
-        switch tree {
-        case let .group(children, _) where children.count == 2:
-            return (children[0], children[1])
-        default:
+        switch calleeKind {
+        case .transparent:
+            // Transparent operations don't produce a tree node.
+            // The full fallback belongs to the inner generator.
+            return (tree, nil)
+
+        case .nonGroup:
+            // Callee is never a group, so a 2-child group is always continuation wrapping.
+            if case let .group(children, _) = tree, children.count == 2 {
+                return (children[0], children[1])
+            }
+            return (tree, nil)
+
+        case let .group(childCount):
+            // Zip's callee tree is .group(children) with children.count == childCount.
+            // Continuation wrapping would be .group([zip_callee_group, cont]).
+            if case let .group(children, _) = tree, children.count == 2,
+               case let .group(inner, _) = children[0], inner.count == childCount
+            {
+                // First child is a group matching the expected callee shape → continuation wrapped.
+                return (children[0], children[1])
+            }
+            // Otherwise the tree IS the callee (pure continuation, or no wrapping).
             return (tree, nil)
         }
     }
@@ -77,7 +122,21 @@ private extension GuidedMaterializer {
             return (value, .emptyJust)
 
         case let .impure(operation, continuation):
-            let (calleeFallback, continuationFallback) = decomposeFallback(fallbackTree)
+            let calleeKind: CalleeTreeKind
+            switch operation {
+            case .contramap:
+                calleeKind = .transparent
+            case let .transform(kind, _):
+                switch kind {
+                case .map: calleeKind = .transparent
+                case .bind: calleeKind = .nonGroup
+                }
+            case let .zip(generators, _):
+                calleeKind = .group(childCount: generators.count)
+            default:
+                calleeKind = .nonGroup
+            }
+            let (calleeFallback, continuationFallback) = decomposeFallback(fallbackTree, calleeKind: calleeKind)
 
             switch operation {
             case let .contramap(_, nextGen):
@@ -367,6 +426,9 @@ private extension GuidedMaterializer {
             // Clamp the prefix value's bit pattern to the valid range
             let bp = prefixValue.choice.bitPattern64
             randomBits = Swift.min(Swift.max(bp, min), max)
+        } else if context.maximizeBoundValues, context.cursor.isSuspended {
+            // Maximize: use upper bound for bind's bound values during redistribute
+            randomBits = max
         } else if let calleeFallback, case let .choice(value, _) = calleeFallback {
             // Fallback: use tree value, clamped to valid range
             randomBits = Swift.min(Swift.max(value.bitPattern64, min), max)
@@ -426,8 +488,10 @@ private extension GuidedMaterializer {
 
         guard let selectedChoice else { return nil }
 
-        // Decompose branch choice tree into body and continuation fallbacks
-        let (branchBodyFallback, branchContFallback) = decomposeFallback(branchChoiceTree)
+        // Decompose branch choice tree into body and continuation fallbacks.
+        // The branch body generator's callee kind is unknown; .nonGroup is the
+        // conservative default (matches prior behaviour).
+        let (branchBodyFallback, branchContFallback) = decomposeFallback(branchChoiceTree, calleeKind: .nonGroup)
 
         // Execute only the selected branch (materializePicks: false)
         guard let (result, branchTree) = try generateRecursive(
@@ -784,5 +848,6 @@ private extension GuidedMaterializer {
         var size: UInt64 = GenerationContext.scaledSize(forRun: 0)
         var sizeOverride: UInt64?
         var abortOnFilter: Bool = false
+        var maximizeBoundValues: Bool = false
     }
 }

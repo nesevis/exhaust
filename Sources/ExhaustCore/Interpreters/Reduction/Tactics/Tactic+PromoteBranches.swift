@@ -17,12 +17,12 @@ struct PromoteBranchesTactic: BranchShrinkTactic {
         gen: ReflectiveGenerator<Output>,
         sequence: ChoiceSequence,
         tree: ChoiceTree,
-        bindIndex: BindSpanIndex?,
+        context: TacticContext,
         property: (Output) -> Bool,
         rejectCache: inout ReducerCache,
     ) throws -> ShrinkResult<Output>? {
         guard let (newTree, newSequence, output) = try ReducerStrategies.promoteBranches(
-            gen, tree: tree, property: property, sequence: sequence, rejectCache: &rejectCache, bindIndex: bindIndex
+            gen, tree: tree, property: property, sequence: sequence, rejectCache: &rejectCache, bindIndex: context.bindIndex
         ) else {
             return nil
         }
