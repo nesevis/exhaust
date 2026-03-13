@@ -97,3 +97,19 @@ public protocol SiblingGroupShrinkTactic {
         rejectCache: inout ReducerCache,
     ) throws -> ShrinkResult<Output>?
 }
+
+/// A tactic that operates across all bind depths (tandem, redistribute).
+protocol CrossStageShrinkTactic {
+    var name: String { get }
+
+    func apply<Output>(
+        gen: ReflectiveGenerator<Output>,
+        sequence: ChoiceSequence,
+        tree: ChoiceTree,
+        siblingGroups: [SiblingGroup],
+        allValueSpans: [ChoiceSpan],
+        bindIndex: BindSpanIndex?,
+        property: (Output) -> Bool,
+        rejectCache: inout ReducerCache,
+    ) throws -> ShrinkResult<Output>?
+}

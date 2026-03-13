@@ -192,6 +192,57 @@ struct KleisliReducerIntegrationTests {
             #expect(shrunk == 51)
         }
     }
+
+    @Test("Bind-dependent shrink output still fails the property")
+    func bindShrinkOutputFailsProperty() throws {
+        // A bind generator where bound content depends on the inner value:
+        // inner picks a length, bound generates that many elements.
+        let gen = #gen(.int(in: 1 ... 5))
+            .bound(
+                forward: { n in Gen.int(in: 0 ... 50).array(length: UInt64(n)) },
+                backward: { (arr: [Int]) in arr.count }
+            )
+
+        let property: ([Int]) -> Bool = { $0.count < 3 || $0.allSatisfy({ $0 <= 10 }) }
+
+        var iterator = ValueAndChoiceTreeInterpreter(gen, materializePicks: true, seed: 99)
+        var failingTree: ChoiceTree?
+        while let (value, tree) = try iterator.next() {
+            if property(value) == false {
+                failingTree = tree
+                break
+            }
+        }
+
+        let tree = try #require(failingTree)
+        let (shrunkSequence, shrunkOutput) = try #require(
+            try Interpreters.kleisliReduce(gen: gen, tree: tree, config: .fast, property: property)
+        )
+
+        // The shrunk output must still violate the property
+        #expect(property(shrunkOutput) == false)
+
+        // The shrunk sequence must be valid (materializable)
+        let replayedOutput = try #require(
+            try Interpreters.materialize(gen, with: tree, using: shrunkSequence)
+        )
+        // Replayed output must also violate the property
+        #expect(property(replayedOutput) == false)
+    }
+
+    @Test("EvaluationCounter counts property invocations")
+    func evaluationCounting() {
+        let counter = EvaluationCounter()
+        let result = counter.wrap({ (x: Int) in x > 5 }, body: { counted in
+            let a = counted(3)
+            let b = counted(10)
+            let c = counted(7)
+            return (a, b, c)
+        })
+
+        #expect(result == (false, true, true))
+        #expect(counter.count == 3)
+    }
 }
 
 // MARK: - BindSpanIndex.spansByDepth Tests

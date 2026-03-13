@@ -31,7 +31,7 @@ struct CalculatorShrinkingChallenge {
         let result = #exhaust(
             gen,
             .suppressIssueReporting,
-            .useKleisliReducer,
+//            .useKleisliReducer,
             .replay(1117838118804311299)
         ) { expr in
             guard Self.containsLiteralDivisionByZero(expr) == false else {
