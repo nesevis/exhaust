@@ -785,7 +785,7 @@ for each cycle:
             depthProgress = false
             let valueTargets = extractTargets(sequence, depth, bindIndex)  // .spans
             let siblingTargets = extractSiblingTargets(sequence, depth, bindIndex)  // .siblingGroups
-            let context = DecoderContext(depth, bindIndex, fallbackTree, .normal)
+            let context = DecoderContext(.specific(depth), bindIndex, fallbackTree, .normal)
             let decoder = SequenceDecoder.for( context)  // depth > 0, .normal → Direct
             depthProgress = runValueMinimization(lattice, valueTargets, decoder, ...) || depthProgress
             depthProgress = runReordering(lattice, siblingTargets, decoder, ...) || depthProgress
@@ -801,7 +801,7 @@ for each cycle:
             // accept(structureChanged: true) rebuilds bindIndex + lattice,
             // so targets must be re-extracted from the current state.
             let targets = extractDeletionTargets(sequence, depth, bindIndex)
-            let context = DecoderContext(depth, bindIndex, fallbackTree, .relaxed)
+            let context = DecoderContext(.specific(depth), bindIndex, fallbackTree, .relaxed)
             let decoder = SequenceDecoder.for( context)  // .relaxed → Guided
             // ... encode, decode, accept(result, structureChanged: true)
 
@@ -822,7 +822,7 @@ for each cycle:
             // For bind generators, accept(structureChanged: true) rebuilds
             // bindIndex, so targets must be re-extracted from current state.
             let targets = extractTargets(sequence, 0, bindIndex)
-            let context = DecoderContext(0, bindIndex, fallbackTree, .normal)
+            let context = DecoderContext(.specific(0), bindIndex, fallbackTree, .normal)
             let decoder = SequenceDecoder.for( context)
             // With binds: needsBindReDerivation → .guided (.bounded)
             // Without binds: neither condition → .direct (.exact)
@@ -906,7 +906,7 @@ for each cycle:
         // Depth -1 (cross-stage): operates on whole sequence.
         // With binds: .crossStage (per-candidate inner-value check)
         // Without binds: .direct
-        let context = DecoderContext(-1, bindIndex, fallbackTree, .normal)
+        let context = DecoderContext(.global, bindIndex, fallbackTree, .normal)
         let decoder = SequenceDecoder.for( context)
         for encoder in redistributionEncoders:
             // ... encode, decode
@@ -1015,7 +1015,7 @@ The covariant sweep runs at depth 0 only, after the deletion sweep:
 
 - **Value minimization and reordering only** (deletion at depth 0 is handled by the deletion sweep).
 
-- **Decoder:** With binds present: `.guided` with fallback tree containing the contravariant-improved bound values. Re-derivation uses tier-1 prefix values and tier-2 clamping to preserve those improvements where the new bound ranges permit. Grade: `(.bounded, w)`. Without binds: `.direct` — no re-derivation needed, no bound ranges to shift. Grade: `(.exact, w)`. `SequenceDecoder.for(_:)` handles the routing based on `DecoderContext(0, bindIndex, fallbackTree, .normal)`.
+- **Decoder:** With binds present: `.guided` with fallback tree containing the contravariant-improved bound values. Re-derivation uses tier-1 prefix values and tier-2 clamping to preserve those improvements where the new bound ranges permit. Grade: `(.bounded, w)`. Without binds: `.direct` — no re-derivation needed, no bound ranges to shift. Grade: `(.exact, w)`. `SequenceDecoder.for(_:)` handles the routing based on `DecoderContext(.specific(0), bindIndex, fallbackTree, .normal)`.
 
 - **On success:** Mark affected bind chains dirty. `BindSpanIndex.bindRegionForInnerIndex` identifies which bind region the mutated inner value feeds. All depths within that region's chain are dirty (bound ranges may have shifted at every nesting level). For generators with multiple independent bind chains, only the affected chain is dirtied — unaffected chains are skipped on the next contravariant sweep. For the common case (single bind chain), all bound depths are dirty and the next contravariant sweep is a full re-sweep. For deletion successes in the deletion sweep, all depths are dirty (span positions are invalidated globally).
 
