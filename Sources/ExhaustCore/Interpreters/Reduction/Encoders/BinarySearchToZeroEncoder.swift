@@ -93,9 +93,25 @@ public struct BinarySearchToZeroEncoder: AdaptiveEncoder {
             let seqIdx = spans[i].range.lowerBound
             guard let v = sequence[seqIdx].value else { i += 1; continue }
             let simplified = v.choice.semanticSimplest
-            guard simplified != v.choice else { i += 1; continue }
-            guard v.isRangeExplicit == false || simplified.fits(in: v.validRange) else { i += 1; continue }
-            let targetBP = simplified.bitPattern64
+            // Stale-range escape hatch (matches legacy reduceIntegralValues):
+            // when the value is within its recorded range, target the range
+            // minimum (safe for bind-constrained generators). When the value is
+            // OUTSIDE its recorded range (a prior pass pushed it past the stale
+            // boundary), target zero — the range is stale and the materializer
+            // will validate against the generator's fresh range.
+            let isWithinRecordedRange = v.isRangeExplicit && v.choice.fits(in: v.validRange)
+            let target: ChoiceValue
+            if isWithinRecordedRange {
+                if simplified.fits(in: v.validRange) {
+                    target = simplified
+                } else {
+                    target = ChoiceValue(v.choice.tag.makeConvertible(bitPattern64: v.validRange!.lowerBound), tag: v.choice.tag)
+                }
+            } else {
+                target = simplified
+            }
+            guard target != v.choice else { i += 1; continue }
+            let targetBP = target.bitPattern64
             let currentBP = v.choice.bitPattern64
             guard currentBP != targetBP else { i += 1; continue }
             let stepper: DirectionalStepper = if currentBP > targetBP {
