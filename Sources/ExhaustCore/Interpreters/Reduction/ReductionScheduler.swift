@@ -183,10 +183,23 @@ enum ReductionScheduler {
                 ) {
                     budget.recordMaterialization(accepted: true)
                     accept(result, structureChanged: structureChanged)
+                    if isInstrumented {
+                        ExhaustLog.debug(category: .reducer, event: "encoder_accepted", metadata: [
+                            "encoder": encoder.name, "probes": "\(probes)",
+                            "seq_len": "\(startSeqLen)→\(sequence.count)",
+                            "output": "\(output)",
+                        ])
+                    }
                     return true
                 }
                 budget.recordMaterialization(accepted: false)
                 cache.insert(candidate)
+            }
+            if isInstrumented, probes > 0 {
+                ExhaustLog.debug(category: .reducer, event: "encoder_exhausted", metadata: [
+                    "encoder": encoder.name, "probes": "\(probes)",
+                    "seq_len": "\(startSeqLen)",
+                ])
             }
             return false
         }
@@ -218,6 +231,13 @@ enum ReductionScheduler {
                     budget.recordMaterialization(accepted: false)
                     lastAccepted = false
                 }
+            }
+            if isInstrumented, probes > 0 {
+                ExhaustLog.debug(category: .reducer, event: anyAccepted ? "encoder_accepted" : "encoder_exhausted", metadata: [
+                    "encoder": encoder.name, "probes": "\(probes)", "accepted": "\(accepted)",
+                    "seq_len": "\(startSeqLen)→\(sequence.count)",
+                    "output": anyAccepted ? "\(output)" : "",
+                ])
             }
             return anyAccepted
         }
