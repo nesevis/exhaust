@@ -16,26 +16,11 @@ struct SequenceDecoderForTests {
         return BindSpanIndex(from: seq)
     }
 
-    // MARK: - .relaxed strictness without binds → .direct
-    // Tree-driven (.direct) handles deletion correctly for non-bind generators.
-    // Guided (prefix-driven) misaligns after deletion in grouped generators (zip of arrays).
-
-    @Test("Relaxed strictness at depth > 0 without binds produces direct decoder")
-    func relaxedStrictnessDeepDepthNoBind() {
-        let context = DecoderContext(
-            depth: .specific(2), bindIndex: nil,
-            fallbackTree: nil, strictness: .relaxed
-        )
-        let decoder = SequenceDecoder.for(context)
-        #expect(decoder.approximation == .exact)
-        guard case .direct = decoder else {
-            Issue.record("Expected .direct, got \(decoder)")
-            return
-        }
-    }
+    // MARK: - .relaxed strictness
 
     @Test("Relaxed strictness at depth 0 without binds produces direct decoder")
     func relaxedStrictnessDepth0NoBind() {
+        // Non-bind deletion uses .direct — tree re-derivation happens in accept().
         let context = DecoderContext(
             depth: .specific(0), bindIndex: nil,
             fallbackTree: nil, strictness: .relaxed
@@ -47,11 +32,10 @@ struct SequenceDecoderForTests {
         }
     }
 
-    @Test("Relaxed strictness at depth > 0 with binds produces guided decoder")
-    func relaxedStrictnessDeepDepthWithBinds() {
-        let bindIndex = Self.makeBoundBindIndex()
+    @Test("Relaxed strictness at depth > 0 produces guided decoder")
+    func relaxedStrictnessDeepDepth() {
         let context = DecoderContext(
-            depth: .specific(2), bindIndex: bindIndex,
+            depth: .specific(2), bindIndex: nil,
             fallbackTree: nil, strictness: .relaxed
         )
         let decoder = SequenceDecoder.for(context)

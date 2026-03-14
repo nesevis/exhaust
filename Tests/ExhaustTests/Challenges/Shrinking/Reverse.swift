@@ -20,7 +20,7 @@ struct ReverseShrinkingChallenge {
     func reverseFull() throws {
         let gen = #gen(.uint()).array(length: 1 ... 1000)
         
-        let output = #exhaust(gen, .suppressIssueReporting) { arr in
+        let output = #exhaust(gen, .useKleisliReducer, .suppressIssueReporting) { arr in
             arr.elementsEqual(arr.reversed())
         }
         
