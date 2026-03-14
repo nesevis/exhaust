@@ -74,7 +74,7 @@ struct DifferenceShrinkingChallenge {
     @Test("Difference must not be one")
     func differenceTest3() {
         let gen = #gen(.int(in: 1 ... 1000)).array(length: 2)
-
+        ExhaustLog.setConfiguration(.init(isEnabled: true, minimumLevel: .info, categoryMinimumLevels: [.reducer: .debug], format: .human))
         let output = #exhaust(
             gen,
             .suppressIssueReporting,

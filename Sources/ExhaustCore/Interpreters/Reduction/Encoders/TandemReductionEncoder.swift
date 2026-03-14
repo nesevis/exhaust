@@ -56,7 +56,7 @@ public struct TandemReductionEncoder: AdaptiveEncoder {
     private var plans: [WindowPlan] = []
     private var planIndex = 0
     private var probePhase = ProbePhase.directShot
-    private var stepper = BinarySearchStepper(lo: 0, hi: 0)
+    private var stepper = MaxBinarySearchStepper(lo: 0, hi: 0)
     private var lastDirectShotCandidate: WindowCandidate?
     private var lastBinaryCandidate: WindowCandidate?
 
@@ -158,7 +158,7 @@ public struct TandemReductionEncoder: AdaptiveEncoder {
         lastDirectShotCandidate = nil
 
         let plan = plans[planIndex]
-        stepper = BinarySearchStepper(lo: 0, hi: plan.distance)
+        stepper = MaxBinarySearchStepper(lo: 0, hi: plan.distance)
 
         guard let firstDelta = stepper.start() else {
             // Already converged (distance <= 0); move to next plan.
@@ -173,27 +173,31 @@ public struct TandemReductionEncoder: AdaptiveEncoder {
 
     /// Builds and returns a probe candidate for a given binary search delta.
     private mutating func emitBinaryProbe(delta: UInt64) -> ChoiceSequence? {
+        var currentDelta = delta
         let plan = plans[planIndex]
-        guard let candidate = makeTandemCandidate(
-            plan: plan,
-            current: sequence,
-            delta: delta
-        ) else {
-            // This delta produces no valid candidate; report as rejection.
-            // Advance the stepper immediately to find the next delta.
-            if let nextDelta = stepper.advance(lastAccepted: false) {
-                return emitBinaryProbe(delta: nextDelta)
+        // Loop instead of recursion: skip deltas where candidate construction fails
+        // without advancing the stepper (construction failure ≠ property rejection).
+        while true {
+            if let candidate = makeTandemCandidate(
+                plan: plan,
+                current: sequence,
+                delta: currentDelta
+            ) {
+                lastBinaryCandidate = candidate
+                return candidate.sequence
             }
-            // Stepper converged without a valid candidate.
-            applyBestAccepted()
-            planIndex += 1
-            probePhase = .directShot
-            lastBinaryCandidate = nil
-            return nextProbe(lastAccepted: false)
+            // This delta produced no valid candidate. Treat as rejection and try the
+            // next stepper value. The stepper converges in O(log n) steps.
+            guard let nextDelta = stepper.advance(lastAccepted: false) else {
+                // Stepper converged without a valid candidate.
+                applyBestAccepted()
+                planIndex += 1
+                probePhase = .directShot
+                lastBinaryCandidate = nil
+                return nextProbe(lastAccepted: false)
+            }
+            currentDelta = nextDelta
         }
-
-        lastBinaryCandidate = candidate
-        return candidate.sequence
     }
 
     /// Applies the best accepted delta from the stepper's convergence to the base sequence.

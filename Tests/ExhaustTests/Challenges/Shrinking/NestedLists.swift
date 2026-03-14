@@ -23,7 +23,6 @@ struct NestedListsShrinkingChallenge {
     @Test("Nested Lists")
     func nestedListsFull() throws {
         let gen = #gen(.uint().array().array())
-        ExhaustLog.setConfiguration(.init(isEnabled: true, minimumLevel: .info, categoryMinimumLevels: [.reducer: .debug], format: .human))
         
         let output = #exhaust(gen, .suppressIssueReporting, .useKleisliReducer, .replay(13580297670505979531)) { arr in
             arr.map(\.count).reduce(0, +) <= 10
