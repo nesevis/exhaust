@@ -25,6 +25,124 @@ public enum SequenceDecoder {
         }
     }
 
+    // MARK: - Decode
+
+    /// Materializes a candidate and checks feasibility against the property.
+    ///
+    /// - Returns: A ``ShrinkResult`` if the candidate produces a failing output that is shortlex-smaller than the original, or `nil` if the candidate is rejected.
+    public func decode<Output>(
+        candidate: ChoiceSequence,
+        gen: ReflectiveGenerator<Output>,
+        tree: ChoiceTree,
+        originalSequence: ChoiceSequence,
+        property: (Output) -> Bool
+    ) throws -> ShrinkResult<Output>? {
+        switch self {
+        case let .direct(strictness):
+            return try decodeDirect(
+                candidate: candidate, gen: gen, tree: tree,
+                strictness: strictness, property: property
+            )
+
+        case let .guided(fallbackTree, strictness):
+            return decodeGuided(
+                candidate: candidate, gen: gen,
+                fallbackTree: fallbackTree ?? tree, strictness: strictness,
+                originalSequence: originalSequence, property: property
+            )
+
+        case let .crossStage(bindIndex, fallbackTree, strictness):
+            return try decodeCrossStage(
+                candidate: candidate, gen: gen, tree: tree,
+                bindIndex: bindIndex, fallbackTree: fallbackTree ?? tree,
+                strictness: strictness,
+                originalSequence: originalSequence, property: property
+            )
+        }
+    }
+
+    // MARK: - Decode Implementations
+
+    private func decodeDirect<Output>(
+        candidate: ChoiceSequence,
+        gen: ReflectiveGenerator<Output>,
+        tree: ChoiceTree,
+        strictness: Interpreters.Strictness,
+        property: (Output) -> Bool
+    ) throws -> ShrinkResult<Output>? {
+        guard let output = try Interpreters.materialize(
+            gen, with: tree, using: candidate, strictness: strictness
+        ) else {
+            return nil
+        }
+        guard property(output) == false else { return nil }
+        return ShrinkResult(
+            sequence: candidate,
+            tree: tree,
+            output: output,
+            evaluations: 1
+        )
+    }
+
+    private func decodeGuided<Output>(
+        candidate: ChoiceSequence,
+        gen: ReflectiveGenerator<Output>,
+        fallbackTree: ChoiceTree,
+        strictness: Interpreters.Strictness,
+        originalSequence: ChoiceSequence,
+        property: (Output) -> Bool
+    ) -> ShrinkResult<Output>? {
+        let seed = candidate.zobristHash
+        switch GuidedMaterializer.materialize(gen, prefix: candidate, seed: seed, fallbackTree: fallbackTree) {
+        case let .success(reDerivedOutput, reDerivedSequence, reDerivedTree):
+            guard reDerivedSequence.shortLexPrecedes(originalSequence) else { return nil }
+            guard property(reDerivedOutput) == false else { return nil }
+            return ShrinkResult(
+                sequence: reDerivedSequence,
+                tree: reDerivedTree,
+                output: reDerivedOutput,
+                evaluations: 1
+            )
+        case .filterEncountered, .failed:
+            return nil
+        }
+    }
+
+    private func decodeCrossStage<Output>(
+        candidate: ChoiceSequence,
+        gen: ReflectiveGenerator<Output>,
+        tree: ChoiceTree,
+        bindIndex: BindSpanIndex,
+        fallbackTree: ChoiceTree,
+        strictness: Interpreters.Strictness,
+        originalSequence: ChoiceSequence,
+        property: (Output) -> Bool
+    ) throws -> ShrinkResult<Output>? {
+        // Check whether inner values changed. If only bound values were modified,
+        // the strategy's values are authoritative — re-derivation would replace
+        // carefully redistributed values with PRNG noise.
+        let innerValuesChanged = bindIndex.regions.contains { region in
+            region.innerRange.contains { idx in
+                candidate[idx].shortLexCompare(originalSequence[idx]) != .eq
+            }
+        }
+
+        if innerValuesChanged {
+            return decodeGuided(
+                candidate: candidate, gen: gen,
+                fallbackTree: fallbackTree, strictness: strictness,
+                originalSequence: originalSequence, property: property
+            )
+        } else {
+            return try decodeDirect(
+                candidate: candidate, gen: gen, tree: tree,
+                strictness: strictness, property: property
+            )
+        }
+    }
+
+    // MARK: - Decoder Selection
+
     /// Returns the appropriate decoder for a given context.
     ///
     /// One decoder per context means all encoders sharing a context share the same `dec`, forming a uniform hom-set.
