@@ -144,6 +144,7 @@ enum ReductionScheduler {
         var tandemEncoder = TandemReductionEncoder()
         var redistributeEncoder = CrossStageRedistributeEncoder()
         var bindAwareRedistributeEncoder = BindAwareRedistributeEncoder()
+        var lattice = DominanceLattice()
 
         // MARK: - Helpers
 
@@ -190,6 +191,7 @@ enum ReductionScheduler {
             budget: inout LegBudget
         ) throws -> Bool {
             guard budget.isExhausted == false else { return false }
+            if lattice.shouldSkip(encoder.name, phase: encoder.phase) { return false }
             let startSeqLen = sequence.count
             var probes = 0
             for candidate in encoder.encode(sequence: sequence, targets: targets) {
@@ -202,6 +204,7 @@ enum ReductionScheduler {
                 ) {
                     budget.recordMaterialization(accepted: true)
                     accept(result, structureChanged: structureChanged)
+                    lattice.recordSuccess(encoder.name)
                     if isInstrumented {
                         ExhaustLog.debug(category: .reducer, event: "encoder_accepted", metadata: [
                             "encoder": encoder.name, "probes": "\(probes)",
@@ -233,6 +236,7 @@ enum ReductionScheduler {
             budget: inout LegBudget
         ) throws -> Bool {
             guard budget.isExhausted == false else { return false }
+            if lattice.shouldSkip(encoder.name, phase: encoder.phase) { return false }
             let startSeqLen = sequence.count
             encoder.start(sequence: sequence, targets: targets)
             var lastAccepted = false
@@ -255,6 +259,9 @@ enum ReductionScheduler {
                     budget.recordMaterialization(accepted: false)
                     lastAccepted = false
                 }
+            }
+            if anyAccepted {
+                lattice.recordSuccess(encoder.name)
             }
             if isInstrumented, probes > 0 {
                 ExhaustLog.debug(category: .reducer, event: anyAccepted ? "encoder_accepted" : "encoder_exhausted", metadata: [
@@ -372,6 +379,7 @@ enum ReductionScheduler {
                 let target = cycleBudget.initialBudget(for: .contravariant)
                 var legBudget = LegBudget(hardCap: remaining, stallPatience: target)
                 rejectCache = ReducerCache()
+                lattice.invalidate()
                 if maxBindDepth >= 1 {
                     for depth in stride(from: maxBindDepth, through: 1, by: -1) where dirtyDepths.contains(depth) {
                         guard legBudget.isExhausted == false else { break }
@@ -424,6 +432,7 @@ enum ReductionScheduler {
                 let target = cycleBudget.initialBudget(for: .deletion)
                 var legBudget = LegBudget(hardCap: remaining, stallPatience: target)
                 rejectCache = ReducerCache()
+                lattice.invalidate()
                 for depth in 0 ... maxBindDepth {
                     guard legBudget.isExhausted == false else { break }
 
@@ -465,6 +474,7 @@ enum ReductionScheduler {
                 let target = cycleBudget.initialBudget(for: .covariant)
                 var legBudget = LegBudget(hardCap: remaining, stallPatience: target)
                 rejectCache = ReducerCache()
+                lattice.invalidate()
                 let preCovariantSequence = sequence
                 let preCovariantBindIndex = bindIndex
                 let preCovariantTree = tree
