@@ -323,6 +323,7 @@ enum ReductionScheduler {
 
         while stallBudget > 0 {
             cycles += 1
+            let cycleStartBest = bestSequence
             var cycleImproved = false
             let maxBindDepth = bindIndex?.maxBindDepth ?? 0
             var contravariantAccepted = 0
@@ -636,7 +637,10 @@ enum ReductionScheduler {
             }
 
             // ── Cycle termination ──
-            if cycleImproved {
+            // A cycle counts as improved only if the global best advanced.
+            // Encoders that re-discover the same values (cross-zero probes on already-optimal
+            // values, tandem oscillation) would otherwise reset the stall budget forever.
+            if bestSequence.count < cycleStartBest.count || bestSequence.shortLexPrecedes(cycleStartBest) {
                 stallBudget = config.maxStalls
             } else {
                 stallBudget -= 1

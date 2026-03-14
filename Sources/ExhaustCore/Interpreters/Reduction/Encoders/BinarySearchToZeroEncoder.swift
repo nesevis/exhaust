@@ -18,12 +18,52 @@ public struct BinarySearchToZeroEncoder: AdaptiveEncoder {
 
     // MARK: - State
 
+    private enum DirectionalStepper {
+        /// Current BP > target BP: search downward for smallest accepted BP.
+        case downward(BinarySearchStepper)
+        /// Current BP < target BP: search upward for largest accepted BP.
+        case upward(MaxBinarySearchStepper)
+
+        var bestAccepted: UInt64 {
+            switch self {
+            case let .downward(s): s.bestAccepted
+            case let .upward(s): s.bestAccepted
+            }
+        }
+
+        mutating func start() -> UInt64? {
+            switch self {
+            case var .downward(s):
+                let v = s.start()
+                self = .downward(s)
+                return v
+            case var .upward(s):
+                let v = s.start()
+                self = .upward(s)
+                return v
+            }
+        }
+
+        mutating func advance(lastAccepted: Bool) -> UInt64? {
+            switch self {
+            case var .downward(s):
+                let v = s.advance(lastAccepted: lastAccepted)
+                self = .downward(s)
+                return v
+            case var .upward(s):
+                let v = s.advance(lastAccepted: lastAccepted)
+                self = .upward(s)
+                return v
+            }
+        }
+    }
+
     private struct TargetState {
         let seqIdx: Int
         let validRange: ClosedRange<UInt64>?
         let isRangeExplicit: Bool
         let choiceTag: TypeTag
-        var stepper: BinarySearchStepper
+        var stepper: DirectionalStepper
     }
 
     private enum Phase {
@@ -58,12 +98,17 @@ public struct BinarySearchToZeroEncoder: AdaptiveEncoder {
             let targetBP = simplified.bitPattern64
             let currentBP = v.choice.bitPattern64
             guard currentBP != targetBP else { i += 1; continue }
+            let stepper: DirectionalStepper = if currentBP > targetBP {
+                .downward(BinarySearchStepper(lo: targetBP, hi: currentBP))
+            } else {
+                .upward(MaxBinarySearchStepper(lo: currentBP, hi: targetBP))
+            }
             self.targets.append(TargetState(
                 seqIdx: seqIdx,
                 validRange: v.validRange,
                 isRangeExplicit: v.isRangeExplicit,
                 choiceTag: v.choice.tag,
-                stepper: BinarySearchStepper(lo: targetBP, hi: currentBP)
+                stepper: stepper
             ))
             i += 1
         }
