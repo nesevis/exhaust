@@ -647,10 +647,28 @@ private extension GuidedMaterializer {
         var choiceTrees = [ChoiceTree]()
         choiceTrees.reserveCapacity(generators.count)
 
+        // When a fallback tree is available, scope the cursor per child so that
+        // deleted children don't cause the cursor to consume a sibling's entries.
+        // Each child gets at most as many entries as its fallback tree would produce
+        // when flattened. Without a fallback tree, no scoping is applied — the cursor
+        // consumes entries freely (normal generation/replay behavior).
+        //
+        // After each child, childStartPosition advances to the cursor's *actual*
+        // position — not the fallback-derived span. When a child was deleted from
+        // the prefix, its entries are shorter than the fallback span, and subsequent
+        // children's scopes must start from the actual cursor position.
+        let canScope = childFallbacks.contains(where: { $0 != nil })
+        var childStartPosition = context.cursor.position
         for (gen, fb) in zip(generators, childFallbacks) {
+            if canScope, let fb {
+                context.cursor.pushScope(limit: childStartPosition + fb.flattenedEntryCount)
+            }
             guard let (result, tree) = try generateRecursive(gen, with: inputValue, context: &context, fallbackTree: fb) else {
+                if canScope, fb != nil { context.cursor.popScope() }
                 return nil
             }
+            if canScope, fb != nil { context.cursor.popScope() }
+            childStartPosition = context.cursor.position
             results.append(result)
             choiceTrees.append(tree)
         }
@@ -708,16 +726,38 @@ private extension GuidedMaterializer {
         /// When > 0, the cursor is inside a bind's bound subtree and should
         /// behave as exhausted so GuidedMaterializer falls back to PRNG.
         private var bindSuspendDepth: Int = 0
+        /// Stack of position limits for nested scopes (zip children).
+        /// When non-empty, the cursor reports exhausted at the topmost limit.
+        private var scopeLimits: [Int] = []
 
         init(from sequence: ChoiceSequence) {
             entries = sequence
+        }
+
+        /// Pushes a scope limit: the cursor will report exhausted at `limit`.
+        /// Used by the zip handler to prevent one child from consuming a sibling's entries.
+        mutating func pushScope(limit: Int) {
+            scopeLimits.append(limit)
+        }
+
+        /// Pops the most recent scope limit.
+        mutating func popScope() {
+            scopeLimits.removeLast()
+        }
+
+        /// The effective end position: min of sequence length and topmost scope limit.
+        private var effectiveEnd: Int {
+            if let limit = scopeLimits.last {
+                return min(entries.count, limit)
+            }
+            return entries.count
         }
 
         /// Skip consecutive `.group(true/false)` and `.just` markers at the current position.
         /// Groups are transparent wrappers from `runContinuation` and pick sites.
         /// Just markers carry no data and are purely structural.
         private mutating func skipGroups() {
-            while position < entries.count {
+            while position < effectiveEnd {
                 switch entries[position] {
                 case .group, .bind, .just:
                     position += 1
@@ -735,7 +775,7 @@ private extension GuidedMaterializer {
         /// entries (e.g. sibling parameters in a zip) are correctly aligned.
         mutating func skipBindBound() {
             var depth = 0
-            while position < entries.count {
+            while position < effectiveEnd {
                 switch entries[position] {
                 case .bind(true):
                     depth += 1
@@ -775,7 +815,7 @@ private extension GuidedMaterializer {
         mutating func tryConsumeValue() -> ChoiceSequenceValue.Value? {
             guard !exhausted, !isSuspended else { return nil }
             skipGroups()
-            guard position < entries.count else {
+            guard position < effectiveEnd else {
                 exhausted = true
                 return nil
             }
@@ -792,7 +832,7 @@ private extension GuidedMaterializer {
         mutating func tryConsumeBranch() -> ChoiceSequenceValue.Branch? {
             guard !exhausted, !isSuspended else { return nil }
             skipGroups()
-            guard position < entries.count else {
+            guard position < effectiveEnd else {
                 exhausted = true
                 return nil
             }
@@ -813,7 +853,7 @@ private extension GuidedMaterializer {
         mutating func tryConsumeSequenceOpen() -> (elementCount: Int, isLengthExplicit: Bool)? {
             guard !exhausted, !isSuspended else { return nil }
             skipGroups()
-            guard position < entries.count else {
+            guard position < effectiveEnd else {
                 exhausted = true
                 return nil
             }
@@ -835,7 +875,7 @@ private extension GuidedMaterializer {
         mutating func skipSequenceClose() {
             guard !exhausted else { return }
             skipGroups()
-            guard position < entries.count else { return }
+            guard position < effectiveEnd else { return }
             if case .sequence(false, _) = entries[position] {
                 position += 1
             }

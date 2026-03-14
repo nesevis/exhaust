@@ -26,7 +26,13 @@ struct DistinctShrinkingChallenge {
     @Test("Distinct, Full")
     func distinct() {
         let gen = #gen(.int().array(length: 3 ... 30))
-        let counterExample = #exhaust(gen, .suppressIssueReporting) {
+        ExhaustLog.setConfiguration(.init(isEnabled: true, minimumLevel: .info, categoryMinimumLevels: [.reducer: .debug], format: .human))
+        let counterExample = #exhaust(
+            gen,
+            .suppressIssueReporting,
+            .useKleisliReducer,
+            .replay(5023515172476973421)
+        ) {
             Set($0).count < 3
         }
         #expect(counterExample == [0, -1, 1])
@@ -36,7 +42,12 @@ struct DistinctShrinkingChallenge {
     func distinctReflected() {
         let gen = #gen(.int().array(length: 3 ... 30))
         let value = [1337, 80085, 69, 67]
-        let counterExample = #exhaust(gen, .suppressIssueReporting, .reflecting(value)) {
+        let counterExample = #exhaust(
+            gen,
+            .suppressIssueReporting,
+            .useKleisliReducer,
+            .reflecting(value)
+        ) {
             Set($0).count < 3
         }
         #expect(counterExample == [0, -1, 1])

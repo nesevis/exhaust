@@ -156,11 +156,10 @@ public enum SequenceDecoder {
     /// 2. Cross-stage routing (`.global`, binds present): redistribution may or may not change
     ///    inner values — routing is per-candidate.
     ///
-    /// Deletion (`.relaxed` strictness) uses `.guided` when binds are present (bound re-derivation
-    /// after structural changes) and `.direct` otherwise. For non-bind generators, tree-driven
-    /// materialization handles deletion correctly. The `.guided` (prefix-driven) decoder misaligns
-    /// after deletion in grouped generators (e.g. zip of arrays) because removing one
-    /// sub-generator's entries causes the cursor to consume the next sub-generator's data.
+    /// Three independent reasons trigger non-direct decoders:
+    /// 1. Bind re-derivation (`.specific(0)`, binds present): bound content must be re-derived after inner value changes.
+    /// 2. Structural invalidity (`.relaxed` strictness): deletion invalidates the tree's positional mapping. ``GuidedMaterializer`` re-derives a consistent (sequence, tree) pair from the prefix.
+    /// 3. Cross-stage routing (`.global`, binds present): redistribution may or may not change inner values — routing is per-candidate.
     ///
     /// Value reduction at depths > 0 always uses `.direct` — even with binds. These positions are
     /// bound values, and `.guided` would ignore candidate modifications via cursor suspension.
@@ -180,8 +179,6 @@ public enum SequenceDecoder {
             return .direct(strictness: context.strictness)
 
         case .specific(0):
-            // Depth 0 with binds: inner value changes need guided re-derivation of bound content.
-            // Depth 0 without binds: direct materialization handles both value changes and deletion.
             if hasBinds {
                 return .guided(
                     fallbackTree: context.fallbackTree,
@@ -192,9 +189,7 @@ public enum SequenceDecoder {
 
         case .specific:
             // Depths > 0: deletion with binds needs guided re-derivation; value reduction
-            // (`.normal`) uses direct even with binds — these are bound values that guided
-            // would ignore via cursor suspension.
-            if context.strictness == .relaxed, hasBinds {
+            if context.strictness == .relaxed {
                 return .guided(
                     fallbackTree: context.fallbackTree,
                     strictness: context.strictness

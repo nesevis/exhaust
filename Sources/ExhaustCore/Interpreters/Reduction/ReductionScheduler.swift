@@ -154,6 +154,22 @@ enum ReductionScheduler {
             fallbackTree = result.tree
             if structureChanged {
                 bindIndex = hasBind ? BindSpanIndex(from: sequence) : nil
+                // Re-derive a consistent (sequence, tree) pair after structural changes.
+                // Decoders like .direct return the original tree, which becomes stale after
+                // deletion. GuidedMaterializer replays the accepted sequence as prefix and
+                // rebuilds a matching tree. Cursor scoping ensures zip children don't consume
+                // siblings' entries — deleted children exhaust within their scope and fall back
+                // to the fallback tree (or PRNG), producing correct empty sequences.
+                let seed = sequence.zobristHash
+                if case let .success(reDerivedOutput, reDerivedSequence, reDerivedTree) =
+                    GuidedMaterializer.materialize(gen, prefix: sequence, seed: seed, fallbackTree: tree),
+                   property(reDerivedOutput) == false
+                {
+                    sequence = reDerivedSequence
+                    tree = reDerivedTree
+                    output = reDerivedOutput
+                    fallbackTree = reDerivedTree
+                }
             }
             if hasBind {
                 bestSequence = sequence
@@ -174,9 +190,12 @@ enum ReductionScheduler {
             budget: inout LegBudget
         ) throws -> Bool {
             guard budget.isExhausted == false else { return false }
+            let startSeqLen = sequence.count
+            var probes = 0
             for candidate in encoder.encode(sequence: sequence, targets: targets) {
-                guard budget.isExhausted == false else { return false }
+                guard budget.isExhausted == false else { break }
                 guard cache.contains(candidate) == false else { continue }
+                probes += 1
                 if let result = try decoder.decode(
                     candidate: candidate, gen: gen, tree: tree,
                     originalSequence: sequence, property: property
@@ -214,11 +233,15 @@ enum ReductionScheduler {
             budget: inout LegBudget
         ) throws -> Bool {
             guard budget.isExhausted == false else { return false }
+            let startSeqLen = sequence.count
             encoder.start(sequence: sequence, targets: targets)
             var lastAccepted = false
             var anyAccepted = false
+            var probes = 0
+            var accepted = 0
             while let probe = encoder.nextProbe(lastAccepted: lastAccepted) {
                 guard budget.isExhausted == false else { break }
+                probes += 1
                 if let result = try decoder.decode(
                     candidate: probe, gen: gen, tree: tree,
                     originalSequence: sequence, property: property
@@ -227,6 +250,7 @@ enum ReductionScheduler {
                     accept(result, structureChanged: structureChanged)
                     lastAccepted = true
                     anyAccepted = true
+                    accepted += 1
                 } else {
                     budget.recordMaterialization(accepted: false)
                     lastAccepted = false

@@ -56,6 +56,36 @@ public enum ChoiceTree: Hashable, Equatable, Sendable {
 extension ChoiceTree {
     public static let emptyJust = Self.just("")
 
+    /// The number of entries this tree produces when flattened to a ``ChoiceSequence``.
+    ///
+    /// Matches the count of `ChoiceSequence.flatten(self)` without allocating.
+    /// Used by ``GuidedMaterializer`` to scope cursor consumption per zip child.
+    public var flattenedEntryCount: Int {
+        switch self {
+        case .choice: 1
+        case .just: 1
+        case .getSize: 0
+        case let .sequence(_, elements, _):
+            2 + elements.reduce(0) { $0 + $1.flattenedEntryCount } // open + elements + close
+        case let .branch(_, _, _, _, choice):
+            choice.flattenedEntryCount
+        case let .group(array, _):
+            if array.allSatisfy({ $0.isBranch || $0.isSelected }),
+               case let .selected(.branch(_, _, _, _, choice)) = array.first(where: \.isSelected)
+            {
+                2 + 1 + choice.flattenedEntryCount // group open + branch entry + choice + group close
+            } else {
+                2 + array.reduce(0) { $0 + $1.flattenedEntryCount } // group open + children + group close
+            }
+        case let .bind(inner, bound):
+            2 + inner.flattenedEntryCount + bound.flattenedEntryCount // bind open + inner + bound + bind close
+        case let .resize(_, choices):
+            2 + choices.reduce(0) { $0 + $1.flattenedEntryCount } // group open + choices + group close
+        case let .selected(tree):
+            tree.flattenedEntryCount
+        }
+    }
+
     /// Whether this node is a `.choice` leaf.
     public var isChoice: Bool {
         if case .choice = self {

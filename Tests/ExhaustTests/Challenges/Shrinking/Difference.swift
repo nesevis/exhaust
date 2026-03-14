@@ -44,6 +44,7 @@ struct DifferenceShrinkingChallenge {
             gen,
             .suppressIssueReporting,
             .reflecting([700, 700]),
+            .useKleisliReducer,
             property: property
         )
 
@@ -63,6 +64,7 @@ struct DifferenceShrinkingChallenge {
             gen,
             .suppressIssueReporting,
             .reflecting([700, 701]),
+            .useKleisliReducer,
             property: property
         )
         
@@ -73,7 +75,11 @@ struct DifferenceShrinkingChallenge {
     func differenceTest3() {
         let gen = #gen(.int(in: 1 ... 1000)).array(length: 2)
 
-        let output = #exhaust(gen, .suppressIssueReporting) { arr in
+        let output = #exhaust(
+            gen,
+            .suppressIssueReporting,
+            .useKleisliReducer
+        ) { arr in
             let diff = abs(arr[0] - arr[1])
             return arr[0] < 10 || diff != 1
         }
