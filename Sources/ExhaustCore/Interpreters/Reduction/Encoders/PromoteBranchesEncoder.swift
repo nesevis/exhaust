@@ -30,7 +30,13 @@ public struct PromoteBranchesEncoder: BranchEncoder {
                 let source = sorted[sourceIdx]
                 if selectedBranchID(of: source.branch.node) != selectedBranchID(of: target.branch.node) {
                     var candidateTree = tree
-                    candidateTree[target.branch.fingerprint] = source.branch.node.unwrapped
+                    // Strip isRangeExplicit from the promoted subtree. The source
+                    // carries stale bind-dependent ranges from its original (deeper)
+                    // position; marking them non-explicit lets encoders target zero
+                    // instead of the stale range minimum.
+                    let sourceNode = source.branch.node.unwrapped
+                    let stripped = stripExplicitRanges(sourceNode)
+                    candidateTree[target.branch.fingerprint] = stripped
                     let candidateSequence = ChoiceSequence.flatten(candidateTree)
                     if candidateSequence.shortLexPrecedes(sequence) {
                         candidates.append((candidateSequence, candidateTree))
@@ -58,6 +64,31 @@ private func extractBranchNodes(
         }
     }
     return results
+}
+
+/// Recursively sets `isRangeExplicit = false` on all `.choice` nodes in the
+/// subtree. This marks promoted ranges as non-authoritative, letting encoders
+/// target zero instead of the (potentially stale) range minimum.
+private func stripExplicitRanges(_ tree: ChoiceTree) -> ChoiceTree {
+    switch tree {
+    case let .choice(value, meta):
+        return .choice(value, ChoiceMetadata(validRange: meta.validRange, isRangeExplicit: false))
+    case let .selected(inner):
+        return .selected(stripExplicitRanges(inner))
+    case let .group(children, isOpaque):
+        return .group(children.map(stripExplicitRanges), isOpaque: isOpaque)
+    case let .branch(siteID, weight, id, branchIDs, choice):
+        return .branch(siteID: siteID, weight: weight, id: id,
+                        branchIDs: branchIDs, choice: stripExplicitRanges(choice))
+    case let .sequence(length, elements, meta):
+        return .sequence(length: length, elements: elements.map(stripExplicitRanges), meta)
+    case let .bind(inner, bound):
+        return .bind(inner: stripExplicitRanges(inner), bound: stripExplicitRanges(bound))
+    case let .resize(size, choices):
+        return .resize(newSize: size, choices: choices.map(stripExplicitRanges))
+    case .just, .getSize:
+        return tree
+    }
 }
 
 private func selectedBranchID(of group: ChoiceTree) -> UInt64? {
