@@ -28,13 +28,13 @@ public enum GuidedMaterializer {
         seed: UInt64,
         abortOnFilter: Bool = false,
         fallbackTree: ChoiceTree? = nil,
-        maximizeBoundValues: Bool = false,
+        maximizeBoundRegionIndices: Set<Int>? = nil,
     ) -> Result<Output> {
         var context = GuidedContext(
             cursor: GuidedCursor(from: prefix),
             prng: Xoshiro256(seed: seed),
             abortOnFilter: abortOnFilter,
-            maximizeBoundValues: maximizeBoundValues,
+            maximizeBoundRegionIndices: maximizeBoundRegionIndices,
         )
         do {
             guard let (value, tree) = try generateRecursive(gen, with: (), context: &context, fallbackTree: fallbackTree) else {
@@ -426,8 +426,12 @@ private extension GuidedMaterializer {
             // Clamp the prefix value's bit pattern to the valid range
             let bp = prefixValue.choice.bitPattern64
             randomBits = Swift.min(Swift.max(bp, min), max)
-        } else if context.maximizeBoundValues, context.cursor.isSuspended {
-            // Maximize: use upper bound for bind's bound values during redistribute
+        } else if let indices = context.maximizeBoundRegionIndices,
+                  context.cursor.isSuspended,
+                  indices.contains(context.cursor.bindEncounterCount - 1) {
+            // Maximize: use upper bound for this bind region's bound values.
+            // bindEncounterCount is 1-based (incremented on suspendForBind), so subtract 1
+            // to get the 0-based region index matching BindSpanIndex.regions ordering.
             randomBits = max
         } else if let calleeFallback, case let .choice(value, _) = calleeFallback {
             // Fallback: use tree value, clamped to valid range
@@ -750,10 +754,15 @@ private extension GuidedMaterializer {
             }
         }
 
+        /// Total number of bind suspensions entered (monotonically increasing).
+        /// Used by ``maximizeBoundRegionIndices`` to identify which bind region we're inside.
+        private(set) var bindEncounterCount: Int = 0
+
         /// Suspend prefix consumption so the cursor reports exhausted.
         /// Used when generating a bind's bound subtree via PRNG.
         mutating func suspendForBind() {
             bindSuspendDepth += 1
+            bindEncounterCount += 1
         }
 
         /// Resume prefix consumption after the bound subtree has been generated.
@@ -864,6 +873,6 @@ private extension GuidedMaterializer {
         var size: UInt64 = GenerationContext.scaledSize(forRun: 0)
         var sizeOverride: UInt64?
         var abortOnFilter: Bool = false
-        var maximizeBoundValues: Bool = false
+        var maximizeBoundRegionIndices: Set<Int>? = nil
     }
 }

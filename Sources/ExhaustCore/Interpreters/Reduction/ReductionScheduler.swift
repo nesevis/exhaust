@@ -143,6 +143,7 @@ enum ReductionScheduler {
         )
         var tandemEncoder = TandemReductionEncoder()
         var redistributeEncoder = CrossStageRedistributeEncoder()
+        var bindAwareRedistributeEncoder = BindAwareRedistributeEncoder()
 
         // MARK: - Helpers
 
@@ -526,6 +527,45 @@ enum ReductionScheduler {
                 let redistContext = DecoderContext(depth: .global, bindIndex: bindIndex, fallbackTree: fallbackTree, strictness: .normal)
                 let redistDecoder = SequenceDecoder.for(redistContext)
                 var redistributionAccepted = false
+
+                // Bind-aware redistribution: coordinate inner+bound across bind regions.
+                // Runs first because it's the most targeted for bind-coupled generators,
+                // where the cross-stage encoder cannot make progress.
+                if hasBind, let bi = bindIndex, bi.regions.count >= 2 {
+                    let regionPairs = BindAwareRedistributeEncoder.buildPlans(
+                        from: sequence, bindIndex: bi
+                    )
+                    for plan in regionPairs {
+                        guard legBudget.isExhausted == false else { break }
+                        let sinkRegionIndex = plan.sink.regionIndex
+                        let bindRedistDecoder = SequenceDecoder.guided(
+                            fallbackTree: fallbackTree ?? tree,
+                            strictness: .normal,
+                            maximizeBoundRegionIndices: Set([sinkRegionIndex])
+                        )
+                        bindAwareRedistributeEncoder.startPlan(
+                            sequence: sequence, plan: plan
+                        )
+                        var lastAccepted = false
+                        while let probe = bindAwareRedistributeEncoder.nextProbe(lastAccepted: lastAccepted) {
+                            guard legBudget.isExhausted == false else { break }
+                            if let result = try bindRedistDecoder.decode(
+                                candidate: probe, gen: gen, tree: tree,
+                                originalSequence: sequence, property: property
+                            ) {
+                                legBudget.recordMaterialization(accepted: true)
+                                accept(result, structureChanged: true)
+                                lastAccepted = true
+                                cycleImproved = true
+                                redistributionAccepted = true
+                                if isInstrumented { ExhaustLog.debug(category: .reducer, event: "redistribution_accepted", metadata: ["encoder": "bindAwareRedistribute"]) }
+                            } else {
+                                legBudget.recordMaterialization(accepted: false)
+                                lastAccepted = false
+                            }
+                        }
+                    }
+                }
 
                 // Tandem reduction: reduce sibling value pairs together.
                 let allSiblings = ChoiceSequence.extractSiblingGroups(from: sequence)

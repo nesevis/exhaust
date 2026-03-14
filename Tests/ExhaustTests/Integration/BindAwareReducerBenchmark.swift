@@ -57,7 +57,7 @@ struct BindAwareReducerBenchmark {
 
     // MARK: - Scenario 3: Zip of two bind generators
 
-    @Test("Scenario 3: zip of two binds", .disabled(), arguments: [
+    @Test("Scenario 3: zip of two binds", arguments: [
         UInt64(42)//, UInt64(123), UInt64(999), UInt64(7777), UInt64(31415),
     ])
     func zipOfTwoBinds(seed: UInt64) throws {

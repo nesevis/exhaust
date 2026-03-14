@@ -12,7 +12,8 @@ public enum SequenceDecoder {
     case direct(strictness: Interpreters.Strictness)
 
     /// ``GuidedMaterializer`` with tiered resolution. Bounded — re-derivation can shift bound values, but the shortlex guard rejects regressions.
-    case guided(fallbackTree: ChoiceTree?, strictness: Interpreters.Strictness)
+    case guided(fallbackTree: ChoiceTree?, strictness: Interpreters.Strictness,
+                maximizeBoundRegionIndices: Set<Int>? = nil)
 
     /// Per-candidate routing for cross-stage tactics. Routes to direct if only bound values changed, guided if inner values changed.
     case crossStage(bindIndex: BindSpanIndex, fallbackTree: ChoiceTree?, strictness: Interpreters.Strictness)
@@ -44,10 +45,11 @@ public enum SequenceDecoder {
                 strictness: strictness, property: property
             )
 
-        case let .guided(fallbackTree, strictness):
+        case let .guided(fallbackTree, strictness, maximizeBoundRegionIndices):
             return decodeGuided(
                 candidate: candidate, gen: gen,
                 fallbackTree: fallbackTree ?? tree, strictness: strictness,
+                maximizeBoundRegionIndices: maximizeBoundRegionIndices,
                 originalSequence: originalSequence, property: property
             )
 
@@ -89,11 +91,12 @@ public enum SequenceDecoder {
         gen: ReflectiveGenerator<Output>,
         fallbackTree: ChoiceTree,
         strictness: Interpreters.Strictness,
+        maximizeBoundRegionIndices: Set<Int>? = nil,
         originalSequence: ChoiceSequence,
         property: (Output) -> Bool
     ) -> ShrinkResult<Output>? {
         let seed = candidate.zobristHash
-        switch GuidedMaterializer.materialize(gen, prefix: candidate, seed: seed, fallbackTree: fallbackTree) {
+        switch GuidedMaterializer.materialize(gen, prefix: candidate, seed: seed, fallbackTree: fallbackTree, maximizeBoundRegionIndices: maximizeBoundRegionIndices) {
         case let .success(reDerivedOutput, reDerivedSequence, reDerivedTree):
             guard reDerivedSequence.shortLexPrecedes(originalSequence) else { return nil }
             guard property(reDerivedOutput) == false else { return nil }

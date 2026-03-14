@@ -34,11 +34,11 @@ extension ReducerStrategies {
         bindIndex: BindSpanIndex?,
         mutatedIndex: Int,
         strictness: Interpreters.Strictness = .normal,
-        maximizeBoundValues: Bool = false,
+        maximizeBoundRegionIndices: Set<Int>? = nil,
     ) throws -> Output? {
         if let bindIndex, bindIndex.bindRegionForInnerIndex(mutatedIndex) != nil {
             let seed = candidate.zobristHash
-            switch GuidedMaterializer.materialize(gen, prefix: candidate, seed: seed, fallbackTree: tree, maximizeBoundValues: maximizeBoundValues) {
+            switch GuidedMaterializer.materialize(gen, prefix: candidate, seed: seed, fallbackTree: tree, maximizeBoundRegionIndices: maximizeBoundRegionIndices) {
             case let .success(value, _, _):
                 return value
             case .filterEncountered, .failed:
@@ -68,13 +68,13 @@ extension ReducerStrategies {
         bindIndex: BindSpanIndex?,
         mutatedIndices: some Collection<Int>,
         strictness: Interpreters.Strictness = .normal,
-        maximizeBoundValues: Bool = false,
+        maximizeBoundRegionIndices: Set<Int>? = nil,
     ) throws -> Output? {
         if let bindIndex, bindIndex.isEmpty == false,
            mutatedIndices.contains(where: { bindIndex.bindRegionForInnerIndex($0) != nil })
         {
             let seed = candidate.zobristHash
-            switch GuidedMaterializer.materialize(gen, prefix: candidate, seed: seed, fallbackTree: tree, maximizeBoundValues: maximizeBoundValues) {
+            switch GuidedMaterializer.materialize(gen, prefix: candidate, seed: seed, fallbackTree: tree, maximizeBoundRegionIndices: maximizeBoundRegionIndices) {
             case let .success(value, _, _):
                 return value
             case .filterEncountered, .failed:
