@@ -350,28 +350,65 @@ enum ReductionScheduler {
             }
 
             // ── Pre-cycle: Branch tactics ──
+            // Branch encoders produce finite candidate sequences and run to
+            // exhaustion — no stall patience. The hard cap (remaining cycle
+            // budget) is the only limit. This matches the plan's design:
+            // branch tactics "run unconditionally" (Section 1.6) with
+            // termination via encoder exhaustion, not heuristic patience.
             do {
-                let target = cycleBudget.initialBudget(for: .branch)
-                var branchBudget = LegBudget(hardCap: remaining, stallPatience: target)
+                var branchUsed = 0
                 for branchEncoder in branchEncoders {
-                    guard branchBudget.isExhausted == false else { break }
-                    let decoder = SequenceDecoder.guided(fallbackTree: fallbackTree ?? tree, strictness: .relaxed)
-                    for candidate in branchEncoder.encode(sequence: sequence, tree: tree) {
-                        guard branchBudget.isExhausted == false else { break }
-                        if let result = try decoder.decode(
-                            candidate: candidate, gen: gen, tree: tree,
-                            originalSequence: sequence, property: property
-                        ) {
-                            branchBudget.recordMaterialization(accepted: true)
-                            accept(result, structureChanged: true)
-                            cycleImproved = true
-                            if isInstrumented { ExhaustLog.debug(category: .reducer, event: "branch_accepted", metadata: ["encoder": branchEncoder.name]) }
-                            break
+                    guard branchUsed < remaining else { break }
+                    var probes = 0
+                    var materializationFailures = 0
+                    var propertyPasses = 0
+                    var accepted = false
+                    for (candidateSequence, candidateTree) in branchEncoder.encode(sequence: sequence, tree: tree) {
+                        guard branchUsed < remaining else { break }
+                        probes += 1
+                        // Materialize using the encoder's modified tree directly,
+                        // matching the legacy reducer's promoteBranches approach.
+                        guard let output = try? Interpreters.materialize(
+                            gen, with: candidateTree, using: candidateSequence, strictness: .relaxed
+                        ) else {
+                            branchUsed += 1
+                            materializationFailures += 1
+                            continue
                         }
-                        branchBudget.recordMaterialization(accepted: false)
+                        guard property(output) == false else {
+                            branchUsed += 1
+                            propertyPasses += 1
+                            continue
+                        }
+                        let result = ShrinkResult(
+                            sequence: candidateSequence,
+                            tree: candidateTree,
+                            output: output,
+                            evaluations: 1
+                        )
+                        branchUsed += 1
+                        accept(result, structureChanged: true)
+                        cycleImproved = true
+                        accepted = true
+                        if isInstrumented {
+                            ExhaustLog.debug(category: .reducer, event: "branch_accepted", metadata: [
+                                "encoder": branchEncoder.name,
+                                "probes": "\(probes)",
+                                "output": "\(output)",
+                            ])
+                        }
+                        break
+                    }
+                    if isInstrumented, accepted == false, probes > 0 {
+                        ExhaustLog.debug(category: .reducer, event: "branch_exhausted", metadata: [
+                            "encoder": branchEncoder.name,
+                            "probes": "\(probes)",
+                            "materialization_failures": "\(materializationFailures)",
+                            "property_passes": "\(propertyPasses)",
+                        ])
                     }
                 }
-                remaining -= branchBudget.used
+                remaining -= branchUsed
             }
 
             // ── Leg 1: Contravariant sweep (depths max → 1) ──

@@ -477,7 +477,7 @@ struct PromoteBranchesEncoderTests {
         // so with 2 branches of different complexity, it should produce 1 candidate.
         if candidates.isEmpty == false {
             for candidate in candidates {
-                #expect(candidate.shortLexPrecedes(seq))
+                #expect(candidate.0.shortLexPrecedes(seq))
             }
         }
     }
@@ -514,7 +514,7 @@ struct PromoteBranchesEncoderTests {
                 let seq = ChoiceSequence(tree)
                 let encoder = PromoteBranchesEncoder()
                 for candidate in encoder.encode(sequence: seq, tree: tree) {
-                    #expect(candidate.shortLexPrecedes(seq))
+                    #expect(candidate.0.shortLexPrecedes(seq))
                 }
             }
         }
@@ -535,8 +535,8 @@ struct PromoteBranchesEncoderTests {
                 if candidates.isEmpty == false {
                     // Each candidate must be different from the original.
                     for candidate in candidates {
-                        #expect(candidate != seq)
-                        #expect(candidate.shortLexPrecedes(seq))
+                        #expect(candidate.0 != seq)
+                        #expect(candidate.0.shortLexPrecedes(seq))
                     }
                     found = true
                 }

@@ -11,7 +11,7 @@ public struct PromoteBranchesEncoder: BranchEncoder {
     public func encode(
         sequence: ChoiceSequence,
         tree: ChoiceTree
-    ) -> any Sequence<ChoiceSequence> {
+    ) -> any Sequence<(ChoiceSequence, ChoiceTree)> {
         guard tree.contains(\.unwrapped.isBranch) else { return AnySequence([]) }
         let branches = extractBranchNodes(from: tree)
         guard branches.count >= 2 else { return AnySequence([]) }
@@ -20,7 +20,7 @@ public struct PromoteBranchesEncoder: BranchEncoder {
             .map { branch in (branch: branch, sequence: ChoiceSequence.flatten(branch.node, includingAllBranches: true)) }
             .sorted { lhs, rhs in lhs.sequence.shortLexPrecedes(rhs.sequence) }
 
-        var candidates: [ChoiceSequence] = []
+        var candidates: [(ChoiceSequence, ChoiceTree)] = []
         // while-loop: avoiding IteratorProtocol overhead in debug builds
         var targetIdx = sorted.count - 1
         while targetIdx >= 1 {
@@ -33,7 +33,7 @@ public struct PromoteBranchesEncoder: BranchEncoder {
                     candidateTree[target.branch.fingerprint] = source.branch.node.unwrapped
                     let candidateSequence = ChoiceSequence.flatten(candidateTree)
                     if candidateSequence.shortLexPrecedes(sequence) {
-                        candidates.append(candidateSequence)
+                        candidates.append((candidateSequence, candidateTree))
                     }
                 }
                 sourceIdx += 1

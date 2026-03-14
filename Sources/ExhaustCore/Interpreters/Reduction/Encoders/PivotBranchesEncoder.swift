@@ -11,11 +11,11 @@ public struct PivotBranchesEncoder: BranchEncoder {
     public func encode(
         sequence: ChoiceSequence,
         tree: ChoiceTree
-    ) -> any Sequence<ChoiceSequence> {
+    ) -> any Sequence<(ChoiceSequence, ChoiceTree)> {
         let pickSites = extractPickSites(from: tree)
         guard pickSites.isEmpty == false else { return AnySequence([]) }
 
-        var candidates: [ChoiceSequence] = []
+        var candidates: [(ChoiceSequence, ChoiceTree)] = []
         for site in pickSites {
             guard case let .group(elements, _) = tree[site] else { continue }
             guard let selectedIndex = elements.firstIndex(where: \.isSelected) else { continue }
@@ -35,7 +35,7 @@ public struct PivotBranchesEncoder: BranchEncoder {
                 let candidateSequence = ChoiceSequence(candidateTree)
 
                 if candidateSequence.shortLexPrecedes(sequence) {
-                    candidates.append(candidateSequence)
+                    candidates.append((candidateSequence, candidateTree))
                 }
             }
         }

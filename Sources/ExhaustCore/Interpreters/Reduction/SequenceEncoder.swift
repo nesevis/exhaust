@@ -43,7 +43,9 @@ public protocol AdaptiveEncoder: SequenceEncoderBase {
 
 /// A branch encoder that operates on the tree structure rather than on value spans.
 ///
-/// Branch tactics (promote, pivot) need the tree to identify branch points and available alternatives. They return candidate sequences only — the scheduler passes each through `.guided` to rebuild the tree.
+/// Branch tactics (promote, pivot) need the tree to identify branch points and available
+/// alternatives. They return `(sequence, tree)` pairs — the modified tree carries the
+/// promoted/pivoted branch structure, so the scheduler can decode without re-derivation.
 public protocol BranchEncoder {
     /// Human-readable name for logging.
     var name: String { get }
@@ -51,9 +53,13 @@ public protocol BranchEncoder {
     /// Declared grade: approximation bound and resource bound.
     var grade: ReductionGrade { get }
 
-    /// Produces candidate branch mutations.
+    /// Produces candidate branch mutations as `(sequence, tree)` pairs.
+    ///
+    /// Each candidate carries the modified tree so the scheduler can materialize
+    /// directly against it, avoiding GuidedMaterializer re-derivation which can
+    /// change the intended tree structure.
     func encode(
         sequence: ChoiceSequence,
         tree: ChoiceTree
-    ) -> any Sequence<ChoiceSequence>
+    ) -> any Sequence<(ChoiceSequence, ChoiceTree)>
 }
