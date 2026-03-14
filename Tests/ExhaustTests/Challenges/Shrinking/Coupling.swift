@@ -40,7 +40,14 @@ struct CouplingShrinkingChallenge {
 
     @Test("Coupling")
     func couplingChallenge() throws {
-        let value = try #require(#exhaust(Self.gen, .suppressIssueReporting, property: Self.property))
+        let value = try #require(
+            #exhaust(
+                Self.gen,
+                .suppressIssueReporting,
+                .useKleisliReducer,
+                property: Self.property
+            )
+        )
         #expect(value.count == 2)
         #expect(value == [1, 0])
     }

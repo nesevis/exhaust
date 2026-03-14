@@ -26,7 +26,14 @@ struct BinaryHeapShrinkingChallenge {
 
     @Test("Binary heap, Full")
     func binaryHeapFull() throws {
-        let output = try #require(#exhaust(Self.gen, .suppressIssueReporting, property: Self.property))
+        let output = try #require(
+            #exhaust(
+                Self.gen,
+                .suppressIssueReporting,
+//                .useKleisliReducer,
+                property: Self.property
+            )
+        )
         let outputValues = Self.toList(output).sorted()
         // The shrunken result should have 4 values — the minimal failing heap
         // The exact order and number of zeroes and ones (ie the size of the tree) isn't consistent

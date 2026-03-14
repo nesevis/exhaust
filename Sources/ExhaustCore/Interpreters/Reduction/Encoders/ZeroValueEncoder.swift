@@ -14,7 +14,30 @@ public struct ZeroValueEncoder: BatchEncoder {
         targets: TargetSet
     ) -> any Sequence<ChoiceSequence> {
         guard case let .spans(spans) = targets else { return [] as [ChoiceSequence] }
-        return spans.lazy.compactMap { span -> ChoiceSequence? in
+
+        // First: try setting ALL values to zero simultaneously.
+        // This handles filter-coupled generators where individual changes break
+        // coupling constraints but the all-zero candidate preserves them.
+        // Matches the legacy reducer's naiveSimplifyValuesToSemanticSimplest pass.
+        var allZero = sequence
+        var anyChanged = false
+        for span in spans {
+            let seqIdx = span.range.lowerBound
+            guard let v = sequence[seqIdx].value else { continue }
+            let simplified = v.choice.semanticSimplest
+            guard simplified != v.choice else { continue }
+            guard v.isRangeExplicit == false || simplified.fits(in: v.validRange) else { continue }
+            allZero[seqIdx] = .value(.init(
+                choice: simplified,
+                validRange: v.validRange,
+                isRangeExplicit: v.isRangeExplicit
+            ))
+            anyChanged = true
+        }
+        let allZeroPrefix: [ChoiceSequence] = anyChanged ? [allZero] : []
+
+        // Then: try each value individually.
+        let individual = spans.lazy.compactMap { span -> ChoiceSequence? in
             let seqIdx = span.range.lowerBound
             guard let v = sequence[seqIdx].value else { return nil }
             let simplified = v.choice.semanticSimplest
@@ -28,5 +51,7 @@ public struct ZeroValueEncoder: BatchEncoder {
             ))
             return candidate
         }
+
+        return allZeroPrefix + Array(individual)
     }
 }

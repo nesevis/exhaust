@@ -27,29 +27,32 @@ private func allValueSpans(from seq: ChoiceSequence) -> [ChoiceSpan] {
 
 @Suite("ZeroValueEncoder")
 struct ZeroValueEncoderTests {
-    @Test("Produces one candidate per non-zero target")
+    @Test("Produces all-zero candidate plus one per non-zero target")
     func candidatesPerTarget() {
         let seq = makeSequence([5, 0, 3])
         let spans = allValueSpans(from: seq)
         let encoder = ZeroValueEncoder()
         let candidates = Array(encoder.encode(sequence: seq, targets: .spans(spans)))
-        // Value 0 is already at semantic simplest — only 2 candidates.
-        #expect(candidates.count == 2)
+        // 1 all-zero + 2 individual (value 0 is already at semantic simplest).
+        #expect(candidates.count == 3)
     }
 
-    @Test("Each candidate sets one value to zero")
+    @Test("First candidate zeros all values, then one each")
     func candidateSetsOneToZero() {
         let seq = makeSequence([5, 7])
         let spans = allValueSpans(from: seq)
         let encoder = ZeroValueEncoder()
         let candidates = Array(encoder.encode(sequence: seq, targets: .spans(spans)))
-        #expect(candidates.count == 2)
-        // First candidate zeros index 0.
+        #expect(candidates.count == 3)
+        // First candidate zeros all values.
         #expect(candidates[0][0].value?.choice == .unsigned(0, .uint64))
-        #expect(candidates[0][1].value?.choice == .unsigned(7, .uint64))
-        // Second candidate zeros index 1.
-        #expect(candidates[1][0].value?.choice == .unsigned(5, .uint64))
-        #expect(candidates[1][1].value?.choice == .unsigned(0, .uint64))
+        #expect(candidates[0][1].value?.choice == .unsigned(0, .uint64))
+        // Second candidate zeros index 0 only.
+        #expect(candidates[1][0].value?.choice == .unsigned(0, .uint64))
+        #expect(candidates[1][1].value?.choice == .unsigned(7, .uint64))
+        // Third candidate zeros index 1 only.
+        #expect(candidates[2][0].value?.choice == .unsigned(5, .uint64))
+        #expect(candidates[2][1].value?.choice == .unsigned(0, .uint64))
     }
 
     @Test("Every candidate is shortlex ≤ the input")
