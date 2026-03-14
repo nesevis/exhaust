@@ -137,16 +137,10 @@ enum ReductionScheduler {
         var binarySearchToTargetEncoder = BinarySearchToTargetEncoder()
         let reorderEncoder = ReorderSiblingsEncoder()
 
-        // Legacy tactics for encoders not yet extracted.
-        let budgetLogger: ((String) -> Void)? = isInstrumented ? { message in
-            ExhaustLog.notice(category: .reducer, event: "kleisli_probe_budget_exhausted", message)
-        } : nil
-        let alignedWindowsTactic = DeleteAlignedWindowsTactic(
-            probeBudget: config.probeBudgets.deleteAlignedSiblingWindows,
-            subsetBeamSearchTuning: config.alignedDeletionBeamSearchTuning,
-            onBudgetExhausted: budgetLogger
+        var reduceFloatEncoder = ReduceFloatEncoder()
+        var deleteAlignedWindowsEncoder = DeleteAlignedWindowsEncoder(
+            beamTuning: config.alignedDeletionBeamSearchTuning
         )
-        let floatTactic = ReduceFloatTactic()
         var tandemEncoder = TandemReductionEncoder()
         var redistributeEncoder = CrossStageRedistributeEncoder()
 
@@ -359,15 +353,8 @@ enum ReductionScheduler {
                             }
 
                             let fSpans = floatSpans(at: depth)
-                            if fSpans.isEmpty == false, legBudget.isExhausted == false {
-                                let tacticContext = TacticContext(bindIndex: bindIndex, depth: depth, fallbackTree: fallbackTree)
-                                if let result = try floatTactic.apply(
-                                    gen: gen, sequence: sequence, tree: tree,
-                                    targetSpans: fSpans, context: tacticContext,
-                                    property: property, rejectCache: &rejectCache
-                                ) {
-                                    legBudget.recordMaterialization(accepted: true)
-                                    accept(result, structureChanged: false)
+                            if fSpans.isEmpty == false {
+                                if try runAdaptive(&reduceFloatEncoder, decoder: decoder, targets: .spans(fSpans), structureChanged: false, cache: &rejectCache, budget: &legBudget) {
                                     depthProgress = true
                                     contravariantAccepted += 1
                                 }
@@ -411,22 +398,9 @@ enum ReductionScheduler {
                         cycleImproved = true
                     }
 
-                    // Legacy: aligned window deletion.
-                    if legBudget.isExhausted == false {
-                        let tacticContext = TacticContext(bindIndex: bindIndex, depth: depth, fallbackTree: fallbackTree)
-                        let containerSpans = deletionTargets(category: .containerSpans, depth: depth)
-                        if containerSpans.isEmpty == false {
-                            if let result = try alignedWindowsTactic.apply(
-                                gen: gen, sequence: sequence, tree: tree,
-                                targetSpans: containerSpans, context: tacticContext,
-                                property: property, rejectCache: &rejectCache
-                            ) {
-                                legBudget.recordMaterialization(accepted: true)
-                                accept(result, structureChanged: true)
-                                deletionAccepted += 1
-                                cycleImproved = true
-                            }
-                        }
+                    if try runAdaptive(&deleteAlignedWindowsEncoder, decoder: makeDeletionDecoder(at: depth), targets: .spans(deletionTargets(category: .containerSpans, depth: depth)), structureChanged: true, cache: &rejectCache, budget: &legBudget) {
+                        deletionAccepted += 1
+                        cycleImproved = true
                     }
 
                     if try runAdaptive(&speculativeDelete, decoder: makeDeletionDecoder(at: depth), targets: .spans(deletionTargets(category: .mixed, depth: depth)), structureChanged: true, cache: &rejectCache, budget: &legBudget) {
@@ -490,15 +464,8 @@ enum ReductionScheduler {
                 // Float reduction.
                 do {
                     let fSpansZero = floatSpans(at: 0)
-                    if fSpansZero.isEmpty == false, legBudget.isExhausted == false {
-                        let tacticContext = TacticContext(bindIndex: bindIndex, depth: 0, fallbackTree: fallbackTree)
-                        if let result = try floatTactic.apply(
-                            gen: gen, sequence: sequence, tree: tree,
-                            targetSpans: fSpansZero, context: tacticContext,
-                            property: property, rejectCache: &rejectCache
-                        ) {
-                            legBudget.recordMaterialization(accepted: true)
-                            accept(result, structureChanged: structureChangedOnCovariant)
+                    if fSpansZero.isEmpty == false {
+                        if try runAdaptive(&reduceFloatEncoder, decoder: makeDepthZeroDecoder(), targets: .spans(fSpansZero), structureChanged: structureChangedOnCovariant, cache: &rejectCache, budget: &legBudget) {
                             covariantAccepted += 1
                             cycleImproved = true
                         }

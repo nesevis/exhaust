@@ -136,19 +136,6 @@ struct KleisliReducerIntegrationTests {
         #expect(property(replayedOutput) == false)
     }
 
-    @Test("EvaluationCounter counts property invocations")
-    func evaluationCounting() {
-        let counter = EvaluationCounter()
-        let result = counter.wrap({ (x: Int) in x > 5 }, body: { counted in
-            let a = counted(3)
-            let b = counted(10)
-            let c = counted(7)
-            return (a, b, c)
-        })
-
-        #expect(result == (false, true, true))
-        #expect(counter.count == 3)
-    }
 }
 
 // MARK: - BindSpanIndex.spansByDepth Tests

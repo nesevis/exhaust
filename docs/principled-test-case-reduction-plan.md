@@ -678,13 +678,19 @@ Why 3 cycles? Binary search halves the search space per cycle, so 3 cycles of bi
 
 ### Deferred
 
-The following features are designed but not yet implemented:
+The following features are designed but not yet implemented. All three are *correct-without, faster-with* optimizations — the current scheduler produces correct results without them.
 
-- **Thompson Sampling** — Adaptive encoder selection within equivalence classes (Section 6). The `ReductionGrade.maxMaterializations` field and `ApproximationClass` enum provide the grade infrastructure. The scheduler currently runs all encoders in fixed order; Thompson Sampling would replace this with posterior-driven selection within each hom-set. Requires: `EncoderPosterior` state, `selectEncoder()` function, per-cycle posterior updates.
+- **Thompson Sampling** — Adaptive encoder selection within equivalence classes (Section 4.7). The `ReductionGrade.maxMaterializations` field and `ApproximationClass` enum provide the grade infrastructure. The scheduler currently runs all encoders in fixed order; Thompson Sampling would replace this with posterior-driven selection within each hom-set. Requires: `EncoderPosterior` state, `selectEncoder()` function, per-cycle posterior updates.
+
+  **Why deferred:** With only 2–4 encoders per equivalence class, fixed-order dispatch is nearly as efficient as adaptive selection. Thompson Sampling converges in 2–3 cycles given the small action space, so the marginal gain does not justify the added state management (Beta priors, decay, dirty-depth resets) before the core scheduler is proven.
 
 - **Dominance lattice** — 2-cell pruning of dominated encoders (paper Def 15.3). The one-decoder-per-context design (Section 1.2) ensures 2-cell comparison is well-defined within each hom-set. `ReductionGrade.maxMaterializations` carries the resource component of the grade needed for dominance comparison. Not yet wired into the scheduler — all encoders run unconditionally.
 
+  **Why deferred:** Pruning dominated encoders (e.g., skipping `BinarySearchToZero` after `ZeroValue` succeeds) reduces materializations but does not change results. The infrastructure is in place; wiring it in is mechanical once the encoder set stabilizes. Doing it now would couple lattice rebuilds to an encoder set that is still evolving (legacy tactics not yet extracted).
+
 - **Phase 5 (Exploration)** — Speculative `RelaxRoundEncoder` for escaping local optima. The `.speculative` case exists in `ApproximationClass`. Requires: a new V-cycle leg after redistribution, a pipeline acceptance criterion (overall improvement, not per-step), and the `RelaxRoundEncoder` implementation.
+
+  **Why deferred:** Speculative morphisms require a fundamentally different acceptance criterion — the pipeline result must improve even if intermediate steps regress. This is a different contract from the exact/bounded legs. Adding it as a separate leg after the core V-cycle is proven is cleanest: no existing encoder, decoder, or acceptance logic needs modification. The `.speculative` enum case already exists for forward compatibility.
 
 ### Post-Processing (Natural Transformation)
 

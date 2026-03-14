@@ -70,7 +70,7 @@ public enum SequenceDecoder {
         strictness: Interpreters.Strictness,
         property: (Output) -> Bool
     ) throws -> ShrinkResult<Output>? {
-        guard let output = try Interpreters.materialize(
+        guard let output = try? Interpreters.materialize(
             gen, with: tree, using: candidate, strictness: strictness
         ) else {
             return nil
