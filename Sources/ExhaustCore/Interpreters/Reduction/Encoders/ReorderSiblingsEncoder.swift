@@ -1,6 +1,6 @@
 /// Sorts sibling groups into shortlex ascending order.
 ///
-/// For each sibling group, produces a candidate with siblings reordered by their comparison keys. Only groups that are not already sorted produce candidates.
+/// For each sibling group, produces a candidate with siblings reordered by their comparison keys. Only groups that are not already sorted produce candidates. Uses slice-based reconstruction to handle variable-sized sibling ranges.
 public struct ReorderSiblingsEncoder: BatchEncoder {
     public let name = "reorderSiblings"
     public let phase = ReductionPhase.reordering
@@ -24,23 +24,30 @@ public struct ReorderSiblingsEncoder: BatchEncoder {
             }
             guard sortedIndices != Array(keys.indices) else { return nil }
 
-            var candidate = sequence
-            // Build the reordered content by writing sorted siblings into their destination ranges.
-            var writeIdx = 0
-            while writeIdx < ranges.count {
-                let sourceIdx = sortedIndices[writeIdx]
-                let destRange = ranges[writeIdx]
-                let srcRange = ranges[sourceIdx]
-                if srcRange != destRange {
-                    let srcSlice = sequence[srcRange]
-                    var pos = destRange.lowerBound
-                    for value in srcSlice {
-                        candidate[pos] = value
-                        pos += 1
+            // Extract slices in original order, then reconstruct with permuted order.
+            // This handles variable-sized sibling ranges correctly.
+            let slices = ranges.map { Array(sequence[$0]) }
+            let spanStart = ranges[0].lowerBound
+            let spanEnd = ranges[ranges.count - 1].upperBound
+
+            var candidate = ContiguousArray(sequence[..<spanStart])
+            var i = 0
+            while i < ranges.count {
+                // Include gap between previous range and current range.
+                if i > 0 {
+                    let gapStart = ranges[i - 1].upperBound + 1
+                    let gapEnd = ranges[i].lowerBound
+                    if gapStart < gapEnd {
+                        candidate.append(contentsOf: sequence[gapStart ..< gapEnd])
                     }
                 }
-                writeIdx += 1
+                candidate.append(contentsOf: slices[sortedIndices[i]])
+                i += 1
             }
+            if spanEnd + 1 < sequence.count {
+                candidate.append(contentsOf: sequence[(spanEnd + 1)...])
+            }
+
             guard candidate.shortLexPrecedes(sequence) else { return nil }
             return candidate
         }
