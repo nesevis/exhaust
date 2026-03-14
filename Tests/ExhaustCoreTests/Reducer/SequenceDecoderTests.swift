@@ -16,29 +16,46 @@ struct SequenceDecoderForTests {
         return BindSpanIndex(from: seq)
     }
 
-    // MARK: - .relaxed strictness → .guided (regardless of bind state)
+    // MARK: - .relaxed strictness without binds → .direct
+    // Tree-driven (.direct) handles deletion correctly for non-bind generators.
+    // Guided (prefix-driven) misaligns after deletion in grouped generators (zip of arrays).
 
-    @Test("Relaxed strictness at depth > 0 produces guided decoder")
-    func relaxedStrictnessDeepDepth() {
+    @Test("Relaxed strictness at depth > 0 without binds produces direct decoder")
+    func relaxedStrictnessDeepDepthNoBind() {
         let context = DecoderContext(
             depth: .specific(2), bindIndex: nil,
             fallbackTree: nil, strictness: .relaxed
         )
         let decoder = SequenceDecoder.for(context)
-        #expect(decoder.approximation == .bounded)
-        guard case .guided = decoder else {
-            Issue.record("Expected .guided, got \(decoder)")
+        #expect(decoder.approximation == .exact)
+        guard case .direct = decoder else {
+            Issue.record("Expected .direct, got \(decoder)")
             return
         }
     }
 
-    @Test("Relaxed strictness at depth 0 without binds produces guided decoder")
+    @Test("Relaxed strictness at depth 0 without binds produces direct decoder")
     func relaxedStrictnessDepth0NoBind() {
         let context = DecoderContext(
             depth: .specific(0), bindIndex: nil,
             fallbackTree: nil, strictness: .relaxed
         )
         let decoder = SequenceDecoder.for(context)
+        guard case .direct = decoder else {
+            Issue.record("Expected .direct, got \(decoder)")
+            return
+        }
+    }
+
+    @Test("Relaxed strictness at depth > 0 with binds produces guided decoder")
+    func relaxedStrictnessDeepDepthWithBinds() {
+        let bindIndex = Self.makeBoundBindIndex()
+        let context = DecoderContext(
+            depth: .specific(2), bindIndex: bindIndex,
+            fallbackTree: nil, strictness: .relaxed
+        )
+        let decoder = SequenceDecoder.for(context)
+        #expect(decoder.approximation == .bounded)
         guard case .guided = decoder else {
             Issue.record("Expected .guided, got \(decoder)")
             return

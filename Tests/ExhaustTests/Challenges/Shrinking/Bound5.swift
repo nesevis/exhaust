@@ -103,7 +103,7 @@ struct Bound5ShrinkingChallenge {
             Self.gen,
             .suppressIssueReporting,
             .reflecting(value),
-//            .useKleisliReducer,
+            .useKleisliReducer,
             property: Self.property
         )
 

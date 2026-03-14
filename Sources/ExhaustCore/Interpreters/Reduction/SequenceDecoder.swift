@@ -150,16 +150,29 @@ public enum SequenceDecoder {
     ///
     /// One decoder per context means all encoders sharing a context share the same `dec`, forming a uniform hom-set.
     ///
-    /// Three independent reasons trigger non-direct decoders:
-    /// 1. Bind re-derivation (`.specific(0)`, binds present): bound content must be re-derived after inner value changes.
-    /// 2. Structural invalidity (`.relaxed` strictness): deletion at any depth invalidates the tree's positional mapping.
-    /// 3. Cross-stage routing (`.global`, binds present): redistribution may or may not change inner values — routing is per-candidate.
+    /// Two independent reasons trigger non-direct decoders:
+    /// 1. Bind re-derivation (`.specific(0)`, binds present): inner value changes require bound
+    ///    content to be re-derived via ``GuidedMaterializer``.
+    /// 2. Cross-stage routing (`.global`, binds present): redistribution may or may not change
+    ///    inner values — routing is per-candidate.
+    ///
+    /// Deletion (`.relaxed` strictness) uses `.guided` when binds are present (bound re-derivation
+    /// after structural changes) and `.direct` otherwise. For non-bind generators, tree-driven
+    /// materialization handles deletion correctly. The `.guided` (prefix-driven) decoder misaligns
+    /// after deletion in grouped generators (e.g. zip of arrays) because removing one
+    /// sub-generator's entries causes the cursor to consume the next sub-generator's data.
+    ///
+    /// Value reduction at depths > 0 always uses `.direct` — even with binds. These positions are
+    /// bound values, and `.guided` would ignore candidate modifications via cursor suspension.
     public static func `for`(_ context: DecoderContext) -> SequenceDecoder {
+        let hasBinds = context.bindIndex != nil
+            && context.bindIndex?.isEmpty == false
+
         switch context.depth {
         case .global:
-            if let bindIndex = context.bindIndex, bindIndex.isEmpty == false {
+            if hasBinds {
                 return .crossStage(
-                    bindIndex: bindIndex,
+                    bindIndex: context.bindIndex!,
                     fallbackTree: context.fallbackTree,
                     strictness: context.strictness
                 )
@@ -167,9 +180,9 @@ public enum SequenceDecoder {
             return .direct(strictness: context.strictness)
 
         case .specific(0):
-            let needsBindReDerivation = context.bindIndex != nil
-                && context.bindIndex?.isEmpty == false
-            if needsBindReDerivation || context.strictness == .relaxed {
+            // Depth 0 with binds: inner value changes need guided re-derivation of bound content.
+            // Depth 0 without binds: direct materialization handles both value changes and deletion.
+            if hasBinds {
                 return .guided(
                     fallbackTree: context.fallbackTree,
                     strictness: context.strictness
@@ -178,7 +191,10 @@ public enum SequenceDecoder {
             return .direct(strictness: context.strictness)
 
         case .specific:
-            if context.strictness == .relaxed {
+            // Depths > 0: deletion with binds needs guided re-derivation; value reduction
+            // (`.normal`) uses direct even with binds — these are bound values that guided
+            // would ignore via cursor suspension.
+            if context.strictness == .relaxed, hasBinds {
                 return .guided(
                     fallbackTree: context.fallbackTree,
                     strictness: context.strictness
