@@ -161,10 +161,15 @@ enum ReductionScheduler {
                 // rebuilds a matching tree. Cursor scoping ensures zip children don't consume
                 // siblings' entries — deleted children exhaust within their scope and fall back
                 // to the fallback tree (or PRNG), producing correct empty sequences.
+                //
+                // The shortlex guard prevents re-derivation from inflating the sequence:
+                // GuidedMaterializer's PRNG fallback can generate more content than the
+                // prefix contained, producing a longer sequence than the accepted candidate.
                 let seed = sequence.zobristHash
                 if case let .success(reDerivedOutput, reDerivedSequence, reDerivedTree) =
                     GuidedMaterializer.materialize(gen, prefix: sequence, seed: seed, fallbackTree: tree),
-                   property(reDerivedOutput) == false
+                   property(reDerivedOutput) == false,
+                   sequence.shortLexPrecedes(reDerivedSequence) == false
                 {
                     sequence = reDerivedSequence
                     tree = reDerivedTree
@@ -199,12 +204,20 @@ enum ReductionScheduler {
                 guard cache.contains(candidate) == false else { continue }
                 probes += 1
                 if let result = try decoder.decode(
-                    candidate: candidate, gen: gen, tree: tree,
-                    originalSequence: sequence, property: property
+                    candidate: candidate,
+                    gen: gen,
+                    tree: tree,
+                    originalSequence: sequence,
+                    property: property
                 ) {
                     budget.recordMaterialization(accepted: true)
                     accept(result, structureChanged: structureChanged)
-                    lattice.recordSuccess(encoder.name)
+                    // Don't record lattice success for batch encoders:
+                    // runBatch stops at the first success (angelic resolution),
+                    // so the encoder didn't cover all targets. The 2-cell
+                    // dominance (paper Def 15.3) is sound only when the
+                    // dominator runs to exhaustion — skipping a dominated
+                    // encoder after partial dominator execution is unsound.
                     if isInstrumented {
                         ExhaustLog.debug(category: .reducer, event: "encoder_accepted", metadata: [
                             "encoder": encoder.name, "probes": "\(probes)",
@@ -217,11 +230,17 @@ enum ReductionScheduler {
                 budget.recordMaterialization(accepted: false)
                 cache.insert(candidate)
             }
-            if isInstrumented, probes > 0 {
-                ExhaustLog.debug(category: .reducer, event: "encoder_exhausted", metadata: [
-                    "encoder": encoder.name, "probes": "\(probes)",
-                    "seq_len": "\(startSeqLen)",
-                ])
+            if isInstrumented {
+                if probes > 0 {
+                    ExhaustLog.debug(category: .reducer, event: "encoder_exhausted", metadata: [
+                        "encoder": encoder.name, "probes": "\(probes)",
+                        "seq_len": "\(startSeqLen)",
+                    ])
+                } else {
+                    ExhaustLog.debug(category: .reducer, event: "encoder_no_probes", metadata: [
+                        "encoder": encoder.name,
+                    ])
+                }
             }
             return false
         }
@@ -263,12 +282,18 @@ enum ReductionScheduler {
             if anyAccepted {
                 lattice.recordSuccess(encoder.name)
             }
-            if isInstrumented, probes > 0 {
-                ExhaustLog.debug(category: .reducer, event: anyAccepted ? "encoder_accepted" : "encoder_exhausted", metadata: [
-                    "encoder": encoder.name, "probes": "\(probes)", "accepted": "\(accepted)",
-                    "seq_len": "\(startSeqLen)→\(sequence.count)",
-                    "output": anyAccepted ? "\(output)" : "",
-                ])
+            if isInstrumented {
+                if probes > 0 {
+                    ExhaustLog.debug(category: .reducer, event: anyAccepted ? "encoder_accepted" : "encoder_exhausted", metadata: [
+                        "encoder": encoder.name, "probes": "\(probes)", "accepted": "\(accepted)",
+                        "seq_len": "\(startSeqLen)→\(sequence.count)",
+                        "output": anyAccepted ? "\(output)" : "",
+                    ])
+                } else {
+                    ExhaustLog.debug(category: .reducer, event: "encoder_no_probes", metadata: [
+                        "encoder": encoder.name,
+                    ])
+                }
             }
             return anyAccepted
         }
@@ -368,8 +393,11 @@ enum ReductionScheduler {
                         probes += 1
                         // Materialize using the encoder's modified tree directly,
                         // matching the legacy reducer's promoteBranches approach.
-                        guard let output = try? Interpreters.materialize(
-                            gen, with: candidateTree, using: candidateSequence, strictness: .relaxed
+                        guard var output = try? Interpreters.materialize(
+                            gen,
+                            with: candidateTree,
+                            using: candidateSequence,
+                            strictness: .relaxed
                         ) else {
                             branchUsed += 1
                             materializationFailures += 1
@@ -387,7 +415,23 @@ enum ReductionScheduler {
                             evaluations: 1
                         )
                         branchUsed += 1
-                        accept(result, structureChanged: true)
+                        // Accept branch result directly — no GuidedMaterializer
+                        // re-derivation. The encoder's candidateTree preserves
+                        // branch alternatives at all pick sites; re-derivation
+                        // through GuidedMaterializer would strip them, preventing
+                        // pivotBranches from finding candidates on the next pass.
+                        sequence = result.sequence
+                        tree = result.tree
+                        output = result.output
+                        fallbackTree = result.tree
+                        if hasBind {
+                            bindIndex = BindSpanIndex(from: sequence)
+                            bestSequence = sequence
+                            bestOutput = output
+                        } else if sequence.shortLexPrecedes(bestSequence) {
+                            bestSequence = sequence
+                            bestOutput = output
+                        }
                         cycleImproved = true
                         accepted = true
                         if isInstrumented {
@@ -409,6 +453,31 @@ enum ReductionScheduler {
                     }
                 }
                 remaining -= branchUsed
+
+                // After all branch encoders have run, re-derive the sequence to
+                // refresh validRange annotations. Branch promotion copies subtrees
+                // with stale ranges from their original (deeper) position; the
+                // generator's bind closures compute fresh ranges from the current
+                // parent values. Re-derivation runs the generator, producing a
+                // sequence with accurate ranges. We defer this until after ALL
+                // branch encoders have run so pivotBranches sees the original tree
+                // with full alternatives.
+                if cycleImproved {
+                    let seed = sequence.zobristHash
+                    if case let .success(reDerivedOutput, reDerivedSequence, reDerivedTree) =
+                        GuidedMaterializer.materialize(gen, prefix: sequence, seed: seed, fallbackTree: tree),
+                       property(reDerivedOutput) == false,
+                       sequence.shortLexPrecedes(reDerivedSequence) == false
+                    {
+                        sequence = reDerivedSequence
+                        tree = reDerivedTree
+                        output = reDerivedOutput
+                        fallbackTree = reDerivedTree
+                    }
+                    if hasBind {
+                        bindIndex = BindSpanIndex(from: sequence)
+                    }
+                }
             }
 
             // ── Leg 1: Contravariant sweep (depths max → 1) ──
@@ -516,7 +585,11 @@ enum ReductionScheduler {
                 let preCovariantBindIndex = bindIndex
                 let preCovariantTree = tree
 
-                let structureChangedOnCovariant = hasBind
+                // Re-derive after covariant value changes when the generator has
+                // dynamic range dependencies (from ._bind or .bind()). When
+                // hasDynamicRanges is false (detected via choice tree sampling),
+                // re-derivation is only needed if the tree has explicit .bind nodes.
+                let structureChangedOnCovariant = hasBind || config.hasDynamicRanges
 
                 // Zero values.
                 do {

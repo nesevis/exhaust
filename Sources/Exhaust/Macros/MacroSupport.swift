@@ -231,10 +231,18 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
         )
         let actualSeed = generator.baseSeed
 
+        let rangeSampleLimit = 5
+        var passingTrees: [ChoiceTree] = []
+
         do { while let (next, tree) = try generator.next() {
             iterations += 1
             let passed = property(next)
+            if passed, passingTrees.count < rangeSampleLimit {
+                passingTrees.append(tree)
+            }
             if passed == false {
+                let hasDynamicRanges = passingTrees.count < 2
+                    || RangeDependencyDetector.hasDynamicRanges(in: passingTrees)
                 var propertyInvocationCount = 0
                 let countingProperty: (Output) -> Bool = { value in
                     propertyInvocationCount += 1
@@ -246,6 +254,7 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
                         tree: tree,
                         config: reductionConfig,
                         useKleisli: useKleisliReducer,
+                        hasDynamicRanges: hasDynamicRanges,
                         property: countingProperty,
                     ) {
                         let failure = PropertyTestFailure(
