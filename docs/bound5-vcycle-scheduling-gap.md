@@ -243,3 +243,218 @@ combination:
 
 Together, these address both root causes without compromising the V-cycle's
 architectural principles.
+
+---
+
+## Addendum: Implementation Retrospective
+
+The plan in `docs/principled-test-case-reduction-plan.md` specified the V-cycle
+architecture, encoder/decoder separation, and budget system in detail. The ported
+encoders matched the legacy strategies' algorithms faithfully. Yet multiple
+correctness issues emerged during integration that the plan did not anticipate.
+This section catalogues what went wrong, why, and what a future plan should address.
+
+### Issues discovered during implementation
+
+#### 1. GuidedMaterializer cursor misalignment in zips
+
+**What happened:** When `DeleteContainerSpansEncoder` removed a container span
+from a zipped sequence, `GuidedMaterializer`'s flat cursor consumed the next
+sibling's entries instead of falling back to the fallback tree. Array `a`'s
+sub-generator ate array `b`'s data, producing misaligned values.
+
+**Root cause:** The cursor has no concept of per-child boundaries in a zip. It
+consumes entries in positional order, unaware that entries belong to different
+sub-generators.
+
+**Fix applied:** Added cursor scoping to `handleZip` — each child's cursor
+consumption is limited to the fallback tree's expected span via `pushScope`/
+`popScope`. The `flattenedEntryCount` property on `ChoiceTree` computes the
+expected span without allocating.
+
+**What the plan should have specified:** The plan described encoders and decoders
+as independent components but did not specify how `GuidedMaterializer` handles
+structural changes to grouped generators. A section on "cursor alignment
+invariants" would have caught this: when replaying a modified prefix through a
+zip, the cursor must respect child boundaries derived from the fallback tree.
+
+#### 2. Stale tree after `.direct` deletion
+
+**What happened:** The `.direct(strictness: .normal)` decoder produces the correct
+output for deletion candidates but returns the **original tree** unchanged. After
+deletion, the working tree had 129 entries while the sequence had 12. All subsequent
+`.direct` materializations failed because positions didn't align.
+
+**Root cause:** `decodeDirect` returns `ShrinkResult(sequence: candidate, tree: tree, ...)`
+where `tree` is the original tree passed in, not a re-derived one. This is correct
+for value-only changes (same structure) but wrong for structural changes.
+
+**Fix applied:** Added tree re-derivation in the `accept()` function when
+`structureChanged == true`, using `GuidedMaterializer` with cursor scoping.
+
+**What the plan should have specified:** The plan described the decoder's role as
+`dec: candidate → ShrinkResult?` but did not specify the tree consistency
+invariant: after acceptance, the `(sequence, tree)` pair must be consistent. A
+formal invariant — "accept() post-condition: `ChoiceSequence.flatten(tree) ≈ sequence`"
+— would have made the stale-tree issue obvious during design.
+
+#### 3. Binary search direction for signed integers
+
+**What happened:** `BinarySearchToZeroEncoder` searched in bit-pattern space from
+`currentBP` toward `targetBP`. For large negative integers, `currentBP < targetBP`
+(XOR encoding maps large negatives to small bit patterns), so
+`BinarySearchStepper(lo: targetBP, hi: currentBP)` had `lo > hi` and converged
+immediately. The encoder fell through to the cross-zero probe (16 shortlex keys
+per cycle), producing linear descent at ~8 per cycle on values of magnitude ~10^17.
+
+**Root cause:** The plan specified "binary search toward reduction target" without
+considering that "toward" in bit-pattern space can mean upward or downward depending
+on the sign of the value. The XOR encoding is order-preserving (larger values →
+larger bit patterns), but the search direction must match.
+
+**Fix applied:** Added `DirectionalStepper` enum wrapping either `BinarySearchStepper`
+(downward: `currentBP > targetBP`) or `MaxBinarySearchStepper` (upward:
+`currentBP < targetBP`).
+
+**What the plan should have specified:** A section on "signed integer encoding and
+search direction" with explicit examples: `Int(-10^17)` has `bitPattern64 ≈ 0`,
+`Int(0)` has `bitPattern64 = signBitMask`. The search must go upward in BP space
+for negative values.
+
+#### 4. Cross-zero probing for shortlex-optimal signed values
+
+**What happened:** `BinarySearchToZeroEncoder` reduced `[3, 4, -1]` to `[0, 1, 2]`
+instead of `[0, -1, 1]`. The binary search in bit-pattern space goes
+`4 → 2 → 1 → 0`, never crossing zero to try `-1` (shortlex key 1, simpler than
+`1` at key 2).
+
+**Root cause:** Bit-pattern binary search stays on one side of zero. The shortlex
+ordering (zigzag encoding: `0, -1, 1, -2, 2, ...`) requires crossing zero to find
+the simplest values.
+
+**Fix applied:** Added a cross-zero probe phase after binary search convergence:
+walks down in shortlex key space (up to 16 keys), trying each via
+`ChoiceValue.fromShortlexKey`. Matches the legacy `reduceIntegralValues`'
+cross-zero probing.
+
+**What the plan should have specified:** The plan should have noted that shortlex
+ordering for signed integers differs from bit-pattern ordering, and that binary
+search in BP space is incomplete for signed types. The legacy reducer's cross-zero
+probing should have been called out as a required feature, not just an
+implementation detail of `reduceIntegralValues`.
+
+#### 5. `TandemReductionEncoder` searched for smallest delta instead of largest
+
+**What happened:** The tandem encoder used `BinarySearchStepper(lo: 0, hi: distance)`
+which finds the **smallest** accepted delta (converging toward 0). For coupled values
+like `[999, 1000]` where `abs(a-b) == 1` is preserved by any shared delta, the
+stepper converged at delta=1 instead of delta=989. Result: linear descent at 1 per
+cycle, ~30,000 invocations for values ~1000.
+
+**Root cause:** `BinarySearchStepper` is designed for value minimization (find
+smallest accepted BP). Tandem reduction needs delta maximization (find largest
+accepted shared offset).
+
+**Fix applied:** Added `MaxBinarySearchStepper` with inverted search logic
+(on accept: raise `lo`; on reject: lower `hi`). Fixed edge case where `lastProbe=0`
+rejection caused `hi` underflow → infinite loop.
+
+**What the plan should have specified:** The plan described tandem reduction as
+"binary search for optimal shared delta" but did not specify which direction.
+The stepper's contract — "find smallest accepted value" vs "find largest accepted
+value" — should have been explicit. Using the wrong one silently produces correct
+but pathologically slow results.
+
+#### 6. Oscillation from structure-preserving encoders
+
+**What happened:** When tandem and cross-stage redistribution ran in the covariant
+leg, they "accepted" probes each cycle that were shortlex-better than the cycle
+start but not globally better. The stall budget reset every cycle, causing infinite
+loops.
+
+**Root cause:** The stall detection compared to the cycle-start sequence. Encoders
+that re-discover the same shortlex-optimal values (e.g., cross-zero probing on
+already-optimal signed integers) count as "progress" even though `bestSequence`
+hasn't advanced.
+
+**Fix applied:** Changed stall detection to compare `bestSequence` at cycle end
+against `bestSequence` at cycle start. Only global-best advancement resets the
+stall budget.
+
+**What the plan should have specified:** An explicit termination invariant:
+"a cycle counts as improved if and only if `bestSequence` strictly advanced."
+The plan described the stall budget mechanism but used `cycleImproved` (any
+encoder accepted) as the trigger, which is necessary but not sufficient.
+
+#### 7. Filter-coupled generators and the all-zero candidate
+
+**What happened:** The Deletion shrinking challenge has a filter coupling array
+and number: `.filter { $0.contains($1) }`. Reducing one value at a time breaks
+the filter. All 105 property invocations were wasted — zero encoders accepted.
+
+**Root cause:** `ZeroValueEncoder` produced one candidate per target (each with
+one value zeroed). The filter rejects candidates where the array doesn't contain
+the number. Only the all-zero candidate `([0, 0], 0)` preserves the filter.
+
+**Fix applied:** Added an all-zero candidate (all values set to semantic simplest
+simultaneously) as the first candidate from `ZeroValueEncoder`, matching the
+legacy `naiveSimplifyValuesToSemanticSimplest` pass.
+
+**What the plan should have specified:** The plan should have identified the
+legacy's `naiveSimplifyValuesToSemanticSimplest` as a distinct tactic (set all
+values to zero at once) rather than grouping it with per-value zeroing. The
+filter-coupling failure mode is a known challenge in property-based testing
+literature.
+
+### Patterns in what the plan missed
+
+The issues cluster into three categories:
+
+1. **Encoding assumptions** (#3, #4, #5): The plan specified operations in terms
+   of "bit patterns" and "binary search" without fully working through the
+   implications of the XOR sign-magnitude encoding for signed integers. Each
+   encoder that operates in bit-pattern space needed direction-awareness and
+   cross-zero handling.
+
+2. **Invariant violations** (#1, #2, #6): The plan specified the encoder/decoder
+   separation and the V-cycle structure but did not state the invariants that must
+   hold between components: cursor alignment in zips, tree consistency after
+   structural changes, and termination conditions. These invariants are implicit in
+   the legacy reducer's monolithic loop but must be made explicit when the
+   responsibilities are split across encoder, decoder, and scheduler.
+
+3. **Legacy parity gaps** (#4, #7): The plan ported each legacy pass to an encoder
+   but missed behaviours that were incidental to the legacy pass structure: the
+   cross-zero probe was an implementation detail of `reduceIntegralValues`, and the
+   all-zero candidate was a side effect of `naiveSimplifyValuesToSemanticSimplest`
+   running before per-value passes. These behaviours are load-bearing but not
+   visible in a pass-level description.
+
+### Recommendations for future plans
+
+1. **State the invariants.** For each component boundary (encoder→decoder,
+   decoder→accept, accept→next cycle), specify the pre- and post-conditions.
+   "The tree must match the sequence after acceptance" is a one-line invariant
+   that would have prevented hours of debugging.
+
+2. **Work through signed integer examples.** Any plan involving bit-pattern
+   arithmetic should include concrete examples with negative values, showing the
+   XOR encoding, shortlex keys, and search directions. The zigzag encoding
+   is non-obvious and every encoder that touches bit patterns needs to account
+   for it.
+
+3. **List legacy behaviours, not just legacy passes.** A pass may have multiple
+   behaviours (e.g., `reduceIntegralValues` has binary search, cross-zero probing,
+   boundary unlock, and stale-range escape). Porting the "binary search" part
+   without the "cross-zero probing" part silently degrades quality.
+
+4. **Specify termination conditions precisely.** "Stall after N fruitless cycles"
+   must define "fruitless" — is it "no encoder accepted" or "global best didn't
+   advance"? The difference is the difference between termination and infinite
+   loops.
+
+5. **Include pathological test cases in the plan.** The Bound5, Difference, Distinct,
+   Deletion, and Large Union List challenges each exposed a different class of bug.
+   A plan that includes "verify these specific inputs reduce to these specific
+   outputs" would have caught the issues during design review rather than during
+   integration.
