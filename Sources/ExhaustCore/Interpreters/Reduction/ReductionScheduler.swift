@@ -92,10 +92,8 @@ enum ReductionScheduler {
             onBudgetExhausted: budgetLogger
         )
         let floatTactic = ReduceFloatTactic()
-        let crossStageTactics: [any CrossStageShrinkTactic] = [
-            ReduceInTandemTactic(probeBudget: config.probeBudgets.reduceValuesInTandem, onBudgetExhausted: budgetLogger),
-            RedistributeTactic(probeBudget: config.probeBudgets.redistributeNumericPairs, onBudgetExhausted: budgetLogger),
-        ]
+        var tandemEncoder = TandemReductionEncoder()
+        var redistributeEncoder = CrossStageRedistributeEncoder()
 
         // MARK: - Helpers
 
@@ -472,23 +470,22 @@ enum ReductionScheduler {
                 cyclesSinceRedistribution = 0
                 let target = cycleBudget.initialBudget(for: .redistribution)
                 var legBudget = LegBudget(hardCap: remaining, stallPatience: target)
-                let crossStageContext = TacticContext(bindIndex: bindIndex, depth: -1, fallbackTree: fallbackTree)
-                let allValues = ChoiceSequence.extractAllValueSpans(from: sequence)
+                let redistContext = DecoderContext(depth: .global, bindIndex: bindIndex, fallbackTree: fallbackTree, strictness: .normal)
+                let redistDecoder = SequenceDecoder.for(redistContext)
+
+                // Tandem reduction: reduce sibling value pairs together.
                 let allSiblings = ChoiceSequence.extractSiblingGroups(from: sequence)
-                for tactic in crossStageTactics {
-                    guard legBudget.isExhausted == false else { break }
-                    if let result = try tactic.apply(
-                        gen: gen, sequence: sequence, tree: tree,
-                        siblingGroups: allSiblings, allValueSpans: allValues,
-                        context: crossStageContext, property: property,
-                        rejectCache: &rejectCache
-                    ) {
-                        legBudget.recordMaterialization(accepted: true)
-                        accept(result, structureChanged: hasBind)
+                if allSiblings.isEmpty == false {
+                    if try runAdaptive(&tandemEncoder, decoder: redistDecoder, targets: .siblingGroups(allSiblings), structureChanged: hasBind, cache: &rejectCache, budget: &legBudget) {
                         cycleImproved = true
-                        if isInstrumented { ExhaustLog.debug(category: .reducer, event: "redistribution_accepted", metadata: ["tactic": tactic.name]) }
-                        break
+                        if isInstrumented { ExhaustLog.debug(category: .reducer, event: "redistribution_accepted", metadata: ["encoder": "tandemReduction"]) }
                     }
+                }
+
+                // Cross-stage redistribution: move mass between coordinates.
+                if try runAdaptive(&redistributeEncoder, decoder: redistDecoder, targets: .wholeSequence, structureChanged: hasBind, cache: &rejectCache, budget: &legBudget) {
+                    cycleImproved = true
+                    if isInstrumented { ExhaustLog.debug(category: .reducer, event: "redistribution_accepted", metadata: ["encoder": "crossStageRedistribute"]) }
                 }
             } else {
                 cyclesSinceRedistribution += 1
