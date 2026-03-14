@@ -185,6 +185,17 @@ public enum SequenceDecoder {
                     strictness: context.strictness
                 )
             }
+            // Deletion (.relaxed) invalidates the tree's positional mapping even
+            // without binds. GuidedMaterializer rebuilds a consistent (sequence,
+            // tree) pair and applies the shortlex guard. Without this, the .direct
+            // decoder returns a stale tree, and the re-derivation in accept() can
+            // produce a longer sequence than the deletion candidate.
+            if context.strictness == .relaxed {
+                return .guided(
+                    fallbackTree: context.fallbackTree,
+                    strictness: context.strictness
+                )
+            }
             return .direct(strictness: context.strictness)
 
         case .specific:
