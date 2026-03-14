@@ -29,6 +29,8 @@ public enum ApproximationClass: Int, Comparable, Sendable {
 public struct ReductionGrade: Sendable {
     public let approximation: ApproximationClass
     /// Maximum materializations this encoder or morphism will consume.
+    ///
+    /// Infrastructure for the deferred dominance lattice (see plan Phase 5). Currently unused at the scheduler level — ``ReductionScheduler/LegBudget`` handles runtime tracking.
     public let maxMaterializations: Int
 
     public init(approximation: ApproximationClass, maxMaterializations: Int) {

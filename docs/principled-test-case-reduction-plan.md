@@ -351,7 +351,7 @@ protocol BatchEncoder: SequenceEncoderBase {
     func encode(
         sequence: ChoiceSequence,
         targets: TargetSet,
-    ) -> some Sequence<ChoiceSequence>
+    ) -> any Sequence<ChoiceSequence>
 }
 
 /// Adaptive encoding: one probe at a time, feedback-driven.
@@ -387,7 +387,7 @@ protocol AdaptiveEncoder: SequenceEncoderBase {
 }
 ```
 
-**Swift implementation notes for `BatchEncoder`.** The `some Sequence` return type supports two lazy implementation approaches: `sequence(state:next:)` (returns `UnfoldSequence`) for encoders with simple iteration state (e.g., deletion walking a span list), and a custom `Sequence`/`IteratorProtocol` conformance for encoders with richer traversal state (e.g., beam search over sibling subsets). Both are pull-driven — the scheduler consumes only as many candidates as it evaluates.
+**Swift implementation notes for `BatchEncoder`.** The `any Sequence` return type supports two lazy implementation approaches: `sequence(state:next:)` (returns `UnfoldSequence`) for encoders with simple iteration state (e.g., deletion walking a span list), and a custom `Sequence`/`IteratorProtocol` conformance for encoders with richer traversal state (e.g., beam search over sibling subsets). Both are pull-driven — the scheduler consumes only as many candidates as it evaluates.
 
 **Scheduler dispatch by protocol conformance:**
 
@@ -606,8 +606,10 @@ enum ReductionPhase: Int, Comparable {
 2. `DeleteSequenceElementsEncoder` — removes element groups within arrays
 3. `DeleteSequenceBoundariesEncoder` — removes array start/end markers
 4. `DeleteFreeStandingValuesEncoder` — removes individual loose values
-5. `DeleteAlignedWindowsEncoder` — beam-search over sibling subsets
+5. `DeleteAlignedWindowsTactic` — beam-search over sibling subsets (legacy tactic, not yet extracted to `AdaptiveEncoder`)
 6. `SpeculativeDeleteEncoder` — delete + flag for GuidedMaterializer repair
+
+**Note:** Deletion encoders 1–4 and 6 conform to `AdaptiveEncoder` (adaptive batch sizing), not `BatchEncoder`. Each deletion pass uses feedback-driven probing: after a successful deletion, the encoder can skip past the deleted region. `DeleteAlignedWindowsTactic` remains as a legacy `ShrinkTactic`, invoked directly by the scheduler.
 
 **2-cell relationships:**
 - 1 ⇒ 6 (container deletion is strictly more aggressive than speculative single-span deletion)
@@ -626,7 +628,7 @@ enum ReductionPhase: Int, Comparable {
 1. `ZeroValueEncoder` — set each value to 0. Grade: `(.exact, n)`.
 2. `BinarySearchToZeroEncoder` — binary search each value toward 0. Grade: `(.exact, n·log V)`.
 3. `BinarySearchToTargetEncoder` — binary search toward a target from another depth. Grade: `(.exact, n·log V)`.
-4. `ReduceFloatEncoder` — multi-stage float pipeline. Grade: `(.exact, n·stages·log V)`.
+4. `ReduceFloatTactic` — multi-stage float pipeline (legacy tactic, not yet extracted to encoder protocol). Grade: `(.exact, n·stages·log V)`.
 
 **2-cell chain:** 1 ⇒ 2 ⇒ 3. Zero is the best binary-search-to-zero can achieve. Binary-search-to-zero finds values ≤ any nonzero target.
 
@@ -673,6 +675,16 @@ Why 3 cycles? Binary search halves the search space per cycle, so 3 cycles of bi
 **Not implemented initially.** This is infrastructure-in-waiting, justified by the paper's relax-round framework (paper §11.2).
 
 **Can `.speculative` be deferred without redesign?** Yes. The initial implementation needs only `.exact` and `.bounded`. Adding `.speculative` later requires: (1) a new enum case in `ApproximationClass`, (2) a new `ReductionLeg.exploration` case, (3) a new leg in the V-cycle after redistribution, and (4) a modified acceptance criterion for that leg (pipeline result must improve, not just each intermediate step). The grade algebra doesn't change — lattice join over three values instead of two. The V-cycle gains one more leg. No existing code needs modification except adding the new leg to the scheduler loop. The scheduling constraint ("speculative must run last") is enforced by leg ordering, not by special-casing in the grade algebra. The `ApproximationClass` enum is included now with three cases for completeness, but an initial implementation could define only `.exact` and `.bounded` and add `.speculative` when Phase 5 is built.
+
+### Deferred
+
+The following features are designed but not yet implemented:
+
+- **Thompson Sampling** — Adaptive encoder selection within equivalence classes (Section 6). The `ReductionGrade.maxMaterializations` field and `ApproximationClass` enum provide the grade infrastructure. The scheduler currently runs all encoders in fixed order; Thompson Sampling would replace this with posterior-driven selection within each hom-set. Requires: `EncoderPosterior` state, `selectEncoder()` function, per-cycle posterior updates.
+
+- **Dominance lattice** — 2-cell pruning of dominated encoders (paper Def 15.3). The one-decoder-per-context design (Section 1.2) ensures 2-cell comparison is well-defined within each hom-set. `ReductionGrade.maxMaterializations` carries the resource component of the grade needed for dominance comparison. Not yet wired into the scheduler — all encoders run unconditionally.
+
+- **Phase 5 (Exploration)** — Speculative `RelaxRoundEncoder` for escaping local optima. The `.speculative` case exists in `ApproximationClass`. Requires: a new V-cycle leg after redistribution, a pipeline acceptance criterion (overall improvement, not per-step), and the `RelaxRoundEncoder` implementation.
 
 ### Post-Processing (Natural Transformation)
 
@@ -1115,7 +1127,7 @@ protocol BranchEncoder {
     func encode(
         sequence: ChoiceSequence,
         tree: ChoiceTree,
-    ) -> some Sequence<ChoiceSequence>
+    ) -> any Sequence<ChoiceSequence>
 }
 ```
 

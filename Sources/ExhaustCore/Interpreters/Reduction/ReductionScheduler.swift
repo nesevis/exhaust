@@ -5,6 +5,61 @@
 /// Resource tracking uses per-leg budgets with unused-budget forwarding. Each leg has a hard cap (maximum materializations) and a stall patience (maximum consecutive fruitless materializations). Forwarded budget extends productive legs but does not increase patience for unproductive ones.
 enum ReductionScheduler {
 
+    // MARK: - Merge
+
+    /// Builds a merged sequence by substituting pre-covariant bound values where they're
+    /// shortlex-smaller and within the post-covariant valid range.
+    ///
+    /// Returns `nil` if no valid substitution exists (pre-checks 2b, 3, 4 all gate this).
+    static func buildMergedSequence(
+        preCovariantSequence: ChoiceSequence,
+        postCovariantSequence: ChoiceSequence,
+        preBindIndex: BindSpanIndex,
+        postBindIndex: BindSpanIndex
+    ) -> ChoiceSequence? {
+        guard preBindIndex.regions.count == postBindIndex.regions.count else { return nil }
+
+        // Pre-check 2b: Filter to regions where inner range sizes match (corresponding generator sites).
+        // Pre-check 3: Scan for any aligned bound position where pre < post (a merge candidate exists).
+        var correspondingRegions: [(BindSpanIndex.BindRegion, BindSpanIndex.BindRegion)] = []
+        var anyMergeCandidate = false
+        for (oldRegion, newRegion) in zip(preBindIndex.regions, postBindIndex.regions) {
+            guard oldRegion.innerRange.count == newRegion.innerRange.count else { continue }
+            correspondingRegions.append((oldRegion, newRegion))
+            if anyMergeCandidate == false {
+                for (oldIdx, newIdx) in zip(oldRegion.boundRange, newRegion.boundRange) {
+                    if preCovariantSequence[oldIdx].shortLexCompare(postCovariantSequence[newIdx]) == .lt {
+                        anyMergeCandidate = true
+                        break
+                    }
+                }
+            }
+        }
+
+        guard anyMergeCandidate else { return nil }
+
+        var mergedSeq = postCovariantSequence
+        var didMerge = false
+        for (oldRegion, newRegion) in correspondingRegions {
+            for (oldIdx, newIdx) in zip(oldRegion.boundRange, newRegion.boundRange) {
+                // Pre-check 4: Skip substitution if pre-covariant value falls outside post-covariant valid range.
+                if let preValue = preCovariantSequence[oldIdx].value,
+                   let postValue = postCovariantSequence[newIdx].value,
+                   preValue.choice.fits(in: postValue.validRange) == false
+                {
+                    continue
+                }
+                if preCovariantSequence[oldIdx].shortLexCompare(postCovariantSequence[newIdx]) == .lt {
+                    mergedSeq[newIdx] = preCovariantSequence[oldIdx]
+                    didMerge = true
+                }
+            }
+        }
+
+        guard didMerge, mergedSeq.shortLexPrecedes(postCovariantSequence) else { return nil }
+        return mergedSeq
+    }
+
     // MARK: - Leg Budget Tracker
 
     /// Tracks materialization budget within a single V-cycle leg.
@@ -215,6 +270,16 @@ enum ReductionScheduler {
             return spans
         }
 
+        func makeDeletionDecoder(at depth: Int) -> SequenceDecoder {
+            let context = DecoderContext(depth: .specific(depth), bindIndex: bindIndex, fallbackTree: fallbackTree, strictness: .relaxed)
+            return SequenceDecoder.for(context)
+        }
+
+        func makeDepthZeroDecoder() -> SequenceDecoder {
+            let context = DecoderContext(depth: .specific(0), bindIndex: bindIndex, fallbackTree: fallbackTree, strictness: .normal)
+            return SequenceDecoder.for(context)
+        }
+
         // MARK: - V-Cycle
 
         while stallBudget > 0 {
@@ -224,6 +289,7 @@ enum ReductionScheduler {
             var contravariantAccepted = 0
             var deletionAccepted = 0
             var covariantAccepted = 0
+            var dirtyDepths = Set(0 ... maxBindDepth)
 
             // Per-cycle budget with unused-budget forwarding.
             var remaining = cycleBudget.total
@@ -267,7 +333,7 @@ enum ReductionScheduler {
                 var legBudget = LegBudget(hardCap: remaining, stallPatience: target)
                 rejectCache = ReducerCache()
                 if maxBindDepth >= 1 {
-                    for depth in stride(from: maxBindDepth, through: 1, by: -1) {
+                    for depth in stride(from: maxBindDepth, through: 1, by: -1) where dirtyDepths.contains(depth) {
                         guard legBudget.isExhausted == false else { break }
                         var depthProgress = true
                         while depthProgress, legBudget.isExhausted == false {
@@ -327,22 +393,20 @@ enum ReductionScheduler {
                 rejectCache = ReducerCache()
                 for depth in 0 ... maxBindDepth {
                     guard legBudget.isExhausted == false else { break }
-                    let deletionContext = DecoderContext(depth: .specific(depth), bindIndex: bindIndex, fallbackTree: fallbackTree, strictness: .relaxed)
-                    let deletionDecoder = SequenceDecoder.for(deletionContext)
 
-                    if try runAdaptive(&deleteContainerSpans, decoder: deletionDecoder, targets: .spans(deletionTargets(category: .containerSpans, depth: depth)), structureChanged: true, cache: &rejectCache, budget: &legBudget) {
+                    if try runAdaptive(&deleteContainerSpans, decoder: makeDeletionDecoder(at: depth), targets: .spans(deletionTargets(category: .containerSpans, depth: depth)), structureChanged: true, cache: &rejectCache, budget: &legBudget) {
                         deletionAccepted += 1
                         cycleImproved = true
                     }
-                    if try runAdaptive(&deleteSequenceElements, decoder: deletionDecoder, targets: .spans(deletionTargets(category: .sequenceElements, depth: depth)), structureChanged: true, cache: &rejectCache, budget: &legBudget) {
+                    if try runAdaptive(&deleteSequenceElements, decoder: makeDeletionDecoder(at: depth), targets: .spans(deletionTargets(category: .sequenceElements, depth: depth)), structureChanged: true, cache: &rejectCache, budget: &legBudget) {
                         deletionAccepted += 1
                         cycleImproved = true
                     }
-                    if try runAdaptive(&deleteSequenceBoundaries, decoder: deletionDecoder, targets: .spans(deletionTargets(category: .sequenceBoundaries, depth: depth)), structureChanged: true, cache: &rejectCache, budget: &legBudget) {
+                    if try runAdaptive(&deleteSequenceBoundaries, decoder: makeDeletionDecoder(at: depth), targets: .spans(deletionTargets(category: .sequenceBoundaries, depth: depth)), structureChanged: true, cache: &rejectCache, budget: &legBudget) {
                         deletionAccepted += 1
                         cycleImproved = true
                     }
-                    if try runAdaptive(&deleteFreeStandingValues, decoder: deletionDecoder, targets: .spans(deletionTargets(category: .freeStandingValues, depth: depth)), structureChanged: true, cache: &rejectCache, budget: &legBudget) {
+                    if try runAdaptive(&deleteFreeStandingValues, decoder: makeDeletionDecoder(at: depth), targets: .spans(deletionTargets(category: .freeStandingValues, depth: depth)), structureChanged: true, cache: &rejectCache, budget: &legBudget) {
                         deletionAccepted += 1
                         cycleImproved = true
                     }
@@ -365,12 +429,15 @@ enum ReductionScheduler {
                         }
                     }
 
-                    if try runAdaptive(&speculativeDelete, decoder: deletionDecoder, targets: .spans(deletionTargets(category: .mixed, depth: depth)), structureChanged: true, cache: &rejectCache, budget: &legBudget) {
+                    if try runAdaptive(&speculativeDelete, decoder: makeDeletionDecoder(at: depth), targets: .spans(deletionTargets(category: .mixed, depth: depth)), structureChanged: true, cache: &rejectCache, budget: &legBudget) {
                         deletionAccepted += 1
                         cycleImproved = true
                     }
                 }
                 remaining -= legBudget.used
+                if deletionAccepted > 0 {
+                    dirtyDepths = Set(0 ... (bindIndex?.maxBindDepth ?? 0))
+                }
             }
 
             // ── Leg 3: Covariant sweep (depth 0) ──
@@ -382,47 +449,70 @@ enum ReductionScheduler {
                 let preCovariantBindIndex = bindIndex
                 let preCovariantTree = tree
 
-                let depth0Context = DecoderContext(depth: .specific(0), bindIndex: bindIndex, fallbackTree: fallbackTree, strictness: .normal)
-                let depth0Decoder = SequenceDecoder.for(depth0Context)
                 let structureChangedOnCovariant = hasBind
 
-                let vSpans0 = valueSpans(at: 0)
-                if vSpans0.isEmpty == false {
-                    let targets = TargetSet.spans(vSpans0)
-                    if try runBatch(zeroValueEncoder, decoder: depth0Decoder, targets: targets, structureChanged: structureChangedOnCovariant, cache: &rejectCache, budget: &legBudget) {
-                        covariantAccepted += 1
-                        cycleImproved = true
-                    }
-                    if try runAdaptive(&binarySearchToZeroEncoder, decoder: depth0Decoder, targets: targets, structureChanged: structureChangedOnCovariant, cache: &rejectCache, budget: &legBudget) {
-                        covariantAccepted += 1
-                        cycleImproved = true
-                    }
-                    if try runAdaptive(&binarySearchToTargetEncoder, decoder: depth0Decoder, targets: targets, structureChanged: structureChangedOnCovariant, cache: &rejectCache, budget: &legBudget) {
-                        covariantAccepted += 1
-                        cycleImproved = true
+                // Zero values.
+                do {
+                    let vSpansZero = valueSpans(at: 0)
+                    if vSpansZero.isEmpty == false {
+                        let targets = TargetSet.spans(vSpansZero)
+                        if try runBatch(zeroValueEncoder, decoder: makeDepthZeroDecoder(), targets: targets, structureChanged: structureChangedOnCovariant, cache: &rejectCache, budget: &legBudget) {
+                            covariantAccepted += 1
+                            cycleImproved = true
+                        }
                     }
                 }
 
-                let fSpans0 = floatSpans(at: 0)
-                if fSpans0.isEmpty == false, legBudget.isExhausted == false {
-                    let tacticContext = TacticContext(bindIndex: bindIndex, depth: 0, fallbackTree: fallbackTree)
-                    if let result = try floatTactic.apply(
-                        gen: gen, sequence: sequence, tree: tree,
-                        targetSpans: fSpans0, context: tacticContext,
-                        property: property, rejectCache: &rejectCache
-                    ) {
-                        legBudget.recordMaterialization(accepted: true)
-                        accept(result, structureChanged: structureChangedOnCovariant)
-                        covariantAccepted += 1
-                        cycleImproved = true
+                // Binary search to zero.
+                do {
+                    let vSpansZero = valueSpans(at: 0)
+                    if vSpansZero.isEmpty == false {
+                        let targets = TargetSet.spans(vSpansZero)
+                        if try runAdaptive(&binarySearchToZeroEncoder, decoder: makeDepthZeroDecoder(), targets: targets, structureChanged: structureChangedOnCovariant, cache: &rejectCache, budget: &legBudget) {
+                            covariantAccepted += 1
+                            cycleImproved = true
+                        }
                     }
                 }
 
-                let sGroups0 = siblingGroups(at: 0)
-                if sGroups0.isEmpty == false {
-                    if try runBatch(reorderEncoder, decoder: depth0Decoder, targets: .siblingGroups(sGroups0), structureChanged: structureChangedOnCovariant, cache: &rejectCache, budget: &legBudget) {
-                        covariantAccepted += 1
-                        cycleImproved = true
+                // Binary search to target.
+                do {
+                    let vSpansZero = valueSpans(at: 0)
+                    if vSpansZero.isEmpty == false {
+                        let targets = TargetSet.spans(vSpansZero)
+                        if try runAdaptive(&binarySearchToTargetEncoder, decoder: makeDepthZeroDecoder(), targets: targets, structureChanged: structureChangedOnCovariant, cache: &rejectCache, budget: &legBudget) {
+                            covariantAccepted += 1
+                            cycleImproved = true
+                        }
+                    }
+                }
+
+                // Float reduction.
+                do {
+                    let fSpansZero = floatSpans(at: 0)
+                    if fSpansZero.isEmpty == false, legBudget.isExhausted == false {
+                        let tacticContext = TacticContext(bindIndex: bindIndex, depth: 0, fallbackTree: fallbackTree)
+                        if let result = try floatTactic.apply(
+                            gen: gen, sequence: sequence, tree: tree,
+                            targetSpans: fSpansZero, context: tacticContext,
+                            property: property, rejectCache: &rejectCache
+                        ) {
+                            legBudget.recordMaterialization(accepted: true)
+                            accept(result, structureChanged: structureChangedOnCovariant)
+                            covariantAccepted += 1
+                            cycleImproved = true
+                        }
+                    }
+                }
+
+                // Sibling reordering.
+                do {
+                    let sGroupsZero = siblingGroups(at: 0)
+                    if sGroupsZero.isEmpty == false {
+                        if try runBatch(reorderEncoder, decoder: makeDepthZeroDecoder(), targets: .siblingGroups(sGroupsZero), structureChanged: structureChangedOnCovariant, cache: &rejectCache, budget: &legBudget) {
+                            covariantAccepted += 1
+                            cycleImproved = true
+                        }
                     }
                 }
 
@@ -431,21 +521,14 @@ enum ReductionScheduler {
                 // ── Post-processing: Shortlex merge ──
                 // Not charged to any leg's budget — fixed per-cycle overhead.
                 if hasBind, covariantAccepted > 0,
-                   let preBi = preCovariantBindIndex, let postBi = bindIndex,
-                   preBi.regions.count == postBi.regions.count
+                   let preBi = preCovariantBindIndex, let postBi = bindIndex
                 {
-                    var mergedSeq = sequence
-                    var didMerge = false
-                    for (oldRegion, newRegion) in zip(preBi.regions, postBi.regions) {
-                        for (oldIdx, newIdx) in zip(oldRegion.boundRange, newRegion.boundRange) {
-                            if preCovariantSequence[oldIdx].shortLexCompare(sequence[newIdx]) == .lt {
-                                mergedSeq[newIdx] = preCovariantSequence[oldIdx]
-                                didMerge = true
-                            }
-                        }
-                    }
-
-                    if didMerge, mergedSeq.shortLexPrecedes(sequence) {
+                    if let mergedSeq = Self.buildMergedSequence(
+                        preCovariantSequence: preCovariantSequence,
+                        postCovariantSequence: sequence,
+                        preBindIndex: preBi,
+                        postBindIndex: postBi
+                    ) {
                         let seed = mergedSeq.zobristHash
                         if case let .success(mergedOutput, mergedFinalSeq, mergedTree) =
                             GuidedMaterializer.materialize(gen, prefix: mergedSeq, seed: seed, fallbackTree: preCovariantTree),
@@ -458,6 +541,9 @@ enum ReductionScheduler {
                             if isInstrumented { ExhaustLog.debug(category: .reducer, event: "merge_accepted") }
                         }
                     }
+                }
+                if covariantAccepted > 0 {
+                    dirtyDepths = Set(0 ... (bindIndex?.maxBindDepth ?? 0))
                 }
             }
 
@@ -472,12 +558,14 @@ enum ReductionScheduler {
                 var legBudget = LegBudget(hardCap: remaining, stallPatience: target)
                 let redistContext = DecoderContext(depth: .global, bindIndex: bindIndex, fallbackTree: fallbackTree, strictness: .normal)
                 let redistDecoder = SequenceDecoder.for(redistContext)
+                var redistributionAccepted = false
 
                 // Tandem reduction: reduce sibling value pairs together.
                 let allSiblings = ChoiceSequence.extractSiblingGroups(from: sequence)
                 if allSiblings.isEmpty == false {
                     if try runAdaptive(&tandemEncoder, decoder: redistDecoder, targets: .siblingGroups(allSiblings), structureChanged: hasBind, cache: &rejectCache, budget: &legBudget) {
                         cycleImproved = true
+                        redistributionAccepted = true
                         if isInstrumented { ExhaustLog.debug(category: .reducer, event: "redistribution_accepted", metadata: ["encoder": "tandemReduction"]) }
                     }
                 }
@@ -485,7 +573,12 @@ enum ReductionScheduler {
                 // Cross-stage redistribution: move mass between coordinates.
                 if try runAdaptive(&redistributeEncoder, decoder: redistDecoder, targets: .wholeSequence, structureChanged: hasBind, cache: &rejectCache, budget: &legBudget) {
                     cycleImproved = true
+                    redistributionAccepted = true
                     if isInstrumented { ExhaustLog.debug(category: .reducer, event: "redistribution_accepted", metadata: ["encoder": "crossStageRedistribute"]) }
+                }
+
+                if redistributionAccepted {
+                    dirtyDepths = Set(0 ... (bindIndex?.maxBindDepth ?? 0))
                 }
             } else {
                 cyclesSinceRedistribution += 1
