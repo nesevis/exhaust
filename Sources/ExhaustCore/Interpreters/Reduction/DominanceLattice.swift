@@ -39,34 +39,18 @@ struct DominanceLattice {
     /// Only checks dominators within the same ``ReductionPhase`` — cross-phase
     /// dominance is not defined (the leg ordering handles inter-phase sequencing).
     func shouldSkip(_ name: String, phase: ReductionPhase) -> Bool {
-        for dominator in dominators(of: name, in: phase) where succeeded.contains(dominator) {
-            return true
-        }
-        return false
-    }
-
-    /// The 2-cell dominance relationships.
-    ///
-    /// Returns the names of encoders that dominate the given encoder within the
-    /// same phase. If any of these has succeeded, the given encoder can be skipped.
-    private func dominators(of name: String, in phase: ReductionPhase) -> [String] {
-        switch phase {
-        case .structuralDeletion:
-            switch name {
-            // Container deletion is strictly more aggressive than speculative single-span deletion.
-            case "speculativeDelete": return ["deleteContainerSpans"]
-            default: return []
-            }
-        case .valueMinimization:
-            switch name {
-            // Zero is the best binary-search-to-zero can achieve.
-            case "binarySearchToZero": return ["zeroValue"]
-            // Binary-search-to-zero finds values ≤ any nonzero target.
-            case "binarySearchToTarget": return ["zeroValue", "binarySearchToZero"]
-            default: return []
-            }
-        case .reordering, .redistribution, .exploration:
-            return []
+        switch (phase, name) {
+        // Container deletion is strictly more aggressive than speculative single-span deletion.
+        case (.structuralDeletion, "speculativeDelete"):
+            return succeeded.contains("deleteContainerSpans")
+        // Zero is the best binary-search-to-zero can achieve.
+        case (.valueMinimization, "binarySearchToZero"):
+            return succeeded.contains("zeroValue")
+        // Binary-search-to-zero finds values ≤ any nonzero target.
+        case (.valueMinimization, "binarySearchToTarget"):
+            return succeeded.contains("zeroValue") || succeeded.contains("binarySearchToZero")
+        default:
+            return false
         }
     }
 }

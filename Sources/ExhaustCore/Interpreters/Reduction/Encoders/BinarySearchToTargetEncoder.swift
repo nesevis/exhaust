@@ -28,6 +28,8 @@ public struct BinarySearchToTargetEncoder: AdaptiveEncoder {
     private var targets: [TargetState] = []
     private var currentIndex = 0
     private var needsFirstProbe = true
+    /// Saved entry for in-place mutation restore on rejection.
+    private var savedEntry: ChoiceSequenceValue?
 
     // MARK: - AdaptiveEncoder
 
@@ -36,6 +38,7 @@ public struct BinarySearchToTargetEncoder: AdaptiveEncoder {
         self.targets = []
         self.currentIndex = 0
         self.needsFirstProbe = true
+        self.savedEntry = nil
 
         guard case let .spans(spans) = targets else { return }
 
@@ -68,28 +71,38 @@ public struct BinarySearchToTargetEncoder: AdaptiveEncoder {
                 needsFirstProbe = false
                 probeValue = targets[currentIndex].stepper.start()
             } else {
+                let state = targets[currentIndex]
                 if lastAccepted {
-                    let state = targets[currentIndex]
                     sequence[state.seqIdx] = .value(.init(
                         choice: ChoiceValue(state.choiceTag.makeConvertible(bitPattern64: state.stepper.bestAccepted), tag: state.choiceTag),
                         validRange: state.validRange,
                         isRangeExplicit: state.isRangeExplicit
                     ))
+                } else if let saved = savedEntry {
+                    sequence[state.seqIdx] = saved
                 }
+                savedEntry = nil
                 probeValue = targets[currentIndex].stepper.advance(lastAccepted: lastAccepted)
             }
 
             if let bp = probeValue {
                 let state = targets[currentIndex]
-                var candidate = sequence
-                candidate[state.seqIdx] = .value(.init(
+                // In-place mutation: save entry before mutating, restore on rejection.
+                // Avoids full ChoiceSequence copy per probe (COW copy deferred to caller).
+                savedEntry = sequence[state.seqIdx]
+                sequence[state.seqIdx] = .value(.init(
                     choice: ChoiceValue(state.choiceTag.makeConvertible(bitPattern64: bp), tag: state.choiceTag),
                     validRange: state.validRange,
                     isRangeExplicit: state.isRangeExplicit
                 ))
-                return candidate
+                return sequence
             }
 
+            // Moving to next target — restore if needed.
+            if let saved = savedEntry {
+                sequence[targets[currentIndex].seqIdx] = saved
+                savedEntry = nil
+            }
             currentIndex += 1
             needsFirstProbe = true
         }

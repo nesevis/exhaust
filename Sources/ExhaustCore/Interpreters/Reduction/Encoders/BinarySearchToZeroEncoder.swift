@@ -74,6 +74,8 @@ public struct BinarySearchToZeroEncoder: AdaptiveEncoder {
     private var currentIndex = 0
     private var needsFirstProbe = true
     private var searchPhase = Phase.binarySearch
+    /// Saved entry for in-place mutation restore on rejection.
+    private var savedEntry: ChoiceSequenceValue?
 
     // MARK: - AdaptiveEncoder
 
@@ -83,6 +85,7 @@ public struct BinarySearchToZeroEncoder: AdaptiveEncoder {
         self.currentIndex = 0
         self.needsFirstProbe = true
         self.searchPhase = .binarySearch
+        self.savedEntry = nil
 
         guard case let .spans(spans) = targets else { return }
 
@@ -152,15 +155,21 @@ public struct BinarySearchToZeroEncoder: AdaptiveEncoder {
                 advanceToNextTarget()
 
             case let .crossZero(currentKey, lowerBound):
-                if lastAccepted {
-                    // Update base sequence with the previously accepted cross-zero probe.
-                    let state = targets[currentIndex]
-                    let acceptedChoice = ChoiceValue.fromShortlexKey(currentKey, tag: state.choiceTag)
-                    sequence[state.seqIdx] = .reduced(.init(
-                        choice: acceptedChoice,
-                        validRange: state.validRange,
-                        isRangeExplicit: state.isRangeExplicit
-                    ))
+                // Handle feedback from last returned probe.
+                if let saved = savedEntry {
+                    if lastAccepted {
+                        // Update base sequence with the previously accepted cross-zero probe.
+                        let state = targets[currentIndex]
+                        let acceptedChoice = ChoiceValue.fromShortlexKey(currentKey, tag: state.choiceTag)
+                        sequence[state.seqIdx] = .reduced(.init(
+                            choice: acceptedChoice,
+                            validRange: state.validRange,
+                            isRangeExplicit: state.isRangeExplicit
+                        ))
+                    } else {
+                        sequence[targets[currentIndex].seqIdx] = saved
+                    }
+                    savedEntry = nil
                 }
                 guard currentKey > lowerBound else {
                     advanceToNextTarget()
@@ -181,9 +190,10 @@ public struct BinarySearchToZeroEncoder: AdaptiveEncoder {
                 guard probeEntry.shortLexCompare(sequence[state.seqIdx]) == .lt else {
                     continue
                 }
-                var candidate = sequence
-                candidate[state.seqIdx] = probeEntry
-                return candidate
+                // In-place mutation: save entry before mutating, restore on rejection.
+                savedEntry = sequence[state.seqIdx]
+                sequence[state.seqIdx] = probeEntry
+                return sequence
             }
         }
         return nil
@@ -198,14 +208,17 @@ public struct BinarySearchToZeroEncoder: AdaptiveEncoder {
             needsFirstProbe = false
             probeValue = targets[currentIndex].stepper.start()
         } else {
+            let state = targets[currentIndex]
             if lastAccepted {
-                let state = targets[currentIndex]
                 sequence[state.seqIdx] = .value(.init(
                     choice: ChoiceValue(state.choiceTag.makeConvertible(bitPattern64: state.stepper.bestAccepted), tag: state.choiceTag),
                     validRange: state.validRange,
                     isRangeExplicit: state.isRangeExplicit
                 ))
+            } else if let saved = savedEntry {
+                sequence[state.seqIdx] = saved
             }
+            savedEntry = nil
             probeValue = targets[currentIndex].stepper.advance(lastAccepted: lastAccepted)
         }
 
@@ -218,13 +231,14 @@ public struct BinarySearchToZeroEncoder: AdaptiveEncoder {
         if let current = sequence[state.seqIdx].value, bp == current.choice.bitPattern64 {
             return nil
         }
-        var candidate = sequence
-        candidate[state.seqIdx] = .value(.init(
+        // In-place mutation: save entry before mutating, restore on rejection.
+        savedEntry = sequence[state.seqIdx]
+        sequence[state.seqIdx] = .value(.init(
             choice: ChoiceValue(state.choiceTag.makeConvertible(bitPattern64: bp), tag: state.choiceTag),
             validRange: state.validRange,
             isRangeExplicit: state.isRangeExplicit
         ))
-        return candidate
+        return sequence
     }
 
     private mutating func advanceToNextTarget() {

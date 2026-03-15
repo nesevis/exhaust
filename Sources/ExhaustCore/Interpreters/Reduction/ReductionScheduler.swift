@@ -158,6 +158,7 @@ enum ReductionScheduler {
         var bestSequence = sequence
         var bestOutput = output
         var rejectCache = ReducerCache()
+        var spanCache = SpanCache()
         var stallBudget = config.maxStalls
         var cyclesSinceRedistribution = 0
         let redistributionDeferralCap = 3
@@ -199,6 +200,9 @@ enum ReductionScheduler {
             tree = result.tree
             output = result.output
             fallbackTree = result.tree
+            // Invalidate cached spans — structure changed means indices shifted;
+            // even value-only changes invalidate value span targets.
+            spanCache.invalidate()
             if structureChanged {
                 bindIndex = hasBind ? BindSpanIndex(from: sequence) : nil
                 if config.useReductionMaterializer == false {
@@ -343,49 +347,6 @@ enum ReductionScheduler {
             return anyAccepted
         }
 
-        func valueSpans(at depth: Int) -> [ChoiceSpan] {
-            let all = ChoiceSequence.extractAllValueSpans(from: sequence)
-            if let bi = bindIndex {
-                return all.filter { bi.bindDepth(at: $0.range.lowerBound) == depth }
-            }
-            return all
-        }
-
-        func siblingGroups(at depth: Int) -> [SiblingGroup] {
-            let all = ChoiceSequence.extractSiblingGroups(from: sequence)
-            if let bi = bindIndex {
-                return all.filter { bi.bindDepth(at: $0.ranges[0].lowerBound) == depth }
-            }
-            return all
-        }
-
-        func floatSpans(at depth: Int) -> [ChoiceSpan] {
-            valueSpans(at: depth).filter { span in
-                guard let v = sequence[span.range.lowerBound].value else { return false }
-                return v.choice.tag == .double || v.choice.tag == .float
-            }
-        }
-
-        func deletionTargets(category: DeletionSpanCategory, depth: Int) -> [ChoiceSpan] {
-            let spans: [ChoiceSpan]
-            switch category {
-            case .containerSpans:
-                spans = ChoiceSequence.extractContainerSpans(from: sequence)
-            case .sequenceElements:
-                spans = ChoiceSequence.extractSequenceElementSpans(from: sequence)
-            case .sequenceBoundaries:
-                spans = ChoiceSequence.extractSequenceBoundarySpans(from: sequence)
-            case .freeStandingValues:
-                spans = ChoiceSequence.extractFreeStandingValueSpans(from: sequence)
-            case .siblingGroups, .mixed:
-                spans = ChoiceSequence.extractContainerSpans(from: sequence)
-            }
-            if let bi = bindIndex {
-                return spans.filter { bi.bindDepth(at: $0.range.lowerBound) == depth }
-            }
-            return spans
-        }
-
         func makeDeletionDecoder(at depth: Int) -> SequenceDecoder {
             let context = DecoderContext(depth: .specific(depth), bindIndex: bindIndex, fallbackTree: fallbackTree, strictness: .relaxed, useReductionMaterializer: config.useReductionMaterializer)
             return SequenceDecoder.for(context)
@@ -412,23 +373,24 @@ enum ReductionScheduler {
             var remaining = cycleBudget.total
 
             // ── Cost-based encoder ordering ──
-            // Reset from allCases each cycle, sort by estimated probe cost
-            // (each encoder's estimatedCost inspects the ChoiceSequence), and
-            // filter out ineligible encoders (nil cost = no targets). Move-to-front
-            // adjusts within this baseline during the cycle.
+            // Compute costs once per slot, cache in dictionaries, then sort.
+            // Eliminates O(n log n) repeated estimatedCost calls in sort comparators.
             do {
-                func valueCost(_ slot: ValueEncoderSlot) -> Int? {
-                    switch slot {
+                var valueCosts = [ValueEncoderSlot: Int]()
+                for slot in ValueEncoderSlot.allCases {
+                    let cost: Int? = switch slot {
                     case .zeroValue: zeroValueEncoder.estimatedCost(sequence: sequence, bindIndex: bindIndex)
                     case .binarySearchToZero: binarySearchToZeroEncoder.estimatedCost(sequence: sequence, bindIndex: bindIndex)
                     case .binarySearchToTarget: binarySearchToTargetEncoder.estimatedCost(sequence: sequence, bindIndex: bindIndex)
                     case .reduceFloat: reduceFloatEncoder.estimatedCost(sequence: sequence, bindIndex: bindIndex)
                     case .reorderSiblings: reorderEncoder.estimatedCost(sequence: sequence, bindIndex: bindIndex)
                     }
+                    if let cost { valueCosts[slot] = cost }
                 }
 
-                func deletionCost(_ slot: DeletionEncoderSlot) -> Int? {
-                    switch slot {
+                var deletionCosts = [DeletionEncoderSlot: Int]()
+                for slot in DeletionEncoderSlot.allCases {
+                    let cost: Int? = switch slot {
                     case .containerSpans: deleteContainerSpans.estimatedCost(sequence: sequence, bindIndex: bindIndex)
                     case .sequenceElements: deleteSequenceElements.estimatedCost(sequence: sequence, bindIndex: bindIndex)
                     case .sequenceBoundaries: deleteSequenceBoundaries.estimatedCost(sequence: sequence, bindIndex: bindIndex)
@@ -436,19 +398,19 @@ enum ReductionScheduler {
                     case .alignedWindows: deleteAlignedWindowsEncoder.estimatedCost(sequence: sequence, bindIndex: bindIndex)
                     case .speculativeDelete: speculativeDelete.estimatedCost(sequence: sequence, bindIndex: bindIndex)
                     }
+                    if let cost { deletionCosts[slot] = cost }
                 }
 
                 snipOrder = ValueEncoderSlot.allCases
-                    .filter { valueCost($0) != nil }
-                    .sorted { (valueCost($0) ?? 0) < (valueCost($1) ?? 0) }
+                    .filter { valueCosts[$0] != nil }
+                    .sorted { (valueCosts[$0] ?? 0) < (valueCosts[$1] ?? 0) }
 
-                trainOrder = ValueEncoderSlot.allCases
-                    .filter { valueCost($0) != nil }
-                    .sorted { (valueCost($0) ?? 0) < (valueCost($1) ?? 0) }
+                // trainOrder starts identical to snipOrder; move-to-front diverges during cycle.
+                trainOrder = snipOrder
 
                 pruneOrder = DeletionEncoderSlot.allCases
-                    .filter { deletionCost($0) != nil }
-                    .sorted { (deletionCost($0) ?? 0) < (deletionCost($1) ?? 0) }
+                    .filter { deletionCosts[$0] != nil }
+                    .sorted { (deletionCosts[$0] ?? 0) < (deletionCosts[$1] ?? 0) }
             }
 
             if isInstrumented {
@@ -485,6 +447,7 @@ enum ReductionScheduler {
                 let target = cycleBudget.initialBudget(for: .contravariant)
                 var legBudget = LegBudget(hardCap: remaining, stallPatience: target)
                 rejectCache = ReducerCache()
+                spanCache.invalidate()
                 lattice.invalidate()
                 if maxBindDepth >= 1 {
                     for depth in stride(from: maxBindDepth, through: 1, by: -1) where dirtyDepths.contains(depth) {
@@ -494,9 +457,9 @@ enum ReductionScheduler {
                             depthProgress = false
                             let context = DecoderContext(depth: .specific(depth), bindIndex: bindIndex, fallbackTree: fallbackTree, strictness: .normal, useReductionMaterializer: config.useReductionMaterializer)
                             let decoder = SequenceDecoder.for(context)
-                            let vSpans = valueSpans(at: depth)
-                            let fSpans = floatSpans(at: depth)
-                            let sGroups = siblingGroups(at: depth)
+                            let vSpans = spanCache.valueSpans(at: depth, from: sequence, bindIndex: bindIndex)
+                            let fSpans = spanCache.floatSpans(at: depth, from: sequence, bindIndex: bindIndex)
+                            let sGroups = spanCache.siblingGroups(at: depth, from: sequence, bindIndex: bindIndex)
 
                             for slot in snipOrder {
                                 guard legBudget.isExhausted == false else { break }
@@ -554,29 +517,33 @@ enum ReductionScheduler {
                 let target = cycleBudget.initialBudget(for: .deletion)
                 var legBudget = LegBudget(hardCap: remaining, stallPatience: target)
                 rejectCache = ReducerCache()
+                spanCache.invalidate()
                 lattice.invalidate()
                 for depth in 0 ... maxBindDepth {
                     guard legBudget.isExhausted == false else { break }
 
+                    // Decoder context depends on depth, bind index, and strictness — all
+                    // stable within a depth iteration. Create once per depth, reuse across slots.
+                    let depthDecoder = makeDeletionDecoder(at: depth)
+
                     for slot in pruneOrder {
                         guard legBudget.isExhausted == false else { break }
-                        // Targets and decoder are extracted per-slot because
-                        // accept(structureChanged: true) can change span structure
-                        // between encoder calls.
+                        // Targets are re-extracted per slot via SpanCache (invalidated by
+                        // accept(structureChanged: true) between encoder calls).
                         let accepted: Bool
                         switch slot {
                         case .containerSpans:
-                            accepted = try runAdaptive(&deleteContainerSpans, decoder: makeDeletionDecoder(at: depth), targets: .spans(deletionTargets(category: slot.spanCategory, depth: depth)), structureChanged: true, cache: &rejectCache, budget: &legBudget)
+                            accepted = try runAdaptive(&deleteContainerSpans, decoder: depthDecoder, targets: .spans(spanCache.deletionTargets(category: slot.spanCategory, depth: depth, from: sequence, bindIndex: bindIndex)), structureChanged: true, cache: &rejectCache, budget: &legBudget)
                         case .sequenceElements:
-                            accepted = try runAdaptive(&deleteSequenceElements, decoder: makeDeletionDecoder(at: depth), targets: .spans(deletionTargets(category: slot.spanCategory, depth: depth)), structureChanged: true, cache: &rejectCache, budget: &legBudget)
+                            accepted = try runAdaptive(&deleteSequenceElements, decoder: depthDecoder, targets: .spans(spanCache.deletionTargets(category: slot.spanCategory, depth: depth, from: sequence, bindIndex: bindIndex)), structureChanged: true, cache: &rejectCache, budget: &legBudget)
                         case .sequenceBoundaries:
-                            accepted = try runAdaptive(&deleteSequenceBoundaries, decoder: makeDeletionDecoder(at: depth), targets: .spans(deletionTargets(category: slot.spanCategory, depth: depth)), structureChanged: true, cache: &rejectCache, budget: &legBudget)
+                            accepted = try runAdaptive(&deleteSequenceBoundaries, decoder: depthDecoder, targets: .spans(spanCache.deletionTargets(category: slot.spanCategory, depth: depth, from: sequence, bindIndex: bindIndex)), structureChanged: true, cache: &rejectCache, budget: &legBudget)
                         case .freeStandingValues:
-                            accepted = try runAdaptive(&deleteFreeStandingValues, decoder: makeDeletionDecoder(at: depth), targets: .spans(deletionTargets(category: slot.spanCategory, depth: depth)), structureChanged: true, cache: &rejectCache, budget: &legBudget)
+                            accepted = try runAdaptive(&deleteFreeStandingValues, decoder: depthDecoder, targets: .spans(spanCache.deletionTargets(category: slot.spanCategory, depth: depth, from: sequence, bindIndex: bindIndex)), structureChanged: true, cache: &rejectCache, budget: &legBudget)
                         case .alignedWindows:
-                            accepted = try runAdaptive(&deleteAlignedWindowsEncoder, decoder: makeDeletionDecoder(at: depth), targets: .spans(deletionTargets(category: slot.spanCategory, depth: depth)), structureChanged: true, cache: &rejectCache, budget: &legBudget)
+                            accepted = try runAdaptive(&deleteAlignedWindowsEncoder, decoder: depthDecoder, targets: .spans(spanCache.deletionTargets(category: slot.spanCategory, depth: depth, from: sequence, bindIndex: bindIndex)), structureChanged: true, cache: &rejectCache, budget: &legBudget)
                         case .speculativeDelete:
-                            accepted = try runAdaptive(&speculativeDelete, decoder: makeDeletionDecoder(at: depth), targets: .spans(deletionTargets(category: slot.spanCategory, depth: depth)), structureChanged: true, cache: &rejectCache, budget: &legBudget)
+                            accepted = try runAdaptive(&speculativeDelete, decoder: depthDecoder, targets: .spans(spanCache.deletionTargets(category: slot.spanCategory, depth: depth, from: sequence, bindIndex: bindIndex)), structureChanged: true, cache: &rejectCache, budget: &legBudget)
                         }
                         if accepted {
                             deletionAccepted += 1
@@ -596,6 +563,7 @@ enum ReductionScheduler {
                 let target = cycleBudget.initialBudget(for: .covariant)
                 var legBudget = LegBudget(hardCap: remaining, stallPatience: target)
                 rejectCache = ReducerCache()
+                spanCache.invalidate()
                 lattice.invalidate()
                 let preCovariantSequence = sequence
                 let preCovariantBindIndex = bindIndex
@@ -607,51 +575,55 @@ enum ReductionScheduler {
                 // index refresh when binds are present.
                 let structureChangedOnCovariant = hasBind
 
-                // Targets are re-extracted per slot because
-                // accept(structureChanged: true) can change span structure.
+                // Decoder context depends on depth (0), bind index, and strictness — all
+                // stable within the Train leg. Create once, reuse across all slots.
+                let trainDecoder = makeDepthZeroDecoder()
+
+                // Targets are re-extracted per slot via SpanCache (invalidated by
+                // accept() between encoder calls).
                 for slot in trainOrder {
                     guard legBudget.isExhausted == false else { break }
                     switch slot {
                     case .zeroValue:
-                        let vSpans = valueSpans(at: 0)
+                        let vSpans = spanCache.valueSpans(at: 0, from: sequence, bindIndex: bindIndex)
                         if vSpans.isEmpty == false {
-                            if try runAdaptive(&zeroValueEncoder, decoder: makeDepthZeroDecoder(), targets: .spans(vSpans), structureChanged: structureChangedOnCovariant, cache: &rejectCache, budget: &legBudget) {
+                            if try runAdaptive(&zeroValueEncoder, decoder: trainDecoder, targets: .spans(vSpans), structureChanged: structureChangedOnCovariant, cache: &rejectCache, budget: &legBudget) {
                                 covariantAccepted += 1
                                 cycleImproved = true
                                 Self.moveToFront(.zeroValue, in: &trainOrder)
                             }
                         }
                     case .binarySearchToZero:
-                        let vSpans = valueSpans(at: 0)
+                        let vSpans = spanCache.valueSpans(at: 0, from: sequence, bindIndex: bindIndex)
                         if vSpans.isEmpty == false {
-                            if try runAdaptive(&binarySearchToZeroEncoder, decoder: makeDepthZeroDecoder(), targets: .spans(vSpans), structureChanged: structureChangedOnCovariant, cache: &rejectCache, budget: &legBudget) {
+                            if try runAdaptive(&binarySearchToZeroEncoder, decoder: trainDecoder, targets: .spans(vSpans), structureChanged: structureChangedOnCovariant, cache: &rejectCache, budget: &legBudget) {
                                 covariantAccepted += 1
                                 cycleImproved = true
                                 Self.moveToFront(.binarySearchToZero, in: &trainOrder)
                             }
                         }
                     case .binarySearchToTarget:
-                        let vSpans = valueSpans(at: 0)
+                        let vSpans = spanCache.valueSpans(at: 0, from: sequence, bindIndex: bindIndex)
                         if vSpans.isEmpty == false {
-                            if try runAdaptive(&binarySearchToTargetEncoder, decoder: makeDepthZeroDecoder(), targets: .spans(vSpans), structureChanged: structureChangedOnCovariant, cache: &rejectCache, budget: &legBudget) {
+                            if try runAdaptive(&binarySearchToTargetEncoder, decoder: trainDecoder, targets: .spans(vSpans), structureChanged: structureChangedOnCovariant, cache: &rejectCache, budget: &legBudget) {
                                 covariantAccepted += 1
                                 cycleImproved = true
                                 Self.moveToFront(.binarySearchToTarget, in: &trainOrder)
                             }
                         }
                     case .reduceFloat:
-                        let fSpans = floatSpans(at: 0)
+                        let fSpans = spanCache.floatSpans(at: 0, from: sequence, bindIndex: bindIndex)
                         if fSpans.isEmpty == false {
-                            if try runAdaptive(&reduceFloatEncoder, decoder: makeDepthZeroDecoder(), targets: .spans(fSpans), structureChanged: structureChangedOnCovariant, cache: &rejectCache, budget: &legBudget) {
+                            if try runAdaptive(&reduceFloatEncoder, decoder: trainDecoder, targets: .spans(fSpans), structureChanged: structureChangedOnCovariant, cache: &rejectCache, budget: &legBudget) {
                                 covariantAccepted += 1
                                 cycleImproved = true
                                 Self.moveToFront(.reduceFloat, in: &trainOrder)
                             }
                         }
                     case .reorderSiblings:
-                        let sGroups = siblingGroups(at: 0)
+                        let sGroups = spanCache.siblingGroups(at: 0, from: sequence, bindIndex: bindIndex)
                         if sGroups.isEmpty == false {
-                            if try runBatch(reorderEncoder, decoder: makeDepthZeroDecoder(), targets: .siblingGroups(sGroups), structureChanged: structureChangedOnCovariant, cache: &rejectCache, budget: &legBudget) {
+                            if try runBatch(reorderEncoder, decoder: trainDecoder, targets: .siblingGroups(sGroups), structureChanged: structureChangedOnCovariant, cache: &rejectCache, budget: &legBudget) {
                                 covariantAccepted += 1
                                 cycleImproved = true
                                 Self.moveToFront(.reorderSiblings, in: &trainOrder)

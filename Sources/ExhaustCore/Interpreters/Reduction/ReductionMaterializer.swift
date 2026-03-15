@@ -680,6 +680,7 @@ private extension ReductionMaterializer {
         var choiceTrees = [ChoiceTree]()
         choiceTrees.reserveCapacity(generators.count)
 
+        precondition(childFallbacks.count == generators.count)
         let canScope = childFallbacks.contains(where: { $0 != nil })
         // Skip transparent markers (group/bind/just) so childStartPosition
         // is past the parent's group-open marker. Without this, the scope
@@ -688,7 +689,11 @@ private extension ReductionMaterializer {
         // The unconsumed close marker then blocks the next child's open.
         if canScope { context.cursor.skipGroups() }
         var childStartPosition = context.cursor.position
-        for (gen, fb) in zip(generators, childFallbacks) {
+        // while-loop: avoiding zip/IteratorProtocol overhead in debug builds.
+        var zipIdx = 0
+        while zipIdx < generators.count {
+            let gen = generators[zipIdx]
+            let fb = childFallbacks[zipIdx]
             if canScope, let fb {
                 context.cursor.pushScope(limit: childStartPosition + fb.flattenedEntryCount)
             }
@@ -702,6 +707,7 @@ private extension ReductionMaterializer {
             childStartPosition = context.cursor.position
             results.append(result)
             choiceTrees.append(tree)
+            zipIdx += 1
         }
         return try runContinuation(
             result: results, calleeChoiceTree: .group(choiceTrees),
