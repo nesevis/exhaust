@@ -219,6 +219,13 @@ public struct BinarySearchToZeroEncoder: AdaptiveEncoder {
 
         guard let bp = probeValue else { return nil }
         let state = targets[currentIndex]
+        // Skip probes that reproduce the current value — the property trivially
+        // fails and the probe wastes a materialization. This happens when
+        // MaxBinarySearchStepper's range collapses to lo after all upward probes
+        // are rejected.
+        if let current = sequence[state.seqIdx].value, bp == current.choice.bitPattern64 {
+            return nil
+        }
         var candidate = sequence
         candidate[state.seqIdx] = .value(.init(
             choice: ChoiceValue(state.choiceTag.makeConvertible(bitPattern64: bp), tag: state.choiceTag),

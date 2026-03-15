@@ -52,6 +52,12 @@ struct DeleteAlignedWindowsEncoder: AdaptiveEncoder {
 
     // MARK: - State
 
+    /// Sequence length from the previous `start()` call. Used to detect structural
+    /// stall: if the sequence length hasn't decreased between invocations, no deletion
+    /// encoder succeeded since last time, so beam search is unlikely to help.
+    private var previousSequenceLength: Int?
+    private var structurallyStalled = false
+
     private var sequence = ChoiceSequence()
     private var cohorts: [[AlignedDeletionSlot]] = []
     private var cohortIndex = 0
@@ -80,6 +86,8 @@ struct DeleteAlignedWindowsEncoder: AdaptiveEncoder {
     // MARK: - AdaptiveEncoder
 
     mutating func start(sequence: ChoiceSequence, targets: TargetSet) {
+        self.structurallyStalled = (previousSequenceLength == sequence.count)
+        self.previousSequenceLength = sequence.count
         self.sequence = sequence
         self.cohortIndex = 0
         self.searchPhase = .contiguous
@@ -381,11 +389,15 @@ struct DeleteAlignedWindowsEncoder: AdaptiveEncoder {
                 }
                 return false
             }
-            // Contiguous found nothing — try beam search only if contiguous
-            // deletion succeeded in some prior cohort (or this is the first cohort).
-            // If no contiguous deletion has ever been accepted, beam search
-            // (which tries subsets of the same slots) is very unlikely to succeed.
-            if anyContiguousEverAccepted == false, cohortIndex > 0 {
+            // Skip beam search when:
+            // (a) No deletion encoder shortened the sequence since the last
+            //     invocation (structural stall) — beam search tries subsets of
+            //     the same slots that contiguous search already exhausted.
+            // (b) No contiguous deletion has been accepted in ANY cohort this
+            //     invocation AND this is not the first cohort.
+            if structurallyStalled
+                || (anyContiguousEverAccepted == false && cohortIndex > 0)
+            {
                 cohortIndex += 1
                 if cohortIndex < cohorts.count {
                     prepareCohort()

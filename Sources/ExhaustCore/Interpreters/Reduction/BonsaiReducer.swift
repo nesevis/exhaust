@@ -64,7 +64,7 @@ public extension Interpreters {
         }
 
         static let fast = Self(
-            maxStalls: 3,
+            maxStalls: 1,
             recentCycleWindow: 6,
             probeBudgets: .fast,
             alignedDeletionBeamSearchTuning: .fast,
