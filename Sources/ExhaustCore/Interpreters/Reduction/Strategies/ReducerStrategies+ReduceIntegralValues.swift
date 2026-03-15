@@ -21,7 +21,7 @@ extension ReducerStrategies {
         bindIndex: BindSpanIndex? = nil,
     ) throws -> (ChoiceSequence, Output)? {
         var current = sequence
-        var currentHash = current.zobristHash
+        var currentHash = ZobristHash.hash(of: current)
         var progress = false
         var latestOutput: Output?
 
@@ -65,7 +65,7 @@ extension ReducerStrategies {
                         rejectCache: &rejectCache,
                         bindIndex: bindIndex,
                     ) {
-                        currentHash = current.zobristHash
+                        currentHash = ZobristHash.hash(of: current)
                     }
                 }
                 continue
@@ -93,7 +93,7 @@ extension ReducerStrategies {
                 tag: choiceTag,
             )
             let targetEntry = ChoiceSequenceValue.reduced(.init(choice: targetChoice, validRange: validRange, isRangeExplicit: isRangeExplicit))
-            let targetHash = ChoiceSequence.zobristHashUpdating(currentHash, at: seqIdx, replacing: currentEntry, with: targetEntry)
+            let targetHash = ZobristHash.updating(currentHash, at: seqIdx, replacing: currentEntry, with: targetEntry)
             var candidate = current
             candidate[seqIdx] = targetEntry
             if targetEntry.shortLexCompare(current[seqIdx]) == .lt, rejectCache.contains(candidate, zobristHash: targetHash) == false {
@@ -139,7 +139,7 @@ extension ReducerStrategies {
                         rejectCache: &rejectCache,
                         bindIndex: bindIndex,
                     ) {
-                        currentHash = current.zobristHash
+                        currentHash = ZobristHash.hash(of: current)
                     }
                 }
                 continue
@@ -172,7 +172,7 @@ extension ReducerStrategies {
                         return false
                     }
                     probe[seqIdx] = probeEntry
-                    let probeHash = ChoiceSequence.zobristHashUpdating(currentHash, at: seqIdx, replacing: originalEntry, with: probeEntry)
+                    let probeHash = ZobristHash.updating(currentHash, at: seqIdx, replacing: originalEntry, with: probeEntry)
                     guard rejectCache.contains(probe, zobristHash: probeHash) == false
                     else {
                         return false
@@ -200,7 +200,7 @@ extension ReducerStrategies {
             if bestDelta > 0 {
                 if bestProbeDelta == bestDelta, let bestProbeEntry, let bestProbeOutput {
                     current[seqIdx] = bestProbeEntry
-                    currentHash = ChoiceSequence.zobristHashUpdating(currentHash, at: seqIdx, replacing: originalEntry, with: bestProbeEntry)
+                    currentHash = ZobristHash.updating(currentHash, at: seqIdx, replacing: originalEntry, with: bestProbeEntry)
                     latestOutput = bestProbeOutput
                     progress = true
                     continue
@@ -220,7 +220,7 @@ extension ReducerStrategies {
                    property(output) == false
                 {
                     current = candidate
-                    currentHash = current.zobristHash
+                    currentHash = ZobristHash.hash(of: current)
                     latestOutput = output
                     progress = true
                     continue
@@ -250,7 +250,7 @@ extension ReducerStrategies {
                            property(output) == false
                         {
                             current = crossZeroProbe
-                            currentHash = current.zobristHash
+                            currentHash = ZobristHash.hash(of: current)
                             latestOutput = output
                             progress = true
                             crossZeroImproved = true
@@ -292,7 +292,7 @@ extension ReducerStrategies {
                         {
                             latestOutput = output
                             current = boundary
-                            currentHash = current.zobristHash
+                            currentHash = ZobristHash.hash(of: current)
                             progress = true
                             boundaryImproved = true
                             break
@@ -328,7 +328,7 @@ extension ReducerStrategies {
                         rejectCache: &rejectCache,
                         bindIndex: bindIndex,
                     ) {
-                        currentHash = current.zobristHash
+                        currentHash = ZobristHash.hash(of: current)
                         continue
                     }
                 }

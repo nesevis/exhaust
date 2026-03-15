@@ -37,7 +37,7 @@ extension ReducerStrategies {
         maximizeBoundRegionIndices: Set<Int>? = nil,
     ) throws -> Output? {
         if let bindIndex, bindIndex.bindRegionForInnerIndex(mutatedIndex) != nil {
-            let seed = candidate.zobristHash
+            let seed = ZobristHash.hash(of: candidate)
             switch GuidedMaterializer.materialize(gen, prefix: candidate, seed: seed, fallbackTree: tree, maximizeBoundRegionIndices: maximizeBoundRegionIndices) {
             case let .success(value, _, _):
                 return value
@@ -73,7 +73,7 @@ extension ReducerStrategies {
         if let bindIndex, bindIndex.isEmpty == false,
            mutatedIndices.contains(where: { bindIndex.bindRegionForInnerIndex($0) != nil })
         {
-            let seed = candidate.zobristHash
+            let seed = ZobristHash.hash(of: candidate)
             switch GuidedMaterializer.materialize(gen, prefix: candidate, seed: seed, fallbackTree: tree, maximizeBoundRegionIndices: maximizeBoundRegionIndices) {
             case let .success(value, _, _):
                 return value

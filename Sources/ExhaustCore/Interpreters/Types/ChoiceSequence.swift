@@ -8,7 +8,7 @@
 // MARK: - Academic Provenance
 
 //
-// Corresponds to the dissertation's bracketed choice sequences (Goldstein §4.6). Shortlex ordering — shorter sequences are always simpler, with lexicographic comparison as tiebreaker — is from MacIver & Donaldson (ECOOP 2020, §2.2). Exhaust adds Zobrist hashing for O(1) incremental duplicate detection during reduction.
+// Corresponds to the dissertation's bracketed choice sequences (Goldstein §4.6). Shortlex ordering — shorter sequences are always simpler, with lexicographic comparison as tiebreaker — is from MacIver & Donaldson (ECOOP 2020, §2.2). Zobrist hashing for O(1) incremental duplicate detection lives in ``ZobristHash``.
 
 /// A contiguous region of a ``ChoiceSequence``, identified by its kind, index range, and nesting depth.
 public struct ChoiceSpan: CustomDebugStringConvertible {
@@ -35,88 +35,6 @@ public typealias ChoiceSequence = ContiguousArray<ChoiceSequenceValue>
 public extension Collection<ChoiceSequenceValue> {
     var shortString: String {
         map(\.shortString).joined()
-    }
-}
-
-// MARK: - Zobrist hashing
-
-extension ChoiceSequence {
-    /// Computes a Zobrist hash: XOR of position-dependent contributions for each element.
-    /// Enables O(1) incremental updates when single elements change.
-    public var zobristHash: UInt64 {
-        var hash: UInt64 = 0
-        // while-loop: avoiding IteratorProtocol overhead in debug builds.
-        var i = 0
-        while i < count {
-            hash ^= Self.zobristContribution(at: i, self[i])
-            i += 1
-        }
-        return hash
-    }
-
-    /// Position-dependent hash contribution of a single element.
-    /// Uses splitmix64 mixing for good avalanche with XOR combination.
-    public static func zobristContribution(at position: Int, _ value: ChoiceSequenceValue) -> UInt64 {
-        var bits: UInt64 = switch value {
-        case let .value(v):
-            v.choice.bitPattern64 ^ (zobristTagBits(v.choice.tag) << 48)
-        case let .reduced(v):
-            v.choice.bitPattern64 ^ (zobristTagBits(v.choice.tag) << 48) ^ 0xFF00_FF00_FF00_FF00
-        case .sequence(true, isLengthExplicit: true):
-            1
-        case .sequence(true, isLengthExplicit: false):
-            2
-        case .sequence(false, isLengthExplicit: true):
-            3
-        case .sequence(false, isLengthExplicit: false):
-            4
-        case .group(true):
-            5
-        case .group(false):
-            6
-        case .bind(true):
-            8
-        case .bind(false):
-            9
-        case let .branch(b):
-            b.id ^ 0xDEAD_BEEF_CAFE_BABE
-        case .just:
-            7
-        }
-        bits ^= UInt64(position) &* 0x9E37_79B9_7F4A_7C15
-        bits = (bits ^ (bits >> 30)) &* 0xBF58_476D_1CE4_E5B9
-        bits = (bits ^ (bits >> 27)) &* 0x94D0_49BB_1331_11EB
-        bits ^= bits >> 31
-        return bits
-    }
-
-    /// Updates a Zobrist hash in O(1) after replacing the element at `position`.
-    public static func zobristHashUpdating(
-        _ hash: UInt64,
-        at position: Int,
-        replacing oldValue: ChoiceSequenceValue,
-        with newValue: ChoiceSequenceValue,
-    ) -> UInt64 {
-        hash ^ zobristContribution(at: position, oldValue) ^ zobristContribution(at: position, newValue)
-    }
-
-    private static func zobristTagBits(_ tag: TypeTag) -> UInt64 {
-        switch tag {
-        case .uint: 0
-        case .uint64: 1
-        case .uint32: 2
-        case .uint16: 3
-        case .uint8: 4
-        case .int: 5
-        case .int64: 6
-        case .int32: 7
-        case .int16: 8
-        case .int8: 9
-        case .double: 10
-        case .float: 11
-        case .date: 12
-        case .bits: 13
-        }
     }
 }
 

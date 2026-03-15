@@ -72,7 +72,7 @@ extension ReducerStrategies {
         }
 
         var current = sequence
-        var currentHash = current.zobristHash
+        var currentHash = ZobristHash.hash(of: current)
         var progress = false
         var latestOutput: Output?
         var semanticStats = SequenceSemanticStats(sequence: current)
@@ -197,8 +197,8 @@ extension ReducerStrategies {
                             var probe = current
                             probe[idx1] = probeEntry1
                             probe[idx2] = probeEntry2
-                            var probeHash = ChoiceSequence.zobristHashUpdating(currentHash, at: idx1, replacing: current[idx1], with: probeEntry1)
-                            probeHash = ChoiceSequence.zobristHashUpdating(probeHash, at: idx2, replacing: current[idx2], with: probeEntry2)
+                            var probeHash = ZobristHash.updating(currentHash, at: idx1, replacing: current[idx1], with: probeEntry1)
+                            probeHash = ZobristHash.updating(probeHash, at: idx2, replacing: current[idx2], with: probeEntry2)
 
                             #if DEBUG
                                 assert(
@@ -314,8 +314,8 @@ extension ReducerStrategies {
                                 var probe = current
                                 probe[idx1] = probeEntry1
                                 probe[idx2] = probeEntry2
-                                var probeHash = ChoiceSequence.zobristHashUpdating(currentHash, at: idx1, replacing: current[idx1], with: probeEntry1)
-                                probeHash = ChoiceSequence.zobristHashUpdating(probeHash, at: idx2, replacing: current[idx2], with: probeEntry2)
+                                var probeHash = ZobristHash.updating(currentHash, at: idx1, replacing: current[idx1], with: probeEntry1)
+                                probeHash = ZobristHash.updating(probeHash, at: idx2, replacing: current[idx2], with: probeEntry2)
 
                                 let probeNonSemanticCount = semanticStats.nonSemanticCount(
                                     afterReplacing: (idx1, probeEntry1),
@@ -384,7 +384,7 @@ extension ReducerStrategies {
                                 || afterPairSorted.lexicographicallyPrecedes(beforePair)
                             else { continue }
                             current = probe
-                            currentHash = current.zobristHash
+                            currentHash = ZobristHash.hash(of: current)
                             latestOutput = output
                             progress = true
                             semanticStats.applyReplacements(

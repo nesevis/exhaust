@@ -213,7 +213,7 @@ enum ReductionScheduler {
                     //
                     // Not needed for ReductionMaterializer — the fresh decoder results
                     // already have a current tree with fresh validRange metadata.
-                    let seed = sequence.zobristHash
+                    let seed = ZobristHash.hash(of: sequence)
                     if case let .success(reDerivedOutput, reDerivedSequence, reDerivedTree) =
                         GuidedMaterializer.materialize(gen, prefix: sequence, seed: seed, fallbackTree: tree),
                        property(reDerivedOutput) == false,
@@ -645,7 +645,7 @@ enum ReductionScheduler {
                         preBindIndex: preBi,
                         postBindIndex: postBi
                     ) {
-                        let seed = mergedSeq.zobristHash
+                        let seed = ZobristHash.hash(of: mergedSeq)
                         if case let .success(mergedOutput, mergedFinalSeq, mergedTree) =
                             GuidedMaterializer.materialize(gen, prefix: mergedSeq, seed: seed, fallbackTree: preCovariantTree),
                            property(mergedOutput) == false,

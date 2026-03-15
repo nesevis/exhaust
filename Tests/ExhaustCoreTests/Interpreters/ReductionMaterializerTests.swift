@@ -237,7 +237,7 @@ struct ReductionMaterializerTests {
         // Guided mode with fallback tree should succeed.
         guard case let .success(_, tree) = ReductionMaterializer.materialize(
             gen, prefix: prefix,
-            mode: .guided(seed: prefix.zobristHash, fallbackTree: originalTree)
+            mode: .guided(seed: ZobristHash.hash(of: prefix), fallbackTree: originalTree)
         ) else {
             Issue.record("Expected .success for guided bind materialization")
             return

@@ -57,7 +57,7 @@ public enum ReductionMaterializer {
 
         switch mode {
         case .exact:
-            seed = prefix.zobristHash
+            seed = ZobristHash.hash(of: prefix)
             // In exact mode, the fallback tree is used for `.getSize` extraction only,
             // not for value fallback (all values come from the prefix).
             resolvedFallbackTree = fallbackTree

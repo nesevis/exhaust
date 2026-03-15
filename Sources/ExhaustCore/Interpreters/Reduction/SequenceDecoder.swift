@@ -112,7 +112,7 @@ public enum SequenceDecoder {
         originalSequence: ChoiceSequence,
         property: (Output) -> Bool
     ) -> ShrinkResult<Output>? {
-        let seed = candidate.zobristHash
+        let seed = ZobristHash.hash(of: candidate)
         switch GuidedMaterializer.materialize(gen, prefix: candidate, seed: seed, fallbackTree: fallbackTree, maximizeBoundRegionIndices: maximizeBoundRegionIndices) {
         case let .success(reDerivedOutput, reDerivedSequence, reDerivedTree):
             guard reDerivedSequence.shortLexPrecedes(originalSequence) else { return nil }
@@ -196,7 +196,7 @@ public enum SequenceDecoder {
         originalSequence: ChoiceSequence,
         property: (Output) -> Bool
     ) -> ShrinkResult<Output>? {
-        let seed = candidate.zobristHash
+        let seed = ZobristHash.hash(of: candidate)
         switch ReductionMaterializer.materialize(
             gen, prefix: candidate,
             mode: .guided(seed: seed, fallbackTree: fallbackTree,

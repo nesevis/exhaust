@@ -27,7 +27,7 @@ extension ReducerStrategies {
         bindIndex: BindSpanIndex? = nil,
     ) throws -> (ChoiceSequence, Output)? {
         var current = sequence
-        var currentHash = current.zobristHash
+        var currentHash = ZobristHash.hash(of: current)
         var progress = false
         var latestOutput: Output?
 
@@ -55,7 +55,7 @@ extension ReducerStrategies {
                 tag: choiceTag,
             )
             let targetEntry = ChoiceSequenceValue.reduced(.init(choice: targetChoice, validRange: validRange, isRangeExplicit: isRangeExplicit))
-            let targetHash = ChoiceSequence.zobristHashUpdating(currentHash, at: seqIdx, replacing: current[seqIdx], with: targetEntry)
+            let targetHash = ZobristHash.updating(currentHash, at: seqIdx, replacing: current[seqIdx], with: targetEntry)
             var candidate = current
             candidate[seqIdx] = targetEntry
             if targetEntry.shortLexCompare(current[seqIdx]) == .lt, rejectCache.contains(candidate, zobristHash: targetHash) == false {
@@ -87,7 +87,7 @@ extension ReducerStrategies {
                 rejectCache: &rejectCache,
                 bindIndex: bindIndex,
             ) {
-                currentHash = current.zobristHash
+                currentHash = ZobristHash.hash(of: current)
                 continue
             }
 
@@ -106,7 +106,7 @@ extension ReducerStrategies {
                 rejectCache: &rejectCache,
                 bindIndex: bindIndex,
             ) {
-                currentHash = current.zobristHash
+                currentHash = ZobristHash.hash(of: current)
                 continue
             }
 
@@ -125,7 +125,7 @@ extension ReducerStrategies {
                 rejectCache: &rejectCache,
                 bindIndex: bindIndex,
             ) {
-                currentHash = current.zobristHash
+                currentHash = ZobristHash.hash(of: current)
                 continue
             }
 
@@ -144,7 +144,7 @@ extension ReducerStrategies {
                 rejectCache: &rejectCache,
                 bindIndex: bindIndex,
             ) {
-                currentHash = current.zobristHash
+                currentHash = ZobristHash.hash(of: current)
                 continue
             }
         }

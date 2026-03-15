@@ -555,7 +555,7 @@ public extension Interpreters {
                     // The fallback tree preserves bound values where possible, with a
                     // merge step as safety net for stale tree entries.
                     let beforeSeq = currentSequence
-                    let seed = currentSequence.zobristHash
+                    let seed = ZobristHash.hash(of: currentSequence)
                     if case let .success(value, seq, newTree) =
                         GuidedMaterializer.materialize(gen, prefix: currentSequence, seed: seed, fallbackTree: currentTree),
                        property(value) == false
