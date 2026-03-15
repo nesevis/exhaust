@@ -445,7 +445,13 @@ private extension ReductionMaterializer {
     ) throws -> (Output, ChoiceTree)? {
         // Always consume a jump seed from the PRNG stream (VACTI pattern).
         let jumpSeed = context.prng.next()
-        let branchIDs = choices.map(\.id)
+        var branchIDs = [UInt64]()
+        branchIDs.reserveCapacity(choices.count)
+        var branchIDIdx = 0
+        while branchIDIdx < choices.count {
+            branchIDs.append(choices[branchIDIdx].id)
+            branchIDIdx += 1
+        }
 
         // Extract fallback branch info.
         let fbBranchId: UInt64?
@@ -497,10 +503,18 @@ private extension ReductionMaterializer {
         branches.reserveCapacity(choices.count)
         var finalValue: Output?
 
-        for choice in choices {
-            let isSelected = choice.id == selectedChoice.id
+        // Pre-compute selected index to avoid per-iteration ID comparison.
+        var selectedIndex = 0
+        while selectedIndex < choices.count {
+            if choices[selectedIndex].id == selectedChoice.id { break }
+            selectedIndex += 1
+        }
 
-            if isSelected {
+        var choiceIdx = 0
+        while choiceIdx < choices.count {
+            let choice = choices[choiceIdx]
+
+            if choiceIdx == selectedIndex {
                 guard let (result, branchTree) = try generateRecursive(
                     choice.generator, with: inputValue, context: &context,
                     fallbackTree: branchBodyFallback
@@ -521,7 +535,7 @@ private extension ReductionMaterializer {
             } else {
                 // Non-selected branch: generate fresh via jumped PRNG.
                 var branchContext = Context(
-                    cursor: Cursor(from: []),
+                    cursor: Cursor.empty,
                     prng: Xoshiro256(seed: jumpSeed),
                     mode: .generate,
                     size: context.size
@@ -542,6 +556,7 @@ private extension ReductionMaterializer {
                     ))
                 }
             }
+            choiceIdx += 1
         }
 
         guard let value = finalValue else { return nil }
@@ -625,19 +640,22 @@ private extension ReductionMaterializer {
         elements.reserveCapacity(Int(length))
 
         var elementIndex = 0
-        let didSucceed = try SequenceExecutionKernel.run(count: length) {
-            let elFB = elementFallbacks.flatMap {
-                $0.indices.contains(elementIndex) ? $0[elementIndex] : nil
+        var remaining = length
+        while remaining > 0 {
+            let elFB: ChoiceTree?
+            if let fbs = elementFallbacks, elementIndex < fbs.count {
+                elFB = fbs[elementIndex]
+            } else {
+                elFB = nil
             }
             guard let (result, element) = try generateRecursive(
                 elementGen, with: inputValue, context: &context, fallbackTree: elFB
-            ) else { return false }
+            ) else { return nil }
             results.append(result)
             elements.append(element)
             elementIndex += 1
-            return true
+            remaining -= 1
         }
-        guard didSucceed else { return nil }
 
         context.cursor.skipSequenceClose()
 
@@ -666,13 +684,13 @@ private extension ReductionMaterializer {
         calleeFallback: ChoiceTree? = nil,
         continuationFallback: ChoiceTree? = nil
     ) throws -> (Output, ChoiceTree)? {
-        let childFallbacks: [ChoiceTree?]
+        let fallbackChildren: [ChoiceTree]?
         if let calleeFallback, case let .group(children, _) = calleeFallback,
            children.count == generators.count
         {
-            childFallbacks = children.map { Optional($0) }
+            fallbackChildren = children
         } else {
-            childFallbacks = Array(repeating: nil, count: generators.count)
+            fallbackChildren = nil
         }
 
         var results = [Any]()
@@ -680,8 +698,7 @@ private extension ReductionMaterializer {
         var choiceTrees = [ChoiceTree]()
         choiceTrees.reserveCapacity(generators.count)
 
-        precondition(childFallbacks.count == generators.count)
-        let canScope = childFallbacks.contains(where: { $0 != nil })
+        let canScope = fallbackChildren != nil
         // Skip transparent markers (group/bind/just) so childStartPosition
         // is past the parent's group-open marker. Without this, the scope
         // limit for the first child is too tight by the number of skipped
@@ -690,10 +707,10 @@ private extension ReductionMaterializer {
         if canScope { context.cursor.skipGroups() }
         var childStartPosition = context.cursor.position
         // while-loop: avoiding zip/IteratorProtocol overhead in debug builds.
-        var zipIdx = 0
-        while zipIdx < generators.count {
-            let gen = generators[zipIdx]
-            let fb = childFallbacks[zipIdx]
+        var zipIndex = 0
+        while zipIndex < generators.count {
+            let gen = generators[zipIndex]
+            let fb: ChoiceTree? = fallbackChildren?[zipIndex]
             if canScope, let fb {
                 context.cursor.pushScope(limit: childStartPosition + fb.flattenedEntryCount)
             }
@@ -707,7 +724,7 @@ private extension ReductionMaterializer {
             childStartPosition = context.cursor.position
             results.append(result)
             choiceTrees.append(tree)
-            zipIdx += 1
+            zipIndex += 1
         }
         return try runContinuation(
             result: results, calleeChoiceTree: .group(choiceTrees),
@@ -874,25 +891,32 @@ private extension ReductionMaterializer {
         /// Stack of position limits for nested scopes (zip children).
         private var scopeLimits: [Int] = []
 
+        /// Cached end position — updated on scope push/pop.
+        private var effectiveEnd: Int
+
+        private static let emptySequence = ChoiceSequence()
+
+        static var empty: Cursor { Cursor(from: emptySequence) }
+
         init(from sequence: ChoiceSequence) {
             entries = sequence
+            effectiveEnd = sequence.count
         }
 
         // MARK: Scope management
 
         mutating func pushScope(limit: Int) {
             scopeLimits.append(limit)
+            effectiveEnd = min(entries.count, limit)
         }
 
         mutating func popScope() {
             scopeLimits.removeLast()
-        }
-
-        private var effectiveEnd: Int {
             if let limit = scopeLimits.last {
-                return min(entries.count, limit)
+                effectiveEnd = min(entries.count, limit)
+            } else {
+                effectiveEnd = entries.count
             }
-            return entries.count
         }
 
         // MARK: Skip transparent markers
