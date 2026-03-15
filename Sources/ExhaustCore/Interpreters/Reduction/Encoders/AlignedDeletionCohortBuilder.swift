@@ -7,10 +7,12 @@
 
 // MARK: - Types
 
+/// A single aligned deletion slot: the set of choice sequence ranges that would be removed together across sibling containers.
 struct AlignedDeletionSlot {
     let ranges: [ClosedRange<Int>]
 }
 
+/// Precomputed range sets and prefix unions for a cohort's slots, enabling O(1) contiguous-window range set construction.
 struct AlignedDeletionCohortRanges {
     let slotRangeSets: [RangeSet<Int>]
     let prefixUnions: [RangeSet<Int>]
@@ -48,12 +50,14 @@ struct AlignedDeletionCohortRanges {
 
 // MARK: - Supporting Types
 
+/// A single child within an aligned container, carrying its range, structural kind, and optional value type tag for bare values.
 struct AlignedContainerChild {
     let range: ClosedRange<Int>
     let kind: SiblingChildKind
     let valueTag: TypeTag?
 }
 
+/// Describes a container's structure for alignment matching: its bind depth, choice sequence range, and typed children.
 struct AlignedContainerDescriptor {
     let depth: Int
     let range: ClosedRange<Int>
@@ -62,6 +66,7 @@ struct AlignedContainerDescriptor {
 
 // MARK: - Cohort Builder
 
+/// Builds deletion cohorts from structurally aligned sibling containers, sibling groups, and root sequence containers.
 enum AlignedDeletionCohortBuilder {
 
     /// Builds all cohorts from a choice sequence and sibling groups.
@@ -167,6 +172,7 @@ enum AlignedDeletionCohortBuilder {
 
     // MARK: - Helpers
 
+    /// Extracts the aligned container descriptor for a given range, unwrapping single-child wrappers and typing bare value children.
     static func alignedContainerDescriptor(
         in sequence: ChoiceSequence,
         range: ClosedRange<Int>,
@@ -193,6 +199,7 @@ enum AlignedDeletionCohortBuilder {
         return .init(depth: depth, range: range, children: typedChildren)
     }
 
+    /// Returns the effective children of a container range, unwrapping up to 16 layers of single-child wrapper nodes.
     static func effectiveAlignedChildren(
         in sequence: ChoiceSequence,
         from range: ClosedRange<Int>,

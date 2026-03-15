@@ -38,6 +38,7 @@ struct DeleteAlignedWindowsEncoder: AdaptiveEncoder {
         case beamSearch
     }
 
+    /// A single state in the beam search frontier: a bitmask of selected slots, the accumulated deletion range set, and heuristic metadata for beam pruning.
     private struct BeamState {
         let mask: Int
         let lastAddedSlot: Int
@@ -49,9 +50,7 @@ struct DeleteAlignedWindowsEncoder: AdaptiveEncoder {
 
     // MARK: - State
 
-    /// Sequence length from the previous `start()` call. Used to detect structural
-    /// stall: if the sequence length hasn't decreased between invocations, no deletion
-    /// encoder succeeded since last time, so beam search is unlikely to help.
+    /// Sequence length from the previous ``start()`` call. Used to detect structural stall: if the sequence length hasn't decreased between invocations, no deletion encoder succeeded since last time, so beam search is unlikely to help.
     private var previousSequenceLength: Int?
     private var structurallyStalled = false
 

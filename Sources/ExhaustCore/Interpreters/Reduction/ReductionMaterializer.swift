@@ -8,13 +8,12 @@
 /// Materializer that always produces a fresh ``ChoiceTree`` with current ``validRange`` metadata
 /// and all branch alternatives at pick sites.
 ///
-/// Unlike the legacy `Interpreters.materialize()` + `GuidedMaterializer` path, this materializer:
+/// Unlike the legacy ``Interpreters.materialize()`` + ``GuidedMaterializer`` path, this materializer:
 /// - Rebuilds the tree from the generator on every invocation (no stale metadata).
 /// - Materializes all branch alternatives at pick sites (``PromoteBranchesEncoder`` sees candidates).
 /// - Supports exact and guided modes with inner-reject/bound-clamp semantics.
 ///
-/// The result intentionally omits ``ChoiceSequence`` — the caller flattens `result.tree` to get a
-/// sequence with fresh metadata. The tree is the single source of truth.
+/// The result intentionally omits ``ChoiceSequence`` — the caller flattens `result.tree` to get a sequence with fresh metadata. The tree is the single source of truth.
 public enum ReductionMaterializer {
 
     /// Controls how values are resolved at each choice point.
@@ -129,8 +128,7 @@ private extension ReductionMaterializer.Mode {
 
 private extension ReductionMaterializer {
 
-    /// Describes the callee tree shape produced by an operation, used by ``decomposeFallback``
-    /// to distinguish a data group (e.g. zip's children) from a continuation-wrapped tree.
+    /// Describes the callee tree shape produced by an operation, used by ``decomposeFallback`` to distinguish a data group (for example zip's children) from a continuation-wrapped tree.
     enum CalleeTreeKind {
         /// Operations whose callee tree is never a `.group`.
         case nonGroup

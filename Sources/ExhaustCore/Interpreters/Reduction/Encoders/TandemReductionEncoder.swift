@@ -9,9 +9,7 @@
 ///
 /// For each sibling group, identifies index sets of values sharing the same ``TypeTag``, builds suffix-window plans (dropping the leading sibling on each iteration to prevent a near-target leader from blocking the set), and binary-searches for the optimal shared delta using ``BinarySearchStepper``. Before starting binary search for each plan, a direct shot at the full distance is attempted to handle non-monotonic predicates where intermediate deltas break coupling constraints but the full target delta preserves them.
 ///
-/// - Complexity: O(*g* . *w* . log *d*), where *g* is the number of sibling groups,
-///   *w* is the number of tandem windows explored per group, and *d* is the maximum
-///   bit-pattern distance between a value and its reduction target.
+/// - Complexity: O(*g* . *w* . log *d*), where *g* is the number of sibling groups, *w* is the number of tandem windows explored per group, and *d* is the maximum bit-pattern distance between a value and its reduction target.
 public struct TandemReductionEncoder: AdaptiveEncoder {
     public init() {}
 

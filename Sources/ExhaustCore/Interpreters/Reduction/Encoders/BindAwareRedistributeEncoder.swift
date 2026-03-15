@@ -7,23 +7,13 @@
 
 /// Bind-aware cross-region value redistribution encoder.
 ///
-/// For generators with bind-dependent ranges (e.g. `bind(0...50, { n in 0...max(1,n) })`),
-/// the standard ``CrossStageRedistributeEncoder`` fails because it operates on positions
-/// independently — changing an inner value changes the valid range for its bound values,
-/// but the encoder doesn't account for this causal link.
+/// For generators with bind-dependent ranges (for example `bind(0...50, { n in 0...max(1,n) })`), the standard ``CrossStageRedistributeEncoder`` fails because it operates on positions independently — changing an inner value changes the valid range for its bound values, but the encoder doesn't account for this causal link.
 ///
-/// This encoder identifies bind regions via ``BindSpanIndex``, pairs them by depth,
-/// and redistributes mass between their inner values. Bound values are handled by
-/// ``GuidedMaterializer`` with per-region maximization: the sink region's bound values
-/// are maximized to absorb freed mass, while the source region's bounds clamp naturally.
+/// This encoder identifies bind regions via ``BindSpanIndex``, pairs them by depth, and redistributes mass between their inner values. Bound values are handled by ``GuidedMaterializer`` with per-region maximization: the sink region's bound values are maximized to absorb freed mass, while the source region's bounds clamp naturally.
 ///
-/// All numeric types (integers and floats) are handled uniformly via rational arithmetic:
-/// integer values have denominator 1, floats are decomposed via ``FloatShrink.integerRatio``.
-/// Mixed pairs (float + integer) use a step size equal to the common denominator to preserve
-/// integrality on the integer side.
+/// All numeric types (integers and floats) are handled uniformly via rational arithmetic: integer values have denominator 1, floats are decomposed via ``FloatShrink.integerRatio``. Mixed pairs (float + integer) use a step size equal to the common denominator to preserve integrality on the integer side.
 ///
-/// Uses ``FindIntegerStepper`` for feedback-driven delta search, with a non-monotonic
-/// fallback phase when the monotone search converges without finding an improvement.
+/// Uses ``FindIntegerStepper`` for feedback-driven delta search, with a non-monotonic fallback phase when the monotone search converges without finding an improvement.
 public struct BindAwareRedistributeEncoder: AdaptiveEncoder {
     public init() {}
 

@@ -1,10 +1,7 @@
 /// Sets each target value to its semantic simplest form (zero for numerics), or to the
 /// range's lower bound when zero falls outside an explicit valid range.
 ///
-/// Two phases: first tries setting ALL values to simplest simultaneously (handles
-/// filter-coupled generators), then iterates individually. The 2-cell chain
-/// ZeroValue => BinarySearchToZero means that targets where ZeroValue succeeds
-/// can skip binary search entirely.
+/// Two phases: first tries setting ALL values to simplest simultaneously (handles filter-coupled generators), then iterates individually. The 2-cell chain ZeroValue => BinarySearchToZero means that targets where ZeroValue succeeds can skip binary search entirely.
 public struct ZeroValueEncoder: AdaptiveEncoder {
     public let name = "zeroValue"
     public let phase = ReductionPhase.valueMinimization
@@ -102,11 +99,7 @@ public struct ZeroValueEncoder: AdaptiveEncoder {
 
     /// Returns the simplest valid target for a value.
     ///
-    /// Stale-range escape hatch (matches legacy reduceIntegralValues): when the
-    /// value is within its recorded range, targets the range minimum if zero doesn't
-    /// fit. When the value is OUTSIDE its recorded range (a prior pass pushed it past
-    /// the stale boundary), targets zero — the range is stale and the materializer
-    /// will validate against the generator's fresh range.
+    /// Stale-range escape hatch (matches legacy reduceIntegralValues): when the value is within its recorded range, targets the range minimum if zero doesn't fit. When the value is OUTSIDE its recorded range (a prior pass pushed it past the stale boundary), targets zero — the range is stale and the materializer will validate against the generator's fresh range.
     private static func simplestTarget(for v: ChoiceSequenceValue.Value) -> ChoiceValue {
         let simplified = v.choice.semanticSimplest
         let isWithinRecordedRange = v.isRangeExplicit && v.choice.fits(in: v.validRange)

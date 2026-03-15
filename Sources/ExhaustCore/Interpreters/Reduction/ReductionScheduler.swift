@@ -48,8 +48,7 @@ enum ReductionScheduler {
 
     // MARK: - Merge
 
-    /// Builds a merged sequence by substituting pre-covariant bound values where they're
-    /// shortlex-smaller and within the post-covariant valid range.
+    /// Builds a merged sequence by substituting pre-covariant bound values where they're shortlex-smaller and within the post-covariant valid range.
     ///
     /// Returns `nil` if no valid substitution exists (pre-checks 2b, 3, 4 all gate this).
     static func buildMergedSequence(

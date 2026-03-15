@@ -13,8 +13,7 @@
 /// 2. Integer-domain binary search for integral floats
 /// 3. `as_integer_ratio`-style integer-part minimization
 ///
-/// Each stage processes one float span at a time. On convergence or exhaustion,
-/// advances to the next stage or the next span.
+/// Each stage processes one float span at a time. On convergence or exhaustion, advances to the next stage or the next span.
 struct ReduceFloatEncoder: AdaptiveEncoder {
     init() {}
 
