@@ -31,8 +31,7 @@ struct ZeroValueEncoderTests {
     func candidatesPerTarget() {
         let seq = makeSequence([5, 0, 3])
         let spans = allValueSpans(from: seq)
-        let encoder = ZeroValueEncoder()
-        let candidates = Array(encoder.encode(sequence: seq, targets: .spans(spans)))
+        let candidates = collectZeroValueProbes(sequence: seq, spans: spans)
         // 1 all-zero + 2 individual (value 0 is already at semantic simplest).
         #expect(candidates.count == 3)
     }
@@ -41,8 +40,7 @@ struct ZeroValueEncoderTests {
     func candidateSetsOneToZero() {
         let seq = makeSequence([5, 7])
         let spans = allValueSpans(from: seq)
-        let encoder = ZeroValueEncoder()
-        let candidates = Array(encoder.encode(sequence: seq, targets: .spans(spans)))
+        let candidates = collectZeroValueProbes(sequence: seq, spans: spans)
         #expect(candidates.count == 3)
         // First candidate zeros all values.
         #expect(candidates[0][0].value?.choice == .unsigned(0, .uint64))
@@ -59,26 +57,24 @@ struct ZeroValueEncoderTests {
     func shortlexInvariant() {
         let seq = makeSequence([10, 20, 30])
         let spans = allValueSpans(from: seq)
-        let encoder = ZeroValueEncoder()
-        for candidate in encoder.encode(sequence: seq, targets: .spans(spans)) {
+        let candidates = collectZeroValueProbes(sequence: seq, spans: spans)
+        for candidate in candidates {
             #expect(candidate.shortLexPrecedes(seq))
         }
     }
 
     @Test("Empty targets produce no candidates")
     func emptyTargets() {
-        let seq = makeSequence([5])
-        let encoder = ZeroValueEncoder()
-        let candidates = Array(encoder.encode(sequence: seq, targets: .spans([])))
+        let candidates = collectZeroValueProbes(sequence: makeSequence([5]), spans: [])
         #expect(candidates.isEmpty)
     }
 
     @Test("Wrong target type produces no candidates")
     func wrongTargetType() {
-        let seq = makeSequence([5])
-        let encoder = ZeroValueEncoder()
-        let candidates = Array(encoder.encode(sequence: seq, targets: .wholeSequence))
-        #expect(candidates.isEmpty)
+        var encoder = ZeroValueEncoder()
+        encoder.start(sequence: makeSequence([5]), targets: .wholeSequence)
+        let probe = encoder.nextProbe(lastAccepted: false)
+        #expect(probe == nil)
     }
 }
 
@@ -648,6 +644,17 @@ private func generateForEncoder<Output>(
 ) throws -> (value: Output, tree: ChoiceTree) {
     var iter = ValueAndChoiceTreeInterpreter(gen, materializePicks: materializePicks, seed: seed)
     return try #require(iter.prefix(iteration + 1).last)
+}
+
+/// Collects all probes from a ZeroValueEncoder, rejecting every probe.
+private func collectZeroValueProbes(sequence: ChoiceSequence, spans: [ChoiceSpan]) -> [ChoiceSequence] {
+    var encoder = ZeroValueEncoder()
+    encoder.start(sequence: sequence, targets: .spans(spans))
+    var results: [ChoiceSequence] = []
+    while let probe = encoder.nextProbe(lastAccepted: false) {
+        results.append(probe)
+    }
+    return results
 }
 
 /// A pick generator with two branches for encoder testing.
