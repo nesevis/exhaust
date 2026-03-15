@@ -6,7 +6,6 @@
 //  that violate their specified constraints.
 //
 
-import ExhaustCore
 import Testing
 @testable import Exhaust
 
@@ -45,7 +44,7 @@ struct ConstraintViolationTests {
     @Test("Bound generators respect all constraints")
     func boundGeneratorConstraints() {
         let gen = #gen(.int(in: 1 ... 100)).bind { first in
-            Gen.choose(in: (first + 1) ... 200).map { (first, $0) }
+            #gen(.int(in: (first + 1) ... 200)).map { (first, $0) }
         }
         #exhaust(gen) { first, second in
             second > first && first >= 1 && first <= 100 && second <= 200

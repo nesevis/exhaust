@@ -7,7 +7,6 @@
 
 import ExhaustCore
 import Testing
-@testable import Exhaust
 
 @Suite("Uniqueness Constraint")
 struct UniquenessConstraintTests {
@@ -16,7 +15,7 @@ struct UniquenessConstraintTests {
     @Test("High-cardinality generator produces all maxRuns unique values")
     func highCardinalityProducesAllUnique() throws {
         // Use a non-size-scaled generator to avoid collisions from small sizes
-        let gen = #gen(.uint64(in: 0 ... UInt64.max)).unique()
+        let gen = uniqueGen(Gen.choose(in: UInt64(0) ... UInt64.max))
         let maxRuns: UInt64 = 50
         var iterator = ValueAndChoiceTreeInterpreter(
             gen,
@@ -37,7 +36,7 @@ struct UniquenessConstraintTests {
     @Test("Low-cardinality generator exhausts retry budget")
     func lowCardinalityExhaustsRetryBudget() throws {
         // Gen.exact always produces the same value with the same choice sequence
-        let gen = Gen.exact(42).unique()
+        let gen = uniqueGen(Gen.exact(42))
         var iterator = ValueAndChoiceTreeInterpreter(
             gen,
             seed: 1,
@@ -54,7 +53,7 @@ struct UniquenessConstraintTests {
 
     @Test("Bool generator produces exactly 2 unique values")
     func boolProducesExactlyTwo() throws {
-        let gen = #gen(.bool()).unique()
+        let gen = uniqueGen(boolGen())
         var iterator = ValueAndChoiceTreeInterpreter(
             gen,
             seed: 42,
@@ -73,7 +72,7 @@ struct UniquenessConstraintTests {
 
     @Test("Determinism: same seed produces identical unique results")
     func determinism() throws {
-        let gen = #gen(.uint64()).unique()
+        let gen = uniqueGen(Gen.choose(in: UInt64.min ... UInt64.max, scaling: UInt64.defaultScaling))
         let seed: UInt64 = 99
         let maxRuns: UInt64 = 20
 
@@ -101,7 +100,7 @@ struct UniquenessConstraintTests {
     @Test("ValueInterpreter with unique combinator produces unique values")
     func valueInterpreterUniqueness() throws {
         // Use a non-size-scaled generator to avoid collisions from small sizes
-        let gen = #gen(.uint64(in: 0 ... UInt64.max)).unique()
+        let gen = uniqueGen(Gen.choose(in: UInt64(0) ... UInt64.max))
         let seed: UInt64 = 42
         let maxRuns: UInt64 = 20
 
@@ -121,11 +120,12 @@ struct UniquenessConstraintTests {
     @Test("unique(by:) deduplicates by key path")
     func uniqueByKeyPath() throws {
         // Generate pairs where first element varies but second is bounded (0-4)
-        let secondGen = #gen(.uint64(in: 0 ... 4))
-        let pairGen = #gen(
-            .uint64(),
+        let secondGen = Gen.choose(in: UInt64(0) ... UInt64(4))
+        let innerPairGen = Gen.zip(
+            Gen.choose(in: UInt64.min ... UInt64.max, scaling: UInt64.defaultScaling),
             secondGen
-        ).unique(by: \.1)
+        )
+        let pairGen = uniqueGen(innerPairGen, by: { (pair: (UInt64, UInt64)) in AnyHashable(pair.1) })
 
         var iterator = ValueAndChoiceTreeInterpreter(
             pairGen,
@@ -152,8 +152,10 @@ struct UniquenessConstraintTests {
     @Test("unique(by:) deduplicates by transform function")
     func uniqueByTransform() throws {
         // Generate values and deduplicate by modulo 5
-        let gen = #gen(.uint64())
-            .unique(by: { $0 % 5 })
+        let gen = uniqueGen(
+            Gen.choose(in: UInt64.min ... UInt64.max, scaling: UInt64.defaultScaling),
+            by: { (v: UInt64) in AnyHashable(v % 5) }
+        )
 
         var iterator = ValueAndChoiceTreeInterpreter(
             gen,
@@ -177,10 +179,14 @@ struct UniquenessConstraintTests {
 
     @Test("CGS interpreter with unique combinator produces unique values")
     func cgsUniqueness() throws {
-        let gen = #gen(.oneOf(weighted:
-            (1, .just(1)),
-            (1, .just(2)),
-            (1, .just(3)))).unique(by: { AnyHashable($0) })
+        let gen = uniqueGen(
+            Gen.pick(choices: [
+                (1, Gen.just(1)),
+                (1, Gen.just(2)),
+                (1, Gen.just(3)),
+            ]),
+            by: { (v: Int) in AnyHashable(v) }
+        )
 
         var iterator = OnlineCGSInterpreter(
             gen,
@@ -201,11 +207,30 @@ struct UniquenessConstraintTests {
     // MARK: - PropertyTest with unique combinator
 
     @Test("PropertyTest with unique combinator passes through")
-    func propertyTestPassthrough() {
-        let gen = #gen(.bool()).unique()
+    func propertyTestPassthrough() throws {
+        let gen = uniqueGen(boolGen())
 
-        #exhaust(gen, .samplingBudget(100), .replay(42)) { _ in
-            true
+        var iterator = ValueInterpreter(gen, seed: 42, maxRuns: 100)
+        while let value = try iterator.next() {
+            #expect(true)
         }
     }
+}
+
+// MARK: - Helpers
+
+/// Wraps a generator with the `.unique` operation (no key extractor).
+private func uniqueGen<Value>(_ gen: ReflectiveGenerator<Value>) -> ReflectiveGenerator<Value> {
+    .impure(
+        operation: .unique(gen: gen.erase(), fingerprint: 0, keyExtractor: nil),
+        continuation: { .pure($0 as! Value) }
+    )
+}
+
+/// Wraps a generator with the `.unique` operation using a key extractor.
+private func uniqueGen<Value>(_ gen: ReflectiveGenerator<Value>, by keyExtractor: @escaping (Value) -> AnyHashable) -> ReflectiveGenerator<Value> {
+    .impure(
+        operation: .unique(gen: gen.erase(), fingerprint: 0, keyExtractor: { value in keyExtractor(value as! Value) }),
+        continuation: { .pure($0 as! Value) }
+    )
 }

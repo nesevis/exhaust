@@ -8,7 +8,6 @@
 
 import ExhaustCore
 import Testing
-@testable import Exhaust
 
 private enum AdvancedCoupledFixtures {
     enum StackAction: Equatable {
@@ -113,9 +112,9 @@ struct AdvancedCoupledScenariosTests {
 
     @Test("2.1 Coupled Integers (fast-check)")
     func coupledIntegersFastCheckStyle() throws {
-        let gen = #gen(
-            .int(in: 0 ... 1_000_000),
-            .int(in: 0 ... 1_000_000)
+        let gen = Gen.zip(
+            Gen.choose(in: 0 ... 1_000_000) as ReflectiveGenerator<Int>,
+            Gen.choose(in: 0 ... 1_000_000) as ReflectiveGenerator<Int>
         )
 
         let property: ((Int, Int)) -> Bool = { pair in
@@ -140,25 +139,24 @@ struct AdvancedCoupledScenariosTests {
 
     @Test("2.2 Stateful Stack Bug (jqwik)")
     func statefulStackBugJqwikStyle() throws {
-        let actionGen: ReflectiveGenerator<AdvancedCoupledFixtures.StackAction> = #gen(
-            .int(in: 0 ... 1),
-            Gen.element(from: ["a", "b", "c"])
-        )
-        .mapped(
-            forward: { tag, value in
-                tag == 0 ? .pop : .push(value)
-            },
-            backward: { action in
+        let actionGen: ReflectiveGenerator<AdvancedCoupledFixtures.StackAction> = Gen.contramap(
+            { (action: AdvancedCoupledFixtures.StackAction) -> (Int, String) in
                 switch action {
                 case .pop:
                     (0, "a")
                 case let .push(value):
                     (1, value)
                 }
+            },
+            Gen.zip(
+                Gen.choose(in: 0 ... 1) as ReflectiveGenerator<Int>,
+                Gen.element(from: ["a", "b", "c"])
+            )._map { tag, value in
+                tag == 0 ? .pop : .push(value)
             }
         )
 
-        let gen = actionGen.array(length: 1 ... 40)
+        let gen = Gen.arrayOf(actionGen, within: UInt64(1) ... 40)
         let property: ([AdvancedCoupledFixtures.StackAction]) -> Bool = { actions in
             AdvancedCoupledFixtures.stackInvariantHolds(actions: actions)
         }
@@ -175,12 +173,11 @@ struct AdvancedCoupledScenariosTests {
 
     @Test("2.3 Run-Length Encoding Regression (Hypothesis)")
     func runLengthEncodingRegressionHypothesisStyle() throws {
-        let binaryStringGen = Gen.element(from: Array("01"))
-            .array(length: 0 ... 40)
-            .mapped(
-                forward: { chars in String(chars) },
-                backward: { string in Array(string) }
-            )
+        let charArrayGen = Gen.arrayOf(Gen.element(from: Array("01")), within: UInt64(0) ... 40)
+        let binaryStringGen = Gen.contramap(
+            { (string: String) -> [Character] in Array(string) },
+            charArrayGen._map { chars in String(chars) }
+        )
 
         let property: (String) -> Bool = { s in
             AdvancedCoupledFixtures.rleDecode(AdvancedCoupledFixtures.buggyRLEEncode(s)) == s
@@ -198,9 +195,9 @@ struct AdvancedCoupledScenariosTests {
 
     @Test("2.4 Floating Point Summation (Hypothesis)")
     func floatingPointSummationHypothesisStyle() throws {
-        let gen = #gen(
-            .double(in: 0.0 ... 1000.0),
-            .double(in: 0.0 ... 1000.0)
+        let gen = Gen.zip(
+            Gen.choose(in: 0.0 ... 1000.0 as ClosedRange<Double>),
+            Gen.choose(in: 0.0 ... 1000.0 as ClosedRange<Double>)
         )
 
         let property: ((Double, Double)) -> Bool = { pair in
@@ -221,12 +218,11 @@ struct AdvancedCoupledScenariosTests {
     @Test("2.5 Nasty Strings (Hypothesis)")
     func nastyUnicodeStringsHypothesisStyle() throws {
         let marker = "𝕿𝖍𝖊"
-        let unicodeStringGen = Gen.element(from: Array("xy The𝕿𝖍𝖊"))
-            .array(length: 0 ... 40)
-            .mapped(
-                forward: { chars in String(chars) },
-                backward: { string in Array(string) }
-            )
+        let unicodeCharArrayGen = Gen.arrayOf(Gen.element(from: Array("xy The𝕿𝖍𝖊")), within: UInt64(0) ... 40)
+        let unicodeStringGen = Gen.contramap(
+            { (string: String) -> [Character] in Array(string) },
+            unicodeCharArrayGen._map { chars in String(chars) }
+        )
 
         let property: (String) -> Bool = { s in
             s.contains(marker) == false
@@ -244,9 +240,9 @@ struct AdvancedCoupledScenariosTests {
 
     @Test("2.6 Difference with Gap (CsCheck)")
     func differenceWithGapCsCheckStyle() throws {
-        let gen = #gen(
-            .int(in: 0 ... 1_000_000),
-            .int(in: 0 ... 1_000_000)
+        let gen = Gen.zip(
+            Gen.choose(in: 0 ... 1_000_000) as ReflectiveGenerator<Int>,
+            Gen.choose(in: 0 ... 1_000_000) as ReflectiveGenerator<Int>
         )
 
         let property: ((Int, Int)) -> Bool = { pair in

@@ -5,7 +5,6 @@
 //  Created by Chris Kolbu on 11/2/2026.
 //
 
-import ExhaustCore
 import Foundation
 import Testing
 @testable import Exhaust
@@ -25,7 +24,6 @@ struct BinaryHeapShrinkingChallenge {
 
     @Test("Binary heap, Full")
     func binaryHeapFull() throws {
-        ExhaustLog.setConfiguration(.init(isEnabled: true, minimumLevel: .info, categoryMinimumLevels: [.reducer: .debug], format: .human))
         // The property: if the heap satisfies the invariant, then `toSortedList`
         // must produce a sorted list containing the same elements as `toList`.
         let property: @Sendable (Heap<Int>) -> Bool = { heap in
@@ -128,8 +126,7 @@ struct BinaryHeapShrinkingChallenge {
 
     /// Generates valid min-heaps by threading a minimum value through `bind`.
     /// Uses `bind` to constrain child values >= parent, so all generated heaps
-    /// satisfy the invariant by construction. Reflection is lost but the
-    /// `ValueAndChoiceTreeInterpreter` provides the ChoiceTree directly.
+    /// satisfy the invariant by construction.
     static func heapGen(min: Int = 0, depth: UInt64) -> ReflectiveGenerator<Heap<Int>> {
         let maxVal = 100
         let emptyGen: ReflectiveGenerator<Heap<Int>> = #gen(.just(.empty))
@@ -140,10 +137,7 @@ struct BinaryHeapShrinkingChallenge {
 
         let nodeGen = #gen(.int(in: min ... maxVal))
             .bind { value in
-                Gen.zip(
-                    heapGen(min: value, depth: depth / 2),
-                    heapGen(min: value, depth: depth / 2)
-                )
+                #gen(heapGen(min: value, depth: depth / 2), heapGen(min: value, depth: depth / 2))
                 .mapped(
                     forward: { left, right in Heap.node(value, left, right) },
                     backward: { heap in

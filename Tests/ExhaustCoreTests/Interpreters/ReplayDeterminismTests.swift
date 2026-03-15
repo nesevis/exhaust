@@ -1,6 +1,6 @@
 //
 //  ReplayDeterminismTests.swift
-//  ExhaustTests
+//  ExhaustCoreTests
 //
 //  Tests for replay determinism functionality ensuring that identical
 //  recipes produce identical results across multiple test runs.
@@ -8,13 +8,16 @@
 
 import ExhaustCore
 import Testing
-@testable import Exhaust
 
 @Suite("Replay Determinism")
 struct ReplayDeterminismTests {
     @Test("Replay produces identical results with same recipe")
     func replayDeterminism() throws {
-        let gen = #gen(.string(), .uint(), .int())
+        let gen = Gen.zip(
+            stringGen(),
+            Gen.choose() as ReflectiveGenerator<UInt>,
+            Gen.choose() as ReflectiveGenerator<Int>
+        )
 
         // Generate initial value
         var iterator = ValueInterpreter(gen)
@@ -35,7 +38,7 @@ struct ReplayDeterminismTests {
 
     @Test("Recipe serialization preserves determinism")
     func recipeSerializationDeterminism() throws {
-        let gen = #gen(.int(in: 1 ... 1000))
+        let gen: ReflectiveGenerator<Int> = Gen.choose(in: 1 ... 1000)
 
         let value = 742
         let recipe = try #require(try Interpreters.reflect(gen, with: value))
@@ -59,9 +62,20 @@ struct ReplayDeterminismTests {
             let scores: [Int]
         }
 
-        let personGen = #gen(.string(), .uint(), .int().array(length: 1 ... 5)) { name, age, scores in
-            Person(name: name, age: age, scores: scores)
-        }
+        let innerGen = Gen.zip(
+            stringGen(),
+            Gen.choose() as ReflectiveGenerator<UInt>,
+            Gen.arrayOf(Gen.choose() as ReflectiveGenerator<Int>, within: 1 ... 5)
+        )
+
+        let personGen = Gen.contramap(
+            { (person: Person) -> (String, UInt, [Int]) in
+                (person.name, person.age, person.scores)
+            },
+            innerGen._map { (tuple: (String, UInt, [Int])) -> Person in
+                Person(name: tuple.0, age: tuple.1, scores: tuple.2)
+            }
+        )
 
         let person = Person(name: "Alice", age: 25, scores: [90, 85, 92])
         let recipe = try #require(try Interpreters.reflect(personGen, with: person))
@@ -76,7 +90,7 @@ struct ReplayDeterminismTests {
 
     @Test("Arrays replay with exact element order")
     func arrayReplayOrder() throws {
-        let gen = #gen(.string()).array(length: 3 ... 7)
+        let gen = Gen.arrayOf(stringGen(), within: 3 ... 7)
 
         let array = ["hello", "world", "test", "array"]
         let recipe = try #require(try Interpreters.reflect(gen, with: array))

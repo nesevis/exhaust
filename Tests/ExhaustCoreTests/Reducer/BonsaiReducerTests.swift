@@ -5,7 +5,6 @@
 
 import ExhaustCore
 import Testing
-@testable import Exhaust
 
 // MARK: - BonsaiReducer Integration Tests
 
@@ -28,11 +27,21 @@ struct BonsaiReducerIntegrationTests {
 
     @Test("Bind-dependent array length shrinks correctly")
     func bindDependentShrink() throws {
-        let gen = #gen(.int(in: 1 ... 10))
-            .bound(
-                forward: { n in Gen.int(in: 0 ... 100).array(length: UInt64(n)) },
-                backward: { (arr: [Int]) in arr.count }
-            )
+        let gen: ReflectiveGenerator<[Int]> = Gen.liftF(.transform(
+            kind: .bind(
+                forward: { innerValue -> ReflectiveGenerator<Any> in
+                    let n = innerValue as! Int
+                    return Gen.arrayOf(Gen.choose(in: 0 ... 100 as ClosedRange<Int>), exactly: UInt64(n)).erase()
+                },
+                backward: { finalOutput -> Any in
+                    let arr = finalOutput as! [Int]
+                    return arr.count as Any
+                },
+                inputType: "Int",
+                outputType: "[Int]"
+            ),
+            inner: (Gen.choose(in: 1 ... 10 as ClosedRange<Int>)).erase()
+        ))
 
         ExhaustLog.setConfiguration(.init(isEnabled: true, minimumLevel: .info, categoryMinimumLevels: [.reducer: .debug], format: .human))
         var iterator = ValueAndChoiceTreeInterpreter(gen, materializePicks: true, seed: 42)
@@ -57,7 +66,7 @@ struct BonsaiReducerIntegrationTests {
     @Test("Non-bind degenerate case: maxBindDepth == 0, single coordinate")
     func nonBindDegenerateCase() throws {
         // Int array with sum > 10. Minimal: [11] or similar.
-        let gen = Gen.int(in: 0 ... 100).array(length: 1 ... 5)
+        let gen = Gen.arrayOf(Gen.choose(in: 0 ... 100 as ClosedRange<Int>), within: 1 ... 5)
 
         var iterator = ValueAndChoiceTreeInterpreter(gen, materializePicks: true, seed: 42)
         var failingTree: ChoiceTree?
@@ -84,7 +93,7 @@ struct BonsaiReducerIntegrationTests {
 
     @Test("Reducer terminates and returns a result")
     func termination() throws {
-        let gen = Gen.int(in: 0 ... 1000)
+        let gen = Gen.choose(in: 0 ... 1000 as ClosedRange<Int>)
         var iterator = ValueAndChoiceTreeInterpreter(gen, materializePicks: true, seed: 42)
         let (value, tree) = try #require(try iterator.next())
         try #require(value > 50)
@@ -101,11 +110,21 @@ struct BonsaiReducerIntegrationTests {
     func bindShrinkOutputFailsProperty() throws {
         // A bind generator where bound content depends on the inner value:
         // inner picks a length, bound generates that many elements.
-        let gen = #gen(.int(in: 1 ... 5))
-            .bound(
-                forward: { n in Gen.int(in: 0 ... 50).array(length: UInt64(n)) },
-                backward: { (arr: [Int]) in arr.count }
-            )
+        let gen: ReflectiveGenerator<[Int]> = Gen.liftF(.transform(
+            kind: .bind(
+                forward: { innerValue -> ReflectiveGenerator<Any> in
+                    let n = innerValue as! Int
+                    return Gen.arrayOf(Gen.choose(in: 0 ... 50 as ClosedRange<Int>), exactly: UInt64(n)).erase()
+                },
+                backward: { finalOutput -> Any in
+                    let arr = finalOutput as! [Int]
+                    return arr.count as Any
+                },
+                inputType: "Int",
+                outputType: "[Int]"
+            ),
+            inner: (Gen.choose(in: 1 ... 5 as ClosedRange<Int>)).erase()
+        ))
 
         let property: ([Int]) -> Bool = { $0.count < 3 || $0.allSatisfy { $0 <= 10 } }
 

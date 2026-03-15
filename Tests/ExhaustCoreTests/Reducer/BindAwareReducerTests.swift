@@ -9,7 +9,6 @@
 
 import ExhaustCore
 import Testing
-@testable import Exhaust
 
 // MARK: - BindSpanIndex Unit Tests
 
@@ -180,17 +179,38 @@ struct BindSpanIndexTests {
 @Suite("Bind-Aware Reduction")
 struct BindAwareReductionTests {
     @Test("Bind-dependent array length shrinks correctly")
-    func bindDependentShrink() {
+    func bindDependentShrink() throws {
         // Property: array.count <= 2 (fails when n >= 3). Minimal: n = 3.
-        let gen = #gen(.int(in: 1 ... 10))
-            .bound(
-                forward: { n in Gen.int(in: 0 ... 100).array(length: UInt64(n)) },
-                backward: { (arr: [Int]) in arr.count }
-            )
+        let gen: ReflectiveGenerator<[Int]> = Gen.liftF(.transform(
+            kind: .bind(
+                forward: { innerValue -> ReflectiveGenerator<Any> in
+                    let n = innerValue as! Int
+                    return Gen.arrayOf(Gen.choose(in: 0 ... 100 as ClosedRange<Int>), exactly: UInt64(n)).erase()
+                },
+                backward: { finalOutput -> Any in
+                    let arr = finalOutput as! [Int]
+                    return arr.count as Any
+                },
+                inputType: "Int",
+                outputType: "[Int]"
+            ),
+            inner: (Gen.choose(in: 1 ... 10 as ClosedRange<Int>)).erase()
+        ))
 
-        let output = #exhaust(gen, .suppressIssueReporting, .replay(42)) { arr in
-            arr.count <= 2
+        // Find a failing value, then reduce
+        var iterator = ValueAndChoiceTreeInterpreter(gen, materializePicks: true, seed: 42)
+        var failingTree: ChoiceTree?
+        while let (value, tree) = try iterator.next() {
+            if (value.count <= 2) == false {
+                failingTree = tree
+                break
+            }
         }
+
+        let tree = try #require(failingTree)
+        let (_, output) = try #require(
+            try Interpreters.reduce(gen: gen, tree: tree, config: .fast) { $0.count <= 2 }
+        )
 
         #expect(output == [0, 0, 0])
     }
@@ -199,11 +219,21 @@ struct BindAwareReductionTests {
     func bindDependentRangeShrink() throws {
         // .int(in: 0...100).bound { n in .int(in: 0...max(1, n)) }
         // Property: m < 5 (fails when m >= 5).
-        let gen = #gen(.int(in: 0 ... 100))
-            .bound(
-                forward: { n in Gen.int(in: 0 ... max(1, n)) },
-                backward: { (m: Int) in m }
-            )
+        let gen: ReflectiveGenerator<Int> = Gen.liftF(.transform(
+            kind: .bind(
+                forward: { innerValue -> ReflectiveGenerator<Any> in
+                    let n = innerValue as! Int
+                    return (Gen.choose(in: 0 ... max(1, n) as ClosedRange<Int>) as ReflectiveGenerator<Int>).erase()
+                },
+                backward: { finalOutput -> Any in
+                    let m = finalOutput as! Int
+                    return m as Any
+                },
+                inputType: "Int",
+                outputType: "Int"
+            ),
+            inner: (Gen.choose(in: 0 ... 100 as ClosedRange<Int>)).erase()
+        ))
 
         var iterator = ValueAndChoiceTreeInterpreter(gen, materializePicks: true, seed: 42)
         var failingTree: ChoiceTree?
@@ -276,11 +306,21 @@ struct MaterializeCandidateTests {
 
     @Test("Routes through GuidedMaterializer for inner-range mutation")
     func guidedMaterializerRouting() throws {
-        let gen = #gen(.int(in: 0 ... 100))
-            .bound(
-                forward: { n in Gen.int(in: 0 ... max(1, n)) },
-                backward: { (m: Int) in m }
-            )
+        let gen: ReflectiveGenerator<Int> = Gen.liftF(.transform(
+            kind: .bind(
+                forward: { innerValue -> ReflectiveGenerator<Any> in
+                    let n = innerValue as! Int
+                    return (Gen.choose(in: 0 ... max(1, n) as ClosedRange<Int>) as ReflectiveGenerator<Int>).erase()
+                },
+                backward: { finalOutput -> Any in
+                    let m = finalOutput as! Int
+                    return m as Any
+                },
+                inputType: "Int",
+                outputType: "Int"
+            ),
+            inner: (Gen.choose(in: 0 ... 100 as ClosedRange<Int>)).erase()
+        ))
 
         var iterator = ValueAndChoiceTreeInterpreter(gen, materializePicks: true, seed: 42)
         let (_, genTree) = try #require(try iterator.next())

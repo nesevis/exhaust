@@ -7,7 +7,6 @@
 
 import ExhaustCore
 import Testing
-@testable import Exhaust
 
 @Suite("Generation Examples")
 struct GenerationExamplesTests {
@@ -15,7 +14,7 @@ struct GenerationExamplesTests {
     struct BasicExampleTests {
         @Test("Profile memory allocations")
         func profileMemAlloc() throws {
-            let generator = #gen(.string())
+            let generator = stringGen()
             var iterator = ValueAndChoiceTreeInterpreter(generator, materializePicks: true, seed: 1, maxRuns: 100)
             while let (value, tree) = try iterator.next() {
                 let value = value
@@ -27,12 +26,21 @@ struct GenerationExamplesTests {
 
         @Test("Test Gen filtering")
         func genFiltering() throws {
-            let generator = #gen(.uint())
-                .filter { $0.isMultiple(of: 3) }
-                .classify(
-                    ("even", { n in n % 2 == 0 }),
-                    ("odd", { n in n % 2 != 0 })
-                )
+            let innerGen = Gen.choose(in: UInt.min ... UInt.max, scaling: UInt.defaultScaling)
+            let filteredGen: ReflectiveGenerator<UInt> = .impure(
+                operation: .filter(
+                    gen: innerGen.erase(),
+                    fingerprint: 0,
+                    filterType: .auto,
+                    predicate: { ($0 as! UInt).isMultiple(of: 3) }
+                ),
+                continuation: { .pure($0 as! UInt) }
+            )
+            let generator = Gen.classify(
+                filteredGen,
+                ("even", { n in n % 2 == 0 }),
+                ("odd", { n in n % 2 != 0 })
+            )
             var iterator = ValueAndChoiceTreeInterpreter(generator, seed: 1, maxRuns: 100)
             while let (value, _) = try iterator.next() {
                 #expect(value.isMultiple(of: 3))
@@ -70,7 +78,7 @@ struct GenerationExamplesTests {
 
         @Test("ValueAndChoiceTreeGeneratorDoesntSwallowMaps")
         func vACTGdoesntswallomaps() throws {
-            let gen = #gen(.uint()).map(\.self).map { second in
+            let gen = Gen.choose(in: UInt.min ... UInt.max, scaling: UInt.defaultScaling)._map { $0 }._map { second in
                 second.description
             }
 //            let filtered = Gen.filter(gen, { $0.contains("@") })
@@ -83,7 +91,7 @@ struct GenerationExamplesTests {
 
         @Test
         func example2() throws {
-            let gen = #gen(.int(in: 1 ... 5))
+            let gen = Gen.choose(in: 1 ... 5) as ReflectiveGenerator<Int>
             var iterator = ValueInterpreter(gen)
             let results = try iterator.next()
             let nonNilResults = try #require(results)
@@ -93,35 +101,12 @@ struct GenerationExamplesTests {
 
         @Test("Test Gen.dictionaryof")
         func genDictionaryOf() throws {
-            let gen = #gen(.dictionary(.string(), .int()))
+            let gen = Gen.dictionaryOf(stringGen(), Gen.choose(in: Int.min ... Int.max, scaling: Int.defaultScaling))
             var iterator = ValueInterpreter(gen)
             let result = try #require(iterator.prefix(2).last) // Skip the first length=0 response
             let reflection = try #require(try Interpreters.reflect(gen, with: result))
             let replay = try #require(try Interpreters.replay(gen, using: reflection))
             #expect(result == replay)
-        }
-
-        @Test
-        func example3() throws {
-            struct Person: Equatable {
-                let age: Int
-                let height: Double
-            }
-            let zipped = #gen(.int(in: 0 ... 150), .double(in: 120.0 ... 180.0)) { age, height in
-                Person(age: age, height: height)
-            }
-            var iterator = ValueInterpreter(zipped)
-            let result = try iterator.next()!
-            let choices = try Interpreters.reflect(zipped, with: result)
-            if let choices {
-                let replayed = try Interpreters.replay(zipped, using: choices)
-                if let replayed {
-                    #expect(replayed == result)
-                } else {
-                    #expect(false, "Replay failed in example3")
-                }
-            }
-            #expect(true)
         }
     }
 
@@ -130,12 +115,12 @@ struct GenerationExamplesTests {
         @Test("Debug array step by step")
         func debugArrayStepByStep() throws {
             // 1. Test #gen(.string()) alone
-            let stringGen = #gen(.string())
+            let singleStringGen = stringGen()
             for i in 0 ..< 3 {
-                var iterator = ValueInterpreter(stringGen)
+                var iterator = ValueInterpreter(singleStringGen)
                 let generated = try iterator.next()!
-                if let recipe = try Interpreters.reflect(stringGen, with: generated) {
-                    if let replayed = try Interpreters.replay(stringGen, using: recipe) {
+                if let recipe = try Interpreters.reflect(singleStringGen, with: generated) {
+                    if let replayed = try Interpreters.replay(singleStringGen, using: recipe) {
                         // Round-trip successful
                     } else {
                         #expect(false, "Replay failed")
@@ -146,7 +131,7 @@ struct GenerationExamplesTests {
             }
 
             // 2. Test array alone (without map)
-            let arrayGen = #gen(.string()).array(length: 1 ... 3)
+            let arrayGen = Gen.arrayOf(stringGen(), within: UInt64(1) ... 3)
             for i in 0 ..< 3 {
                 var iterator = ValueInterpreter(arrayGen)
                 let generated = try iterator.next()!

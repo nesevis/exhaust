@@ -9,7 +9,6 @@
 
 import ExhaustCore
 import Testing
-@testable import Exhaust
 
 @Suite("Bind-Aware Reducer Benchmark")
 struct BindAwareReducerBenchmark {
@@ -22,11 +21,21 @@ struct BindAwareReducerBenchmark {
         // Inner: pick n from 1...20.
         // Bound: array of n elements, each from 0...100.
         // Property: array.count <= 3 (fails when n >= 4).
-        let gen = #gen(.int(in: 1 ... 20))
-            .bound(
-                forward: { n in #gen(.int(in: 0 ... 100).array(length: UInt64(max(0, n)))) },
-                backward: { (arr: [Int]) in arr.count }
-            )
+        let gen: ReflectiveGenerator<[Int]> = Gen.liftF(.transform(
+            kind: .bind(
+                forward: { innerValue -> ReflectiveGenerator<Any> in
+                    let n = innerValue as! Int
+                    return Gen.arrayOf(Gen.choose(in: 0 ... 100 as ClosedRange<Int>), exactly: UInt64(max(0, n))).erase()
+                },
+                backward: { finalOutput -> Any in
+                    let arr = finalOutput as! [Int]
+                    return arr.count as Any
+                },
+                inputType: "Int",
+                outputType: "[Int]"
+            ),
+            inner: (Gen.choose(in: 1 ... 20 as ClosedRange<Int>)).erase()
+        ))
 
         let result = try reduceAndMeasure(gen: gen, seed: seed) { $0.count <= 3 }
         guard let result else { return }
@@ -43,11 +52,21 @@ struct BindAwareReducerBenchmark {
         // Inner: pick n from 0...100.
         // Bound: pick m from 0...max(1, n).
         // Property: m < 10.
-        let gen = #gen(.int(in: 0 ... 100))
-            .bound(
-                forward: { n in Gen.int(in: 0 ... max(1, n)) },
-                backward: { (m: Int) in m }
-            )
+        let gen: ReflectiveGenerator<Int> = Gen.liftF(.transform(
+            kind: .bind(
+                forward: { innerValue -> ReflectiveGenerator<Any> in
+                    let n = innerValue as! Int
+                    return (Gen.choose(in: 0 ... max(1, n) as ClosedRange<Int>) as ReflectiveGenerator<Int>).erase()
+                },
+                backward: { finalOutput -> Any in
+                    let m = finalOutput as! Int
+                    return m as Any
+                },
+                inputType: "Int",
+                outputType: "Int"
+            ),
+            inner: (Gen.choose(in: 0 ... 100 as ClosedRange<Int>)).erase()
+        ))
 
         let result = try reduceAndMeasure(gen: gen, seed: seed) { $0 < 10 }
         guard let result else { return }
@@ -65,23 +84,29 @@ struct BindAwareReducerBenchmark {
         // Two independent bind generators zipped together.
         // Each: inner picks n from 0...50, bound picks m from 0...max(1,n).
         // Property: sum of both bound values < 20.
-        let singleBind = #gen(.int(in: 0 ... 50))
-            .bound(
-                forward: { n in Gen.int(in: 0 ... max(1, n)) },
-                backward: { (m: Int) in m }
-            )
+        let singleBind: ReflectiveGenerator<Int> = Gen.liftF(.transform(
+            kind: .bind(
+                forward: { innerValue -> ReflectiveGenerator<Any> in
+                    let n = innerValue as! Int
+                    return (Gen.choose(in: 0 ... max(1, n) as ClosedRange<Int>) as ReflectiveGenerator<Int>).erase()
+                },
+                backward: { finalOutput -> Any in
+                    let m = finalOutput as! Int
+                    return m as Any
+                },
+                inputType: "Int",
+                outputType: "Int"
+            ),
+            inner: (Gen.choose(in: 0 ... 50 as ClosedRange<Int>)).erase()
+        ))
 
-        let gen = #gen(singleBind, singleBind)
+        let gen = Gen.zip(singleBind, singleBind)
 
-        let result = try #require(
-            #exhaust(
-                gen,
-                .useBonsaiReducer,
-                .suppressIssueReporting,
-                .reflecting((11, 15))
-            ) { pair in
-                pair.0 + pair.1 < 20
-            }
+        // Reflect the starting value, then bonsai-reduce
+        let tree = try #require(try Interpreters.reflect(gen, with: (11, 15)))
+        let property: ((Int, Int)) -> Bool = { pair in pair.0 + pair.1 < 20 }
+        let (_, result) = try #require(
+            try Interpreters.bonsaiReduce(gen: gen, tree: tree, config: .fast, property: property)
         )
 
         #expect(result == (0, 20))
@@ -96,14 +121,25 @@ struct BindAwareReducerBenchmark {
         // Inner: pick n from 1...30.
         // Bound: group of two values, both from 0...max(1,n).
         // Property: both bound values < 5.
-        let gen = #gen(.int(in: 1 ... 30))
-            .bound(
-                forward: { n in
+        let gen: ReflectiveGenerator<(Int, Int)> = Gen.liftF(.transform(
+            kind: .bind(
+                forward: { innerValue -> ReflectiveGenerator<Any> in
+                    let n = innerValue as! Int
                     let upper = max(1, n)
-                    return Gen.zip(Gen.int(in: 0 ... upper), Gen.int(in: 0 ... upper))
+                    return Gen.zip(
+                        Gen.choose(in: 0 ... upper as ClosedRange<Int>),
+                        Gen.choose(in: 0 ... upper as ClosedRange<Int>)
+                    ).erase()
                 },
-                backward: { (pair: (Int, Int)) in max(pair.0, pair.1) }
-            )
+                backward: { finalOutput -> Any in
+                    let pair = finalOutput as! (Int, Int)
+                    return max(pair.0, pair.1) as Any
+                },
+                inputType: "Int",
+                outputType: "(Int, Int)"
+            ),
+            inner: (Gen.choose(in: 1 ... 30 as ClosedRange<Int>)).erase()
+        ))
 
         let result = try reduceAndMeasure(gen: gen, seed: seed) { pair in
             pair.0 < 5 && pair.1 < 5
