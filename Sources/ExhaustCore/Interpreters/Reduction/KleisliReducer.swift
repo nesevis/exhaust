@@ -44,6 +44,9 @@ public extension Interpreters {
         /// stale `validRange` metadata. When `false`, re-derivation is skipped unless
         /// the tree contains explicit `.bind` nodes.
         let hasDynamicRanges: Bool
+        /// When `true`, use ``ReductionMaterializer``-backed decoders that produce
+        /// fresh trees with current `validRange` and all branch alternatives.
+        let useReductionMaterializer: Bool
 
         private init(
             maxStalls: Int,
@@ -51,12 +54,14 @@ public extension Interpreters {
             probeBudgets: TCRConfiguration.ProbeBudgets,
             alignedDeletionBeamSearchTuning: TCRConfiguration.AlignedDeletionBeamSearchTuning,
             hasDynamicRanges: Bool,
+            useReductionMaterializer: Bool = false,
         ) {
             self.maxStalls = maxStalls
             self.recentCycleWindow = recentCycleWindow
             self.probeBudgets = probeBudgets
             self.alignedDeletionBeamSearchTuning = alignedDeletionBeamSearchTuning
             self.hasDynamicRanges = hasDynamicRanges
+            self.useReductionMaterializer = useReductionMaterializer
         }
 
         /// Maps a ``TCRConfiguration`` preset to the corresponding configuration.
@@ -76,6 +81,7 @@ public extension Interpreters {
                 probeBudgets: probeBudgets,
                 alignedDeletionBeamSearchTuning: alignedDeletionBeamSearchTuning,
                 hasDynamicRanges: value,
+                useReductionMaterializer: useReductionMaterializer,
             )
         }
 
@@ -85,6 +91,7 @@ public extension Interpreters {
             probeBudgets: .fast,
             alignedDeletionBeamSearchTuning: .fast,
             hasDynamicRanges: true,
+            useReductionMaterializer: true,
         )
 
         static let slow = Self(
@@ -93,6 +100,7 @@ public extension Interpreters {
             probeBudgets: .slow,
             alignedDeletionBeamSearchTuning: .slow,
             hasDynamicRanges: true,
+            useReductionMaterializer: true,
         )
     }
 }

@@ -18,11 +18,21 @@ public enum SequenceDecoder {
     /// Per-candidate routing for cross-stage tactics. Routes to direct if only bound values changed, guided if inner values changed.
     case crossStage(bindIndex: BindSpanIndex, fallbackTree: ChoiceTree?, strictness: Interpreters.Strictness)
 
+    /// ``ReductionMaterializer`` exact mode. Produces a fresh tree with current `validRange` and
+    /// all branch alternatives. Inner values are rejected if out-of-range; bound values are clamped.
+    case exactFresh
+
+    /// ``ReductionMaterializer`` guided mode. Produces a fresh tree with current `validRange` and
+    /// all branch alternatives. Tiered resolution: prefix → fallback → PRNG. Cursor suspension
+    /// at bind sites.
+    case guidedFresh(fallbackTree: ChoiceTree?,
+                     maximizeBoundRegionIndices: Set<Int>? = nil)
+
     /// The approximation class of this decoder.
     public var approximation: ApproximationClass {
         switch self {
-        case .direct: .exact
-        case .guided, .crossStage: .bounded
+        case .direct, .exactFresh: .exact
+        case .guided, .crossStage, .guidedFresh: .bounded
         }
     }
 
@@ -58,6 +68,21 @@ public enum SequenceDecoder {
                 candidate: candidate, gen: gen, tree: tree,
                 bindIndex: bindIndex, fallbackTree: fallbackTree ?? tree,
                 strictness: strictness,
+                originalSequence: originalSequence, property: property
+            )
+
+        case .exactFresh:
+            return decodeExactFresh(
+                candidate: candidate, gen: gen,
+                fallbackTree: tree,
+                originalSequence: originalSequence, property: property
+            )
+
+        case let .guidedFresh(fallbackTree, maximizeBoundRegionIndices):
+            return decodeGuidedFresh(
+                candidate: candidate, gen: gen,
+                fallbackTree: fallbackTree ?? tree,
+                maximizeBoundRegionIndices: maximizeBoundRegionIndices,
                 originalSequence: originalSequence, property: property
             )
         }
@@ -144,6 +169,62 @@ public enum SequenceDecoder {
         }
     }
 
+    // MARK: - Fresh Decode Implementations
+
+    private func decodeExactFresh<Output>(
+        candidate: ChoiceSequence,
+        gen: ReflectiveGenerator<Output>,
+        fallbackTree: ChoiceTree,
+        originalSequence: ChoiceSequence,
+        property: (Output) -> Bool
+    ) -> ShrinkResult<Output>? {
+        switch ReductionMaterializer.materialize(
+            gen, prefix: candidate,
+            mode: .exact, fallbackTree: fallbackTree
+        ) {
+        case let .success(output, freshTree):
+            guard property(output) == false else { return nil }
+            let freshSequence = ChoiceSequence(freshTree)
+            return ShrinkResult(
+                sequence: freshSequence,
+                tree: freshTree,
+                output: output,
+                evaluations: 1
+            )
+        case .rejected, .failed:
+            return nil
+        }
+    }
+
+    private func decodeGuidedFresh<Output>(
+        candidate: ChoiceSequence,
+        gen: ReflectiveGenerator<Output>,
+        fallbackTree: ChoiceTree,
+        maximizeBoundRegionIndices: Set<Int>? = nil,
+        originalSequence: ChoiceSequence,
+        property: (Output) -> Bool
+    ) -> ShrinkResult<Output>? {
+        let seed = candidate.zobristHash
+        switch ReductionMaterializer.materialize(
+            gen, prefix: candidate,
+            mode: .guided(seed: seed, fallbackTree: fallbackTree,
+                          maximizeBoundRegionIndices: maximizeBoundRegionIndices)
+        ) {
+        case let .success(output, freshTree):
+            let freshSequence = ChoiceSequence(freshTree)
+            guard freshSequence.shortLexPrecedes(originalSequence) else { return nil }
+            guard property(output) == false else { return nil }
+            return ShrinkResult(
+                sequence: freshSequence,
+                tree: freshTree,
+                output: output,
+                evaluations: 1
+            )
+        case .rejected, .failed:
+            return nil
+        }
+    }
+
     // MARK: - Decoder Selection
 
     /// Returns the appropriate decoder for a given context.
@@ -164,6 +245,43 @@ public enum SequenceDecoder {
     /// Value reduction at depths > 0 always uses `.direct` — even with binds. These positions are
     /// bound values, and `.guided` would ignore candidate modifications via cursor suspension.
     public static func `for`(_ context: DecoderContext) -> SequenceDecoder {
+        if context.useReductionMaterializer {
+            return forFresh(context)
+        }
+        return forLegacy(context)
+    }
+
+    /// Decoder selection using ``ReductionMaterializer``-backed decoders.
+    ///
+    /// Simpler than the legacy path: the fresh materializer always produces a consistent
+    /// (sequence, tree) pair, so the exact/guided distinction maps cleanly to value vs
+    /// structural changes.
+    private static func forFresh(_ context: DecoderContext) -> SequenceDecoder {
+        let hasBinds = context.bindIndex != nil
+            && context.bindIndex?.isEmpty == false
+
+        switch context.depth {
+        case .global:
+            // Cross-stage redistribution: guided re-derivation handles both
+            // inner and bound value changes uniformly.
+            return .guidedFresh(fallbackTree: context.fallbackTree)
+
+        case .specific(0):
+            if hasBinds || context.strictness == .relaxed {
+                return .guidedFresh(fallbackTree: context.fallbackTree)
+            }
+            return .exactFresh
+
+        case .specific:
+            if context.strictness == .relaxed {
+                return .guidedFresh(fallbackTree: context.fallbackTree)
+            }
+            return .exactFresh
+        }
+    }
+
+    /// Legacy decoder selection using `Interpreters.materialize()` and ``GuidedMaterializer``.
+    private static func forLegacy(_ context: DecoderContext) -> SequenceDecoder {
         let hasBinds = context.bindIndex != nil
             && context.bindIndex?.isEmpty == false
 

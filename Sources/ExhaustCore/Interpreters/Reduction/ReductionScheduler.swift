@@ -93,7 +93,7 @@ enum ReductionScheduler {
     /// Default per-cycle materialization budget.
     ///
     /// Sized to allow thorough reduction for typical generators. The per-leg weights distribute this across the V-cycle legs.
-    static let defaultCycleBudgetTotal = 200
+    static let defaultCycleBudgetTotal = 2000
 
     // MARK: - Entry Point
 
@@ -155,26 +155,25 @@ enum ReductionScheduler {
             fallbackTree = result.tree
             if structureChanged {
                 bindIndex = hasBind ? BindSpanIndex(from: sequence) : nil
-                // Re-derive a consistent (sequence, tree) pair after structural changes.
-                // Decoders like .direct return the original tree, which becomes stale after
-                // deletion. GuidedMaterializer replays the accepted sequence as prefix and
-                // rebuilds a matching tree. Cursor scoping ensures zip children don't consume
-                // siblings' entries — deleted children exhaust within their scope and fall back
-                // to the fallback tree (or PRNG), producing correct empty sequences.
-                //
-                // The shortlex guard prevents re-derivation from inflating the sequence:
-                // GuidedMaterializer's PRNG fallback can generate more content than the
-                // prefix contained, producing a longer sequence than the accepted candidate.
-                let seed = sequence.zobristHash
-                if case let .success(reDerivedOutput, reDerivedSequence, reDerivedTree) =
-                    GuidedMaterializer.materialize(gen, prefix: sequence, seed: seed, fallbackTree: tree),
-                   property(reDerivedOutput) == false,
-                   sequence.shortLexPrecedes(reDerivedSequence) == false
-                {
-                    sequence = reDerivedSequence
-                    tree = reDerivedTree
-                    output = reDerivedOutput
-                    fallbackTree = reDerivedTree
+                if config.useReductionMaterializer == false {
+                    // Legacy path: re-derive a consistent (sequence, tree) pair after
+                    // structural changes. Decoders like .direct return the original tree,
+                    // which becomes stale after deletion. GuidedMaterializer replays the
+                    // accepted sequence as prefix and rebuilds a matching tree.
+                    //
+                    // Not needed for ReductionMaterializer — the fresh decoder results
+                    // already have a current tree with fresh validRange metadata.
+                    let seed = sequence.zobristHash
+                    if case let .success(reDerivedOutput, reDerivedSequence, reDerivedTree) =
+                        GuidedMaterializer.materialize(gen, prefix: sequence, seed: seed, fallbackTree: tree),
+                       property(reDerivedOutput) == false,
+                       sequence.shortLexPrecedes(reDerivedSequence) == false
+                    {
+                        sequence = reDerivedSequence
+                        tree = reDerivedTree
+                        output = reDerivedOutput
+                        fallbackTree = reDerivedTree
+                    }
                 }
             }
             if hasBind {
@@ -342,12 +341,12 @@ enum ReductionScheduler {
         }
 
         func makeDeletionDecoder(at depth: Int) -> SequenceDecoder {
-            let context = DecoderContext(depth: .specific(depth), bindIndex: bindIndex, fallbackTree: fallbackTree, strictness: .relaxed)
+            let context = DecoderContext(depth: .specific(depth), bindIndex: bindIndex, fallbackTree: fallbackTree, strictness: .relaxed, useReductionMaterializer: config.useReductionMaterializer)
             return SequenceDecoder.for(context)
         }
 
         func makeDepthZeroDecoder() -> SequenceDecoder {
-            let context = DecoderContext(depth: .specific(0), bindIndex: bindIndex, fallbackTree: fallbackTree, strictness: .normal)
+            let context = DecoderContext(depth: .specific(0), bindIndex: bindIndex, fallbackTree: fallbackTree, strictness: .normal, useReductionMaterializer: config.useReductionMaterializer)
             return SequenceDecoder.for(context)
         }
 
@@ -391,39 +390,66 @@ enum ReductionScheduler {
                     for (candidateSequence, candidateTree) in branchEncoder.encode(sequence: sequence, tree: tree) {
                         guard branchUsed < remaining else { break }
                         probes += 1
-                        // Materialize using the encoder's modified tree directly,
-                        // matching the legacy reducer's promoteBranches approach.
-                        guard var output = try? Interpreters.materialize(
-                            gen,
-                            with: candidateTree,
-                            using: candidateSequence,
-                            strictness: .relaxed
-                        ) else {
-                            branchUsed += 1
-                            materializationFailures += 1
-                            continue
+
+                        let branchOutput: Output
+                        let branchResult: ShrinkResult<Output>
+
+                        if config.useReductionMaterializer {
+                            // Fresh path: ReductionMaterializer produces a fresh tree
+                            // with current validRange and all branch alternatives.
+                            switch ReductionMaterializer.materialize(
+                                gen, prefix: candidateSequence, mode: .exact,
+                                fallbackTree: tree
+                            ) {
+                            case let .success(value, freshTree):
+                                guard property(value) == false else {
+                                    branchUsed += 1
+                                    propertyPasses += 1
+                                    continue
+                                }
+                                branchOutput = value
+                                let freshSequence = ChoiceSequence(freshTree)
+                                branchResult = ShrinkResult(
+                                    sequence: freshSequence, tree: freshTree,
+                                    output: value, evaluations: 1
+                                )
+                            case .rejected, .failed:
+                                branchUsed += 1
+                                materializationFailures += 1
+                                continue
+                            }
+                        } else {
+                            // Legacy path: materialize using the encoder's modified tree.
+                            guard let legacyOutput = try? Interpreters.materialize(
+                                gen, with: candidateTree, using: candidateSequence,
+                                strictness: .relaxed
+                            ) else {
+                                branchUsed += 1
+                                materializationFailures += 1
+                                continue
+                            }
+                            guard property(legacyOutput) == false else {
+                                branchUsed += 1
+                                propertyPasses += 1
+                                continue
+                            }
+                            branchOutput = legacyOutput
+                            branchResult = ShrinkResult(
+                                sequence: candidateSequence, tree: candidateTree,
+                                output: legacyOutput, evaluations: 1
+                            )
                         }
-                        guard property(output) == false else {
-                            branchUsed += 1
-                            propertyPasses += 1
-                            continue
-                        }
-                        let result = ShrinkResult(
-                            sequence: candidateSequence,
-                            tree: candidateTree,
-                            output: output,
-                            evaluations: 1
-                        )
+
                         branchUsed += 1
                         // Accept branch result directly — no GuidedMaterializer
-                        // re-derivation. The encoder's candidateTree preserves
-                        // branch alternatives at all pick sites; re-derivation
-                        // through GuidedMaterializer would strip them, preventing
-                        // pivotBranches from finding candidates on the next pass.
-                        sequence = result.sequence
-                        tree = result.tree
-                        output = result.output
-                        fallbackTree = result.tree
+                        // re-derivation. For legacy: the encoder's candidateTree
+                        // preserves branch alternatives; re-derivation through
+                        // GuidedMaterializer would strip them. For fresh: the tree
+                        // already has current metadata and all alternatives.
+                        sequence = branchResult.sequence
+                        tree = branchResult.tree
+                        output = branchResult.output
+                        fallbackTree = branchResult.tree
                         if hasBind {
                             bindIndex = BindSpanIndex(from: sequence)
                             bestSequence = sequence
@@ -455,14 +481,9 @@ enum ReductionScheduler {
                 remaining -= branchUsed
 
                 // After all branch encoders have run, re-derive the sequence to
-                // refresh validRange annotations. Branch promotion copies subtrees
-                // with stale ranges from their original (deeper) position; the
-                // generator's bind closures compute fresh ranges from the current
-                // parent values. Re-derivation runs the generator, producing a
-                // sequence with accurate ranges. We defer this until after ALL
-                // branch encoders have run so pivotBranches sees the original tree
-                // with full alternatives.
-                if cycleImproved {
+                // refresh validRange annotations. Not needed for ReductionMaterializer —
+                // the fresh tree already has current metadata and all branch alternatives.
+                if cycleImproved, config.useReductionMaterializer == false {
                     let seed = sequence.zobristHash
                     if case let .success(reDerivedOutput, reDerivedSequence, reDerivedTree) =
                         GuidedMaterializer.materialize(gen, prefix: sequence, seed: seed, fallbackTree: tree),
@@ -492,7 +513,7 @@ enum ReductionScheduler {
                         var depthProgress = true
                         while depthProgress, legBudget.isExhausted == false {
                             depthProgress = false
-                            let context = DecoderContext(depth: .specific(depth), bindIndex: bindIndex, fallbackTree: fallbackTree, strictness: .normal)
+                            let context = DecoderContext(depth: .specific(depth), bindIndex: bindIndex, fallbackTree: fallbackTree, strictness: .normal, useReductionMaterializer: config.useReductionMaterializer)
                             let decoder = SequenceDecoder.for(context)
 
                             let vSpans = valueSpans(at: depth)
@@ -589,7 +610,17 @@ enum ReductionScheduler {
                 // dynamic range dependencies (from ._bind or .bind()). When
                 // hasDynamicRanges is false (detected via choice tree sampling),
                 // re-derivation is only needed if the tree has explicit .bind nodes.
-                let structureChangedOnCovariant = hasBind || config.hasDynamicRanges
+                //
+                // With ReductionMaterializer, every materialization returns a fresh tree
+                // with current validRange, so hasDynamicRanges is not load-bearing —
+                // the decoder already handles re-derivation. Still pass structureChanged
+                // to accept() for bind index refresh.
+                let structureChangedOnCovariant: Bool
+                if config.useReductionMaterializer {
+                    structureChangedOnCovariant = hasBind
+                } else {
+                    structureChangedOnCovariant = hasBind || config.hasDynamicRanges
+                }
 
                 // Zero values.
                 do {
@@ -689,7 +720,7 @@ enum ReductionScheduler {
                 cyclesSinceRedistribution = 0
                 let target = cycleBudget.initialBudget(for: .redistribution)
                 var legBudget = LegBudget(hardCap: remaining, stallPatience: target)
-                let redistContext = DecoderContext(depth: .global, bindIndex: bindIndex, fallbackTree: fallbackTree, strictness: .normal)
+                let redistContext = DecoderContext(depth: .global, bindIndex: bindIndex, fallbackTree: fallbackTree, strictness: .normal, useReductionMaterializer: config.useReductionMaterializer)
                 let redistDecoder = SequenceDecoder.for(redistContext)
                 var redistributionAccepted = false
 
@@ -703,11 +734,19 @@ enum ReductionScheduler {
                     for plan in regionPairs {
                         guard legBudget.isExhausted == false else { break }
                         let sinkRegionIndex = plan.sink.regionIndex
-                        let bindRedistDecoder = SequenceDecoder.guided(
-                            fallbackTree: fallbackTree ?? tree,
-                            strictness: .normal,
-                            maximizeBoundRegionIndices: Set([sinkRegionIndex])
-                        )
+                        let bindRedistDecoder: SequenceDecoder
+                        if config.useReductionMaterializer {
+                            bindRedistDecoder = .guidedFresh(
+                                fallbackTree: fallbackTree ?? tree,
+                                maximizeBoundRegionIndices: Set([sinkRegionIndex])
+                            )
+                        } else {
+                            bindRedistDecoder = .guided(
+                                fallbackTree: fallbackTree ?? tree,
+                                strictness: .normal,
+                                maximizeBoundRegionIndices: Set([sinkRegionIndex])
+                            )
+                        }
                         bindAwareRedistributeEncoder.startPlan(
                             sequence: sequence, plan: plan
                         )

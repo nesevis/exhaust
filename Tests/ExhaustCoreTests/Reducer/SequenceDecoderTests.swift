@@ -18,16 +18,18 @@ struct SequenceDecoderForTests {
 
     // MARK: - .relaxed strictness
 
-    @Test("Relaxed strictness at depth 0 without binds produces direct decoder")
+    @Test("Relaxed strictness at depth 0 without binds produces guided decoder")
     func relaxedStrictnessDepth0NoBind() {
-        // Non-bind deletion uses .direct — tree re-derivation happens in accept().
+        // Deletion (.relaxed) invalidates the tree's positional mapping even
+        // without binds. GuidedMaterializer rebuilds a consistent (sequence, tree)
+        // pair and applies the shortlex guard.
         let context = DecoderContext(
             depth: .specific(0), bindIndex: nil,
             fallbackTree: nil, strictness: .relaxed
         )
         let decoder = SequenceDecoder.for(context)
-        guard case .direct = decoder else {
-            Issue.record("Expected .direct, got \(decoder)")
+        guard case .guided = decoder else {
+            Issue.record("Expected .guided, got \(decoder)")
             return
         }
     }

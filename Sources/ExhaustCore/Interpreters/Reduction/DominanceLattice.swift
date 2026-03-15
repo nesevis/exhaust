@@ -39,10 +39,8 @@ struct DominanceLattice {
     /// Only checks dominators within the same ``ReductionPhase`` — cross-phase
     /// dominance is not defined (the leg ordering handles inter-phase sequencing).
     func shouldSkip(_ name: String, phase: ReductionPhase) -> Bool {
-        for dominator in dominators(of: name, in: phase) {
-            if succeeded.contains(dominator) {
-                return true
-            }
+        for dominator in dominators(of: name, in: phase) where succeeded.contains(dominator) {
+            return true
         }
         return false
     }

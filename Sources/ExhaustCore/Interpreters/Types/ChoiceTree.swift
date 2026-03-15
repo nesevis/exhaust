@@ -123,8 +123,10 @@ extension ChoiceTree {
         switch self {
         case .bind:
             true
-        case .choice, .just, .getSize, .branch:
+        case .choice, .just, .getSize:
             false
+        case let .branch(_, _, _, _, choice):
+            choice.containsBind
         case let .selected(inner):
             inner.containsBind
         case let .sequence(_, elements, _):
