@@ -44,7 +44,7 @@ struct CouplingShrinkingChallenge {
             #exhaust(
                 Self.gen,
                 .suppressIssueReporting,
-                .useKleisliReducer,
+                .useBonsaiReducer,
                 property: Self.property
             )
         )

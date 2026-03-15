@@ -19,8 +19,13 @@ struct ReverseShrinkingChallenge {
     @Test("Reverse, Full")
     func reverseFull() throws {
         let gen = #gen(.uint()).array(length: 1 ... 1000)
-        
-        let output = #exhaust(gen, .useKleisliReducer, .suppressIssueReporting) { arr in
+        ExhaustLog.setConfiguration(.init(isEnabled: true, minimumLevel: .info, categoryMinimumLevels: [.reducer: .debug], format: .human))
+        let output = #exhaust(
+            gen,
+            .useBonsaiReducer,
+            .suppressIssueReporting,
+            .replay(33556013978236435)
+        ) { arr in
             arr.elementsEqual(arr.reversed())
         }
         

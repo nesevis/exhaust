@@ -3,17 +3,17 @@ import Foundation
 // MARK: - Reducer Dispatch
 
 public extension Interpreters {
-    /// Dispatches to either the Kleisli reducer or the standard reducer based on the `useKleisli` flag.
+    /// Dispatches to either the Bonsai reducer or the standard reducer based on the `useBonsai` flag.
     static func dispatchReduce<Output>(
         gen: ReflectiveGenerator<Output>,
         tree: ChoiceTree,
         config: TCRConfiguration,
-        useKleisli: Bool,
+        useBonsai: Bool,
         hasDynamicRanges: Bool = true,
         property: (Output) -> Bool,
     ) throws -> (ChoiceSequence, Output)? {
-        if useKleisli {
-            return try kleisliReduce(
+        if useBonsai {
+            return try bonsaiReduce(
                 gen: gen,
                 tree: tree,
                 config: .init(from: config, hasDynamicRanges: hasDynamicRanges),
@@ -28,8 +28,8 @@ public extension Interpreters {
 // MARK: - Configuration
 
 public extension Interpreters {
-    /// Configuration for the V-cycle reducer.
-    struct KleisliReducerConfiguration: Sendable {
+    /// Configuration for the Bonsai reducer's V-cycle pass pipeline.
+    struct BonsaiReducerConfiguration: Sendable {
         /// Maximum number of outer cycles with no improvement before terminating.
         let maxStalls: Int
         /// Window size for cycle detection.
@@ -108,15 +108,13 @@ public extension Interpreters {
 // MARK: - Entry Point
 
 public extension Interpreters {
-    /// V-cycle reducer: multigrid reduction over bind depths.
+    /// Bonsai reducer: iterative tree miniaturization via structured pass pipeline.
     ///
-    /// Delegates to ``ReductionScheduler`` for the V-cycle pattern:
-    /// contravariant sweep (depths max→1), deletion sweep (depths 0→max),
-    /// covariant sweep (depth 0), post-processing merge, and redistribution.
-    static func kleisliReduce<Output>(
+    /// Delegates to ``ReductionScheduler`` for the V-cycle pattern: snip (contravariant sweep, depths max→1), prune (deletion sweep, depths 0→max), train (covariant sweep, depth 0), post-processing merge, and shape (redistribution).
+    static func bonsaiReduce<Output>(
         gen: ReflectiveGenerator<Output>,
         tree: ChoiceTree,
-        config: KleisliReducerConfiguration,
+        config: BonsaiReducerConfiguration,
         property: (Output) -> Bool,
     ) throws -> (ChoiceSequence, Output)? {
         try ReductionScheduler.run(gen: gen, initialTree: tree, config: config, property: property)

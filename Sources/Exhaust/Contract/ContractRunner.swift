@@ -34,7 +34,7 @@ public func __runContract<Spec: ContractSpec>(
     var suppressIssueReporting = false
     var useRandomOnly = false
     var useArgumentAwareCoverage = false
-    var useKleisliReducer = false
+    var useBonsaiReducer = false
 
     for setting in settings {
         switch setting {
@@ -52,8 +52,8 @@ public func __runContract<Spec: ContractSpec>(
             useRandomOnly = true
         case .argumentAwareCoverage:
             useArgumentAwareCoverage = true
-        case .useKleisliReducer:
-            useKleisliReducer = true
+        case .useBonsaiReducer:
+            useBonsaiReducer = true
         }
     }
 
@@ -93,7 +93,7 @@ public func __runContract<Spec: ContractSpec>(
             commandLimit: commandLimit,
             coverageBudget: coverageBudget,
             reductionConfig: reductionConfig,
-            useKleisliReducer: useKleisliReducer,
+            useBonsaiReducer: useBonsaiReducer,
             argumentAware: useArgumentAwareCoverage,
             property: property,
         )
@@ -116,7 +116,7 @@ public func __runContract<Spec: ContractSpec>(
                 coverageBudget: coverageBudget,
                 seed: seed,
                 reductionConfig: reductionConfig,
-                useKleisliReducer: useKleisliReducer,
+                useBonsaiReducer: useBonsaiReducer,
                 suppressIssueReporting: true,
                 useRandomOnly: useRandomOnly || skipGenericCoverage,
             ),
@@ -297,7 +297,7 @@ func runSCACoverage<Command>(
     commandLimit: Int,
     coverageBudget: UInt64,
     reductionConfig: TCRBudget,
-    useKleisliReducer: Bool,
+    useBonsaiReducer: Bool,
     argumentAware: Bool,
     property: @escaping @Sendable ([Command]) -> Bool,
 ) -> SCAResult<Command>? {
@@ -389,7 +389,7 @@ func runSCACoverage<Command>(
                 gen: seqGen,
                 tree: shrinkTree,
                 config: reductionConfig,
-                useKleisli: useKleisliReducer,
+                useBonsai: useBonsaiReducer,
                 property: property,
             ) {
                 return (shrunkValue, value)
@@ -417,7 +417,7 @@ func buildExhaustSettings<Output>(
     coverageBudget: UInt64,
     seed: UInt64?,
     reductionConfig: TCRBudget,
-    useKleisliReducer: Bool,
+    useBonsaiReducer: Bool,
     suppressIssueReporting: Bool,
     useRandomOnly: Bool,
 ) -> [ExhaustSettings<Output>] {
@@ -435,8 +435,8 @@ func buildExhaustSettings<Output>(
     if useRandomOnly {
         settings.append(.randomOnly)
     }
-    if useKleisliReducer {
-        settings.append(.useKleisliReducer)
+    if useBonsaiReducer {
+        settings.append(.useBonsaiReducer)
     }
     return settings
 }

@@ -37,7 +37,7 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
         var suppressIssueReporting = false
         var reflectingValue: Output?
         var useRandomOnly = false
-        var useKleisliReducer = false
+        var useBonsaiReducer = false
 
         for setting in settings {
             switch setting {
@@ -55,8 +55,8 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
                 reflectingValue = value
             case .randomOnly:
                 useRandomOnly = true
-            case .useKleisliReducer:
-                useKleisliReducer = true
+            case .useBonsaiReducer:
+                useBonsaiReducer = true
             }
         }
 
@@ -66,7 +66,7 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
                     gen,
                     value: reflectingValue,
                     reductionConfig: reductionConfig,
-                    useKleisliReducer: useKleisliReducer,
+                    useBonsaiReducer: useBonsaiReducer,
                     suppressIssueReporting: suppressIssueReporting,
                     sourceCode: sourceCode,
                     fileID: fileID,
@@ -106,7 +106,7 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
                         gen: gen,
                         tree: shrinkTree,
                         config: reductionConfig,
-                        useKleisli: useKleisliReducer,
+                        useBonsai: useBonsaiReducer,
                         property: countingProperty,
                     ) {
                         var failure = PropertyTestFailure(
@@ -253,7 +253,7 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
                         gen: gen,
                         tree: tree,
                         config: reductionConfig,
-                        useKleisli: useKleisliReducer,
+                        useBonsai: useBonsaiReducer,
                         hasDynamicRanges: hasDynamicRanges,
                         property: countingProperty,
                     ) {
@@ -380,7 +380,7 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
         var suppressIssueReporting = false
         var poolCapacity = 256
         var generateRatio = 0.2
-        var useKleisliReducer = false
+        var useBonsaiReducer = false
 
         for setting in settings {
             switch setting {
@@ -396,8 +396,8 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
                 poolCapacity = n
             case let .generateRatio(r):
                 generateRatio = r
-            case .useKleisliReducer:
-                useKleisliReducer = true
+            case .useBonsaiReducer:
+                useBonsaiReducer = true
             }
         }
 
@@ -406,7 +406,7 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
             property: property,
             samplingBudget: samplingBudget,
             reductionConfig: reductionConfig,
-            useKleisliReducer: useKleisliReducer,
+            useBonsaiReducer: useBonsaiReducer,
             poolCapacity: poolCapacity,
             generateRatio: generateRatio,
             seed: seed,
@@ -548,7 +548,7 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
         _ gen: ReflectiveGenerator<Output>,
         value: Output,
         reductionConfig: TCRBudget,
-        useKleisliReducer: Bool,
+        useBonsaiReducer: Bool,
         suppressIssueReporting: Bool,
         sourceCode: String?,
         fileID: StaticString,
@@ -604,7 +604,7 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
             gen: gen,
             tree: tree,
             config: reductionConfig,
-            useKleisli: useKleisliReducer,
+            useBonsai: useBonsaiReducer,
             property: countingProperty,
         ) {
             let failure = PropertyTestFailure(

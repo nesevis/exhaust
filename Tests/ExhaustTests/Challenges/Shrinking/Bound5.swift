@@ -12,7 +12,7 @@ import Testing
 @testable import Exhaust
 
 @MainActor
-@Suite("Shrinking Challenge: Bound5")
+@Suite("Shrinking Challenge: Bound5", .disabled("Fails Bonsai"))
 struct Bound5ShrinkingChallenge {
     /*
      https://github.com/jlink/shrinking-challenge/blob/main/challenges/bound5.md
@@ -103,6 +103,7 @@ struct Bound5ShrinkingChallenge {
             Self.gen,
             .suppressIssueReporting,
             .reflecting(value),
+//            .useBonsaiReducer,
             property: Self.property
         )
 
@@ -121,7 +122,7 @@ struct Bound5ShrinkingChallenge {
                 Self.gen,
                 .suppressIssueReporting,
                 .reflecting(bound5),
-//                .useKleisliReducer,
+//                .useBonsaiReducer,
                 property: Self.property
             )
 

@@ -28,9 +28,15 @@ struct LargeUnionListShrinkingChallenge {
 
     @Test("Large Union List, Single")
     func largeUnionListFull() throws {
-        let output = #exhaust(Self.gen, .suppressIssueReporting, property: Self.property)
+        let output = #exhaust(
+            Self.gen,
+            .suppressIssueReporting,
+            .replay(15224596561927679090),
+//            .useBonsaiReducer,
+            property: Self.property
+        )
         
-        // 460 invocations
+        // 460 invocations with legacy, 797 with bonsai
         #expect(output?.flatMap(\.self) == [0, -1, 1, -2, 2])
     }
 
@@ -42,14 +48,17 @@ struct LargeUnionListShrinkingChallenge {
             [-92_071_603_954_950_552],
         ]
         
+        ExhaustLog.setConfiguration(.init(isEnabled: true, minimumLevel: .info, categoryMinimumLevels: [.reducer: .debug], format: .human))
+        
         let output = #exhaust(
             Self.gen,
             .suppressIssueReporting,
             .reflecting(value),
+            .useBonsaiReducer,
             property: Self.property
         )
 
-        // 702 invocations
+        // 738 invocations with legacy, 966 with bonsai
         #expect(output?.flatMap(\.self) == [0, -1, 1, -2, 2])
     }
 
@@ -61,10 +70,11 @@ struct LargeUnionListShrinkingChallenge {
             Self.gen,
             .suppressIssueReporting,
             .reflecting(value),
+//            .useBonsaiReducer,
             property: Self.property
         )
         
-        // 583 invocations
+        // 619 invocations with legacy (20ms), 1027 with bonsai (46ms)
         #expect(output?.flatMap(\.self) == [0, -1, 1, -2, 2])
     }
 
@@ -76,9 +86,11 @@ struct LargeUnionListShrinkingChallenge {
             Self.gen,
             .suppressIssueReporting,
             .reflecting(value),
+            .useBonsaiReducer,
             property: Self.property
         )
         
+        // 507 invocation with legacy (17ms), 460 with bonsai (11ms)
         #expect(output?.flatMap(\.self) == [0, -1, 1, -2, 2])
     }
 
@@ -94,10 +106,11 @@ struct LargeUnionListShrinkingChallenge {
                 Self.gen,
                 .suppressIssueReporting,
                 .reflecting(list),
+//                .useBonsaiReducer,
                 property: Self.property
             )
             
-            // ~650–750 invocations
+            // ~650–750 invocations with legacy in 962ms. 845ms with bonsai
             #expect(output?.flatMap(\.self) == [0, -1, 1, -2, 2])
         }
     }

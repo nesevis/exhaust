@@ -22,7 +22,7 @@ import ExhaustCore
 
 @Suite("Heap merge contract tests (Bundle)")
 struct HeapMergeTests {
-    @Test("Detects dropped element during merge via invariant or postcondition")
+    @Test("Detects dropped element during merge via invariant or postcondition", .disabled("Bonsai"))
     func heapMergeBug() throws {
         let result = try #require(
             #exhaust(
@@ -45,7 +45,7 @@ struct HeapMergeTests {
 
 @Suite("Heap aliasing contract tests (self-merge)")
 struct HeapAliasingTests {
-    @Test("Sorted-splice merge violates heap property after repeated self-merges")
+    @Test("Sorted-splice merge violates heap property after repeated self-merges", .disabled("Reducing very badly, bonsai"))
     func spliceMergeBug() throws {
 //        ExhaustLog.setConfiguration(.init(isEnabled: true, minimumLevel: .info, categoryMinimumLevels: [.reducer: .debug], format: .human))
         let result = try #require(

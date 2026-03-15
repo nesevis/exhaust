@@ -196,7 +196,7 @@ struct CovariantDecoderFreshnessTests {
         }
 
         let tree = try #require(failingTree)
-        let config = Interpreters.KleisliReducerConfiguration(from: .fast)
+        let config = Interpreters.BonsaiReducerConfiguration(from: .fast)
         let (_, output) = try #require(
             try ReductionScheduler.run(gen: gen, initialTree: tree, config: config) { output in
                 let arr = output as! [Any]
@@ -232,7 +232,7 @@ struct DeletionDecoderFreshnessTests {
         }
 
         let tree = try #require(failingTree)
-        let config = Interpreters.KleisliReducerConfiguration(from: .fast)
+        let config = Interpreters.BonsaiReducerConfiguration(from: .fast)
         let (_, output) = try #require(
             try ReductionScheduler.run(gen: gen, initialTree: tree, config: config) { output in
                 let arr = output as! [Any]

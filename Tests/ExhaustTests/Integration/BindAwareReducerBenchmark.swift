@@ -76,7 +76,7 @@ struct BindAwareReducerBenchmark {
         let result = try #require(
             #exhaust(
                 gen,
-                .useKleisliReducer,
+                .useBonsaiReducer,
                 .suppressIssueReporting,
                 .reflecting((11, 15))
             ) { pair in

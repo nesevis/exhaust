@@ -1,18 +1,16 @@
 //
-//  KleisliReducerTests.swift
+//  BonsaiReducerTests.swift
 //  Exhaust
-//
-//  Tests for the KleisliReducer (principled test case reduction via cyclic coordinate descent).
 //
 
 import Testing
 @testable import ExhaustCore
 @testable import Exhaust
 
-// MARK: - KleisliReducer Integration Tests
+// MARK: - BonsaiReducer Integration Tests
 
-@Suite("KleisliReducer")
-struct KleisliReducerIntegrationTests {
+@Suite("BonsaiReducer")
+struct BonsaiReducerIntegrationTests {
     @Test("Non-bind generator produces same result as existing reducer")
     func nonBindEquivalence() throws {
         let gen = Gen.choose(in: UInt64(0) ... 1000)
@@ -21,11 +19,11 @@ struct KleisliReducerIntegrationTests {
         let (value, tree) = try #require(try iterator.next())
         try #require(value > 5)
 
-        let kleisliResult = try #require(
-            try Interpreters.kleisliReduce(gen: gen, tree: tree, config: .fast) { $0 < 5 }
+        let bonsaiResult = try #require(
+            try Interpreters.bonsaiReduce(gen: gen, tree: tree, config: .fast) { $0 < 5 }
         )
 
-        #expect(kleisliResult.1 == 5)
+        #expect(bonsaiResult.1 == 5)
     }
 
     @Test("Bind-dependent array length shrinks correctly")
@@ -50,7 +48,7 @@ struct KleisliReducerIntegrationTests {
         #expect(tree.containsBind)
 
         let (_, shrunk) = try #require(
-            try Interpreters.kleisliReduce(gen: gen, tree: tree, config: .fast) { $0.count <= 2 }
+            try Interpreters.bonsaiReduce(gen: gen, tree: tree, config: .fast) { $0.count <= 2 }
         )
 
         #expect(shrunk == [0, 0, 0])
@@ -74,7 +72,7 @@ struct KleisliReducerIntegrationTests {
         #expect(tree.containsBind == false)
 
         let (_, shrunk) = try #require(
-            try Interpreters.kleisliReduce(gen: gen, tree: tree, config: .fast) {
+            try Interpreters.bonsaiReduce(gen: gen, tree: tree, config: .fast) {
                 $0.reduce(0, +) <= 10
             }
         )
@@ -91,7 +89,7 @@ struct KleisliReducerIntegrationTests {
         let (value, tree) = try #require(try iterator.next())
         try #require(value > 50)
 
-        let result = try Interpreters.kleisliReduce(gen: gen, tree: tree, config: .fast) { $0 <= 50 }
+        let result = try Interpreters.bonsaiReduce(gen: gen, tree: tree, config: .fast) { $0 <= 50 }
         #expect(result != nil)
         if let (_, shrunk) = result {
             print()
@@ -122,7 +120,7 @@ struct KleisliReducerIntegrationTests {
 
         let tree = try #require(failingTree)
         let (shrunkSequence, shrunkOutput) = try #require(
-            try Interpreters.kleisliReduce(gen: gen, tree: tree, config: .fast, property: property)
+            try Interpreters.bonsaiReduce(gen: gen, tree: tree, config: .fast, property: property)
         )
 
         // The shrunk output must still violate the property

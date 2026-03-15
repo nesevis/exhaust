@@ -28,7 +28,8 @@ struct PostconditionTests {
             #exhaust(
                 StackLIFOContract.self,
                 commandLimit: 4,
-                .suppressIssueReporting
+                .suppressIssueReporting,
+                .useBonsaiReducer
             )
         )
 

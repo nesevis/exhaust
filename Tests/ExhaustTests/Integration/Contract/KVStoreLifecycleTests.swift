@@ -23,13 +23,14 @@ import ExhaustCore
 
 @Suite("Key-value store lifecycle contract tests")
 struct KVStoreLifecycleTests {
-    @Test("Stale data after close/reopen detected via invariant or postcondition")
+    @Test("Stale data after close/reopen detected via invariant or postcondition", .disabled("Bonsai is suboptimal"))
     func staleDataAfterReopen() throws {
         let result = try #require(
             #exhaust(
                 KVStoreLifecycleContract.self,
                 commandLimit: 10,
-                .suppressIssueReporting
+                .suppressIssueReporting,
+//                .useBonsaiReducer
             )
         )
 

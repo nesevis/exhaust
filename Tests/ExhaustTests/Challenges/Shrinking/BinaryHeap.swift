@@ -10,7 +10,6 @@ import Foundation
 import Testing
 @testable import Exhaust
 
-@MainActor
 @Suite("Shrinking Challenge: Binary Heap")
 struct BinaryHeapShrinkingChallenge {
     /*
@@ -26,12 +25,22 @@ struct BinaryHeapShrinkingChallenge {
 
     @Test("Binary heap, Full")
     func binaryHeapFull() throws {
+        ExhaustLog.setConfiguration(.init(isEnabled: true, minimumLevel: .info, categoryMinimumLevels: [.reducer: .debug], format: .human))
+        /// The property: if the heap satisfies the invariant, then `toSortedList`
+        /// must produce a sorted list containing the same elements as `toList`.
+        let property: @Sendable (Heap<Int>) -> Bool = { heap in
+            guard Self.invariant(heap) else { return true }
+            let xs = Self.toSortedList(heap)
+            let sorted = Self.toList(heap).sorted()
+            return sorted == xs.sorted() && xs == xs.sorted()
+        }
         let output = try #require(
             #exhaust(
                 Self.gen,
                 .suppressIssueReporting,
-//                .useKleisliReducer,
-                property: Self.property
+                .useBonsaiReducer,
+                .replay(626360492104589905),
+                property: property
             )
         )
         let outputValues = Self.toList(output).sorted()
@@ -129,9 +138,8 @@ struct BinaryHeapShrinkingChallenge {
             return emptyGen
         }
 
-
         let nodeGen = #gen(.int(in: min ... maxVal))
-            ._bind { value in
+            .bind { value in
                 Gen.zip(
                     heapGen(min: value, depth: depth / 2),
                     heapGen(min: value, depth: depth / 2),
@@ -153,15 +161,6 @@ struct BinaryHeapShrinkingChallenge {
     }
 
     static let gen = heapGen(depth: 6)
-
-    /// The property: if the heap satisfies the invariant, then `toSortedList`
-    /// must produce a sorted list containing the same elements as `toList`.
-    static let property: (Heap<Int>) -> Bool = { heap in
-        guard invariant(heap) else { return true }
-        let xs = toSortedList(heap)
-        let sorted = toList(heap).sorted()
-        return sorted == xs.sorted() && xs == xs.sorted()
-    }
 }
 
 extension BinaryHeapShrinkingChallenge.Heap: CustomDebugStringConvertible {

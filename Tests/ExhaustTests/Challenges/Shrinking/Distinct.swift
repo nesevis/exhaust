@@ -30,7 +30,7 @@ struct DistinctShrinkingChallenge {
         let counterExample = #exhaust(
             gen,
             .suppressIssueReporting,
-            .useKleisliReducer,
+            .useBonsaiReducer,
             .replay(5023515172476973421)
         ) {
             Set($0).count < 3
@@ -40,12 +40,13 @@ struct DistinctShrinkingChallenge {
 
     @Test("Distinct, reflected counterexample")
     func distinctReflected() {
+        ExhaustLog.setConfiguration(.init(isEnabled: true, minimumLevel: .info, categoryMinimumLevels: [.reducer: .debug], format: .human))
         let gen = #gen(.int().array(length: 3 ... 30))
         let value = [1337, 80085, 69, 67]
         let counterExample = #exhaust(
             gen,
             .suppressIssueReporting,
-            .useKleisliReducer,
+            .useBonsaiReducer,
             .reflecting(value)
         ) {
             Set($0).count < 3

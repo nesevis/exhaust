@@ -28,10 +28,11 @@ struct CalculatorShrinkingChallenge {
     @Test("Calculator, Full")
     func calculatorFull() throws {
         let gen = #gen(Self.expression(depth: 4))
+        ExhaustLog.setConfiguration(.init(isEnabled: true, minimumLevel: .info, categoryMinimumLevels: [.reducer: .debug], format: .human))
         let result = #exhaust(
             gen,
             .suppressIssueReporting,
-//            .useKleisliReducer,
+            .useBonsaiReducer,
             .replay(1117838118804311299)
         ) { expr in
             guard Self.containsLiteralDivisionByZero(expr) == false else {
@@ -47,10 +48,11 @@ struct CalculatorShrinkingChallenge {
             }
         }
 
+        print("Output: \(result!)")
         #expect(
             result == .div(.value(0), .div(.value(0), .value(1))) ||
             result == .div(.value(0), .div(.value(0), .value(-1))) ||
-            // The Kleisli reducer gets it to the minimum!
+            // The Bonsai reducer gets it to the minimum!
             result == .div(.value(0), .add(.value(0), .value(0)))
         )
     }

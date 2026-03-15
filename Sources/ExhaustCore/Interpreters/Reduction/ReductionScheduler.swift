@@ -101,7 +101,7 @@ enum ReductionScheduler {
     static func run<Output>(
         gen: ReflectiveGenerator<Output>,
         initialTree: ChoiceTree,
-        config: Interpreters.KleisliReducerConfiguration,
+        config: Interpreters.BonsaiReducerConfiguration,
         property: (Output) -> Bool
     ) throws -> (ChoiceSequence, Output)? {
         let isInstrumented = ExhaustLog.isEnabled(.debug, for: .reducer)

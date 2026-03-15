@@ -23,7 +23,7 @@ public struct ExploreRunner<Output>: ~Copyable {
     private let property: (Output) -> Bool
     private let samplingBudget: UInt64
     private let reductionConfig: Interpreters.TCRConfiguration
-    private let useKleisliReducer: Bool
+    private let useBonsaiReducer: Bool
     private let scorer: (Output) -> Double
 
     private var pool: DefaultSeedPool
@@ -36,7 +36,7 @@ public struct ExploreRunner<Output>: ~Copyable {
         property: @escaping (Output) -> Bool,
         samplingBudget: UInt64 = 10000,
         reductionConfig: Interpreters.TCRConfiguration = .fast,
-        useKleisliReducer: Bool = false,
+        useBonsaiReducer: Bool = false,
         poolCapacity: Int = 256,
         generateRatio: Double = 0.2,
         seed: UInt64? = nil,
@@ -46,7 +46,7 @@ public struct ExploreRunner<Output>: ~Copyable {
         self.property = property
         self.samplingBudget = samplingBudget
         self.reductionConfig = reductionConfig
-        self.useKleisliReducer = useKleisliReducer
+        self.useBonsaiReducer = useBonsaiReducer
         self.scorer = scorer
         pool = DefaultSeedPool(
             capacity: poolCapacity,
@@ -205,7 +205,7 @@ public struct ExploreRunner<Output>: ~Copyable {
                 gen: gen,
                 tree: shrinkTree,
                 config: reductionConfig,
-                useKleisli: useKleisliReducer,
+                useBonsai: useBonsaiReducer,
                 property: property,
             ) {
                 return .failure(

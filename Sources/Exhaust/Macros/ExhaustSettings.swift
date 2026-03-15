@@ -45,8 +45,13 @@ public enum ExhaustSettings<Output> {
     /// When `.randomOnly` is set, `#exhaust` skips this analysis and proceeds directly to random sampling. Useful for benchmarking, comparing coverage strategies, or when the analysis overhead is unwanted.
     case randomOnly
 
-    /// Uses the Kleisli reducer (cyclic coordinate descent over bind depths) instead of the default reducer.
+    /// Bonsai reducer: iterative tree miniaturization via structured pass pipeline.
     ///
-    /// The Kleisli reducer treats each bind depth in the generator's Kleisli chain as a coordinate axis and applies shrink tactics ordered by a dominance lattice. This can produce better counterexamples for bind-dependent generators.
-    case useKleisliReducer
+    /// Snip (maintenance pruning): minimize values bottom-up within fixed ranges.
+    /// Prune (structural pruning): remove subtrees top-down, re-derive via guided materialization.
+    /// Train (wiring/root work): modify inner values at depth 0, re-derive all bound content.
+    /// Shape (balance): redistribute mass between coordinates when local passes stall.
+    ///
+    /// Produces better counterexamples than the legacy reducer for bind-dependent generators by exploiting the tree structure of the choice sequence.
+    case useBonsaiReducer
 }
