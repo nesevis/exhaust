@@ -658,6 +658,12 @@ private extension GuidedMaterializer {
         // the prefix, its entries are shorter than the fallback span, and subsequent
         // children's scopes must start from the actual cursor position.
         let canScope = childFallbacks.contains(where: { $0 != nil })
+        // Skip transparent markers (group/bind/just) so childStartPosition
+        // is past the parent's group-open marker. Without this, the scope
+        // limit for the first child is too tight by the number of skipped
+        // markers, leaving the child's sequence-close outside the scope.
+        // The unconsumed close marker then blocks the next child's open.
+        if canScope { context.cursor.skipGroups() }
         var childStartPosition = context.cursor.position
         for (gen, fb) in zip(generators, childFallbacks) {
             if canScope, let fb {
@@ -756,7 +762,7 @@ private extension GuidedMaterializer {
         /// Skip consecutive `.group(true/false)` and `.just` markers at the current position.
         /// Groups are transparent wrappers from `runContinuation` and pick sites.
         /// Just markers carry no data and are purely structural.
-        private mutating func skipGroups() {
+        mutating func skipGroups() {
             while position < effectiveEnd {
                 switch entries[position] {
                 case .group, .bind, .just:

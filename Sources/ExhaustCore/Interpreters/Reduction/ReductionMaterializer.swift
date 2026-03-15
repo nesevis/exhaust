@@ -683,6 +683,12 @@ private extension ReductionMaterializer {
         choiceTrees.reserveCapacity(generators.count)
 
         let canScope = childFallbacks.contains(where: { $0 != nil })
+        // Skip transparent markers (group/bind/just) so childStartPosition
+        // is past the parent's group-open marker. Without this, the scope
+        // limit for the first child is too tight by the number of skipped
+        // markers, leaving the child's sequence-close outside the scope.
+        // The unconsumed close marker then blocks the next child's open.
+        if canScope { context.cursor.skipGroups() }
         var childStartPosition = context.cursor.position
         for (gen, fb) in zip(generators, childFallbacks) {
             if canScope, let fb {
@@ -887,7 +893,7 @@ private extension ReductionMaterializer {
 
         // MARK: Skip transparent markers
 
-        private mutating func skipGroups() {
+        mutating func skipGroups() {
             while position < effectiveEnd {
                 switch entries[position] {
                 case .group, .bind, .just:
