@@ -16,7 +16,6 @@
 // that exercises bundle creation, drawing, and consumption.
 
 import Exhaust
-import ExhaustCore
 import Testing
 
 // MARK: - Tests
@@ -25,8 +24,9 @@ import Testing
 struct HeapMergeTests {
     @Test("Detects dropped element during merge via invariant or postcondition")
     func heapMergeBug() throws {
-        // Bonsai uses 686 invocations in 136ms
-        // Legacy uses 51 in 18ms
+        // Bonsai uses 464 invocations in 71ms
+        // Legacy uses 256 in 23ms
+        // Bonsai does not reduce as well (6 vs 5)
         let result = try #require(
             #exhaust(
                 HeapMergeContract.self,
@@ -34,7 +34,8 @@ struct HeapMergeTests {
                 .samplingBudget(2000),
 //                .argumentAwareCoverage,
 //                .useBonsaiReducer,
-                .suppressIssueReporting
+                .suppressIssueReporting,
+                .replay(2244429497963284422)
             )
         )
 
@@ -101,7 +102,7 @@ struct HeapMergeContract {
         heapRefs.add(heaps.count - 1)
     }
 
-    @Command(weight: 5, Gen.int(in: 0 ... 99), Gen.int(in: 0 ... 50))
+    @Command(weight: 5, #gen(.int(in: 0 ... 99), .int(in: 0 ... 50)))
     mutating func push(heapIndex: Int, value: Int) throws {
         guard let idx = heapRefs.draw(at: heapIndex) else { throw skip() }
         heaps[idx].push(value)
@@ -109,7 +110,7 @@ struct HeapMergeContract {
         expectedContents[idx].sort()
     }
 
-    @Command(weight: 3, Gen.int(in: 0 ... 99))
+    @Command(weight: 3, #gen(.int(in: 0 ... 99)))
     mutating func pop(heapIndex: Int) throws {
         guard let idx = heapRefs.draw(at: heapIndex) else { throw skip() }
         guard !heaps[idx].isEmpty else { throw skip() }
@@ -118,7 +119,7 @@ struct HeapMergeContract {
         try check(actual == expectedMin, "pop must return the minimum element")
     }
 
-    @Command(weight: 2, Gen.int(in: 0 ... 99), Gen.int(in: 0 ... 99))
+    @Command(weight: 2, #gen(.int(in: 0 ... 99), .int(in: 0 ... 99)))
     mutating func merge(sourceIndex: Int, targetIndex: Int) throws {
         guard heapRefs.count >= 2 else { throw skip() }
         guard let src = heapRefs.consume(at: sourceIndex) else { throw skip() }
@@ -166,13 +167,13 @@ struct HeapAliasingContract {
         heapRefs.add(heap)
     }
 
-    @Command(weight: 4, Gen.int(in: 0 ... 99), Gen.int(in: -5 ... 5))
+    @Command(weight: 4, #gen(.int(in: 0 ... 99), .int(in: -5 ... 5)))
     mutating func push(heapIndex: Int, value: Int) throws {
         guard let heap = heapRefs.draw(at: heapIndex) else { throw skip() }
         heap.push(value)
     }
 
-    @Command(weight: 2, Gen.int(in: 0 ... 99))
+    @Command(weight: 2, #gen(.int(in: 0 ... 99)))
     mutating func pop(heapIndex: Int) throws {
         guard let heap = heapRefs.draw(at: heapIndex) else { throw skip() }
         guard !heap.isEmpty else { throw skip() }
@@ -181,7 +182,7 @@ struct HeapAliasingContract {
         try check(actual == expectedMin, "pop must return the minimum element")
     }
 
-    @Command(weight: 4, Gen.int(in: 0 ... 99), Gen.int(in: 0 ... 99))
+    @Command(weight: 4, #gen(.int(in: 0 ... 99), .int(in: 0 ... 99)))
     mutating func merge(index1: Int, index2: Int) throws {
         guard let heap1 = heapRefs.draw(at: index1) else { throw skip() }
         guard let heap2 = heapRefs.draw(at: index2) else { throw skip() }

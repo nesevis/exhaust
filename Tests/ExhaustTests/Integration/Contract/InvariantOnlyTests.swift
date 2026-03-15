@@ -1,5 +1,4 @@
 import Exhaust
-import ExhaustCore
 import Testing
 
 // MARK: - Tests
@@ -12,7 +11,8 @@ struct InvariantOnlyTests {
             #exhaust(
                 CircularBufferContract.self,
                 commandLimit: 6,
-                .suppressIssueReporting
+                .suppressIssueReporting,
+                .useBonsaiReducer
             )
         )
 
@@ -81,7 +81,7 @@ struct SortedBackingContract {
         zip(queue.elements, queue.elements.dropFirst()).allSatisfy { $0 <= $1 }
     }
 
-    @Command(weight: 3, Gen.int(in: 0 ... 20))
+    @Command(weight: 3, #gen(.int(in: 0 ... 20)))
     mutating func enqueue(value: Int) throws {
         queue.enqueue(value)
     }

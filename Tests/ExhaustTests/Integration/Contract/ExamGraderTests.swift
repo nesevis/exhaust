@@ -20,7 +20,6 @@
 // The dependent-data challenge from the original blog post surfaces naturally here: the `submitAnswers` command intentionally *does not* constrain its answer count to the current exam's key length, which is what allows the invariant to detect the missing validation. A correct system would enforce the constraint internally.
 
 import Exhaust
-import ExhaustCore
 import Testing
 
 // MARK: - Tests
@@ -30,11 +29,13 @@ struct ExamGraderTests {
     /// Runs the contract and verifies that Exhaust detects at least one of the two embedded bugs. With sequence lengths of 3 to 8 commands, the contract reliably triggers either the invariant failure (mismatched answer length) or the postcondition failure (grading penalizes blanks). The test passes when the trace contains a failure — meaning the contract successfully caught the bug.
     @Test("Detects answer length mismatch or grading bug")
     func examGraderBugs() throws {
+        // Note: Bonsai doesn't produce as minimal a counterexample
         let result = try #require(
             #exhaust(
                 ExamGraderContract.self,
                 commandLimit: 8,
-                .suppressIssueReporting
+                .suppressIssueReporting,
+                .useBonsaiReducer
             )
         )
         #expect(result.trace.contains { step in
@@ -98,12 +99,12 @@ struct ExamGraderContract {
         grader.submissions.allSatisfy { $0.answers.count == $0.exam.answerKey.count }
     }
 
-    @Command(weight: 2, Gen.int(in: 1 ... 5))
+    @Command(weight: 2, #gen(.int(in: 1 ... 5)))
     mutating func createExam(keyLength: Int) throws {
         grader.createExam(name: "exam", answerKey: Array(repeating: keyLength, count: keyLength))
     }
 
-    @Command(weight: 3, Gen.int(in: 0 ... 6))
+    @Command(weight: 3, #gen(.int(in: 0 ... 6)))
     mutating func submitAnswers(answerCount: Int) throws {
         guard grader.exams["exam"] != nil else { throw skip() }
         grader.submitAnswers(student: "student", examName: "exam", answers: Array(repeating: answerCount, count: answerCount))
@@ -145,7 +146,7 @@ private func examWithMatchingAnswers() -> ReflectiveGenerator<(Exam, [Int?])> {
                 weighted: (1, .just(nil)),
                 (2, #gen(.int(in: 1 ... 5)).map { Optional($0) })
             ).array(length: UInt64(keyLength))
-            return Gen.zip(keyGen, answersGen).map { answerKey, answers in
+            return #gen(keyGen, answersGen).map { answerKey, answers in
                 (Exam(name: "exam", answerKey: answerKey), answers)
             }
         }

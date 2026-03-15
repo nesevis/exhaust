@@ -1,5 +1,4 @@
 import Exhaust
-import ExhaustCore
 import Testing
 
 // MARK: - Tests
@@ -12,7 +11,8 @@ struct PostconditionTests {
             #exhaust(
                 SetUniquenessContract.self,
                 commandLimit: 5,
-                .suppressIssueReporting
+                .suppressIssueReporting,
+                .useBonsaiReducer
             )
         )
 
@@ -65,7 +65,7 @@ struct PostconditionTests {
 struct SetUniquenessContract {
     @SUT var uniqueSet = BuggySet<Int>()
 
-    @Command(weight: 3, Gen.int(in: 0 ... 3))
+    @Command(weight: 3, .int(in: 0 ... 3))
     mutating func add(element: Int) throws {
         uniqueSet.add(element)
         // Postcondition: after add, the element is present
@@ -75,7 +75,7 @@ struct SetUniquenessContract {
         try check(occurrences == 1, "set must not contain duplicates")
     }
 
-    @Command(weight: 2, Gen.int(in: 0 ... 3))
+    @Command(weight: 2, .int(in: 0 ... 3))
     mutating func remove(element: Int) throws {
         uniqueSet.remove(element)
         // Postcondition: after remove, the element is gone
@@ -96,7 +96,7 @@ struct SetUniquenessContract {
 struct StackLIFOContract {
     @SUT var stack = BuggyStack<Int>()
 
-    @Command(weight: 3, Gen.int(in: 0 ... 9))
+    @Command(weight: 3, .int(in: 0 ... 9))
     mutating func push(value: Int) throws {
         let previousCount = stack.count
         stack.push(value)
@@ -127,14 +127,14 @@ struct DictionaryConsistencyContract {
         dict.trackedCount == dict.actualCount
     }
 
-    @Command(weight: 3, Gen.int(in: 0 ... 4), Gen.int(in: 0 ... 99))
+    @Command(weight: 3, .int(in: 0 ... 4), .int(in: 0 ... 99))
     mutating func set(key: Int, value: Int) throws {
         dict.set(key, value)
         // Postcondition: the value is retrievable
         try check(dict.get(key) == value, "get must return set value")
     }
 
-    @Command(weight: 2, Gen.int(in: 0 ... 4))
+    @Command(weight: 2, .int(in: 0 ... 4))
     mutating func remove(key: Int) throws {
         dict.remove(key)
         // Postcondition: the key is gone

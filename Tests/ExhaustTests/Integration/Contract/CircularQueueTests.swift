@@ -16,7 +16,6 @@
 // `put` first, in order. The model is a simple FIFO array.
 
 import Exhaust
-import ExhaustCore
 import Testing
 
 // MARK: - Tests
@@ -65,7 +64,7 @@ struct CircularQueueContract {
         queue.count >= 0 && queue.count <= queue.capacity // swiftlint:disable:this empty_count
     }
 
-    @Command(weight: 3, Gen.int(in: 0 ... 20))
+    @Command(weight: 3, #gen(.int(in: 0 ... 20)))
     mutating func put(value: Int) throws {
         guard queue.count < queue.capacity else { throw skip() }
         expected.append(value)
