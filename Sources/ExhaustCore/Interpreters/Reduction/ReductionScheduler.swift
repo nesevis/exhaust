@@ -601,18 +601,10 @@ enum ReductionScheduler {
                     for plan in regionPairs {
                         guard legBudget.isExhausted == false else { break }
                         let sinkRegionIndex = plan.sink.regionIndex
-                        let bindRedistDecoder: SequenceDecoder = if config.useReductionMaterializer {
-                            .guidedFresh(
-                                fallbackTree: fallbackTree ?? tree,
-                                maximizeBoundRegionIndices: Set([sinkRegionIndex])
-                            )
-                        } else {
-                            .guided(
-                                fallbackTree: fallbackTree ?? tree,
-                                strictness: .normal,
-                                maximizeBoundRegionIndices: Set([sinkRegionIndex])
-                            )
-                        }
+                        let bindRedistDecoder: SequenceDecoder = .guidedFresh(
+                            fallbackTree: fallbackTree ?? tree,
+                            maximizeBoundRegionIndices: Set([sinkRegionIndex])
+                        )
                         bindAwareRedistributeEncoder.startPlan(
                             sequence: sequence, plan: plan
                         )
