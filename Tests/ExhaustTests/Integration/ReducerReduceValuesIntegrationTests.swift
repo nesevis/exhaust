@@ -5,7 +5,6 @@
 //  Reducer test that requires #exhaust macro (Exhaust module).
 //
 
-import ExhaustCore
 import Testing
 @testable import Exhaust
 

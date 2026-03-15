@@ -3,9 +3,9 @@
 //  Exhaust
 //
 
-import ExhaustCore
 import Testing
 @testable import Exhaust
+import ExhaustCore
 
 @Suite("Public API Conformances")
 struct ConformanceTests {

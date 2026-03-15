@@ -4,7 +4,8 @@
 //
 
 import Testing
-@testable import ExhaustCore
+import Exhaust
+import ExhaustCore
 
 @Suite("RangeDependencyDetector")
 struct RangeDependencyDetectorTests {

@@ -8,8 +8,8 @@
 //
 
 import Testing
-@testable import ExhaustCore
 @testable import Exhaust
+import ExhaustCore
 
 // MARK: - BindSpanIndex Unit Tests
 

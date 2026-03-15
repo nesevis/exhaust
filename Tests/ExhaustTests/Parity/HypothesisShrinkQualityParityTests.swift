@@ -6,7 +6,6 @@
 //  tests/quality/test_shrink_quality.py.
 //
 
-import ExhaustCore
 import Testing
 @testable import Exhaust
 

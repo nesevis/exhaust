@@ -5,7 +5,6 @@
 //  Created by Chris Kolbu on 11/2/2026.
 //
 
-import ExhaustCore
 import Foundation
 import OSLog
 import Testing
@@ -47,7 +46,7 @@ struct Bound5ShrinkingChallenge {
 
     @Test("Bound5, Pathological 1")
     func bound5Pathological() throws {
-        ExhaustLog.setConfiguration(.init(isEnabled: true, minimumLevel: .info, categoryMinimumLevels: [.reducer: .debug], format: .human))
+//        ExhaustLog.setConfiguration(.init(isEnabled: true, minimumLevel: .info, categoryMinimumLevels: [.reducer: .debug], format: .human))
         let value: Bound5 = .init(
             a: [-18914, -2906, 9816],
             b: [7672, 16087, 24512],
@@ -60,6 +59,7 @@ struct Bound5ShrinkingChallenge {
             Self.gen,
             .suppressIssueReporting,
             .reflecting(value),
+            .useBonsaiReducer,
             property: Self.property
         )
 
@@ -69,7 +69,7 @@ struct Bound5ShrinkingChallenge {
 
     @Test("Bound5, Pathological 2")
     func bound5Pathological2() throws {
-        ExhaustLog.setConfiguration(.init(isEnabled: true, minimumLevel: .info, categoryMinimumLevels: [.reducer: .debug], format: .human))
+//        ExhaustLog.setConfiguration(.init(isEnabled: true, minimumLevel: .info, categoryMinimumLevels: [.reducer: .debug], format: .human))
         let value: Bound5 = .init(
             a: [-10709],
             b: [29251, 31661],
@@ -82,6 +82,7 @@ struct Bound5ShrinkingChallenge {
             Self.gen,
             .suppressIssueReporting,
             .reflecting(value),
+//            .useBonsaiReducer,
             property: Self.property
         )
 

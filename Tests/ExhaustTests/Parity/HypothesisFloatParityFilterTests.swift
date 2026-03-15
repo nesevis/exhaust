@@ -5,10 +5,10 @@
 //  Float parity tests that require .filter (Exhaust-only).
 //
 
-import ExhaustCore
 import Foundation
 import Testing
 @testable import Exhaust
+import ExhaustCore
 
 private enum HypothesisFloatParityHelpers {
     static func reduce<Output>(

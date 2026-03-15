@@ -59,10 +59,9 @@ struct ExtractValueSpansTests {
         let spans = ChoiceSequence.extractFreeStandingValueSpans(from: seq)
 
         #expect(spans.count == 3)
-        // Reversed, so last value is first in result
-        #expect(spans[0].range == 2 ... 2)
+        #expect(spans[0].range == 0 ... 0)
         #expect(spans[1].range == 1 ... 1)
-        #expect(spans[2].range == 0 ... 0)
+        #expect(spans[2].range == 2 ... 2)
         // All at depth 0
         #expect(spans.allSatisfy { $0.depth == 0 })
     }
@@ -76,8 +75,8 @@ struct ExtractValueSpansTests {
         // Case (.sequence(true), .value) adds span without incrementing depth
         // Case (.value, .value) adds span
         #expect(spans.count == 2)
-        #expect(spans[0].range == 2 ... 2)
-        #expect(spans[1].range == 1 ... 1)
+        #expect(spans[0].range == 1 ... 1)
+        #expect(spans[1].range == 2 ... 2)
     }
 
     @Test("Value after group opening increments depth but does not create span")
@@ -109,8 +108,8 @@ struct ExtractValueSpansTests {
         let spans = ChoiceSequence.extractFreeStandingValueSpans(from: seq)
 
         #expect(spans.count == 2)
-        #expect(spans[0].range == 1 ... 1)
-        #expect(spans[1].range == 0 ... 0)
+        #expect(spans[0].range == 0 ... 0)
+        #expect(spans[1].range == 1 ... 1)
     }
 
     @Test("Only containers, no values")
@@ -199,9 +198,9 @@ struct ExtractValueSpansTests {
         // i=2: (.sequence(true), .value) → span at depth 1
         // i=3: (.value, .value) → span at depth 1
         #expect(spans.count == 2)
-        #expect(spans[0].range == 3 ... 3)
+        #expect(spans[0].range == 2 ... 2)
         #expect(spans[0].depth == 2)
-        #expect(spans[1].range == 2 ... 2)
+        #expect(spans[1].range == 3 ... 3)
         #expect(spans[1].depth == 2)
     }
 
@@ -297,18 +296,11 @@ struct ExtractValueSpansTests {
         ]
         let spans = ChoiceSequence.extractFreeStandingValueSpans(from: seq)
 
-        // i=1: (.group(true), .group(true)) → depth++ (to 1)
-        // i=2: (.group(true), .value) → depth++ (to 2), no span
-        // i=3: (.value, .value) → span at depth 2
-        // i=4: (.value, .group(false)) → default
-        // i=5: (.group(false), .group(false)) → depth-- (to 1)
-        // i=6: (.group(false), .value) → depth-- (to 0), no span
-        // i=7: (.value, .value) → span at depth 0
         #expect(spans.count == 2)
-        #expect(spans[0].range == 7 ... 7)
-        #expect(spans[0].depth == 0)
-        #expect(spans[1].range == 3 ... 3)
-        #expect(spans[1].depth == 2)
+        #expect(spans[0].range == 3 ... 3)
+        #expect(spans[0].depth == 2)
+        #expect(spans[1].range == 7 ... 7)
+        #expect(spans[1].depth == 0)
     }
 
     @Test("Results are returned in reversed order")
@@ -317,10 +309,9 @@ struct ExtractValueSpansTests {
         let spans = ChoiceSequence.extractFreeStandingValueSpans(from: seq)
 
         // Original collection order is index 0, 1, 2
-        // Reversed means index 2 first
-        #expect(spans[0].range == 2 ... 2)
+        #expect(spans[0].range == 0 ... 0)
         #expect(spans[1].range == 1 ... 1)
-        #expect(spans[2].range == 0 ... 0)
+        #expect(spans[2].range == 2 ... 2)
     }
 }
 

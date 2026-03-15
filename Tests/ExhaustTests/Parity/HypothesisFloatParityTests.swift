@@ -73,10 +73,10 @@
 //  Reason: no `allow_subnormal` toggle or FTZ-runtime contract hooks in Exhaust.
 //
 
-import ExhaustCore
 import Foundation
 import Testing
 @testable import Exhaust
+import ExhaustCore
 
 private enum HypothesisFloatParityHelpers {
     static func reduce<Output>(

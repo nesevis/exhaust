@@ -5,7 +5,6 @@
 //  Created by Chris Kolbu on 17/2/2026.
 //
 
-import ExhaustCore
 import Foundation
 import Testing
 @testable import Exhaust

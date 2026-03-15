@@ -385,7 +385,7 @@ func runSCACoverage<Command>(
             // since coverage-built trees lack unselected branches needed by reducer strategies.
             let shrinkTree = (try? Interpreters.reflect(seqGen, with: value)) ?? tree
             // Reduce the failing sequence
-            if let (_, shrunkValue) = try? Interpreters.dispatchReduce( // swiftlint:disable:this force_try
+            if let (_, shrunkValue) = try? Interpreters.dispatchReduce(
                 gen: seqGen,
                 tree: shrinkTree,
                 config: reductionConfig,

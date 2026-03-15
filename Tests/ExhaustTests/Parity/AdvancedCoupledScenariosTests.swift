@@ -6,9 +6,9 @@
 //  Hypothesis, and CsCheck challenge cases.
 //
 
-import ExhaustCore
 import Testing
 @testable import Exhaust
+import ExhaustCore
 
 private enum AdvancedCoupledFixtures {
     enum StackAction: Equatable {

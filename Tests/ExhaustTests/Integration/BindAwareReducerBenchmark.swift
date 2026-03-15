@@ -8,8 +8,8 @@
 //
 
 import Testing
-@testable import ExhaustCore
 @testable import Exhaust
+import ExhaustCore
 
 @Suite("Bind-Aware Reducer Benchmark")
 struct BindAwareReducerBenchmark {
@@ -24,7 +24,7 @@ struct BindAwareReducerBenchmark {
         // Property: array.count <= 3 (fails when n >= 4).
         let gen = #gen(.int(in: 1 ... 20))
             .bound(
-                forward: { n in Gen.int(in: 0 ... 100).array(length: UInt64(max(0, n))) },
+                forward: { n in #gen(.int(in: 0 ... 100).array(length: UInt64(max(0, n)))) },
                 backward: { (arr: [Int]) in arr.count }
             )
 

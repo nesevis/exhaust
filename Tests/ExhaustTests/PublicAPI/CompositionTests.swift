@@ -6,9 +6,9 @@
 //  array generation, and complex structure composition.
 //
 
-import ExhaustCore
 import Testing
 @testable import Exhaust
+import ExhaustCore
 
 // MARK: - Test Structures
 

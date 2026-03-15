@@ -6,9 +6,9 @@
 //  recipes produce identical results across multiple test runs.
 //
 
-import ExhaustCore
 import Testing
 @testable import Exhaust
+import ExhaustCore
 
 @Suite("Replay Determinism")
 struct ReplayDeterminismTests {
