@@ -60,7 +60,7 @@ public extension Interpreters {
 public extension Interpreters {
     /// Bonsai reducer: iterative tree miniaturization via structured pass pipeline.
     ///
-    /// Delegates to ``ReductionScheduler`` for the V-cycle pattern: snip (contravariant sweep, depths max→1), prune (deletion sweep, depths 0→max), train (covariant sweep, depth 0), post-processing merge, and shape (redistribution).
+    /// Delegates to ``ReductionScheduler`` for the pass pipeline: snip (contravariant sweep, depths max→1), prune (deletion sweep, depths 0→max), train (covariant sweep, depth 0), and shape (redistribution).
     static func bonsaiReduce<Output>(
         gen: ReflectiveGenerator<Output>,
         tree: ChoiceTree,

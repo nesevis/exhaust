@@ -1,6 +1,6 @@
 /// Bonsai cultivation cycle scheduler for principled test case reduction.
 ///
-/// Orchestrates encoders and decoders in the cultivation cycle: snip (contravariant sweep, depths max→1, exact), prune (deletion sweep, depths 0→max, guided), train (covariant sweep, depth 0, guided for binds), post-processing merge, and shape (redistribution).
+/// Orchestrates encoders and decoders in the cultivation cycle: snip (contravariant sweep, depths max→1, exact), prune (deletion sweep, depths 0→max, guided), train (covariant sweep, depth 0, guided for binds), and shape (redistribution).
 ///
 /// Resource tracking uses per-leg budgets with unused-budget forwarding. Each leg has a hard cap (maximum materializations) and a stall patience (maximum consecutive fruitless materializations). Forwarded budget extends productive legs but does not increase patience for unproductive ones.
 ///
@@ -45,60 +45,6 @@ enum ReductionScheduler {
         order.insert(slot, at: 0)
     }
 
-    // MARK: - Merge
-
-    /// Builds a merged sequence by substituting pre-covariant bound values where they're shortlex-smaller and within the post-covariant valid range.
-    ///
-    /// Returns `nil` if no valid substitution exists (pre-checks 2b, 3, 4 all gate this).
-    static func buildMergedSequence(
-        preCovariantSequence: ChoiceSequence,
-        postCovariantSequence: ChoiceSequence,
-        preBindIndex: BindSpanIndex,
-        postBindIndex: BindSpanIndex
-    ) -> ChoiceSequence? {
-        guard preBindIndex.regions.count == postBindIndex.regions.count else { return nil }
-
-        // Pre-check 2b: Filter to regions where inner range sizes match (corresponding generator sites).
-        // Pre-check 3: Scan for any aligned bound position where pre < post (a merge candidate exists).
-        var correspondingRegions: [(BindSpanIndex.BindRegion, BindSpanIndex.BindRegion)] = []
-        var anyMergeCandidate = false
-        for (oldRegion, newRegion) in zip(preBindIndex.regions, postBindIndex.regions) {
-            guard oldRegion.innerRange.count == newRegion.innerRange.count else { continue }
-            correspondingRegions.append((oldRegion, newRegion))
-            if anyMergeCandidate == false {
-                for (oldIdx, newIdx) in zip(oldRegion.boundRange, newRegion.boundRange) {
-                    if preCovariantSequence[oldIdx].shortLexCompare(postCovariantSequence[newIdx]) == .lt {
-                        anyMergeCandidate = true
-                        break
-                    }
-                }
-            }
-        }
-
-        guard anyMergeCandidate else { return nil }
-
-        var mergedSeq = postCovariantSequence
-        var didMerge = false
-        for (oldRegion, newRegion) in correspondingRegions {
-            for (oldIdx, newIdx) in zip(oldRegion.boundRange, newRegion.boundRange) {
-                // Pre-check 4: Skip substitution if pre-covariant value falls outside post-covariant valid range.
-                if let preValue = preCovariantSequence[oldIdx].value,
-                   let postValue = postCovariantSequence[newIdx].value,
-                   preValue.choice.fits(in: postValue.validRange) == false
-                {
-                    continue
-                }
-                if preCovariantSequence[oldIdx].shortLexCompare(postCovariantSequence[newIdx]) == .lt {
-                    mergedSeq[newIdx] = preCovariantSequence[oldIdx]
-                    didMerge = true
-                }
-            }
-        }
-
-        guard didMerge, mergedSeq.shortLexPrecedes(postCovariantSequence) else { return nil }
-        return mergedSeq
-    }
-
     // MARK: - Leg Budget Tracker
 
     /// Tracks materialization budget within a single V-cycle leg.
@@ -132,7 +78,7 @@ enum ReductionScheduler {
     /// Default per-cycle materialization budget.
     ///
     /// Sized to allow thorough reduction for typical generators. The per-leg weights distribute this across the V-cycle legs.
-    static let defaultCycleBudgetTotal = 2000
+    static let defaultCycleBudgetTotal = 300
 
     // MARK: - Entry Point
 
@@ -563,10 +509,6 @@ enum ReductionScheduler {
                 rejectCache = ReducerCache()
                 spanCache.invalidate()
                 lattice.invalidate()
-                let preCovariantSequence = sequence
-                let preCovariantBindIndex = bindIndex
-                let preCovariantTree = tree
-
                 // ReductionMaterializer produces fresh trees with current validRange
                 // on every materialization, so no separate re-derivation is needed
                 // for range refreshes. Pass structureChanged to accept() for bind
@@ -631,31 +573,6 @@ enum ReductionScheduler {
                 }
 
                 remaining -= legBudget.used
-
-                // ── Post-processing: Shortlex merge ──
-                // Not charged to any leg's budget — fixed per-cycle overhead.
-                if hasBind, covariantAccepted > 0,
-                   let preBi = preCovariantBindIndex, let postBi = bindIndex
-                {
-                    if let mergedSeq = Self.buildMergedSequence(
-                        preCovariantSequence: preCovariantSequence,
-                        postCovariantSequence: sequence,
-                        preBindIndex: preBi,
-                        postBindIndex: postBi
-                    ) {
-                        let seed = ZobristHash.hash(of: mergedSeq)
-                        if case let .success(mergedOutput, mergedFinalSeq, mergedTree) =
-                            GuidedMaterializer.materialize(gen, prefix: mergedSeq, seed: seed, fallbackTree: preCovariantTree),
-                            property(mergedOutput) == false,
-                            mergedFinalSeq.shortLexPrecedes(sequence)
-                        {
-                            let mergeResult = ShrinkResult(sequence: mergedFinalSeq, tree: mergedTree, output: mergedOutput, evaluations: 1)
-                            accept(mergeResult, structureChanged: true)
-                            cycleImproved = true
-                            if isInstrumented { ExhaustLog.debug(category: .reducer, event: "merge_accepted") }
-                        }
-                    }
-                }
                 if covariantAccepted > 0 {
                     dirtyDepths = Set(0 ... (bindIndex?.maxBindDepth ?? 0))
                 }
