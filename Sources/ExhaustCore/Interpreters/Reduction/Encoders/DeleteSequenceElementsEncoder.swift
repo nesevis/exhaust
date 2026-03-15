@@ -7,9 +7,6 @@ public struct DeleteSequenceElementsEncoder: AdaptiveEncoder {
     public let name = "deleteSequenceElements"
     public let phase = ReductionPhase.structuralDeletion
 
-    public var grade: ReductionGrade {
-        ReductionGrade(approximation: .exact, maxMaterializations: 0)
-    }
 
     public func estimatedCost(sequence: ChoiceSequence, bindIndex: BindSpanIndex?) -> Int? {
         let t = ChoiceSequence.extractSequenceElementSpans(from: sequence).count

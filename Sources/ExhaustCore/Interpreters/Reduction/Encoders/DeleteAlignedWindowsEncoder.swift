@@ -20,9 +20,6 @@ struct DeleteAlignedWindowsEncoder: AdaptiveEncoder {
     let name = "deleteAlignedWindows"
     let phase = ReductionPhase.structuralDeletion
 
-    var grade: ReductionGrade {
-        ReductionGrade(approximation: .exact, maxMaterializations: 0)
-    }
 
     func estimatedCost(sequence: ChoiceSequence, bindIndex: BindSpanIndex?) -> Int? {
         let t = ChoiceSequence.extractContainerSpans(from: sequence).count

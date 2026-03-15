@@ -18,9 +18,6 @@ public struct TandemReductionEncoder: AdaptiveEncoder {
     public let name = "tandemReduction"
     public let phase = ReductionPhase.redistribution
 
-    public var grade: ReductionGrade {
-        ReductionGrade(approximation: .bounded, maxMaterializations: 0)
-    }
 
     public func estimatedCost(sequence: ChoiceSequence, bindIndex: BindSpanIndex?) -> Int? {
         let g = ChoiceSequence.extractSiblingGroups(from: sequence).count

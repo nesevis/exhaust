@@ -7,9 +7,6 @@ public struct DeleteSequenceBoundariesEncoder: AdaptiveEncoder {
     public let name = "deleteSequenceBoundaries"
     public let phase = ReductionPhase.structuralDeletion
 
-    public var grade: ReductionGrade {
-        ReductionGrade(approximation: .exact, maxMaterializations: 0)
-    }
 
     public func estimatedCost(sequence: ChoiceSequence, bindIndex: BindSpanIndex?) -> Int? {
         let t = ChoiceSequence.extractSequenceBoundarySpans(from: sequence).count

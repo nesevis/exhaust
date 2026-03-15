@@ -7,9 +7,6 @@ public struct DeleteFreeStandingValuesEncoder: AdaptiveEncoder {
     public let name = "deleteFreeStandingValues"
     public let phase = ReductionPhase.structuralDeletion
 
-    public var grade: ReductionGrade {
-        ReductionGrade(approximation: .exact, maxMaterializations: 0)
-    }
 
     public func estimatedCost(sequence: ChoiceSequence, bindIndex: BindSpanIndex?) -> Int? {
         let t = ChoiceSequence.extractFreeStandingValueSpans(from: sequence).count

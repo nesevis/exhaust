@@ -3,9 +3,6 @@ public protocol SequenceEncoderBase {
     /// Human-readable name for logging.
     var name: String { get }
 
-    /// Declared grade: approximation bound and resource bound.
-    var grade: ReductionGrade { get }
-
     /// Which phase this encoder belongs to.
     var phase: ReductionPhase { get }
 

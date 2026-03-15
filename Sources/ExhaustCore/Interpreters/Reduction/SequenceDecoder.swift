@@ -28,14 +28,6 @@ public enum SequenceDecoder {
     case guidedFresh(fallbackTree: ChoiceTree?,
                      maximizeBoundRegionIndices: Set<Int>? = nil)
 
-    /// The approximation class of this decoder.
-    public var approximation: ApproximationClass {
-        switch self {
-        case .direct, .exactFresh: .exact
-        case .guided, .crossStage, .guidedFresh: .bounded
-        }
-    }
-
     // MARK: - Decode
 
     /// Materializes a candidate and checks feasibility against the property.

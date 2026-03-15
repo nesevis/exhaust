@@ -5,9 +5,6 @@ public struct ReorderSiblingsEncoder: BatchEncoder {
     public let name = "reorderSiblings"
     public let phase = ReductionPhase.reordering
 
-    public var grade: ReductionGrade {
-        ReductionGrade(approximation: .exact, maxMaterializations: 0)
-    }
 
     public func estimatedCost(sequence: ChoiceSequence, bindIndex: BindSpanIndex?) -> Int? {
         let count = ChoiceSequence.extractSiblingGroups(from: sequence).count

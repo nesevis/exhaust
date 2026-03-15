@@ -21,9 +21,6 @@ struct ReduceFloatEncoder: AdaptiveEncoder {
     let name = "reduceFloat"
     let phase = ReductionPhase.valueMinimization
 
-    var grade: ReductionGrade {
-        ReductionGrade(approximation: .exact, maxMaterializations: 0)
-    }
 
     func estimatedCost(sequence: ChoiceSequence, bindIndex: BindSpanIndex?) -> Int? {
         let spans = ChoiceSequence.extractAllValueSpans(from: sequence)

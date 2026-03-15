@@ -9,9 +9,6 @@ public struct ZeroValueEncoder: AdaptiveEncoder {
     public let name = "zeroValue"
     public let phase = ReductionPhase.valueMinimization
 
-    public var grade: ReductionGrade {
-        ReductionGrade(approximation: .exact, maxMaterializations: 0)
-    }
 
     public func estimatedCost(sequence: ChoiceSequence, bindIndex: BindSpanIndex?) -> Int? {
         let t = ChoiceSequence.extractAllValueSpans(from: sequence).count

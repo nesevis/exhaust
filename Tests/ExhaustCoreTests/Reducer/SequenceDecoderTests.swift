@@ -41,7 +41,6 @@ struct SequenceDecoderForTests {
             fallbackTree: nil, strictness: .relaxed
         )
         let decoder = SequenceDecoder.for(context)
-        #expect(decoder.approximation == .bounded)
         guard case .guided = decoder else {
             Issue.record("Expected .guided, got \(decoder)")
             return
@@ -57,7 +56,6 @@ struct SequenceDecoderForTests {
             fallbackTree: nil, strictness: .normal
         )
         let decoder = SequenceDecoder.for(context)
-        #expect(decoder.approximation == .exact)
         guard case .direct = decoder else {
             Issue.record("Expected .direct, got \(decoder)")
             return
@@ -74,7 +72,6 @@ struct SequenceDecoderForTests {
             fallbackTree: nil, strictness: .normal
         )
         let decoder = SequenceDecoder.for(context)
-        #expect(decoder.approximation == .bounded)
         guard case .guided = decoder else {
             Issue.record("Expected .guided, got \(decoder)")
             return
@@ -90,7 +87,6 @@ struct SequenceDecoderForTests {
             fallbackTree: nil, strictness: .normal
         )
         let decoder = SequenceDecoder.for(context)
-        #expect(decoder.approximation == .exact)
         guard case .direct = decoder else {
             Issue.record("Expected .direct, got \(decoder)")
             return
@@ -107,7 +103,6 @@ struct SequenceDecoderForTests {
             fallbackTree: nil, strictness: .normal
         )
         let decoder = SequenceDecoder.for(context)
-        #expect(decoder.approximation == .bounded)
         guard case .crossStage = decoder else {
             Issue.record("Expected .crossStage, got \(decoder)")
             return
@@ -123,7 +118,6 @@ struct SequenceDecoderForTests {
             fallbackTree: nil, strictness: .normal
         )
         let decoder = SequenceDecoder.for(context)
-        #expect(decoder.approximation == .exact)
         guard case .direct = decoder else {
             Issue.record("Expected .direct, got \(decoder)")
             return
@@ -159,27 +153,5 @@ struct SequenceDecoderForTests {
             Issue.record("Expected .direct for empty bind index at global depth, got \(decoder)")
             return
         }
-    }
-}
-
-@Suite("SequenceDecoder.approximation")
-struct SequenceDecoderApproximationTests {
-    @Test("Direct decoder has exact approximation")
-    func directApproximation() {
-        let decoder = SequenceDecoder.direct(strictness: .normal)
-        #expect(decoder.approximation == .exact)
-    }
-
-    @Test("Guided decoder has bounded approximation")
-    func guidedApproximation() {
-        let decoder = SequenceDecoder.guided(fallbackTree: nil, strictness: .normal)
-        #expect(decoder.approximation == .bounded)
-    }
-
-    @Test("CrossStage decoder has bounded approximation")
-    func crossStageApproximation() {
-        let bindIndex = BindSpanIndex(from: ChoiceSequence())
-        let decoder = SequenceDecoder.crossStage(bindIndex: bindIndex, fallbackTree: nil, strictness: .normal)
-        #expect(decoder.approximation == .bounded)
     }
 }
