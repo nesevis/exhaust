@@ -81,7 +81,7 @@ private extension GuidedMaterializer {
     /// misinterpreting a data group (e.g. zip of 2 generators) as continuation wrapping.
     static func decomposeFallback(
         _ tree: ChoiceTree?,
-        calleeKind: CalleeTreeKind
+        calleeKind: CalleeTreeKind,
     ) -> (callee: ChoiceTree?, continuation: ChoiceTree?) {
         guard let tree else { return (nil, nil) }
         switch calleeKind {
@@ -122,19 +122,18 @@ private extension GuidedMaterializer {
             return (value, .emptyJust)
 
         case let .impure(operation, continuation):
-            let calleeKind: CalleeTreeKind
-            switch operation {
+            let calleeKind: CalleeTreeKind = switch operation {
             case .contramap:
-                calleeKind = .transparent
+                .transparent
             case let .transform(kind, _):
                 switch kind {
-                case .map: calleeKind = .transparent
-                case .bind: calleeKind = .nonGroup
+                case .map: .transparent
+                case .bind: .nonGroup
                 }
             case let .zip(generators, _):
-                calleeKind = .group(childCount: generators.count)
+                .group(childCount: generators.count)
             default:
-                calleeKind = .nonGroup
+                .nonGroup
             }
             let (calleeFallback, continuationFallback) = decomposeFallback(fallbackTree, calleeKind: calleeKind)
 
@@ -428,7 +427,8 @@ private extension GuidedMaterializer {
             randomBits = Swift.min(Swift.max(bp, min), max)
         } else if let indices = context.maximizeBoundRegionIndices,
                   context.cursor.isSuspended,
-                  indices.contains(context.cursor.bindEncounterCount - 1) {
+                  indices.contains(context.cursor.bindEncounterCount - 1)
+        {
             // Maximize: use upper bound for this bind region's bound values.
             // bindEncounterCount is 1-based (incremented on suspendForBind), so subtract 1
             // to get the 0-based region index matching BindSpanIndex.regions ordering.
@@ -633,13 +633,12 @@ private extension GuidedMaterializer {
         calleeFallback: ChoiceTree? = nil,
         continuationFallback: ChoiceTree? = nil,
     ) throws -> (Output, ChoiceTree)? {
-        let childFallbacks: [ChoiceTree?]
-        if let calleeFallback, case let .group(children, _) = calleeFallback,
-           children.count == generators.count
+        let childFallbacks: [ChoiceTree?] = if let calleeFallback, case let .group(children, _) = calleeFallback,
+                                               children.count == generators.count
         {
-            childFallbacks = children.map { Optional($0) }
+            children.map { Optional($0) }
         } else {
-            childFallbacks = Array(repeating: nil, count: generators.count)
+            Array(repeating: nil, count: generators.count)
         }
 
         var results = [Any]()
@@ -698,11 +697,10 @@ private extension GuidedMaterializer {
         calleeFallback: ChoiceTree? = nil,
         continuationFallback: ChoiceTree? = nil,
     ) throws -> (Output, ChoiceTree)? {
-        let innerFallback: ChoiceTree?
-        if let calleeFallback, case let .resize(_, choices) = calleeFallback, let inner = choices.first {
-            innerFallback = inner
+        let innerFallback: ChoiceTree? = if let calleeFallback, case let .resize(_, choices) = calleeFallback, let inner = choices.first {
+            inner
         } else {
-            innerFallback = nil
+            nil
         }
         context.sizeOverride = newSize
         guard let result = try generateRecursive(gen, with: inputValue, context: &context, fallbackTree: innerFallback) else {
@@ -816,7 +814,9 @@ private extension GuidedMaterializer {
             bindSuspendDepth -= 1
         }
 
-        var isSuspended: Bool { bindSuspendDepth > 0 }
+        var isSuspended: Bool {
+            bindSuspendDepth > 0
+        }
 
         mutating func tryConsumeValue() -> ChoiceSequenceValue.Value? {
             guard !exhausted, !isSuspended else { return nil }
@@ -919,6 +919,6 @@ private extension GuidedMaterializer {
         var size: UInt64 = GenerationContext.scaledSize(forRun: 0)
         var sizeOverride: UInt64?
         var abortOnFilter: Bool = false
-        var maximizeBoundRegionIndices: Set<Int>? = nil
+        var maximizeBoundRegionIndices: Set<Int>?
     }
 }

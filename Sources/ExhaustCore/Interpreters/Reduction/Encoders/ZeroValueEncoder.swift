@@ -6,8 +6,7 @@ public struct ZeroValueEncoder: AdaptiveEncoder {
     public let name = "zeroValue"
     public let phase = ReductionPhase.valueMinimization
 
-
-    public func estimatedCost(sequence: ChoiceSequence, bindIndex: BindSpanIndex?) -> Int? {
+    public func estimatedCost(sequence: ChoiceSequence, bindIndex _: BindSpanIndex?) -> Int? {
         let t = ChoiceSequence.extractAllValueSpans(from: sequence).count
         guard t > 0 else { return nil }
         return 1 + t
@@ -29,9 +28,9 @@ public struct ZeroValueEncoder: AdaptiveEncoder {
 
     public mutating func start(sequence: ChoiceSequence, targets: TargetSet) {
         self.sequence = sequence
-        self.zeroPhase = .allAtOnce
-        self.spanIndex = 0
-        self.filteredSpans = []
+        zeroPhase = .allAtOnce
+        spanIndex = 0
+        filteredSpans = []
 
         guard case let .spans(spans) = targets else { return }
 
@@ -59,7 +58,7 @@ public struct ZeroValueEncoder: AdaptiveEncoder {
                 allSimplest[entry.seqIdx] = .value(.init(
                     choice: entry.target,
                     validRange: entry.validRange,
-                    isRangeExplicit: entry.isRangeExplicit
+                    isRangeExplicit: entry.isRangeExplicit,
                 ))
             }
             return allSimplest
@@ -71,7 +70,7 @@ public struct ZeroValueEncoder: AdaptiveEncoder {
                 sequence[prev.seqIdx] = .value(.init(
                     choice: prev.target,
                     validRange: prev.validRange,
-                    isRangeExplicit: prev.isRangeExplicit
+                    isRangeExplicit: prev.isRangeExplicit,
                 ))
             }
 
@@ -89,7 +88,7 @@ public struct ZeroValueEncoder: AdaptiveEncoder {
                 candidate[entry.seqIdx] = .value(.init(
                     choice: entry.target,
                     validRange: entry.validRange,
-                    isRangeExplicit: entry.isRangeExplicit
+                    isRangeExplicit: entry.isRangeExplicit,
                 ))
                 return candidate
             }

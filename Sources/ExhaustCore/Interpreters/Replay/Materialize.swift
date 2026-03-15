@@ -59,7 +59,7 @@ extension Interpreters {
         @discardableResult
         mutating func consumeGroup(_ isOpen: Bool, line: Int = #line) throws -> ChoiceSequenceValue {
             // Accept both .group and .bind markers — in Phase 1 they are interchangeable
-            let isMatch: Bool = if case .group(isOpen) = peek { true }
+            let isMatch = if case .group(isOpen) = peek { true }
             else if case .bind(isOpen) = peek { true }
             else { false }
             guard isMatch else {

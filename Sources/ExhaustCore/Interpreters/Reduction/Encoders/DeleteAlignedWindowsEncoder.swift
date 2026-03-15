@@ -20,8 +20,7 @@ struct DeleteAlignedWindowsEncoder: AdaptiveEncoder {
     let name = "deleteAlignedWindows"
     let phase = ReductionPhase.structuralDeletion
 
-
-    func estimatedCost(sequence: ChoiceSequence, bindIndex: BindSpanIndex?) -> Int? {
+    func estimatedCost(sequence: ChoiceSequence, bindIndex _: BindSpanIndex?) -> Int? {
         let t = ChoiceSequence.extractContainerSpans(from: sequence).count
         guard t > 0 else { return nil }
         return t * 50
@@ -81,17 +80,17 @@ struct DeleteAlignedWindowsEncoder: AdaptiveEncoder {
 
     // MARK: - AdaptiveEncoder
 
-    mutating func start(sequence: ChoiceSequence, targets: TargetSet) {
-        self.structurallyStalled = (previousSequenceLength == sequence.count)
-        self.previousSequenceLength = sequence.count
+    mutating func start(sequence: ChoiceSequence, targets _: TargetSet) {
+        structurallyStalled = (previousSequenceLength == sequence.count)
+        previousSequenceLength = sequence.count
         self.sequence = sequence
-        self.cohortIndex = 0
-        self.searchPhase = .contiguous
-        self.needsFirstProbe = true
-        self.anyContiguousEverAccepted = false
+        cohortIndex = 0
+        searchPhase = .contiguous
+        needsFirstProbe = true
+        anyContiguousEverAccepted = false
 
         let siblingGroups = ChoiceSequence.extractSiblingGroups(from: sequence)
-        self.cohorts = AlignedDeletionCohortBuilder.buildCohorts(from: sequence, siblingGroups: siblingGroups)
+        cohorts = AlignedDeletionCohortBuilder.buildCohorts(from: sequence, siblingGroups: siblingGroups)
             .filter { $0.isEmpty == false }
 
         if cohorts.isEmpty == false {

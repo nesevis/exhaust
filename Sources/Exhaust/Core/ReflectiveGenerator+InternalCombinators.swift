@@ -40,9 +40,9 @@ extension ReflectiveGenerator where Operation == ReflectiveOperation {
                 forward: { try forward($0 as! Value).erase() },
                 backward: { try backward($0 as! NewValue) as Any },
                 inputType: String(describing: Value.self),
-                outputType: String(describing: NewValue.self)
+                outputType: String(describing: NewValue.self),
             ),
-            inner: self.erase()
+            inner: erase(),
         ))
     }
 }

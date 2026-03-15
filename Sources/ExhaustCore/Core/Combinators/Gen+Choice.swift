@@ -116,7 +116,7 @@ public extension Gen {
     ///
     /// These ranges should not be treated as strict during reflection because the contextual value that produced them may be opaque from the reflected output.
     @inlinable
-    public static func chooseDerived<Output: BitPatternConvertible>(
+    static func chooseDerived<Output: BitPatternConvertible>(
         in range: ClosedRange<Output>,
         type _: Output.Type = Output.self,
     ) -> ReflectiveGenerator<Output> {

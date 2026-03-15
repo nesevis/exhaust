@@ -6,8 +6,8 @@
 //  #gen macro converted to Gen.* API.
 //
 
-import Testing
 import ExhaustCore
+import Testing
 
 @Suite("ExploreRunner Integration")
 struct ExploreIntegrationTests {

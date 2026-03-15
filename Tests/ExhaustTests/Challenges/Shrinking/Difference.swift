@@ -32,26 +32,26 @@ struct DifferenceShrinkingChallenge {
      Test 3 seems the most difficult one to shrink because shrinking parameters individually will never lead to a smaller and falsifying sample. This is also the hardest to find a falsifying sample in the first place.
      */
     @Test("Difference must not be zero")
-    func differenceTest1() throws {
+    func differenceTest1() {
         let gen = #gen(.int(in: 1 ... 1000)).array(length: 2)
 
         let property: @Sendable ([Int]) -> Bool = { arr in
             arr[0] < 10 || arr[0] != arr[1]
         }
-        
+
         let output = #exhaust(
             gen,
             .suppressIssueReporting,
             .reflecting([700, 700]),
             .useBonsaiReducer,
-            property: property
+            property: property,
         )
 
         #expect(output == [10, 10])
     }
 
     @Test("Difference must not be small")
-    func differenceTest2() throws {
+    func differenceTest2() {
         let gen = #gen(.int(in: 1 ... 1000)).array(length: 2)
 
         let property: @Sendable ([Int]) -> Bool = { arr in
@@ -64,9 +64,9 @@ struct DifferenceShrinkingChallenge {
             .suppressIssueReporting,
             .reflecting([700, 701]),
             .useBonsaiReducer,
-            property: property
+            property: property,
         )
-        
+
         #expect(output == [10, 6])
     }
 
@@ -77,7 +77,7 @@ struct DifferenceShrinkingChallenge {
         let output = #exhaust(
             gen,
             .suppressIssueReporting,
-            .useBonsaiReducer
+            .useBonsaiReducer,
         ) { arr in
             let diff = abs(arr[0] - arr[1])
             return arr[0] < 10 || diff != 1

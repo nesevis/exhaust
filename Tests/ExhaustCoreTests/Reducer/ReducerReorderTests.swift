@@ -7,8 +7,8 @@
 //  are normalized (e.g. [3, 1, 2] → [1, 2, 3]).
 //
 
-import Testing
 import ExhaustCore
+import Testing
 
 // MARK: - Helpers
 

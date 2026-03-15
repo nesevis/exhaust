@@ -1,4 +1,5 @@
 // MARK: - Circular Queue Contract Test
+
 //
 // Inspired by gopter's `example_circularqueue_test.go` (Jan Ritter, gopter project).
 //
@@ -14,9 +15,9 @@
 // postcondition verification: every `get` must return the element that was
 // `put` first, in order. The model is a simple FIFO array.
 
-import Testing
 import Exhaust
 import ExhaustCore
+import Testing
 
 // MARK: - Tests
 
@@ -30,9 +31,9 @@ struct CircularQueueTests {
                 commandLimit: 10,
                 .samplingBudget(500),
                 .suppressIssueReporting,
-                .replay(12892450489757532783),
-                .useBonsaiReducer
-            )
+                .replay(12_892_450_489_757_532_783),
+                .useBonsaiReducer,
+            ),
         )
 
         #expect(result.trace.contains { step in
@@ -64,7 +65,7 @@ struct CircularQueueContract {
         queue.count >= 0 && queue.count <= queue.capacity // swiftlint:disable:this empty_count
     }
 
-    @Command(weight: 3, Gen.int(in: 0...20))
+    @Command(weight: 3, Gen.int(in: 0 ... 20))
     mutating func put(value: Int) throws {
         guard queue.count < queue.capacity else { throw skip() }
         expected.append(value)
@@ -73,7 +74,7 @@ struct CircularQueueContract {
 
     @Command(weight: 3)
     mutating func get() throws {
-        guard queue.count > 0 else { throw skip() } // swiftlint:disable:this empty_count
+        guard !queue.isEmpty else { throw skip() } // swiftlint:disable:this empty_count
         let expectedValue = expected.removeFirst()
         let actual = queue.get()
         try check(actual == expectedValue, "get must return elements in FIFO order")
@@ -105,7 +106,7 @@ struct BuggyCircularQueue {
 
     mutating func put(_ value: Int) {
         // Bug: corrupts stored value when writePos == 2 and buffer is non-empty
-        if writePos == 2 && count > 0 { // swiftlint:disable:this empty_count
+        if writePos == 2, count > 0 { // swiftlint:disable:this empty_count
             buffer[writePos] = value &+ 1
         } else {
             buffer[writePos] = value
@@ -121,5 +122,7 @@ struct BuggyCircularQueue {
         return value
     }
 
-    var size: Int { count }
+    var size: Int {
+        count
+    }
 }

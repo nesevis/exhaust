@@ -5,8 +5,8 @@
 //  Created by Chris Kolbu on 25/7/2025.
 //
 
-import Testing
 import ExhaustCore
+import Testing
 
 @discardableResult
 func validateGenerator<Output: Equatable>(_ gen: ReflectiveGenerator<Output>) throws -> (recipe: ChoiceTree, instance: Output) {

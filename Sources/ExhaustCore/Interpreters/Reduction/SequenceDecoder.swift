@@ -38,44 +38,44 @@ public enum SequenceDecoder {
         gen: ReflectiveGenerator<Output>,
         tree: ChoiceTree,
         originalSequence: ChoiceSequence,
-        property: (Output) -> Bool
+        property: (Output) -> Bool,
     ) throws -> ShrinkResult<Output>? {
         switch self {
         case let .direct(strictness):
-            return try decodeDirect(
+            try decodeDirect(
                 candidate: consume candidate, gen: gen, tree: tree,
-                strictness: strictness, property: property
+                strictness: strictness, property: property,
             )
 
         case let .guided(fallbackTree, strictness, maximizeBoundRegionIndices):
-            return decodeGuided(
+            decodeGuided(
                 candidate: consume candidate, gen: gen,
                 fallbackTree: fallbackTree ?? tree, strictness: strictness,
                 maximizeBoundRegionIndices: maximizeBoundRegionIndices,
-                originalSequence: originalSequence, property: property
+                originalSequence: originalSequence, property: property,
             )
 
         case let .crossStage(bindIndex, fallbackTree, strictness):
-            return try decodeCrossStage(
+            try decodeCrossStage(
                 candidate: consume candidate, gen: gen, tree: tree,
                 bindIndex: bindIndex, fallbackTree: fallbackTree ?? tree,
                 strictness: strictness,
-                originalSequence: originalSequence, property: property
+                originalSequence: originalSequence, property: property,
             )
 
         case .exactFresh:
-            return decodeExactFresh(
+            decodeExactFresh(
                 candidate: consume candidate, gen: gen,
                 fallbackTree: tree,
-                originalSequence: originalSequence, property: property
+                originalSequence: originalSequence, property: property,
             )
 
         case let .guidedFresh(fallbackTree, maximizeBoundRegionIndices):
-            return decodeGuidedFresh(
+            decodeGuidedFresh(
                 candidate: consume candidate, gen: gen,
                 fallbackTree: fallbackTree ?? tree,
                 maximizeBoundRegionIndices: maximizeBoundRegionIndices,
-                originalSequence: originalSequence, property: property
+                originalSequence: originalSequence, property: property,
             )
         }
     }
@@ -87,10 +87,10 @@ public enum SequenceDecoder {
         gen: ReflectiveGenerator<Output>,
         tree: ChoiceTree,
         strictness: Interpreters.Strictness,
-        property: (Output) -> Bool
+        property: (Output) -> Bool,
     ) throws -> ShrinkResult<Output>? {
         guard let output = try? Interpreters.materialize(
-            gen, with: tree, using: candidate, strictness: strictness
+            gen, with: tree, using: candidate, strictness: strictness,
         ) else {
             return nil
         }
@@ -99,7 +99,7 @@ public enum SequenceDecoder {
             sequence: consume candidate,
             tree: tree,
             output: output,
-            evaluations: 1
+            evaluations: 1,
         )
     }
 
@@ -107,10 +107,10 @@ public enum SequenceDecoder {
         candidate: consuming ChoiceSequence,
         gen: ReflectiveGenerator<Output>,
         fallbackTree: ChoiceTree,
-        strictness: Interpreters.Strictness,
+        strictness _: Interpreters.Strictness,
         maximizeBoundRegionIndices: Set<Int>? = nil,
         originalSequence: ChoiceSequence,
-        property: (Output) -> Bool
+        property: (Output) -> Bool,
     ) -> ShrinkResult<Output>? {
         let seed = ZobristHash.hash(of: candidate)
         switch GuidedMaterializer.materialize(gen, prefix: consume candidate, seed: seed, fallbackTree: fallbackTree, maximizeBoundRegionIndices: maximizeBoundRegionIndices) {
@@ -121,7 +121,7 @@ public enum SequenceDecoder {
                 sequence: reDerivedSequence,
                 tree: reDerivedTree,
                 output: reDerivedOutput,
-                evaluations: 1
+                evaluations: 1,
             )
         case .filterEncountered, .failed:
             return nil
@@ -136,7 +136,7 @@ public enum SequenceDecoder {
         fallbackTree: ChoiceTree,
         strictness: Interpreters.Strictness,
         originalSequence: ChoiceSequence,
-        property: (Output) -> Bool
+        property: (Output) -> Bool,
     ) throws -> ShrinkResult<Output>? {
         // Check whether inner values changed. If only bound values were modified,
         // the strategy's values are authoritative — re-derivation would replace
@@ -151,12 +151,12 @@ public enum SequenceDecoder {
             return decodeGuided(
                 candidate: consume candidate, gen: gen,
                 fallbackTree: fallbackTree, strictness: strictness,
-                originalSequence: originalSequence, property: property
+                originalSequence: originalSequence, property: property,
             )
         } else {
             return try decodeDirect(
                 candidate: consume candidate, gen: gen, tree: tree,
-                strictness: strictness, property: property
+                strictness: strictness, property: property,
             )
         }
     }
@@ -167,12 +167,12 @@ public enum SequenceDecoder {
         candidate: consuming ChoiceSequence,
         gen: ReflectiveGenerator<Output>,
         fallbackTree: ChoiceTree,
-        originalSequence: ChoiceSequence,
-        property: (Output) -> Bool
+        originalSequence _: ChoiceSequence,
+        property: (Output) -> Bool,
     ) -> ShrinkResult<Output>? {
         switch ReductionMaterializer.materialize(
             gen, prefix: consume candidate,
-            mode: .exact, fallbackTree: fallbackTree
+            mode: .exact, fallbackTree: fallbackTree,
         ) {
         case let .success(output, freshTree):
             guard property(output) == false else { return nil }
@@ -181,7 +181,7 @@ public enum SequenceDecoder {
                 sequence: freshSequence,
                 tree: freshTree,
                 output: output,
-                evaluations: 1
+                evaluations: 1,
             )
         case .rejected, .failed:
             return nil
@@ -194,13 +194,13 @@ public enum SequenceDecoder {
         fallbackTree: ChoiceTree,
         maximizeBoundRegionIndices: Set<Int>? = nil,
         originalSequence: ChoiceSequence,
-        property: (Output) -> Bool
+        property: (Output) -> Bool,
     ) -> ShrinkResult<Output>? {
         let seed = ZobristHash.hash(of: candidate)
         switch ReductionMaterializer.materialize(
             gen, prefix: consume candidate,
             mode: .guided(seed: seed, fallbackTree: fallbackTree,
-                          maximizeBoundRegionIndices: maximizeBoundRegionIndices)
+                          maximizeBoundRegionIndices: maximizeBoundRegionIndices),
         ) {
         case let .success(output, freshTree):
             let freshSequence = ChoiceSequence(freshTree)
@@ -210,7 +210,7 @@ public enum SequenceDecoder {
                 sequence: freshSequence,
                 tree: freshTree,
                 output: output,
-                evaluations: 1
+                evaluations: 1,
             )
         case .rejected, .failed:
             return nil
@@ -283,7 +283,7 @@ public enum SequenceDecoder {
                 return .crossStage(
                     bindIndex: context.bindIndex!,
                     fallbackTree: context.fallbackTree,
-                    strictness: context.strictness
+                    strictness: context.strictness,
                 )
             }
             return .direct(strictness: context.strictness)
@@ -292,7 +292,7 @@ public enum SequenceDecoder {
             if hasBinds {
                 return .guided(
                     fallbackTree: context.fallbackTree,
-                    strictness: context.strictness
+                    strictness: context.strictness,
                 )
             }
             // Deletion (.relaxed) invalidates the tree's positional mapping even
@@ -303,7 +303,7 @@ public enum SequenceDecoder {
             if context.strictness == .relaxed {
                 return .guided(
                     fallbackTree: context.fallbackTree,
-                    strictness: context.strictness
+                    strictness: context.strictness,
                 )
             }
             return .direct(strictness: context.strictness)
@@ -313,7 +313,7 @@ public enum SequenceDecoder {
             if context.strictness == .relaxed {
                 return .guided(
                     fallbackTree: context.fallbackTree,
-                    strictness: context.strictness
+                    strictness: context.strictness,
                 )
             }
             return .direct(strictness: context.strictness)

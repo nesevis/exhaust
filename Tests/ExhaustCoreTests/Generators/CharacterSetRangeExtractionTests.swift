@@ -7,9 +7,9 @@
 //  #exhaust replaced with exhaustCheck helper.
 //
 
+import ExhaustCore
 import Foundation
 import Testing
-import ExhaustCore
 
 @Suite("CharacterSet Range Extraction")
 struct CharacterSetRangeExtractionTests {

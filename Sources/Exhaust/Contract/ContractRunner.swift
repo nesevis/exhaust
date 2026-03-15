@@ -61,12 +61,12 @@ public func __runContract<Spec: ContractSpec>(
     let commandGen = Spec.commandGenerator
     let seqGen: ReflectiveGenerator<[Spec.Command]> = commandGen.array(
         length: 0 ... commandLimit,
-        scaling: .constant
+        scaling: .constant,
     )
 
     // The property: execute the command sequence against a fresh spec and check for failures.
     let property: @Sendable ([Spec.Command]) -> Bool = { commands in
-        var spec = Spec.init()
+        var spec = Spec()
         for command in commands {
             do {
                 try spec.run(command)
@@ -176,7 +176,7 @@ private func buildTrace<Spec: ContractSpec>(
     _ commands: [Spec.Command],
     specType _: Spec.Type,
 ) -> ([TraceStep], Spec) {
-    var spec = Spec.init()
+    var spec = Spec()
     var trace: [TraceStep] = []
     trace.reserveCapacity(commands.count)
 
@@ -274,8 +274,8 @@ struct ContractFailureInfo<Command> {
 // MARK: - Sequence Covering Array (SCA) coverage
 
 /// Extracts pick choices from a command generator if it's a top-level `Gen.pick`.
-func extractPickChoices<Command>(
-    from gen: ReflectiveGenerator<Command>,
+func extractPickChoices(
+    from gen: ReflectiveGenerator<some Any>,
 ) -> ContiguousArray<ReflectiveOperation.PickTuple>? {
     guard case let .impure(operation, _) = gen,
           case let .pick(choices) = operation
@@ -318,13 +318,12 @@ func runSCACoverage<Command>(
     //   seqLen  5 @ t≤6:  2ms    seqLen 15 @ t≤3: 35ms
     //   seqLen  8 @ t≤5: 31ms    seqLen 20 @ t≤3: 94ms
     //   seqLen 10 @ t≤4: 40ms    seqLen 30 @ t≤2: 18ms
-    let strengthCap: Int
-    switch seqLen {
-    case ...6:  strengthCap = 6
-    case ...8:  strengthCap = 5
-    case ...12: strengthCap = 4
-    case ...20: strengthCap = 3
-    default:    strengthCap = 2
+    let strengthCap = switch seqLen {
+    case ...6: 6
+    case ...8: 5
+    case ...12: 4
+    case ...20: 3
+    default: 2
     }
 
     if argumentAware {
@@ -359,16 +358,15 @@ func runSCACoverage<Command>(
     let lengthRange = UInt64(0) ... UInt64(commandLimit)
 
     for row in covering.rows {
-        let tree: ChoiceTree?
-        if let mapping {
-            tree = SequenceCoveringArray.buildTree(
+        let tree: ChoiceTree? = if let mapping {
+            SequenceCoveringArray.buildTree(
                 row: row,
                 profile: profile,
                 mapping: mapping,
                 sequenceLengthRange: lengthRange,
             )
         } else {
-            tree = SequenceCoveringArray.buildTree(
+            SequenceCoveringArray.buildTree(
                 row: row,
                 profile: profile,
                 sequenceLengthRange: lengthRange,

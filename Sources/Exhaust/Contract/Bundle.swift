@@ -36,10 +36,14 @@ public final class Bundle<Element>: @unchecked Sendable {
     public init() {}
 
     /// The number of elements currently in the bundle.
-    public var count: Int { elements.count }
+    public var count: Int {
+        elements.count
+    }
 
     /// Whether the bundle contains any elements.
-    public var isEmpty: Bool { elements.isEmpty }
+    public var isEmpty: Bool {
+        elements.isEmpty
+    }
 
     /// Stores a value in the bundle for later retrieval by `draw()` or `consume()`.
     ///

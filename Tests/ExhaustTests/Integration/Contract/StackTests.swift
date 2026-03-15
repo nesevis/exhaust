@@ -1,6 +1,6 @@
-import Testing
 import Exhaust
 import ExhaustCore
+import Testing
 
 // MARK: - Tests
 
@@ -12,7 +12,7 @@ struct StackTests {
             StackSpec.self,
             commandLimit: 15,
             .samplingBudget(50),
-            .suppressIssueReporting
+            .suppressIssueReporting,
         )
         #expect(result == nil, "Stack spec should pass — model and SUT are identical")
     }
@@ -30,7 +30,7 @@ struct StackSpec {
         stack == expected
     }
 
-    @Command(weight: 3, Gen.int(in: 0...9))
+    @Command(weight: 3, Gen.int(in: 0 ... 9))
     mutating func push(value: Int) throws {
         expected.append(value)
         stack.append(value)

@@ -192,19 +192,19 @@ public enum ChoiceTreeAnalysis {
     private static func walkTreeValidateOnly(_ tree: ChoiceTree) -> Bool {
         switch tree {
         case .choice, .just, .getSize, .resize:
-            return true
+            true
         case .group(_, isOpaque: true):
-            return true
+            true
         case let .group(children, _):
-            return children.allSatisfy { walkTreeValidateOnly($0) }
+            children.allSatisfy { walkTreeValidateOnly($0) }
         case let .bind(inner, bound):
-            return walkTreeValidateOnly(inner) && walkTreeValidateOnly(bound)
+            walkTreeValidateOnly(inner) && walkTreeValidateOnly(bound)
         case let .selected(inner):
-            return walkTreeValidateOnly(inner)
+            walkTreeValidateOnly(inner)
         case let .sequence(_, elements, _):
-            return elements.allSatisfy { walkTreeValidateOnly($0) }
+            elements.allSatisfy { walkTreeValidateOnly($0) }
         case let .branch(_, _, _, _, choice):
-            return walkTreeValidateOnly(choice)
+            walkTreeValidateOnly(choice)
         }
     }
 

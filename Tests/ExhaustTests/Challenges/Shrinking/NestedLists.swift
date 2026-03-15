@@ -20,7 +20,7 @@ struct NestedListsShrinkingChallenge {
      Some libraries, e.g. Hypothesis and jqwik, can shrink this reliably to a single list of 11 elements: [[0, 0, 0, 0, 0, 0, 0, 0, 0, 0]].
      */
     @Test("Nested Lists")
-    func nestedListsFull() throws {
+    func nestedListsFull() {
         let gen = #gen(.uint().array().array())
         let output = #exhaust(
             gen,
@@ -30,7 +30,7 @@ struct NestedListsShrinkingChallenge {
         ) { arr in
             arr.map(\.count).reduce(0, +) <= 10
         }
-        
+
         #expect(output == [Array(repeating: UInt(0), count: 11)])
     }
 }

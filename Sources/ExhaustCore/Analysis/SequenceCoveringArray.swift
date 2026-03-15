@@ -154,12 +154,11 @@ public enum SequenceCoveringArray {
         var offset: UInt64 = 0
 
         for (index, profile) in branchProfiles.enumerated() {
-            let contribution: UInt64
-            switch profile {
+            let contribution: UInt64 = switch profile {
             case .parameterFree, .unanalyzable:
-                contribution = 1
+                1
             case let .analyzed(params):
-                contribution = params.reduce(UInt64(1)) { acc, param in
+                params.reduce(UInt64(1)) { acc, param in
                     let (product, overflow) = acc.multipliedReportingOverflow(by: param.domainSize)
                     return overflow ? .max : product
                 }
@@ -281,19 +280,19 @@ public enum SequenceCoveringArray {
     private static func isParameterFree(_ gen: ReflectiveGenerator<Any>) -> Bool {
         switch gen {
         case .pure:
-            return true
+            true
         case let .impure(op, _):
             switch op {
             case .just:
-                return true
+                true
             case let .contramap(_, inner):
-                return isParameterFree(inner)
+                isParameterFree(inner)
             case let .prune(inner):
-                return isParameterFree(inner)
+                isParameterFree(inner)
             case let .transform(_, inner):
-                return isParameterFree(inner)
+                isParameterFree(inner)
             default:
-                return false
+                false
             }
         }
     }
@@ -307,7 +306,7 @@ public enum SequenceCoveringArray {
     ) -> [BoundaryParameter] {
         switch result {
         case let .finite(profile):
-            return profile.parameters.enumerated().map { i, param in
+            profile.parameters.enumerated().map { i, param in
                 switch param.kind {
                 case let .chooseBits(range, tag):
                     if param.domainSize <= threshold {
@@ -339,7 +338,7 @@ public enum SequenceCoveringArray {
             }
 
         case let .boundary(profile):
-            return profile.parameters.enumerated().map { i, param in
+            profile.parameters.enumerated().map { i, param in
                 switch param.kind {
                 case let .finiteChooseBits(range, tag) where param.domainSize > threshold:
                     let boundaryValues = BoundaryDomainAnalysis.computeBoundaryValues(

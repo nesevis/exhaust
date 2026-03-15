@@ -52,8 +52,7 @@ benchmark("Double generation with choiceTree materialised") {
 benchmark("String generation with choiceTree materialised") {
     let generator = #gen(.string())
     var iterator = ValueAndChoiceTreeInterpreter(generator, materializePicks: true, seed: 1, maxRuns: 100)
-    while let _ = try iterator.next() {
-    }
+    while let _ = try iterator.next() {}
 }
 
 private struct Person {

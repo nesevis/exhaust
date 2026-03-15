@@ -3,8 +3,8 @@
 //  Exhaust
 //
 
-import Testing
 import ExhaustCore
+import Testing
 
 @Suite("Covering Array Integration")
 struct CoveringArrayIntegrationTests {
@@ -23,9 +23,9 @@ struct CoveringArrayIntegrationTests {
                 },
                 backward: nil,
                 inputType: "Int",
-                outputType: "[Int]"
+                outputType: "[Int]",
             ),
-            inner: Gen.choose(in: 0 ... 2 as ClosedRange<Int>).erase()
+            inner: Gen.choose(in: 0 ... 2 as ClosedRange<Int>).erase(),
         ))
         let gen = Gen.zip(bindGen, Gen.choose(in: 0 ... 3 as ClosedRange<Int>), Gen.choose(in: 0 ... 3 as ClosedRange<Int>))
 
@@ -39,7 +39,7 @@ struct CoveringArrayIntegrationTests {
         #expect(profile.originalTree?.containsBind == true)
 
         let covering = try #require(
-            CoveringArray.generate(profile: profile, strength: profile.parameters.count)
+            CoveringArray.generate(profile: profile, strength: profile.parameters.count),
         )
 
         var replayedValues: [([Int], Int, Int)] = []
@@ -85,7 +85,7 @@ struct CoveringArrayIntegrationTests {
         }
 
         let covering = try #require(
-            CoveringArray.generate(profile: profile, strength: profile.parameters.count)
+            CoveringArray.generate(profile: profile, strength: profile.parameters.count),
         )
 
         // Full exhaustive enumeration: 2 * 2 * 3 = 12 rows
@@ -113,7 +113,7 @@ struct CoveringArrayIntegrationTests {
         }
 
         let covering = try #require(
-            CoveringArray.generate(profile: profile, strength: profile.parameters.count)
+            CoveringArray.generate(profile: profile, strength: profile.parameters.count),
         )
 
         var foundFailure = false
@@ -125,7 +125,7 @@ struct CoveringArrayIntegrationTests {
                 continue
             }
             // Fails when a == true and b == 3
-            if value.0 == true && value.1 == 3 {
+            if value.0 == true, value.1 == 3 {
                 foundFailure = true
                 break
             }
@@ -172,7 +172,7 @@ struct CoveringArrayIntegrationTests {
 
         // Generate a 3-way covering array
         let covering = try #require(
-            CoveringArray.generate(profile: profile, strength: 3)
+            CoveringArray.generate(profile: profile, strength: 3),
         )
 
         var foundFailure = false
@@ -185,7 +185,7 @@ struct CoveringArrayIntegrationTests {
                 continue
             }
             let value = resultValue
-            if value.0 == 2 && value.1 == 3 && value.3 == 1 {
+            if value.0 == 2, value.1 == 3, value.3 == 1 {
                 foundFailure = true
                 break
             }
@@ -211,7 +211,7 @@ struct CoveringArrayIntegrationTests {
             var iter = ValueInterpreter(gen, seed: UInt64(trial), maxRuns: 100)
             var foundInTrial = false
             while let value = try iter.next() {
-                if value.0 == 2 && value.1 == 3 && value.3 == 1 {
+                if value.0 == 2, value.1 == 3, value.3 == 1 {
                     foundInTrial = true
                     break
                 }

@@ -68,7 +68,6 @@ struct AlignedContainerDescriptor {
 
 /// Builds deletion cohorts from structurally aligned sibling containers, sibling groups, and root sequence containers.
 enum AlignedDeletionCohortBuilder {
-
     /// Builds all cohorts from a choice sequence and sibling groups.
     ///
     /// Combines three cohort-formation passes:

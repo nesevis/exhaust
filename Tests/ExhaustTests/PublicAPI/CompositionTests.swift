@@ -6,9 +6,9 @@
 //  array generation, and complex structure composition.
 //
 
+import ExhaustCore
 import Testing
 @testable import Exhaust
-import ExhaustCore
 
 // MARK: - Test Structures
 
@@ -239,26 +239,26 @@ struct CompositionTests {
         @Test("bound generates correct values in forward direction")
         func boundForwardGeneration() throws {
             // Generate an int n, then use it to produce an array of n zeros
-            let gen = #gen(.int(in: 1...5))
+            let gen = #gen(.int(in: 1 ... 5))
                 .bound(
                     forward: { n in Gen.just(Array(repeating: 0, count: n)) },
-                    backward: { (arr: [Int]) in arr.count }
+                    backward: { (arr: [Int]) in arr.count },
                 )
 
-            for _ in 0..<20 {
+            for _ in 0 ..< 20 {
                 var iterator = ValueInterpreter(gen)
                 let value = try iterator.next()!
-                #expect((1...5).contains(value.count))
+                #expect((1 ... 5).contains(value.count))
                 #expect(value.allSatisfy { $0 == 0 })
             }
         }
 
         @Test("bound validates successfully")
         func boundValidates() {
-            let gen = #gen(.int(in: 1...5))
+            let gen = #gen(.int(in: 1 ... 5))
                 .bound(
                     forward: { n in Gen.just(Array(repeating: 0, count: n)) },
-                    backward: { (arr: [Int]) in arr.count }
+                    backward: { (arr: [Int]) in arr.count },
                 )
 
             #examine(gen, samples: 50, seed: 42)
@@ -266,7 +266,7 @@ struct CompositionTests {
 
         @Test("Forward-only bind still throws on reflection")
         func forwardOnlyBindThrows() throws {
-            let gen = #gen(.int(in: 1...5)).bind { n in
+            let gen = #gen(.int(in: 1 ... 5)).bind { n in
                 Gen.just(Array(repeating: 0, count: n))
             }
 
@@ -281,13 +281,13 @@ struct CompositionTests {
         @Test("bound with dependent generator reflects correctly")
         func boundDependentGenerator() throws {
             // Generate a max value, then generate an int within that range
-            let gen = #gen(.int(in: 10...20)).bound(
-                forward: { max in #gen(.int(in: 0...max)) },
-                backward: { (_: Int) in 15 } // conservative: always claim max was 15
+            let gen = #gen(.int(in: 10 ... 20)).bound(
+                forward: { max in #gen(.int(in: 0 ... max)) },
+                backward: { (_: Int) in 15 }, // conservative: always claim max was 15
             )
 
             // Forward generation should work
-            for _ in 0..<20 {
+            for _ in 0 ..< 20 {
                 var iterator = ValueInterpreter(gen)
                 let value = try iterator.next()!
                 #expect(value >= 0)

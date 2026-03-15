@@ -43,7 +43,7 @@ public enum HillClimber {
 
         // Materialize the seed via GuidedMaterializer to get baseline
         guard case let .success(baselineValue, _, _) = GuidedMaterializer.materialize(
-            gen, prefix: currentSequence, seed: probePRNG.next()
+            gen, prefix: currentSequence, seed: probePRNG.next(),
         ) else {
             return .unchanged(probesUsed: 0)
         }
@@ -112,7 +112,7 @@ public enum HillClimber {
                         probe[i] = newEntry
 
                         guard case let .success(value, sequence, tree) = GuidedMaterializer.materialize(
-                            gen, prefix: probe, seed: probePRNG.next()
+                            gen, prefix: probe, seed: probePRNG.next(),
                         ) else {
                             probesUsed += 1
                             return false
@@ -176,7 +176,7 @@ public enum HillClimber {
                     probe[i] = .branch(.init(id: altID, validIDs: b.validIDs))
 
                     guard case let .success(value, sequence, tree) = GuidedMaterializer.materialize(
-                        gen, prefix: probe, seed: probePRNG.next()
+                        gen, prefix: probe, seed: probePRNG.next(),
                     ) else {
                         probesUsed += 1
                         continue

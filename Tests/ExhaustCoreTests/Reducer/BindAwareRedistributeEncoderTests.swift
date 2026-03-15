@@ -5,7 +5,6 @@ import Testing
 
 @Suite("BindAwareRedistributeEncoder — Rational Helpers")
 struct BindAwareRedistributeRationalTests {
-
     // MARK: - rationalForChoice
 
     @Test("Unsigned integer has denominator 1")
@@ -195,7 +194,7 @@ struct BindAwareRedistributeRationalTests {
     @Test("Overflow during scaling returns nil")
     func scaleOverflow() {
         let result = BindAwareRedistributeEncoder.scaledNumerator(
-            (numerator: Int64.max, denominator: 1), to: 2
+            (numerator: Int64.max, denominator: 1), to: 2,
         )
         #expect(result == nil)
     }
@@ -343,7 +342,7 @@ struct BindAwareRedistributeRationalTests {
             return
         }
         let result = BindAwareRedistributeEncoder.choiceFromNumerator(
-            ratio.numerator, denominator: ratio.denominator, original: choice
+            ratio.numerator, denominator: ratio.denominator, original: choice,
         )
         #expect(result == choice)
     }
@@ -357,7 +356,7 @@ struct BindAwareRedistributeRationalTests {
             return
         }
         let result = BindAwareRedistributeEncoder.choiceFromNumerator(
-            ratio.numerator, denominator: ratio.denominator, original: choice
+            ratio.numerator, denominator: ratio.denominator, original: choice,
         )
         guard case let .floating(value, _, _) = result else {
             Issue.record("Expected floating result")
@@ -374,7 +373,7 @@ struct BindAwareRedistributeRationalTests {
         guard let intRatio = BindAwareRedistributeEncoder.rationalForChoice(intChoice),
               let floatRatio = BindAwareRedistributeEncoder.rationalForChoice(floatChoice),
               let commonDenom = BindAwareRedistributeEncoder.leastCommonMultiple(
-                  intRatio.denominator, floatRatio.denominator
+                  intRatio.denominator, floatRatio.denominator,
               )
         else {
             Issue.record("Failed to compute rationals")
@@ -396,10 +395,10 @@ struct BindAwareRedistributeRationalTests {
 
         // Verify round-trip back to choices.
         let intResult = BindAwareRedistributeEncoder.choiceFromNumerator(
-            intScaled, denominator: commonDenom, original: intChoice
+            intScaled, denominator: commonDenom, original: intChoice,
         )
         let floatResult = BindAwareRedistributeEncoder.choiceFromNumerator(
-            floatScaled, denominator: commonDenom, original: floatChoice
+            floatScaled, denominator: commonDenom, original: floatChoice,
         )
         #expect(intResult == intChoice)
         guard case let .floating(fv, _, _) = floatResult else {

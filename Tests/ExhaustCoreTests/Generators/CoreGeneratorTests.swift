@@ -6,8 +6,8 @@
 //  basic composition, and interpreter consistency.
 //
 
-import Testing
 import ExhaustCore
+import Testing
 
 @Suite("Core Generator Functionality")
 struct CoreGeneratorTests {

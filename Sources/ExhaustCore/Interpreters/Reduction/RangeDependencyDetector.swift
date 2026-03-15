@@ -5,7 +5,6 @@
 /// ranges vary (or insufficient samples exist), the conservative default is
 /// to assume dynamic dependencies and always re-derive.
 public enum RangeDependencyDetector {
-
     /// Returns `true` if any `.choice` node's `validRange` varies across the sample trees,
     /// or if there are too few samples to determine stability.
     ///

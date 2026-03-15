@@ -7,8 +7,7 @@ public struct SpeculativeDeleteEncoder: AdaptiveEncoder {
     public let name = "speculativeDelete"
     public let phase = ReductionPhase.structuralDeletion
 
-
-    public func estimatedCost(sequence: ChoiceSequence, bindIndex: BindSpanIndex?) -> Int? {
+    public func estimatedCost(sequence: ChoiceSequence, bindIndex _: BindSpanIndex?) -> Int? {
         let t = ChoiceSequence.extractContainerSpans(from: sequence).count
         guard t > 0 else { return nil }
         return t * 10

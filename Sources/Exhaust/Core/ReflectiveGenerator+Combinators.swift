@@ -106,9 +106,9 @@ public extension ReflectiveGenerator where Operation == ReflectiveOperation {
             kind: .map(
                 forward: { try path.extract(from: $0) as Any },
                 inputType: String(describing: Value.self),
-                outputType: String(describing: NewOutput.self)
+                outputType: String(describing: NewOutput.self),
             ),
-            inner: self.erase()
+            inner: erase(),
         ))
     }
 
@@ -373,9 +373,9 @@ public extension ReflectiveGenerator where Operation == ReflectiveOperation {
             kind: .map(
                 forward: { try transform($0 as! Value) },
                 inputType: String(describing: Value.self),
-                outputType: String(describing: NewValue.self)
+                outputType: String(describing: NewValue.self),
             ),
-            inner: self.erase()
+            inner: erase(),
         ))
     }
 
@@ -401,9 +401,9 @@ public extension ReflectiveGenerator where Operation == ReflectiveOperation {
                 forward: { try transform($0 as! Value).erase() },
                 backward: nil,
                 inputType: String(describing: Value.self),
-                outputType: String(describing: NewValue.self)
+                outputType: String(describing: NewValue.self),
             ),
-            inner: self.erase()
+            inner: erase(),
         ))
     }
 

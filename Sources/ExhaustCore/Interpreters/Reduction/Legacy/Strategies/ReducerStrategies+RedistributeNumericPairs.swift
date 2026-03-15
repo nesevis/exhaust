@@ -90,65 +90,188 @@ extension ReducerStrategies {
                     let (idx1, _) = allNumericCandidates[lhs]
                     let (idx2, _) = allNumericCandidates[rhs]
 
-                        // Use current values (may have been updated by prior iterations)
-                        guard let fresh1 = current[idx1].value,
-                              let fresh2 = current[idx2].value else { continue }
+                    // Use current values (may have been updated by prior iterations)
+                    guard let fresh1 = current[idx1].value,
+                          let fresh2 = current[idx2].value else { continue }
 
-                        let bp1 = fresh1.choice.bitPattern64
-                        let target1 = fresh1.choice.reductionTarget(in: fresh1.isRangeExplicit ? fresh1.validRange : nil)
-                        let floatContext = makeFloatRedistributionContext(
+                    let bp1 = fresh1.choice.bitPattern64
+                    let target1 = fresh1.choice.reductionTarget(in: fresh1.isRangeExplicit ? fresh1.validRange : nil)
+                    let floatContext = makeFloatRedistributionContext(
+                        lhs: fresh1.choice,
+                        rhs: fresh2.choice,
+                        lhsTargetBitPattern: target1,
+                    )
+                    let mixedContext: MixedRedistributionContext? = floatContext == nil
+                        ? makeMixedRedistributionContext(
                             lhs: fresh1.choice,
                             rhs: fresh2.choice,
                             lhsTargetBitPattern: target1,
                         )
-                        let mixedContext: MixedRedistributionContext? = floatContext == nil
-                            ? makeMixedRedistributionContext(
+                        : nil
+
+                    let decrease1Upward: Bool
+                    let distance1: UInt64
+                    if let floatContext {
+                        decrease1Upward = floatContext.lhsMovesUpward
+                        distance1 = floatContext.distance
+                    } else if let mixedContext {
+                        decrease1Upward = mixedContext.lhsMovesUpward
+                        distance1 = mixedContext.distanceInSteps
+                    } else {
+                        guard fresh1.choice.tag == fresh2.choice.tag else { continue }
+                        guard bp1 != target1 else { continue }
+                        decrease1Upward = target1 > bp1
+                        distance1 = decrease1Upward
+                            ? target1 - bp1
+                            : bp1 - target1
+                    }
+                    guard distance1 > 0 else { continue }
+
+                    let semanticDistance2 = absDiff(
+                        fresh2.choice.shortlexKey,
+                        fresh2.choice.semanticSimplest.shortlexKey,
+                    )
+
+                    // Skip if node2 is already at its target — no point moving it away.
+                    guard semanticDistance2 > 0 else { continue }
+
+                    var lastProbe: ChoiceSequence?
+                    var lastProbeOutput: Output?
+                    var lastProbeEntry1: ChoiceSequenceValue?
+                    var lastProbeEntry2: ChoiceSequenceValue?
+                    var lastProbeNonSemanticCount = Int.max
+                    let beforePair = sortedPairKeys(fresh1.choice, fresh2.choice)
+
+                    _ = AdaptiveProbe.findInteger { (k: UInt64) -> Bool in
+                        if budgetExhausted {
+                            return false
+                        }
+                        guard k > 0 else { return true }
+                        guard k <= distance1 else { return false }
+
+                        guard let (newChoice1, newChoice2) = {
+                            if let mixedContext {
+                                return mixedRedistributedPairChoices(
+                                    lhs: fresh1.choice,
+                                    rhs: fresh2.choice,
+                                    delta: k,
+                                    context: mixedContext,
+                                )
+                            }
+                            return redistributedPairChoices(
                                 lhs: fresh1.choice,
                                 rhs: fresh2.choice,
-                                lhsTargetBitPattern: target1,
+                                delta: k,
+                                lhsMovesUpward: decrease1Upward,
+                                floatContext: floatContext,
                             )
-                            : nil
-
-                        let decrease1Upward: Bool
-                        let distance1: UInt64
-                        if let floatContext {
-                            decrease1Upward = floatContext.lhsMovesUpward
-                            distance1 = floatContext.distance
-                        } else if let mixedContext {
-                            decrease1Upward = mixedContext.lhsMovesUpward
-                            distance1 = mixedContext.distanceInSteps
-                        } else {
-                            guard fresh1.choice.tag == fresh2.choice.tag else { continue }
-                            guard bp1 != target1 else { continue }
-                            decrease1Upward = target1 > bp1
-                            distance1 = decrease1Upward
-                                ? target1 - bp1
-                                : bp1 - target1
+                        }() else {
+                            return false
                         }
-                        guard distance1 > 0 else { continue }
-
-                        let semanticDistance2 = absDiff(
-                            fresh2.choice.shortlexKey,
-                            fresh2.choice.semanticSimplest.shortlexKey,
-                        )
-
-                        // Skip if node2 is already at its target — no point moving it away.
-                        guard semanticDistance2 > 0 else { continue }
-
-                        var lastProbe: ChoiceSequence?
-                        var lastProbeOutput: Output?
-                        var lastProbeEntry1: ChoiceSequenceValue?
-                        var lastProbeEntry2: ChoiceSequenceValue?
-                        var lastProbeNonSemanticCount = Int.max
-                        let beforePair = sortedPairKeys(fresh1.choice, fresh2.choice)
-
-                        _ = AdaptiveProbe.findInteger { (k: UInt64) -> Bool in
-                            if budgetExhausted {
+                        if floatContext != nil || mixedContext != nil {
+                            if fresh1.isRangeExplicit, newChoice1.fits(in: fresh1.validRange) == false {
                                 return false
                             }
-                            guard k > 0 else { return true }
-                            guard k <= distance1 else { return false }
+                            if fresh2.isRangeExplicit, newChoice2.fits(in: fresh2.validRange) == false {
+                                return false
+                            }
+                        }
 
+                        // Do not range-gate here: recorded valid ranges can be stale after prior
+                        // structural/value edits. Let replay/materialization be the source of truth.
+                        let probeEntry1 = ChoiceSequenceValue.reduced(.init(
+                            choice: newChoice1,
+                            validRange: fresh1.validRange,
+                            isRangeExplicit: fresh1.isRangeExplicit,
+                        ))
+                        let probeEntry2 = ChoiceSequenceValue.value(.init(
+                            choice: newChoice2,
+                            validRange: fresh2.validRange,
+                            isRangeExplicit: fresh2.isRangeExplicit,
+                        ))
+                        let probeNonSemanticCount = semanticStats.nonSemanticCount(
+                            afterReplacing: (idx1, probeEntry1),
+                            and: (idx2, probeEntry2),
+                        )
+
+                        var probe = current
+                        probe[idx1] = probeEntry1
+                        probe[idx2] = probeEntry2
+                        var probeHash = ZobristHash.updating(currentHash, at: idx1, replacing: current[idx1], with: probeEntry1)
+                        probeHash = ZobristHash.updating(probeHash, at: idx2, replacing: current[idx2], with: probeEntry2)
+
+                        #if DEBUG
+                            assert(
+                                SequenceSemanticStats.fullNonSemanticCount(in: probe) == probeNonSemanticCount,
+                                "SequenceSemanticStats delta mismatch in redistributeNumericPairs",
+                            )
+                        #endif
+
+                        let afterPair = sortedPairKeys(newChoice1, newChoice2)
+                        let improvesStructure = probe.shortLexPrecedes(current)
+                            || probeNonSemanticCount < currentNonSemanticCount
+                            || afterPair.lexicographicallyPrecedes(beforePair)
+                        guard improvesStructure else { return false }
+
+                        guard rejectCache.contains(probe, zobristHash: probeHash) == false else {
+                            return false
+                        }
+                        guard budget.consume() else {
+                            budgetExhausted = true
+                            reportBudgetExhaustionIfNeeded()
+                            return false
+                        }
+                        guard let output = try? ReducerStrategies.materializeCandidate(gen, tree: tree, candidate: probe, bindIndex: bindIndex, mutatedIndices: [idx1, idx2], maximizeBoundRegionIndices: maximizeBoundRegionIndices) else {
+                            rejectCache.insert(probe, zobristHash: probeHash)
+                            return false
+                        }
+                        let success = property(output) == false
+                        if success {
+                            // Record only probes that actually change the pair multiset.
+                            // This avoids committing pure cross-container swaps like (-1, -32768) <-> (-32768, -1),
+                            // while still allowing the monotone search to continue probing larger k.
+                            if afterPair != beforePair {
+                                lastProbe = probe
+                                lastProbeOutput = output
+                                lastProbeEntry1 = probeEntry1
+                                lastProbeEntry2 = probeEntry2
+                                lastProbeNonSemanticCount = probeNonSemanticCount
+                            }
+                        } else {
+                            rejectCache.insert(probe, zobristHash: probeHash)
+                        }
+                        return success
+                    }
+
+                    if budgetExhausted {
+                        break candidateLoop
+                    }
+
+                    if lastProbe == nil {
+                        // Non-monotonic fallback: useful redistributions can fail for small k
+                        // but succeed for larger k (e.g. wrapping from small positive -> Int16.min).
+                        var fallbackKs = [distance1]
+                        if distance1 > 1 { fallbackKs.append(distance1 - 1) }
+                        fallbackKs.append(max(1, distance1 / 2))
+                        fallbackKs.append(max(1, distance1 / 4))
+                        if floatContext == nil, mixedContext == nil,
+                           let wrapK = wrappingBoundaryDelta(for: fresh2.choice.tag, bitPattern: fresh2.choice.bitPattern64),
+                           wrapK > 0,
+                           wrapK <= distance1
+                        {
+                            fallbackKs.append(wrapK)
+                            if wrapK > 1 { fallbackKs.append(wrapK - 1) }
+                        }
+                        let uniqueFallbackKs = Array(Set(fallbackKs))
+                            .filter { $0 > 0 && $0 <= distance1 }
+                            .sorted(by: >)
+
+                        var bestFallbackProbe: ChoiceSequence?
+                        var bestFallbackOutput: Output?
+                        var bestFallbackEntry1: ChoiceSequenceValue?
+                        var bestFallbackEntry2: ChoiceSequenceValue?
+                        var bestFallbackNonSemantic = Int.max
+                        for k in uniqueFallbackKs {
                             guard let (newChoice1, newChoice2) = {
                                 if let mixedContext {
                                     return mixedRedistributedPairChoices(
@@ -166,19 +289,17 @@ extension ReducerStrategies {
                                     floatContext: floatContext,
                                 )
                             }() else {
-                                return false
+                                continue
                             }
                             if floatContext != nil || mixedContext != nil {
                                 if fresh1.isRangeExplicit, newChoice1.fits(in: fresh1.validRange) == false {
-                                    return false
+                                    continue
                                 }
                                 if fresh2.isRangeExplicit, newChoice2.fits(in: fresh2.validRange) == false {
-                                    return false
+                                    continue
                                 }
                             }
 
-                            // Do not range-gate here: recorded valid ranges can be stale after prior
-                            // structural/value edits. Let replay/materialization be the source of truth.
                             let probeEntry1 = ChoiceSequenceValue.reduced(.init(
                                 choice: newChoice1,
                                 validRange: fresh1.validRange,
@@ -189,10 +310,6 @@ extension ReducerStrategies {
                                 validRange: fresh2.validRange,
                                 isRangeExplicit: fresh2.isRangeExplicit,
                             ))
-                            let probeNonSemanticCount = semanticStats.nonSemanticCount(
-                                afterReplacing: (idx1, probeEntry1),
-                                and: (idx2, probeEntry2),
-                            )
 
                             var probe = current
                             probe[idx1] = probeEntry1
@@ -200,199 +317,82 @@ extension ReducerStrategies {
                             var probeHash = ZobristHash.updating(currentHash, at: idx1, replacing: current[idx1], with: probeEntry1)
                             probeHash = ZobristHash.updating(probeHash, at: idx2, replacing: current[idx2], with: probeEntry2)
 
+                            let probeNonSemanticCount = semanticStats.nonSemanticCount(
+                                afterReplacing: (idx1, probeEntry1),
+                                and: (idx2, probeEntry2),
+                            )
                             #if DEBUG
                                 assert(
                                     SequenceSemanticStats.fullNonSemanticCount(in: probe) == probeNonSemanticCount,
-                                    "SequenceSemanticStats delta mismatch in redistributeNumericPairs",
+                                    "SequenceSemanticStats delta mismatch in redistributeNumericPairs fallback",
                                 )
                             #endif
-
                             let afterPair = sortedPairKeys(newChoice1, newChoice2)
                             let improvesStructure = probe.shortLexPrecedes(current)
                                 || probeNonSemanticCount < currentNonSemanticCount
                                 || afterPair.lexicographicallyPrecedes(beforePair)
-                            guard improvesStructure else { return false }
-
-                            guard rejectCache.contains(probe, zobristHash: probeHash) == false else {
-                                return false
-                            }
+                            guard improvesStructure else { continue }
+                            guard afterPair != beforePair else { continue }
+                            guard rejectCache.contains(probe, zobristHash: probeHash) == false else { continue }
                             guard budget.consume() else {
                                 budgetExhausted = true
                                 reportBudgetExhaustionIfNeeded()
-                                return false
+                                break
                             }
                             guard let output = try? ReducerStrategies.materializeCandidate(gen, tree: tree, candidate: probe, bindIndex: bindIndex, mutatedIndices: [idx1, idx2], maximizeBoundRegionIndices: maximizeBoundRegionIndices) else {
                                 rejectCache.insert(probe, zobristHash: probeHash)
-                                return false
+                                continue
                             }
-                            let success = property(output) == false
-                            if success {
-                                // Record only probes that actually change the pair multiset.
-                                // This avoids committing pure cross-container swaps like (-1, -32768) <-> (-32768, -1),
-                                // while still allowing the monotone search to continue probing larger k.
-                                if afterPair != beforePair {
-                                    lastProbe = probe
-                                    lastProbeOutput = output
-                                    lastProbeEntry1 = probeEntry1
-                                    lastProbeEntry2 = probeEntry2
-                                    lastProbeNonSemanticCount = probeNonSemanticCount
-                                }
-                            } else {
+                            guard property(output) == false else {
                                 rejectCache.insert(probe, zobristHash: probeHash)
+                                continue
                             }
-                            return success
-                        }
 
+                            if bestFallbackProbe == nil
+                                || probeNonSemanticCount < bestFallbackNonSemantic
+                                || (probeNonSemanticCount == bestFallbackNonSemantic
+                                    && probe.shortLexPrecedes(bestFallbackProbe!))
+                            {
+                                bestFallbackProbe = probe
+                                bestFallbackOutput = output
+                                bestFallbackEntry1 = probeEntry1
+                                bestFallbackEntry2 = probeEntry2
+                                bestFallbackNonSemantic = probeNonSemanticCount
+                            }
+                        }
                         if budgetExhausted {
                             break candidateLoop
                         }
 
-                        if lastProbe == nil {
-                            // Non-monotonic fallback: useful redistributions can fail for small k
-                            // but succeed for larger k (e.g. wrapping from small positive -> Int16.min).
-                            var fallbackKs = [distance1]
-                            if distance1 > 1 { fallbackKs.append(distance1 - 1) }
-                            fallbackKs.append(max(1, distance1 / 2))
-                            fallbackKs.append(max(1, distance1 / 4))
-                            if floatContext == nil, mixedContext == nil,
-                               let wrapK = wrappingBoundaryDelta(for: fresh2.choice.tag, bitPattern: fresh2.choice.bitPattern64),
-                               wrapK > 0,
-                               wrapK <= distance1
-                            {
-                                fallbackKs.append(wrapK)
-                                if wrapK > 1 { fallbackKs.append(wrapK - 1) }
-                            }
-                            let uniqueFallbackKs = Array(Set(fallbackKs))
-                                .filter { $0 > 0 && $0 <= distance1 }
-                                .sorted(by: >)
-
-                            var bestFallbackProbe: ChoiceSequence?
-                            var bestFallbackOutput: Output?
-                            var bestFallbackEntry1: ChoiceSequenceValue?
-                            var bestFallbackEntry2: ChoiceSequenceValue?
-                            var bestFallbackNonSemantic = Int.max
-                            for k in uniqueFallbackKs {
-                                guard let (newChoice1, newChoice2) = {
-                                    if let mixedContext {
-                                        return mixedRedistributedPairChoices(
-                                            lhs: fresh1.choice,
-                                            rhs: fresh2.choice,
-                                            delta: k,
-                                            context: mixedContext,
-                                        )
-                                    }
-                                    return redistributedPairChoices(
-                                        lhs: fresh1.choice,
-                                        rhs: fresh2.choice,
-                                        delta: k,
-                                        lhsMovesUpward: decrease1Upward,
-                                        floatContext: floatContext,
-                                    )
-                                }() else {
-                                    continue
-                                }
-                                if floatContext != nil || mixedContext != nil {
-                                    if fresh1.isRangeExplicit, newChoice1.fits(in: fresh1.validRange) == false {
-                                        continue
-                                    }
-                                    if fresh2.isRangeExplicit, newChoice2.fits(in: fresh2.validRange) == false {
-                                        continue
-                                    }
-                                }
-
-                                let probeEntry1 = ChoiceSequenceValue.reduced(.init(
-                                    choice: newChoice1,
-                                    validRange: fresh1.validRange,
-                                    isRangeExplicit: fresh1.isRangeExplicit,
-                                ))
-                                let probeEntry2 = ChoiceSequenceValue.value(.init(
-                                    choice: newChoice2,
-                                    validRange: fresh2.validRange,
-                                    isRangeExplicit: fresh2.isRangeExplicit,
-                                ))
-
-                                var probe = current
-                                probe[idx1] = probeEntry1
-                                probe[idx2] = probeEntry2
-                                var probeHash = ZobristHash.updating(currentHash, at: idx1, replacing: current[idx1], with: probeEntry1)
-                                probeHash = ZobristHash.updating(probeHash, at: idx2, replacing: current[idx2], with: probeEntry2)
-
-                                let probeNonSemanticCount = semanticStats.nonSemanticCount(
-                                    afterReplacing: (idx1, probeEntry1),
-                                    and: (idx2, probeEntry2),
-                                )
-                                #if DEBUG
-                                    assert(
-                                        SequenceSemanticStats.fullNonSemanticCount(in: probe) == probeNonSemanticCount,
-                                        "SequenceSemanticStats delta mismatch in redistributeNumericPairs fallback",
-                                    )
-                                #endif
-                                let afterPair = sortedPairKeys(newChoice1, newChoice2)
-                                let improvesStructure = probe.shortLexPrecedes(current)
-                                    || probeNonSemanticCount < currentNonSemanticCount
-                                    || afterPair.lexicographicallyPrecedes(beforePair)
-                                guard improvesStructure else { continue }
-                                guard afterPair != beforePair else { continue }
-                                guard rejectCache.contains(probe, zobristHash: probeHash) == false else { continue }
-                                guard budget.consume() else {
-                                    budgetExhausted = true
-                                    reportBudgetExhaustionIfNeeded()
-                                    break
-                                }
-                                guard let output = try? ReducerStrategies.materializeCandidate(gen, tree: tree, candidate: probe, bindIndex: bindIndex, mutatedIndices: [idx1, idx2], maximizeBoundRegionIndices: maximizeBoundRegionIndices) else {
-                                    rejectCache.insert(probe, zobristHash: probeHash)
-                                    continue
-                                }
-                                guard property(output) == false else {
-                                    rejectCache.insert(probe, zobristHash: probeHash)
-                                    continue
-                                }
-
-                                if bestFallbackProbe == nil
-                                    || probeNonSemanticCount < bestFallbackNonSemantic
-                                    || (probeNonSemanticCount == bestFallbackNonSemantic
-                                        && probe.shortLexPrecedes(bestFallbackProbe!))
-                                {
-                                    bestFallbackProbe = probe
-                                    bestFallbackOutput = output
-                                    bestFallbackEntry1 = probeEntry1
-                                    bestFallbackEntry2 = probeEntry2
-                                    bestFallbackNonSemantic = probeNonSemanticCount
-                                }
-                            }
-                            if budgetExhausted {
-                                break candidateLoop
-                            }
-
-                            if let bestFallbackProbe, let bestFallbackOutput {
-                                lastProbe = bestFallbackProbe
-                                lastProbeOutput = bestFallbackOutput
-                                lastProbeEntry1 = bestFallbackEntry1
-                                lastProbeEntry2 = bestFallbackEntry2
-                                lastProbeNonSemanticCount = bestFallbackNonSemantic
-                            }
+                        if let bestFallbackProbe, let bestFallbackOutput {
+                            lastProbe = bestFallbackProbe
+                            lastProbeOutput = bestFallbackOutput
+                            lastProbeEntry1 = bestFallbackEntry1
+                            lastProbeEntry2 = bestFallbackEntry2
+                            lastProbeNonSemanticCount = bestFallbackNonSemantic
                         }
+                    }
 
-                        if let probe = lastProbe,
-                           let output = lastProbeOutput,
-                           let probeEntry1 = lastProbeEntry1,
-                           let probeEntry2 = lastProbeEntry2
-                        {
-                            let afterPairSorted = sortedPairKeys(probeEntry1.value!.choice, probeEntry2.value!.choice)
-                            guard probe.shortLexPrecedes(current)
-                                || lastProbeNonSemanticCount < currentNonSemanticCount
-                                || afterPairSorted.lexicographicallyPrecedes(beforePair)
-                            else { continue }
-                            current = probe
-                            currentHash = ZobristHash.hash(of: current)
-                            latestOutput = output
-                            progress = true
-                            semanticStats.applyReplacements(
-                                (idx1, probeEntry1),
-                                (idx2, probeEntry2),
-                            )
-                            currentNonSemanticCount = semanticStats.nonSemanticCount
-                        }
+                    if let probe = lastProbe,
+                       let output = lastProbeOutput,
+                       let probeEntry1 = lastProbeEntry1,
+                       let probeEntry2 = lastProbeEntry2
+                    {
+                        let afterPairSorted = sortedPairKeys(probeEntry1.value!.choice, probeEntry2.value!.choice)
+                        guard probe.shortLexPrecedes(current)
+                            || lastProbeNonSemanticCount < currentNonSemanticCount
+                            || afterPairSorted.lexicographicallyPrecedes(beforePair)
+                        else { continue }
+                        current = probe
+                        currentHash = ZobristHash.hash(of: current)
+                        latestOutput = output
+                        progress = true
+                        semanticStats.applyReplacements(
+                            (idx1, probeEntry1),
+                            (idx2, probeEntry2),
+                        )
+                        currentNonSemanticCount = semanticStats.nonSemanticCount
+                    }
                 }
             }
         }
@@ -638,7 +638,6 @@ extension ReducerStrategies {
             return narrowed
         }
     }
-
 
     private static func scaledNumerator(
         _ ratio: (numerator: Int64, denominator: UInt64),

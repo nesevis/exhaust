@@ -14,7 +14,9 @@ struct InlineBuffer<Element> {
                           Element, Element, Element, Element)
     private(set) var count: Int
 
-    static var capacity: Int { 8 }
+    static var capacity: Int {
+        8
+    }
 
     init(repeating value: Element) {
         storage = (value, value, value, value, value, value, value, value)
@@ -65,5 +67,7 @@ struct InlineBuffer<Element> {
         return self[count &- 1]
     }
 
-    var isEmpty: Bool { count == 0 } // swiftlint:disable:this empty_count
+    var isEmpty: Bool {
+        count == 0
+    } // swiftlint:disable:this empty_count
 }

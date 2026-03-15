@@ -3,9 +3,9 @@
 //  Exhaust
 //
 
+import ExhaustCore
 import Foundation
 import Testing
-import ExhaustCore
 
 // MARK: - Boundary Domain Analysis
 
@@ -351,7 +351,7 @@ struct DateBoundaryValueTests {
         // Range spanning the reference date (0 seconds since ref)
         let lower: Int64 = -86400
         let interval: Int64 = 1
-        let numSteps: Int64 = 172800 // 2 * 86400
+        let numSteps: Int64 = 172_800 // 2 * 86400
 
         let values = BoundaryDomainAnalysis.computeBoundaryValues(
             min: Int64(0).bitPattern64,
@@ -369,7 +369,7 @@ struct DateBoundaryValueTests {
         let unixEpoch: Int64 = -978_307_200
         let lower = unixEpoch - 86400
         let interval: Int64 = 1
-        let numSteps: Int64 = 172800 // 2 * 86400
+        let numSteps: Int64 = 172_800 // 2 * 86400
 
         let values = BoundaryDomainAnalysis.computeBoundaryValues(
             min: Int64(0).bitPattern64,

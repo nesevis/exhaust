@@ -1,6 +1,6 @@
-import Testing
 import Exhaust
 import ExhaustCore
+import Testing
 
 // MARK: - Tests
 
@@ -12,8 +12,8 @@ struct BuggyCounterTests {
             #exhaust(
                 BuggyCounterSpec.self,
                 commandLimit: 10,
-                .suppressIssueReporting
-            )
+                .suppressIssueReporting,
+            ),
         )
         print()
         // The trace should end with a failing step
@@ -32,8 +32,8 @@ struct BuggyCounterTests {
             #exhaust(
                 BuggyCounterSpec.self,
                 commandLimit: 10,
-                .suppressIssueReporting
-            )
+                .suppressIssueReporting,
+            ),
         )
 
         // Every step should have a 1-based index

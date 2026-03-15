@@ -7,8 +7,8 @@
 //  them, merging adjacent inner sequences (e.g. [[V][V][V]] → [[VVV]]).
 //
 
-import Testing
 import ExhaustCore
+import Testing
 
 // MARK: - Helpers
 

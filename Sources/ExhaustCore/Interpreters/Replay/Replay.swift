@@ -112,7 +112,6 @@ extension Interpreters {
             return inner as? Output
         case let .classify(gen, _, _), let .unique(gen, _, _):
             return try replayWithChoicesHelper(gen, choices: &choices) as? Output
-
         case let .transform(kind, inner):
             let result: Any
             switch kind {
@@ -433,7 +432,6 @@ extension Interpreters {
             return inner as? Output
         case let .classify(gen, _, _), let .unique(gen, _, _):
             return try replayRecursive(gen, with: script) as? Output
-
         case let .transform(kind, inner):
             let result: Any
             switch kind {

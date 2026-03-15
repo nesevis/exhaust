@@ -276,13 +276,13 @@ extension BoundaryParameter {
     var tag: TypeTag {
         switch kind {
         case let .chooseBits(_, tag), let .finiteChooseBits(_, tag):
-            return tag
+            tag
         case let .sequenceElement(_, _, tag):
-            return tag
+            tag
         case .sequenceLength:
-            return .uint64
+            .uint64
         case .pick:
-            return .uint64
+            .uint64
         }
     }
 }

@@ -63,7 +63,7 @@ public extension Gen {
         )
         // Lift the operation. The continuation will decode the `[Any]` result.
         return .impure(operation: sequenceOperation) { result in
-            return .pure(result as! [Output])
+            .pure(result as! [Output])
         }
     }
 
@@ -321,7 +321,7 @@ public extension Gen {
         var offsetToElement: [Int: AnyCollection.Element] = [:]
         offsetToElement.reserveCapacity(collection.count)
         elementToOffset.reserveCapacity(collection.count)
-        
+
         for (offset, element) in collection.enumerated() {
             offsetToElement[offset] = element
             // Keep only the first occurrence for backward mapping
@@ -336,4 +336,3 @@ public extension Gen {
         )
     }
 }
-

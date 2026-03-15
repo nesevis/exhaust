@@ -5,10 +5,10 @@
 //  Created by Chris Kolbu on 11/2/2026.
 //
 
+import ExhaustCore
 import Foundation
 import Testing
 @testable import Exhaust
-import ExhaustCore
 
 @MainActor
 @Suite("Shrinking Challenge: Coupling")
@@ -45,8 +45,8 @@ struct CouplingShrinkingChallenge {
                 Self.gen,
                 .suppressIssueReporting,
                 .useBonsaiReducer,
-                property: Self.property
-            )
+                property: Self.property,
+            ),
         )
         #expect(value.count == 2)
         #expect(value == [1, 0])

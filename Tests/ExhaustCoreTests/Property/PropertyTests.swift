@@ -10,9 +10,9 @@
 //  .filter and .optional() tests noted where they use Exhaust-only features.
 //
 
+import ExhaustCore
 import Foundation
 import Testing
-import ExhaustCore
 
 // MARK: - Roundtrip Properties
 

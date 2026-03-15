@@ -25,7 +25,7 @@ struct DeletionShrinkingChallenge {
      The expected smallest falsified sample is ([0, 0], 0).
      */
     @Test("Deletion, Full")
-    func deletionFull() throws {
+    func deletionFull() {
         let numberGen = #gen(.int(in: 0 ... 20))
         let gen = #gen(numberGen.array(length: 2 ... 20), numberGen)
             .filter { $0.contains($1) }
@@ -38,12 +38,12 @@ struct DeletionShrinkingChallenge {
             xs.remove(at: index)
             return xs.contains(x) == false
         }
-        
+
         let output = #exhaust(
             gen,
             .suppressIssueReporting,
             .useBonsaiReducer,
-            property: property
+            property: property,
         )
 
         #expect(output?.0 == [0, 0])

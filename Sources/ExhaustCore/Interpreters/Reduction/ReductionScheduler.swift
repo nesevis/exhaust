@@ -6,7 +6,6 @@
 ///
 /// Encoder ordering within each leg uses move-to-front: when an encoder succeeds, it is promoted to the front of its leg's order for subsequent iterations. This adapts to generator structure without parameters — productive encoders are tried first, reducing wasted materializations on consistently fruitless encoders.
 enum ReductionScheduler {
-
     // MARK: - Encoder Ordering
 
     /// Value minimization and reordering encoder slots, used by the snip and train legs.
@@ -55,7 +54,7 @@ enum ReductionScheduler {
         preCovariantSequence: ChoiceSequence,
         postCovariantSequence: ChoiceSequence,
         preBindIndex: BindSpanIndex,
-        postBindIndex: BindSpanIndex
+        postBindIndex: BindSpanIndex,
     ) -> ChoiceSequence? {
         guard preBindIndex.regions.count == postBindIndex.regions.count else { return nil }
 
@@ -142,7 +141,7 @@ enum ReductionScheduler {
         gen: ReflectiveGenerator<Output>,
         initialTree: ChoiceTree,
         config: Interpreters.BonsaiReducerConfiguration,
-        property: (Output) -> Bool
+        property: (Output) -> Bool,
     ) throws -> (ChoiceSequence, Output)? {
         let isInstrumented = ExhaustLog.isEnabled(.debug, for: .reducer)
 
@@ -181,7 +180,7 @@ enum ReductionScheduler {
 
         var reduceFloatEncoder = ReduceFloatEncoder()
         var deleteAlignedWindowsEncoder = DeleteAlignedWindowsEncoder(
-            beamTuning: config.alignedDeletionBeamSearchTuning
+            beamTuning: config.alignedDeletionBeamSearchTuning,
         )
         var tandemEncoder = TandemReductionEncoder()
         var redistributeEncoder = CrossStageRedistributeEncoder()
@@ -216,8 +215,8 @@ enum ReductionScheduler {
                     let seed = ZobristHash.hash(of: sequence)
                     if case let .success(reDerivedOutput, reDerivedSequence, reDerivedTree) =
                         GuidedMaterializer.materialize(gen, prefix: sequence, seed: seed, fallbackTree: tree),
-                       property(reDerivedOutput) == false,
-                       sequence.shortLexPrecedes(reDerivedSequence) == false
+                        property(reDerivedOutput) == false,
+                        sequence.shortLexPrecedes(reDerivedSequence) == false
                     {
                         sequence = reDerivedSequence
                         tree = reDerivedTree
@@ -242,7 +241,7 @@ enum ReductionScheduler {
             targets: TargetSet,
             structureChanged: Bool,
             cache: inout ReducerCache,
-            budget: inout LegBudget
+            budget: inout LegBudget,
         ) throws -> Bool {
             guard budget.isExhausted == false else { return false }
             if lattice.shouldSkip(encoder.name, phase: encoder.phase) { return false }
@@ -257,7 +256,7 @@ enum ReductionScheduler {
                     gen: gen,
                     tree: tree,
                     originalSequence: sequence,
-                    property: property
+                    property: property,
                 ) {
                     budget.recordMaterialization(accepted: true)
                     accept(result, structureChanged: structureChanged)
@@ -300,8 +299,8 @@ enum ReductionScheduler {
             decoder: SequenceDecoder,
             targets: TargetSet,
             structureChanged: Bool,
-            cache: inout ReducerCache,
-            budget: inout LegBudget
+            cache _: inout ReducerCache,
+            budget: inout LegBudget,
         ) throws -> Bool {
             guard budget.isExhausted == false else { return false }
             if lattice.shouldSkip(encoder.name, phase: encoder.phase) { return false }
@@ -316,7 +315,7 @@ enum ReductionScheduler {
                 probes += 1
                 if let result = try decoder.decode(
                     candidate: probe, gen: gen, tree: tree,
-                    originalSequence: sequence, property: property
+                    originalSequence: sequence, property: property,
                 ) {
                     budget.recordMaterialization(accepted: true)
                     accept(result, structureChanged: structureChanged)
@@ -417,7 +416,7 @@ enum ReductionScheduler {
                 ExhaustLog.debug(
                     category: .reducer,
                     event: "vcycle_start",
-                    metadata: ["cycle": "\(cycles)", "stall_budget": "\(stallBudget)", "max_bind_depth": "\(maxBindDepth)", "cycle_budget": "\(remaining)"]
+                    metadata: ["cycle": "\(cycles)", "stall_budget": "\(stallBudget)", "max_bind_depth": "\(maxBindDepth)", "cycle_budget": "\(remaining)"],
                 )
             }
 
@@ -530,20 +529,19 @@ enum ReductionScheduler {
                         guard legBudget.isExhausted == false else { break }
                         // Targets are re-extracted per slot via SpanCache (invalidated by
                         // accept(structureChanged: true) between encoder calls).
-                        let accepted: Bool
-                        switch slot {
+                        let accepted: Bool = switch slot {
                         case .containerSpans:
-                            accepted = try runAdaptive(&deleteContainerSpans, decoder: depthDecoder, targets: .spans(spanCache.deletionTargets(category: slot.spanCategory, depth: depth, from: sequence, bindIndex: bindIndex)), structureChanged: true, cache: &rejectCache, budget: &legBudget)
+                            try runAdaptive(&deleteContainerSpans, decoder: depthDecoder, targets: .spans(spanCache.deletionTargets(category: slot.spanCategory, depth: depth, from: sequence, bindIndex: bindIndex)), structureChanged: true, cache: &rejectCache, budget: &legBudget)
                         case .sequenceElements:
-                            accepted = try runAdaptive(&deleteSequenceElements, decoder: depthDecoder, targets: .spans(spanCache.deletionTargets(category: slot.spanCategory, depth: depth, from: sequence, bindIndex: bindIndex)), structureChanged: true, cache: &rejectCache, budget: &legBudget)
+                            try runAdaptive(&deleteSequenceElements, decoder: depthDecoder, targets: .spans(spanCache.deletionTargets(category: slot.spanCategory, depth: depth, from: sequence, bindIndex: bindIndex)), structureChanged: true, cache: &rejectCache, budget: &legBudget)
                         case .sequenceBoundaries:
-                            accepted = try runAdaptive(&deleteSequenceBoundaries, decoder: depthDecoder, targets: .spans(spanCache.deletionTargets(category: slot.spanCategory, depth: depth, from: sequence, bindIndex: bindIndex)), structureChanged: true, cache: &rejectCache, budget: &legBudget)
+                            try runAdaptive(&deleteSequenceBoundaries, decoder: depthDecoder, targets: .spans(spanCache.deletionTargets(category: slot.spanCategory, depth: depth, from: sequence, bindIndex: bindIndex)), structureChanged: true, cache: &rejectCache, budget: &legBudget)
                         case .freeStandingValues:
-                            accepted = try runAdaptive(&deleteFreeStandingValues, decoder: depthDecoder, targets: .spans(spanCache.deletionTargets(category: slot.spanCategory, depth: depth, from: sequence, bindIndex: bindIndex)), structureChanged: true, cache: &rejectCache, budget: &legBudget)
+                            try runAdaptive(&deleteFreeStandingValues, decoder: depthDecoder, targets: .spans(spanCache.deletionTargets(category: slot.spanCategory, depth: depth, from: sequence, bindIndex: bindIndex)), structureChanged: true, cache: &rejectCache, budget: &legBudget)
                         case .alignedWindows:
-                            accepted = try runAdaptive(&deleteAlignedWindowsEncoder, decoder: depthDecoder, targets: .spans(spanCache.deletionTargets(category: slot.spanCategory, depth: depth, from: sequence, bindIndex: bindIndex)), structureChanged: true, cache: &rejectCache, budget: &legBudget)
+                            try runAdaptive(&deleteAlignedWindowsEncoder, decoder: depthDecoder, targets: .spans(spanCache.deletionTargets(category: slot.spanCategory, depth: depth, from: sequence, bindIndex: bindIndex)), structureChanged: true, cache: &rejectCache, budget: &legBudget)
                         case .speculativeDelete:
-                            accepted = try runAdaptive(&speculativeDelete, decoder: depthDecoder, targets: .spans(spanCache.deletionTargets(category: slot.spanCategory, depth: depth, from: sequence, bindIndex: bindIndex)), structureChanged: true, cache: &rejectCache, budget: &legBudget)
+                            try runAdaptive(&speculativeDelete, decoder: depthDecoder, targets: .spans(spanCache.deletionTargets(category: slot.spanCategory, depth: depth, from: sequence, bindIndex: bindIndex)), structureChanged: true, cache: &rejectCache, budget: &legBudget)
                         }
                         if accepted {
                             deletionAccepted += 1
@@ -643,13 +641,13 @@ enum ReductionScheduler {
                         preCovariantSequence: preCovariantSequence,
                         postCovariantSequence: sequence,
                         preBindIndex: preBi,
-                        postBindIndex: postBi
+                        postBindIndex: postBi,
                     ) {
                         let seed = ZobristHash.hash(of: mergedSeq)
                         if case let .success(mergedOutput, mergedFinalSeq, mergedTree) =
                             GuidedMaterializer.materialize(gen, prefix: mergedSeq, seed: seed, fallbackTree: preCovariantTree),
-                           property(mergedOutput) == false,
-                           mergedFinalSeq.shortLexPrecedes(sequence)
+                            property(mergedOutput) == false,
+                            mergedFinalSeq.shortLexPrecedes(sequence)
                         {
                             let mergeResult = ShrinkResult(sequence: mergedFinalSeq, tree: mergedTree, output: mergedOutput, evaluations: 1)
                             accept(mergeResult, structureChanged: true)
@@ -666,7 +664,7 @@ enum ReductionScheduler {
             // ── Cross-cutting: Redistribution ──
             let redistributionTriggered =
                 (contravariantAccepted == 0 && deletionAccepted == 0)
-                || cyclesSinceRedistribution >= redistributionDeferralCap
+                    || cyclesSinceRedistribution >= redistributionDeferralCap
 
             if redistributionTriggered {
                 cyclesSinceRedistribution = 0
@@ -681,33 +679,32 @@ enum ReductionScheduler {
                 // where the cross-stage encoder cannot make progress.
                 if hasBind, let bi = bindIndex, bi.regions.count >= 2 {
                     let regionPairs = BindAwareRedistributeEncoder.buildPlans(
-                        from: sequence, bindIndex: bi
+                        from: sequence, bindIndex: bi,
                     )
                     for plan in regionPairs {
                         guard legBudget.isExhausted == false else { break }
                         let sinkRegionIndex = plan.sink.regionIndex
-                        let bindRedistDecoder: SequenceDecoder
-                        if config.useReductionMaterializer {
-                            bindRedistDecoder = .guidedFresh(
+                        let bindRedistDecoder: SequenceDecoder = if config.useReductionMaterializer {
+                            .guidedFresh(
                                 fallbackTree: fallbackTree ?? tree,
-                                maximizeBoundRegionIndices: Set([sinkRegionIndex])
+                                maximizeBoundRegionIndices: Set([sinkRegionIndex]),
                             )
                         } else {
-                            bindRedistDecoder = .guided(
+                            .guided(
                                 fallbackTree: fallbackTree ?? tree,
                                 strictness: .normal,
-                                maximizeBoundRegionIndices: Set([sinkRegionIndex])
+                                maximizeBoundRegionIndices: Set([sinkRegionIndex]),
                             )
                         }
                         bindAwareRedistributeEncoder.startPlan(
-                            sequence: sequence, plan: plan
+                            sequence: sequence, plan: plan,
                         )
                         var lastAccepted = false
                         while let probe = bindAwareRedistributeEncoder.nextProbe(lastAccepted: lastAccepted) {
                             guard legBudget.isExhausted == false else { break }
                             if let result = try bindRedistDecoder.decode(
                                 candidate: probe, gen: gen, tree: tree,
-                                originalSequence: sequence, property: property
+                                originalSequence: sequence, property: property,
                             ) {
                                 legBudget.recordMaterialization(accepted: true)
                                 accept(result, structureChanged: true)

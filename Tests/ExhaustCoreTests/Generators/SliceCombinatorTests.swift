@@ -1,5 +1,5 @@
-import Testing
 import ExhaustCore
+import Testing
 
 @Suite("Gen.slice Combinator")
 struct SliceCombinatorTests {

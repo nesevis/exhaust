@@ -7,8 +7,7 @@ public struct BinarySearchToTargetEncoder: AdaptiveEncoder {
     public let name = "binarySearchToTarget"
     public let phase = ReductionPhase.valueMinimization
 
-
-    public func estimatedCost(sequence: ChoiceSequence, bindIndex: BindSpanIndex?) -> Int? {
+    public func estimatedCost(sequence: ChoiceSequence, bindIndex _: BindSpanIndex?) -> Int? {
         let t = ChoiceSequence.extractAllValueSpans(from: sequence).count
         guard t > 0 else { return nil }
         return t * 64
@@ -36,9 +35,9 @@ public struct BinarySearchToTargetEncoder: AdaptiveEncoder {
     public mutating func start(sequence: ChoiceSequence, targets: TargetSet) {
         self.sequence = sequence
         self.targets = []
-        self.currentIndex = 0
-        self.needsFirstProbe = true
-        self.savedEntry = nil
+        currentIndex = 0
+        needsFirstProbe = true
+        savedEntry = nil
 
         guard case let .spans(spans) = targets else { return }
 
@@ -57,7 +56,7 @@ public struct BinarySearchToTargetEncoder: AdaptiveEncoder {
                 validRange: v.validRange,
                 isRangeExplicit: v.isRangeExplicit,
                 choiceTag: v.choice.tag,
-                stepper: BinarySearchStepper(lo: targetBP, hi: currentBP)
+                stepper: BinarySearchStepper(lo: targetBP, hi: currentBP),
             ))
             i += 1
         }
@@ -76,7 +75,7 @@ public struct BinarySearchToTargetEncoder: AdaptiveEncoder {
                     sequence[state.seqIdx] = .value(.init(
                         choice: ChoiceValue(state.choiceTag.makeConvertible(bitPattern64: state.stepper.bestAccepted), tag: state.choiceTag),
                         validRange: state.validRange,
-                        isRangeExplicit: state.isRangeExplicit
+                        isRangeExplicit: state.isRangeExplicit,
                     ))
                 } else if let saved = savedEntry {
                     sequence[state.seqIdx] = saved
@@ -93,7 +92,7 @@ public struct BinarySearchToTargetEncoder: AdaptiveEncoder {
                 sequence[state.seqIdx] = .value(.init(
                     choice: ChoiceValue(state.choiceTag.makeConvertible(bitPattern64: bp), tag: state.choiceTag),
                     validRange: state.validRange,
-                    isRangeExplicit: state.isRangeExplicit
+                    isRangeExplicit: state.isRangeExplicit,
                 ))
                 return sequence
             }

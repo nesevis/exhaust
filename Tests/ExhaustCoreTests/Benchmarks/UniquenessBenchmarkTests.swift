@@ -8,9 +8,9 @@
 //    AVL    — AVL tree, values 0...9, depth 5, predicate: valid BST + balanced
 //
 
+import ExhaustCore
 import Foundation
 import Testing
-import ExhaustCore
 
 // MARK: - Benchmark Problem
 

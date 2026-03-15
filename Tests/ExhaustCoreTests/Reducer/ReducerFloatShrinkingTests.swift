@@ -5,8 +5,8 @@
 //  Focused tests for floating-point shrinking behavior through Interpreters.reduce.
 //
 
-import Testing
 import ExhaustCore
+import Testing
 
 @Suite("Reducer Float Shrinking")
 struct ReducerFloatShrinkingTests {

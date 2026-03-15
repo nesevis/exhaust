@@ -5,9 +5,9 @@
 //  Tests for the offline generator tuning algorithm.
 //
 
+import ExhaustCore
 import Foundation
 import Testing
-import ExhaustCore
 
 @Suite("Choice Gradient Sampling")
 struct GeneratorTuningTests {

@@ -5,8 +5,8 @@
 //  Tests for promoteBranches and pivotBranches shrink passes.
 //
 
-import Testing
 import ExhaustCore
+import Testing
 
 // MARK: - Helpers
 

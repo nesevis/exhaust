@@ -7,9 +7,9 @@
 //  (0 for numbers, "a" for characters) using find_integer for batching.
 //
 
+import ExhaustCore
 import Foundation
 import Testing
-import ExhaustCore
 
 // MARK: - Helpers
 

@@ -7,8 +7,7 @@ public struct DeleteContainerSpansEncoder: AdaptiveEncoder {
     public let name = "deleteContainerSpans"
     public let phase = ReductionPhase.structuralDeletion
 
-
-    public func estimatedCost(sequence: ChoiceSequence, bindIndex: BindSpanIndex?) -> Int? {
+    public func estimatedCost(sequence: ChoiceSequence, bindIndex _: BindSpanIndex?) -> Int? {
         let t = ChoiceSequence.extractContainerSpans(from: sequence).count
         guard t > 0 else { return nil }
         return t * 10
@@ -24,9 +23,9 @@ public struct DeleteContainerSpansEncoder: AdaptiveEncoder {
         let filtered = spans.filter { span in
             switch sequence[span.range.lowerBound] {
             case .sequence(true, isLengthExplicit: _), .group(true), .bind(true):
-                return true
+                true
             default:
-                return false
+                false
             }
         }
         driver.start(sequence: sequence, sortedSpans: filtered)

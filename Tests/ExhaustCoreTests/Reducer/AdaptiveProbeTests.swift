@@ -5,8 +5,8 @@
 //  Created by Chris Kolbu on 12/2/2026.
 //
 
-import Testing
 import ExhaustCore
+import Testing
 
 // MARK: - findInteger
 

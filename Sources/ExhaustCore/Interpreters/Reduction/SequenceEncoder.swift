@@ -26,7 +26,7 @@ public protocol BatchEncoder: SequenceEncoderBase {
     /// Returns a lazy sequence of candidates. The scheduler filters through the reject cache and decodes each until one succeeds.
     func encode(
         sequence: ChoiceSequence,
-        targets: TargetSet
+        targets: TargetSet,
     ) -> any Sequence<ChoiceSequence>
 }
 
@@ -47,4 +47,3 @@ public protocol AdaptiveEncoder: SequenceEncoderBase {
     /// - Returns: The next candidate to try, or `nil` when converged.
     mutating func nextProbe(lastAccepted: Bool) -> ChoiceSequence?
 }
-

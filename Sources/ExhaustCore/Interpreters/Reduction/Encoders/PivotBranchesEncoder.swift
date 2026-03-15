@@ -7,10 +7,11 @@
 public struct PivotBranchesEncoder: BatchEncoder {
     public let name = "pivotBranches"
 
-    public var phase: ReductionPhase { .structuralDeletion }
+    public var phase: ReductionPhase {
+        .structuralDeletion
+    }
 
-
-    public func estimatedCost(sequence: ChoiceSequence, bindIndex: BindSpanIndex?) -> Int? {
+    public func estimatedCost(sequence: ChoiceSequence, bindIndex _: BindSpanIndex?) -> Int? {
         guard sequence.isEmpty == false else { return nil }
         return 10
     }
@@ -20,7 +21,7 @@ public struct PivotBranchesEncoder: BatchEncoder {
 
     public func encode(
         sequence: ChoiceSequence,
-        targets: TargetSet
+        targets _: TargetSet,
     ) -> any Sequence<ChoiceSequence> {
         guard let tree = currentTree else { return AnySequence([]) }
         let pickSites = extractPickSites(from: tree)

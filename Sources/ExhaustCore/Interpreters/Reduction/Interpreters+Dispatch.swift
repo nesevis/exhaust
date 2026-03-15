@@ -15,14 +15,14 @@ public extension Interpreters {
         property: (Output) -> Bool,
     ) throws -> (ChoiceSequence, Output)? {
         if useBonsai {
-            return try bonsaiReduce(
+            try bonsaiReduce(
                 gen: gen,
                 tree: tree,
                 config: .init(from: config),
                 property: property,
             )
         } else {
-            return try reduce(gen: gen, tree: tree, config: config, property: property)
+            try reduce(gen: gen, tree: tree, config: config, property: property)
         }
     }
 }

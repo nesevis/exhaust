@@ -12,15 +12,14 @@ import SwiftSyntaxMacros
 /// - A `checkInvariants()` method calling all `@Invariant` methods.
 /// - `modelDescription` and `sutDescription` computed properties.
 public struct ContractDeclarationMacro: MemberMacro, ExtensionMacro {
-
     // MARK: - ExtensionMacro
 
     public static func expansion(
-        of node: AttributeSyntax,
+        of _: AttributeSyntax,
         attachedTo declaration: some DeclGroupSyntax,
         providingExtensionsOf type: some TypeSyntaxProtocol,
-        conformingTo protocols: [TypeSyntax],
-        in context: some MacroExpansionContext,
+        conformingTo _: [TypeSyntax],
+        in _: some MacroExpansionContext,
     ) throws -> [ExtensionDeclSyntax] {
         let members = declaration.memberBlock.members
         let commands = extractCommands(from: members)
@@ -37,7 +36,7 @@ public struct ContractDeclarationMacro: MemberMacro, ExtensionMacro {
     public static func expansion(
         of node: AttributeSyntax,
         providingMembersOf declaration: some DeclGroupSyntax,
-        conformingTo protocols: [TypeSyntax],
+        conformingTo _: [TypeSyntax],
         in context: some MacroExpansionContext,
     ) throws -> [DeclSyntax] {
         let members = declaration.memberBlock.members
@@ -342,7 +341,7 @@ private func synthesizeCheckInvariants(invariants: [InvariantInfo], hasAnyAsync:
 
     var checks: [String] = []
     for inv in invariants {
-        if hasAnyAsync && inv.isAsync {
+        if hasAnyAsync, inv.isAsync {
             // Evaluate async invariant before passing to check() since @autoclosure doesn't support async.
             checks.append("        let \(inv.methodName)Result = await \(inv.methodName)()")
             checks.append("        try check(\(inv.methodName)Result, \"\(inv.methodName)\")")
@@ -404,7 +403,9 @@ enum ContractDiagnostic: String, DiagnosticMessage {
     case noSUT = "@Contract requires exactly one @SUT property"
     case sutTypeNotInferred = "@SUT property type could not be inferred — add an explicit type annotation"
 
-    var message: String { rawValue }
+    var message: String {
+        rawValue
+    }
 
     var diagnosticID: MessageID {
         MessageID(domain: "ExhaustMacros", id: "\(self)")

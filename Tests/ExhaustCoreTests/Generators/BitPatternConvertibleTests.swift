@@ -7,8 +7,8 @@
 //  NOTE: All #exhaust calls converted to exhaustCheck helper since #exhaust is Exhaust-only.
 //
 
-import Testing
 import ExhaustCore
+import Testing
 
 @Suite("BitPattern Conversion")
 struct BitPatternConvertibleTests {

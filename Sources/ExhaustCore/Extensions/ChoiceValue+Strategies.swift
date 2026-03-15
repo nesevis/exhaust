@@ -5,8 +5,8 @@
 //  Created by Chris Kolbu on 22/7/2025.
 //
 
-extension ChoiceValue {
-    public var bitPattern64: UInt64 {
+public extension ChoiceValue {
+    var bitPattern64: UInt64 {
         switch self {
         case let .unsigned(uint, _):
             uint
@@ -21,7 +21,7 @@ extension ChoiceValue {
     /// - Signed integers: zigzag encoding (0 → 0, -1 → 1, 1 → 2, -2 → 3, ...)
     /// - Floating point: absolute value's raw IEEE 754 bit pattern (0.0 → 0, ±small → small, ±large → large)
     /// - Unsigned integers: identical to `bitPattern64`
-    public var shortlexKey: UInt64 {
+    var shortlexKey: UInt64 {
         switch self {
         case let .unsigned(uint, _):
             uint
@@ -36,7 +36,7 @@ extension ChoiceValue {
     ///
     /// - For signed integers: zigzag decodes the key back to a signed value.
     /// - For unsigned integers and floats: the key equals the bit pattern.
-    public static func fromShortlexKey(_ key: UInt64, tag: TypeTag) -> ChoiceValue {
+    static func fromShortlexKey(_ key: UInt64, tag: TypeTag) -> ChoiceValue {
         switch tag {
         case .int, .int8, .int16, .int32, .int64, .date:
             // Zigzag decode: inverse of (value << 1) ^ (value >> 63)
@@ -59,7 +59,7 @@ extension ChoiceValue {
     /// The bit pattern of the ideal shrink target for this value type.
     /// - Unsigned: lowest valid bit pattern (smallest value)
     /// - Signed/Float: 0's bit pattern if in range, else the range bound closest to 0's bit pattern
-    public func reductionTarget(in range: ClosedRange<UInt64>?) -> UInt64 {
+    func reductionTarget(in range: ClosedRange<UInt64>?) -> UInt64 {
         let target = semanticSimplest.bitPattern64
         if fits(in: range, bitPattern: target) {
             return target
@@ -172,7 +172,7 @@ extension ChoiceValue {
         return range.contains(bitPattern)
     }
 
-    public var fundamentalValues: [ChoiceValue] {
+    var fundamentalValues: [ChoiceValue] {
         switch self {
         case .unsigned:
             let values: [UInt64] = [0, 1, 2]

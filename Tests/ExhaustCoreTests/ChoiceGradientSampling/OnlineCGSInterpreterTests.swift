@@ -5,9 +5,9 @@
 //  Tests for the online CGS interpreter.
 //
 
+import ExhaustCore
 import Foundation
 import Testing
-import ExhaustCore
 
 @Suite("Online CGS Interpreter")
 struct OnlineCGSInterpreterTests {
@@ -199,7 +199,6 @@ struct OnlineCGSInterpreterTests {
         #expect(lowCount > 0, "Should produce values from first branch")
         #expect(highCount > 0, "Should produce values from second branch")
     }
-
 }
 
 // MARK: - DerivativeContext Tests

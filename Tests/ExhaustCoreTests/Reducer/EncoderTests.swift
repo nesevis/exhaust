@@ -269,7 +269,7 @@ struct TandemReductionEncoderTests {
             elements: [
                 ChoiceTree.choice(.unsigned(5, .uint64), .init(validRange: 0 ... 100, isRangeExplicit: true)),
             ],
-            .init(validRange: 0 ... 10, isRangeExplicit: true)
+            .init(validRange: 0 ... 10, isRangeExplicit: true),
         )
         let seq = ChoiceSequence(tree)
         let groups = ChoiceSequence.extractSiblingGroups(from: seq)
@@ -288,7 +288,7 @@ struct TandemReductionEncoderTests {
                 ChoiceTree.choice(.unsigned(50, .uint64), .init(validRange: 0 ... 100, isRangeExplicit: true)),
                 ChoiceTree.choice(.unsigned(80, .uint64), .init(validRange: 0 ... 100, isRangeExplicit: true)),
             ],
-            .init(validRange: 0 ... 10, isRangeExplicit: true)
+            .init(validRange: 0 ... 10, isRangeExplicit: true),
         )
         let seq = ChoiceSequence(tree)
         let groups = ChoiceSequence.extractSiblingGroups(from: seq)
@@ -315,7 +315,7 @@ struct TandemReductionEncoderTests {
                 ChoiceTree.choice(.unsigned(50, .uint64), .init(validRange: 0 ... 100, isRangeExplicit: true)),
                 ChoiceTree.choice(.unsigned(80, .uint64), .init(validRange: 0 ... 100, isRangeExplicit: true)),
             ],
-            .init(validRange: 0 ... 10, isRangeExplicit: true)
+            .init(validRange: 0 ... 10, isRangeExplicit: true),
         )
         let seq = ChoiceSequence(tree)
         let groups = ChoiceSequence.extractSiblingGroups(from: seq)
@@ -348,7 +348,7 @@ struct TandemReductionEncoderTests {
                 ChoiceTree.choice(.unsigned(1000, .uint64), .init(validRange: 0 ... 10000, isRangeExplicit: true)),
                 ChoiceTree.choice(.unsigned(2000, .uint64), .init(validRange: 0 ... 10000, isRangeExplicit: true)),
             ],
-            .init(validRange: 0 ... 10, isRangeExplicit: true)
+            .init(validRange: 0 ... 10, isRangeExplicit: true),
         )
         let seq = ChoiceSequence(tree)
         let groups = ChoiceSequence.extractSiblingGroups(from: seq)
@@ -375,7 +375,7 @@ struct TandemReductionEncoderTests {
                 ChoiceTree.choice(.unsigned(0, .uint64), .init(validRange: 0 ... 100, isRangeExplicit: true)),
                 ChoiceTree.choice(.unsigned(0, .uint64), .init(validRange: 0 ... 100, isRangeExplicit: true)),
             ],
-            .init(validRange: 0 ... 10, isRangeExplicit: true)
+            .init(validRange: 0 ... 10, isRangeExplicit: true),
         )
         let seq = ChoiceSequence(tree)
         let groups = ChoiceSequence.extractSiblingGroups(from: seq)
@@ -397,7 +397,7 @@ struct TandemReductionEncoderTests {
                 ChoiceTree.choice(.unsigned(50, .uint64), .init(validRange: 0 ... 100, isRangeExplicit: true)),
                 ChoiceTree.choice(.unsigned(80, .uint32), .init(validRange: 0 ... 100, isRangeExplicit: true)),
             ],
-            .init(validRange: 0 ... 10, isRangeExplicit: true)
+            .init(validRange: 0 ... 10, isRangeExplicit: true),
         )
         let seq = ChoiceSequence(tree)
         let groups = ChoiceSequence.extractSiblingGroups(from: seq)
@@ -447,8 +447,8 @@ struct PromoteBranchesEncoderTests {
                     weight: 1,
                     id: 0,
                     branchIDs: [0, 1],
-                    choice: ChoiceTree.choice(.unsigned(5, .uint64), .init(validRange: 0 ... 100))
-                )
+                    choice: ChoiceTree.choice(.unsigned(5, .uint64), .init(validRange: 0 ... 100)),
+                ),
             ),
             ChoiceTree.branch(
                 siteID: 1,
@@ -458,7 +458,7 @@ struct PromoteBranchesEncoderTests {
                 choice: ChoiceTree.group([
                     ChoiceTree.choice(.unsigned(10, .uint64), .init(validRange: 0 ... 100)),
                     ChoiceTree.choice(.unsigned(20, .uint64), .init(validRange: 0 ... 100)),
-                ])
+                ]),
             ),
         ])
         let seq = ChoiceSequence(tree)
@@ -481,7 +481,7 @@ struct PromoteBranchesEncoderTests {
     }
 
     @Test("Two branch groups produce candidates replacing complex with simple")
-    func twoBranchGroupsProduceCandidates() throws {
+    func twoBranchGroupsProduceCandidates() {
         // Use the tagged gen from ReducerBranchTests pattern: zip two pick generators.
         let taggedGen = makeTaggedGenForEncoder()
         for seed in UInt64(0) ... 100 {
@@ -503,7 +503,7 @@ struct PromoteBranchesEncoderTests {
     }
 
     @Test("Every candidate shortlex-precedes the input")
-    func candidatesShortlexPrecede() throws {
+    func candidatesShortlexPrecede() {
         let taggedGen = makeTaggedGenForEncoder()
         for seed in UInt64(0) ... 100 {
             for iteration in 0 ... 5 {
@@ -521,7 +521,7 @@ struct PromoteBranchesEncoderTests {
     }
 
     @Test("Candidates have simpler branch structure substituted")
-    func candidatesBranchSubstituted() throws {
+    func candidatesBranchSubstituted() {
         let taggedGen = makeTaggedGenForEncoder()
         var found = false
         for seed in UInt64(0) ... 100 {
@@ -640,7 +640,7 @@ private func generateForEncoder<Output>(
     _ gen: ReflectiveGenerator<Output>,
     materializePicks: Bool = true,
     seed: UInt64 = 42,
-    iteration: Int = 0
+    iteration: Int = 0,
 ) throws -> (value: Output, tree: ChoiceTree) {
     var iter = ValueAndChoiceTreeInterpreter(gen, materializePicks: materializePicks, seed: seed)
     return try #require(iter.prefix(iteration + 1).last)
@@ -661,11 +661,11 @@ private func collectZeroValueProbes(sequence: ChoiceSequence, spans: [ChoiceSpan
 private func makeTaggedGenForEncoder() -> ReflectiveGenerator<(Int, Int)> {
     let smallBranch = Gen.contramap(
         { (value: Int) throws -> Int in value },
-        Gen.choose(in: 0 ... 100 as ClosedRange<Int>)._map { $0 }
+        Gen.choose(in: 0 ... 100 as ClosedRange<Int>)._map { $0 },
     )
     let bigBranch = Gen.contramap(
         { (value: Int) throws -> (Int, Int) in (value / 2, value - value / 2) },
-        Gen.zip(Gen.choose(in: 0 ... 100 as ClosedRange<Int>), Gen.choose(in: 0 ... 100 as ClosedRange<Int>))._map { $0 + $1 }
+        Gen.zip(Gen.choose(in: 0 ... 100 as ClosedRange<Int>), Gen.choose(in: 0 ... 100 as ClosedRange<Int>))._map { $0 + $1 },
     )
     let pickGen = Gen.pick(choices: [(1, smallBranch), (1, bigBranch)])
     return Gen.zip(pickGen, pickGen)

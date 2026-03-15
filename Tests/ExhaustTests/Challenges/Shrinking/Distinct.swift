@@ -30,7 +30,7 @@ struct DistinctShrinkingChallenge {
             gen,
             .suppressIssueReporting,
             .useBonsaiReducer,
-            .replay(5023515172476973421)
+            .replay(5_023_515_172_476_973_421),
         ) {
             Set($0).count < 3
         }
@@ -45,7 +45,7 @@ struct DistinctShrinkingChallenge {
             gen,
             .suppressIssueReporting,
             .useBonsaiReducer,
-            .reflecting(value)
+            .reflecting(value),
         ) {
             Set($0).count < 3
         }

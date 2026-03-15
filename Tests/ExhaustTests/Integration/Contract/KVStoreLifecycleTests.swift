@@ -1,4 +1,5 @@
 // MARK: - Key-Value Store Lifecycle Contract Test
+
 //
 // Inspired by ScalaCheck's `CommandsLevelDB.scala` (Rickard Nilsson, ScalaCheck project).
 //
@@ -15,9 +16,9 @@
 // store is closed (and on `open` when already open) test that the contract
 // runner correctly handles high skip rates without false positives.
 
-import Testing
 import Exhaust
 import ExhaustCore
+import Testing
 
 // MARK: - Tests
 
@@ -31,14 +32,14 @@ struct KVStoreLifecycleTests {
                 KVStoreLifecycleContract.self,
                 commandLimit: 10,
                 .suppressIssueReporting,
-                .useBonsaiReducer
-            )
+                .useBonsaiReducer,
+            ),
         )
 
         #expect(result.trace.contains { step in
             switch step.outcome {
-            case .invariantFailed, .checkFailed: return true
-            default: return false
+            case .invariantFailed, .checkFailed: true
+            default: false
             }
         })
     }
@@ -82,14 +83,14 @@ struct KVStoreLifecycleContract {
         store.close()
     }
 
-    @Command(weight: 4, Gen.int(in: 0...3), Gen.int(in: 0...99))
+    @Command(weight: 4, Gen.int(in: 0 ... 3), Gen.int(in: 0 ... 99))
     mutating func put(key: Int, value: Int) throws {
         guard isOpen else { throw skip() }
         contents[key] = value
         store.put(key, value)
     }
 
-    @Command(weight: 3, Gen.int(in: 0...3))
+    @Command(weight: 3, Gen.int(in: 0 ... 3))
     mutating func get(key: Int) throws {
         guard isOpen else { throw skip() }
         let actual = store.get(key)
@@ -126,5 +127,7 @@ struct BuggyKVStore {
         storage[key]
     }
 
-    var count: Int { storage.count }
+    var count: Int {
+        storage.count
+    }
 }

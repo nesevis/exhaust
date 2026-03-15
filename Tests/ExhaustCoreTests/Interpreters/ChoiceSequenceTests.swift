@@ -5,8 +5,8 @@
 //  Tests for ChoiceSequence.flatten method
 //
 
-import Testing
 import ExhaustCore
+import Testing
 
 @Suite("Choice Sequence Tests")
 struct ChoiceSequenceTests {

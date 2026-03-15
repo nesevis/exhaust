@@ -169,9 +169,9 @@ struct BindAwarenessTests {
                     (finalOutput as! [Int]).count
                 },
                 inputType: "Int",
-                outputType: "[Int]"
+                outputType: "[Int]",
             ),
-            inner: Gen.choose(in: 0 ... 5 as ClosedRange<Int>).erase()
+            inner: Gen.choose(in: 0 ... 5 as ClosedRange<Int>).erase(),
         ))
 
         var interpreter = ValueAndChoiceTreeInterpreter(gen, seed: 42)
@@ -191,7 +191,7 @@ struct BindAwarenessTests {
     // MARK: - Coverage analysis treats bound subtree as opaque
 
     @Test("ChoiceTreeAnalysis produces fewer parameters for bind-dependent generators")
-    func coverageAnalysisTreatsBoundAsOpaque() throws {
+    func coverageAnalysisTreatsBoundAsOpaque() {
         // Construct a bind generator: inner picks from 0...3, bound depends on inner
         let gen: ReflectiveGenerator<[Int]> = Gen.liftF(.transform(
             kind: .bind(
@@ -203,9 +203,9 @@ struct BindAwarenessTests {
                     (finalOutput as! [Int]).count
                 },
                 inputType: "Int",
-                outputType: "[Int]"
+                outputType: "[Int]",
             ),
-            inner: Gen.choose(in: 0 ... 3 as ClosedRange<Int>).erase()
+            inner: Gen.choose(in: 0 ... 3 as ClosedRange<Int>).erase(),
         ))
 
         let result = ChoiceTreeAnalysis.analyze(gen)

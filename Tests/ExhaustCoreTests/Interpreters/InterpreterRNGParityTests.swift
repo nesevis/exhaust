@@ -5,9 +5,9 @@
 //  Created by Claude Code on 07/02/2026.
 //
 
+import ExhaustCore
 import Foundation
 import Testing
-import ExhaustCore
 
 @Suite("Interpreter RNG Parity")
 struct InterpreterRNGParityTests {

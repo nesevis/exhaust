@@ -5,9 +5,9 @@
 //  Created by Claude on 25/2/2026.
 //
 
+import ExhaustCore
 import Testing
 @testable import Exhaust
-import ExhaustCore
 
 @Suite("Uniqueness Constraint")
 struct UniquenessConstraintTests {

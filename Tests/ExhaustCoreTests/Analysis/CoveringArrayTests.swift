@@ -3,8 +3,8 @@
 //  Exhaust
 //
 
-import Testing
 import ExhaustCore
+import Testing
 
 // MARK: - Finite Domain Analysis
 

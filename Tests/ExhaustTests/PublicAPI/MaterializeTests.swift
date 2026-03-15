@@ -5,10 +5,10 @@
 //  Created by Chris Kolbu on 12/2/2026.
 //
 
+import ExhaustCore
 import Foundation
 import Testing
 @testable import Exhaust
-import ExhaustCore
 
 @Suite("Materialize")
 struct MaterializeTests {
@@ -267,7 +267,9 @@ struct MaterializeTests {
 
         struct Wrapper: Equatable {
             let value: Int
-            init(_ value: Int) { self.value = value }
+            init(_ value: Int) {
+                self.value = value
+            }
         }
 
         // _macroMapScalar<Input, Output> (unconstrained fallback): Int → Wrapper (non-numeric output)

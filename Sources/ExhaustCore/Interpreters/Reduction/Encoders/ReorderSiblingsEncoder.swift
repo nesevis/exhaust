@@ -5,8 +5,7 @@ public struct ReorderSiblingsEncoder: BatchEncoder {
     public let name = "reorderSiblings"
     public let phase = ReductionPhase.reordering
 
-
-    public func estimatedCost(sequence: ChoiceSequence, bindIndex: BindSpanIndex?) -> Int? {
+    public func estimatedCost(sequence: ChoiceSequence, bindIndex _: BindSpanIndex?) -> Int? {
         let count = ChoiceSequence.extractSiblingGroups(from: sequence).count
         guard count > 0 else { return nil }
         // Reordering is a cleanup pass — it should run after value minimization
@@ -17,7 +16,7 @@ public struct ReorderSiblingsEncoder: BatchEncoder {
 
     public func encode(
         sequence: ChoiceSequence,
-        targets: TargetSet
+        targets: TargetSet,
     ) -> any Sequence<ChoiceSequence> {
         guard case let .siblingGroups(groups) = targets else { return [] as [ChoiceSequence] }
         return groups.lazy.compactMap { group -> ChoiceSequence? in
@@ -65,7 +64,7 @@ public struct ReorderSiblingsEncoder: BatchEncoder {
 /// Lexicographically compares two sequences of ``ChoiceValue`` by shortlex key.
 private func choiceValuesPrecede(
     _ lhs: [ChoiceValue],
-    _ rhs: [ChoiceValue]
+    _ rhs: [ChoiceValue],
 ) -> Bool {
     for (a, b) in zip(lhs, rhs) {
         let aKey = a.shortlexKey

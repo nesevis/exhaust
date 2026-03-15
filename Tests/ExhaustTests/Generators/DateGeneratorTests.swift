@@ -3,10 +3,10 @@
 //  Exhaust
 //
 
+import ExhaustCore
 import Foundation
 import Testing
 @testable import Exhaust
-import ExhaustCore
 
 @Suite("Date Generator")
 struct DateGeneratorTests {

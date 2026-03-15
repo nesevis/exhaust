@@ -43,7 +43,9 @@ public struct BindSpanIndex {
     }
 
     /// Whether any bind spans exist.
-    public var isEmpty: Bool { regions.isEmpty }
+    public var isEmpty: Bool {
+        regions.isEmpty
+    }
 
     /// Returns the ``BindRegion`` whose inner range contains the given index, or `nil`.
     public func bindRegionForInnerIndex(_ index: Int) -> BindRegion? {

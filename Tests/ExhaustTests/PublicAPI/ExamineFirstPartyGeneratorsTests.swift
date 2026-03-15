@@ -1,6 +1,5 @@
 import Foundation
 import Testing
-
 @testable import Exhaust
 
 // swiftlint:disable type_body_length
@@ -12,7 +11,6 @@ import Testing
 /// kept low (30–50) to keep CI fast while still exercising the pipeline.
 @Suite("#examine first-party generators")
 struct ExamineFirstPartyGeneratorsTests {
-
     // MARK: - Bool
 
     @Test func bool() {
@@ -339,7 +337,7 @@ struct ExamineFirstPartyGeneratorsTests {
 //        let report = #examine(.array(Direction.allCases), samples: 50)
 //        #expect(report.passed)
 //    }
-//    
+//
 //    @Test func oneOfCaseIterableNonEquatable() {
 //        let report = #examine(.array(DirectionNonEquatable.allCases), samples: 50)
 //        #expect(report.passed)
@@ -419,7 +417,7 @@ struct ExamineFirstPartyGeneratorsTests {
                 .int32(in: 0 ... 10),
                 .int32(in: 10 ... 20),
                 .int32(in: 20 ... 30),
-                .int32(in: 30 ... 40)
+                .int32(in: 30 ... 40),
             ),
             samples: 30,
         )
@@ -432,7 +430,7 @@ struct ExamineFirstPartyGeneratorsTests {
         let report = #examine(
             .int(in: 0 ... 100).mapped(
                 forward: { String($0) },
-                backward: { Int($0) ?? 0 }
+                backward: { Int($0) ?? 0 },
             ),
             samples: 50,
         )
@@ -444,7 +442,7 @@ struct ExamineFirstPartyGeneratorsTests {
             let report = #examine(
                 .int(in: 1 ... 10).bound(
                     forward: { n in .int(in: 0 ... n) },
-                    backward: { $0 }
+                    backward: { $0 },
                 ),
                 samples: 30,
             )
@@ -475,6 +473,5 @@ private enum Direction: CaseIterable, Equatable {
 private enum DirectionNonEquatable: CaseIterable {
     case north, south, east, west
 }
-
 
 // swiftlint:enable type_body_length

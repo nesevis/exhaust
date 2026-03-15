@@ -5,8 +5,8 @@
 //  NOTE: #gen and #exhaust converted to ExhaustCore Gen.* API.
 //
 
-import Testing
 import ExhaustCore
+import Testing
 
 @Suite("Per-run seeding reproducibility")
 struct ReproducibilityTests {

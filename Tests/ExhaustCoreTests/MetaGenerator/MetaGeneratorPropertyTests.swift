@@ -7,8 +7,8 @@
 //  *recipes* and testing the resulting generators.
 //
 
-import Testing
 import ExhaustCore
+import Testing
 
 @Suite("Meta-Generator Property Tests")
 struct MetaGeneratorPropertyTests {

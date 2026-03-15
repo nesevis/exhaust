@@ -73,10 +73,10 @@
 //  Reason: no `allow_subnormal` toggle or FTZ-runtime contract hooks in Exhaust.
 //
 
+import ExhaustCore
 import Foundation
 import Testing
 @testable import Exhaust
-import ExhaustCore
 
 private enum HypothesisFloatParityHelpers {
     static func reduce<Output>(
@@ -162,7 +162,6 @@ struct HypothesisFloatShrinkingParityTests {
             #expect(output.count(where: { $0 == 0.0 }) == n - 1)
             #expect(output.contains(1.0))
         }
-        
     }
 
     @Test("Shrinks bounded values down to ceil(minValue)")

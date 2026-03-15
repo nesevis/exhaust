@@ -5,8 +5,8 @@
 //  Created by Chris Kolbu on 27/7/2025.
 //
 
-import Testing
 import ExhaustCore
+import Testing
 
 @Test("Test Xoshiro against reference implementation")
 func xoshiroAgainstReference() {

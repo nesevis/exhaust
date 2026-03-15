@@ -3,13 +3,12 @@
 //  Exhaust
 //
 
-import Testing
 import Exhaust
 import ExhaustCore
+import Testing
 
 @Suite("RangeDependencyDetector")
 struct RangeDependencyDetectorTests {
-
     // MARK: - Edge cases
 
     @Test("Empty sample returns true (conservative)")
@@ -21,7 +20,7 @@ struct RangeDependencyDetectorTests {
     func singleSample() {
         let tree = ChoiceTree.choice(
             .unsigned(42, .uint64),
-            ChoiceMetadata(validRange: 0 ... 100, isRangeExplicit: true)
+            ChoiceMetadata(validRange: 0 ... 100, isRangeExplicit: true),
         )
         #expect(RangeDependencyDetector.hasDynamicRanges(in: [tree]) == true)
     }
@@ -54,11 +53,11 @@ struct RangeDependencyDetectorTests {
     func sizeScaledRangesIgnored() {
         let tree1 = ChoiceTree.choice(
             .unsigned(10, .uint64),
-            ChoiceMetadata(validRange: 0 ... 50, isRangeExplicit: false)
+            ChoiceMetadata(validRange: 0 ... 50, isRangeExplicit: false),
         )
         let tree2 = ChoiceTree.choice(
             .unsigned(20, .uint64),
-            ChoiceMetadata(validRange: 0 ... 200, isRangeExplicit: false)
+            ChoiceMetadata(validRange: 0 ... 200, isRangeExplicit: false),
         )
         // Different ranges, but both non-explicit — should be ignored
         #expect(RangeDependencyDetector.hasDynamicRanges(in: [tree1, tree2]) == false)
@@ -84,11 +83,11 @@ struct RangeDependencyDetectorTests {
         // Simulates a bind where child range depends on parent value
         let tree1 = ChoiceTree.bind(
             inner: .choice(.unsigned(20, .uint64), ChoiceMetadata(validRange: 0 ... 100, isRangeExplicit: true)),
-            bound: .choice(.unsigned(30, .uint64), ChoiceMetadata(validRange: 20 ... 100, isRangeExplicit: true))
+            bound: .choice(.unsigned(30, .uint64), ChoiceMetadata(validRange: 20 ... 100, isRangeExplicit: true)),
         )
         let tree2 = ChoiceTree.bind(
             inner: .choice(.unsigned(50, .uint64), ChoiceMetadata(validRange: 0 ... 100, isRangeExplicit: true)),
-            bound: .choice(.unsigned(70, .uint64), ChoiceMetadata(validRange: 50 ... 100, isRangeExplicit: true))
+            bound: .choice(.unsigned(70, .uint64), ChoiceMetadata(validRange: 50 ... 100, isRangeExplicit: true)),
         )
         // Inner range is static (0...100), bound range varies (20...100 vs 50...100)
         #expect(RangeDependencyDetector.hasDynamicRanges(in: [tree1, tree2]) == true)
@@ -118,14 +117,14 @@ struct RangeDependencyDetectorTests {
             elements: [
                 .choice(.unsigned(1, .uint64), ChoiceMetadata(validRange: 0 ... 10, isRangeExplicit: true)),
             ],
-            ChoiceMetadata(validRange: 1 ... 5, isRangeExplicit: true)
+            ChoiceMetadata(validRange: 1 ... 5, isRangeExplicit: true),
         )
         let tree2 = ChoiceTree.sequence(
             length: 3,
             elements: [
                 .choice(.unsigned(1, .uint64), ChoiceMetadata(validRange: 0 ... 10, isRangeExplicit: true)),
             ],
-            ChoiceMetadata(validRange: 2 ... 8, isRangeExplicit: true)
+            ChoiceMetadata(validRange: 2 ... 8, isRangeExplicit: true),
         )
         // Sequence-level range differs
         #expect(RangeDependencyDetector.hasDynamicRanges(in: [tree1, tree2]) == true)
@@ -137,11 +136,11 @@ struct RangeDependencyDetectorTests {
     func thirdSampleDiverges() {
         let staticTree = ChoiceTree.choice(
             .unsigned(10, .uint64),
-            ChoiceMetadata(validRange: 0 ... 100, isRangeExplicit: true)
+            ChoiceMetadata(validRange: 0 ... 100, isRangeExplicit: true),
         )
         let dynamicTree = ChoiceTree.choice(
             .unsigned(50, .uint64),
-            ChoiceMetadata(validRange: 10 ... 100, isRangeExplicit: true)
+            ChoiceMetadata(validRange: 10 ... 100, isRangeExplicit: true),
         )
         #expect(RangeDependencyDetector.hasDynamicRanges(in: [staticTree, staticTree, dynamicTree]) == true)
     }

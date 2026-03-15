@@ -572,7 +572,7 @@ public extension ChoiceSequence {
 
     /// Returns the flattened `ChoiceValue`s within the given range, ignoring structural markers.
     /// Used as a lexicographic comparison key for sibling reordering.
-    public static func siblingComparisonKey(
+    static func siblingComparisonKey(
         from sequence: ChoiceSequence,
         range: ClosedRange<Int>,
     ) -> [ChoiceValue] {
@@ -591,7 +591,7 @@ public extension ChoiceSequence {
         return keys
     }
 
-    public func shortLexPrecedes(_ other: ChoiceSequence) -> Bool {
+    func shortLexPrecedes(_ other: ChoiceSequence) -> Bool {
         // Shorter sequences are always better
         if count != other.count {
             return count < other.count

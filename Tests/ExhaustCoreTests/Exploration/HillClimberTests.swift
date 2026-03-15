@@ -3,8 +3,8 @@
 //  ExhaustTests
 //
 
-import Testing
 import ExhaustCore
+import Testing
 
 @Suite("HillClimber")
 struct HillClimberTests {

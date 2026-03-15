@@ -6,8 +6,8 @@
 //  single-value generators, and complex composition scenarios.
 //
 
-import Testing
 import ExhaustCore
+import Testing
 
 @Suite("Generator Composition Edge Cases")
 struct GeneratorCompositionEdgeCaseTests {

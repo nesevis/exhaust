@@ -1,4 +1,5 @@
 // MARK: - Exam Grader Contract Test
+
 //
 // Ported from Hillel Wayne's blog post "Property Testing Complex Inputs" (https://www.hillelwayne.com/post/contract-examples/).
 //
@@ -18,9 +19,9 @@
 //
 // The dependent-data challenge from the original blog post surfaces naturally here: the `submitAnswers` command intentionally *does not* constrain its answer count to the current exam's key length, which is what allows the invariant to detect the missing validation. A correct system would enforce the constraint internally.
 
-import Testing
 import Exhaust
 import ExhaustCore
+import Testing
 
 // MARK: - Tests
 
@@ -33,13 +34,13 @@ struct ExamGraderTests {
             #exhaust(
                 ExamGraderContract.self,
                 commandLimit: 8,
-                .suppressIssueReporting
-            )
+                .suppressIssueReporting,
+            ),
         )
         #expect(result.trace.contains { step in
             switch step.outcome {
-            case .invariantFailed, .checkFailed: return true
-            default: return false
+            case .invariantFailed, .checkFailed: true
+            default: false
             }
         })
     }
@@ -48,7 +49,7 @@ struct ExamGraderTests {
     ///
     /// This is written as a standalone property test rather than a `@Contract` because dependent generation requires `bind` — monadic chaining where one generated value determines the shape of the next generator. `@Command` attribute arguments are resolved at macro expansion time, so they cannot express inter-parameter dependencies. Hypothesis solves this with `@composite`, which provides an imperative `draw()` function that executes generators within the current choice-recording context. Without equivalent syntax sugar, the `bind`-based generator cannot be embedded in a `@Command` declaration, so a standalone `#exhaust` property test is the natural home for it.
     @Test("Dependent generator isolates grading bug via @composite pattern")
-    func gradingBugWithDependentGenerator() throws {
+    func gradingBugWithDependentGenerator() {
         let grader = BuggyExamGrader()
         let gen = examWithMatchingAnswers()
 
@@ -56,7 +57,7 @@ struct ExamGraderTests {
             gen,
             .samplingBudget(500),
             .suppressIssueReporting,
-            .useBonsaiReducer
+            .useBonsaiReducer,
         ) { exam, answers in
             let instance = ExamInstance(student: "student", exam: exam, answers: answers)
             let score = grader.grade(instance)
@@ -68,7 +69,7 @@ struct ExamGraderTests {
             let hasBlanks = answers.contains(where: { $0 == nil })
 
             // Only check the interesting case: some correct answers + some blanks
-            guard nonBlankCorrect && hasAttempted && hasBlanks else { return true }
+            guard nonBlankCorrect, hasAttempted, hasBlanks else { return true }
             return score == 1.0
         }
 
@@ -97,12 +98,12 @@ struct ExamGraderContract {
         grader.submissions.allSatisfy { $0.answers.count == $0.exam.answerKey.count }
     }
 
-    @Command(weight: 2, Gen.int(in: 1...5))
+    @Command(weight: 2, Gen.int(in: 1 ... 5))
     mutating func createExam(keyLength: Int) throws {
         grader.createExam(name: "exam", answerKey: Array(repeating: keyLength, count: keyLength))
     }
 
-    @Command(weight: 3, Gen.int(in: 0...6))
+    @Command(weight: 3, Gen.int(in: 0 ... 6))
     mutating func submitAnswers(answerCount: Int) throws {
         guard grader.exams["exam"] != nil else { throw skip() }
         grader.submitAnswers(student: "student", examName: "exam", answers: Array(repeating: answerCount, count: answerCount))
@@ -116,7 +117,7 @@ struct ExamGraderContract {
         let nonBlankCorrect = zip(latest.answers, latest.exam.answerKey)
             .allSatisfy { answer, key in answer == nil || answer == key }
         if nonBlankCorrect {
-            let nonBlankCount = latest.answers.compactMap({ $0 }).count
+            let nonBlankCount = latest.answers.compactMap(\.self).count
             if nonBlankCount > 0 {
                 try check(score == 1.0, "blanks should not penalize a perfect score")
             }
@@ -125,6 +126,7 @@ struct ExamGraderContract {
 }
 
 // MARK: - Dependent generator (Exhaust equivalent of @composite)
+
 //
 // Hillel Wayne's blog post uses Hypothesis's `@composite` decorator to build a generator where the answers array length depends on the previously generated answer key length. This is the core challenge the post addresses: generating *structurally dependent* test data.
 //
@@ -136,12 +138,12 @@ struct ExamGraderContract {
 
 /// Generates an ``Exam`` and matching `[Int?]` answers array where the answers length always matches the answer key length, and each answer is either correct, wrong, or blank (nil).
 private func examWithMatchingAnswers() -> ReflectiveGenerator<(Exam, [Int?])> {
-    #gen(.int(in: 1...5))
+    #gen(.int(in: 1 ... 5))
         .bind { keyLength in
-            let keyGen = #gen(.int(in: 1...5)).array(length: UInt64(keyLength))
+            let keyGen = #gen(.int(in: 1 ... 5)).array(length: UInt64(keyLength))
             let answersGen: ReflectiveGenerator<[Int?]> = ReflectiveGenerator.oneOf(
                 weighted: (1, .just(nil)),
-                (2, #gen(.int(in: 1...5)).map { Optional($0) })
+                (2, #gen(.int(in: 1 ... 5)).map { Optional($0) }),
             ).array(length: UInt64(keyLength))
             return Gen.zip(keyGen, answersGen).map { answerKey, answers in
                 (Exam(name: "exam", answerKey: answerKey), answers)
@@ -155,13 +157,13 @@ private func examWithMatchingAnswers() -> ReflectiveGenerator<(Exam, [Int?])> {
 
 struct Exam {
     let name: String
-    let answerKey: [Int]  // correct answers, values 1...5
+    let answerKey: [Int] // correct answers, values 1...5
 }
 
 struct ExamInstance {
     let student: String
     let exam: Exam
-    let answers: [Int?]  // nil = blank/skipped
+    let answers: [Int?] // nil = blank/skipped
 }
 
 // A stateful exam management system with two deliberate bugs.
@@ -189,8 +191,8 @@ struct BuggyExamGrader {
         let total = instance.exam.answerKey.count
         guard total > 0 else { return 1.0 }
         let correct = zip(instance.answers, instance.exam.answerKey)
-            .filter { $0.0 == $0.1 }
-            .count
+            .count(where: { $0.0 == $0.1 })
+
         return Double(correct) / Double(total)
     }
 }

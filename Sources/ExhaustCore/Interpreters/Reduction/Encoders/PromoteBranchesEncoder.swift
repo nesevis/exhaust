@@ -7,10 +7,11 @@
 public struct PromoteBranchesEncoder: BatchEncoder {
     public let name = "promoteBranches"
 
-    public var phase: ReductionPhase { .structuralDeletion }
+    public var phase: ReductionPhase {
+        .structuralDeletion
+    }
 
-
-    public func estimatedCost(sequence: ChoiceSequence, bindIndex: BindSpanIndex?) -> Int? {
+    public func estimatedCost(sequence: ChoiceSequence, bindIndex _: BindSpanIndex?) -> Int? {
         guard sequence.isEmpty == false else { return nil }
         return 20
     }
@@ -20,7 +21,7 @@ public struct PromoteBranchesEncoder: BatchEncoder {
 
     public func encode(
         sequence: ChoiceSequence,
-        targets: TargetSet
+        targets _: TargetSet,
     ) -> any Sequence<ChoiceSequence> {
         guard let tree = currentTree else { return AnySequence([]) }
         guard tree.contains(\.unwrapped.isBranch) else { return AnySequence([]) }
@@ -59,7 +60,7 @@ public struct PromoteBranchesEncoder: BatchEncoder {
 // MARK: - Helpers
 
 private func extractBranchNodes(
-    from tree: ChoiceTree
+    from tree: ChoiceTree,
 ) -> [(fingerprint: Fingerprint, node: ChoiceTree)] {
     var results: [(fingerprint: Fingerprint, node: ChoiceTree)] = []
     for element in tree.walk() {

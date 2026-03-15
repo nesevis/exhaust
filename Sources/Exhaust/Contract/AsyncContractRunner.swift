@@ -11,7 +11,9 @@ import IssueReporting
 /// Mutable box for passing a value-type spec across the Task boundary.
 final class SpecBox<Spec>: @unchecked Sendable {
     var spec: Spec
-    init(_ spec: Spec) { self.spec = spec }
+    init(_ spec: Spec) {
+        self.spec = spec
+    }
 }
 
 /// Runs an async contract property test for the given specification type.

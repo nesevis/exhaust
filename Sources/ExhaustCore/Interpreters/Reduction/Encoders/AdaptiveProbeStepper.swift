@@ -2,7 +2,6 @@
 ///
 /// Produces probes in the same order as ``findInteger`` (linear 1...4, exponential doubling, binary search), but yields one probe at a time so the scheduler can provide acceptance feedback between probes.
 struct FindIntegerStepper {
-
     // MARK: - State
 
     private enum Phase {
@@ -37,7 +36,7 @@ struct FindIntegerStepper {
         }
 
         switch phase {
-        case .linear(let next):
+        case let .linear(next):
             if lastAccepted {
                 if next < 4 {
                     let probe = next + 1
@@ -54,7 +53,7 @@ struct FindIntegerStepper {
             phase = .done
             return nil
 
-        case .exponential(_, let high):
+        case let .exponential(_, high):
             if lastAccepted {
                 let newLow = high
                 let (doubled, overflow) = high.multipliedReportingOverflow(by: 2)
@@ -78,7 +77,7 @@ struct FindIntegerStepper {
             lastProbe = mid
             return mid
 
-        case .binary(let low, let high):
+        case let .binary(low, high):
             let newLow = lastAccepted ? lastProbe : low
             let newHigh = lastAccepted ? high : lastProbe
             if newLow + 1 >= newHigh {
@@ -103,7 +102,6 @@ struct FindIntegerStepper {
 ///
 /// On acceptance, narrows the upper bound (`hi = probe`). On rejection, narrows the lower bound (`lo = probe + 1`). Converges to the smallest value that is accepted. Used by ``BinarySearchToZeroEncoder`` and ``BinarySearchToTargetEncoder`` where the goal is to find the simplest (smallest bit pattern) value that still fails the property.
 struct BinarySearchStepper {
-
     // MARK: - State
 
     private var lo: UInt64
@@ -122,7 +120,7 @@ struct BinarySearchStepper {
     init(lo: UInt64, hi: UInt64) {
         self.lo = lo
         self.hi = hi
-        self.bestAccepted = hi
+        bestAccepted = hi
     }
 
     /// Returns the first probe value (midpoint), or `nil` if already converged.
@@ -162,7 +160,6 @@ struct BinarySearchStepper {
 ///
 /// On acceptance, narrows the lower bound (`lo = probe + 1`). On rejection, narrows the upper bound (`hi = probe`). Converges to the largest value that is accepted. Used by ``TandemReductionEncoder`` where the goal is to find the largest shared delta that still fails the property — maximizing the reduction.
 struct MaxBinarySearchStepper {
-
     // MARK: - State
 
     private var lo: UInt64
@@ -181,7 +178,7 @@ struct MaxBinarySearchStepper {
     init(lo: UInt64, hi: UInt64) {
         self.lo = lo
         self.hi = hi
-        self.bestAccepted = lo
+        bestAccepted = lo
     }
 
     /// Returns the first probe value (midpoint), or `nil` if already converged.

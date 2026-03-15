@@ -102,9 +102,9 @@ struct HeuristicInverterTests {
             kind: .map(
                 forward: { Double($0 as! Int) as Any },
                 inputType: "Int",
-                outputType: "Double"
+                outputType: "Double",
             ),
-            inner: Gen.choose(in: 0 ... 100 as ClosedRange<Int>).erase()
+            inner: Gen.choose(in: 0 ... 100 as ClosedRange<Int>).erase(),
         ))
         let tree = try Interpreters.reflect(gen, with: 42.0 as Double)
         #expect(tree != nil)
@@ -116,9 +116,9 @@ struct HeuristicInverterTests {
             kind: .map(
                 forward: { String($0 as! Int) as Any },
                 inputType: "Int",
-                outputType: "String"
+                outputType: "String",
             ),
-            inner: Gen.choose(in: 0 ... 100 as ClosedRange<Int>).erase()
+            inner: Gen.choose(in: 0 ... 100 as ClosedRange<Int>).erase(),
         ))
         #expect(throws: Interpreters.ReflectionError.self) {
             _ = try Interpreters.reflect(gen, with: "42")

@@ -7,8 +7,7 @@ public struct BinarySearchToZeroEncoder: AdaptiveEncoder {
     public let name = "binarySearchToZero"
     public let phase = ReductionPhase.valueMinimization
 
-
-    public func estimatedCost(sequence: ChoiceSequence, bindIndex: BindSpanIndex?) -> Int? {
+    public func estimatedCost(sequence: ChoiceSequence, bindIndex _: BindSpanIndex?) -> Int? {
         let t = ChoiceSequence.extractAllValueSpans(from: sequence).count
         guard t > 0 else { return nil }
         return t * 80
@@ -82,10 +81,10 @@ public struct BinarySearchToZeroEncoder: AdaptiveEncoder {
     public mutating func start(sequence: ChoiceSequence, targets: TargetSet) {
         self.sequence = sequence
         self.targets = []
-        self.currentIndex = 0
-        self.needsFirstProbe = true
-        self.searchPhase = .binarySearch
-        self.savedEntry = nil
+        currentIndex = 0
+        needsFirstProbe = true
+        searchPhase = .binarySearch
+        savedEntry = nil
 
         guard case let .spans(spans) = targets else { return }
 
@@ -101,15 +100,14 @@ public struct BinarySearchToZeroEncoder: AdaptiveEncoder {
             // boundary), target zero — the range is stale and the materializer
             // will validate against the generator's fresh range.
             let isWithinRecordedRange = v.isRangeExplicit && v.choice.fits(in: v.validRange)
-            let target: ChoiceValue
-            if isWithinRecordedRange {
+            let target: ChoiceValue = if isWithinRecordedRange {
                 if simplified.fits(in: v.validRange) {
-                    target = simplified
+                    simplified
                 } else {
-                    target = ChoiceValue(v.choice.tag.makeConvertible(bitPattern64: v.validRange!.lowerBound), tag: v.choice.tag)
+                    ChoiceValue(v.choice.tag.makeConvertible(bitPattern64: v.validRange!.lowerBound), tag: v.choice.tag)
                 }
             } else {
-                target = simplified
+                simplified
             }
             guard target != v.choice else { i += 1; continue }
             let targetBP = target.bitPattern64
@@ -125,7 +123,7 @@ public struct BinarySearchToZeroEncoder: AdaptiveEncoder {
                 validRange: v.validRange,
                 isRangeExplicit: v.isRangeExplicit,
                 choiceTag: v.choice.tag,
-                stepper: stepper
+                stepper: stepper,
             ))
             i += 1
         }
@@ -142,7 +140,7 @@ public struct BinarySearchToZeroEncoder: AdaptiveEncoder {
                 let state = targets[currentIndex]
                 let currentChoice = sequence[state.seqIdx].value?.choice ?? ChoiceValue(
                     state.choiceTag.makeConvertible(bitPattern64: state.stepper.bestAccepted),
-                    tag: state.choiceTag
+                    tag: state.choiceTag,
                 )
                 let currentKey = currentChoice.shortlexKey
                 if currentKey > 0 {
@@ -164,7 +162,7 @@ public struct BinarySearchToZeroEncoder: AdaptiveEncoder {
                         sequence[state.seqIdx] = .reduced(.init(
                             choice: acceptedChoice,
                             validRange: state.validRange,
-                            isRangeExplicit: state.isRangeExplicit
+                            isRangeExplicit: state.isRangeExplicit,
                         ))
                     } else {
                         sequence[targets[currentIndex].seqIdx] = saved
@@ -185,7 +183,7 @@ public struct BinarySearchToZeroEncoder: AdaptiveEncoder {
                 let probeEntry = ChoiceSequenceValue.reduced(.init(
                     choice: probeChoice,
                     validRange: state.validRange,
-                    isRangeExplicit: state.isRangeExplicit
+                    isRangeExplicit: state.isRangeExplicit,
                 ))
                 guard probeEntry.shortLexCompare(sequence[state.seqIdx]) == .lt else {
                     continue
@@ -213,7 +211,7 @@ public struct BinarySearchToZeroEncoder: AdaptiveEncoder {
                 sequence[state.seqIdx] = .value(.init(
                     choice: ChoiceValue(state.choiceTag.makeConvertible(bitPattern64: state.stepper.bestAccepted), tag: state.choiceTag),
                     validRange: state.validRange,
-                    isRangeExplicit: state.isRangeExplicit
+                    isRangeExplicit: state.isRangeExplicit,
                 ))
             } else if let saved = savedEntry {
                 sequence[state.seqIdx] = saved
@@ -236,7 +234,7 @@ public struct BinarySearchToZeroEncoder: AdaptiveEncoder {
         sequence[state.seqIdx] = .value(.init(
             choice: ChoiceValue(state.choiceTag.makeConvertible(bitPattern64: bp), tag: state.choiceTag),
             validRange: state.validRange,
-            isRangeExplicit: state.isRangeExplicit
+            isRangeExplicit: state.isRangeExplicit,
         ))
         return sequence
     }

@@ -5,8 +5,8 @@
 ////  Created by Chris Kolbu on 29/7/2025.
 ////
 
-extension ChoiceTree {
-    public var metadata: ChoiceMetadata {
+public extension ChoiceTree {
+    var metadata: ChoiceMetadata {
         switch self {
         case let .choice(_, meta), let .sequence(_, _, meta):
             return meta

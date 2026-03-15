@@ -259,7 +259,7 @@ extension ReducerStrategies {
                     progress: &progress,
                     rejectCache: &rejectCache,
                     bindIndex: bindIndex,
-                    ) {
+                ) {
                     return true
                 }
             }

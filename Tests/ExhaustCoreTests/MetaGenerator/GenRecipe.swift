@@ -7,8 +7,8 @@
 //  that invariants hold universally across all possible generator structures.
 //
 
-import Testing
 import ExhaustCore
+import Testing
 
 // MARK: - Recipe Type (output type tracking)
 

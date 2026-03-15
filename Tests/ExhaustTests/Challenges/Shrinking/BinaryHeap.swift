@@ -5,10 +5,10 @@
 //  Created by Chris Kolbu on 11/2/2026.
 //
 
+import ExhaustCore
 import Foundation
 import Testing
 @testable import Exhaust
-import ExhaustCore
 
 @Suite("Shrinking Challenge: Binary Heap")
 struct BinaryHeapShrinkingChallenge {
@@ -20,14 +20,14 @@ struct BinaryHeapShrinkingChallenge {
         (0, None, (0, (0, None, None), (1, None, None)))
      This is essentially because small examples are "too sparse", so it's very hard to find one by luck.
      */
-    
+
     // MARK: - Tests
 
     @Test("Binary heap, Full")
     func binaryHeapFull() throws {
         ExhaustLog.setConfiguration(.init(isEnabled: true, minimumLevel: .info, categoryMinimumLevels: [.reducer: .debug], format: .human))
-        /// The property: if the heap satisfies the invariant, then `toSortedList`
-        /// must produce a sorted list containing the same elements as `toList`.
+        // The property: if the heap satisfies the invariant, then `toSortedList`
+        // must produce a sorted list containing the same elements as `toList`.
         let property: @Sendable (Heap<Int>) -> Bool = { heap in
             guard Self.invariant(heap) else { return true }
             let xs = Self.toSortedList(heap)
@@ -39,9 +39,9 @@ struct BinaryHeapShrinkingChallenge {
                 Self.gen,
                 .suppressIssueReporting,
                 .useBonsaiReducer,
-                .replay(626360492104589905),
-                property: property
-            )
+                .replay(626_360_492_104_589_905),
+                property: property,
+            ),
         )
         let outputValues = Self.toList(output).sorted()
         // The shrunken result should have 4 values — the minimal failing heap

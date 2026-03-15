@@ -16,8 +16,7 @@ public struct TandemReductionEncoder: AdaptiveEncoder {
     public let name = "tandemReduction"
     public let phase = ReductionPhase.redistribution
 
-
-    public func estimatedCost(sequence: ChoiceSequence, bindIndex: BindSpanIndex?) -> Int? {
+    public func estimatedCost(sequence: ChoiceSequence, bindIndex _: BindSpanIndex?) -> Int? {
         let g = ChoiceSequence.extractSiblingGroups(from: sequence).count
         guard g > 0 else { return nil }
         return g * 20
@@ -65,11 +64,11 @@ public struct TandemReductionEncoder: AdaptiveEncoder {
 
     public mutating func start(sequence: ChoiceSequence, targets: TargetSet) {
         self.sequence = sequence
-        self.plans = []
-        self.planIndex = 0
-        self.probePhase = .directShot
-        self.lastDirectShotCandidate = nil
-        self.lastBinaryCandidate = nil
+        plans = []
+        planIndex = 0
+        probePhase = .directShot
+        lastDirectShotCandidate = nil
+        lastBinaryCandidate = nil
 
         guard case let .siblingGroups(groups) = targets else { return }
 
@@ -86,7 +85,7 @@ public struct TandemReductionEncoder: AdaptiveEncoder {
                     let windowPlans = buildWindowPlans(
                         for: indexSet,
                         in: sequence,
-                        groupKind: group.kind
+                        groupKind: group.kind,
                     )
                     plans.append(contentsOf: windowPlans)
                 }
@@ -105,7 +104,7 @@ public struct TandemReductionEncoder: AdaptiveEncoder {
                 if let candidate = makeTandemCandidate(
                     plan: plan,
                     current: sequence,
-                    delta: plan.distance
+                    delta: plan.distance,
                 ) {
                     lastDirectShotCandidate = candidate
                     probePhase = .binarySearchStart
@@ -182,7 +181,7 @@ public struct TandemReductionEncoder: AdaptiveEncoder {
             if let candidate = makeTandemCandidate(
                 plan: plan,
                 current: sequence,
-                delta: currentDelta
+                delta: currentDelta,
             ) {
                 lastBinaryCandidate = candidate
                 return candidate.sequence
@@ -213,7 +212,7 @@ public struct TandemReductionEncoder: AdaptiveEncoder {
         if let candidate = makeTandemCandidate(
             plan: plan,
             current: sequence,
-            delta: bestDelta
+            delta: bestDelta,
         ) {
             applyAcceptedCandidate(candidate)
         }
@@ -234,7 +233,7 @@ public struct TandemReductionEncoder: AdaptiveEncoder {
     private func buildWindowPlans(
         for indexSet: [Int],
         in sequence: ChoiceSequence,
-        groupKind: SiblingChildKind
+        groupKind: SiblingChildKind,
     ) -> [WindowPlan] {
         guard indexSet.count >= 2 else { return [] }
 
@@ -248,7 +247,7 @@ public struct TandemReductionEncoder: AdaptiveEncoder {
             if let plan = makeWindowPlan(
                 windowIndices: windowIndices,
                 in: sequence,
-                groupKind: groupKind
+                groupKind: groupKind,
             ) {
                 plans.append(plan)
             }
@@ -262,7 +261,7 @@ public struct TandemReductionEncoder: AdaptiveEncoder {
     private func makeWindowPlan(
         windowIndices: [Int],
         in sequence: ChoiceSequence,
-        groupKind: SiblingChildKind
+        groupKind: SiblingChildKind,
     ) -> WindowPlan? {
         guard let firstValueIndex = windowIndices.first,
               let firstValue = sequence[firstValueIndex].value
@@ -294,7 +293,7 @@ public struct TandemReductionEncoder: AdaptiveEncoder {
             }
             let targetChoice = ChoiceValue(
                 tag.makeConvertible(bitPattern64: targetBP),
-                tag: tag
+                tag: tag,
             )
             guard case let .floating(targetFloatingValue, _, _) = targetChoice,
                   currentFloatingValue.isFinite,
@@ -337,7 +336,7 @@ public struct TandemReductionEncoder: AdaptiveEncoder {
             disallowAwayMoves: groupKind != .bareValue,
             usesFloatingSteps: usesFloatingSteps,
             searchUpward: searchUpward,
-            distance: distance
+            distance: distance,
         )
     }
 
@@ -349,7 +348,7 @@ public struct TandemReductionEncoder: AdaptiveEncoder {
     private func makeTandemCandidate(
         plan: WindowPlan,
         current: ChoiceSequence,
-        delta: UInt64
+        delta: UInt64,
     ) -> WindowCandidate? {
         guard delta > 0 else { return nil }
 
@@ -396,7 +395,7 @@ public struct TandemReductionEncoder: AdaptiveEncoder {
                     : value.choice.bitPattern64 - delta
                 newChoice = ChoiceValue(
                     plan.tag.makeConvertible(bitPattern64: newValue),
-                    tag: plan.tag
+                    tag: plan.tag,
                 )
             }
 
@@ -418,7 +417,7 @@ public struct TandemReductionEncoder: AdaptiveEncoder {
             let newEntry = ChoiceSequenceValue.value(.init(
                 choice: newChoice,
                 validRange: value.validRange,
-                isRangeExplicit: value.isRangeExplicit
+                isRangeExplicit: value.isRangeExplicit,
             ))
             let order = newEntry.shortLexCompare(originalEntry)
             guard order != .eq else {
@@ -448,7 +447,7 @@ public struct TandemReductionEncoder: AdaptiveEncoder {
     /// Groups values within a sibling group into index sets of same-typed values suitable for tandem reduction.
     private func tandemIndexSets(
         for group: SiblingGroup,
-        in sequence: ChoiceSequence
+        in sequence: ChoiceSequence,
     ) -> [[Int]] {
         if let valueRanges = group.valueRanges, valueRanges.count >= 2 {
             let indices = valueRanges.map(\.lowerBound)
@@ -527,7 +526,7 @@ public struct TandemReductionEncoder: AdaptiveEncoder {
     /// Returns the indices of value entries within a range of the sequence.
     private func valueIndices(
         in sequence: ChoiceSequence,
-        within range: ClosedRange<Int>
+        within range: ClosedRange<Int>,
     ) -> [Int] {
         var indices = [Int]()
         indices.reserveCapacity(range.count)

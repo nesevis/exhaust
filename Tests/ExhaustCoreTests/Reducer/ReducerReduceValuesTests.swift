@@ -7,9 +7,9 @@
 //  the minimum failing value when Pass 3's all-or-nothing simplification fails.
 //
 
+import ExhaustCore
 import Foundation
 import Testing
-import ExhaustCore
 
 // MARK: - Helpers
 

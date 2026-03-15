@@ -18,7 +18,6 @@
 ///
 /// Reference: Sepulveda-Jimenez, Def 15.3 (2-cell dominance).
 struct DominanceLattice {
-
     /// Encoders that have accepted at least one candidate since the last invalidation.
     private var succeeded: Set<String> = []
 
@@ -42,15 +41,15 @@ struct DominanceLattice {
         switch (phase, name) {
         // Container deletion is strictly more aggressive than speculative single-span deletion.
         case (.structuralDeletion, "speculativeDelete"):
-            return succeeded.contains("deleteContainerSpans")
+            succeeded.contains("deleteContainerSpans")
         // Zero is the best binary-search-to-zero can achieve.
         case (.valueMinimization, "binarySearchToZero"):
-            return succeeded.contains("zeroValue")
+            succeeded.contains("zeroValue")
         // Binary-search-to-zero finds values ≤ any nonzero target.
         case (.valueMinimization, "binarySearchToTarget"):
-            return succeeded.contains("zeroValue") || succeeded.contains("binarySearchToZero")
+            succeeded.contains("zeroValue") || succeeded.contains("binarySearchToZero")
         default:
-            return false
+            false
         }
     }
 }

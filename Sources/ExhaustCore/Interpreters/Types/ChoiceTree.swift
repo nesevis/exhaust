@@ -53,14 +53,14 @@ public enum ChoiceTree: Hashable, Equatable, Sendable {
     indirect case selected(ChoiceTree)
 }
 
-extension ChoiceTree {
-    public static let emptyJust = Self.just("")
+public extension ChoiceTree {
+    static let emptyJust = Self.just("")
 
     /// The number of entries this tree produces when flattened to a ``ChoiceSequence``.
     ///
     /// Matches the count of `ChoiceSequence.flatten(self)` without allocating.
     /// Used by ``GuidedMaterializer`` to scope cursor consumption per zip child.
-    public var flattenedEntryCount: Int {
+    var flattenedEntryCount: Int {
         switch self {
         case .choice: 1
         case .just: 1
@@ -87,7 +87,7 @@ extension ChoiceTree {
     }
 
     /// Whether this node is a `.choice` leaf.
-    public var isChoice: Bool {
+    var isChoice: Bool {
         if case .choice = self {
             return true
         }
@@ -95,7 +95,7 @@ extension ChoiceTree {
     }
 
     /// Whether this node is a `.selected` wrapper.
-    public var isSelected: Bool {
+    var isSelected: Bool {
         if case .selected = self {
             return true
         }
@@ -103,7 +103,7 @@ extension ChoiceTree {
     }
 
     /// Whether this node is a `.branch` pick site.
-    public var isBranch: Bool {
+    var isBranch: Bool {
         if case .branch = self {
             return true
         }
@@ -111,7 +111,7 @@ extension ChoiceTree {
     }
 
     /// Whether this node is a `.just` constant.
-    public var isJust: Bool {
+    var isJust: Bool {
         if case .just = self {
             return true
         }
@@ -119,7 +119,7 @@ extension ChoiceTree {
     }
 
     /// Whether this tree contains any `.bind` nodes.
-    public var containsBind: Bool {
+    var containsBind: Bool {
         switch self {
         case .bind:
             true
@@ -140,7 +140,7 @@ extension ChoiceTree {
 
     /// Whether this tree contains any pick sites (`.branch` nodes).
     /// Short-circuits on the first pick found.
-    public var containsPicks: Bool {
+    var containsPicks: Bool {
         switch self {
         case .branch:
             true
@@ -160,7 +160,7 @@ extension ChoiceTree {
     }
 
     /// Returns the maximum `breadth × 2^pickDepth` across all pick sites, where pickDepth counts nested `.branch` levels.
-    public var pickComplexity: UInt64 {
+    var pickComplexity: UInt64 {
         pickComplexityHelper(pickDepth: 0)
     }
 
@@ -186,12 +186,12 @@ extension ChoiceTree {
     }
 }
 
-extension ChoiceTree {
+public extension ChoiceTree {
     /// Recursively transforms a ``ChoiceTree`` by applying a given closure to each node.
     ///
     /// - Parameter transform: A closure that takes a ``ChoiceTree`` and returns a transformed ``ChoiceTree``.
     /// - Returns: A new ``ChoiceTree`` with the transform applied to all its nodes and their children.
-    public func map(_ transform: (ChoiceTree) throws -> ChoiceTree) rethrows -> ChoiceTree {
+    func map(_ transform: (ChoiceTree) throws -> ChoiceTree) rethrows -> ChoiceTree {
         let transformedNode = try transform(self)
 
         switch transformedNode {
@@ -222,7 +222,7 @@ extension ChoiceTree {
     ///
     /// After structural passes like `deleteSequenceBoundaries` merge inner sequences, the tree's recorded length ranges can become stale. This method relaxes those ranges so subsequent materialization passes don't reject valid candidates.
     /// Only affects sequence nodes whose `isRangeExplicit` is `false`.
-    public func relaxingNonExplicitSequenceLengthRanges() -> ChoiceTree {
+    func relaxingNonExplicitSequenceLengthRanges() -> ChoiceTree {
         map { node in
             guard case let .sequence(length, elements, metadata) = node,
                   metadata.isRangeExplicit == false
@@ -238,7 +238,7 @@ extension ChoiceTree {
     }
 
     /// Returns whether any node in this tree satisfies the given predicate. Short-circuits on the first match.
-    public func contains(_ predicate: (ChoiceTree) -> Bool) -> Bool {
+    func contains(_ predicate: (ChoiceTree) -> Bool) -> Bool {
         let selfResult = predicate(self)
         guard selfResult == false else {
             return true

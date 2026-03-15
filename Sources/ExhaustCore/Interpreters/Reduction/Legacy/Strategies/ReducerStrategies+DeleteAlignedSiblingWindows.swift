@@ -99,7 +99,7 @@ extension ReducerStrategies {
         probeBudget: Int,
         subsetBeamSearchTuning: AlignedDeletionBeamSearchTuning,
         onBudgetExhausted: ((String) -> Void)? = nil,
-        bindIndex: BindSpanIndex? = nil,
+        bindIndex _: BindSpanIndex? = nil,
     ) throws -> (ChoiceSequence, Output)? {
         let cohorts = alignedContainerCohorts(in: sequence)
             + alignedSiblingGroupCohorts(from: siblingGroups)

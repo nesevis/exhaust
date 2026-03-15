@@ -27,14 +27,14 @@ struct LengthListShrinkingChallenge {
     }
 
     @Test("Length List, Full")
-    func lengthListFull() throws {
+    func lengthListFull() {
         let output = #exhaust(
             Self.gen,
             .suppressIssueReporting,
             .useBonsaiReducer,
-            property: Self.property
+            property: Self.property,
         )
-        
+
         #expect(output == [900])
     }
 }

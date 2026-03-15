@@ -266,17 +266,17 @@ public extension Interpreters {
                         "loop": "\(loops)",
                         "stall_budget": "\(stallBudget)",
                         "sequence": currentSequence.shortString,
-                        "current_bind_depth": currentBindDepth.description
+                        "current_bind_depth": currentBindDepth.description,
                     ],
                 )
             }
             for pass in passes {
                 let property = isInstrumented == false
-                ? property
-                : { v in
-                    propertyInvocations[pass, default: 0] += 1
-                    return property(v)
-                }
+                    ? property
+                    : { v in
+                        propertyInvocations[pass, default: 0] += 1
+                        return property(v)
+                    }
                 // The order of shrink passes to take next turn
                 var passImproved = false
 
@@ -558,7 +558,7 @@ public extension Interpreters {
                     let seed = ZobristHash.hash(of: currentSequence)
                     if case let .success(value, seq, newTree) =
                         GuidedMaterializer.materialize(gen, prefix: currentSequence, seed: seed, fallbackTree: currentTree),
-                       property(value) == false
+                        property(value) == false
                     {
                         // Restore the shortlex-smaller of the two choices at each bound
                         // position so that shrinking work from previous depth passes is
@@ -597,7 +597,7 @@ public extension Interpreters {
                     }
                 }
             }
-            
+
             stallBudget -= 1
         }
 

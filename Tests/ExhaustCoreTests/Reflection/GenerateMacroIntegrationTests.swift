@@ -6,8 +6,8 @@
 //  and Gen.contramap produce working backward mappings for reflection.
 //
 
-import Testing
 import ExhaustCore
+import Testing
 
 @Suite("Generator reflection")
 struct GenerateMacroIntegrationTests {

@@ -6,8 +6,8 @@
 //  then test the flatten method on those reflected trees.
 //
 
-import Testing
 import ExhaustCore
+import Testing
 
 @Suite("Reflect and Flatten Integration Tests")
 struct ReflectAndFlattenTests {

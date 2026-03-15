@@ -2,7 +2,6 @@
 ///
 /// Uses ``FindIntegerStepper`` to binary-search for the largest contiguous batch of same-depth spans that can be deleted. Each concrete deletion encoder provides target filtering; this struct drives the probe loop.
 struct AdaptiveDeletionEncoder {
-
     // MARK: - State
 
     private var sequence = ChoiceSequence()
@@ -18,8 +17,8 @@ struct AdaptiveDeletionEncoder {
     mutating func start(sequence: ChoiceSequence, sortedSpans: [ChoiceSpan]) {
         self.sequence = sequence
         self.sortedSpans = sortedSpans
-        self.spanIndex = 0
-        self.needsNewGroup = true
+        spanIndex = 0
+        needsNewGroup = true
     }
 
     /// Produces the next deletion candidate, or `nil` when all groups are exhausted.

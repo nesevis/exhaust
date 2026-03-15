@@ -6,9 +6,9 @@
 //  and time-to-N valid BSTs with maxRuns-aware budgeting.
 //
 
+import ExhaustCore
 import Foundation
 import Testing
-import ExhaustCore
 
 private enum BenchBST: Equatable, Hashable {
     case leaf

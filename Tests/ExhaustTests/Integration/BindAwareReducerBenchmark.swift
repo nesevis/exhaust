@@ -7,9 +7,9 @@
 //  improvement from bind-aware shrink passes.
 //
 
+import ExhaustCore
 import Testing
 @testable import Exhaust
-import ExhaustCore
 
 @Suite("Bind-Aware Reducer Benchmark")
 struct BindAwareReducerBenchmark {
@@ -25,7 +25,7 @@ struct BindAwareReducerBenchmark {
         let gen = #gen(.int(in: 1 ... 20))
             .bound(
                 forward: { n in #gen(.int(in: 0 ... 100).array(length: UInt64(max(0, n)))) },
-                backward: { (arr: [Int]) in arr.count }
+                backward: { (arr: [Int]) in arr.count },
             )
 
         let result = try reduceAndMeasure(gen: gen, seed: seed) { $0.count <= 3 }
@@ -46,7 +46,7 @@ struct BindAwareReducerBenchmark {
         let gen = #gen(.int(in: 0 ... 100))
             .bound(
                 forward: { n in Gen.int(in: 0 ... max(1, n)) },
-                backward: { (m: Int) in m }
+                backward: { (m: Int) in m },
             )
 
         let result = try reduceAndMeasure(gen: gen, seed: seed) { $0 < 10 }
@@ -58,9 +58,9 @@ struct BindAwareReducerBenchmark {
     // MARK: - Scenario 3: Zip of two bind generators
 
     @Test("Scenario 3: zip of two binds", arguments: [
-        UInt64(42)//, UInt64(123), UInt64(999), UInt64(7777), UInt64(31415),
+        UInt64(42), // , UInt64(123), UInt64(999), UInt64(7777), UInt64(31415),
     ])
-    func zipOfTwoBinds(seed: UInt64) throws {
+    func zipOfTwoBinds(seed _: UInt64) throws {
         ExhaustLog.setConfiguration(.init(isEnabled: true, minimumLevel: .info, categoryMinimumLevels: [.reducer: .debug], format: .human))
         // Two independent bind generators zipped together.
         // Each: inner picks n from 0...50, bound picks m from 0...max(1,n).
@@ -68,20 +68,21 @@ struct BindAwareReducerBenchmark {
         let singleBind = #gen(.int(in: 0 ... 50))
             .bound(
                 forward: { n in Gen.int(in: 0 ... max(1, n)) },
-                backward: { (m: Int) in m }
+                backward: { (m: Int) in m },
             )
 
         let gen = #gen(singleBind, singleBind)
-        
+
         let result = try #require(
             #exhaust(
                 gen,
                 .useBonsaiReducer,
                 .suppressIssueReporting,
-                .reflecting((11, 15))
+                .reflecting((11, 15)),
             ) { pair in
-            pair.0 + pair.1 < 20
-        })
+                pair.0 + pair.1 < 20
+            },
+        )
 
         #expect(result == (0, 20))
     }
@@ -101,7 +102,7 @@ struct BindAwareReducerBenchmark {
                     let upper = max(1, n)
                     return Gen.zip(Gen.int(in: 0 ... upper), Gen.int(in: 0 ... upper))
                 },
-                backward: { (pair: (Int, Int)) in max(pair.0, pair.1) }
+                backward: { (pair: (Int, Int)) in max(pair.0, pair.1) },
             )
 
         let result = try reduceAndMeasure(gen: gen, seed: seed) { pair in
@@ -153,7 +154,7 @@ private func reduceAndMeasure<Output>(
     }
 
     guard let (_, shrunk) = try Interpreters.reduce(
-        gen: gen, tree: tree, config: .fast, property: countingProperty
+        gen: gen, tree: tree, config: .fast, property: countingProperty,
     ) else {
         return nil
     }
@@ -161,6 +162,6 @@ private func reduceAndMeasure<Output>(
     return MeasuredResult(
         invocations: invocationCount,
         output: shrunk,
-        originalOutput: originalOutput
+        originalOutput: originalOutput,
     )
 }

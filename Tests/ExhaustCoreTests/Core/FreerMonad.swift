@@ -5,8 +5,8 @@
 //  Created by Chris Kolbu on 16/7/2025.
 //
 
-import Testing
 import ExhaustCore
+import Testing
 
 // MARK: - Test Cases
 

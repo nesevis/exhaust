@@ -20,14 +20,13 @@ struct ReduceFloatEncoder: AdaptiveEncoder {
     let name = "reduceFloat"
     let phase = ReductionPhase.valueMinimization
 
-
-    func estimatedCost(sequence: ChoiceSequence, bindIndex: BindSpanIndex?) -> Int? {
+    func estimatedCost(sequence: ChoiceSequence, bindIndex _: BindSpanIndex?) -> Int? {
         let spans = ChoiceSequence.extractAllValueSpans(from: sequence)
-        let t = spans.filter { span in
+        let t = spans.count(where: { span in
             let seqIdx = span.range.lowerBound
             guard let v = sequence[seqIdx].value else { return false }
             return v.choice.tag == .double || v.choice.tag == .float
-        }.count
+        })
         guard t > 0 else { return nil }
         return t * 94
     }
@@ -83,11 +82,11 @@ struct ReduceFloatEncoder: AdaptiveEncoder {
     mutating func start(sequence: ChoiceSequence, targets: TargetSet) {
         self.sequence = sequence
         self.targets = []
-        self.currentTargetIndex = 0
-        self.stage = .specialValues
-        self.batchCandidates = []
-        self.batchIndex = 0
-        self.needsFirstProbe = true
+        currentTargetIndex = 0
+        stage = .specialValues
+        batchCandidates = []
+        batchIndex = 0
+        needsFirstProbe = true
 
         guard case let .spans(spans) = targets else { return }
 
@@ -104,7 +103,7 @@ struct ReduceFloatEncoder: AdaptiveEncoder {
                 validRange: v.validRange,
                 isRangeExplicit: v.isRangeExplicit,
                 currentValue: floatingValue,
-                currentBitPattern: v.choice.bitPattern64
+                currentBitPattern: v.choice.bitPattern64,
             ))
         }
     }
@@ -276,11 +275,11 @@ struct ReduceFloatEncoder: AdaptiveEncoder {
     private mutating func nextCandidateForCurrentStage(lastAccepted: Bool) -> ChoiceSequence? {
         switch stage {
         case .specialValues, .truncation:
-            return nextBatchCandidate()
+            nextBatchCandidate()
         case .integralBinarySearch:
-            return nextIntegralBinarySearchCandidate(lastAccepted: lastAccepted)
+            nextIntegralBinarySearchCandidate(lastAccepted: lastAccepted)
         case .ratioBinarySearch:
-            return nextRatioBinarySearchCandidate(lastAccepted: lastAccepted)
+            nextRatioBinarySearchCandidate(lastAccepted: lastAccepted)
         }
     }
 
@@ -516,16 +515,15 @@ struct ReduceFloatEncoder: AdaptiveEncoder {
     // MARK: - Stage/Target Advancement
 
     private mutating func advanceStageOrTarget() -> Bool {
-        let nextStage: Stage?
-        switch stage {
+        let nextStage: Stage? = switch stage {
         case .specialValues:
-            nextStage = .truncation
+            .truncation
         case .truncation:
-            nextStage = .integralBinarySearch
+            .integralBinarySearch
         case .integralBinarySearch:
-            nextStage = .ratioBinarySearch
+            .ratioBinarySearch
         case .ratioBinarySearch:
-            nextStage = nil
+            nil
         }
 
         if let next = nextStage {
