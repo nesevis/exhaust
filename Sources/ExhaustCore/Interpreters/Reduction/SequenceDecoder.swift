@@ -34,7 +34,7 @@ public enum SequenceDecoder {
     ///
     /// - Returns: A ``ShrinkResult`` if the candidate produces a failing output that is shortlex-smaller than the original, or `nil` if the candidate is rejected.
     public func decode<Output>(
-        candidate: ChoiceSequence,
+        candidate: consuming ChoiceSequence,
         gen: ReflectiveGenerator<Output>,
         tree: ChoiceTree,
         originalSequence: ChoiceSequence,
@@ -43,13 +43,13 @@ public enum SequenceDecoder {
         switch self {
         case let .direct(strictness):
             return try decodeDirect(
-                candidate: candidate, gen: gen, tree: tree,
+                candidate: consume candidate, gen: gen, tree: tree,
                 strictness: strictness, property: property
             )
 
         case let .guided(fallbackTree, strictness, maximizeBoundRegionIndices):
             return decodeGuided(
-                candidate: candidate, gen: gen,
+                candidate: consume candidate, gen: gen,
                 fallbackTree: fallbackTree ?? tree, strictness: strictness,
                 maximizeBoundRegionIndices: maximizeBoundRegionIndices,
                 originalSequence: originalSequence, property: property
@@ -57,7 +57,7 @@ public enum SequenceDecoder {
 
         case let .crossStage(bindIndex, fallbackTree, strictness):
             return try decodeCrossStage(
-                candidate: candidate, gen: gen, tree: tree,
+                candidate: consume candidate, gen: gen, tree: tree,
                 bindIndex: bindIndex, fallbackTree: fallbackTree ?? tree,
                 strictness: strictness,
                 originalSequence: originalSequence, property: property
@@ -65,14 +65,14 @@ public enum SequenceDecoder {
 
         case .exactFresh:
             return decodeExactFresh(
-                candidate: candidate, gen: gen,
+                candidate: consume candidate, gen: gen,
                 fallbackTree: tree,
                 originalSequence: originalSequence, property: property
             )
 
         case let .guidedFresh(fallbackTree, maximizeBoundRegionIndices):
             return decodeGuidedFresh(
-                candidate: candidate, gen: gen,
+                candidate: consume candidate, gen: gen,
                 fallbackTree: fallbackTree ?? tree,
                 maximizeBoundRegionIndices: maximizeBoundRegionIndices,
                 originalSequence: originalSequence, property: property
@@ -83,7 +83,7 @@ public enum SequenceDecoder {
     // MARK: - Decode Implementations
 
     private func decodeDirect<Output>(
-        candidate: ChoiceSequence,
+        candidate: consuming ChoiceSequence,
         gen: ReflectiveGenerator<Output>,
         tree: ChoiceTree,
         strictness: Interpreters.Strictness,
@@ -96,7 +96,7 @@ public enum SequenceDecoder {
         }
         guard property(output) == false else { return nil }
         return ShrinkResult(
-            sequence: candidate,
+            sequence: consume candidate,
             tree: tree,
             output: output,
             evaluations: 1
@@ -104,7 +104,7 @@ public enum SequenceDecoder {
     }
 
     private func decodeGuided<Output>(
-        candidate: ChoiceSequence,
+        candidate: consuming ChoiceSequence,
         gen: ReflectiveGenerator<Output>,
         fallbackTree: ChoiceTree,
         strictness: Interpreters.Strictness,
@@ -113,7 +113,7 @@ public enum SequenceDecoder {
         property: (Output) -> Bool
     ) -> ShrinkResult<Output>? {
         let seed = ZobristHash.hash(of: candidate)
-        switch GuidedMaterializer.materialize(gen, prefix: candidate, seed: seed, fallbackTree: fallbackTree, maximizeBoundRegionIndices: maximizeBoundRegionIndices) {
+        switch GuidedMaterializer.materialize(gen, prefix: consume candidate, seed: seed, fallbackTree: fallbackTree, maximizeBoundRegionIndices: maximizeBoundRegionIndices) {
         case let .success(reDerivedOutput, reDerivedSequence, reDerivedTree):
             guard reDerivedSequence.shortLexPrecedes(originalSequence) else { return nil }
             guard property(reDerivedOutput) == false else { return nil }
@@ -129,7 +129,7 @@ public enum SequenceDecoder {
     }
 
     private func decodeCrossStage<Output>(
-        candidate: ChoiceSequence,
+        candidate: consuming ChoiceSequence,
         gen: ReflectiveGenerator<Output>,
         tree: ChoiceTree,
         bindIndex: BindSpanIndex,
@@ -149,13 +149,13 @@ public enum SequenceDecoder {
 
         if innerValuesChanged {
             return decodeGuided(
-                candidate: candidate, gen: gen,
+                candidate: consume candidate, gen: gen,
                 fallbackTree: fallbackTree, strictness: strictness,
                 originalSequence: originalSequence, property: property
             )
         } else {
             return try decodeDirect(
-                candidate: candidate, gen: gen, tree: tree,
+                candidate: consume candidate, gen: gen, tree: tree,
                 strictness: strictness, property: property
             )
         }
@@ -164,14 +164,14 @@ public enum SequenceDecoder {
     // MARK: - Fresh Decode Implementations
 
     private func decodeExactFresh<Output>(
-        candidate: ChoiceSequence,
+        candidate: consuming ChoiceSequence,
         gen: ReflectiveGenerator<Output>,
         fallbackTree: ChoiceTree,
         originalSequence: ChoiceSequence,
         property: (Output) -> Bool
     ) -> ShrinkResult<Output>? {
         switch ReductionMaterializer.materialize(
-            gen, prefix: candidate,
+            gen, prefix: consume candidate,
             mode: .exact, fallbackTree: fallbackTree
         ) {
         case let .success(output, freshTree):
@@ -189,7 +189,7 @@ public enum SequenceDecoder {
     }
 
     private func decodeGuidedFresh<Output>(
-        candidate: ChoiceSequence,
+        candidate: consuming ChoiceSequence,
         gen: ReflectiveGenerator<Output>,
         fallbackTree: ChoiceTree,
         maximizeBoundRegionIndices: Set<Int>? = nil,
@@ -198,7 +198,7 @@ public enum SequenceDecoder {
     ) -> ShrinkResult<Output>? {
         let seed = ZobristHash.hash(of: candidate)
         switch ReductionMaterializer.materialize(
-            gen, prefix: candidate,
+            gen, prefix: consume candidate,
             mode: .guided(seed: seed, fallbackTree: fallbackTree,
                           maximizeBoundRegionIndices: maximizeBoundRegionIndices)
         ) {

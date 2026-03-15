@@ -47,7 +47,7 @@ public enum ReductionMaterializer {
     /// - Returns: A ``Result`` containing the output value and fresh tree on success.
     public static func materialize<Output>(
         _ gen: ReflectiveGenerator<Output>,
-        prefix: ChoiceSequence,
+        prefix: consuming ChoiceSequence,
         mode: Mode,
         fallbackTree: ChoiceTree? = nil
     ) -> Result<Output> {
@@ -69,7 +69,7 @@ public enum ReductionMaterializer {
         }
 
         var context = Context(
-            cursor: Cursor(from: prefix),
+            cursor: Cursor(from: consume prefix),
             prng: Xoshiro256(seed: seed),
             mode: mode.internalMode,
             // Use max size (100) so size-scaled generators produce their full range.
@@ -889,31 +889,33 @@ private extension ReductionMaterializer {
         private var bindSuspendDepth: Int = 0
 
         /// Stack of position limits for nested scopes (zip children).
-        private var scopeLimits: [Int] = []
+        /// Stack-allocated — max nesting depth ~3-4 in practice.
+        private var scopeStorage = InlineArray<8, Int>(repeating: 0)
+        private var scopeCount: Int = 0
 
         /// Cached end position — updated on scope push/pop.
         private var effectiveEnd: Int
 
-        private static let emptySequence = ChoiceSequence()
+        static var empty: Cursor { Cursor(from: ChoiceSequence()) }
 
-        static var empty: Cursor { Cursor(from: emptySequence) }
-
-        init(from sequence: ChoiceSequence) {
+        init(from sequence: consuming ChoiceSequence) {
             entries = sequence
-            effectiveEnd = sequence.count
+            effectiveEnd = entries.count
         }
 
         // MARK: Scope management
 
         mutating func pushScope(limit: Int) {
-            scopeLimits.append(limit)
+            assert(scopeCount < 8, "Scope nesting exceeds InlineArray capacity")
+            scopeStorage[scopeCount] = limit
+            scopeCount &+= 1
             effectiveEnd = min(entries.count, limit)
         }
 
         mutating func popScope() {
-            scopeLimits.removeLast()
-            if let limit = scopeLimits.last {
-                effectiveEnd = min(entries.count, limit)
+            scopeCount &-= 1
+            if scopeCount > 0 {
+                effectiveEnd = min(entries.count, scopeStorage[scopeCount - 1])
             } else {
                 effectiveEnd = entries.count
             }
@@ -925,7 +927,7 @@ private extension ReductionMaterializer {
             while position < effectiveEnd {
                 switch entries[position] {
                 case .group, .bind, .just:
-                    position += 1
+                    position &+= 1
                 default:
                     return
                 }
@@ -940,17 +942,17 @@ private extension ReductionMaterializer {
             while position < effectiveEnd {
                 switch entries[position] {
                 case .bind(true):
-                    depth += 1
+                    depth &+= 1
                     position += 1
                 case .bind(false):
                     if depth == 0 {
                         position += 1
                         return
                     }
-                    depth -= 1
-                    position += 1
+                    depth &-= 1
+                    position &+= 1
                 default:
-                    position += 1
+                    position &+= 1
                 }
             }
         }
@@ -958,12 +960,12 @@ private extension ReductionMaterializer {
         private(set) var bindEncounterCount: Int = 0
 
         mutating func suspendForBind() {
-            bindSuspendDepth += 1
+            bindSuspendDepth &+= 1
             bindEncounterCount += 1
         }
 
         mutating func resumeAfterBind() {
-            bindSuspendDepth -= 1
+            bindSuspendDepth &-= 1
         }
 
         var isSuspended: Bool { bindSuspendDepth > 0 }
@@ -979,7 +981,7 @@ private extension ReductionMaterializer {
             }
             switch entries[position] {
             case let .value(v), let .reduced(v):
-                position += 1
+                position &+= 1
                 return v
             default:
                 exhausted = true
@@ -996,7 +998,7 @@ private extension ReductionMaterializer {
             }
             switch entries[position] {
             case let .branch(b):
-                position += 1
+                position &+= 1
                 return b
             default:
                 exhausted = true
@@ -1017,7 +1019,7 @@ private extension ReductionMaterializer {
                 exhausted = true
                 return nil
             }
-            position += 1
+            position &+= 1
 
             guard let count = countTopLevelElements(from: position) else {
                 exhausted = true
@@ -1031,7 +1033,7 @@ private extension ReductionMaterializer {
             skipGroups()
             guard position < effectiveEnd else { return }
             if case .sequence(false, _) = entries[position] {
-                position += 1
+                position &+= 1
             }
         }
 
@@ -1045,16 +1047,16 @@ private extension ReductionMaterializer {
                 case .sequence(false, _) where depth == 0:
                     return count
                 case .group(true), .bind(true), .sequence(true, _):
-                    if depth == 0 { count += 1 }
-                    depth += 1
+                    if depth == 0 { count &+= 1 }
+                    depth &+= 1
                 case .group(false), .bind(false), .sequence(false, _):
                     depth -= 1
                 case .value, .reduced, .just:
-                    if depth == 0 { count += 1 }
+                    if depth == 0 { count &+= 1 }
                 case .branch:
                     break
                 }
-                pos += 1
+                pos &+= 1
             }
             return nil
         }
