@@ -39,14 +39,14 @@ public extension Interpreters {
             }
         }
 
-        static let fast = Self(
+        public static let fast = Self(
             maxStalls: 1,
             recentCycleWindow: 6,
             probeBudgets: .fast,
             alignedDeletionBeamSearchTuning: .fast,
         )
 
-        static let slow = Self(
+        public static let slow = Self(
             maxStalls: 8,
             recentCycleWindow: 12,
             probeBudgets: .slow,

@@ -10,7 +10,7 @@ public enum ReducerStrategies {}
 
 // MARK: - Bind-Aware Materialization
 
-extension ReducerStrategies {
+public extension ReducerStrategies {
     /// Materializes a candidate sequence, using ``GuidedMaterializer`` when a single
     /// mutated index falls inside a bind's inner subtree (so bound content is re-derived fresh).
     ///

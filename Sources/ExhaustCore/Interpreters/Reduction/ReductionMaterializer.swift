@@ -889,9 +889,8 @@ private extension ReductionMaterializer {
         private var bindSuspendDepth: Int = 0
 
         /// Stack of position limits for nested scopes (zip children).
-        /// Stack-allocated — max nesting depth ~3-4 in practice.
-        private var scopeStorage = InlineArray<8, Int>(repeating: 0)
-        private var scopeCount: Int = 0
+        /// Max nesting depth ~3-4 in practice.
+        private var scopeLimits = InlineBuffer<Int>(repeating: 0)
 
         /// Cached end position — updated on scope push/pop.
         private var effectiveEnd: Int
@@ -906,16 +905,14 @@ private extension ReductionMaterializer {
         // MARK: Scope management
 
         mutating func pushScope(limit: Int) {
-            assert(scopeCount < 8, "Scope nesting exceeds InlineArray capacity")
-            scopeStorage[scopeCount] = limit
-            scopeCount &+= 1
+            scopeLimits.append(limit)
             effectiveEnd = min(entries.count, limit)
         }
 
         mutating func popScope() {
-            scopeCount &-= 1
-            if scopeCount > 0 {
-                effectiveEnd = min(entries.count, scopeStorage[scopeCount - 1])
+            scopeLimits.removeLast()
+            if let limit = scopeLimits.last {
+                effectiveEnd = min(entries.count, limit)
             } else {
                 effectiveEnd = entries.count
             }
@@ -946,7 +943,7 @@ private extension ReductionMaterializer {
                     position += 1
                 case .bind(false):
                     if depth == 0 {
-                        position += 1
+                        position &+= 1
                         return
                     }
                     depth &-= 1
