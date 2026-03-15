@@ -601,7 +601,7 @@ enum ReductionScheduler {
                     for plan in regionPairs {
                         guard legBudget.isExhausted == false else { break }
                         let sinkRegionIndex = plan.sink.regionIndex
-                        let bindRedistDecoder: SequenceDecoder = .guidedFresh(
+                        let bindRedistDecoder: SequenceDecoder = .guided(
                             fallbackTree: fallbackTree ?? tree,
                             maximizeBoundRegionIndices: Set([sinkRegionIndex])
                         )

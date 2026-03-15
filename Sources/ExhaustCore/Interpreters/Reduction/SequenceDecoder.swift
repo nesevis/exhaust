@@ -4,13 +4,12 @@
 public enum SequenceDecoder {
     /// ``ReductionMaterializer`` exact mode. Produces a fresh tree with current `validRange` and
     /// all branch alternatives. Inner values are rejected if out-of-range; bound values are clamped.
-    case exactFresh
+    case exact
 
     /// ``ReductionMaterializer`` guided mode. Produces a fresh tree with current `validRange` and
     /// all branch alternatives. Tiered resolution: prefix → fallback → PRNG. Cursor suspension
     /// at bind sites.
-    case guidedFresh(fallbackTree: ChoiceTree?,
-                     maximizeBoundRegionIndices: Set<Int>? = nil)
+    case guided(fallbackTree: ChoiceTree?, maximizeBoundRegionIndices: Set<Int>? = nil)
 
     // MARK: - Decode
 
@@ -25,15 +24,15 @@ public enum SequenceDecoder {
         property: (Output) -> Bool
     ) throws -> ShrinkResult<Output>? {
         switch self {
-        case .exactFresh:
-            decodeExactFresh(
+        case .exact:
+            decodeExact(
                 candidate: consume candidate, gen: gen,
                 fallbackTree: tree,
                 originalSequence: originalSequence, property: property
             )
 
-        case let .guidedFresh(fallbackTree, maximizeBoundRegionIndices):
-            decodeGuidedFresh(
+        case let .guided(fallbackTree, maximizeBoundRegionIndices):
+            decodeGuided(
                 candidate: consume candidate, gen: gen,
                 fallbackTree: fallbackTree ?? tree,
                 maximizeBoundRegionIndices: maximizeBoundRegionIndices,
@@ -65,67 +64,9 @@ public enum SequenceDecoder {
         )
     }
 
-    private func decodeGuided<Output>(
-        candidate: consuming ChoiceSequence,
-        gen: ReflectiveGenerator<Output>,
-        fallbackTree: ChoiceTree,
-        strictness _: Interpreters.Strictness,
-        maximizeBoundRegionIndices: Set<Int>? = nil,
-        originalSequence: ChoiceSequence,
-        property: (Output) -> Bool
-    ) -> ShrinkResult<Output>? {
-        let seed = ZobristHash.hash(of: candidate)
-        switch GuidedMaterializer.materialize(gen, prefix: consume candidate, seed: seed, fallbackTree: fallbackTree, maximizeBoundRegionIndices: maximizeBoundRegionIndices) {
-        case let .success(reDerivedOutput, reDerivedSequence, reDerivedTree):
-            guard reDerivedSequence.shortLexPrecedes(originalSequence) else { return nil }
-            guard property(reDerivedOutput) == false else { return nil }
-            return ShrinkResult(
-                sequence: reDerivedSequence,
-                tree: reDerivedTree,
-                output: reDerivedOutput,
-                evaluations: 1
-            )
-        case .filterEncountered, .failed:
-            return nil
-        }
-    }
+    // MARK: - Decode Implementations
 
-    private func decodeCrossStage<Output>(
-        candidate: consuming ChoiceSequence,
-        gen: ReflectiveGenerator<Output>,
-        tree: ChoiceTree,
-        bindIndex: BindSpanIndex,
-        fallbackTree: ChoiceTree,
-        strictness: Interpreters.Strictness,
-        originalSequence: ChoiceSequence,
-        property: (Output) -> Bool
-    ) throws -> ShrinkResult<Output>? {
-        // Check whether inner values changed. If only bound values were modified,
-        // the strategy's values are authoritative — re-derivation would replace
-        // carefully redistributed values with PRNG noise.
-        let innerValuesChanged = bindIndex.regions.contains { region in
-            region.innerRange.contains { idx in
-                candidate[idx].shortLexCompare(originalSequence[idx]) != .eq
-            }
-        }
-
-        if innerValuesChanged {
-            return decodeGuided(
-                candidate: consume candidate, gen: gen,
-                fallbackTree: fallbackTree, strictness: strictness,
-                originalSequence: originalSequence, property: property
-            )
-        } else {
-            return try decodeDirect(
-                candidate: consume candidate, gen: gen, tree: tree,
-                strictness: strictness, property: property
-            )
-        }
-    }
-
-    // MARK: - Fresh Decode Implementations
-
-    private func decodeExactFresh<Output>(
+    private func decodeExact<Output>(
         candidate: consuming ChoiceSequence,
         gen: ReflectiveGenerator<Output>,
         fallbackTree: ChoiceTree,
@@ -150,7 +91,7 @@ public enum SequenceDecoder {
         }
     }
 
-    private func decodeGuidedFresh<Output>(
+    private func decodeGuided<Output>(
         candidate: consuming ChoiceSequence,
         gen: ReflectiveGenerator<Output>,
         fallbackTree: ChoiceTree,
@@ -160,9 +101,13 @@ public enum SequenceDecoder {
     ) -> ShrinkResult<Output>? {
         let seed = ZobristHash.hash(of: candidate)
         switch ReductionMaterializer.materialize(
-            gen, prefix: consume candidate,
-            mode: .guided(seed: seed, fallbackTree: fallbackTree,
-                          maximizeBoundRegionIndices: maximizeBoundRegionIndices)
+            gen,
+            prefix: consume candidate,
+            mode: .guided(
+                seed: seed,
+                fallbackTree: fallbackTree,
+                maximizeBoundRegionIndices: maximizeBoundRegionIndices
+            )
         ) {
         case let .success(output, freshTree):
             let freshSequence = ChoiceSequence(freshTree)
@@ -194,19 +139,19 @@ public enum SequenceDecoder {
         case .global:
             // Cross-stage redistribution: guided re-derivation handles both
             // inner and bound value changes uniformly.
-            return .guidedFresh(fallbackTree: context.fallbackTree)
+            return .guided(fallbackTree: context.fallbackTree)
 
         case .specific(0):
             if hasBinds || context.strictness == .relaxed {
-                return .guidedFresh(fallbackTree: context.fallbackTree)
+                return .guided(fallbackTree: context.fallbackTree)
             }
-            return .exactFresh
+            return .exact
 
         case .specific:
             if context.strictness == .relaxed {
-                return .guidedFresh(fallbackTree: context.fallbackTree)
+                return .guided(fallbackTree: context.fallbackTree)
             }
-            return .exactFresh
+            return .exact
         }
     }
 }
