@@ -23,7 +23,7 @@ struct ReducerReduceValuesIntegrationTests {
             $0 + $1 + $2
         }
 
-        let counterExample = #exhaust(gen, .suppressIssueReporting) { str in
+        let counterExample = #exhaust(gen, .suppressIssueReporting, .useBonsaiReducer) { str in
             str.contains("5") == false
         }
 

@@ -22,7 +22,7 @@ import ExhaustCore
 
 @Suite("Circular queue contract tests")
 struct CircularQueueTests {
-    @Test("Position-dependent corruption detected via FIFO postcondition", .disabled("Bonsai doesn't minimise as well"))
+    @Test("Position-dependent corruption detected via FIFO postcondition")
     func circularQueueCorruption() throws {
         let result = try #require(
             #exhaust(

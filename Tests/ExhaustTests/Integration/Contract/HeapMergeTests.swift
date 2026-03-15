@@ -22,14 +22,17 @@ import ExhaustCore
 
 @Suite("Heap merge contract tests (Bundle)")
 struct HeapMergeTests {
-    @Test("Detects dropped element during merge via invariant or postcondition", .disabled("Bonsai"))
+    @Test("Detects dropped element during merge via invariant or postcondition")
     func heapMergeBug() throws {
+        // Bonsai uses 686 invocations in 136ms
+        // Legacy uses 51 in 18ms
         let result = try #require(
             #exhaust(
                 HeapMergeContract.self,
                 commandLimit: 12,
                 .samplingBudget(2000),
 //                .argumentAwareCoverage,
+//                .useBonsaiReducer,
                 .suppressIssueReporting
             )
         )
@@ -45,14 +48,18 @@ struct HeapMergeTests {
 
 @Suite("Heap aliasing contract tests (self-merge)")
 struct HeapAliasingTests {
-    @Test("Sorted-splice merge violates heap property after repeated self-merges", .disabled("Reducing very badly, bonsai"))
+    #warning("Pathological bonsai case")
+    @Test("Sorted-splice merge violates heap property after repeated self-merges")
     func spliceMergeBug() throws {
 //        ExhaustLog.setConfiguration(.init(isEnabled: true, minimumLevel: .info, categoryMinimumLevels: [.reducer: .debug], format: .human))
+        // Legacy: 79 invocations, 31ms, CE 5 steps
+        // Bonsai: 8024 invocations, 2.8 seconds, CE 7 steps
         let result = try #require(
             #exhaust(
                 HeapAliasingContract.self,
                 commandLimit: 20,
-                .suppressIssueReporting
+                .suppressIssueReporting,
+//                .useBonsaiReducer
             )
         )
 

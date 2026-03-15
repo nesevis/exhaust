@@ -12,7 +12,7 @@ import Testing
 @testable import Exhaust
 
 @MainActor
-@Suite("Shrinking Challenge: Bound5", .disabled("Fails Bonsai"))
+@Suite("Shrinking Challenge: Bound5")
 struct Bound5ShrinkingChallenge {
     /*
      https://github.com/jlink/shrinking-challenge/blob/main/challenges/bound5.md
