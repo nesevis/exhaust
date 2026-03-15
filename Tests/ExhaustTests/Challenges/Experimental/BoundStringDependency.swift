@@ -21,7 +21,11 @@ struct DependentStringChallenge {
             backward: \.count
         )
 
-        let output = #exhaust(gen, .suppressIssueReporting) { value in
+        let output = #exhaust(
+            gen,
+            .suppressIssueReporting,
+            .useBonsaiReducer
+        ) { value in
             !(4...5 ~= value.count)
         }
 

@@ -48,18 +48,19 @@ struct HeapMergeTests {
 
 @Suite("Heap aliasing contract tests (self-merge)")
 struct HeapAliasingTests {
-    #warning("Pathological bonsai case")
+    #warning("Pathological bonsai case; 4x slower")
     @Test("Sorted-splice merge violates heap property after repeated self-merges")
     func spliceMergeBug() throws {
 //        ExhaustLog.setConfiguration(.init(isEnabled: true, minimumLevel: .info, categoryMinimumLevels: [.reducer: .debug], format: .human))
-        // Legacy: 79 invocations, 31ms, CE 5 steps
-        // Bonsai: 8024 invocations, 2.8 seconds, CE 7 steps
+        // Legacy: 92 invocations, 31ms, CE 5 steps
+        // Bonsai: 105 invocations, 73ms, CE 5 steps
         let result = try #require(
             #exhaust(
                 HeapAliasingContract.self,
                 commandLimit: 20,
                 .suppressIssueReporting,
-//                .useBonsaiReducer
+                .useBonsaiReducer,
+                .replay(6161601321680111336)
             )
         )
 
