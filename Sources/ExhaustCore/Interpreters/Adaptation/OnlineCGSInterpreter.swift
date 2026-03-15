@@ -66,7 +66,7 @@ public struct OnlineCGSInterpreter<FinalOutput>: ~Copyable, ExhaustIterator {
                         }
                         return ReflectiveGenerator<Any>.impure(
                             operation: .zip(gens),
-                            continuation: { .pure($0) },
+                            continuation: { .pure($0) }
                         )
                     }._bind { zipResult in
                         try continuation(zipResult)
@@ -83,7 +83,7 @@ public struct OnlineCGSInterpreter<FinalOutput>: ~Copyable, ExhaustIterator {
             index: Int,
             completed: [Any],
             allGenerators: ContiguousArray<ReflectiveGenerator<Any>>,
-            continuation: (Any) throws -> ReflectiveGenerator<Any>,
+            continuation: (Any) throws -> ReflectiveGenerator<Any>
         )
     }
 
@@ -106,7 +106,7 @@ public struct OnlineCGSInterpreter<FinalOutput>: ~Copyable, ExhaustIterator {
         sampleCount: UInt64 = 50,
         seed: UInt64? = nil,
         maxRuns: UInt64? = nil,
-        fitnessAccumulator: FitnessAccumulator? = nil,
+        fitnessAccumulator: FitnessAccumulator? = nil
     ) {
         self.generator = generator
         self.predicate = predicate
@@ -126,7 +126,7 @@ public struct OnlineCGSInterpreter<FinalOutput>: ~Copyable, ExhaustIterator {
             baseSeed: baseSeed,
             isFixed: false,
             size: 0,
-            prng: Xoshiro256(seed: baseSeed),
+            prng: Xoshiro256(seed: baseSeed)
         )
     }
 
@@ -158,7 +158,7 @@ public struct OnlineCGSInterpreter<FinalOutput>: ~Copyable, ExhaustIterator {
                 predicate: predicate,
                 sampleCount: sampleCount,
                 cgsState: &cgsState,
-                derivativeContext: derivativeContext,
+                derivativeContext: derivativeContext
             )
         } catch GeneratorError.uniqueBudgetExhausted {
             ExhaustLog.warning(
@@ -167,7 +167,7 @@ public struct OnlineCGSInterpreter<FinalOutput>: ~Copyable, ExhaustIterator {
                 metadata: [
                     "unique_count": "\(context.runs)",
                     "requested": "\(context.maxRuns)",
-                ],
+                ]
             )
             context.runs = context.maxRuns
             return nil
@@ -183,7 +183,7 @@ public struct OnlineCGSInterpreter<FinalOutput>: ~Copyable, ExhaustIterator {
         predicate: @escaping (FinalOutput) -> Bool,
         sampleCount: UInt64,
         cgsState: inout CGSState,
-        derivativeContext: DerivativeContext,
+        derivativeContext: DerivativeContext
     ) throws -> Output? {
         switch gen {
         case let .pure(value):
@@ -201,7 +201,7 @@ public struct OnlineCGSInterpreter<FinalOutput>: ~Copyable, ExhaustIterator {
                     predicate: predicate,
                     sampleCount: sampleCount,
                     cgsState: &cgsState,
-                    derivativeContext: derivativeContext,
+                    derivativeContext: derivativeContext
                 ) else { return nil }
                 return try runContinuation(
                     result: result,
@@ -211,7 +211,7 @@ public struct OnlineCGSInterpreter<FinalOutput>: ~Copyable, ExhaustIterator {
                     predicate: predicate,
                     sampleCount: sampleCount,
                     cgsState: &cgsState,
-                    derivativeContext: derivativeContext,
+                    derivativeContext: derivativeContext
                 )
 
             // MARK: - Prune
@@ -227,7 +227,7 @@ public struct OnlineCGSInterpreter<FinalOutput>: ~Copyable, ExhaustIterator {
                     predicate: predicate,
                     sampleCount: sampleCount,
                     cgsState: &cgsState,
-                    derivativeContext: derivativeContext,
+                    derivativeContext: derivativeContext
                 ) else { return nil }
                 return try runContinuation(
                     result: result,
@@ -237,7 +237,7 @@ public struct OnlineCGSInterpreter<FinalOutput>: ~Copyable, ExhaustIterator {
                     predicate: predicate,
                     sampleCount: sampleCount,
                     cgsState: &cgsState,
-                    derivativeContext: derivativeContext,
+                    derivativeContext: derivativeContext
                 )
 
             // MARK: - Pick (CGS Core)
@@ -251,7 +251,7 @@ public struct OnlineCGSInterpreter<FinalOutput>: ~Copyable, ExhaustIterator {
                     predicate: predicate,
                     sampleCount: sampleCount,
                     cgsState: &cgsState,
-                    derivativeContext: derivativeContext,
+                    derivativeContext: derivativeContext
                 )
 
             // MARK: - ChooseBits
@@ -273,21 +273,21 @@ public struct OnlineCGSInterpreter<FinalOutput>: ~Copyable, ExhaustIterator {
                                     min: subrange.lowerBound,
                                     max: subrange.upperBound,
                                     tag: tag,
-                                    isRangeExplicit: isRangeExplicit,
+                                    isRangeExplicit: isRangeExplicit
                                 ),
-                                continuation: { .pure($0) },
+                                continuation: { .pure($0) }
                             )
                             subrangeChoices.append(ReflectiveOperation.PickTuple(
                                 siteID: 0,
                                 id: UInt64(i),
                                 weight: 1,
-                                generator: subGen,
+                                generator: subGen
                             ))
                         }
 
                         let synthesisedPick: ReflectiveGenerator<Output> = .impure(
                             operation: .pick(choices: subrangeChoices),
-                            continuation: continuation,
+                            continuation: continuation
                         )
 
                         return try generateRecursive(
@@ -297,7 +297,7 @@ public struct OnlineCGSInterpreter<FinalOutput>: ~Copyable, ExhaustIterator {
                             predicate: predicate,
                             sampleCount: sampleCount,
                             cgsState: &cgsState,
-                            derivativeContext: derivativeContext,
+                            derivativeContext: derivativeContext
                         )
                     }
                 }
@@ -310,7 +310,7 @@ public struct OnlineCGSInterpreter<FinalOutput>: ~Copyable, ExhaustIterator {
                     predicate: predicate,
                     sampleCount: sampleCount,
                     cgsState: &cgsState,
-                    derivativeContext: derivativeContext,
+                    derivativeContext: derivativeContext
                 )
 
             // MARK: - Sequence
@@ -323,7 +323,7 @@ public struct OnlineCGSInterpreter<FinalOutput>: ~Copyable, ExhaustIterator {
                     predicate: predicate,
                     sampleCount: sampleCount,
                     cgsState: &cgsState,
-                    derivativeContext: derivativeContext,
+                    derivativeContext: derivativeContext
                 ) else {
                     return nil
                 }
@@ -346,7 +346,7 @@ public struct OnlineCGSInterpreter<FinalOutput>: ~Copyable, ExhaustIterator {
                         predicate: predicate,
                         sampleCount: sampleCount,
                         cgsState: &cgsState,
-                        derivativeContext: elementDerivativeContext,
+                        derivativeContext: elementDerivativeContext
                     ) else {
                         return false
                     }
@@ -362,7 +362,7 @@ public struct OnlineCGSInterpreter<FinalOutput>: ~Copyable, ExhaustIterator {
                     predicate: predicate,
                     sampleCount: sampleCount,
                     cgsState: &cgsState,
-                    derivativeContext: derivativeContext,
+                    derivativeContext: derivativeContext
                 )
 
             // MARK: - Zip
@@ -376,7 +376,7 @@ public struct OnlineCGSInterpreter<FinalOutput>: ~Copyable, ExhaustIterator {
                     predicate: predicate,
                     sampleCount: sampleCount,
                     cgsState: &cgsState,
-                    derivativeContext: derivativeContext,
+                    derivativeContext: derivativeContext
                 )
 
             // MARK: - Just
@@ -390,7 +390,7 @@ public struct OnlineCGSInterpreter<FinalOutput>: ~Copyable, ExhaustIterator {
                     predicate: predicate,
                     sampleCount: sampleCount,
                     cgsState: &cgsState,
-                    derivativeContext: derivativeContext,
+                    derivativeContext: derivativeContext
                 )
 
             // MARK: - GetSize
@@ -406,7 +406,7 @@ public struct OnlineCGSInterpreter<FinalOutput>: ~Copyable, ExhaustIterator {
                     predicate: predicate,
                     sampleCount: sampleCount,
                     cgsState: &cgsState,
-                    derivativeContext: derivativeContext,
+                    derivativeContext: derivativeContext
                 )
 
             // MARK: - Resize
@@ -420,7 +420,7 @@ public struct OnlineCGSInterpreter<FinalOutput>: ~Copyable, ExhaustIterator {
                     predicate: predicate,
                     sampleCount: sampleCount,
                     cgsState: &cgsState,
-                    derivativeContext: derivativeContext,
+                    derivativeContext: derivativeContext
                 ) else { return nil }
                 return try runContinuation(
                     result: result,
@@ -430,7 +430,7 @@ public struct OnlineCGSInterpreter<FinalOutput>: ~Copyable, ExhaustIterator {
                     predicate: predicate,
                     sampleCount: sampleCount,
                     cgsState: &cgsState,
-                    derivativeContext: derivativeContext,
+                    derivativeContext: derivativeContext
                 )
 
             // MARK: - Filter
@@ -441,7 +441,7 @@ public struct OnlineCGSInterpreter<FinalOutput>: ~Copyable, ExhaustIterator {
                     fingerprint: fingerprint,
                     filterType: filterType,
                     predicate: filterPredicate,
-                    context: &context,
+                    context: &context
                 )
 
                 var attempts = 0 as UInt64
@@ -453,7 +453,7 @@ public struct OnlineCGSInterpreter<FinalOutput>: ~Copyable, ExhaustIterator {
                         predicate: predicate,
                         sampleCount: sampleCount,
                         cgsState: &cgsState,
-                        derivativeContext: derivativeContext,
+                        derivativeContext: derivativeContext
                     ) else { return nil }
 
                     if filterPredicate(result) {
@@ -465,7 +465,7 @@ public struct OnlineCGSInterpreter<FinalOutput>: ~Copyable, ExhaustIterator {
                             predicate: predicate,
                             sampleCount: sampleCount,
                             cgsState: &cgsState,
-                            derivativeContext: derivativeContext,
+                            derivativeContext: derivativeContext
                         )
                     }
                     attempts += 1
@@ -482,7 +482,7 @@ public struct OnlineCGSInterpreter<FinalOutput>: ~Copyable, ExhaustIterator {
                     predicate: predicate,
                     sampleCount: sampleCount,
                     cgsState: &cgsState,
-                    derivativeContext: derivativeContext,
+                    derivativeContext: derivativeContext
                 ) else { return nil }
                 for (label, classifier) in classifiers where classifier(result) {
                     context.classifications[fingerprint, default: [:]][label, default: []].insert(context.runs)
@@ -495,7 +495,7 @@ public struct OnlineCGSInterpreter<FinalOutput>: ~Copyable, ExhaustIterator {
                     predicate: predicate,
                     sampleCount: sampleCount,
                     cgsState: &cgsState,
-                    derivativeContext: derivativeContext,
+                    derivativeContext: derivativeContext
                 )
 
             // MARK: - Transform
@@ -508,7 +508,7 @@ public struct OnlineCGSInterpreter<FinalOutput>: ~Copyable, ExhaustIterator {
                     predicate: predicate,
                     sampleCount: sampleCount,
                     cgsState: &cgsState,
-                    derivativeContext: derivativeContext,
+                    derivativeContext: derivativeContext
                 ) else { return nil }
                 let result: Any
                 switch kind {
@@ -523,7 +523,7 @@ public struct OnlineCGSInterpreter<FinalOutput>: ~Copyable, ExhaustIterator {
                         predicate: predicate,
                         sampleCount: sampleCount,
                         cgsState: &cgsState,
-                        derivativeContext: derivativeContext,
+                        derivativeContext: derivativeContext
                     ) else { return nil }
                     result = boundValue
                 }
@@ -535,7 +535,7 @@ public struct OnlineCGSInterpreter<FinalOutput>: ~Copyable, ExhaustIterator {
                     predicate: predicate,
                     sampleCount: sampleCount,
                     cgsState: &cgsState,
-                    derivativeContext: derivativeContext,
+                    derivativeContext: derivativeContext
                 )
 
             // MARK: - Unique
@@ -550,7 +550,7 @@ public struct OnlineCGSInterpreter<FinalOutput>: ~Copyable, ExhaustIterator {
                         predicate: predicate,
                         sampleCount: sampleCount,
                         cgsState: &cgsState,
-                        derivativeContext: derivativeContext,
+                        derivativeContext: derivativeContext
                     ) else { return nil }
 
                     let isDuplicate: Bool
@@ -572,7 +572,7 @@ public struct OnlineCGSInterpreter<FinalOutput>: ~Copyable, ExhaustIterator {
                             predicate: predicate,
                             sampleCount: sampleCount,
                             cgsState: &cgsState,
-                            derivativeContext: derivativeContext,
+                            derivativeContext: derivativeContext
                         )
                     }
                     attempts += 1
@@ -593,7 +593,7 @@ public struct OnlineCGSInterpreter<FinalOutput>: ~Copyable, ExhaustIterator {
         predicate: @escaping (FinalOutput) -> Bool,
         sampleCount: UInt64,
         cgsState: inout CGSState,
-        derivativeContext: DerivativeContext,
+        derivativeContext: DerivativeContext
     ) throws -> Output? {
         let nextGen = try continuation(result)
         return try generateRecursive(
@@ -603,7 +603,7 @@ public struct OnlineCGSInterpreter<FinalOutput>: ~Copyable, ExhaustIterator {
             predicate: predicate,
             sampleCount: sampleCount,
             cgsState: &cgsState,
-            derivativeContext: derivativeContext,
+            derivativeContext: derivativeContext
         )
     }
 
@@ -618,7 +618,7 @@ public struct OnlineCGSInterpreter<FinalOutput>: ~Copyable, ExhaustIterator {
         predicate: @escaping (FinalOutput) -> Bool,
         sampleCount: UInt64,
         cgsState: inout CGSState,
-        derivativeContext: DerivativeContext,
+        derivativeContext: DerivativeContext
     ) throws -> Output? {
         // Fast path: single choice or deep pick — skip derivative evaluation.
         // Without .sequenceElement frames, derivative context cannot compose through
@@ -640,7 +640,7 @@ public struct OnlineCGSInterpreter<FinalOutput>: ~Copyable, ExhaustIterator {
                 predicate: predicate,
                 sampleCount: sampleCount,
                 cgsState: &cgsState,
-                derivativeContext: branchContext,
+                derivativeContext: branchContext
             ) else {
                 return nil
             }
@@ -652,7 +652,7 @@ public struct OnlineCGSInterpreter<FinalOutput>: ~Copyable, ExhaustIterator {
                 predicate: predicate,
                 sampleCount: sampleCount,
                 cgsState: &cgsState,
-                derivativeContext: derivativeContext,
+                derivativeContext: derivativeContext
             )
         }
 
@@ -705,7 +705,7 @@ public struct OnlineCGSInterpreter<FinalOutput>: ~Copyable, ExhaustIterator {
                 predicate: predicate,
                 sampleCount: sampleCount,
                 cgsState: &cgsState,
-                derivativeContext: branchContext,
+                derivativeContext: branchContext
             ) else {
                 return nil
             }
@@ -717,7 +717,7 @@ public struct OnlineCGSInterpreter<FinalOutput>: ~Copyable, ExhaustIterator {
                 predicate: predicate,
                 sampleCount: sampleCount,
                 cgsState: &cgsState,
-                derivativeContext: derivativeContext,
+                derivativeContext: derivativeContext
             )
         }
 
@@ -746,7 +746,7 @@ public struct OnlineCGSInterpreter<FinalOutput>: ~Copyable, ExhaustIterator {
                     let result = try LightweightSampler.sample(
                         derivatives[derivIdx],
                         using: &cgsState.samplingPRNG,
-                        size: currentSize,
+                        size: currentSize
                     )
                     if let value = result, predicate(value) {
                         fitnesses[choiceIdx] += 1
@@ -788,7 +788,7 @@ public struct OnlineCGSInterpreter<FinalOutput>: ~Copyable, ExhaustIterator {
                     siteID: choice.siteID,
                     choiceID: choice.id,
                     fitness: fitnesses[choiceIdx],
-                    observations: completedRounds,
+                    observations: completedRounds
                 )
             }
         }
@@ -807,7 +807,7 @@ public struct OnlineCGSInterpreter<FinalOutput>: ~Copyable, ExhaustIterator {
                 siteID: choice.siteID,
                 id: choice.id,
                 weight: allLiveZero ? (isLive[i] ? 1 : 0) : fitnesses[i],
-                generator: choice.generator,
+                generator: choice.generator
             ))
         }
 
@@ -831,7 +831,7 @@ public struct OnlineCGSInterpreter<FinalOutput>: ~Copyable, ExhaustIterator {
             predicate: predicate,
             sampleCount: sampleCount,
             cgsState: &cgsState,
-            derivativeContext: branchContext,
+            derivativeContext: branchContext
         ) else {
             return nil
         }
@@ -845,7 +845,7 @@ public struct OnlineCGSInterpreter<FinalOutput>: ~Copyable, ExhaustIterator {
             predicate: predicate,
             sampleCount: sampleCount,
             cgsState: &cgsState,
-            derivativeContext: derivativeContext,
+            derivativeContext: derivativeContext
         )
     }
 
@@ -860,7 +860,7 @@ public struct OnlineCGSInterpreter<FinalOutput>: ~Copyable, ExhaustIterator {
         predicate: @escaping (FinalOutput) -> Bool,
         sampleCount: UInt64,
         cgsState: inout CGSState,
-        derivativeContext: DerivativeContext,
+        derivativeContext: DerivativeContext
     ) throws -> Output? {
         var results = [Any]()
         results.reserveCapacity(generators.count)
@@ -871,7 +871,7 @@ public struct OnlineCGSInterpreter<FinalOutput>: ~Copyable, ExhaustIterator {
                 index: i,
                 completed: results,
                 allGenerators: generators,
-                continuation: { try continuation($0).erase() },
+                continuation: { try continuation($0).erase() }
             ))
 
             guard let result = try generateRecursive(
@@ -881,7 +881,7 @@ public struct OnlineCGSInterpreter<FinalOutput>: ~Copyable, ExhaustIterator {
                 predicate: predicate,
                 sampleCount: sampleCount,
                 cgsState: &cgsState,
-                derivativeContext: componentContext,
+                derivativeContext: componentContext
             ) else {
                 throw GeneratorError.couldNotGenerateConcomitantChoiceTree
             }
@@ -895,7 +895,7 @@ public struct OnlineCGSInterpreter<FinalOutput>: ~Copyable, ExhaustIterator {
             predicate: predicate,
             sampleCount: sampleCount,
             cgsState: &cgsState,
-            derivativeContext: derivativeContext,
+            derivativeContext: derivativeContext
         )
     }
 }

@@ -25,7 +25,7 @@ extension Interpreters {
     /// - Returns: The deterministically generated value, or `nil` if the tree does not match the generator's structure.
     public static func replay<Output>(
         _ gen: ReflectiveGenerator<Output>,
-        using choiceTree: ChoiceTree,
+        using choiceTree: ChoiceTree
     ) throws -> Output? {
         // Start the recursive process. The helper returns the value and any *unconsumed*
         // parts of the tree. A successful top-level replay should consume the entire tree.
@@ -39,7 +39,7 @@ extension Interpreters {
 
     private static func replayWithChoices<Output>(
         _ gen: ReflectiveGenerator<Output>,
-        choices: [ChoiceTree],
+        choices: [ChoiceTree]
     ) throws -> Output? {
         var remainingChoices = choices
         return try replayWithChoicesHelper(gen, choices: &remainingChoices)
@@ -47,7 +47,7 @@ extension Interpreters {
 
     private static func replayWithChoicesHelper<Output>(
         _ gen: ReflectiveGenerator<Output>,
-        choices: inout [ChoiceTree],
+        choices: inout [ChoiceTree]
     ) throws -> Output? {
         switch gen {
         case let .pure(value):
@@ -58,7 +58,7 @@ extension Interpreters {
             try replayWithChoicesOperation(
                 operation,
                 continuation: continuation,
-                choices: &choices,
+                choices: &choices
             )
         }
     }
@@ -66,7 +66,7 @@ extension Interpreters {
     private static func replayWithChoicesOperation<Output>(
         _ operation: ReflectiveOperation,
         continuation: @escaping (Any) throws -> ReflectiveGenerator<Output>,
-        choices: inout [ChoiceTree],
+        choices: inout [ChoiceTree]
     ) throws -> Output? {
         switch operation {
         case .chooseBits:
@@ -75,25 +75,25 @@ extension Interpreters {
             return try replayWithChoicesPick(
                 pickChoices: pickChoices,
                 continuation: continuation,
-                choices: &choices,
+                choices: &choices
             )
         case let .sequence(_, elementGenerator):
             return try replayWithChoicesSequence(
                 elementGenerator: elementGenerator,
                 continuation: continuation,
-                choices: &choices,
+                choices: &choices
             )
         case let .zip(generators, _):
             return try replayWithChoicesZip(
                 generators: generators,
                 continuation: continuation,
-                choices: &choices,
+                choices: &choices
             )
         case let .contramap(_, subGenerator), let .prune(subGenerator):
             return try replayWithChoicesWrapped(
                 subGenerator: subGenerator,
                 continuation: continuation,
-                choices: &choices,
+                choices: &choices
             )
         case let .just(value):
             return try replayWithChoicesJust(value: value, continuation: continuation, choices: &choices)
@@ -103,7 +103,7 @@ extension Interpreters {
             return try replayWithChoicesResize(
                 subGenerator: subGenerator,
                 continuation: continuation,
-                choices: &choices,
+                choices: &choices
             )
         case let .filter(gen, _, _, predicate):
             guard let inner = try replayWithChoicesHelper(gen, choices: &choices), predicate(inner) else {
@@ -112,7 +112,6 @@ extension Interpreters {
             return inner as? Output
         case let .classify(gen, _, _), let .unique(gen, _, _):
             return try replayWithChoicesHelper(gen, choices: &choices) as? Output
-
         case let .transform(kind, inner):
             let result: Any
             switch kind {
@@ -155,7 +154,7 @@ extension Interpreters {
     @inline(__always)
     private static func replayWithChoicesChooseBits<Output>(
         continuation: @escaping (Any) throws -> ReflectiveGenerator<Output>,
-        choices: inout [ChoiceTree],
+        choices: inout [ChoiceTree]
     ) throws -> Output? {
         guard choices.isEmpty == false else {
             return nil
@@ -172,7 +171,7 @@ extension Interpreters {
     private static func replayWithChoicesPick<Output>(
         pickChoices: ContiguousArray<ReflectiveOperation.PickTuple>,
         continuation: @escaping (Any) throws -> ReflectiveGenerator<Output>,
-        choices: inout [ChoiceTree],
+        choices: inout [ChoiceTree]
     ) throws -> Output? {
         guard choices.isEmpty == false else {
             return nil
@@ -206,7 +205,7 @@ extension Interpreters {
     private static func replayWithChoicesSequence<Output>(
         elementGenerator: ReflectiveGenerator<Any>,
         continuation: @escaping (Any) throws -> ReflectiveGenerator<Output>,
-        choices: inout [ChoiceTree],
+        choices: inout [ChoiceTree]
     ) throws -> Output? {
         guard choices.isEmpty == false else {
             return nil
@@ -236,7 +235,7 @@ extension Interpreters {
     private static func replayWithChoicesZip<Output>(
         generators: ContiguousArray<ReflectiveGenerator<Any>>,
         continuation: @escaping (Any) throws -> ReflectiveGenerator<Output>,
-        choices: inout [ChoiceTree],
+        choices: inout [ChoiceTree]
     ) throws -> Output? {
         // Unwrap a single non-branch group wrapper that encloses per-lane
         // subtrees (produced by reflect's reflectZipOperation).
@@ -278,14 +277,14 @@ extension Interpreters {
     private static func replayWithChoicesWrapped<Output>(
         subGenerator: ReflectiveGenerator<Any>,
         continuation: @escaping (Any) throws -> ReflectiveGenerator<Output>,
-        choices: inout [ChoiceTree],
+        choices: inout [ChoiceTree]
     ) throws -> Output? {
         try InterpreterWrapperHandlers.continueAfterSubgenerator(
             runSubgenerator: { try replayWithChoicesHelper(subGenerator, choices: &choices) },
             runContinuation: { subResult in
                 let nextGen = try continuation(subResult)
                 return try replayWithChoicesHelper(nextGen, choices: &choices)
-            },
+            }
         )
     }
 
@@ -293,7 +292,7 @@ extension Interpreters {
     private static func replayWithChoicesJust<Output>(
         value: Any,
         continuation: @escaping (Any) throws -> ReflectiveGenerator<Output>,
-        choices: inout [ChoiceTree],
+        choices: inout [ChoiceTree]
     ) throws -> Output? {
         guard choices.isEmpty == false else {
             return nil
@@ -310,7 +309,7 @@ extension Interpreters {
     @inline(__always)
     private static func replayWithChoicesGetSize<Output>(
         continuation: @escaping (Any) throws -> ReflectiveGenerator<Output>,
-        choices: inout [ChoiceTree],
+        choices: inout [ChoiceTree]
     ) throws -> Output? {
         guard choices.isEmpty == false else {
             return nil
@@ -328,7 +327,7 @@ extension Interpreters {
     private static func replayWithChoicesResize<Output>(
         subGenerator: ReflectiveGenerator<Any>,
         continuation: @escaping (Any) throws -> ReflectiveGenerator<Output>,
-        choices: inout [ChoiceTree],
+        choices: inout [ChoiceTree]
     ) throws -> Output? {
         guard choices.isEmpty == false else {
             return nil
@@ -348,7 +347,7 @@ extension Interpreters {
 
     private static func replayRecursive<Output>(
         _ gen: ReflectiveGenerator<Output>,
-        with script: ChoiceTree,
+        with script: ChoiceTree
     ) throws -> Output? {
         // Handle group scripts by distributing choices to the generator
         // Groups containing branches represent `picks` and are handled together
@@ -383,7 +382,7 @@ extension Interpreters {
                 operation,
                 script: script,
                 continuation: continuation,
-                runContinuation: runContinuation,
+                runContinuation: runContinuation
             )
         }
     }
@@ -392,7 +391,7 @@ extension Interpreters {
         _ operation: ReflectiveOperation,
         script: ChoiceTree,
         continuation: @escaping (Any) throws -> ReflectiveGenerator<Output>,
-        runContinuation: (Any) throws -> Output?,
+        runContinuation: (Any) throws -> Output?
     ) throws -> Output? {
         switch operation {
         case let .zip(generators, _):
@@ -407,7 +406,7 @@ extension Interpreters {
             return try replayRecursiveResize(
                 nextGen: nextGen,
                 script: script,
-                runContinuation: runContinuation,
+                runContinuation: runContinuation
             )
         case let .pick(choices):
             return try replayRecursivePick(choices: choices, script: script)
@@ -416,13 +415,13 @@ extension Interpreters {
                 lengthGen: lengthGen,
                 elementGenerator: elementGenerator,
                 script: script,
-                runContinuation: runContinuation,
+                runContinuation: runContinuation
             )
         case let .contramap(_, subGenerator):
             return try replayRecursiveContramap(
                 subGenerator: subGenerator,
                 script: script,
-                continuation: continuation,
+                continuation: continuation
             )
         case let .prune(subGenerator):
             return try replayRecursive(subGenerator, with: script) as? Output
@@ -433,7 +432,6 @@ extension Interpreters {
             return inner as? Output
         case let .classify(gen, _, _), let .unique(gen, _, _):
             return try replayRecursive(gen, with: script) as? Output
-
         case let .transform(kind, inner):
             let result: Any
             switch kind {
@@ -468,7 +466,7 @@ extension Interpreters {
     @inline(__always)
     private static func replayRecursiveChooseBits<Output>(
         script: ChoiceTree,
-        runContinuation: (Any) throws -> Output?,
+        runContinuation: (Any) throws -> Output?
     ) throws -> Output? {
         guard case let .choice(bits, _) = script else {
             return nil
@@ -480,7 +478,7 @@ extension Interpreters {
     private static func replayRecursiveJust<Output>(
         value: Any,
         script: ChoiceTree,
-        runContinuation: (Any) throws -> Output?,
+        runContinuation: (Any) throws -> Output?
     ) throws -> Output? {
         guard case .just = script else {
             return nil
@@ -491,7 +489,7 @@ extension Interpreters {
     @inline(__always)
     private static func replayRecursiveGetSize<Output>(
         script: ChoiceTree,
-        runContinuation: (Any) throws -> Output?,
+        runContinuation: (Any) throws -> Output?
     ) throws -> Output? {
         switch script {
         case let .choice(.unsigned(value, _), _):
@@ -507,7 +505,7 @@ extension Interpreters {
     private static func replayRecursiveResize<Output>(
         nextGen: ReflectiveGenerator<Any>,
         script: ChoiceTree,
-        runContinuation: (Any) throws -> Output?,
+        runContinuation: (Any) throws -> Output?
     ) throws -> Output? {
         guard case let .resize(_, subChoices) = script,
               let firstChoice = subChoices.first,
@@ -521,7 +519,7 @@ extension Interpreters {
     @inline(__always)
     private static func replayRecursivePick<Output>(
         choices: ContiguousArray<ReflectiveOperation.PickTuple>,
-        script: ChoiceTree,
+        script: ChoiceTree
     ) throws -> Output? {
         guard let resolved = PickBranchResolution.unpack(script),
               let chosenGen = PickBranchResolution.generator(for: resolved.id, in: choices),
@@ -536,7 +534,7 @@ extension Interpreters {
         lengthGen: ReflectiveGenerator<UInt64>,
         elementGenerator: ReflectiveGenerator<Any>,
         script: ChoiceTree,
-        runContinuation: (Any) throws -> Output?,
+        runContinuation: (Any) throws -> Output?
     ) throws -> Output? {
         guard case let .sequence(length, elements, _) = script else {
             return nil
@@ -544,7 +542,7 @@ extension Interpreters {
 
         let lengthMetadata = ChoiceMetadata(
             validRange: lengthGen.associatedRange ?? length ... length,
-            isRangeExplicit: lengthGen.associatedRange != nil,
+            isRangeExplicit: lengthGen.associatedRange != nil
         )
         guard try replayRecursive(lengthGen, with: .choice(.unsigned(length, .uint64), lengthMetadata)) != nil else {
             return nil
@@ -569,7 +567,7 @@ extension Interpreters {
     private static func replayRecursiveZip<Output>(
         generators: ContiguousArray<ReflectiveGenerator<Any>>,
         script: ChoiceTree,
-        runContinuation: (Any) throws -> Output?,
+        runContinuation: (Any) throws -> Output?
     ) throws -> Output? {
         guard case let .group(children, _) = script else {
             return nil
@@ -609,14 +607,14 @@ extension Interpreters {
     private static func replayRecursiveContramap<Output>(
         subGenerator: ReflectiveGenerator<Any>,
         script: ChoiceTree,
-        continuation: @escaping (Any) throws -> ReflectiveGenerator<Output>,
+        continuation: @escaping (Any) throws -> ReflectiveGenerator<Output>
     ) throws -> Output? {
         try InterpreterWrapperHandlers.continueAfterSubgenerator(
             runSubgenerator: { try replayRecursive(subGenerator, with: script) },
             runContinuation: { subResult in
                 let nextGen = try continuation(subResult)
                 return try replayRecursive(nextGen, with: script)
-            },
+            }
         )
     }
 

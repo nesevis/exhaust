@@ -20,7 +20,7 @@ public struct Seed {
         tree: ChoiceTree,
         noveltyScore: Double,
         fitness: Double = 0,
-        generation: UInt64,
+        generation: UInt64
     ) {
         self.sequence = sequence
         self.tree = tree

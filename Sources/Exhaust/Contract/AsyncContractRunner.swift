@@ -11,7 +11,9 @@ import IssueReporting
 /// Mutable box for passing a value-type spec across the Task boundary.
 final class SpecBox<Spec>: @unchecked Sendable {
     var spec: Spec
-    init(_ spec: Spec) { self.spec = spec }
+    init(_ spec: Spec) {
+        self.spec = spec
+    }
 }
 
 /// Runs an async contract property test for the given specification type.
@@ -27,7 +29,7 @@ public func __runContractAsync<Spec: AsyncContractSpec>(
     fileID: StaticString = #fileID,
     filePath: StaticString = #filePath,
     line: UInt = #line,
-    column: UInt = #column,
+    column: UInt = #column
 ) async -> ContractResult<Spec>? {
     var samplingBudget: UInt64 = 2000
     var coverageBudget: UInt64 = 2000
@@ -36,7 +38,7 @@ public func __runContractAsync<Spec: AsyncContractSpec>(
     var suppressIssueReporting = false
     var useRandomOnly = false
     var useArgumentAwareCoverage = false
-    var useKleisliReducer = false
+    var useBonsaiReducer = false
 
     for setting in settings {
         switch setting {
@@ -54,14 +56,14 @@ public func __runContractAsync<Spec: AsyncContractSpec>(
             useRandomOnly = true
         case .argumentAwareCoverage:
             useArgumentAwareCoverage = true
-        case .useKleisliReducer:
-            useKleisliReducer = true
+        case .useBonsaiReducer:
+            useBonsaiReducer = true
         }
     }
 
     let commandGen = Spec.commandGenerator
     let seqGen: ReflectiveGenerator<[Spec.Command]> = commandGen.array(
-        length: 0 ... commandLimit,
+        length: 0 ... commandLimit
     )
 
     // The sync property closure runs async spec methods via Task + semaphore.
@@ -101,7 +103,7 @@ public func __runContractAsync<Spec: AsyncContractSpec>(
     nonisolated(unsafe) let reduction = reductionConfig
     let randomOnly = useRandomOnly
     let argAwareCoverage = useArgumentAwareCoverage
-    let kleisli = useKleisliReducer
+    let bonsai = useBonsaiReducer
 
     // Dispatch the entire sync core onto a GCD thread via withCheckedContinuation.
     let searchResult: ([Spec.Command], ContractFailureInfo<Spec.Command>)? = await withCheckedContinuation { continuation in
@@ -115,9 +117,9 @@ public func __runContractAsync<Spec: AsyncContractSpec>(
                     commandLimit: commandLimit,
                     coverageBudget: covBudget,
                     reductionConfig: reduction,
-                    useKleisliReducer: kleisli,
+                    useBonsaiReducer: bonsai,
                     argumentAware: argAwareCoverage,
-                    property: property,
+                    property: property
                 )
             }
 
@@ -133,21 +135,21 @@ public func __runContractAsync<Spec: AsyncContractSpec>(
                         coverageBudget: covBudget,
                         seed: replaySeed,
                         reductionConfig: reduction,
-                        useKleisliReducer: kleisli,
+                        useBonsaiReducer: bonsai,
                         suppressIssueReporting: true,
-                        useRandomOnly: randomOnly || skipGenericCoverage,
+                        useRandomOnly: randomOnly || skipGenericCoverage
                     ),
                     sourceCode: nil,
                     fileID: fileID,
                     filePath: filePath,
                     line: line,
                     column: column,
-                    property: property,
+                    property: property
                 )
                 if let exhaustResult {
                     let info: ContractFailureInfo<Spec.Command> = ContractFailureInfo(
                         originalCommands: nil,
-                        discoveryMethod: replaySeed != nil ? .replay : .randomSampling,
+                        discoveryMethod: replaySeed != nil ? .replay : .randomSampling
                     )
                     continuation.resume(returning: (exhaustResult, info))
                 } else {
@@ -169,7 +171,7 @@ public func __runContractAsync<Spec: AsyncContractSpec>(
         trace: trace,
         sut: spec.sut,
         seed: seed,
-        discoveryMethod: failureInfo.discoveryMethod,
+        discoveryMethod: failureInfo.discoveryMethod
     )
 
     if !suppressIssueReporting {
@@ -177,14 +179,14 @@ public func __runContractAsync<Spec: AsyncContractSpec>(
         ExhaustLog.error(
             category: .propertyTest,
             event: "contract_failed",
-            rendered,
+            rendered
         )
         reportIssue(
             rendered,
             fileID: fileID,
             filePath: filePath,
             line: line,
-            column: column,
+            column: column
         )
     }
 
@@ -196,7 +198,7 @@ public func __runContractAsync<Spec: AsyncContractSpec>(
 /// Re-executes the failing command sequence asynchronously to build a step-by-step trace.
 private func buildTraceAsync<Spec: AsyncContractSpec>(
     _ commands: [Spec.Command],
-    specType _: Spec.Type,
+    specType _: Spec.Type
 ) async -> ([TraceStep], Spec) {
     var spec = Spec()
     var trace: [TraceStep] = []

@@ -18,7 +18,7 @@ import ExhaustCore
 @freestanding(expression)
 public macro extract<T>(
     _ gen: ReflectiveGenerator<T>,
-    seed: UInt64? = nil,
+    seed: UInt64? = nil
 ) -> T = #externalMacro(module: "ExhaustMacros", type: "ExtractMacro")
 
 /// Generates an array of values from a generator without running a property test.
@@ -39,5 +39,5 @@ public macro extract<T>(
 public macro extract<T>(
     _ gen: ReflectiveGenerator<T>,
     count: UInt64,
-    seed: UInt64? = nil,
+    seed: UInt64? = nil
 ) -> [T] = #externalMacro(module: "ExhaustMacros", type: "ExtractMacro")

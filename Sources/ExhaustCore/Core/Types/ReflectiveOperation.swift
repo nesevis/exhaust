@@ -67,7 +67,7 @@ public enum ReflectiveOperation {
             siteID: UInt64,
             id: UInt64,
             weight: UInt64,
-            generator: ReflectiveGenerator<Any>,
+            generator: ReflectiveGenerator<Any>
         ) {
             self.siteID = siteID
             self.id = id

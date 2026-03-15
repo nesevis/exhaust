@@ -36,14 +36,16 @@ public struct BindSpanIndex {
             regions.append(BindRegion(
                 bindSpanRange: span.range,
                 innerRange: children[0].range,
-                boundRange: children[1].range,
+                boundRange: children[1].range
             ))
         }
         self.regions = regions
     }
 
     /// Whether any bind spans exist.
-    public var isEmpty: Bool { regions.isEmpty }
+    public var isEmpty: Bool {
+        regions.isEmpty
+    }
 
     /// Returns the ``BindRegion`` whose inner range contains the given index, or `nil`.
     public func bindRegionForInnerIndex(_ index: Int) -> BindRegion? {

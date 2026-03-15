@@ -1,6 +1,5 @@
-import Testing
 import Exhaust
-import ExhaustCore
+import Testing
 
 // MARK: - Tests
 
@@ -12,7 +11,8 @@ struct PostconditionTests {
             #exhaust(
                 SetUniquenessContract.self,
                 commandLimit: 5,
-                .suppressIssueReporting
+                .suppressIssueReporting,
+                .useBonsaiReducer
             )
         )
 
@@ -28,7 +28,8 @@ struct PostconditionTests {
             #exhaust(
                 StackLIFOContract.self,
                 commandLimit: 4,
-                .suppressIssueReporting
+                .suppressIssueReporting,
+                .useBonsaiReducer
             )
         )
 
@@ -51,8 +52,8 @@ struct PostconditionTests {
         // Could be either invariant failure (count mismatch) or check failure
         #expect(result.trace.contains { step in
             switch step.outcome {
-            case .invariantFailed, .checkFailed: return true
-            default: return false
+            case .invariantFailed, .checkFailed: true
+            default: false
             }
         })
     }
@@ -64,17 +65,17 @@ struct PostconditionTests {
 struct SetUniquenessContract {
     @SUT var uniqueSet = BuggySet<Int>()
 
-    @Command(weight: 3, Gen.int(in: 0...3))
+    @Command(weight: 3, .int(in: 0 ... 3))
     mutating func add(element: Int) throws {
         uniqueSet.add(element)
         // Postcondition: after add, the element is present
         try check(uniqueSet.contains(element), "added element must be contained")
         // Postcondition: no duplicates — count of this element should be 1
-        let occurrences = uniqueSet.elements.filter { $0 == element }.count
+        let occurrences = uniqueSet.elements.count(where: { $0 == element })
         try check(occurrences == 1, "set must not contain duplicates")
     }
 
-    @Command(weight: 2, Gen.int(in: 0...3))
+    @Command(weight: 2, .int(in: 0 ... 3))
     mutating func remove(element: Int) throws {
         uniqueSet.remove(element)
         // Postcondition: after remove, the element is gone
@@ -95,7 +96,7 @@ struct SetUniquenessContract {
 struct StackLIFOContract {
     @SUT var stack = BuggyStack<Int>()
 
-    @Command(weight: 3, Gen.int(in: 0...9))
+    @Command(weight: 3, .int(in: 0 ... 9))
     mutating func push(value: Int) throws {
         let previousCount = stack.count
         stack.push(value)
@@ -126,14 +127,14 @@ struct DictionaryConsistencyContract {
         dict.trackedCount == dict.actualCount
     }
 
-    @Command(weight: 3, Gen.int(in: 0...4), Gen.int(in: 0...99))
+    @Command(weight: 3, .int(in: 0 ... 4), .int(in: 0 ... 99))
     mutating func set(key: Int, value: Int) throws {
         dict.set(key, value)
         // Postcondition: the value is retrievable
         try check(dict.get(key) == value, "get must return set value")
     }
 
-    @Command(weight: 2, Gen.int(in: 0...4))
+    @Command(weight: 2, .int(in: 0 ... 4))
     mutating func remove(key: Int) throws {
         dict.remove(key)
         // Postcondition: the key is gone
@@ -161,7 +162,9 @@ struct BuggySet<Element: Equatable> {
         elements.contains(element)
     }
 
-    var count: Int { elements.count }
+    var count: Int {
+        elements.count
+    }
 }
 
 /// A stack that should obey LIFO ordering. The bug: `push` inserts at the
@@ -183,8 +186,13 @@ struct BuggyStack<Element: Equatable> {
         elements.last
     }
 
-    var isEmpty: Bool { elements.isEmpty }
-    var count: Int { elements.count }
+    var isEmpty: Bool {
+        elements.isEmpty
+    }
+
+    var count: Int {
+        elements.count
+    }
 }
 
 /// A dictionary wrapper. The bug: `remove` decrements count even when the
@@ -210,5 +218,7 @@ struct TrackedDictionary {
         storage[key]
     }
 
-    var actualCount: Int { storage.count }
+    var actualCount: Int {
+        storage.count
+    }
 }

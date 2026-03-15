@@ -5,14 +5,13 @@
 //  Created by Chris Kolbu on 11/2/2026.
 //
 
-import ExhaustCore
 import Foundation
 import Testing
 @testable import Exhaust
 
 @Suite("Shrinking Challenge: Calculator")
 struct CalculatorShrinkingChallenge {
-    /**
+    /*
      https://github.com/jlink/shrinking-challenge/blob/main/challenges/calculator.md
      The challenge involves a simple calculator language representing expressions consisting of integers, their additions and divisions only, like 1 + (2 / 3).
 
@@ -28,11 +27,12 @@ struct CalculatorShrinkingChallenge {
     @Test("Calculator, Full")
     func calculatorFull() throws {
         let gen = #gen(Self.expression(depth: 4))
+        ExhaustLog.setConfiguration(.init(isEnabled: true, minimumLevel: .info, categoryMinimumLevels: [.reducer: .debug], format: .human))
         let result = #exhaust(
             gen,
             .suppressIssueReporting,
-//            .useKleisliReducer,
-            .replay(1117838118804311299)
+            .useBonsaiReducer,
+            .replay(1_117_838_118_804_311_299)
         ) { expr in
             guard Self.containsLiteralDivisionByZero(expr) == false else {
                 return true
@@ -47,16 +47,17 @@ struct CalculatorShrinkingChallenge {
             }
         }
 
+        print("Output: \(result!)")
         #expect(
             result == .div(.value(0), .div(.value(0), .value(1))) ||
-            result == .div(.value(0), .div(.value(0), .value(-1))) ||
-            // The Kleisli reducer gets it to the minimum!
-            result == .div(.value(0), .add(.value(0), .value(0)))
+                result == .div(.value(0), .div(.value(0), .value(-1))) ||
+                // The Bonsai reducer gets it to the minimum!
+                result == .div(.value(0), .add(.value(0), .value(0)))
         )
     }
-    
+
     // MARK: - Types
-    
+
     indirect enum Expr: Equatable, CustomDebugStringConvertible, CustomStringConvertible {
         case value(Int)
         case add(Expr, Expr)
@@ -68,7 +69,7 @@ struct CalculatorShrinkingChallenge {
             }
             return value
         }
-        
+
         var debugDescription: String {
             switch self {
             case let .value(value):
@@ -137,7 +138,7 @@ struct CalculatorShrinkingChallenge {
                     case .value:
                         (value, value)
                     }
-                },
+                }
             )
         let div = #gen(leaf, child)
             .mapped(
@@ -149,7 +150,7 @@ struct CalculatorShrinkingChallenge {
                     case .value:
                         (value, value)
                     }
-                },
+                }
             )
 
         return #gen(.oneOf(weighted:

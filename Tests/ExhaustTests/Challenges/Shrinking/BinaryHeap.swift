@@ -5,12 +5,10 @@
 //  Created by Chris Kolbu on 11/2/2026.
 //
 
-import ExhaustCore
 import Foundation
 import Testing
 @testable import Exhaust
 
-@MainActor
 @Suite("Shrinking Challenge: Binary Heap")
 struct BinaryHeapShrinkingChallenge {
     /*
@@ -21,12 +19,28 @@ struct BinaryHeapShrinkingChallenge {
         (0, None, (0, (0, None, None), (1, None, None)))
      This is essentially because small examples are "too sparse", so it's very hard to find one by luck.
      */
-    
+
     // MARK: - Tests
 
     @Test("Binary heap, Full")
     func binaryHeapFull() throws {
-        let output = try #require(#exhaust(Self.gen, .suppressIssueReporting, property: Self.property))
+        // The property: if the heap satisfies the invariant, then `toSortedList`
+        // must produce a sorted list containing the same elements as `toList`.
+        let property: @Sendable (Heap<Int>) -> Bool = { heap in
+            guard Self.invariant(heap) else { return true }
+            let xs = Self.toSortedList(heap)
+            let sorted = Self.toList(heap).sorted()
+            return sorted == xs.sorted() && xs == xs.sorted()
+        }
+        let output = try #require(
+            #exhaust(
+                Self.gen,
+                .suppressIssueReporting,
+                .useBonsaiReducer,
+                .replay(626_360_492_104_589_905),
+                property: property
+            )
+        )
         let outputValues = Self.toList(output).sorted()
         // The shrunken result should have 4 values — the minimal failing heap
         // The exact order and number of zeroes and ones (ie the size of the tree) isn't consistent
@@ -112,8 +126,7 @@ struct BinaryHeapShrinkingChallenge {
 
     /// Generates valid min-heaps by threading a minimum value through `bind`.
     /// Uses `bind` to constrain child values >= parent, so all generated heaps
-    /// satisfy the invariant by construction. Reflection is lost but the
-    /// `ValueAndChoiceTreeInterpreter` provides the ChoiceTree directly.
+    /// satisfy the invariant by construction.
     static func heapGen(min: Int = 0, depth: UInt64) -> ReflectiveGenerator<Heap<Int>> {
         let maxVal = 100
         let emptyGen: ReflectiveGenerator<Heap<Int>> = #gen(.just(.empty))
@@ -122,13 +135,9 @@ struct BinaryHeapShrinkingChallenge {
             return emptyGen
         }
 
-
         let nodeGen = #gen(.int(in: min ... maxVal))
-            ._bind { value in
-                Gen.zip(
-                    heapGen(min: value, depth: depth / 2),
-                    heapGen(min: value, depth: depth / 2),
-                )
+            .bind { value in
+                #gen(heapGen(min: value, depth: depth / 2), heapGen(min: value, depth: depth / 2))
                 .mapped(
                     forward: { left, right in Heap.node(value, left, right) },
                     backward: { heap in
@@ -136,7 +145,7 @@ struct BinaryHeapShrinkingChallenge {
                         case let .node(_, left, right): (left, right)
                         case .empty: (.empty, .empty)
                         }
-                    },
+                    }
                 )
             }
 
@@ -146,15 +155,6 @@ struct BinaryHeapShrinkingChallenge {
     }
 
     static let gen = heapGen(depth: 6)
-
-    /// The property: if the heap satisfies the invariant, then `toSortedList`
-    /// must produce a sorted list containing the same elements as `toList`.
-    static let property: (Heap<Int>) -> Bool = { heap in
-        guard invariant(heap) else { return true }
-        let xs = toSortedList(heap)
-        let sorted = toList(heap).sorted()
-        return sorted == xs.sorted() && xs == xs.sorted()
-    }
 }
 
 extension BinaryHeapShrinkingChallenge.Heap: CustomDebugStringConvertible {

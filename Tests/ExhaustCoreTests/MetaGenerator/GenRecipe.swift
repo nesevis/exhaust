@@ -7,8 +7,8 @@
 //  that invariants hold universally across all possible generator structures.
 //
 
-import Testing
 import ExhaustCore
+import Testing
 
 // MARK: - Recipe Type (output type tracking)
 
@@ -384,7 +384,7 @@ private func buildCombinator(_ kind: GenRecipe.CombinatorKind) -> ReflectiveGene
     case let .mapped(inner, transform):
         return Gen.contramap(
             { (newOutput: Any) throws -> Any in transform.backward(newOutput) },
-            buildGenerator(from: inner)._map { transform.forward($0) },
+            buildGenerator(from: inner)._map { transform.forward($0) }
         )
 
     case let .array(inner, lengthRange: range):
@@ -397,7 +397,7 @@ private func buildCombinator(_ kind: GenRecipe.CombinatorKind) -> ReflectiveGene
         let innerGen = buildGenerator(from: inner)
         return ReflectiveGenerator<Any>.impure(
             operation: .filter(gen: innerGen.erase(), fingerprint: 0, filterType: .auto, predicate: { predicate.evaluate($0) }),
-            continuation: { .pure($0) },
+            continuation: { .pure($0) }
         )
 
     case let .resized(inner, size: size):

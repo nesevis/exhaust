@@ -67,7 +67,7 @@ public enum ChoiceTreeAnalysis {
                 gen,
                 materializePicks: true,
                 seed: seed,
-                maxRuns: 1,
+                maxRuns: 1
             )
 
             guard let (_, tree) = try? interpreter.next() else {
@@ -145,7 +145,7 @@ public enum ChoiceTreeAnalysis {
 
     private static func walkTree(
         _ tree: ChoiceTree,
-        parameters: inout [BoundaryParameter],
+        parameters: inout [BoundaryParameter]
     ) -> Bool {
         switch tree {
         case let .choice(value, metadata):
@@ -192,19 +192,19 @@ public enum ChoiceTreeAnalysis {
     private static func walkTreeValidateOnly(_ tree: ChoiceTree) -> Bool {
         switch tree {
         case .choice, .just, .getSize, .resize:
-            return true
+            true
         case .group(_, isOpaque: true):
-            return true
+            true
         case let .group(children, _):
-            return children.allSatisfy { walkTreeValidateOnly($0) }
+            children.allSatisfy { walkTreeValidateOnly($0) }
         case let .bind(inner, bound):
-            return walkTreeValidateOnly(inner) && walkTreeValidateOnly(bound)
+            walkTreeValidateOnly(inner) && walkTreeValidateOnly(bound)
         case let .selected(inner):
-            return walkTreeValidateOnly(inner)
+            walkTreeValidateOnly(inner)
         case let .sequence(_, elements, _):
-            return elements.allSatisfy { walkTreeValidateOnly($0) }
+            elements.allSatisfy { walkTreeValidateOnly($0) }
         case let .branch(_, _, _, _, choice):
-            return walkTreeValidateOnly(choice)
+            walkTreeValidateOnly(choice)
         }
     }
 
@@ -221,7 +221,7 @@ public enum ChoiceTreeAnalysis {
     private static func walkChoice(
         value: ChoiceValue,
         metadata: ChoiceMetadata,
-        parameters: inout [BoundaryParameter],
+        parameters: inout [BoundaryParameter]
     ) -> Bool {
         guard let range = metadata.validRange, metadata.isRangeExplicit else {
             return false
@@ -237,7 +237,7 @@ public enum ChoiceTreeAnalysis {
                 index: parameters.count,
                 values: Array(range.lowerBound ... range.upperBound),
                 domainSize: count,
-                kind: .finiteChooseBits(range: range, tag: tag),
+                kind: .finiteChooseBits(range: range, tag: tag)
             )
             parameters.append(param)
         } else {
@@ -246,7 +246,7 @@ public enum ChoiceTreeAnalysis {
                 index: parameters.count,
                 values: boundaryValues,
                 domainSize: UInt64(boundaryValues.count),
-                kind: .chooseBits(range: range, tag: tag),
+                kind: .chooseBits(range: range, tag: tag)
             )
             parameters.append(param)
         }
@@ -274,7 +274,7 @@ public enum ChoiceTreeAnalysis {
 
     private static func walkGroup(
         _ children: [ChoiceTree],
-        parameters: inout [BoundaryParameter],
+        parameters: inout [BoundaryParameter]
     ) -> Bool {
         if isPick(children) {
             return walkPick(children, parameters: &parameters)
@@ -296,7 +296,7 @@ public enum ChoiceTreeAnalysis {
 
     private static func walkPick(
         _ children: [ChoiceTree],
-        parameters: inout [BoundaryParameter],
+        parameters: inout [BoundaryParameter]
     ) -> Bool {
         let domainSize = UInt64(children.count)
         guard domainSize <= finiteDomainThreshold else { return false }
@@ -318,7 +318,7 @@ public enum ChoiceTreeAnalysis {
                 siteID: siteID,
                 id: id,
                 weight: weight,
-                generator: .pure(()),
+                generator: .pure(())
             ))
         }
 
@@ -326,7 +326,7 @@ public enum ChoiceTreeAnalysis {
             index: parameters.count,
             values: Array(0 ..< domainSize),
             domainSize: domainSize,
-            kind: .pick(choices: pickTuples),
+            kind: .pick(choices: pickTuples)
         )
         parameters.append(param)
         return true
@@ -346,7 +346,7 @@ public enum ChoiceTreeAnalysis {
         length _: UInt64,
         elements: [ChoiceTree],
         metadata: ChoiceMetadata,
-        parameters: inout [BoundaryParameter],
+        parameters: inout [BoundaryParameter]
     ) -> Bool {
         guard let lengthRange = metadata.validRange, metadata.isRangeExplicit else {
             return false
@@ -362,7 +362,7 @@ public enum ChoiceTreeAnalysis {
             index: parameters.count,
             values: lengthValues,
             domainSize: UInt64(lengthValues.count),
-            kind: .sequenceLength(lengthRange: lengthRange),
+            kind: .sequenceLength(lengthRange: lengthRange)
         )
         parameters.append(lengthParam)
 
@@ -392,7 +392,7 @@ public enum ChoiceTreeAnalysis {
     private static func walkElementTree(
         _ tree: ChoiceTree,
         elementIndex: Int,
-        parameters: inout [BoundaryParameter],
+        parameters: inout [BoundaryParameter]
     ) -> Bool {
         switch tree {
         case let .choice(value, metadata):
@@ -429,7 +429,7 @@ public enum ChoiceTreeAnalysis {
         value: ChoiceValue,
         metadata: ChoiceMetadata,
         elementIndex: Int,
-        parameters: inout [BoundaryParameter],
+        parameters: inout [BoundaryParameter]
     ) -> Bool {
         guard let range = metadata.validRange, metadata.isRangeExplicit else {
             return false
@@ -445,7 +445,7 @@ public enum ChoiceTreeAnalysis {
                 index: parameters.count,
                 values: Array(range.lowerBound ... range.upperBound),
                 domainSize: count,
-                kind: .finiteChooseBits(range: range, tag: tag),
+                kind: .finiteChooseBits(range: range, tag: tag)
             )
             parameters.append(param)
         } else {
@@ -454,7 +454,7 @@ public enum ChoiceTreeAnalysis {
                 index: parameters.count,
                 values: boundaryValues,
                 domainSize: UInt64(boundaryValues.count),
-                kind: .sequenceElement(elementIndex: elementIndex, range: range, tag: tag),
+                kind: .sequenceElement(elementIndex: elementIndex, range: range, tag: tag)
             )
             parameters.append(param)
         }

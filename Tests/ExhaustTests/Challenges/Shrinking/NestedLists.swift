@@ -5,7 +5,6 @@
 //  Created by Chris Kolbu on 11/2/2026.
 //
 
-import ExhaustCore
 import Foundation
 import Testing
 @testable import Exhaust
@@ -21,14 +20,17 @@ struct NestedListsShrinkingChallenge {
      Some libraries, e.g. Hypothesis and jqwik, can shrink this reliably to a single list of 11 elements: [[0, 0, 0, 0, 0, 0, 0, 0, 0, 0]].
      */
     @Test("Nested Lists")
-    func nestedListsFull() throws {
+    func nestedListsFull() {
         let gen = #gen(.uint().array().array())
-        ExhaustLog.setConfiguration(.init(isEnabled: true, minimumLevel: .info, categoryMinimumLevels: [.reducer: .debug], format: .human))
-        
-        let output = #exhaust(gen, .suppressIssueReporting, .replay(13580297670505979531)) { arr in
+        let output = #exhaust(
+            gen,
+            .suppressIssueReporting,
+            .useBonsaiReducer
+//            .replay(13580297670505979531)
+        ) { arr in
             arr.map(\.count).reduce(0, +) <= 10
         }
-        
+
         #expect(output == [Array(repeating: UInt(0), count: 11)])
     }
 }

@@ -9,7 +9,7 @@ import SwiftSyntaxMacros
 public struct ExhaustTestMacro: ExpressionMacro {
     public static func expansion(
         of node: some FreestandingMacroExpansionSyntax,
-        in context: some MacroExpansionContext,
+        in context: some MacroExpansionContext
     ) throws -> ExprSyntax {
         let args = node.arguments.map(\.self)
 
@@ -18,7 +18,7 @@ public struct ExhaustTestMacro: ExpressionMacro {
             guard !args.isEmpty else {
                 context.diagnose(Diagnostic(
                     node: Syntax(node),
-                    message: ExhaustMacroDiagnostic.exhaustMissingGenerator,
+                    message: ExhaustMacroDiagnostic.exhaustMissingGenerator
                 ))
                 return "fatalError(\"#exhaust requires a generator argument\")"
             }
@@ -51,7 +51,7 @@ public struct ExhaustTestMacro: ExpressionMacro {
             guard args.count >= 2 else {
                 context.diagnose(Diagnostic(
                     node: Syntax(node),
-                    message: ExhaustMacroDiagnostic.exhaustMissingProperty,
+                    message: ExhaustMacroDiagnostic.exhaustMissingProperty
                 ))
                 return "fatalError(\"#exhaust requires a property argument\")"
             }
@@ -62,7 +62,7 @@ public struct ExhaustTestMacro: ExpressionMacro {
             guard let propertyArg = args.last, propertyArg.label?.text == "property" else {
                 context.diagnose(Diagnostic(
                     node: Syntax(node),
-                    message: ExhaustMacroDiagnostic.exhaustMissingProperty,
+                    message: ExhaustMacroDiagnostic.exhaustMissingProperty
                 ))
                 return "fatalError(\"#exhaust requires a property argument\")"
             }

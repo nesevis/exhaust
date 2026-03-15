@@ -11,7 +11,7 @@ public enum WeightedPickSelection {
     @inline(__always)
     public static func draw(
         from choices: ContiguousArray<ReflectiveOperation.PickTuple>,
-        using prng: inout Xoshiro256,
+        using prng: inout Xoshiro256
     ) -> ReflectiveOperation.PickTuple? {
         let totalWeight = choices.reduce(0) { $0 + $1.weight }
         guard totalWeight > 0 else {

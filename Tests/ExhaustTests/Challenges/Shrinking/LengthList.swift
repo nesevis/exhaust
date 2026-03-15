@@ -5,7 +5,6 @@
 //  Created by Chris Kolbu on 11/2/2026.
 //
 
-import ExhaustCore
 import Foundation
 import Testing
 @testable import Exhaust
@@ -28,13 +27,14 @@ struct LengthListShrinkingChallenge {
     }
 
     @Test("Length List, Full")
-    func lengthListFull() throws {
+    func lengthListFull() {
         let output = #exhaust(
             Self.gen,
             .suppressIssueReporting,
+            .useBonsaiReducer,
             property: Self.property
         )
-        
+
         #expect(output == [900])
     }
 }

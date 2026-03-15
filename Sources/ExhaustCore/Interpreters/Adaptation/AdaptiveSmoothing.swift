@@ -4,7 +4,6 @@
 import Foundation
 
 public enum AdaptiveSmoothing {
-
     /// Applies per-site temperature scaling based on entropy analysis.
     ///
     /// Unlike uniform smoothing which applies the same temperature everywhere, this function computes each pick site's entropy ratio and derives a site-specific temperature:
@@ -24,13 +23,13 @@ public enum AdaptiveSmoothing {
         _ generator: ReflectiveGenerator<Output>,
         epsilon: Double = 1.0,
         baseTemperature: Double = 1.0,
-        maxTemperature: Double = 4.0,
+        maxTemperature: Double = 4.0
     ) -> ReflectiveGenerator<Output> {
         smoothGenerator(
             generator,
             epsilon: epsilon,
             baseTemperature: baseTemperature,
-            maxTemperature: maxTemperature,
+            maxTemperature: maxTemperature
         )
     }
 
@@ -38,7 +37,7 @@ public enum AdaptiveSmoothing {
         _ gen: ReflectiveGenerator<Output>,
         epsilon: Double,
         baseTemperature: Double,
-        maxTemperature: Double,
+        maxTemperature: Double
     ) -> ReflectiveGenerator<Output> {
         switch gen {
         case .pure:
@@ -48,7 +47,7 @@ public enum AdaptiveSmoothing {
                 operation,
                 epsilon: epsilon,
                 baseTemperature: baseTemperature,
-                maxTemperature: maxTemperature,
+                maxTemperature: maxTemperature
             )
             return .impure(operation: smoothed, continuation: continuation)
         }
@@ -58,7 +57,7 @@ public enum AdaptiveSmoothing {
         _ op: ReflectiveOperation,
         epsilon: Double,
         baseTemperature: Double,
-        maxTemperature: Double,
+        maxTemperature: Double
     ) -> ReflectiveOperation {
         switch op {
         case let .pick(choices):
@@ -93,8 +92,8 @@ public enum AdaptiveSmoothing {
                         choice.generator,
                         epsilon: epsilon,
                         baseTemperature: baseTemperature,
-                        maxTemperature: maxTemperature,
-                    ),
+                        maxTemperature: maxTemperature
+                    )
                 )
             })
 
@@ -106,20 +105,20 @@ public enum AdaptiveSmoothing {
                     $0,
                     epsilon: epsilon,
                     baseTemperature: baseTemperature,
-                    maxTemperature: maxTemperature,
+                    maxTemperature: maxTemperature
                 )
             }))
 
         case let .sequence(length, gen):
             return .sequence(
                 length: smoothGenerator(length, epsilon: epsilon, baseTemperature: baseTemperature, maxTemperature: maxTemperature),
-                gen: smoothGenerator(gen, epsilon: epsilon, baseTemperature: baseTemperature, maxTemperature: maxTemperature),
+                gen: smoothGenerator(gen, epsilon: epsilon, baseTemperature: baseTemperature, maxTemperature: maxTemperature)
             )
 
         case let .contramap(transform, next):
             return .contramap(
                 transform: transform,
-                next: smoothGenerator(next, epsilon: epsilon, baseTemperature: baseTemperature, maxTemperature: maxTemperature),
+                next: smoothGenerator(next, epsilon: epsilon, baseTemperature: baseTemperature, maxTemperature: maxTemperature)
             )
 
         case let .prune(next):
@@ -128,7 +127,7 @@ public enum AdaptiveSmoothing {
         case let .resize(newSize, next):
             return .resize(
                 newSize: newSize,
-                next: smoothGenerator(next, epsilon: epsilon, baseTemperature: baseTemperature, maxTemperature: maxTemperature),
+                next: smoothGenerator(next, epsilon: epsilon, baseTemperature: baseTemperature, maxTemperature: maxTemperature)
             )
 
         case let .filter(gen, fingerprint, filterType, predicate):
@@ -136,27 +135,27 @@ public enum AdaptiveSmoothing {
                 gen: smoothGenerator(gen, epsilon: epsilon, baseTemperature: baseTemperature, maxTemperature: maxTemperature),
                 fingerprint: fingerprint,
                 filterType: filterType,
-                predicate: predicate,
+                predicate: predicate
             )
 
         case let .classify(gen, fingerprint, classifiers):
             return .classify(
                 gen: smoothGenerator(gen, epsilon: epsilon, baseTemperature: baseTemperature, maxTemperature: maxTemperature),
                 fingerprint: fingerprint,
-                classifiers: classifiers,
+                classifiers: classifiers
             )
 
         case let .unique(gen, fingerprint, keyExtractor):
             return .unique(
                 gen: smoothGenerator(gen, epsilon: epsilon, baseTemperature: baseTemperature, maxTemperature: maxTemperature),
                 fingerprint: fingerprint,
-                keyExtractor: keyExtractor,
+                keyExtractor: keyExtractor
             )
 
         case let .transform(kind, inner):
             return .transform(
                 kind: kind,
-                inner: smoothGenerator(inner, epsilon: epsilon, baseTemperature: baseTemperature, maxTemperature: maxTemperature),
+                inner: smoothGenerator(inner, epsilon: epsilon, baseTemperature: baseTemperature, maxTemperature: maxTemperature)
             )
 
         case .chooseBits, .just, .getSize:

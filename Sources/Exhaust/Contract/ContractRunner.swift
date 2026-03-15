@@ -25,7 +25,7 @@ public func __runContract<Spec: ContractSpec>(
     fileID: StaticString = #fileID,
     filePath: StaticString = #filePath,
     line: UInt = #line,
-    column: UInt = #column,
+    column: UInt = #column
 ) -> ContractResult<Spec>? {
     var samplingBudget: UInt64 = 2000
     var coverageBudget: UInt64 = 2000
@@ -34,7 +34,7 @@ public func __runContract<Spec: ContractSpec>(
     var suppressIssueReporting = false
     var useRandomOnly = false
     var useArgumentAwareCoverage = false
-    var useKleisliReducer = false
+    var useBonsaiReducer = false
 
     for setting in settings {
         switch setting {
@@ -52,8 +52,8 @@ public func __runContract<Spec: ContractSpec>(
             useRandomOnly = true
         case .argumentAwareCoverage:
             useArgumentAwareCoverage = true
-        case .useKleisliReducer:
-            useKleisliReducer = true
+        case .useBonsaiReducer:
+            useBonsaiReducer = true
         }
     }
 
@@ -66,7 +66,7 @@ public func __runContract<Spec: ContractSpec>(
 
     // The property: execute the command sequence against a fresh spec and check for failures.
     let property: @Sendable ([Spec.Command]) -> Bool = { commands in
-        var spec = Spec.init()
+        var spec = Spec()
         for command in commands {
             do {
                 try spec.run(command)
@@ -93,9 +93,9 @@ public func __runContract<Spec: ContractSpec>(
             commandLimit: commandLimit,
             coverageBudget: coverageBudget,
             reductionConfig: reductionConfig,
-            useKleisliReducer: useKleisliReducer,
+            useBonsaiReducer: useBonsaiReducer,
             argumentAware: useArgumentAwareCoverage,
-            property: property,
+            property: property
         )
     }
 
@@ -116,20 +116,20 @@ public func __runContract<Spec: ContractSpec>(
                 coverageBudget: coverageBudget,
                 seed: seed,
                 reductionConfig: reductionConfig,
-                useKleisliReducer: useKleisliReducer,
+                useBonsaiReducer: useBonsaiReducer,
                 suppressIssueReporting: true,
-                useRandomOnly: useRandomOnly || skipGenericCoverage,
+                useRandomOnly: useRandomOnly || skipGenericCoverage
             ),
             sourceCode: nil,
             fileID: fileID,
             filePath: filePath,
             line: line,
             column: column,
-            property: property,
+            property: property
         )
         failureInfo = ContractFailureInfo(
             originalCommands: nil,
-            discoveryMethod: seed != nil ? .replay : .randomSampling,
+            discoveryMethod: seed != nil ? .replay : .randomSampling
         )
     }
 
@@ -145,7 +145,7 @@ public func __runContract<Spec: ContractSpec>(
         trace: trace,
         sut: spec.sut,
         seed: seed,
-        discoveryMethod: failureInfo.discoveryMethod,
+        discoveryMethod: failureInfo.discoveryMethod
     )
 
     if !suppressIssueReporting {
@@ -153,14 +153,14 @@ public func __runContract<Spec: ContractSpec>(
         ExhaustLog.error(
             category: .propertyTest,
             event: "contract_failed",
-            rendered,
+            rendered
         )
         reportIssue(
             rendered,
             fileID: fileID,
             filePath: filePath,
             line: line,
-            column: column,
+            column: column
         )
     }
 
@@ -174,9 +174,9 @@ public func __runContract<Spec: ContractSpec>(
 /// Returns the trace and the spec instance in the state it was in when the failure occurred (or after running all commands if the sequence passes on re-execution).
 private func buildTrace<Spec: ContractSpec>(
     _ commands: [Spec.Command],
-    specType _: Spec.Type,
+    specType _: Spec.Type
 ) -> ([TraceStep], Spec) {
-    var spec = Spec.init()
+    var spec = Spec()
     var trace: [TraceStep] = []
     trace.reserveCapacity(commands.count)
 
@@ -219,7 +219,7 @@ private func buildTrace<Spec: ContractSpec>(
 func renderFailure<Spec: ContractSpecBase>(
     _ result: ContractResult<Spec>,
     failureInfo: ContractFailureInfo<Spec.Command>,
-    modelDescription: String,
+    modelDescription: String
 ) -> String {
     var lines: [String] = []
     lines.append("Contract failure (found via \(failureInfo.discoveryMethod))")
@@ -274,8 +274,8 @@ struct ContractFailureInfo<Command> {
 // MARK: - Sequence Covering Array (SCA) coverage
 
 /// Extracts pick choices from a command generator if it's a top-level `Gen.pick`.
-func extractPickChoices<Command>(
-    from gen: ReflectiveGenerator<Command>,
+func extractPickChoices(
+    from gen: ReflectiveGenerator<some Any>
 ) -> ContiguousArray<ReflectiveOperation.PickTuple>? {
     guard case let .impure(operation, _) = gen,
           case let .pick(choices) = operation
@@ -297,9 +297,9 @@ func runSCACoverage<Command>(
     commandLimit: Int,
     coverageBudget: UInt64,
     reductionConfig: TCRBudget,
-    useKleisliReducer: Bool,
+    useBonsaiReducer: Bool,
     argumentAware: Bool,
-    property: @escaping @Sendable ([Command]) -> Bool,
+    property: @escaping @Sendable ([Command]) -> Bool
 ) -> SCAResult<Command>? {
     guard let pickChoices = extractPickChoices(from: commandGen) else { return nil }
 
@@ -318,24 +318,23 @@ func runSCACoverage<Command>(
     //   seqLen  5 @ t≤6:  2ms    seqLen 15 @ t≤3: 35ms
     //   seqLen  8 @ t≤5: 31ms    seqLen 20 @ t≤3: 94ms
     //   seqLen 10 @ t≤4: 40ms    seqLen 30 @ t≤2: 18ms
-    let strengthCap: Int
-    switch seqLen {
-    case ...6:  strengthCap = 6
-    case ...8:  strengthCap = 5
-    case ...12: strengthCap = 4
-    case ...20: strengthCap = 3
-    default:    strengthCap = 2
+    let strengthCap = switch seqLen {
+    case ...6: 6
+    case ...8: 5
+    case ...12: 4
+    case ...20: 3
+    default: 2
     }
 
     if argumentAware {
         let threshold = SequenceCoveringArray.computeThreshold(
-            budget: coverageBudget, sequenceLength: seqLen, branchCount: pickChoices.count,
+            budget: coverageBudget, sequenceLength: seqLen, branchCount: pickChoices.count
         )
         let branchProfiles = SequenceCoveringArray.analyzeBranches(pickChoices, threshold: threshold)
         let (p, m) = SequenceCoveringArray.buildProfile(
             sequenceLength: seqLen,
             pickChoices: pickChoices,
-            branchProfiles: branchProfiles,
+            branchProfiles: branchProfiles
         )
         profile = p
         mapping = m
@@ -346,7 +345,7 @@ func runSCACoverage<Command>(
         // Command-type-only SCA produces .just("") sub-trees that can't replay parameterized branches.
         guard SequenceCoveringArray.allBranchesParameterFree(pickChoices) else { return nil }
         profile = SequenceCoveringArray.buildProfile(
-            sequenceLength: seqLen, pickChoices: pickChoices,
+            sequenceLength: seqLen, pickChoices: pickChoices
         )
         mapping = nil
         maxStrength = strengthCap
@@ -359,19 +358,18 @@ func runSCACoverage<Command>(
     let lengthRange = UInt64(0) ... UInt64(commandLimit)
 
     for row in covering.rows {
-        let tree: ChoiceTree?
-        if let mapping {
-            tree = SequenceCoveringArray.buildTree(
+        let tree: ChoiceTree? = if let mapping {
+            SequenceCoveringArray.buildTree(
                 row: row,
                 profile: profile,
                 mapping: mapping,
-                sequenceLengthRange: lengthRange,
+                sequenceLengthRange: lengthRange
             )
         } else {
-            tree = SequenceCoveringArray.buildTree(
+            SequenceCoveringArray.buildTree(
                 row: row,
                 profile: profile,
-                sequenceLengthRange: lengthRange,
+                sequenceLengthRange: lengthRange
             )
         }
         guard let tree else { continue }
@@ -385,12 +383,12 @@ func runSCACoverage<Command>(
             // since coverage-built trees lack unselected branches needed by reducer strategies.
             let shrinkTree = (try? Interpreters.reflect(seqGen, with: value)) ?? tree
             // Reduce the failing sequence
-            if let (_, shrunkValue) = try! Interpreters.dispatchReduce( // swiftlint:disable:this force_try
+            if let (_, shrunkValue) = try? Interpreters.dispatchReduce(
                 gen: seqGen,
                 tree: shrinkTree,
                 config: reductionConfig,
-                useKleisli: useKleisliReducer,
-                property: property,
+                useBonsai: useBonsaiReducer,
+                property: property
             ) {
                 return (shrunkValue, value)
             }
@@ -406,7 +404,7 @@ func runSCACoverage<Command>(
             "rows": "\(covering.rows.count)",
             "sequence_length": "\(seqLen)",
             "command_types": "\(pickChoices.count)",
-        ],
+        ]
     )
 
     return nil
@@ -417,9 +415,9 @@ func buildExhaustSettings<Output>(
     coverageBudget: UInt64,
     seed: UInt64?,
     reductionConfig: TCRBudget,
-    useKleisliReducer: Bool,
+    useBonsaiReducer: Bool,
     suppressIssueReporting: Bool,
-    useRandomOnly: Bool,
+    useRandomOnly: Bool
 ) -> [ExhaustSettings<Output>] {
     var settings: [ExhaustSettings<Output>] = [
         .samplingBudget(samplingBudget),
@@ -435,8 +433,8 @@ func buildExhaustSettings<Output>(
     if useRandomOnly {
         settings.append(.randomOnly)
     }
-    if useKleisliReducer {
-        settings.append(.useKleisliReducer)
+    if useBonsaiReducer {
+        settings.append(.useBonsaiReducer)
     }
     return settings
 }

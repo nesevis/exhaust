@@ -8,7 +8,7 @@
 // MARK: - Academic Provenance
 
 //
-// Corresponds to the dissertation's bracketed choice sequences (Goldstein §4.6). Shortlex ordering — shorter sequences are always simpler, with lexicographic comparison as tiebreaker — is from MacIver & Donaldson (ECOOP 2020, §2.2). Exhaust adds Zobrist hashing for O(1) incremental duplicate detection during reduction.
+// Corresponds to the dissertation's bracketed choice sequences (Goldstein §4.6). Shortlex ordering — shorter sequences are always simpler, with lexicographic comparison as tiebreaker — is from MacIver & Donaldson (ECOOP 2020, §2.2). Zobrist hashing for O(1) incremental duplicate detection lives in ``ZobristHash``.
 
 /// A contiguous region of a ``ChoiceSequence``, identified by its kind, index range, and nesting depth.
 public struct ChoiceSpan: CustomDebugStringConvertible {
@@ -38,85 +38,6 @@ public extension Collection<ChoiceSequenceValue> {
     }
 }
 
-// MARK: - Zobrist hashing
-
-extension ChoiceSequence {
-    /// Computes a Zobrist hash: XOR of position-dependent contributions for each element.
-    /// Enables O(1) incremental updates when single elements change.
-    public var zobristHash: UInt64 {
-        var hash: UInt64 = 0
-        for (i, element) in enumerated() {
-            hash ^= Self.zobristContribution(at: i, element)
-        }
-        return hash
-    }
-
-    /// Position-dependent hash contribution of a single element.
-    /// Uses splitmix64 mixing for good avalanche with XOR combination.
-    public static func zobristContribution(at position: Int, _ value: ChoiceSequenceValue) -> UInt64 {
-        var bits: UInt64 = switch value {
-        case let .value(v):
-            v.choice.bitPattern64 ^ (zobristTagBits(v.choice.tag) << 48)
-        case let .reduced(v):
-            v.choice.bitPattern64 ^ (zobristTagBits(v.choice.tag) << 48) ^ 0xFF00_FF00_FF00_FF00
-        case .sequence(true, isLengthExplicit: true):
-            1
-        case .sequence(true, isLengthExplicit: false):
-            2
-        case .sequence(false, isLengthExplicit: true):
-            3
-        case .sequence(false, isLengthExplicit: false):
-            4
-        case .group(true):
-            5
-        case .group(false):
-            6
-        case .bind(true):
-            8
-        case .bind(false):
-            9
-        case let .branch(b):
-            b.id ^ 0xDEAD_BEEF_CAFE_BABE
-        case .just:
-            7
-        }
-        bits ^= UInt64(position) &* 0x9E37_79B9_7F4A_7C15
-        bits = (bits ^ (bits >> 30)) &* 0xBF58_476D_1CE4_E5B9
-        bits = (bits ^ (bits >> 27)) &* 0x94D0_49BB_1331_11EB
-        bits ^= bits >> 31
-        return bits
-    }
-
-    /// Updates a Zobrist hash in O(1) after replacing the element at `position`.
-    public static func zobristHashUpdating(
-        _ hash: UInt64,
-        at position: Int,
-        replacing oldValue: ChoiceSequenceValue,
-        with newValue: ChoiceSequenceValue,
-    ) -> UInt64 {
-        hash ^ zobristContribution(at: position, oldValue) ^ zobristContribution(at: position, newValue)
-    }
-
-    private static func zobristTagBits(_ tag: TypeTag) -> UInt64 {
-        switch tag {
-        case .uint: 0
-        case .uint64: 1
-        case .uint32: 2
-        case .uint16: 3
-        case .uint8: 4
-        case .int: 5
-        case .int64: 6
-        case .int32: 7
-        case .int16: 8
-        case .int8: 9
-        case .double: 10
-        case .float: 11
-        case .date: 12
-        case .bits: 13
-        }
-    }
-}
-
 // MARK: - Helper functions
 
 public extension ChoiceSequence {
@@ -138,14 +59,14 @@ public extension ChoiceSequence {
     private static func flatten(
         _ tree: ChoiceTree,
         includingAllBranches: Bool,
-        into output: inout ChoiceSequence,
+        into output: inout ChoiceSequence
     ) {
         switch tree {
         case let .choice(value, meta):
             output.append(.value(.init(
                 choice: value,
                 validRange: meta.validRange,
-                isRangeExplicit: meta.isRangeExplicit,
+                isRangeExplicit: meta.isRangeExplicit
             )))
         case .just:
             output.append(.just)
@@ -153,8 +74,11 @@ public extension ChoiceSequence {
             break
         case let .sequence(_, elements, meta):
             output.append(.sequence(true, isLengthExplicit: meta.isRangeExplicit))
-            for element in elements {
-                flatten(element, includingAllBranches: includingAllBranches, into: &output)
+            // while-loop: avoiding IteratorProtocol overhead in debug builds.
+            var eIdx = 0
+            while eIdx < elements.count {
+                flatten(elements[eIdx], includingAllBranches: includingAllBranches, into: &output)
+                eIdx += 1
             }
             output.append(.sequence(false))
         case let .branch(_, _, _, _, gen):
@@ -166,14 +90,20 @@ public extension ChoiceSequence {
                 output.append(.group(true))
                 output.append(.branch(.init(id: id, validIDs: branchIDs)))
                 let children = includingAllBranches ? array : [choice]
-                for child in children {
-                    flatten(child, includingAllBranches: includingAllBranches, into: &output)
+                // while-loop: avoiding IteratorProtocol overhead in debug builds.
+                var cIdx = 0
+                while cIdx < children.count {
+                    flatten(children[cIdx], includingAllBranches: includingAllBranches, into: &output)
+                    cIdx += 1
                 }
                 output.append(.group(false))
             } else {
                 output.append(.group(true))
-                for child in array {
-                    flatten(child, includingAllBranches: includingAllBranches, into: &output)
+                // while-loop: avoiding IteratorProtocol overhead in debug builds.
+                var aIdx = 0
+                while aIdx < array.count {
+                    flatten(array[aIdx], includingAllBranches: includingAllBranches, into: &output)
+                    aIdx += 1
                 }
                 output.append(.group(false))
             }
@@ -184,8 +114,11 @@ public extension ChoiceSequence {
             output.append(.bind(false))
         case let .resize(_, choices):
             output.append(.group(true))
-            for choice in choices {
-                flatten(choice, includingAllBranches: includingAllBranches, into: &output)
+            // while-loop: avoiding IteratorProtocol overhead in debug builds.
+            var rIdx = 0
+            while rIdx < choices.count {
+                flatten(choices[rIdx], includingAllBranches: includingAllBranches, into: &output)
+                rIdx += 1
             }
             output.append(.group(false))
         case let .selected(tree):
@@ -225,7 +158,10 @@ public extension ChoiceSequence {
         // collected while that frame was open
         var childrenAtDepth: [[Int]] = []
 
-        for (i, entry) in sequence.enumerated() {
+        // while-loop: avoiding IteratorProtocol overhead in debug builds.
+        var i = 0
+        while i < sequence.count {
+            let entry = sequence[i]
             switch entry {
             case .sequence(true, isLengthExplicit: _):
                 stack.append((entry, i))
@@ -240,13 +176,16 @@ public extension ChoiceSequence {
                 childrenAtDepth.append([])
 
             case .sequence(false, isLengthExplicit: _), .group(false), .bind(false):
-                guard let frame = stack.popLast() else { continue }
+                guard let frame = stack.popLast() else {
+                    i += 1
+                    continue
+                }
 
                 let spanIndex = spans.count
                 spans.append(ChoiceSpan(
                     kind: frame.kind,
                     range: frame.start ... i,
-                    depth: stack.count,
+                    depth: stack.count
                 ))
 
                 if case .sequence(true, isLengthExplicit: _) = frame.kind, frame.start < i - 1 {
@@ -254,7 +193,7 @@ public extension ChoiceSequence {
                     spans.append(ChoiceSpan(
                         kind: frame.kind,
                         range: (frame.start + 1) ... (i - 1),
-                        depth: stack.count,
+                        depth: stack.count
                     ))
                 }
 
@@ -266,6 +205,7 @@ public extension ChoiceSequence {
             case .value, .reduced, .branch, .just:
                 break
             }
+            i += 1
         }
 
         return spans.sorted(by: { lhs, rhs in
@@ -283,7 +223,10 @@ public extension ChoiceSequence {
         var spans: [ChoiceSpan] = []
         var stack: [(kind: ChoiceSequenceValue, start: Int)] = []
 
-        for (i, entry) in sequence.enumerated() {
+        // while-loop: avoiding IteratorProtocol overhead in debug builds.
+        var i = 0
+        while i < sequence.count {
+            let entry = sequence[i]
             switch entry {
             case .sequence(true, isLengthExplicit: _):
                 stack.append((entry, i))
@@ -295,23 +238,33 @@ public extension ChoiceSequence {
                 stack.append((.bind(true), i))
 
             case .group(false), .bind(false):
-                guard let frame = stack.popLast() else { continue }
-                guard case .group(true) = frame.kind else { continue }
+                guard let frame = stack.popLast() else {
+                    i += 1
+                    continue
+                }
+                guard case .group(true) = frame.kind else {
+                    i += 1
+                    continue
+                }
                 // Check if the parent frame (if any) is a sequence
                 if let parent = stack.last, case .sequence(true, isLengthExplicit: _) = parent.kind {
                     spans.append(ChoiceSpan(
                         kind: frame.kind,
                         range: frame.start ... i,
-                        depth: stack.count,
+                        depth: stack.count
                     ))
                 }
 
             case .sequence(false, isLengthExplicit: _):
-                guard let _ = stack.popLast() else { continue }
+                guard let _ = stack.popLast() else {
+                    i += 1
+                    continue
+                }
 
             case .value, .reduced, .branch, .just:
                 break
             }
+            i += 1
         }
 
         return spans.sorted(by: { lhs, rhs in
@@ -325,7 +278,7 @@ public extension ChoiceSequence {
     /// Returns balanced group spans strictly contained within `range`, sorted longest-first.
     static func extractDescendantGroupSpans(
         from sequence: ChoiceSequence,
-        in range: ClosedRange<Int>,
+        in range: ClosedRange<Int>
     ) -> [ChoiceSpan] {
         guard !sequence.isEmpty else { return [] }
         guard range.lowerBound >= 0, range.upperBound < sequence.count else { return [] }
@@ -349,7 +302,7 @@ public extension ChoiceSequence {
                     spans.append(ChoiceSpan(
                         kind: .group(true),
                         range: spanRange,
-                        depth: frame.depth,
+                        depth: frame.depth
                     ))
                 }
             case .sequence(true, isLengthExplicit: _):
@@ -375,7 +328,10 @@ public extension ChoiceSequence {
         var spans: [ChoiceSpan] = []
         var sequenceDepth = 0
 
-        for (i, entry) in sequence.enumerated() {
+        // while-loop: avoiding IteratorProtocol overhead in debug builds.
+        var i = 0
+        while i < sequence.count {
+            let entry = sequence[i]
             switch entry {
             case .sequence(true, isLengthExplicit: _):
                 sequenceDepth += 1
@@ -388,13 +344,14 @@ public extension ChoiceSequence {
                     spans.append(ChoiceSpan(
                         kind: .sequence(false), // arbitrary; the span covers both markers
                         range: i ... i + 1,
-                        depth: sequenceDepth,
+                        depth: sequenceDepth
                     ))
                 }
                 sequenceDepth -= 1
             default:
                 break
             }
+            i += 1
         }
 
         return spans
@@ -404,7 +361,10 @@ public extension ChoiceSequence {
         var spans: [ChoiceSpan] = []
         var depth = 0
 
-        for (i, entry) in sequence.enumerated() {
+        // while-loop: avoiding IteratorProtocol overhead in debug builds.
+        var i = 0
+        while i < sequence.count {
+            let entry = sequence[i]
             switch entry {
             case .value, .reduced:
                 spans.append(ChoiceSpan(kind: entry, range: i ... i, depth: depth))
@@ -413,10 +373,11 @@ public extension ChoiceSequence {
             case .group(false), .bind(false), .sequence(false, isLengthExplicit: _):
                 depth -= 1
             default:
-                continue
+                break
             }
+            i += 1
         }
-        return spans.reversed()
+        return spans
     }
 
     /// Returns the spans of values not inside groups
@@ -426,7 +387,10 @@ public extension ChoiceSequence {
         // collected while that frame was open
         var depth = 0
 
-        for (i, entry) in sequence.enumerated() {
+        // while-loop: avoiding IteratorProtocol overhead in debug builds.
+        var i = 0
+        while i < sequence.count {
+            let entry = sequence[i]
             let preceding = i > 0 ? sequence[i - 1] : nil
 
             switch (preceding, entry) {
@@ -442,14 +406,15 @@ public extension ChoiceSequence {
             case (_, .group(false)), (_, .bind(false)), (_, .sequence(false, isLengthExplicit: _)):
                 depth -= 1
             default:
-                continue
+                break
             }
+            i += 1
         }
 
-        return spans.reversed()
+        return spans
     }
 
-    public mutating func removeSubranges(_ ranges: [ClosedRange<Int>]) {
+    mutating func removeSubranges(_ ranges: [ClosedRange<Int>]) {
         let set = RangeSet(ranges.map(\.asRange))
         removeSubranges(set)
     }
@@ -462,7 +427,10 @@ public extension ChoiceSequence {
         var result: [SiblingGroup] = []
         var stack: [SiblingFrame] = []
 
-        for (i, entry) in sequence.enumerated() {
+        // while-loop: avoiding IteratorProtocol overhead in debug builds.
+        var i = 0
+        while i < sequence.count {
+            let entry = sequence[i]
             switch entry {
             case .sequence(true, isLengthExplicit: _):
                 stack.append(SiblingFrame(depth: stack.count, startIndex: i, isSequence: true))
@@ -471,7 +439,10 @@ public extension ChoiceSequence {
                 stack.append(SiblingFrame(depth: stack.count, startIndex: i, isSequence: false))
 
             case .sequence(false, isLengthExplicit: _), .group(false), .bind(false):
-                guard let frame = stack.popLast() else { continue }
+                guard let frame = stack.popLast() else {
+                    i += 1
+                    continue
+                }
 
                 // Emit a sibling group if there are >= 2 children of homogeneous kind
                 if frame.children.count >= 2 {
@@ -480,7 +451,7 @@ public extension ChoiceSequence {
                         result.append(SiblingGroup(
                             ranges: frame.children.map(\.range),
                             depth: frame.depth,
-                            kind: frame.children[0].kind,
+                            kind: frame.children[0].kind
                         ))
                     } else {
                         // Mixed-kind children: extract same-kind subsets so values of the
@@ -493,25 +464,25 @@ public extension ChoiceSequence {
                             result.append(SiblingGroup(
                                 ranges: children.map(\.range),
                                 depth: frame.depth,
-                                kind: kind,
+                                kind: kind
                             ))
                         }
                     }
                 }
 
                 // Register this closed container as a child of the enclosing frame
-                if !stack.isEmpty {
+                if stack.isEmpty == false {
                     let childKind: SiblingChildKind = frame.isSequence ? .sequence : .group
                     stack[stack.count - 1].children.append(
-                        (range: frame.startIndex ... i, kind: childKind),
+                        (range: frame.startIndex ... i, kind: childKind)
                     )
                 }
 
             case .value, .reduced:
                 // A bare value is a single-index child of the current frame
-                if !stack.isEmpty {
+                if stack.isEmpty == false {
                     stack[stack.count - 1].children.append(
-                        (range: i ... i, kind: .bareValue),
+                        (range: i ... i, kind: .bareValue)
                     )
                 }
 
@@ -519,16 +490,17 @@ public extension ChoiceSequence {
                 // Branch and just markers are structural, skip them
                 break
             }
+            i += 1
         }
 
-        return result.reversed()
+        return result
     }
 
     /// Extracts immediate children of a single container range.
     /// Children are returned in-order and include bare values and immediate nested containers.
-    public static func extractImmediateChildren(
+    static func extractImmediateChildren(
         from sequence: ChoiceSequence,
-        in containerRange: ClosedRange<Int>,
+        in containerRange: ClosedRange<Int>
     ) -> [(range: ClosedRange<Int>, kind: SiblingChildKind)] {
         guard !sequence.isEmpty else { return [] }
         guard containerRange.lowerBound >= 0, containerRange.upperBound < sequence.count else { return [] }
@@ -600,36 +572,41 @@ public extension ChoiceSequence {
 
     /// Returns the flattened `ChoiceValue`s within the given range, ignoring structural markers.
     /// Used as a lexicographic comparison key for sibling reordering.
-    public static func siblingComparisonKey(
+    static func siblingComparisonKey(
         from sequence: ChoiceSequence,
-        range: ClosedRange<Int>,
+        range: ClosedRange<Int>
     ) -> [ChoiceValue] {
         var keys: [ChoiceValue] = []
-        for idx in range {
+        // while-loop: avoiding IteratorProtocol overhead in debug builds.
+        var idx = range.lowerBound
+        while idx <= range.upperBound {
             switch sequence[idx] {
             case let .value(v), let .reduced(v):
                 keys.append(v.choice)
             case .branch, .sequence, .group, .bind, .just:
-                continue
+                break
             }
+            idx += 1
         }
         return keys
     }
 
-    public func shortLexPrecedes(_ other: ChoiceSequence) -> Bool {
+    func shortLexPrecedes(_ other: ChoiceSequence) -> Bool {
         // Shorter sequences are always better
         if count != other.count {
             return count < other.count
         }
-        // Equal length compares lexicographically
-        for (lhs, rhs) in zip(self, other) {
-            switch lhs.shortLexCompare(rhs) {
+        // Equal length compares lexicographically.
+        // while-loop: avoiding zip/IteratorProtocol overhead in debug builds.
+        var i = 0
+        while i < count {
+            switch self[i].shortLexCompare(other[i]) {
             case .lt:
                 return true
             case .gt:
                 return false
             case .eq:
-                continue
+                i += 1
             }
         }
         return false // equal

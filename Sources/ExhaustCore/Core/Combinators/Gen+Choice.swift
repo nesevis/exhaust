@@ -13,7 +13,7 @@ public extension Gen {
     /// - Returns: A generator that produces values from one of the provided generators
     /// - Precondition: At least one choice must be provided
     static func pick<Output>(
-        choices: [(weight: UInt64, generator: ReflectiveGenerator<Output>)],
+        choices: [(weight: UInt64, generator: ReflectiveGenerator<Output>)]
     ) -> ReflectiveGenerator<Output> {
         precondition(choices.isEmpty == false, "At least one choice must be provided")
         // The nested generators must all have the same Output type.
@@ -31,7 +31,7 @@ public extension Gen {
                 siteID: siteID,
                 id: UInt64(index),
                 weight: choice.weight,
-                generator: choice.generator.erase(),
+                generator: choice.generator.erase()
             ))
         }
         return liftF(.pick(choices: array))
@@ -48,7 +48,7 @@ public extension Gen {
     /// - Precondition: At least one choice must be provided
     @inlinable
     static func pick<Output>(
-        choices: [(weight: Int, generator: ReflectiveGenerator<Output>)],
+        choices: [(weight: Int, generator: ReflectiveGenerator<Output>)]
     ) -> ReflectiveGenerator<Output> {
         precondition(choices.map(\.weight).allSatisfy { $0 > 0 }, "Weights must be higher than zero")
 
@@ -68,20 +68,20 @@ public extension Gen {
     @inlinable
     static func choose<Output: BitPatternConvertible>(
         in range: ClosedRange<Output>? = nil,
-        type _: Output.Type = Output.self,
+        type _: Output.Type = Output.self
     ) -> ReflectiveGenerator<Output> {
         let isRangeExplicit = range != nil
         return choose(
             in: range,
             type: Output.self,
-            isRangeExplicit: isRangeExplicit,
+            isRangeExplicit: isRangeExplicit
         )
     }
 
     /// Chooses a random element from a collection by generating a random index.
     @inlinable
     static func choose<C: Collection>(
-        from collection: C,
+        from collection: C
     ) -> ReflectiveGenerator<C.Element> where C.Element: Equatable, C.Index == Int {
         // Use Gen.contramap directly rather than .mapped because the backward
         // closure throws and .mapped propagates that via rethrows (from FreerMonad.bind),
@@ -97,14 +97,14 @@ public extension Gen {
             },
             Gen.choose(in: collection.startIndex ... collection.endIndex.advanced(by: -1))
                 // We're using round-robin indexing here so that the lookup does not fail when shrinking
-                ._map { collection[$0 % count] },
+                ._map { collection[$0 % count] }
         )
     }
 
     /// Chooses a random element from a collection by generating a random index.
     @inlinable
     static func choose<C: Collection>(
-        from collection: C,
+        from collection: C
     ) -> ReflectiveGenerator<C.Element> where C.Index == Int {
         let count = collection.count
         return Gen.choose(in: collection.startIndex ... collection.endIndex.advanced(by: -1))
@@ -116,14 +116,14 @@ public extension Gen {
     ///
     /// These ranges should not be treated as strict during reflection because the contextual value that produced them may be opaque from the reflected output.
     @inlinable
-    public static func chooseDerived<Output: BitPatternConvertible>(
+    static func chooseDerived<Output: BitPatternConvertible>(
         in range: ClosedRange<Output>,
-        type _: Output.Type = Output.self,
+        type _: Output.Type = Output.self
     ) -> ReflectiveGenerator<Output> {
         choose(
             in: range,
             type: Output.self,
-            isRangeExplicit: false,
+            isRangeExplicit: false
         )
     }
 
@@ -139,7 +139,7 @@ public extension Gen {
     @inlinable
     static func choose<Output: BitPatternConvertible>(
         in range: ClosedRange<Output>,
-        scaling: SizeScaling<Output>,
+        scaling: SizeScaling<Output>
     ) -> ReflectiveGenerator<Output> {
         switch scaling {
         case .constant:
@@ -156,7 +156,7 @@ public extension Gen {
     static func scaledRange<Output: BitPatternConvertible>(
         _ range: ClosedRange<Output>,
         scaling: SizeScaling<Output>,
-        size: UInt64,
+        size: UInt64
     ) -> ClosedRange<Output> {
         let fraction = min(Double(size) / 100.0, 1.0)
         guard fraction < 1.0 else { return range }
@@ -207,7 +207,7 @@ public extension Gen {
     static func choose<Output: BitPatternConvertible>(
         in range: ClosedRange<Output>? = nil,
         type _: Output.Type = Output.self,
-        isRangeExplicit: Bool,
+        isRangeExplicit: Bool
     ) -> ReflectiveGenerator<Output> {
         let minBits = range?.lowerBound.bitPattern64 ?? Output.bitPatternRanges[0].lowerBound
         let maxBits = range?.upperBound.bitPattern64 ?? Output.bitPatternRanges[0].upperBound
@@ -216,7 +216,7 @@ public extension Gen {
             guard let convertible = result as? any BitPatternConvertible else {
                 throw GeneratorError.typeMismatch(
                     expected: "any BitPatternConvertible",
-                    actual: String(describing: Swift.type(of: result)),
+                    actual: String(describing: Swift.type(of: result))
                 )
             }
             return .pure(Output(bitPattern64: convertible.bitPattern64))
@@ -228,14 +228,14 @@ public extension Gen {
     /// Use this for composite generators (UUID, Int128, UInt128) where the individual UInt64 halves are not semantically meaningful on their own.
     /// Boundary analysis will produce only all-low / all-high values.
     static func chooseBits(
-        in range: ClosedRange<UInt64>? = nil,
+        in range: ClosedRange<UInt64>? = nil
     ) -> ReflectiveGenerator<UInt64> {
         let resolvedRange = range ?? UInt64.min ... .max
         return .impure(operation: .chooseBits(min: resolvedRange.lowerBound, max: resolvedRange.upperBound, tag: .bits, isRangeExplicit: range != nil)) { result in
             guard let convertible = result as? any BitPatternConvertible else {
                 throw GeneratorError.typeMismatch(
                     expected: "any BitPatternConvertible",
-                    actual: String(describing: Swift.type(of: result)),
+                    actual: String(describing: Swift.type(of: result))
                 )
             }
             return .pure(UInt64(bitPattern64: convertible.bitPattern64))

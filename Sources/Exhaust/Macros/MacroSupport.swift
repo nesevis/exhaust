@@ -28,7 +28,7 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
         filePath: StaticString = #filePath,
         line: UInt = #line,
         column: UInt = #column,
-        property: @Sendable (Output) -> Bool,
+        property: @Sendable (Output) -> Bool
     ) -> Output? {
         var samplingBudget: UInt64 = 100
         var coverageBudget: UInt64 = 2000
@@ -37,7 +37,7 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
         var suppressIssueReporting = false
         var reflectingValue: Output?
         var useRandomOnly = false
-        var useKleisliReducer = false
+        var useBonsaiReducer = false
 
         for setting in settings {
             switch setting {
@@ -55,8 +55,8 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
                 reflectingValue = value
             case .randomOnly:
                 useRandomOnly = true
-            case .useKleisliReducer:
-                useKleisliReducer = true
+            case .useBonsaiReducer:
+                useBonsaiReducer = true
             }
         }
 
@@ -66,14 +66,14 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
                     gen,
                     value: reflectingValue,
                     reductionConfig: reductionConfig,
-                    useKleisliReducer: useKleisliReducer,
+                    useBonsaiReducer: useBonsaiReducer,
                     suppressIssueReporting: suppressIssueReporting,
                     sourceCode: sourceCode,
                     fileID: fileID,
                     filePath: filePath,
                     line: line,
                     column: column,
-                    property: property,
+                    property: property
                 )
             } catch {
                 reportIssue(
@@ -81,7 +81,7 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
                     fileID: fileID,
                     filePath: filePath,
                     line: line,
-                    column: column,
+                    column: column
                 )
                 return reflectingValue
             }
@@ -106,8 +106,8 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
                         gen: gen,
                         tree: shrinkTree,
                         config: reductionConfig,
-                        useKleisli: useKleisliReducer,
-                        property: countingProperty,
+                        useBonsai: useBonsaiReducer,
+                        property: countingProperty
                     ) {
                         var failure = PropertyTestFailure(
                             counterexample: shrunkValue,
@@ -117,14 +117,14 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
                             iteration: iteration,
                             samplingBudget: samplingBudget,
                             blueprint: shrunkSequence.shortString,
-                            propertyInvocations: propertyInvocationCount,
+                            propertyInvocations: propertyInvocationCount
                         )
                         failure.replayHint = "No replay seed — found via systematic combinatorial coverage."
                         let rendered = failure.render(format: ExhaustLog.configuration.format)
                         ExhaustLog.error(
                             category: .propertyTest,
                             event: "property_failed",
-                            rendered,
+                            rendered
                         )
                         if !suppressIssueReporting {
                             reportIssue(
@@ -132,7 +132,7 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
                                 fileID: fileID,
                                 filePath: filePath,
                                 line: line,
-                                column: column,
+                                column: column
                             )
                         }
                         return shrunkValue
@@ -143,7 +143,7 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
                         fileID: fileID,
                         filePath: filePath,
                         line: line,
-                        column: column,
+                        column: column
                     )
                     return value
                 }
@@ -157,14 +157,14 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
                     iteration: iteration,
                     samplingBudget: samplingBudget,
                     blueprint: nil,
-                    propertyInvocations: propertyInvocationCount,
+                    propertyInvocations: propertyInvocationCount
                 )
                 failure.replayHint = "No replay seed — found via systematic combinatorial coverage."
                 let rendered = failure.render(format: ExhaustLog.configuration.format)
                 ExhaustLog.error(
                     category: .propertyTest,
                     event: "property_failed",
-                    rendered,
+                    rendered
                 )
                 if !suppressIssueReporting {
                     reportIssue(
@@ -172,7 +172,7 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
                         fileID: fileID,
                         filePath: filePath,
                         line: line,
-                        column: column,
+                        column: column
                     )
                 }
                 return nil
@@ -184,7 +184,7 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
                     metadata: [
                         "exhaustive": "true",
                         "iterations": "\(iterations)",
-                    ],
+                    ]
                 )
                 var passMetadata = [
                     "iterations": "\(iterations)",
@@ -196,7 +196,7 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
                 ExhaustLog.notice(
                     category: .propertyTest,
                     event: "property_passed",
-                    metadata: passMetadata,
+                    metadata: passMetadata
                 )
                 return nil
 
@@ -213,7 +213,7 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
                         "parameters": "\(parameters)",
                         "exhaustive": "false",
                         "kind": kind == .boundaryValue ? "boundary" : "finite",
-                    ],
+                    ]
                 )
 
             case .notApplicable:
@@ -227,14 +227,13 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
             gen,
             materializePicks: true,
             seed: seed,
-            maxRuns: samplingBudget,
+            maxRuns: samplingBudget
         )
         let actualSeed = generator.baseSeed
 
         do { while let (next, tree) = try generator.next() {
             iterations += 1
-            let passed = property(next)
-            if passed == false {
+            if property(next) == false {
                 var propertyInvocationCount = 0
                 let countingProperty: (Output) -> Bool = { value in
                     propertyInvocationCount += 1
@@ -245,8 +244,8 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
                         gen: gen,
                         tree: tree,
                         config: reductionConfig,
-                        useKleisli: useKleisliReducer,
-                        property: countingProperty,
+                        useBonsai: useBonsaiReducer,
+                        property: countingProperty
                     ) {
                         let failure = PropertyTestFailure(
                             counterexample: shrunkValue,
@@ -256,18 +255,18 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
                             iteration: iterations,
                             samplingBudget: samplingBudget,
                             blueprint: shrunkSequence.shortString,
-                            propertyInvocations: propertyInvocationCount,
+                            propertyInvocations: propertyInvocationCount
                         )
                         let rendered = failure.render(format: ExhaustLog.configuration.format)
                         ExhaustLog.error(
                             category: .propertyTest,
                             event: "property_failed",
-                            rendered,
+                            rendered
                         )
                         ExhaustLog.debug(
                             category: .propertyTest,
                             event: "shrunk_blueprint",
-                            "\(shrunkSequence.shortString)",
+                            "\(shrunkSequence.shortString)"
                         )
                         if !suppressIssueReporting {
                             reportIssue(
@@ -275,7 +274,7 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
                                 fileID: fileID,
                                 filePath: filePath,
                                 line: line,
-                                column: column,
+                                column: column
                             )
                         }
                         return shrunkValue
@@ -286,7 +285,7 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
                         fileID: fileID,
                         filePath: filePath,
                         line: line,
-                        column: column,
+                        column: column
                     )
                     return next
                 }
@@ -300,20 +299,20 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
                     iteration: iterations,
                     samplingBudget: samplingBudget,
                     blueprint: nil,
-                    propertyInvocations: propertyInvocationCount,
+                    propertyInvocations: propertyInvocationCount
                 )
                 let rendered = failure.render(format: ExhaustLog.configuration.format)
                 ExhaustLog.error(
                     category: .propertyTest,
                     event: "property_failed",
-                    rendered,
+                    rendered
                 )
                 reportIssue(
                     rendered,
                     fileID: fileID,
                     filePath: filePath,
                     line: line,
-                    column: column,
+                    column: column
                 )
                 return nil
             }
@@ -324,7 +323,7 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
                 fileID: fileID,
                 filePath: filePath,
                 line: line,
-                column: column,
+                column: column
             )
             return nil
         }
@@ -344,7 +343,7 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
         ExhaustLog.notice(
             category: .propertyTest,
             event: "property_passed",
-            metadata: passMetadata,
+            metadata: passMetadata
         )
         return nil
     }
@@ -363,7 +362,7 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
         filePath: StaticString = #filePath,
         line: UInt = #line,
         column: UInt = #column,
-        property: @Sendable @escaping (Output) -> Bool,
+        property: @Sendable @escaping (Output) -> Bool
     ) -> Output? {
         var samplingBudget: UInt64 = 10000
         var seed: UInt64?
@@ -371,7 +370,7 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
         var suppressIssueReporting = false
         var poolCapacity = 256
         var generateRatio = 0.2
-        var useKleisliReducer = false
+        var useBonsaiReducer = false
 
         for setting in settings {
             switch setting {
@@ -387,8 +386,8 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
                 poolCapacity = n
             case let .generateRatio(r):
                 generateRatio = r
-            case .useKleisliReducer:
-                useKleisliReducer = true
+            case .useBonsaiReducer:
+                useBonsaiReducer = true
             }
         }
 
@@ -397,11 +396,11 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
             property: property,
             samplingBudget: samplingBudget,
             reductionConfig: reductionConfig,
-            useKleisliReducer: useKleisliReducer,
+            useBonsaiReducer: useBonsaiReducer,
             poolCapacity: poolCapacity,
             generateRatio: generateRatio,
             seed: seed,
-            scorer: scorer,
+            scorer: scorer
         )
         let actualSeed = runner.baseSeed
 
@@ -417,13 +416,13 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
                 iteration: Int(iteration),
                 samplingBudget: samplingBudget,
                 blueprint: shrunkSequence.shortString,
-                propertyInvocations: nil,
+                propertyInvocations: nil
             )
             let rendered = failure.render(format: ExhaustLog.configuration.format)
             ExhaustLog.error(
                 category: .propertyTest,
                 event: "explore_property_failed",
-                rendered,
+                rendered
             )
             if !suppressIssueReporting {
                 reportIssue(
@@ -431,7 +430,7 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
                     fileID: fileID,
                     filePath: filePath,
                     line: line,
-                    column: column,
+                    column: column
                 )
             }
             return counterexample
@@ -445,13 +444,13 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
                 iteration: Int(iteration),
                 samplingBudget: samplingBudget,
                 blueprint: nil,
-                propertyInvocations: nil,
+                propertyInvocations: nil
             )
             let rendered = failure.render(format: ExhaustLog.configuration.format)
             ExhaustLog.error(
                 category: .propertyTest,
                 event: "explore_property_failed",
-                rendered,
+                rendered
             )
             if !suppressIssueReporting {
                 reportIssue(
@@ -459,7 +458,7 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
                     fileID: fileID,
                     filePath: filePath,
                     line: line,
-                    column: column,
+                    column: column
                 )
             }
             return counterexample
@@ -475,7 +474,7 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
             ExhaustLog.notice(
                 category: .propertyTest,
                 event: "explore_property_passed",
-                metadata: passMetadata,
+                metadata: passMetadata
             )
             return nil
         }
@@ -486,7 +485,7 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
     /// Generates a single value from a generator. Runtime target of `#extract` expansion.
     public static func __extract<Output>(
         _ gen: ReflectiveGenerator<Output>,
-        seed: UInt64?,
+        seed: UInt64?
     ) -> Output {
         var interpreter = ValueInterpreter(gen, seed: seed, maxRuns: 1, sizeOverride: 50)
         guard let value = try? interpreter.next() else {
@@ -499,7 +498,7 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
     public static func __extractArray<Output>(
         _ gen: ReflectiveGenerator<Output>,
         count: UInt64,
-        seed: UInt64?,
+        seed: UInt64?
     ) -> [Output] {
         var interpreter = ValueInterpreter(gen, seed: seed, maxRuns: count)
         var results: [Output] = []
@@ -520,7 +519,7 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
         fileID: StaticString,
         filePath: StaticString,
         line: UInt,
-        column: UInt,
+        column: UInt
     ) -> ValidationReport {
         gen.validate(
             samples: samples,
@@ -528,7 +527,7 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
             fileID: fileID,
             filePath: filePath,
             line: line,
-            column: column,
+            column: column
         )
     }
 
@@ -539,21 +538,21 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
         _ gen: ReflectiveGenerator<Output>,
         value: Output,
         reductionConfig: TCRBudget,
-        useKleisliReducer: Bool,
+        useBonsaiReducer: Bool,
         suppressIssueReporting: Bool,
         sourceCode: String?,
         fileID: StaticString,
         filePath: StaticString,
         line: UInt,
         column: UInt,
-        property: @Sendable (Output) -> Bool,
+        property: @Sendable (Output) -> Bool
     ) throws -> Output? {
         guard property(value) == false else {
             let message = "reflecting: value passes the property — reduction requires a failing value"
             ExhaustLog.error(
                 category: .propertyTest,
                 event: "reflecting_value_passes",
-                message,
+                message
             )
             if !suppressIssueReporting {
                 reportIssue(
@@ -561,7 +560,7 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
                     fileID: fileID,
                     filePath: filePath,
                     line: line,
-                    column: column,
+                    column: column
                 )
             }
             return nil
@@ -572,7 +571,7 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
             ExhaustLog.error(
                 category: .propertyTest,
                 event: "reflecting_failed",
-                message,
+                message
             )
             if !suppressIssueReporting {
                 reportIssue(
@@ -580,7 +579,7 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
                     fileID: fileID,
                     filePath: filePath,
                     line: line,
-                    column: column,
+                    column: column
                 )
             }
             return nil
@@ -595,8 +594,8 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
             gen: gen,
             tree: tree,
             config: reductionConfig,
-            useKleisli: useKleisliReducer,
-            property: countingProperty,
+            useBonsai: useBonsaiReducer,
+            property: countingProperty
         ) {
             let failure = PropertyTestFailure(
                 counterexample: shrunkValue,
@@ -606,13 +605,13 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
                 iteration: 1,
                 samplingBudget: 1,
                 blueprint: shrunkSequence.shortString,
-                propertyInvocations: propertyInvocationCount,
+                propertyInvocations: propertyInvocationCount
             )
             let rendered = failure.render(format: ExhaustLog.configuration.format)
             ExhaustLog.error(
                 category: .propertyTest,
                 event: "reflecting_reduced",
-                rendered,
+                rendered
             )
             if !suppressIssueReporting {
                 reportIssue(
@@ -620,7 +619,7 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
                     fileID: fileID,
                     filePath: filePath,
                     line: line,
-                    column: column,
+                    column: column
                 )
             }
             return shrunkValue
@@ -635,13 +634,13 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
             iteration: 1,
             samplingBudget: 1,
             blueprint: nil,
-            propertyInvocations: propertyInvocationCount,
+            propertyInvocations: propertyInvocationCount
         )
         let rendered = failure.render(format: ExhaustLog.configuration.format)
         ExhaustLog.error(
             category: .propertyTest,
             event: "reflecting_unreduced",
-            rendered,
+            rendered
         )
         if !suppressIssueReporting {
             reportIssue(
@@ -649,7 +648,7 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
                 fileID: fileID,
                 filePath: filePath,
                 line: line,
-                column: column,
+                column: column
             )
         }
         return value

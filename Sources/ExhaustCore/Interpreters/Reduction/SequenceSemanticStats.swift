@@ -26,14 +26,14 @@ public struct SequenceSemanticStats {
 
     public func nonSemanticCount(
         afterReplacing index: Int,
-        with replacement: ChoiceSequenceValue,
+        with replacement: ChoiceSequenceValue
     ) -> Int {
         nonSemanticCount + deltaForReplacement(at: index, with: replacement)
     }
 
     public func nonSemanticCount(
         afterReplacing first: (index: Int, replacement: ChoiceSequenceValue),
-        and second: (index: Int, replacement: ChoiceSequenceValue),
+        and second: (index: Int, replacement: ChoiceSequenceValue)
     ) -> Int {
         if first.index == second.index {
             return nonSemanticCount(afterReplacing: second.index, with: second.replacement)
@@ -45,7 +45,7 @@ public struct SequenceSemanticStats {
 
     public mutating func applyReplacement(
         at index: Int,
-        with replacement: ChoiceSequenceValue,
+        with replacement: ChoiceSequenceValue
     ) {
         let before = nonSemanticFlags[index]
         let after = Self.isNonSemantic(replacement)
@@ -56,7 +56,7 @@ public struct SequenceSemanticStats {
 
     public mutating func applyReplacements(
         _ first: (index: Int, replacement: ChoiceSequenceValue),
-        _ second: (index: Int, replacement: ChoiceSequenceValue),
+        _ second: (index: Int, replacement: ChoiceSequenceValue)
     ) {
         if first.index == second.index {
             applyReplacement(at: second.index, with: second.replacement)

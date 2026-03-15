@@ -18,7 +18,7 @@ public extension Sequence {
     /// - Complexity: O(*n*), where *n* is the number of elements at the start of the sequence that result in `nil` when applying the transformation.
     @inlinable
     func firstNonNil<Result>(
-        _ transform: (Element) throws -> Result?,
+        _ transform: (Element) throws -> Result?
     ) rethrows -> Result? {
         for value in self {
             if let value = try transform(value) {

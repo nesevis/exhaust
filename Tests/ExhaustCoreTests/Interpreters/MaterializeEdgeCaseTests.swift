@@ -3,8 +3,8 @@
 //  Exhaust
 //
 
-import Testing
 import ExhaustCore
+import Testing
 
 @Suite("Materialize edge cases")
 struct MaterializeEdgeCaseTests {
@@ -13,7 +13,7 @@ struct MaterializeEdgeCaseTests {
     private func roundTrip<Output: Equatable>(
         _ gen: ReflectiveGenerator<Output>,
         seed: UInt64 = 42,
-        maxRuns: UInt64 = 20,
+        maxRuns: UInt64 = 20
     ) throws -> [(original: Output, materialized: Output)] {
         var iterator = ValueAndChoiceTreeInterpreter(gen, materializePicks: false, seed: seed, maxRuns: maxRuns)
         var results: [(original: Output, materialized: Output)] = []

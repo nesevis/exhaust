@@ -1,6 +1,5 @@
 import Foundation
 import Testing
-
 @testable import Exhaust
 
 // swiftlint:disable type_body_length
@@ -12,7 +11,6 @@ import Testing
 /// kept low (30–50) to keep CI fast while still exercising the pipeline.
 @Suite("#examine first-party generators")
 struct ExamineFirstPartyGeneratorsTests {
-
     // MARK: - Bool
 
     @Test func bool() {
@@ -220,7 +218,7 @@ struct ExamineFirstPartyGeneratorsTests {
         let now = Date()
         let report = #examine(
             .date(between: now ... now.addingTimeInterval(86400 * 365), interval: .hours(1)),
-            samples: 30,
+            samples: 30
         )
         #expect(report.passed)
     }
@@ -228,7 +226,7 @@ struct ExamineFirstPartyGeneratorsTests {
     @Test func dateWithinSpanOfAnchor() {
         let report = #examine(
             .date(within: .days(30), of: Date(), interval: .minutes(15)),
-            samples: 30,
+            samples: 30
         )
         #expect(report.passed)
     }
@@ -281,7 +279,7 @@ struct ExamineFirstPartyGeneratorsTests {
         withKnownIssue("Dictionary key ordering is non-deterministic — replay fails") {
             let report = #examine(
                 ReflectiveGenerator.dictionary(.int(in: 0 ... 100), .int(in: 0 ... 100)),
-                samples: 5,
+                samples: 5
             )
             #expect(report.passed)
         }
@@ -300,7 +298,7 @@ struct ExamineFirstPartyGeneratorsTests {
         withKnownIssue("Slice uses a forward-only transform — reflection not supported") {
             let report = #examine(
                 #gen(.slice(.int(in: 0 ... 50).array(length: 3 ... 6))),
-                samples: 30,
+                samples: 30
             )
             #expect(report.passed)
         }
@@ -312,7 +310,7 @@ struct ExamineFirstPartyGeneratorsTests {
         withKnownIssue("Shuffled uses a forward-only transform — reflection not supported") {
             let report = #examine(
                 .int(in: 0 ... 10).array(length: 4).shuffled(),
-                samples: 30,
+                samples: 30
             )
             #expect(report.passed)
         }
@@ -330,7 +328,7 @@ struct ExamineFirstPartyGeneratorsTests {
     @Test func oneOfGenerators() {
         let report = #examine(
             ReflectiveGenerator.oneOf(.int(in: 0 ... 10), .int(in: 90 ... 100)),
-            samples: 50,
+            samples: 50
         )
         #expect(report.passed)
     }
@@ -339,7 +337,7 @@ struct ExamineFirstPartyGeneratorsTests {
 //        let report = #examine(.array(Direction.allCases), samples: 50)
 //        #expect(report.passed)
 //    }
-//    
+//
 //    @Test func oneOfCaseIterableNonEquatable() {
 //        let report = #examine(.array(DirectionNonEquatable.allCases), samples: 50)
 //        #expect(report.passed)
@@ -348,7 +346,7 @@ struct ExamineFirstPartyGeneratorsTests {
     @Test func oneOfWeighted() {
         let report = #examine(
             ReflectiveGenerator.oneOf(weighted: (3, .int(in: 0 ... 10)), (1, .int(in: 90 ... 100))),
-            samples: 50,
+            samples: 50
         )
         #expect(report.passed)
     }
@@ -400,7 +398,7 @@ struct ExamineFirstPartyGeneratorsTests {
     @Test func simd2PerLane() {
         let report = #examine(
             .simd2(.double(in: 0 ... 10), .double(in: -10 ... 0)),
-            samples: 30,
+            samples: 30
         )
         #expect(report.passed)
     }
@@ -408,7 +406,7 @@ struct ExamineFirstPartyGeneratorsTests {
     @Test func simd3PerLane() {
         let report = #examine(
             .simd3(.float(in: 0 ... 1), .float(in: 1 ... 2), .float(in: 2 ... 3)),
-            samples: 30,
+            samples: 30
         )
         #expect(report.passed)
     }
@@ -421,7 +419,7 @@ struct ExamineFirstPartyGeneratorsTests {
                 .int32(in: 20 ... 30),
                 .int32(in: 30 ... 40)
             ),
-            samples: 30,
+            samples: 30
         )
         #expect(report.passed)
     }
@@ -434,7 +432,7 @@ struct ExamineFirstPartyGeneratorsTests {
                 forward: { String($0) },
                 backward: { Int($0) ?? 0 }
             ),
-            samples: 50,
+            samples: 50
         )
         #expect(report.passed)
     }
@@ -446,7 +444,7 @@ struct ExamineFirstPartyGeneratorsTests {
                     forward: { n in .int(in: 0 ... n) },
                     backward: { $0 }
                 ),
-                samples: 30,
+                samples: 30
             )
             #expect(report.passed)
         }
@@ -455,7 +453,7 @@ struct ExamineFirstPartyGeneratorsTests {
     @Test func filter() {
         let report = #examine(
             .int(in: 0 ... 100).filter { $0 % 2 == 0 },
-            samples: 30,
+            samples: 30
         )
         #expect(report.passed)
     }
@@ -475,6 +473,5 @@ private enum Direction: CaseIterable, Equatable {
 private enum DirectionNonEquatable: CaseIterable {
     case north, south, east, west
 }
-
 
 // swiftlint:enable type_body_length

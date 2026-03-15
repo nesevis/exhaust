@@ -1,5 +1,5 @@
-import Testing
 import Exhaust
+import Testing
 
 @Suite("Bundle tests")
 struct BundleTests {

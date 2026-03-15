@@ -5,8 +5,8 @@
 //  Created by Chris Kolbu on 25/7/2025.
 //
 
-import Testing
 import ExhaustCore
+import Testing
 
 @discardableResult
 func validateGenerator<Output: Equatable>(_ gen: ReflectiveGenerator<Output>) throws -> (recipe: ChoiceTree, instance: Output) {
@@ -32,13 +32,13 @@ func asciiCharGen() -> ReflectiveGenerator<Character> {
         { (char: Character) throws -> Int in
             guard let scalar = char.unicodeScalars.first else {
                 throw Interpreters.ReflectionError.couldNotReflectOnSequenceElement(
-                    "Character has no scalars",
+                    "Character has no scalars"
                 )
             }
             return srs.index(of: scalar)
         },
         Gen.choose(in: 0 ... srs.scalarCount - 1)
-            ._map { Character(srs.scalar(at: $0)) },
+            ._map { Character(srs.scalar(at: $0)) }
     )
 }
 
@@ -49,13 +49,13 @@ func defaultCharGen() -> ReflectiveGenerator<Character> {
         { (char: Character) throws -> Int in
             guard let scalar = char.unicodeScalars.first else {
                 throw Interpreters.ReflectionError.couldNotReflectOnSequenceElement(
-                    "Character has no scalars",
+                    "Character has no scalars"
                 )
             }
             return srs.index(of: scalar)
         },
         Gen.choose(in: 0 ... srs.scalarCount - 1)
-            ._map { Character(srs.scalar(at: $0)) },
+            ._map { Character(srs.scalar(at: $0)) }
     )
 }
 
@@ -64,7 +64,7 @@ func asciiStringGen() -> ReflectiveGenerator<String> {
     let charGen = asciiCharGen()
     return Gen.contramap(
         { (s: String) -> [Character] in s.unicodeScalars.map { Character($0) } },
-        Gen.arrayOf(charGen)._map { String($0) },
+        Gen.arrayOf(charGen)._map { String($0) }
     )
 }
 
@@ -73,7 +73,7 @@ func stringGen() -> ReflectiveGenerator<String> {
     let charGen = defaultCharGen()
     return Gen.contramap(
         { (s: String) -> [Character] in s.unicodeScalars.map { Character($0) } },
-        Gen.arrayOf(charGen)._map { String($0) },
+        Gen.arrayOf(charGen)._map { String($0) }
     )
 }
 
@@ -89,13 +89,13 @@ func charGen(from characterSet: CharacterSet) -> ReflectiveGenerator<Character> 
         { (char: Character) throws -> Int in
             guard let scalar = char.unicodeScalars.first else {
                 throw Interpreters.ReflectionError.couldNotReflectOnSequenceElement(
-                    "Character has no scalars",
+                    "Character has no scalars"
                 )
             }
             return srs.index(of: scalar)
         },
         Gen.choose(in: 0 ... srs.scalarCount - 1)
-            ._map { Character(srs.scalar(at: $0)) },
+            ._map { Character(srs.scalar(at: $0)) }
     )
 }
 
@@ -115,12 +115,12 @@ func asOptionalGen<Value>(_ gen: ReflectiveGenerator<Value>) -> ReflectiveGenera
             if let optional = result as? Value?, optional == nil {
                 throw Interpreters.ReflectionError.reflectedNil(
                     type: description,
-                    resultType: String(describing: type(of: result)),
+                    resultType: String(describing: type(of: result))
                 )
             }
             return result as! Value
         },
-        next: gen.erase(),
+        next: gen.erase()
     )) { result in
         .pure(result as? Value)
     }

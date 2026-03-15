@@ -10,9 +10,9 @@
 //  .filter and .optional() tests noted where they use Exhaust-only features.
 //
 
+import ExhaustCore
 import Foundation
 import Testing
-import ExhaustCore
 
 // MARK: - Roundtrip Properties
 
@@ -88,7 +88,7 @@ struct RoundtripPropertyTests {
         // Zip (tuple)
         let zipGen = Gen.zip(
             Gen.choose(in: 0 ... 100) as ReflectiveGenerator<Int>,
-            Gen.choose(in: 0 ... 100) as ReflectiveGenerator<Int>,
+            Gen.choose(in: 0 ... 100) as ReflectiveGenerator<Int>
         )
         try exhaustCheck(zipGen) { value in
             guard let tree = try? Interpreters.reflect(zipGen, with: value),
@@ -120,7 +120,7 @@ struct SizeScalingPropertyTests {
         let range = UInt64(0) ... UInt64(10000)
         let sizeGen = Gen.zip(
             Gen.choose(in: UInt64(1) ... 99),
-            Gen.choose(in: UInt64(1) ... 99),
+            Gen.choose(in: UInt64(1) ... 99)
         )
 
         // Linear scaling
@@ -155,7 +155,7 @@ struct SizeScalingPropertyTests {
         let gen = Gen.zip(
             Gen.choose(in: UInt64(1) ... 10000),
             Gen.choose(in: UInt64(0) ... 99),
-            Gen.choose(in: UInt64(0) ... 99),
+            Gen.choose(in: UInt64(0) ... 99)
         )
 
         // Linear
@@ -181,7 +181,7 @@ struct SizeScalingPropertyTests {
         // Result is always <= distance
         try exhaustCheck(Gen.zip(
             Gen.choose(in: UInt64(0) ... 100_000),
-            Gen.choose(in: UInt64(0) ... 100),
+            Gen.choose(in: UInt64(0) ... 100)
         )) { distance, fRaw in
             let fraction = Double(fRaw) / 100.0
             let linear = Gen.scaledDistance(distance, fraction: fraction, isExponential: false)
@@ -206,7 +206,7 @@ struct FloatShortlexPropertyTests {
     func magnitudeOrdering() throws {
         try exhaustCheck(Gen.zip(
             Gen.choose(in: UInt64(0) ... (1 << 20)),
-            Gen.choose(in: UInt64(0) ... (1 << 20)),
+            Gen.choose(in: UInt64(0) ... (1 << 20))
         )) { a, b in
             guard a < b else { return true }
             return FloatShortlex.shortlexKey(for: Double(a)) < FloatShortlex.shortlexKey(for: Double(b))
@@ -217,7 +217,7 @@ struct FloatShortlexPropertyTests {
     func reverseLowerBitsInvolution() throws {
         try exhaustCheck(Gen.zip(
             Gen.choose(in: UInt64(0) ... ((1 << 20) - 1)),
-            Gen.choose(in: UInt64(1) ... 63),
+            Gen.choose(in: UInt64(1) ... 63)
         )) { rawX, countRaw in
             let count = Int(countRaw)
             let mask: UInt64 = countRaw >= 64 ? UInt64.max : (UInt64(1) << countRaw) - 1
@@ -276,7 +276,7 @@ struct ChoiceValuePropertyTests {
     func unsignedComplexityMonotonicity() throws {
         try exhaustCheck(Gen.zip(
             Gen.choose(in: UInt64(0) ... 100_000),
-            Gen.choose(in: UInt64(0) ... 100_000),
+            Gen.choose(in: UInt64(0) ... 100_000)
         )) { a, b in
             guard a < b else { return true }
             let va = ChoiceValue.unsigned(a, .uint64)
@@ -304,7 +304,7 @@ struct ShortlexKeyPropertyTests {
     func signedShortlexOrdering() throws {
         try exhaustCheck(Gen.zip(
             Gen.choose(in: Int64(-50000) ... 50000),
-            Gen.choose(in: Int64(-50000) ... 50000),
+            Gen.choose(in: Int64(-50000) ... 50000)
         )) { a, b in
             guard abs(a) < abs(b) else { return true }
             let va = ChoiceValue(a, tag: .int64)
@@ -390,7 +390,7 @@ struct ShrinkingPropertyTests {
         while let (value, tree) = try iterator.next() {
             guard !property(value) else { continue }
             guard let (_, shrunk) = try Interpreters.reduce(
-                gen: gen, tree: tree, config: .fast, property: property,
+                gen: gen, tree: tree, config: .fast, property: property
             ) else { continue }
             #expect(!property(shrunk), "Shrunk value \(shrunk) no longer fails the property")
         }
@@ -406,11 +406,11 @@ struct ShrinkingPropertyTests {
             guard !property(value) else { continue }
             let originalSequence = ChoiceSequence.flatten(tree)
             guard let (shrunkSequence, _) = try Interpreters.reduce(
-                gen: gen, tree: tree, config: .fast, property: property,
+                gen: gen, tree: tree, config: .fast, property: property
             ) else { continue }
             #expect(
                 shrunkSequence.shortLexPrecedes(originalSequence) || shrunkSequence == originalSequence,
-                "Shrunk sequence is not simpler than the original",
+                "Shrunk sequence is not simpler than the original"
             )
         }
     }
@@ -424,7 +424,7 @@ struct ChoiceValueComparablePropertyTests {
     func unsignedComparableConsistency() throws {
         try exhaustCheck(Gen.zip(
             Gen.choose(in: UInt64(0) ... 100_000),
-            Gen.choose(in: UInt64(0) ... 100_000),
+            Gen.choose(in: UInt64(0) ... 100_000)
         )) { a, b in
             let va = ChoiceValue.unsigned(a, .uint64)
             let vb = ChoiceValue.unsigned(b, .uint64)
@@ -442,7 +442,7 @@ private func exhaustCheck<T>(
     _ gen: ReflectiveGenerator<T>,
     maxIterations: UInt64 = 100,
     seed: UInt64 = 42,
-    property: (T) -> Bool,
+    property: (T) -> Bool
 ) throws {
     var iter = ValueInterpreter(gen, seed: seed, maxRuns: maxIterations)
     while let value = try iter.next() {
@@ -457,41 +457,41 @@ private func characterGen(from characterSet: CharacterSet) -> ReflectiveGenerato
         { (char: Character) throws -> Int in
             guard let scalar = char.unicodeScalars.first else {
                 throw Interpreters.ReflectionError.couldNotReflectOnSequenceElement(
-                    "Character has no scalars",
+                    "Character has no scalars"
                 )
             }
             return srs.index(of: scalar)
         },
         Gen.choose(in: 0 ... srs.scalarCount - 1)
-            ._map { Character(srs.scalar(at: $0)) },
+            ._map { Character(srs.scalar(at: $0)) }
     )
 }
 
 /// ASCII string generator using ExhaustCore primitives.
 private func asciiStringGen(
-    length: ClosedRange<UInt64>? = nil,
+    length: ClosedRange<UInt64>? = nil
 ) -> ReflectiveGenerator<String> {
     let srs = CharacterSet(charactersIn: Unicode.Scalar(0x0020)! ... Unicode.Scalar(0x007E)!).scalarRangeSet()
     let charGen = Gen.contramap(
         { (char: Character) throws -> Int in
             guard let scalar = char.unicodeScalars.first else {
                 throw Interpreters.ReflectionError.couldNotReflectOnSequenceElement(
-                    "Character has no scalars",
+                    "Character has no scalars"
                 )
             }
             return srs.index(of: scalar)
         },
         Gen.choose(in: 0 ... srs.scalarCount - 1)
-            ._map { Character(srs.scalar(at: $0)) },
+            ._map { Character(srs.scalar(at: $0)) }
     )
     if let length {
         return Gen.contramap(
             { (s: String) throws -> [Character] in s.unicodeScalars.map { Character($0) } },
-            Gen.arrayOf(charGen, within: length)._map { String($0) },
+            Gen.arrayOf(charGen, within: length)._map { String($0) }
         )
     }
     return Gen.contramap(
         { (s: String) throws -> [Character] in s.unicodeScalars.map { Character($0) } },
-        Gen.arrayOf(charGen)._map { String($0) },
+        Gen.arrayOf(charGen)._map { String($0) }
     )
 }

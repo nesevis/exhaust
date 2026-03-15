@@ -46,7 +46,7 @@ public enum CoveringArrayReplay {
         in tree: ChoiceTree,
         row: CoveringArrayRow,
         profile: FiniteDomainProfile,
-        paramIndex: inout Int,
+        paramIndex: inout Int
     ) -> ChoiceTree? {
         switch tree {
         case .choice:
@@ -131,7 +131,7 @@ public enum CoveringArrayReplay {
                 weight: chosen.weight,
                 id: chosen.id,
                 branchIDs: branchIDs,
-                choice: subTree,
+                choice: subTree
             )
             return .group([.selected(branch)])
         }

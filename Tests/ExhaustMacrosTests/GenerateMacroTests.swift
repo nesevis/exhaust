@@ -22,7 +22,7 @@ struct GenerateMacroTests {
                 Person(name: name)
             })
             """,
-            macros: testMacros,
+            macros: testMacros
         )
     }
 
@@ -39,7 +39,7 @@ struct GenerateMacroTests {
                 Person(name: name, age: age)
             })
             """,
-            macros: testMacros,
+            macros: testMacros
         )
     }
 
@@ -56,7 +56,7 @@ struct GenerateMacroTests {
                 Person(name: name, age: age)
             })
             """,
-            macros: testMacros,
+            macros: testMacros
         )
     }
 
@@ -69,7 +69,7 @@ struct GenerateMacroTests {
             expandedSource: """
             intGen.map { $0 * 2 }
             """,
-            macros: testMacros,
+            macros: testMacros
         )
     }
 
@@ -82,7 +82,7 @@ struct GenerateMacroTests {
             expandedSource: """
             __ExhaustRuntime._macroMap(nameGen, label: "name", forward: { Person(name: $0) })
             """,
-            macros: testMacros,
+            macros: testMacros
         )
     }
 
@@ -95,7 +95,7 @@ struct GenerateMacroTests {
             expandedSource: """
             __ExhaustRuntime._macroZip(nameGen, ageGen, labels: ["name", "age"], forward: { Person(name: $0, age: $1) })
             """,
-            macros: testMacros,
+            macros: testMacros
         )
     }
 
@@ -108,7 +108,7 @@ struct GenerateMacroTests {
             expandedSource: """
             __ExhaustRuntime._macroZip(ageGen, nameGen, labels: ["age", "name"], forward: { Person(name: $1, age: $0) })
             """,
-            macros: testMacros,
+            macros: testMacros
         )
     }
 
@@ -125,7 +125,7 @@ struct GenerateMacroTests {
                 Person(name: name.uppercased())
             }
             """,
-            macros: testMacros,
+            macros: testMacros
         )
     }
 
@@ -144,7 +144,7 @@ struct GenerateMacroTests {
                 return doubled
             }
             """,
-            macros: testMacros,
+            macros: testMacros
         )
     }
 
@@ -157,7 +157,7 @@ struct GenerateMacroTests {
             expandedSource: """
             intGen
             """,
-            macros: testMacros,
+            macros: testMacros
         )
     }
 
@@ -174,7 +174,7 @@ struct GenerateMacroTests {
             expandedSource: """
             ReflectiveGenerator.int16().array(length: 0...10)
             """,
-            macros: testMacros,
+            macros: testMacros
         )
     }
 
@@ -187,7 +187,7 @@ struct GenerateMacroTests {
             expandedSource: """
             __ExhaustRuntime.__zip(intGen, stringGen)
             """,
-            macros: testMacros,
+            macros: testMacros
         )
     }
 
@@ -204,7 +204,7 @@ struct GenerateMacroTests {
                 User(name: name, age: age, email: email)
             })
             """,
-            macros: testMacros,
+            macros: testMacros
         )
     }
 
@@ -221,7 +221,7 @@ struct GenerateMacroTests {
                 return Person(name: name)
             })
             """,
-            macros: testMacros,
+            macros: testMacros
         )
     }
 
@@ -238,7 +238,7 @@ struct GenerateMacroTests {
                 Wrapper(x)
             })
             """,
-            macros: testMacros,
+            macros: testMacros
         )
     }
 
@@ -255,7 +255,7 @@ struct GenerateMacroTests {
                 Pair(x, y)
             })
             """,
-            macros: testMacros,
+            macros: testMacros
         )
     }
 
@@ -268,7 +268,7 @@ struct GenerateMacroTests {
             expandedSource: """
             __ExhaustRuntime._macroMap(intGen, label: ".0", forward: { Wrapper($0) })
             """,
-            macros: testMacros,
+            macros: testMacros
         )
     }
 
@@ -287,7 +287,7 @@ struct GenerateMacroTests {
                 Pet.cat(age)
             })
             """,
-            macros: testMacros,
+            macros: testMacros
         )
     }
 
@@ -304,7 +304,7 @@ struct GenerateMacroTests {
                 Pet.dog(age, name)
             })
             """,
-            macros: testMacros,
+            macros: testMacros
         )
     }
 
@@ -321,7 +321,7 @@ struct GenerateMacroTests {
                 Pet.cat(age: age)
             })
             """,
-            macros: testMacros,
+            macros: testMacros
         )
     }
 
@@ -334,7 +334,7 @@ struct GenerateMacroTests {
             expandedSource: """
             __ExhaustRuntime._macroMap(intGen, backward: { guard case let .cat(v0) = $0 else { return nil }; return v0 }, forward: { Pet.cat($0) })
             """,
-            macros: testMacros,
+            macros: testMacros
         )
     }
 
@@ -351,7 +351,7 @@ struct GenerateMacroTests {
                 Pet.dog(age, name)
             })
             """,
-            macros: testMacros,
+            macros: testMacros
         )
     }
 }

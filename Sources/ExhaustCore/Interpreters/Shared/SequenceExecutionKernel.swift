@@ -9,7 +9,7 @@ public enum SequenceExecutionKernel {
     @inline(__always)
     public static func run(
         count: UInt64,
-        step: () throws -> Bool,
+        step: () throws -> Bool
     ) throws -> Bool {
         var remaining = count
         while remaining > 0 {
@@ -24,7 +24,7 @@ public enum SequenceExecutionKernel {
     @inline(__always)
     public static func run<Script>(
         over scripts: [Script],
-        step: (Script) throws -> Bool,
+        step: (Script) throws -> Bool
     ) throws -> Bool {
         for script in scripts {
             guard try step(script) else {

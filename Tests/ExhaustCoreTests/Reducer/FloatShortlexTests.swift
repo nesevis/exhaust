@@ -5,8 +5,8 @@
 //  Created by Codex on 21/2/2026.
 //
 
-import Testing
 import ExhaustCore
+import Testing
 
 @Suite("FloatShortlex")
 struct FloatShortlexTests {

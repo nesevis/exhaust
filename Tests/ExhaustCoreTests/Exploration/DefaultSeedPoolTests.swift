@@ -3,8 +3,8 @@
 //  ExhaustTests
 //
 
-import Testing
 import ExhaustCore
+import Testing
 
 @Suite("DefaultSeedPool")
 struct DefaultSeedPoolTests {
@@ -196,6 +196,6 @@ private func makeSeed(value: UInt64, novelty: Double, fitness: Double = 0, gener
         tree: tree,
         noveltyScore: novelty,
         fitness: fitness,
-        generation: generation,
+        generation: generation
     )
 }

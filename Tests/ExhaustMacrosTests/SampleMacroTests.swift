@@ -21,7 +21,7 @@ struct ExtractMacroTests {
                 seed: nil
             )
             """,
-            macros: testMacros,
+            macros: testMacros
         )
     }
 
@@ -37,7 +37,7 @@ struct ExtractMacroTests {
                 seed: 42
             )
             """,
-            macros: testMacros,
+            macros: testMacros
         )
     }
 
@@ -54,7 +54,7 @@ struct ExtractMacroTests {
                 seed: nil
             )
             """,
-            macros: testMacros,
+            macros: testMacros
         )
     }
 
@@ -71,7 +71,7 @@ struct ExtractMacroTests {
                 seed: 42
             )
             """,
-            macros: testMacros,
+            macros: testMacros
         )
     }
 
@@ -89,10 +89,10 @@ struct ExtractMacroTests {
                     message: ExhaustMacroDiagnostic.extractMissingGenerator.rawValue,
                     line: 1,
                     column: 1,
-                    severity: .error,
+                    severity: .error
                 ),
             ],
-            macros: testMacros,
+            macros: testMacros
         )
     }
 
@@ -108,7 +108,7 @@ struct ExtractMacroTests {
                 seed: nil
             )
             """,
-            macros: testMacros,
+            macros: testMacros
         )
     }
 }

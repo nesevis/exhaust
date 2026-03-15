@@ -8,9 +8,9 @@
 //    AVL    — AVL tree, values 0...9, depth 5, predicate: valid BST + balanced
 //
 
+import ExhaustCore
 import Foundation
 import Testing
-import ExhaustCore
 
 // MARK: - Benchmark Problem
 
@@ -53,7 +53,7 @@ struct UniquenessBenchmarkTests {
             generator: BST.arbitrary(),
             predicate: { $0.height >= 1 && $0.isValidBST() },
             qualityBucket: \.height,
-            bucketLabel: "height",
+            bucketLabel: "height"
         )
     }
 
@@ -70,7 +70,7 @@ struct UniquenessBenchmarkTests {
                 return zip(list, list.dropFirst()).allSatisfy { $0 <= $1 }
             },
             qualityBucket: { Set($0).count },
-            bucketLabel: "distinct",
+            bucketLabel: "distinct"
         )
     }
 
@@ -80,7 +80,7 @@ struct UniquenessBenchmarkTests {
             generator: BST.arbitraryRecursive(),
             predicate: { $0.height >= 1 && $0.isValidBST() },
             qualityBucket: \.height,
-            bucketLabel: "height",
+            bucketLabel: "height"
         )
     }
 
@@ -90,7 +90,7 @@ struct UniquenessBenchmarkTests {
             generator: BST.arbitrary(),
             predicate: { $0.height >= 1 && $0.isValidAVL() },
             qualityBucket: \.height,
-            bucketLabel: "height",
+            bucketLabel: "height"
         )
     }
 
@@ -101,7 +101,7 @@ struct UniquenessBenchmarkTests {
             generator: gen,
             predicate: { $0.isEmpty || $0.dropFirst().reduce($0[0], &+) < 256 },
             qualityBucket: \.count,
-            bucketLabel: "length",
+            bucketLabel: "length"
         )
     }
 
@@ -176,7 +176,7 @@ struct UniquenessBenchmarkTests {
     // MARK: - Strategy Runner
 
     private func runAllStrategies(
-        _ problem: BenchmarkProblem<some Hashable>,
+        _ problem: BenchmarkProblem<some Hashable>
     ) throws -> [BenchmarkResult] {
         let rejection = try measureRejection(problem)
         let smoothed = try measureSmoothed(problem)
@@ -193,7 +193,7 @@ struct UniquenessBenchmarkTests {
     // MARK: - Strategy Implementations
 
     private func measureRejection<Value: Hashable>(
-        _ problem: BenchmarkProblem<Value>,
+        _ problem: BenchmarkProblem<Value>
     ) throws -> BenchmarkResult {
         var unique = Set<Value>()
         var total = 0
@@ -217,12 +217,12 @@ struct UniquenessBenchmarkTests {
             uniqueCount: unique.count,
             totalGenerated: total,
             elapsed: elapsed,
-            qualityDistribution: quality,
+            qualityDistribution: quality
         )
     }
 
     private func measureOnlineCGS<Value: Hashable>(
-        _ problem: BenchmarkProblem<Value>,
+        _ problem: BenchmarkProblem<Value>
     ) throws -> BenchmarkResult {
         var unique = Set<Value>()
         var total = 0
@@ -232,7 +232,7 @@ struct UniquenessBenchmarkTests {
             predicate: problem.predicate,
             sampleCount: 3,
             seed: Self.seed,
-            maxRuns: Self.budget,
+            maxRuns: Self.budget
         )
 
         let start = ContinuousClock.now
@@ -252,12 +252,12 @@ struct UniquenessBenchmarkTests {
             uniqueCount: unique.count,
             totalGenerated: total,
             elapsed: elapsed,
-            qualityDistribution: quality,
+            qualityDistribution: quality
         )
     }
 
     private func measureSmoothed<Value: Hashable>(
-        _ problem: BenchmarkProblem<Value>,
+        _ problem: BenchmarkProblem<Value>
     ) throws -> BenchmarkResult {
         let start = ContinuousClock.now
 
@@ -265,7 +265,7 @@ struct UniquenessBenchmarkTests {
             problem.generator,
             samples: 1000,
             seed: 12345,
-            predicate: problem.predicate,
+            predicate: problem.predicate
         )
         let smoothed = AdaptiveSmoothing.smooth(tuned)
 
@@ -290,12 +290,12 @@ struct UniquenessBenchmarkTests {
             uniqueCount: unique.count,
             totalGenerated: total,
             elapsed: elapsed,
-            qualityDistribution: quality,
+            qualityDistribution: quality
         )
     }
 
     private func measureAdaptivelySmoothed<Value: Hashable>(
-        _ problem: BenchmarkProblem<Value>,
+        _ problem: BenchmarkProblem<Value>
     ) throws -> BenchmarkResult {
         let start = ContinuousClock.now
 
@@ -303,13 +303,13 @@ struct UniquenessBenchmarkTests {
             problem.generator,
             samples: 1000,
             seed: 12345,
-            predicate: problem.predicate,
+            predicate: problem.predicate
         )
         let adaptive = GeneratorTuning.smoothAdaptively(
             tuned,
             epsilon: 1.0,
             baseTemperature: 1.0,
-            maxTemperature: 4.0,
+            maxTemperature: 4.0
         )
 
         var unique = Set<Value>()
@@ -333,19 +333,19 @@ struct UniquenessBenchmarkTests {
             uniqueCount: unique.count,
             totalGenerated: total,
             elapsed: elapsed,
-            qualityDistribution: quality,
+            qualityDistribution: quality
         )
     }
 
     private func measureAutoAdapted<Value: Hashable>(
-        _ problem: BenchmarkProblem<Value>,
+        _ problem: BenchmarkProblem<Value>
     ) throws -> BenchmarkResult {
         let start = ContinuousClock.now
 
         let generator = try GeneratorTuning.probeAndTune(
             problem.generator,
             seed: 12345,
-            predicate: problem.predicate,
+            predicate: problem.predicate
         )
 
         var unique = Set<Value>()
@@ -369,14 +369,14 @@ struct UniquenessBenchmarkTests {
             uniqueCount: unique.count,
             totalGenerated: total,
             elapsed: elapsed,
-            qualityDistribution: quality,
+            qualityDistribution: quality
         )
     }
 
     /// Kolbu
     private func measureOnlineInformedTuning<Value: Hashable>(
         _ problem: BenchmarkProblem<Value>,
-        weightingStrategy: ChoiceGradientTuner<Value>.WeightingStrategy = .totalFitness,
+        weightingStrategy: ChoiceGradientTuner<Value>.WeightingStrategy = .totalFitness
     ) throws -> BenchmarkResult {
         let strategyName = switch weightingStrategy {
         case .totalFitness: "CGS-Tuned"
@@ -393,7 +393,7 @@ struct UniquenessBenchmarkTests {
             warmupRuns: 200,
             sampleCount: 5,
             seed: 12345,
-            weightingStrategy: weightingStrategy,
+            weightingStrategy: weightingStrategy
         )
 
         let warmupElapsed = ContinuousClock.now - start
@@ -423,12 +423,12 @@ struct UniquenessBenchmarkTests {
             uniqueCount: unique.count,
             totalGenerated: total,
             elapsed: elapsed,
-            qualityDistribution: quality,
+            qualityDistribution: quality
         )
     }
 
     private func measureCGSFitnessSharing<Value: Hashable>(
-        _ problem: BenchmarkProblem<Value>,
+        _ problem: BenchmarkProblem<Value>
     ) throws -> BenchmarkResult {
         let start = ContinuousClock.now
 
@@ -438,7 +438,7 @@ struct UniquenessBenchmarkTests {
             warmupRuns: 400,
             sampleCount: 10,
             seed: 12345,
-            weightingStrategy: .fitnessSharing,
+            weightingStrategy: .fitnessSharing
         )
 
         let warmupElapsed = ContinuousClock.now - start
@@ -468,12 +468,12 @@ struct UniquenessBenchmarkTests {
             uniqueCount: unique.count,
             totalGenerated: total,
             elapsed: elapsed,
-            qualityDistribution: quality,
+            qualityDistribution: quality
         )
     }
 
     private func measureCGSUCB<Value: Hashable>(
-        _ problem: BenchmarkProblem<Value>,
+        _ problem: BenchmarkProblem<Value>
     ) throws -> BenchmarkResult {
         let start = ContinuousClock.now
 
@@ -483,7 +483,7 @@ struct UniquenessBenchmarkTests {
             warmupRuns: 200,
             sampleCount: 5,
             seed: 12345,
-            weightingStrategy: .ucb(explorationConstant: 1.4),
+            weightingStrategy: .ucb(explorationConstant: 1.4)
         )
 
         let warmupElapsed = ContinuousClock.now - start
@@ -513,7 +513,7 @@ struct UniquenessBenchmarkTests {
             uniqueCount: unique.count,
             totalGenerated: total,
             elapsed: elapsed,
-            qualityDistribution: quality,
+            qualityDistribution: quality
         )
     }
 

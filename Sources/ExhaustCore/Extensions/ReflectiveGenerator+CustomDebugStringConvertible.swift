@@ -67,7 +67,7 @@ extension ReflectiveGenerator: CustomDebugStringConvertible where Operation == R
                 let nestedDesc = choice.generator.treeDescription(
                     prefix: childPrefix + (isLast ? "    " : "│   "),
                     isLast: true,
-                    depth: depth + 1,
+                    depth: depth + 1
                 )
 
                 return childPrefix + (isLast ? "└── " : "├── ") + choiceHeader + "\n" + nestedDesc

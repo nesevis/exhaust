@@ -5,7 +5,6 @@
 //  Created by Chris Kolbu on 17/2/2026.
 //
 
-import ExhaustCore
 import Foundation
 import Testing
 @testable import Exhaust
@@ -31,7 +30,7 @@ struct StrictlyIncreasingRunChallenge {
      */
 
     @Test("Strictly increasing run")
-    func strictlyIncreasingRun() throws {
+    func strictlyIncreasingRun() {
         let gen = #gen(.uint64(in: 0 ... 10000)).array(length: 1 ... 50)
 
         let property: @Sendable ([UInt64]) -> Bool = { arr in
@@ -48,7 +47,7 @@ struct StrictlyIncreasingRunChallenge {
 
         let counterExample: [UInt64] = [0, 1, 2]
         #expect(property(counterExample) == false)
-        
+
         let output = #exhaust(gen, .suppressIssueReporting, property: property)
 
         // Should be the minimal strictly increasing triple

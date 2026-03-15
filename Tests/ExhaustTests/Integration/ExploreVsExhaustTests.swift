@@ -3,7 +3,6 @@
 //  ExhaustTests
 //
 
-import ExhaustCore
 import Testing
 @testable import Exhaust
 

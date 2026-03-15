@@ -1,6 +1,5 @@
-import Testing
 import Exhaust
-import ExhaustCore
+import Testing
 
 // MARK: - Tests
 
@@ -16,7 +15,8 @@ struct ALUTests {
                 ALUSpec.self,
                 commandLimit: 8,
                 .argumentAwareCoverage,
-                .suppressIssueReporting
+                .suppressIssueReporting,
+                .useBonsaiReducer
             )
         )
 
@@ -40,28 +40,28 @@ struct ALUSpec {
     }
 
     // store: 5 arg values  → 5 domain slots
-    @Command(weight: 2, #gen(.int(in: 0...4)))
+    @Command(weight: 2, #gen(.int(in: 0 ... 4)))
     mutating func store(value: Int) throws {
         expected = value
         alu.store(value)
     }
 
     // add: 4 arg values    → 4 domain slots
-    @Command(weight: 2, #gen(.int(in: 1...4)))
+    @Command(weight: 2, #gen(.int(in: 1 ... 4)))
     mutating func add(operand: Int) throws {
         expected = (expected + operand) & 0xF
         alu.add(operand)
     }
 
     // multiply: 2 arg values → 2 domain slots  (the buggy operation)
-    @Command(weight: 1, #gen(.int(in: 2...3)))
+    @Command(weight: 1, #gen(.int(in: 2 ... 3)))
     mutating func multiply(factor: Int) throws {
         expected = (expected * factor) & 0xF
         alu.multiply(factor)
     }
 
     // subtract: 3 arg values → 3 domain slots
-    @Command(weight: 1, #gen(.int(in: 1...3)))
+    @Command(weight: 1, #gen(.int(in: 1 ... 3)))
     mutating func subtract(amount: Int) throws {
         expected = (expected - amount) & 0xF
         alu.subtract(amount)
@@ -91,10 +91,27 @@ struct ALUSpec {
 struct FourBitALU {
     private(set) var value: Int = 0
 
-    mutating func store(_ v: Int) { value = v }
-    mutating func add(_ v: Int) { value = (value + v) & 0xF }
-    mutating func multiply(_ v: Int) { value = (value * v) % 13 }
-    mutating func subtract(_ v: Int) { value = (value - v) & 0xF }
-    mutating func increment() { value = (value + 1) & 0xF }
-    mutating func clear() { value = 0 }
+    mutating func store(_ v: Int) {
+        value = v
+    }
+
+    mutating func add(_ v: Int) {
+        value = (value + v) & 0xF
+    }
+
+    mutating func multiply(_ v: Int) {
+        value = (value * v) % 13
+    }
+
+    mutating func subtract(_ v: Int) {
+        value = (value - v) & 0xF
+    }
+
+    mutating func increment() {
+        value = (value + 1) & 0xF
+    }
+
+    mutating func clear() {
+        value = 0
+    }
 }

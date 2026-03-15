@@ -6,8 +6,8 @@
 //  then test the flatten method on those reflected trees.
 //
 
-import Testing
 import ExhaustCore
+import Testing
 
 @Suite("Reflect and Flatten Integration Tests")
 struct ReflectAndFlattenTests {
@@ -120,7 +120,7 @@ struct ReflectAndFlattenTests {
     func reflectAndFlattenTupleOfArrays() throws {
         let gen = Gen.zip(
             Gen.arrayOf(Gen.choose(in: UInt64(0) ... 101), within: UInt64(1) ... 10),
-            Gen.arrayOf(Gen.choose(in: UInt64(0) ... 101), within: UInt64(1) ... 20),
+            Gen.arrayOf(Gen.choose(in: UInt64(0) ... 101), within: UInt64(1) ... 20)
         )
         let value: ([UInt64], [UInt64]) = ([42], [99, 100, 101])
 
@@ -175,7 +175,7 @@ struct ReflectAndFlattenTests {
     func reflectAndFlattenNestedStructure() throws {
         let gen = Gen.zip(
             Gen.choose(in: UInt64(1) ... 10),
-            Gen.arrayOf(Gen.choose(in: UInt64(0) ... 100), exactly: 2),
+            Gen.arrayOf(Gen.choose(in: UInt64(0) ... 100), exactly: 2)
         )
 
         let value: (UInt64, [UInt64]) = (5, [20, 80])
@@ -216,7 +216,7 @@ struct ReflectAndFlattenTests {
     func reflectAndFlattenWithMapped() throws {
         let gen = Gen.contramap(
             { (value: UInt64) -> UInt64 in value / 2 },
-            Gen.choose(in: UInt64(0) ... 100)._map { $0 * 2 },
+            Gen.choose(in: UInt64(0) ... 100)._map { $0 * 2 }
         )
         let value: UInt64 = 84 // 42 * 2
 

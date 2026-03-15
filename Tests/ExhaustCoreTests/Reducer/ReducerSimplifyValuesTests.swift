@@ -7,16 +7,16 @@
 //  (0 for numbers, "a" for characters) using find_integer for batching.
 //
 
+import ExhaustCore
 import Foundation
 import Testing
-import ExhaustCore
 
 // MARK: - Helpers
 
 /// Generate a value and its choice tree from a generator with a given seed.
 private func generate<Output>(
     _ gen: ReflectiveGenerator<Output>,
-    seed: UInt64 = 42,
+    seed: UInt64 = 42
 ) throws -> (value: Output, tree: ChoiceTree) {
     var iter = ValueAndChoiceTreeInterpreter(gen, materializePicks: true, seed: seed)
     return try #require(iter.prefix(1).last)
@@ -160,7 +160,7 @@ struct ReducerSimplifyValuesTests {
         }
 
         let result = try #require(
-            try Interpreters.reduce(gen: gen, tree: tree, config: .fast, property: property),
+            try Interpreters.reduce(gen: gen, tree: tree, config: .fast, property: property)
         )
 
         #expect(iterationCount > 0)
@@ -184,7 +184,7 @@ struct ReducerSimplifyValuesTests {
         }
 
         let result = try #require(
-            try Interpreters.reduce(gen: gen, tree: tree, config: .fast, property: property),
+            try Interpreters.reduce(gen: gen, tree: tree, config: .fast, property: property)
         )
         print()
 
@@ -212,7 +212,7 @@ struct ReducerSimplifyValuesTests {
         let property: (UInt64) -> Bool = { _ in false }
 
         let result = try #require(
-            try Interpreters.reduce(gen: gen, tree: tree, config: .fast, property: property),
+            try Interpreters.reduce(gen: gen, tree: tree, config: .fast, property: property)
         )
 
         #expect(result.0.shortLexPrecedes(originalSequence))
@@ -231,7 +231,7 @@ struct ReducerSimplifyValuesTests {
         }
 
         let result = try #require(
-            try Interpreters.reduce(gen: gen, tree: tree, config: .fast, property: property),
+            try Interpreters.reduce(gen: gen, tree: tree, config: .fast, property: property)
         )
 
         // The reduced output must still fail the property
@@ -249,7 +249,7 @@ struct ReducerSimplifyValuesTests {
         let property: (UInt64) -> Bool = { _ in true }
 
         let result = try #require(
-            try Interpreters.reduce(gen: gen, tree: tree, config: .fast, property: property),
+            try Interpreters.reduce(gen: gen, tree: tree, config: .fast, property: property)
         )
 
         #expect(result.0 == originalSequence)
@@ -267,7 +267,7 @@ struct ReducerSimplifyValuesTests {
         let property: (Int64) -> Bool = { _ in false }
 
         let result = try #require(
-            try Interpreters.reduce(gen: gen, tree: tree, config: .fast, property: property),
+            try Interpreters.reduce(gen: gen, tree: tree, config: .fast, property: property)
         )
 
         // The output should be 0 (semantic simplest for signed)
@@ -284,7 +284,7 @@ struct ReducerSimplifyValuesTests {
         let property: (Int64) -> Bool = { _ in false }
 
         let result = try #require(
-            try Interpreters.reduce(gen: gen, tree: tree, config: .fast, property: property),
+            try Interpreters.reduce(gen: gen, tree: tree, config: .fast, property: property)
         )
 
         #expect(result.1 == 0)
@@ -294,7 +294,7 @@ struct ReducerSimplifyValuesTests {
     func characterSimplification() throws {
         let gen = Gen.arrayOf(
             charGen(from: CharacterSet(charactersIn: Unicode.Scalar(" ") ... Unicode.Scalar("z"))),
-            exactly: 3,
+            exactly: 3
         )
 
         let (_, tree) = try generate(gen)
@@ -303,7 +303,7 @@ struct ReducerSimplifyValuesTests {
         let property: ([Character]) -> Bool = { _ in false }
 
         let result = try #require(
-            try Interpreters.reduce(gen: gen, tree: tree, config: .fast, property: property),
+            try Interpreters.reduce(gen: gen, tree: tree, config: .fast, property: property)
         )
 
         // All characters should be " "
@@ -323,7 +323,7 @@ struct ReducerSimplifyValuesTests {
         }
 
         let result = try #require(
-            try Interpreters.reduce(gen: gen, tree: tree, config: .fast, property: property),
+            try Interpreters.reduce(gen: gen, tree: tree, config: .fast, property: property)
         )
 
         // Should be simpler than original
@@ -341,7 +341,7 @@ struct ReducerSimplifyValuesTests {
         let property: ([UInt64]) -> Bool = { _ in false }
 
         let result = try #require(
-            try Interpreters.reduce(gen: gen, tree: tree, config: .fast, property: property),
+            try Interpreters.reduce(gen: gen, tree: tree, config: .fast, property: property)
         )
 
         #expect(ChoiceSequence.validate(result.0))
@@ -356,11 +356,11 @@ struct ReducerSimplifyValuesTests {
         let property: ([UInt64]) -> Bool = { _ in false }
 
         let result = try #require(
-            try Interpreters.reduce(gen: gen, tree: tree, config: .fast, property: property),
+            try Interpreters.reduce(gen: gen, tree: tree, config: .fast, property: property)
         )
 
         let rematerialized = try #require(
-            try Interpreters.materialize(gen, with: tree, using: result.0),
+            try Interpreters.materialize(gen, with: tree, using: result.0)
         )
 
         #expect(result.1 == rematerialized)

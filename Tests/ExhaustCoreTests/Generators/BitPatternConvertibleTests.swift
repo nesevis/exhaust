@@ -7,8 +7,8 @@
 //  NOTE: All #exhaust calls converted to exhaustCheck helper since #exhaust is Exhaust-only.
 //
 
-import Testing
 import ExhaustCore
+import Testing
 
 @Suite("BitPattern Conversion")
 struct BitPatternConvertibleTests {
@@ -93,7 +93,7 @@ struct BitPatternConvertibleTests {
     func propertyTestFloatBitPatternSequentiality() throws {
         let gen = Gen.zip(
             Gen.choose(in: -Float.greatestFiniteMagnitude ... Float(0)),
-            Gen.choose(in: Float(1) ... Float.greatestFiniteMagnitude.nextDown),
+            Gen.choose(in: Float(1) ... Float.greatestFiniteMagnitude.nextDown)
         )
         try exhaustCheck(gen) { low, high in
             low.bitPattern64 < high.bitPattern64
@@ -131,7 +131,7 @@ struct BitPatternConvertibleTests {
     func propertyTestDoubleBitPatternSequentiality() throws {
         let gen = Gen.zip(
             Gen.choose(in: -Double.greatestFiniteMagnitude ... 0),
-            Gen.choose(in: 1.0 ... Double.greatestFiniteMagnitude.nextDown),
+            Gen.choose(in: 1.0 ... Double.greatestFiniteMagnitude.nextDown)
         )
         try exhaustCheck(gen) { low, high in
             low.bitPattern64 < high.bitPattern64
@@ -186,7 +186,7 @@ struct BitPatternConvertibleTests {
     func propertyTestSignedIntegerBitPatternSequentiality() throws {
         let gen = Gen.zip(
             Gen.choose(in: Int64.min ... Int64(0)),
-            Gen.choose(in: Int64(1) ... Int64.max),
+            Gen.choose(in: Int64(1) ... Int64.max)
         )
         try exhaustCheck(gen) { low, high in
             low.bitPattern64 < high.bitPattern64
@@ -238,7 +238,7 @@ private func exhaustCheck<T>(
     _ gen: ReflectiveGenerator<T>,
     maxIterations: UInt64 = 100,
     seed: UInt64 = 42,
-    property: (T) -> Bool,
+    property: (T) -> Bool
 ) throws {
     var iter = ValueInterpreter(gen, seed: seed, maxRuns: maxIterations)
     while let value = try iter.next() {

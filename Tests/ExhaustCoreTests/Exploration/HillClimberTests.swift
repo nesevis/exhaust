@@ -3,8 +3,8 @@
 //  ExhaustTests
 //
 
-import Testing
 import ExhaustCore
+import Testing
 
 @Suite("HillClimber")
 struct HillClimberTests {
@@ -22,7 +22,7 @@ struct HillClimberTests {
             scorer: { Double($0) },
             property: { _ in true },
             budget: 100,
-            prng: &prng,
+            prng: &prng
         )
 
         switch result {
@@ -62,7 +62,7 @@ struct HillClimberTests {
             scorer: { Double($0) },
             property: { _ in true },
             budget: 50,
-            prng: &prng,
+            prng: &prng
         )
 
         switch result {
@@ -90,7 +90,7 @@ struct HillClimberTests {
             scorer: { Double($0) },
             property: { $0 < 900 }, // Fails for values >= 900
             budget: 200,
-            prng: &prng,
+            prng: &prng
         )
 
         switch result {
@@ -119,7 +119,7 @@ struct HillClimberTests {
             scorer: { Double($0) },
             property: { _ in true },
             budget: budget,
-            prng: &prng,
+            prng: &prng
         )
 
         let probesUsed: Int = switch result {
@@ -137,7 +137,7 @@ struct HillClimberTests {
         let sequence = ChoiceSequence(tree)
         let initialSeed = Seed(
             sequence: sequence, tree: tree,
-            noveltyScore: 0, fitness: Double(value.height), generation: 0,
+            noveltyScore: 0, fitness: Double(value.height), generation: 0
         )
         var prng = Xoshiro256(seed: 7)
 
@@ -147,7 +147,7 @@ struct HillClimberTests {
             scorer: { Double($0.height) },
             property: { _ in true },
             budget: 200,
-            prng: &prng,
+            prng: &prng
         )
 
         switch result {
@@ -167,7 +167,7 @@ private func generateWithTree<Output>(
     _ gen: ReflectiveGenerator<Output>,
     seed: UInt64,
     materializePicks: Bool = false,
-    iteration: Int = 0,
+    iteration: Int = 0
 ) throws -> (value: Output, tree: ChoiceTree) {
     var iter = ValueAndChoiceTreeInterpreter(gen, materializePicks: materializePicks, seed: seed)
     return try iter.prefix(iteration + 1).last!

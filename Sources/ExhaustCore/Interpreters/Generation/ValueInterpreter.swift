@@ -20,7 +20,7 @@ public struct ValueInterpreter<Element>: ~Copyable, ExhaustIterator {
         _ generator: ReflectiveGenerator<Element>,
         seed: UInt64? = nil,
         maxRuns: UInt64? = nil,
-        sizeOverride: UInt64? = nil,
+        sizeOverride: UInt64? = nil
     ) {
         self.generator = generator
         let baseSeed: UInt64
@@ -35,7 +35,7 @@ public struct ValueInterpreter<Element>: ~Copyable, ExhaustIterator {
             baseSeed: baseSeed,
             isFixed: false,
             size: 0,
-            prng: Xoshiro256(seed: baseSeed),
+            prng: Xoshiro256(seed: baseSeed)
         )
         context.sizeOverride = sizeOverride
     }
@@ -61,7 +61,7 @@ public struct ValueInterpreter<Element>: ~Copyable, ExhaustIterator {
                 metadata: [
                     "unique_count": "\(context.runs)",
                     "requested": "\(context.maxRuns)",
-                ],
+                ]
             )
             context.runs = context.maxRuns
             return nil
@@ -71,7 +71,7 @@ public struct ValueInterpreter<Element>: ~Copyable, ExhaustIterator {
                 event: "sparse_validity_condition",
                 metadata: [
                     "run": "\(context.runs)",
-                ],
+                ]
             )
             return nil
         }
@@ -82,7 +82,7 @@ public struct ValueInterpreter<Element>: ~Copyable, ExhaustIterator {
         var fixed = ValueInterpreter(
             generator,
             seed: context.baseSeed,
-            maxRuns: context.maxRuns,
+            maxRuns: context.maxRuns
         )
         fixed.context.isFixed = true
         fixed.context.runs = context.runs
@@ -95,7 +95,7 @@ public struct ValueInterpreter<Element>: ~Copyable, ExhaustIterator {
         _ gen: ReflectiveGenerator<Output>,
         initialSize: UInt64 = 0,
         maxRuns: UInt64,
-        using rng: inout Xoshiro256,
+        using rng: inout Xoshiro256
     ) throws -> Output? {
         let baseSeed = rng.seed
         var context = GenerationContext(
@@ -104,7 +104,7 @@ public struct ValueInterpreter<Element>: ~Copyable, ExhaustIterator {
             isFixed: false,
             size: initialSize,
             prng: Xoshiro256(seed: 0),
-            runs: initialSize,
+            runs: initialSize
         )
         swap(&rng, &context.prng)
         let result = try generateRecursive(gen, with: (), context: &context)
@@ -117,7 +117,7 @@ public struct ValueInterpreter<Element>: ~Copyable, ExhaustIterator {
     private static func generateRecursive<Output>(
         _ gen: ReflectiveGenerator<Output>,
         with inputValue: some Any,
-        context: inout GenerationContext,
+        context: inout GenerationContext
     ) throws -> Output? {
         // Size override only affects the first call, not all subsequent ones
         switch gen {
@@ -139,7 +139,7 @@ public struct ValueInterpreter<Element>: ~Copyable, ExhaustIterator {
                     nextGen,
                     inputValue: inputValue,
                     context: &context,
-                    runContinuation: runContinuation,
+                    runContinuation: runContinuation
                 )
 
             case let .prune(nextGen):
@@ -147,7 +147,7 @@ public struct ValueInterpreter<Element>: ~Copyable, ExhaustIterator {
                     nextGen,
                     inputValue: inputValue,
                     context: &context,
-                    runContinuation: runContinuation,
+                    runContinuation: runContinuation
                 )
 
             case let .pick(choices):
@@ -155,7 +155,7 @@ public struct ValueInterpreter<Element>: ~Copyable, ExhaustIterator {
                     choices,
                     inputValue: inputValue,
                     context: &context,
-                    runContinuation: runContinuation,
+                    runContinuation: runContinuation
                 )
 
             case let .chooseBits(min, max, _, _):
@@ -163,7 +163,7 @@ public struct ValueInterpreter<Element>: ~Copyable, ExhaustIterator {
                     min: min,
                     max: max,
                     context: &context,
-                    runContinuation: runContinuation,
+                    runContinuation: runContinuation
                 )
 
             case let .sequence(lengthGen, elementGen):
@@ -171,7 +171,7 @@ public struct ValueInterpreter<Element>: ~Copyable, ExhaustIterator {
                     lengthGen: lengthGen,
                     elementGen: elementGen,
                     context: &context,
-                    runContinuation: runContinuation,
+                    runContinuation: runContinuation
                 )
 
             case let .zip(generators, _):
@@ -179,7 +179,7 @@ public struct ValueInterpreter<Element>: ~Copyable, ExhaustIterator {
                     generators,
                     inputValue: inputValue,
                     context: &context,
-                    runContinuation: runContinuation,
+                    runContinuation: runContinuation
                 )
 
             case let .just(value):
@@ -196,7 +196,7 @@ public struct ValueInterpreter<Element>: ~Copyable, ExhaustIterator {
                     nextGen: nextGen,
                     inputValue: inputValue,
                     context: &context,
-                    runContinuation: runContinuation,
+                    runContinuation: runContinuation
                 )
 
             case let .filter(gen, fingerprint, filterType, predicate):
@@ -205,7 +205,7 @@ public struct ValueInterpreter<Element>: ~Copyable, ExhaustIterator {
                     fingerprint: fingerprint,
                     filterType: filterType,
                     predicate: predicate,
-                    context: &context,
+                    context: &context
                 )
 
                 var attempts = 0 as UInt64
@@ -224,7 +224,7 @@ public struct ValueInterpreter<Element>: ~Copyable, ExhaustIterator {
                     gen,
                     inputValue: inputValue,
                     context: &context,
-                    runContinuation: runContinuation,
+                    runContinuation: runContinuation
                 )
 
             case let .transform(kind, inner):
@@ -233,7 +233,7 @@ public struct ValueInterpreter<Element>: ~Copyable, ExhaustIterator {
                     inner: inner,
                     inputValue: inputValue,
                     context: &context,
-                    runContinuation: runContinuation,
+                    runContinuation: runContinuation
                 )
 
             case let .unique(gen, fingerprint, keyExtractor):
@@ -255,11 +255,11 @@ public struct ValueInterpreter<Element>: ~Copyable, ExhaustIterator {
                             isFixed: context.isFixed,
                             size: context.size,
                             prng: Xoshiro256(seed: 0),
-                            runs: context.runs,
+                            runs: context.runs
                         )
                         swap(&context.prng, &vactiContext.prng)
                         guard let (result, tree) = try ValueAndChoiceTreeInterpreter<Any>.generateRecursive(
-                            gen, with: inputValue, context: &vactiContext,
+                            gen, with: inputValue, context: &vactiContext
                         ) else {
                             swap(&context.prng, &vactiContext.prng)
                             return nil
@@ -284,7 +284,7 @@ public struct ValueInterpreter<Element>: ~Copyable, ExhaustIterator {
         _ nextGen: ReflectiveGenerator<Any>,
         inputValue: some Any,
         context: inout GenerationContext,
-        runContinuation: (Any, inout GenerationContext) throws -> Output?,
+        runContinuation: (Any, inout GenerationContext) throws -> Output?
     ) throws -> Output? {
         guard let result = try generateRecursive(nextGen, with: inputValue, context: &context) else { return nil }
         return try runContinuation(result, &context)
@@ -295,7 +295,7 @@ public struct ValueInterpreter<Element>: ~Copyable, ExhaustIterator {
         _ nextGen: ReflectiveGenerator<Any>,
         inputValue: some Any,
         context: inout GenerationContext,
-        runContinuation: (Any, inout GenerationContext) throws -> Output?,
+        runContinuation: (Any, inout GenerationContext) throws -> Output?
     ) throws -> Output? {
         guard let wrappedValue = InterpreterWrapperHandlers.unwrapPruneInput(inputValue) else {
             return nil
@@ -309,7 +309,7 @@ public struct ValueInterpreter<Element>: ~Copyable, ExhaustIterator {
         _ choices: ContiguousArray<ReflectiveOperation.PickTuple>,
         inputValue: some Any,
         context: inout GenerationContext,
-        runContinuation: (Any, inout GenerationContext) throws -> Output?,
+        runContinuation: (Any, inout GenerationContext) throws -> Output?
     ) throws -> Output? {
         guard let selectedChoice = WeightedPickSelection.draw(from: choices, using: &context.prng) else {
             return nil
@@ -327,7 +327,7 @@ public struct ValueInterpreter<Element>: ~Copyable, ExhaustIterator {
         min: UInt64,
         max: UInt64,
         context: inout GenerationContext,
-        runContinuation: (Any, inout GenerationContext) throws -> Output?,
+        runContinuation: (Any, inout GenerationContext) throws -> Output?
     ) throws -> Output? {
         let randomBits = context.prng.next(in: min ... max)
         return try runContinuation(randomBits, &context)
@@ -338,7 +338,7 @@ public struct ValueInterpreter<Element>: ~Copyable, ExhaustIterator {
         lengthGen: ReflectiveGenerator<UInt64>,
         elementGen: ReflectiveGenerator<Any>,
         context: inout GenerationContext,
-        runContinuation: (Any, inout GenerationContext) throws -> Output?,
+        runContinuation: (Any, inout GenerationContext) throws -> Output?
     ) throws -> Output? {
         guard let length = try generateRecursive(lengthGen, with: (), context: &context) else {
             return nil
@@ -363,7 +363,7 @@ public struct ValueInterpreter<Element>: ~Copyable, ExhaustIterator {
         _ generators: ContiguousArray<ReflectiveGenerator<Any>>,
         inputValue: some Any,
         context: inout GenerationContext,
-        runContinuation: (Any, inout GenerationContext) throws -> Output?,
+        runContinuation: (Any, inout GenerationContext) throws -> Output?
     ) throws -> Output? {
         var results = [Any]()
         results.reserveCapacity(generators.count)
@@ -382,7 +382,7 @@ public struct ValueInterpreter<Element>: ~Copyable, ExhaustIterator {
         nextGen: ReflectiveGenerator<Any>,
         inputValue: some Any,
         context: inout GenerationContext,
-        runContinuation: (Any, inout GenerationContext) throws -> Output?,
+        runContinuation: (Any, inout GenerationContext) throws -> Output?
     ) throws -> Output? {
         context.sizeOverride = newSize
         guard let result = try generateRecursive(nextGen, with: inputValue, context: &context) else {
@@ -397,7 +397,7 @@ public struct ValueInterpreter<Element>: ~Copyable, ExhaustIterator {
         inner: ReflectiveGenerator<Any>,
         inputValue: some Any,
         context: inout GenerationContext,
-        runContinuation: (Any, inout GenerationContext) throws -> Output?,
+        runContinuation: (Any, inout GenerationContext) throws -> Output?
     ) throws -> Output? {
         guard let innerValue = try generateRecursive(inner, with: inputValue, context: &context) else { return nil }
         let result: Any
@@ -417,7 +417,7 @@ public struct ValueInterpreter<Element>: ~Copyable, ExhaustIterator {
         _ gen: ReflectiveGenerator<Any>,
         inputValue: some Any,
         context: inout GenerationContext,
-        runContinuation: (Any, inout GenerationContext) throws -> Output?,
+        runContinuation: (Any, inout GenerationContext) throws -> Output?
     ) throws -> Output? {
         guard let result = try generateRecursive(gen, with: inputValue, context: &context) else { return nil }
         return try runContinuation(result, &context)

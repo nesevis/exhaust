@@ -1,6 +1,5 @@
-import Testing
 import Exhaust
-import ExhaustCore
+import Testing
 
 // MARK: - Tests
 
@@ -12,7 +11,8 @@ struct InvariantOnlyTests {
             #exhaust(
                 CircularBufferContract.self,
                 commandLimit: 6,
-                .suppressIssueReporting
+                .suppressIssueReporting,
+                .useBonsaiReducer
             )
         )
 
@@ -81,7 +81,7 @@ struct SortedBackingContract {
         zip(queue.elements, queue.elements.dropFirst()).allSatisfy { $0 <= $1 }
     }
 
-    @Command(weight: 3, Gen.int(in: 0...20))
+    @Command(weight: 3, #gen(.int(in: 0 ... 20)))
     mutating func enqueue(value: Int) throws {
         queue.enqueue(value)
     }
@@ -125,9 +125,13 @@ struct CircularBuffer {
         return value
     }
 
-    // swiftlint:disable:next empty_count
-    var isEmpty: Bool { count <= 0 }
-    var isFull: Bool { count >= capacity }
+    var isEmpty: Bool {
+        count <= 0 // swiftlint:disable:this empty_count
+    }
+
+    var isFull: Bool {
+        count >= capacity
+    }
 
     mutating func clear() {
         head = 0
@@ -149,7 +153,9 @@ struct BuggyPriorityQueue {
         elements.append(value)
     }
 
-    var isEmpty: Bool { elements.isEmpty }
+    var isEmpty: Bool {
+        elements.isEmpty
+    }
 
     mutating func dequeue() -> Int? {
         guard !elements.isEmpty else { return nil }

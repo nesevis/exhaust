@@ -5,7 +5,6 @@
 //  Created by Chris Kolbu on 11/2/2026.
 //
 
-import ExhaustCore
 import Foundation
 import OSLog
 import Testing
@@ -37,7 +36,7 @@ struct Bound5ShrinkingChallenge {
     }
 
     @Test("Bound5, Single")
-    func bound5Single() throws {
+    func bound5Single() {
         ExhaustLog.setConfiguration(.init(isEnabled: true, minimumLevel: .info, categoryMinimumLevels: [.reducer: .debug], format: .human))
         let output = #exhaust(Self.gen, .suppressIssueReporting, .replay(1337), property: Self.property)
 
@@ -46,8 +45,8 @@ struct Bound5ShrinkingChallenge {
     }
 
     @Test("Bound5, Pathological 1")
-    func bound5Pathological() throws {
-        ExhaustLog.setConfiguration(.init(isEnabled: true, minimumLevel: .info, categoryMinimumLevels: [.reducer: .debug], format: .human))
+    func bound5Pathological() {
+//        ExhaustLog.setConfiguration(.init(isEnabled: true, minimumLevel: .info, categoryMinimumLevels: [.reducer: .debug], format: .human))
         let value: Bound5 = .init(
             a: [-18914, -2906, 9816],
             b: [7672, 16087, 24512],
@@ -55,11 +54,12 @@ struct Bound5ShrinkingChallenge {
             d: [25982, 8828, 5007, -6389],
             e: [12744, -11152, -18025, -29069, 30825]
         )
-        
+
         let output = #exhaust(
             Self.gen,
             .suppressIssueReporting,
             .reflecting(value),
+            .useBonsaiReducer,
             property: Self.property
         )
 
@@ -68,8 +68,8 @@ struct Bound5ShrinkingChallenge {
     }
 
     @Test("Bound5, Pathological 2")
-    func bound5Pathological2() throws {
-        ExhaustLog.setConfiguration(.init(isEnabled: true, minimumLevel: .info, categoryMinimumLevels: [.reducer: .debug], format: .human))
+    func bound5Pathological2() {
+//        ExhaustLog.setConfiguration(.init(isEnabled: true, minimumLevel: .info, categoryMinimumLevels: [.reducer: .debug], format: .human))
         let value: Bound5 = .init(
             a: [-10709],
             b: [29251, 31661],
@@ -77,11 +77,12 @@ struct Bound5ShrinkingChallenge {
             d: [-2824, 15387, -15932, -23458, -6124, 3327, -21001, 16059, -21211, -27710],
             e: [16775, -32275, 813, 11044]
         )
-        
+
         let output = #exhaust(
             Self.gen,
             .suppressIssueReporting,
             .reflecting(value),
+//            .useBonsaiReducer,
             property: Self.property
         )
 
@@ -90,7 +91,7 @@ struct Bound5ShrinkingChallenge {
     }
 
     @Test("Bound5, Pathological 3")
-    func bound5Pathological3() throws {
+    func bound5Pathological3() {
         let value: Bound5 = .init(
             a: [-11954, 25609, -21279],
             b: [20837, 6773, -1304, -13732, -2626, -3440, 15253, 28268, -31908, 30491],
@@ -103,7 +104,7 @@ struct Bound5ShrinkingChallenge {
             Self.gen,
             .suppressIssueReporting,
             .reflecting(value),
-//            .useKleisliReducer,
+//            .useBonsaiReducer,
             property: Self.property
         )
 
@@ -112,17 +113,17 @@ struct Bound5ShrinkingChallenge {
     }
 
     @Test("Bound5, 50")
-    func bound5Many() throws {
+    func bound5Many() {
         let bound5s = #extract(Self.gen, count: 100, seed: 1337)
             .filter { Self.property($0) == false }
-        ExhaustLog.setConfiguration(.init(isEnabled: true, minimumLevel: .info, categoryMinimumLevels: [.reducer: .debug], format: .human))
-        
+//        ExhaustLog.setConfiguration(.init(isEnabled: true, minimumLevel: .info, categoryMinimumLevels: [.reducer: .debug], format: .human))
+
         for bound5 in bound5s {
             let output = #exhaust(
                 Self.gen,
                 .suppressIssueReporting,
                 .reflecting(bound5),
-//                .useKleisliReducer,
+                .useBonsaiReducer,
                 property: Self.property
             )
 
@@ -130,9 +131,9 @@ struct Bound5ShrinkingChallenge {
             #expect(output?.arr.sorted() == [-32768, -1])
         }
     }
-    
+
     // MARK: - Types
-    
+
     struct Bound5: Equatable {
         let a: [Int16]
         let b: [Int16]

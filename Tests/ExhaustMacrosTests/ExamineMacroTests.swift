@@ -26,7 +26,7 @@ struct ExamineMacroTests {
                 column: #column
             )
             """,
-            macros: testMacros,
+            macros: testMacros
         )
     }
 
@@ -47,7 +47,7 @@ struct ExamineMacroTests {
                 column: #column
             )
             """,
-            macros: testMacros,
+            macros: testMacros
         )
     }
 
@@ -68,7 +68,7 @@ struct ExamineMacroTests {
                 column: #column
             )
             """,
-            macros: testMacros,
+            macros: testMacros
         )
     }
 
@@ -89,7 +89,7 @@ struct ExamineMacroTests {
                 column: #column
             )
             """,
-            macros: testMacros,
+            macros: testMacros
         )
     }
 
@@ -107,10 +107,10 @@ struct ExamineMacroTests {
                     message: ExhaustMacroDiagnostic.examineMissingGenerator.rawValue,
                     line: 1,
                     column: 1,
-                    severity: .error,
+                    severity: .error
                 ),
             ],
-            macros: testMacros,
+            macros: testMacros
         )
     }
 
@@ -131,7 +131,7 @@ struct ExamineMacroTests {
                 column: #column
             )
             """,
-            macros: testMacros,
+            macros: testMacros
         )
     }
 }

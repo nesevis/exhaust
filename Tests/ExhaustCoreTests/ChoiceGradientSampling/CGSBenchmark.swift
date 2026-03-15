@@ -6,9 +6,9 @@
 //  and time-to-N valid BSTs with maxRuns-aware budgeting.
 //
 
+import ExhaustCore
 import Foundation
 import Testing
-import ExhaustCore
 
 private enum BenchBST: Equatable, Hashable {
     case leaf
@@ -67,7 +67,7 @@ struct CGSBenchmark {
             naive,
             samples: 500,
             seed: 12345,
-            predicate: isValid,
+            predicate: isValid
         )
         let tuneElapsed = ContinuousClock.now - tuneStart
         let tuneMs = Double(tuneElapsed.components.seconds) * 1000
@@ -146,7 +146,7 @@ struct CGSBenchmark {
                 naive,
                 maxRuns: maxRunsHint,
                 seed: 12345,
-                predicate: isValid,
+                predicate: isValid
             )
 
             let tuneElapsed = ContinuousClock.now - start

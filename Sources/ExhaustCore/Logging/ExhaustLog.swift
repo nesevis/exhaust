@@ -65,7 +65,7 @@ public enum ExhaustLog {
             isEnabled: Bool = true,
             minimumLevel: Level = .notice,
             categoryMinimumLevels: [Category: Level] = [:],
-            format: Format = .human,
+            format: Format = .human
         ) {
             self.isEnabled = isEnabled
             self.minimumLevel = minimumLevel
@@ -106,7 +106,7 @@ public enum ExhaustLog {
         _ message: @autoclosure @escaping () -> String = "",
         metadata: [String: String] = [:],
         file: StaticString = #fileID,
-        line: UInt = #line,
+        line: UInt = #line
     ) {
         _log(
             level,
@@ -115,7 +115,7 @@ public enum ExhaustLog {
             message: message,
             metadata: metadata,
             file: file,
-            line: line,
+            line: line
         )
     }
 
@@ -125,7 +125,7 @@ public enum ExhaustLog {
         _ message: @autoclosure @escaping () -> String = "",
         metadata: [String: String] = [:],
         file: StaticString = #fileID,
-        line: UInt = #line,
+        line: UInt = #line
     ) {
         _log(
             .trace,
@@ -134,7 +134,7 @@ public enum ExhaustLog {
             message: message,
             metadata: metadata,
             file: file,
-            line: line,
+            line: line
         )
     }
 
@@ -144,7 +144,7 @@ public enum ExhaustLog {
         _ message: @autoclosure @escaping () -> String = "",
         metadata: [String: String] = [:],
         file: StaticString = #fileID,
-        line: UInt = #line,
+        line: UInt = #line
     ) {
         _log(
             .debug,
@@ -153,7 +153,7 @@ public enum ExhaustLog {
             message: message,
             metadata: metadata,
             file: file,
-            line: line,
+            line: line
         )
     }
 
@@ -163,7 +163,7 @@ public enum ExhaustLog {
         _ message: @autoclosure @escaping () -> String = "",
         metadata: [String: String] = [:],
         file: StaticString = #fileID,
-        line: UInt = #line,
+        line: UInt = #line
     ) {
         _log(
             .info,
@@ -172,7 +172,7 @@ public enum ExhaustLog {
             message: message,
             metadata: metadata,
             file: file,
-            line: line,
+            line: line
         )
     }
 
@@ -182,7 +182,7 @@ public enum ExhaustLog {
         _ message: @autoclosure @escaping () -> String = "",
         metadata: [String: String] = [:],
         file: StaticString = #fileID,
-        line: UInt = #line,
+        line: UInt = #line
     ) {
         _log(
             .notice,
@@ -191,7 +191,7 @@ public enum ExhaustLog {
             message: message,
             metadata: metadata,
             file: file,
-            line: line,
+            line: line
         )
     }
 
@@ -201,7 +201,7 @@ public enum ExhaustLog {
         _ message: @autoclosure @escaping () -> String = "",
         metadata: [String: String] = [:],
         file: StaticString = #fileID,
-        line: UInt = #line,
+        line: UInt = #line
     ) {
         _log(
             .warning,
@@ -210,7 +210,7 @@ public enum ExhaustLog {
             message: message,
             metadata: metadata,
             file: file,
-            line: line,
+            line: line
         )
     }
 
@@ -220,7 +220,7 @@ public enum ExhaustLog {
         _ message: @autoclosure @escaping () -> String = "",
         metadata: [String: String] = [:],
         file: StaticString = #fileID,
-        line: UInt = #line,
+        line: UInt = #line
     ) {
         _log(
             .error,
@@ -229,7 +229,7 @@ public enum ExhaustLog {
             message: message,
             metadata: metadata,
             file: file,
-            line: line,
+            line: line
         )
     }
 
@@ -239,7 +239,7 @@ public enum ExhaustLog {
         _ message: @autoclosure @escaping () -> String = "",
         metadata: [String: String] = [:],
         file: StaticString = #fileID,
-        line: UInt = #line,
+        line: UInt = #line
     ) {
         _log(
             .critical,
@@ -248,7 +248,7 @@ public enum ExhaustLog {
             message: message,
             metadata: metadata,
             file: file,
-            line: line,
+            line: line
         )
     }
 
@@ -259,7 +259,7 @@ public enum ExhaustLog {
         message: () -> String,
         metadata: [String: String],
         file: StaticString,
-        line: UInt,
+        line: UInt
     ) {
         let configuration = _configuration
         guard shouldLog(level, category: category, configuration: configuration) else {
@@ -274,7 +274,7 @@ public enum ExhaustLog {
             metadata: metadata,
             file: "\(file)",
             line: line,
-            format: configuration.format,
+            format: configuration.format
         )
         print(rendered)
 //        logger(for: category).log(level: level.osLogType, "\(rendered, privacy: .public)")
@@ -333,7 +333,7 @@ public enum ExhaustLog {
         metadata: [String: String],
         file: String,
         line: UInt,
-        format: Format,
+        format: Format
     ) -> String {
         switch format {
         case .human:

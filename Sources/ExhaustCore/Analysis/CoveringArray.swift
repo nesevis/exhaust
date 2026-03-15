@@ -88,7 +88,7 @@ public struct CoveringArray: @unchecked Sendable {
             FiniteParameter(
                 index: param.index,
                 domainSize: param.domainSize,
-                kind: .chooseBits(range: 0 ... max(param.domainSize, 1) - 1, tag: .uint64),
+                kind: .chooseBits(range: 0 ... max(param.domainSize, 1) - 1, tag: .uint64)
             )
         }
         var totalSpace: UInt64 = 1
@@ -99,7 +99,7 @@ public struct CoveringArray: @unchecked Sendable {
         }
         let syntheticProfile = FiniteDomainProfile(
             parameters: syntheticParams,
-            totalSpace: totalSpace,
+            totalSpace: totalSpace
         )
 
         // For 1-parameter boundary profiles, IPOG requires paramCount >= 2.
@@ -222,11 +222,10 @@ private struct IPOGBuilder {
         var combosIncluding = Array(repeating: [[Int]](), count: n)
         var combosIncludingKeys = Array(repeating: [ComboKey](), count: n)
         for i in (strength - 1) ..< n {
-            let combos: [[Int]]
-            if strength == 1 {
-                combos = [[i]]
+            let combos: [[Int]] = if strength == 1 {
+                [[i]]
             } else {
-                combos = combinationsAppending(of: i, choose: strength - 1, trailing: i)
+                combinationsAppending(of: i, choose: strength - 1, trailing: i)
             }
             combosIncludingKeys[i] = combos.map { ComboKey($0) }
             combosIncluding[i] = combos
@@ -330,7 +329,7 @@ private struct IPOGBuilder {
                 }
                 rowIdx += 1
             }
-            
+
             if !fitted {
                 var newRow = [UInt64?](repeating: nil, count: n)
                 let tupleCount = tuple.paramIndices.count
@@ -496,7 +495,7 @@ private struct CoveredSet {
                 if !coveredValues.contains(valueKey) {
                     result.append(IndexedTuple(
                         paramIndices: combo,
-                        values: Array(valueBuffer[0 ..< comboCount]),
+                        values: Array(valueBuffer[0 ..< comboCount])
                     ))
                 }
             }

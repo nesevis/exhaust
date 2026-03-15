@@ -5,7 +5,6 @@
 //  Created by Chris Kolbu on 11/2/2026.
 //
 
-import ExhaustCore
 import Foundation
 import Testing
 @testable import Exhaust
@@ -26,13 +25,12 @@ struct DeletionShrinkingChallenge {
      The expected smallest falsified sample is ([0, 0], 0).
      */
     @Test("Deletion, Full")
-    func deletionFull() throws {
+    func deletionFull() {
         let numberGen = #gen(.int(in: 0 ... 20))
-        let gen = #gen(numberGen.array(length: 2 ... 20), numberGen).filter { $0.contains($1) }
+        let gen = #gen(numberGen.array(length: 2 ... 20), numberGen)
+            .filter { $0.contains($1) }
 
-        var count = 0
-        let property: ([Int], Int) -> Bool = { xs, x in
-            count += 1
+        let property: @Sendable ([Int], Int) -> Bool = { xs, x in
             var xs = xs
             guard let index = xs.firstIndex(of: x) else {
                 return true
@@ -41,12 +39,14 @@ struct DeletionShrinkingChallenge {
             return xs.contains(x) == false
         }
 
-        var iterator = ValueAndChoiceTreeInterpreter(gen, materializePicks: true, seed: 1337)
-        let (_, tree) = try #require(iterator.prefix(36).last)
-        let (_, output) = try #require(try Interpreters.reduce(gen: gen, tree: tree, config: .fast, property: property))
+        let output = #exhaust(
+            gen,
+            .suppressIssueReporting,
+            .useBonsaiReducer,
+            property: property
+        )
 
-        #expect(count == 3)
-        #expect(output.0 == [0, 0])
-        #expect(output.1 == 0)
+        #expect(output?.0 == [0, 0])
+        #expect(output?.1 == 0)
     }
 }

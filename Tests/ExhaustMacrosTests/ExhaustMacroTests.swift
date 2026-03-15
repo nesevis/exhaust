@@ -31,7 +31,7 @@ struct ExhaustMacroTests {
             }
             )
             """,
-            macros: testMacros,
+            macros: testMacros
         )
     }
 
@@ -57,7 +57,7 @@ struct ExhaustMacroTests {
             }
             )
             """,
-            macros: testMacros,
+            macros: testMacros
         )
     }
 
@@ -79,7 +79,7 @@ struct ExhaustMacroTests {
                 property: isValid
             )
             """,
-            macros: testMacros,
+            macros: testMacros
         )
     }
 
@@ -101,7 +101,7 @@ struct ExhaustMacroTests {
                 property: isValid
             )
             """,
-            macros: testMacros,
+            macros: testMacros
         )
     }
 
@@ -119,10 +119,10 @@ struct ExhaustMacroTests {
                     message: ExhaustMacroDiagnostic.exhaustMissingProperty.rawValue,
                     line: 1,
                     column: 1,
-                    severity: .error,
+                    severity: .error
                 ),
             ],
-            macros: testMacros,
+            macros: testMacros
         )
     }
 }

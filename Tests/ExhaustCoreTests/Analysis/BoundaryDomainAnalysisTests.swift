@@ -3,9 +3,9 @@
 //  Exhaust
 //
 
+import ExhaustCore
 import Foundation
 import Testing
-import ExhaustCore
 
 // MARK: - Boundary Domain Analysis
 
@@ -121,7 +121,7 @@ struct BoundaryDomainAnalysisTests {
             Gen.choose(in: 0 ... 10000),
             Gen.choose(in: 0 ... 10000),
             Gen.choose(in: 0 ... 10000),
-            Gen.choose(in: 0 ... 10000),
+            Gen.choose(in: 0 ... 10000)
         )
         let result = ChoiceTreeAnalysis.analyze(gen)
         #expect(result == nil)
@@ -289,7 +289,7 @@ struct ChoiceTreeAnalysisTests {
             Gen.choose(in: 0 ... 10000), Gen.choose(in: 0 ... 10000), Gen.choose(in: 0 ... 10000),
             Gen.choose(in: 0 ... 10000), Gen.choose(in: 0 ... 10000), Gen.choose(in: 0 ... 10000),
             Gen.choose(in: 0 ... 10000), Gen.choose(in: 0 ... 10000), Gen.choose(in: 0 ... 10000),
-            Gen.choose(in: 0 ... 10000), Gen.choose(in: 0 ... 10000), Gen.choose(in: 0 ... 10000),
+            Gen.choose(in: 0 ... 10000), Gen.choose(in: 0 ... 10000), Gen.choose(in: 0 ... 10000)
         )
         let result = ChoiceTreeAnalysis.analyze(gen)
         #expect(result == nil)
@@ -310,7 +310,7 @@ struct DateBoundaryValueTests {
         let values = BoundaryDomainAnalysis.computeBoundaryValues(
             min: Int64(0).bitPattern64,
             max: numSteps.bitPattern64,
-            tag: .date(lowerSeconds: lower, intervalSeconds: interval, timeZoneID: "GMT"),
+            tag: .date(lowerSeconds: lower, intervalSeconds: interval, timeZoneID: "GMT")
         )
 
         // First step (0)
@@ -334,14 +334,14 @@ struct DateBoundaryValueTests {
         let values = BoundaryDomainAnalysis.computeBoundaryValues(
             min: Int64(0).bitPattern64,
             max: numSteps.bitPattern64,
-            tag: .date(lowerSeconds: lower, intervalSeconds: interval, timeZoneID: "GMT"),
+            tag: .date(lowerSeconds: lower, intervalSeconds: interval, timeZoneID: "GMT")
         )
 
         for bp in values {
             let step = Int64(bitPattern64: bp)
             #expect(
                 step >= 0 && step <= numSteps,
-                "Step \(step) is outside valid range [0, \(numSteps)]",
+                "Step \(step) is outside valid range [0, \(numSteps)]"
             )
         }
     }
@@ -351,12 +351,12 @@ struct DateBoundaryValueTests {
         // Range spanning the reference date (0 seconds since ref)
         let lower: Int64 = -86400
         let interval: Int64 = 1
-        let numSteps: Int64 = 172800 // 2 * 86400
+        let numSteps: Int64 = 172_800 // 2 * 86400
 
         let values = BoundaryDomainAnalysis.computeBoundaryValues(
             min: Int64(0).bitPattern64,
             max: numSteps.bitPattern64,
-            tag: .date(lowerSeconds: lower, intervalSeconds: interval, timeZoneID: "GMT"),
+            tag: .date(lowerSeconds: lower, intervalSeconds: interval, timeZoneID: "GMT")
         )
 
         // Reference date (0 seconds) is at step (0 - lower) / interval = 86400
@@ -369,12 +369,12 @@ struct DateBoundaryValueTests {
         let unixEpoch: Int64 = -978_307_200
         let lower = unixEpoch - 86400
         let interval: Int64 = 1
-        let numSteps: Int64 = 172800 // 2 * 86400
+        let numSteps: Int64 = 172_800 // 2 * 86400
 
         let values = BoundaryDomainAnalysis.computeBoundaryValues(
             min: Int64(0).bitPattern64,
             max: numSteps.bitPattern64,
-            tag: .date(lowerSeconds: lower, intervalSeconds: interval, timeZoneID: "GMT"),
+            tag: .date(lowerSeconds: lower, intervalSeconds: interval, timeZoneID: "GMT")
         )
 
         // Unix epoch is at step (unixEpoch - lower) / interval = 86400
@@ -392,7 +392,7 @@ struct DateBoundaryValueTests {
         let values = BoundaryDomainAnalysis.computeBoundaryValues(
             min: Int64(0).bitPattern64,
             max: numSteps.bitPattern64,
-            tag: .date(lowerSeconds: lower, intervalSeconds: interval, timeZoneID: "GMT"),
+            tag: .date(lowerSeconds: lower, intervalSeconds: interval, timeZoneID: "GMT")
         )
 
         // These epochs are outside [lower, lower + numSteps], so no valid step index exists
@@ -455,7 +455,7 @@ struct DateDSTBoundaryTests {
             year: transition.year,
             month: transition.month,
             day: transition.day,
-            hour: transition.hour,
+            hour: transition.hour
         )
         let expectedDate = calendar.date(from: components)!
         let expectedSeconds = Int64(expectedDate.timeIntervalSinceReferenceDate)
@@ -468,13 +468,13 @@ struct DateDSTBoundaryTests {
         let values = BoundaryDomainAnalysis.computeBoundaryValues(
             min: Int64(0).bitPattern64,
             max: numSteps.bitPattern64,
-            tag: .date(lowerSeconds: lower, intervalSeconds: interval, timeZoneID: transition.timeZoneID),
+            tag: .date(lowerSeconds: lower, intervalSeconds: interval, timeZoneID: transition.timeZoneID)
         )
 
         let expectedStep = (expectedSeconds - lower) / interval
         #expect(
             values.contains(expectedStep.bitPattern64),
-            "\(transition.label): expected step \(expectedStep) in boundary values",
+            "\(transition.label): expected step \(expectedStep) in boundary values"
         )
     }
 
@@ -486,7 +486,7 @@ struct DateDSTBoundaryTests {
             year: transition.year,
             month: transition.month,
             day: transition.day,
-            hour: transition.hour,
+            hour: transition.hour
         )
         let expectedDate = calendar.date(from: components)!
         let expectedSeconds = Int64(expectedDate.timeIntervalSinceReferenceDate)
@@ -498,7 +498,7 @@ struct DateDSTBoundaryTests {
         let values = BoundaryDomainAnalysis.computeBoundaryValues(
             min: Int64(0).bitPattern64,
             max: numSteps.bitPattern64,
-            tag: .date(lowerSeconds: lower, intervalSeconds: interval, timeZoneID: transition.timeZoneID),
+            tag: .date(lowerSeconds: lower, intervalSeconds: interval, timeZoneID: transition.timeZoneID)
         )
 
         // The transition step and at least one neighbor should be present
@@ -507,7 +507,7 @@ struct DateDSTBoundaryTests {
         #expect(
             values.contains((transitionStep + 1).bitPattern64)
                 || values.contains((transitionStep - 1).bitPattern64),
-            "At least one neighbor of transition step should be present",
+            "At least one neighbor of transition step should be present"
         )
     }
 }
@@ -525,11 +525,11 @@ struct OpaqueGroupTests {
             Gen.choose(in: Float(0) ... Float(1)),
             Gen.choose(in: Float(0) ... Float(1)),
             Gen.choose(in: Float(0) ... Float(1)),
-            isOpaque: true,
+            isOpaque: true
         )
         let gen = Gen.zip(
             opaqueFloats._map { $0.0 },
-            Gen.choose(in: 0 ... 100),
+            Gen.choose(in: 0 ... 100)
         )
         guard let result = ChoiceTreeAnalysis.analyze(gen) else {
             Issue.record("Expected analyzable generator")
@@ -551,11 +551,11 @@ struct OpaqueGroupTests {
         let opaqueScaled = Gen.zip(
             Gen.choose() as ReflectiveGenerator<Float>,
             Gen.choose() as ReflectiveGenerator<Float>,
-            isOpaque: true,
+            isOpaque: true
         )
         let gen = Gen.zip(
             opaqueScaled._map { $0.0 },
-            Gen.choose(in: 0 ... 10),
+            Gen.choose(in: 0 ... 10)
         )
         guard let result = ChoiceTreeAnalysis.analyze(gen) else {
             Issue.record("Expected analyzable generator — opaque should isolate getSize")
@@ -576,7 +576,7 @@ struct OpaqueGroupTests {
         let gen = Gen.zip(
             Gen.choose(in: 0 ... 1),
             Gen.choose(in: 0 ... 1),
-            Gen.choose(in: 0 ... 1),
+            Gen.choose(in: 0 ... 1)
         )
         guard case let .finite(profile) = ChoiceTreeAnalysis.analyze(gen) else {
             Issue.record("Expected finite profile")
@@ -601,13 +601,13 @@ private func asciiStringGen(length: ClosedRange<Int>) -> ReflectiveGenerator<Str
         { (char: Character) throws -> Int in
             guard let scalar = char.unicodeScalars.first else {
                 throw Interpreters.ReflectionError.couldNotReflectOnSequenceElement(
-                    "Character has no scalars",
+                    "Character has no scalars"
                 )
             }
             return asciiSRS.index(of: scalar)
         },
         Gen.choose(in: 0 ... asciiSRS.scalarCount - 1)
-            ._map { Character(asciiSRS.scalar(at: $0)) },
+            ._map { Character(asciiSRS.scalar(at: $0)) }
     )
     return Gen.arrayOf(charGen, within: UInt64(length.lowerBound) ... UInt64(length.upperBound))
         ._map { String($0) }

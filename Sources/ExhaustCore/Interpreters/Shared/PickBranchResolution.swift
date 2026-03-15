@@ -27,7 +27,7 @@ public enum PickBranchResolution {
     @inline(__always)
     public static func generator(
         for id: UInt64,
-        in choices: ContiguousArray<ReflectiveOperation.PickTuple>,
+        in choices: ContiguousArray<ReflectiveOperation.PickTuple>
     ) -> ReflectiveGenerator<Any>? {
         choices.first(where: { $0.id == id })?.generator
     }

@@ -5,7 +5,6 @@
 //  Created by Chris Kolbu on 11/2/2026.
 //
 
-import ExhaustCore
 import Foundation
 import Testing
 @testable import Exhaust
@@ -23,7 +22,7 @@ struct CouplingShrinkingChallenge {
     /// This generator is not reflective due to the bind
     static let gen = #gen(.int(in: 0 ... 100))
         .bind { n in
-            Gen.arrayOf(Gen.choose(in: 0 ... n), within: 2 ... max(2, UInt64(n) + 1))
+            #gen(.int(in: 0 ... n)).array(length: 2 ... max(2, n + 1))
         }
         .filter { arr in arr.allSatisfy { arr.indices.contains($0) } }
 
@@ -40,7 +39,14 @@ struct CouplingShrinkingChallenge {
 
     @Test("Coupling")
     func couplingChallenge() throws {
-        let value = try #require(#exhaust(Self.gen, .suppressIssueReporting, property: Self.property))
+        let value = try #require(
+            #exhaust(
+                Self.gen,
+                .suppressIssueReporting,
+                .useBonsaiReducer,
+                property: Self.property
+            )
+        )
         #expect(value.count == 2)
         #expect(value == [1, 0])
     }

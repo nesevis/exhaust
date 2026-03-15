@@ -3,7 +3,6 @@
 //  Exhaust
 //
 
-import ExhaustCore
 import Foundation
 import Testing
 @testable import Exhaust
@@ -24,13 +23,11 @@ struct DateGeneratorTests {
             let lower = DateGeneratorTests.epoch
             let upper = lower.addingTimeInterval(86400 * 30) // 30 days
             let gen = #gen(.date(between: lower ... upper, interval: .days(1)))
-            var iterator = ValueInterpreter(gen, seed: 42)
+            let dates = #extract(gen, count: 20, seed: 42)
 
-            for _ in 0 ..< 20 {
-                if let date = try iterator.next() {
-                    #expect(date >= lower)
-                    #expect(date <= upper)
-                }
+            for date in dates {
+                #expect(date >= lower)
+                #expect(date <= upper)
             }
         }
 
@@ -39,13 +36,11 @@ struct DateGeneratorTests {
             let lower = DateGeneratorTests.epoch
             let upper = lower.addingTimeInterval(86400 * 7) // 7 days
             let gen = #gen(.date(between: lower ... upper, interval: .hours(1)))
-            var iterator = ValueInterpreter(gen, seed: 42)
+            let dates = #extract(gen, count: 20, seed: 42)
 
-            for _ in 0 ..< 20 {
-                if let date = try iterator.next() {
-                    let offset = date.timeIntervalSinceReferenceDate - lower.timeIntervalSinceReferenceDate
-                    #expect(offset.truncatingRemainder(dividingBy: 3600) == 0)
-                }
+            for date in dates {
+                let offset = date.timeIntervalSinceReferenceDate - lower.timeIntervalSinceReferenceDate
+                #expect(offset.truncatingRemainder(dividingBy: 3600) == 0)
             }
         }
 
@@ -54,12 +49,10 @@ struct DateGeneratorTests {
             let lower = DateGeneratorTests.epoch
             let upper = lower.addingTimeInterval(3600) // 1 hour
             let gen = #gen(.date(between: lower ... upper, interval: .seconds(1)))
-            var iterator = ValueInterpreter(gen, seed: 42)
+            let date = #extract(gen, seed: 42)
 
-            if let date = try iterator.next() {
-                let ti = date.timeIntervalSinceReferenceDate
-                #expect(ti == ti.rounded(.down))
-            }
+            let ti = date.timeIntervalSinceReferenceDate
+            #expect(ti == ti.rounded(.down))
         }
 
         @Test("Deterministic: same seed produces same dates")
@@ -68,14 +61,9 @@ struct DateGeneratorTests {
             let upper = lower.addingTimeInterval(86400 * 365)
             let gen = #gen(.date(between: lower ... upper, interval: .days(1)))
 
-            var iter1 = ValueInterpreter(gen, seed: 99)
-            var iter2 = ValueInterpreter(gen, seed: 99)
-
-            for _ in 0 ..< 10 {
-                let d1 = try iter1.next()
-                let d2 = try iter2.next()
-                #expect(d1 == d2)
-            }
+            let dates1 = #extract(gen, count: 10, seed: 99)
+            let dates2 = #extract(gen, count: 10, seed: 99)
+            #expect(dates1 == dates2)
         }
 
         @Test("Week stride covers expected range")
@@ -83,12 +71,10 @@ struct DateGeneratorTests {
             let lower = DateGeneratorTests.jan1_2025
             let upper = lower.addingTimeInterval(86400 * 365) // ~1 year
             let gen = #gen(.date(between: lower ... upper, interval: .weeks(1)))
-            var iterator = ValueInterpreter(gen, seed: 7)
+            let date = #extract(gen, seed: 7)
 
-            if let date = try iterator.next() {
-                let offset = date.timeIntervalSince(lower)
-                #expect(offset.truncatingRemainder(dividingBy: 604_800) == 0)
-            }
+            let offset = date.timeIntervalSince(lower)
+            #expect(offset.truncatingRemainder(dividingBy: 604_800) == 0)
         }
     }
 
@@ -100,16 +86,14 @@ struct DateGeneratorTests {
         func fixedSpan() throws {
             let anchor = DateGeneratorTests.jan1_2025
             let gen = #gen(.date(within: .days(30), of: anchor, interval: .hours(1)))
-            var iterator = ValueInterpreter(gen, seed: 42)
+            let dates = #extract(gen, count: 20, seed: 42)
 
             let expectedLower = anchor.addingTimeInterval(-86400 * 30)
             let expectedUpper = anchor.addingTimeInterval(86400 * 30)
 
-            for _ in 0 ..< 20 {
-                if let date = try iterator.next() {
-                    #expect(date >= expectedLower)
-                    #expect(date <= expectedUpper)
-                }
+            for date in dates {
+                #expect(date >= expectedLower)
+                #expect(date <= expectedUpper)
             }
         }
 
@@ -117,17 +101,15 @@ struct DateGeneratorTests {
         func monthSpan() throws {
             let anchor = DateGeneratorTests.jan1_2025
             let gen = #gen(.date(within: .months(6), of: anchor, interval: .days(1)))
-            var iterator = ValueInterpreter(gen, seed: 42)
+            let dates = #extract(gen, count: 20, seed: 42)
 
             let offsetSeconds: TimeInterval = 6 * 2_592_000 // 6 * 30 days
             let expectedLower = anchor.addingTimeInterval(-offsetSeconds)
             let expectedUpper = anchor.addingTimeInterval(offsetSeconds)
 
-            for _ in 0 ..< 20 {
-                if let date = try iterator.next() {
-                    #expect(date >= expectedLower)
-                    #expect(date <= expectedUpper)
-                }
+            for date in dates {
+                #expect(date >= expectedLower)
+                #expect(date <= expectedUpper)
             }
         }
 
@@ -135,17 +117,15 @@ struct DateGeneratorTests {
         func yearSpan() throws {
             let anchor = DateGeneratorTests.jan1_2025
             let gen = #gen(.date(within: .years(1), of: anchor, interval: .days(1)))
-            var iterator = ValueInterpreter(gen, seed: 42)
+            let dates = #extract(gen, count: 20, seed: 42)
 
             let offsetSeconds: TimeInterval = 31_536_000 // 365 days
             let expectedLower = anchor.addingTimeInterval(-offsetSeconds)
             let expectedUpper = anchor.addingTimeInterval(offsetSeconds)
 
-            for _ in 0 ..< 20 {
-                if let date = try iterator.next() {
-                    #expect(date >= expectedLower)
-                    #expect(date <= expectedUpper)
-                }
+            for date in dates {
+                #expect(date >= expectedLower)
+                #expect(date <= expectedUpper)
             }
         }
     }
@@ -158,16 +138,14 @@ struct DateGeneratorTests {
         func asymmetricSpan() throws {
             let anchor = DateGeneratorTests.jan1_2025
             let gen = #gen(.date(within: .days(-7) ... .days(30), of: anchor, interval: .hours(1)))
-            var iterator = ValueInterpreter(gen, seed: 42)
+            let dates = #extract(gen, count: 20, seed: 42)
 
             let expectedLower = anchor.addingTimeInterval(-86400 * 7)
             let expectedUpper = anchor.addingTimeInterval(86400 * 30)
 
-            for _ in 0 ..< 20 {
-                if let date = try iterator.next() {
-                    #expect(date >= expectedLower)
-                    #expect(date <= expectedUpper)
-                }
+            for date in dates {
+                #expect(date >= expectedLower)
+                #expect(date <= expectedUpper)
             }
         }
 
@@ -175,16 +153,14 @@ struct DateGeneratorTests {
         func pastOnlyRange() throws {
             let anchor = DateGeneratorTests.jan1_2025
             let gen = #gen(.date(within: .days(-30) ... .days(-1), of: anchor, interval: .hours(1)))
-            var iterator = ValueInterpreter(gen, seed: 42)
+            let dates = #extract(gen, count: 20, seed: 42)
 
             let expectedLower = anchor.addingTimeInterval(-86400 * 30)
             let expectedUpper = anchor.addingTimeInterval(-86400)
 
-            for _ in 0 ..< 20 {
-                if let date = try iterator.next() {
-                    #expect(date >= expectedLower)
-                    #expect(date <= expectedUpper)
-                }
+            for date in dates {
+                #expect(date >= expectedLower)
+                #expect(date <= expectedUpper)
             }
         }
 
@@ -192,16 +168,14 @@ struct DateGeneratorTests {
         func mixedUnits() throws {
             let anchor = DateGeneratorTests.jan1_2025
             let gen = #gen(.date(within: .hours(-12) ... .weeks(2), of: anchor, interval: .minutes(30)))
-            var iterator = ValueInterpreter(gen, seed: 42)
+            let dates = #extract(gen, count: 20, seed: 42)
 
             let expectedLower = anchor.addingTimeInterval(-12 * 3600)
             let expectedUpper = anchor.addingTimeInterval(2 * 604_800)
 
-            for _ in 0 ..< 20 {
-                if let date = try iterator.next() {
-                    #expect(date >= expectedLower)
-                    #expect(date <= expectedUpper)
-                }
+            for date in dates {
+                #expect(date >= expectedLower)
+                #expect(date <= expectedUpper)
             }
         }
 
@@ -209,15 +183,13 @@ struct DateGeneratorTests {
         func quantized() throws {
             let anchor = DateGeneratorTests.epoch
             let gen = #gen(.date(within: .days(-10) ... .days(10), of: anchor, interval: .hours(6)))
-            var iterator = ValueInterpreter(gen, seed: 42)
+            let dates = #extract(gen, count: 20, seed: 42)
 
             let lowerSeconds = anchor.addingTimeInterval(-86400 * 10).timeIntervalSinceReferenceDate
 
-            for _ in 0 ..< 20 {
-                if let date = try iterator.next() {
-                    let offset = date.timeIntervalSinceReferenceDate - lowerSeconds
-                    #expect(offset.truncatingRemainder(dividingBy: 6 * 3600) == 0)
-                }
+            for date in dates {
+                let offset = date.timeIntervalSinceReferenceDate - lowerSeconds
+                #expect(offset.truncatingRemainder(dividingBy: 6 * 3600) == 0)
             }
         }
     }
@@ -235,21 +207,10 @@ struct DateGeneratorTests {
 
             // Cutoff: noon on Jan 15
             let cutoff = lower.addingTimeInterval(86400 * 14 + 3600 * 12)
-            let property: (Date) -> Bool = { $0 < cutoff }
 
-            // Generate until we find a failing value
-            var iterator = ValueAndChoiceTreeInterpreter(gen, materializePicks: true, seed: 42)
-            var failingTree: ChoiceTree?
-            for _ in 0 ..< 100 {
-                guard let (value, tree) = try iterator.next() else { break }
-                if !property(value) {
-                    failingTree = tree
-                    break
-                }
-            }
-            let tree = try #require(failingTree)
-
-            let (_, output) = try #require(try Interpreters.reduce(gen: gen, tree: tree, config: .fast, property: property))
+            let output = try #require(
+                #exhaust(gen, .suppressIssueReporting) { date in date < cutoff }
+            )
 
             // Should shrink to exactly the cutoff (first failing hour)
             #expect(output == cutoff)
@@ -267,20 +228,10 @@ struct DateGeneratorTests {
 
             // Property: date must be in the first 100 days
             let threshold = lower.addingTimeInterval(86400 * 100)
-            let property: (Date) -> Bool = { $0 < threshold }
 
-            var iterator = ValueAndChoiceTreeInterpreter(gen, materializePicks: true, seed: 1337)
-            var failingTree: ChoiceTree?
-            for _ in 0 ..< 500 {
-                guard let (value, tree) = try iterator.next() else { break }
-                if !property(value) {
-                    failingTree = tree
-                    break
-                }
-            }
-            let tree = try #require(failingTree)
-
-            let (_, output) = try #require(try Interpreters.reduce(gen: gen, tree: tree, config: .fast, property: property))
+            let output = try #require(
+                #exhaust(gen, .suppressIssueReporting) { date in date < threshold }
+            )
 
             // Should shrink to exactly the threshold (first failing day)
             #expect(output == threshold)
@@ -313,16 +264,11 @@ struct DateGeneratorTests {
     @Suite("Reflection")
     struct ReflectionTests {
         @Test("Backward mapping round-trips through forward")
-        func roundTrip() throws {
+        func roundTrip() {
             let lower = DateGeneratorTests.epoch
             let upper = lower.addingTimeInterval(86400 * 365)
             let gen = #gen(.date(between: lower ... upper, interval: .hours(1)))
-            var iterator = ValueInterpreter(gen, seed: 42)
-
-            if let date = try iterator.next() {
-                let offset = date.timeIntervalSince(lower)
-                #expect(offset.truncatingRemainder(dividingBy: 3600) == 0)
-            }
+            #examine(gen, samples: 20, seed: 42)
         }
     }
 }

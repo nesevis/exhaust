@@ -40,7 +40,7 @@ struct ContractMacroTests {
                 column: #column
             )
             """,
-            macros: testMacros,
+            macros: testMacros
         )
     }
 
@@ -61,7 +61,7 @@ struct ContractMacroTests {
                 column: #column
             )
             """,
-            macros: testMacros,
+            macros: testMacros
         )
     }
 }
@@ -125,10 +125,10 @@ struct ContractDeclarationMacroTests {
                 }
 
                 static var commandGenerator: ReflectiveGenerator<Command> {
-                    Gen.pick(choices: [
-                        (3, Gen.just(Command.enqueue)),
-                        (2, Gen.just(Command.dequeue))
-                    ])
+                    .oneOf(weighted:
+                        (3, .just(Command.enqueue)),
+                        (2, .just(Command.dequeue))
+                    )
                 }
 
                 mutating func run(_ command: Command) throws {
@@ -154,7 +154,7 @@ struct ContractDeclarationMacroTests {
             extension QueueSpec: ContractSpec {
             }
             """,
-            macros: testMacros,
+            macros: testMacros
         )
     }
 
@@ -167,7 +167,7 @@ struct ContractDeclarationMacroTests {
             expandedSource: """
             var x: Int = 0
             """,
-            macros: testMacros,
+            macros: testMacros
         )
     }
 
@@ -226,10 +226,10 @@ struct ContractDeclarationMacroTests {
                 }
 
                 static var commandGenerator: ReflectiveGenerator<Command> {
-                    Gen.pick(choices: [
-                        (1, Gen.just(Command.increment)),
-                        (1, Gen.just(Command.decrement))
-                    ])
+                    .oneOf(weighted:
+                        (1, .just(Command.increment)),
+                        (1, .just(Command.decrement))
+                    )
                 }
 
                 mutating func run(_ command: Command) async throws {
@@ -255,7 +255,7 @@ struct ContractDeclarationMacroTests {
             extension AsyncSpec: AsyncContractSpec {
             }
             """,
-            macros: testMacros,
+            macros: testMacros
         )
     }
 
@@ -305,9 +305,9 @@ struct ContractDeclarationMacroTests {
                 }
 
                 static var commandGenerator: ReflectiveGenerator<Command> {
-                    Gen.pick(choices: [
-                        (1, Gen.just(Command.increment))
-                    ])
+                    .oneOf(weighted:
+                        (1, .just(Command.increment))
+                    )
                 }
 
                 mutating func run(_ command: Command) async throws {
@@ -333,7 +333,7 @@ struct ContractDeclarationMacroTests {
             extension AsyncInvSpec: AsyncContractSpec {
             }
             """,
-            macros: testMacros,
+            macros: testMacros
         )
     }
 
@@ -374,9 +374,9 @@ struct ContractDeclarationMacroTests {
                 }
 
                 static var commandGenerator: ReflectiveGenerator<Command> {
-                    Gen.pick(choices: [
-                        (1, Gen.just(Command.increment))
-                    ])
+                    .oneOf(weighted:
+                        (1, .just(Command.increment))
+                    )
                 }
 
                 mutating func run(_ command: Command) throws {
@@ -400,7 +400,7 @@ struct ContractDeclarationMacroTests {
             extension SyncSpec: ContractSpec {
             }
             """,
-            macros: testMacros,
+            macros: testMacros
         )
     }
 }
@@ -424,7 +424,7 @@ struct AsyncContractMacroTests {
                 column: #column
             )
             """,
-            macros: asyncTestMacros,
+            macros: asyncTestMacros
         )
     }
 
@@ -445,7 +445,7 @@ struct AsyncContractMacroTests {
                 column: #column
             )
             """,
-            macros: asyncTestMacros,
+            macros: asyncTestMacros
         )
     }
 }

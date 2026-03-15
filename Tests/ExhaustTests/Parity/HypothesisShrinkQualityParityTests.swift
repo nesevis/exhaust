@@ -6,7 +6,6 @@
 //  tests/quality/test_shrink_quality.py.
 //
 
-import ExhaustCore
 import Testing
 @testable import Exhaust
 
@@ -16,18 +15,18 @@ struct HypothesisShrinkQualityParityTests {
         _ gen: ReflectiveGenerator<Output>,
         startingAt value: Output,
         config: Interpreters.TCRConfiguration = .fast,
-        property: (Output) -> Bool,
+        property: (Output) -> Bool
     ) throws -> Output {
         let tree = try #require(try Interpreters.reflect(gen, with: value))
         let (_, output) = try #require(
-            try Interpreters.reduce(gen: gen, tree: tree, config: config, property: property),
+            try Interpreters.reduce(gen: gen, tree: tree, config: config, property: property)
         )
         return output
     }
 
     private func startPair(
         range: ClosedRange<Int>,
-        gap: Int,
+        gap: Int
     ) -> (Int, Int) {
         for lhs in stride(from: range.upperBound, through: range.lowerBound, by: -1) {
             let rhs = lhs + gap
@@ -42,7 +41,7 @@ struct HypothesisShrinkQualityParityTests {
     func sumOfPairMixed() throws {
         let floatIntGen = #gen(
             .double(in: 0.0 ... 1000.0),
-            .int(in: 0 ... 1000),
+            .int(in: 0 ... 1000)
         )
         let floatIntProperty: ((Double, Int)) -> Bool = { pair in
             guard pair.0 >= 0.0, pair.0 <= 1000.0,
@@ -55,14 +54,14 @@ struct HypothesisShrinkQualityParityTests {
         let floatIntOutput = try reduce(
             floatIntGen,
             startingAt: (700.75, 400),
-            property: floatIntProperty,
+            property: floatIntProperty
         )
         #expect(floatIntProperty(floatIntOutput) == false)
         #expect(floatIntOutput == (1.0, 1000))
 
         let intFloatGen = #gen(
             .int(in: 0 ... 1000),
-            .double(in: 0.0 ... 1000.0),
+            .double(in: 0.0 ... 1000.0)
         )
         let intFloatProperty: ((Int, Double)) -> Bool = { pair in
             guard pair.0 >= 0, pair.0 <= 1000,
@@ -75,7 +74,7 @@ struct HypothesisShrinkQualityParityTests {
         let intFloatOutput = try reduce(
             intFloatGen,
             startingAt: (400, 700.75),
-            property: intFloatProperty,
+            property: intFloatProperty
         )
         #expect(intFloatProperty(intFloatOutput) == false)
         #expect(intFloatOutput == (1, 1000.0))
@@ -88,7 +87,7 @@ struct HypothesisShrinkQualityParityTests {
             .asciiString(),
             .bool(),
             .int(),
-            .int(in: 0 ... 1000),
+            .int(in: 0 ... 1000)
         )
         .mapped(
             forward: { tuple in
@@ -96,7 +95,7 @@ struct HypothesisShrinkQualityParityTests {
             },
             backward: { pair in
                 (pair.0, "seed", false, 123, pair.1)
-            },
+            }
         )
 
         let property: ((Int, Int)) -> Bool = { pair in
@@ -110,7 +109,7 @@ struct HypothesisShrinkQualityParityTests {
         let output = try reduce(
             separatedIntGen,
             startingAt: (800, 300),
-            property: property,
+            property: property
         )
 
         #expect(property(output) == false)
@@ -124,7 +123,7 @@ struct HypothesisShrinkQualityParityTests {
             .asciiString(),
             .bool(),
             .int(),
-            .double(in: 0.0 ... 1000.0),
+            .double(in: 0.0 ... 1000.0)
         )
         .mapped(
             forward: { tuple in
@@ -132,7 +131,7 @@ struct HypothesisShrinkQualityParityTests {
             },
             backward: { pair in
                 (pair.0, "seed", false, 123, pair.1)
-            },
+            }
         )
 
         let property: ((Double, Double)) -> Bool = { pair in
@@ -141,7 +140,7 @@ struct HypothesisShrinkQualityParityTests {
         let output = try reduce(
             separatedFloatGen,
             startingAt: (800.25, 300.5),
-            property: property,
+            property: property
         )
 
         #expect(property(output) == false)
@@ -181,7 +180,7 @@ struct HypothesisShrinkQualityParityTests {
     func loweringTogetherPositive() throws {
         let gen = #gen(
             .int(in: 0 ... 20),
-            .int(in: 0 ... 20),
+            .int(in: 0 ... 20)
         )
         for gap in 0 ... 20 {
             let start = startPair(range: 0 ... 20, gap: gap)
@@ -199,7 +198,7 @@ struct HypothesisShrinkQualityParityTests {
     func loweringTogetherNegative() throws {
         let gen = #gen(
             .int(in: -20 ... 0),
-            .int(in: -20 ... 0),
+            .int(in: -20 ... 0)
         )
         for gap in -20 ... 0 {
             let start = startPair(range: -20 ... 0, gap: gap)
@@ -216,7 +215,7 @@ struct HypothesisShrinkQualityParityTests {
     func loweringTogetherMixed() throws {
         let gen = #gen(
             .int(in: -10 ... 10),
-            .int(in: -10 ... 10),
+            .int(in: -10 ... 10)
         )
         for gap in -10 ... 10 {
             let start = startPair(range: -10 ... 10, gap: gap)
@@ -235,7 +234,7 @@ struct HypothesisShrinkQualityParityTests {
             .int(in: -10 ... 10),
             .asciiString(),
             .double(in: -1000.0 ... 1000.0),
-            .int(in: -10 ... 10),
+            .int(in: -10 ... 10)
         )
 
         for gap in -10 ... 10 {
@@ -246,7 +245,7 @@ struct HypothesisShrinkQualityParityTests {
             let output = try reduce(
                 gen,
                 startingAt: (lhs, "seed", 123.75, rhs),
-                property: property,
+                property: property
             )
 
             #expect(property(output) == false)

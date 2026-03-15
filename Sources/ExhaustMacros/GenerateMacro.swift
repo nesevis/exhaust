@@ -13,13 +13,13 @@ import SwiftSyntaxMacros
 public struct GenerateMacro: ExpressionMacro {
     public static func expansion(
         of node: some FreestandingMacroExpansionSyntax,
-        in context: some MacroExpansionContext,
+        in context: some MacroExpansionContext
     ) throws -> ExprSyntax {
         let generatorArgs = node.arguments.map(\.self)
         guard !generatorArgs.isEmpty else {
             context.diagnose(Diagnostic(
                 node: Syntax(node),
-                message: ExhaustMacroDiagnostic.noGeneratorArguments,
+                message: ExhaustMacroDiagnostic.noGeneratorArguments
             ))
             return "fatalError(\"#gen requires at least one generator argument\")"
         }
@@ -37,17 +37,17 @@ public struct GenerateMacro: ExpressionMacro {
             return buildBidirectionalExpansion(
                 generatorArgs: generatorArgs,
                 closure: trailingClosure,
-                result: result,
+                result: result
             )
         case .scalarConversion:
             return buildScalarConversionExpansion(
                 generatorArg: generatorArgs[0],
-                closure: trailingClosure,
+                closure: trailingClosure
             )
         case .forwardOnly:
             return buildForwardOnlyExpansion(
                 generatorArgs: generatorArgs,
-                closure: trailingClosure,
+                closure: trailingClosure
             )
         }
     }
@@ -58,19 +58,19 @@ public struct GenerateMacro: ExpressionMacro {
     private static func buildBidirectionalExpansion(
         generatorArgs: [LabeledExprListSyntax.Element],
         closure: ClosureExprSyntax,
-        result: BidirectionalResult,
+        result: BidirectionalResult
     ) -> ExprSyntax {
         if result.caseName != nil {
             buildEnumCaseExpansion(
                 generatorArgs: generatorArgs,
                 closure: closure,
-                result: result,
+                result: result
             )
         } else {
             buildMirrorExpansion(
                 generatorArgs: generatorArgs,
                 closure: closure,
-                result: result,
+                result: result
             )
         }
     }
@@ -81,7 +81,7 @@ public struct GenerateMacro: ExpressionMacro {
     private static func buildMirrorExpansion(
         generatorArgs: [LabeledExprListSyntax.Element],
         closure: ClosureExprSyntax,
-        result: BidirectionalResult,
+        result: BidirectionalResult
     ) -> ExprSyntax {
         let closureText = closure.trimmedDescription
 
@@ -120,7 +120,7 @@ public struct GenerateMacro: ExpressionMacro {
     private static func buildEnumCaseExpansion(
         generatorArgs: [LabeledExprListSyntax.Element],
         closure: ClosureExprSyntax,
-        result: BidirectionalResult,
+        result: BidirectionalResult
     ) -> ExprSyntax {
         let closureText = closure.trimmedDescription
         let caseName = result.caseName!
@@ -170,7 +170,7 @@ public struct GenerateMacro: ExpressionMacro {
     /// Emits `__ExhaustRuntime._macroMapScalar(gen, forward: closure)` which has constrained overloads for `BinaryInteger` and `BinaryFloatingPoint` that synthesize the backward pass at compile time, with an unconstrained fallback that is forward-only.
     private static func buildScalarConversionExpansion(
         generatorArg: LabeledExprListSyntax.Element,
-        closure: ClosureExprSyntax,
+        closure: ClosureExprSyntax
     ) -> ExprSyntax {
         let genExpr = generatorArg.expression.trimmedDescription
         let closureText = closure.trimmedDescription
@@ -179,7 +179,7 @@ public struct GenerateMacro: ExpressionMacro {
 
     /// Builds the expansion for the no-closure overload: pass through or zip.
     private static func buildZipExpansion(
-        generatorArgs: [LabeledExprListSyntax.Element],
+        generatorArgs: [LabeledExprListSyntax.Element]
     ) -> ExprSyntax {
         if generatorArgs.count == 1 {
             let genExpr = generatorArgs[0].expression.trimmedDescription
@@ -194,7 +194,7 @@ public struct GenerateMacro: ExpressionMacro {
     /// Builds the expansion for a forward-only mapping (no backward).
     private static func buildForwardOnlyExpansion(
         generatorArgs: [LabeledExprListSyntax.Element],
-        closure: ClosureExprSyntax,
+        closure: ClosureExprSyntax
     ) -> ExprSyntax {
         let closureText = closure.trimmedDescription
 

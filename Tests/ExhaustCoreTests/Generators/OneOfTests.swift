@@ -5,8 +5,8 @@
 //  Created by Chris Kolbu on 26/2/2026.
 //
 
-import Testing
 import ExhaustCore
+import Testing
 
 @Suite("oneOf combinator")
 struct OneOfTests {
@@ -14,7 +14,7 @@ struct OneOfTests {
 
     private func roundTrip<Output: Equatable>(
         _ gen: ReflectiveGenerator<Output>,
-        seed: UInt64 = 42,
+        seed: UInt64 = 42
     ) throws -> (original: Output, materialized: Output) {
         var interpreter = ValueAndChoiceTreeInterpreter(gen, materializePicks: false, seed: seed)
         let (value, tree) = try #require(try interpreter.prefix(1).last)

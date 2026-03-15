@@ -13,7 +13,7 @@ public enum ChoiceTreeHandlers {
         fingerprint: UInt64,
         filterType: FilterType,
         predicate: @escaping (Any) -> Bool,
-        context: inout GenerationContext,
+        context: inout GenerationContext
     ) -> ReflectiveGenerator<Any> {
         if filterType == .rejectionSampling {
             return gen
@@ -49,7 +49,7 @@ public enum ChoiceTreeHandlers {
         tree: ChoiceTree,
         fingerprint: UInt64,
         keyExtractor: ((Any) -> AnyHashable)?,
-        context: inout GenerationContext,
+        context: inout GenerationContext
     ) -> Bool {
         if let keyExtractor {
             let key = keyExtractor(result)

@@ -191,7 +191,7 @@ struct BindAwarenessTests {
     // MARK: - Coverage analysis treats bound subtree as opaque
 
     @Test("ChoiceTreeAnalysis produces fewer parameters for bind-dependent generators")
-    func coverageAnalysisTreatsBoundAsOpaque() throws {
+    func coverageAnalysisTreatsBoundAsOpaque() {
         // Construct a bind generator: inner picks from 0...3, bound depends on inner
         let gen: ReflectiveGenerator<[Int]> = Gen.liftF(.transform(
             kind: .bind(

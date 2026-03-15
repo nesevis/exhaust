@@ -1,4 +1,5 @@
 // MARK: - Heap Merge Contract Test
+
 //
 // Inspired by Hypothesis's rule-based stateful testing tutorial
 // (David MacIver, "Rule Based Stateful Testing", 2016-04-19).
@@ -14,9 +15,8 @@
 // pushing two or more values into the source, and then merging — a sequence
 // that exercises bundle creation, drawing, and consumption.
 
-import Testing
 import Exhaust
-import ExhaustCore
+import Testing
 
 // MARK: - Tests
 
@@ -24,20 +24,25 @@ import ExhaustCore
 struct HeapMergeTests {
     @Test("Detects dropped element during merge via invariant or postcondition")
     func heapMergeBug() throws {
+        // Bonsai uses 464 invocations in 71ms
+        // Legacy uses 256 in 23ms
+        // Bonsai does not reduce as well (6 vs 5)
         let result = try #require(
             #exhaust(
                 HeapMergeContract.self,
                 commandLimit: 12,
                 .samplingBudget(2000),
 //                .argumentAwareCoverage,
-                .suppressIssueReporting
+//                .useBonsaiReducer,
+                .suppressIssueReporting,
+                .replay(2244429497963284422)
             )
         )
 
         #expect(result.trace.contains { step in
             switch step.outcome {
-            case .invariantFailed, .checkFailed: return true
-            default: return false
+            case .invariantFailed, .checkFailed: true
+            default: false
             }
         })
     }
@@ -45,21 +50,26 @@ struct HeapMergeTests {
 
 @Suite("Heap aliasing contract tests (self-merge)")
 struct HeapAliasingTests {
+    #warning("Pathological bonsai case; 4x slower")
     @Test("Sorted-splice merge violates heap property after repeated self-merges")
     func spliceMergeBug() throws {
 //        ExhaustLog.setConfiguration(.init(isEnabled: true, minimumLevel: .info, categoryMinimumLevels: [.reducer: .debug], format: .human))
+        // Legacy: 92 invocations, 31ms, CE 5 steps
+        // Bonsai: 105 invocations, 73ms, CE 5 steps
         let result = try #require(
             #exhaust(
                 HeapAliasingContract.self,
                 commandLimit: 20,
-                .suppressIssueReporting
+                .suppressIssueReporting,
+                .useBonsaiReducer,
+                .replay(6_161_601_321_680_111_336)
             )
         )
 
         #expect(result.trace.contains { step in
             switch step.outcome {
-            case .invariantFailed, .checkFailed: return true
-            default: return false
+            case .invariantFailed, .checkFailed: true
+            default: false
             }
         })
     }
@@ -92,7 +102,7 @@ struct HeapMergeContract {
         heapRefs.add(heaps.count - 1)
     }
 
-    @Command(weight: 5, Gen.int(in: 0...99), Gen.int(in: 0...50))
+    @Command(weight: 5, #gen(.int(in: 0 ... 99), .int(in: 0 ... 50)))
     mutating func push(heapIndex: Int, value: Int) throws {
         guard let idx = heapRefs.draw(at: heapIndex) else { throw skip() }
         heaps[idx].push(value)
@@ -100,7 +110,7 @@ struct HeapMergeContract {
         expectedContents[idx].sort()
     }
 
-    @Command(weight: 3, Gen.int(in: 0...99))
+    @Command(weight: 3, #gen(.int(in: 0 ... 99)))
     mutating func pop(heapIndex: Int) throws {
         guard let idx = heapRefs.draw(at: heapIndex) else { throw skip() }
         guard !heaps[idx].isEmpty else { throw skip() }
@@ -109,7 +119,7 @@ struct HeapMergeContract {
         try check(actual == expectedMin, "pop must return the minimum element")
     }
 
-    @Command(weight: 2, Gen.int(in: 0...99), Gen.int(in: 0...99))
+    @Command(weight: 2, #gen(.int(in: 0 ... 99), .int(in: 0 ... 99)))
     mutating func merge(sourceIndex: Int, targetIndex: Int) throws {
         guard heapRefs.count >= 2 else { throw skip() }
         guard let src = heapRefs.consume(at: sourceIndex) else { throw skip() }
@@ -157,13 +167,13 @@ struct HeapAliasingContract {
         heapRefs.add(heap)
     }
 
-    @Command(weight: 4, Gen.int(in: 0...99), Gen.int(in: -5...5))
+    @Command(weight: 4, #gen(.int(in: 0 ... 99), .int(in: -5 ... 5)))
     mutating func push(heapIndex: Int, value: Int) throws {
         guard let heap = heapRefs.draw(at: heapIndex) else { throw skip() }
         heap.push(value)
     }
 
-    @Command(weight: 2, Gen.int(in: 0...99))
+    @Command(weight: 2, #gen(.int(in: 0 ... 99)))
     mutating func pop(heapIndex: Int) throws {
         guard let heap = heapRefs.draw(at: heapIndex) else { throw skip() }
         guard !heap.isEmpty else { throw skip() }
@@ -172,7 +182,7 @@ struct HeapAliasingContract {
         try check(actual == expectedMin, "pop must return the minimum element")
     }
 
-    @Command(weight: 4, Gen.int(in: 0...99), Gen.int(in: 0...99))
+    @Command(weight: 4, #gen(.int(in: 0 ... 99), .int(in: 0 ... 99)))
     mutating func merge(index1: Int, index2: Int) throws {
         guard let heap1 = heapRefs.draw(at: index1) else { throw skip() }
         guard let heap2 = heapRefs.draw(at: index2) else { throw skip() }
@@ -219,8 +229,13 @@ struct BuggyHeap {
         }
     }
 
-    var isEmpty: Bool { elements.isEmpty }
-    var count: Int { elements.count }
+    var isEmpty: Bool {
+        elements.isEmpty
+    }
+
+    var count: Int {
+        elements.count
+    }
 
     // MARK: - Heap internals
 
@@ -241,10 +256,10 @@ struct BuggyHeap {
             var smallest = i
             let left = 2 * i + 1
             let right = 2 * i + 2
-            if left < count && elements[left] < elements[smallest] {
+            if left < count, elements[left] < elements[smallest] {
                 smallest = left
             }
-            if right < count && elements[right] < elements[smallest] {
+            if right < count, elements[right] < elements[smallest] {
                 smallest = right
             }
             guard smallest != i else { break }
@@ -266,7 +281,7 @@ struct BuggyHeap {
 // counterexample. Push and pop mutate in place, so all bundle references
 // to the same heap see the latest state.
 
-class SpliceHeap {
+final class SpliceHeap {
     private(set) var elements: [Int] = []
 
     func push(_ value: Int) {
@@ -291,7 +306,7 @@ class SpliceHeap {
         let result = SpliceHeap()
         var i = 0, j = 0
         let x = elements, y = other.elements
-        while i < x.count && j < y.count {
+        while i < x.count, j < y.count {
             if x[i] <= y[j] {
                 result.elements.append(x[i])
                 i += 1
@@ -305,8 +320,13 @@ class SpliceHeap {
         return result
     }
 
-    var isEmpty: Bool { elements.isEmpty }
-    var count: Int { elements.count }
+    var isEmpty: Bool {
+        elements.isEmpty
+    }
+
+    var count: Int {
+        elements.count
+    }
 
     // MARK: - Heap internals
 
@@ -327,10 +347,10 @@ class SpliceHeap {
             var smallest = i
             let left = 2 * i + 1
             let right = 2 * i + 2
-            if left < count && elements[left] < elements[smallest] {
+            if left < count, elements[left] < elements[smallest] {
                 smallest = left
             }
-            if right < count && elements[right] < elements[smallest] {
+            if right < count, elements[right] < elements[smallest] {
                 smallest = right
             }
             guard smallest != i else { break }

@@ -12,7 +12,7 @@ public extension Gen {
     /// - Returns: A generator that executes the operation and validates the result type
     @inlinable
     static func liftF<Output>(
-        _ operation: ReflectiveOperation,
+        _ operation: ReflectiveOperation
     ) -> ReflectiveGenerator<Output> {
         .impure(operation: operation) { result in
             if let typedResult = result as? Output {
@@ -44,7 +44,7 @@ public extension Gen {
     @inlinable
     static func contramap<NewInput, Output>(
         _ transform: @escaping (NewInput) throws -> some Any,
-        _ generator: ReflectiveGenerator<Output>,
+        _ generator: ReflectiveGenerator<Output>
     ) -> ReflectiveGenerator<Output> {
         .impure(operation: ReflectiveOperation.contramap(
             // This is where the backwards pass happens
@@ -55,7 +55,7 @@ public extension Gen {
                 }
                 return try transform(input) as Any
             },
-            next: generator.erase(),
+            next: generator.erase()
         )) { result in
             if let typed = result as? Output {
                 // Backward pass - direct value
@@ -66,7 +66,7 @@ public extension Gen {
             }
             throw GeneratorError.typeMismatch(
                 expected: String(describing: Output.self),
-                actual: String(describing: type(of: result)),
+                actual: String(describing: type(of: result))
             )
         }
     }
@@ -84,7 +84,7 @@ public extension Gen {
     @inlinable
     static func comap<NewInput, Output>(
         _ transform: @escaping (NewInput) throws -> (some Any)?,
-        _ generator: ReflectiveGenerator<Output>,
+        _ generator: ReflectiveGenerator<Output>
     ) -> ReflectiveGenerator<Output> {
         contramap(transform, prune(generator))
     }

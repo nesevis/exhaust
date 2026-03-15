@@ -12,15 +12,14 @@ import SwiftSyntaxMacros
 /// - A `checkInvariants()` method calling all `@Invariant` methods.
 /// - `modelDescription` and `sutDescription` computed properties.
 public struct ContractDeclarationMacro: MemberMacro, ExtensionMacro {
-
     // MARK: - ExtensionMacro
 
     public static func expansion(
-        of node: AttributeSyntax,
+        of _: AttributeSyntax,
         attachedTo declaration: some DeclGroupSyntax,
         providingExtensionsOf type: some TypeSyntaxProtocol,
-        conformingTo protocols: [TypeSyntax],
-        in context: some MacroExpansionContext,
+        conformingTo _: [TypeSyntax],
+        in _: some MacroExpansionContext
     ) throws -> [ExtensionDeclSyntax] {
         let members = declaration.memberBlock.members
         let commands = extractCommands(from: members)
@@ -37,8 +36,8 @@ public struct ContractDeclarationMacro: MemberMacro, ExtensionMacro {
     public static func expansion(
         of node: AttributeSyntax,
         providingMembersOf declaration: some DeclGroupSyntax,
-        conformingTo protocols: [TypeSyntax],
-        in context: some MacroExpansionContext,
+        conformingTo _: [TypeSyntax],
+        in context: some MacroExpansionContext
     ) throws -> [DeclSyntax] {
         let members = declaration.memberBlock.members
 
@@ -51,13 +50,13 @@ public struct ContractDeclarationMacro: MemberMacro, ExtensionMacro {
         if commands.isEmpty {
             context.diagnose(Diagnostic(
                 node: Syntax(node),
-                message: ContractDiagnostic.noCommands,
+                message: ContractDiagnostic.noCommands
             ))
         }
         if sutProps.isEmpty {
             context.diagnose(Diagnostic(
                 node: Syntax(node),
-                message: ContractDiagnostic.noSUT,
+                message: ContractDiagnostic.noSUT
             ))
         }
 
@@ -78,7 +77,7 @@ public struct ContractDeclarationMacro: MemberMacro, ExtensionMacro {
             // which is better than a confusing "could not infer" error.
             context.diagnose(Diagnostic(
                 node: Syntax(node),
-                message: ContractDiagnostic.sutTypeNotInferred,
+                message: ContractDiagnostic.sutTypeNotInferred
             ))
             decls.append("var sut: Never { fatalError(\"SUT type could not be inferred — add an explicit type annotation to the @SUT property\") }")
         }
@@ -190,6 +189,14 @@ private func extractCommands(from members: MemberBlockItemListSyntax) -> [Comman
             for arg in argList {
                 if arg.label?.trimmedDescription == "weight" {
                     weight = arg.expression.trimmedDescription
+                } else if let macroExpr = arg.expression.as(MacroExpansionExprSyntax.self),
+                          macroExpr.macroName.trimmedDescription == "gen",
+                          macroExpr.trailingClosure == nil
+                {
+                    // #gen(.a, .b) without trailing closure — unwrap inner generator arguments
+                    for innerArg in macroExpr.arguments {
+                        generatorExprs.append(innerArg.expression.trimmedDescription)
+                    }
                 } else {
                     // Unlabeled arguments are generator expressions
                     generatorExprs.append(arg.expression.trimmedDescription)
@@ -204,7 +211,7 @@ private func extractCommands(from members: MemberBlockItemListSyntax) -> [Comman
             parameters: parameters,
             weight: weight,
             generatorExprs: generatorExprs,
-            isAsync: isAsync,
+            isAsync: isAsync
         )
     }
 }
@@ -272,21 +279,22 @@ private func synthesizeCommandGenerator(commands: [CommandInfo]) -> DeclSyntax {
 
     for cmd in commands {
         if cmd.parameters.isEmpty {
-            choices.append("            (\(cmd.weight), Gen.just(Command.\(cmd.methodName)))")
+            choices.append("            (\(cmd.weight), .just(Command.\(cmd.methodName)))")
         } else if cmd.generatorExprs.count == 1, cmd.parameters.count == 1 {
-            // Single parameter — map directly
+            // Single parameter — use #gen for bidirectional enum case mapping
             let param = cmd.parameters[0]
             let genExpr = qualifyGenExpression(cmd.generatorExprs[0], paramType: param.type)
-            choices.append("            (\(cmd.weight), \(genExpr).map { Command.\(cmd.methodName)(\(param.label): $0) })")
+            choices.append("            (\(cmd.weight), #gen(\(genExpr)) { \(param.label) in Command.\(cmd.methodName)(\(param.label): \(param.label)) })")
         } else if cmd.generatorExprs.count > 1 {
-            // Multiple parameters — zip then map
+            // Multiple parameters — #gen with zip
             let qualifiedGens = zip(cmd.generatorExprs, cmd.parameters).map { qualifyGenExpression($0.0, paramType: $0.1.type) }
-            let zipArgs = qualifiedGens.joined(separator: ", ")
-            let labels = cmd.parameters.enumerated().map { i, p in "\(p.label): $0.\(i)" }.joined(separator: ", ")
-            choices.append("            (\(cmd.weight), Gen.zip(\(zipArgs)).map { Command.\(cmd.methodName)(\(labels)) })")
+            let genArgs = qualifiedGens.joined(separator: ", ")
+            let closureParams = cmd.parameters.map(\.label).joined(separator: ", ")
+            let constructorArgs = cmd.parameters.map { "\($0.label): \($0.label)" }.joined(separator: ", ")
+            choices.append("            (\(cmd.weight), #gen(\(genArgs)) { \(closureParams) in Command.\(cmd.methodName)(\(constructorArgs)) })")
         } else {
-            // No generators specified — use Gen.just for parameterless, error otherwise
-            choices.append("            (\(cmd.weight), Gen.just(Command.\(cmd.methodName)))")
+            // No generators specified — use .just for parameterless, error otherwise
+            choices.append("            (\(cmd.weight), .just(Command.\(cmd.methodName)))")
         }
     }
 
@@ -294,9 +302,9 @@ private func synthesizeCommandGenerator(commands: [CommandInfo]) -> DeclSyntax {
 
     return """
     static var commandGenerator: ReflectiveGenerator<Command> {
-        Gen.pick(choices: [
+        .oneOf(weighted:
     \(raw: choicesBlock)
-        ])
+        )
     }
     """
 }
@@ -342,7 +350,7 @@ private func synthesizeCheckInvariants(invariants: [InvariantInfo], hasAnyAsync:
 
     var checks: [String] = []
     for inv in invariants {
-        if hasAnyAsync && inv.isAsync {
+        if hasAnyAsync, inv.isAsync {
             // Evaluate async invariant before passing to check() since @autoclosure doesn't support async.
             checks.append("        let \(inv.methodName)Result = await \(inv.methodName)()")
             checks.append("        try check(\(inv.methodName)Result, \"\(inv.methodName)\")")
@@ -404,7 +412,9 @@ enum ContractDiagnostic: String, DiagnosticMessage {
     case noSUT = "@Contract requires exactly one @SUT property"
     case sutTypeNotInferred = "@SUT property type could not be inferred — add an explicit type annotation"
 
-    var message: String { rawValue }
+    var message: String {
+        rawValue
+    }
 
     var diagnosticID: MessageID {
         MessageID(domain: "ExhaustMacros", id: "\(self)")

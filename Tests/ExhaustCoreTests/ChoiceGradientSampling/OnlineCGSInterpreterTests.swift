@@ -5,9 +5,9 @@
 //  Tests for the online CGS interpreter.
 //
 
+import ExhaustCore
 import Foundation
 import Testing
-import ExhaustCore
 
 @Suite("Online CGS Interpreter")
 struct OnlineCGSInterpreterTests {
@@ -26,7 +26,7 @@ struct OnlineCGSInterpreterTests {
             predicate: predicate,
             sampleCount: 50,
             seed: 42,
-            maxRuns: 200,
+            maxRuns: 200
         )
         let cgsValues = try Array(collecting: &cgsIterator)
 
@@ -59,7 +59,7 @@ struct OnlineCGSInterpreterTests {
             predicate: predicate,
             sampleCount: 30,
             seed: 42,
-            maxRuns: 50,
+            maxRuns: 50
         )
         let values1 = try Array(collecting: &iterator1)
 
@@ -68,7 +68,7 @@ struct OnlineCGSInterpreterTests {
             predicate: predicate,
             sampleCount: 30,
             seed: 42,
-            maxRuns: 50,
+            maxRuns: 50
         )
         let values2 = try Array(collecting: &iterator2)
 
@@ -81,7 +81,7 @@ struct OnlineCGSInterpreterTests {
     func zipCGSGuidance() throws {
         let gen = Gen.zip(
             Gen.choose(in: 1 ... 20),
-            Gen.choose(in: 1 ... 20),
+            Gen.choose(in: 1 ... 20)
         )
         let predicate: ((Int, Int)) -> Bool = { $0.0 + $0.1 < 10 }
 
@@ -90,7 +90,7 @@ struct OnlineCGSInterpreterTests {
             predicate: predicate,
             sampleCount: 50,
             seed: 42,
-            maxRuns: 200,
+            maxRuns: 200
         )
         let cgsValues = try Array(collecting: &cgsZipIterator)
 
@@ -119,7 +119,7 @@ struct OnlineCGSInterpreterTests {
             predicate: predicate,
             sampleCount: 50,
             seed: 42,
-            maxRuns: 200,
+            maxRuns: 200
         )
         let cgsValues = try Array(collecting: &cgsBitsIterator)
 
@@ -143,7 +143,7 @@ struct OnlineCGSInterpreterTests {
             gen,
             samples: 100,
             seed: 12345,
-            predicate: isValidBST,
+            predicate: isValidBST
         )
 
         let smoothed = AdaptiveSmoothing.smooth(tuned)
@@ -186,7 +186,7 @@ struct OnlineCGSInterpreterTests {
             predicate: predicate,
             sampleCount: 20,
             seed: 42,
-            maxRuns: 50,
+            maxRuns: 50
         )
         let values = try Array(collecting: &fallbackIterator)
 
@@ -199,7 +199,6 @@ struct OnlineCGSInterpreterTests {
         #expect(lowCount > 0, "Should produce values from first branch")
         #expect(highCount > 0, "Should produce values from second branch")
     }
-
 }
 
 // MARK: - DerivativeContext Tests
@@ -286,7 +285,7 @@ struct DerivativeContextTests {
                 let arr = zipResult as! [Any]
                 let sum = (arr[0] as! Int) + (arr[1] as! Int)
                 return .pure(sum as Any)
-            },
+            }
         ))
 
         // Component gen produces 100 (replacing g0 at index 0)

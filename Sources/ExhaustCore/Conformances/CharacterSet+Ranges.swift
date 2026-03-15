@@ -126,7 +126,7 @@ extension CharacterSet {
         from bitmap: Data,
         byteStart: Int,
         planeBase: UInt32,
-        into rangeSet: inout RangeSet<UInt32>,
+        into rangeSet: inout RangeSet<UInt32>
     ) {
         var rangeStart: UInt32?
         var rangeEnd: UInt32 = 0

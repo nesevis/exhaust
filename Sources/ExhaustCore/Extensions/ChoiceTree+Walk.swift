@@ -28,9 +28,9 @@ public struct Fingerprint: Hashable, Sendable {
 
 // MARK: - Children & replacement
 
-extension ChoiceTree {
+public extension ChoiceTree {
     /// The immediate children of this node in traversal order.
-    public var children: [ChoiceTree] {
+    var children: [ChoiceTree] {
         switch self {
         case .choice, .just, .getSize:
             []
@@ -50,7 +50,7 @@ extension ChoiceTree {
     }
 
     /// Returns a copy of this node with the child at `index` replaced by `newChild`.
-    public func replacingChild(at index: Int, with newChild: ChoiceTree) -> ChoiceTree {
+    func replacingChild(at index: Int, with newChild: ChoiceTree) -> ChoiceTree {
         switch self {
         case .choice, .just, .getSize:
             preconditionFailure("Leaf nodes have no children to replace")

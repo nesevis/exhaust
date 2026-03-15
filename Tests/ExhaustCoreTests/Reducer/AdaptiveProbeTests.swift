@@ -5,8 +5,8 @@
 //  Created by Chris Kolbu on 12/2/2026.
 //
 
-import Testing
 import ExhaustCore
+import Testing
 
 // MARK: - findInteger
 
@@ -81,7 +81,7 @@ struct BinarySearchWithGuessTests {
     func noGuess() {
         // predicate: true for n <= 50, false for n > 50
         let result = AdaptiveProbe.binarySearchWithGuess(
-            { $0 <= 50 }, low: 0, high: 100,
+            { $0 <= 50 }, low: 0, high: 100
         )
         #expect(result == 50)
     }
@@ -89,7 +89,7 @@ struct BinarySearchWithGuessTests {
     @Test("Finds transition point with exact guess")
     func exactGuess() {
         let result = AdaptiveProbe.binarySearchWithGuess(
-            { $0 <= 50 }, low: 0, high: 100, guess: 50,
+            { $0 <= 50 }, low: 0, high: 100, guess: 50
         )
         #expect(result == 50)
     }
@@ -97,7 +97,7 @@ struct BinarySearchWithGuessTests {
     @Test("Finds transition point when guess is too low")
     func guessLow() {
         let result = AdaptiveProbe.binarySearchWithGuess(
-            { $0 <= 75 }, low: 0, high: 100, guess: 10,
+            { $0 <= 75 }, low: 0, high: 100, guess: 10
         )
         #expect(result == 75)
     }
@@ -105,7 +105,7 @@ struct BinarySearchWithGuessTests {
     @Test("Finds transition point when guess is too high")
     func guessHigh() {
         let result = AdaptiveProbe.binarySearchWithGuess(
-            { $0 <= 25 }, low: 0, high: 100, guess: 80,
+            { $0 <= 25 }, low: 0, high: 100, guess: 80
         )
         #expect(result == 25)
     }
@@ -113,7 +113,7 @@ struct BinarySearchWithGuessTests {
     @Test("Answer at low bound")
     func answerAtLow() {
         let result = AdaptiveProbe.binarySearchWithGuess(
-            { $0 <= 0 }, low: 0, high: 100, guess: 50,
+            { $0 <= 0 }, low: 0, high: 100, guess: 50
         )
         #expect(result == 0)
     }
@@ -121,7 +121,7 @@ struct BinarySearchWithGuessTests {
     @Test("Answer just below high bound")
     func answerJustBelowHigh() {
         let result = AdaptiveProbe.binarySearchWithGuess(
-            { $0 <= 99 }, low: 0, high: 100, guess: 50,
+            { $0 <= 99 }, low: 0, high: 100, guess: 50
         )
         #expect(result == 99)
     }
@@ -129,7 +129,7 @@ struct BinarySearchWithGuessTests {
     @Test("Narrow range")
     func narrowRange() {
         let result = AdaptiveProbe.binarySearchWithGuess(
-            { $0 <= 5 }, low: 5, high: 6, guess: 5,
+            { $0 <= 5 }, low: 5, high: 6, guess: 5
         )
         #expect(result == 5)
     }
@@ -141,13 +141,13 @@ struct BinarySearchWithGuessTests {
         var closeCallCount = 0
         let closeResult = AdaptiveProbe.binarySearchWithGuess(
             { k in closeCallCount += 1; return k <= threshold },
-            low: 0, high: 1000, guess: 495,
+            low: 0, high: 1000, guess: 495
         )
 
         var farCallCount = 0
         let farResult = AdaptiveProbe.binarySearchWithGuess(
             { k in farCallCount += 1; return k <= threshold },
-            low: 0, high: 1000, guess: 10,
+            low: 0, high: 1000, guess: 10
         )
 
         #expect(closeResult == threshold)
@@ -158,7 +158,7 @@ struct BinarySearchWithGuessTests {
     @Test("Works with UInt64")
     func worksWithUInt64() {
         let result: UInt64 = AdaptiveProbe.binarySearchWithGuess(
-            { $0 <= 42 }, low: 0, high: 100, guess: 30,
+            { $0 <= 42 }, low: 0, high: 100, guess: 30
         )
         #expect(result == 42)
     }

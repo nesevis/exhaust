@@ -1,5 +1,5 @@
 //
-//  DependentString.swift
+//  BoundStringDependency.swift
 //  Exhaust
 //
 //  Created by Chris Kolbu on 13/3/2026.
@@ -10,19 +10,23 @@ import Testing
 
 @Suite("Experimental Challenge: Dependent String")
 struct DependentStringChallenge {
-    /*
+    /**
      The generator returned from `bound` is irrelevant to the property, which only tests for length
      */
     @Test("Bound string dependency")
-    func testBoundStringDependency() throws {
+    func boundStringDependency() {
         ExhaustLog.setConfiguration(.init(isEnabled: true, minimumLevel: .info, categoryMinimumLevels: [.reducer: .debug], format: .human))
         let gen = #gen(.int(in: 0 ... 10)).bound(
             forward: { .string(length: UInt64($0) ... UInt64($0)) },
             backward: \.count
         )
 
-        let output = #exhaust(gen, .suppressIssueReporting) { value in
-            !(4...5 ~= value.count)
+        let output = #exhaust(
+            gen,
+            .suppressIssueReporting,
+            .useBonsaiReducer
+        ) { value in
+            !(4 ... 5 ~= value.count)
         }
 
         #expect(output == "    ")

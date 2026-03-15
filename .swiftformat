@@ -6,7 +6,7 @@
 
 --allman false
 --binarygrouping 4,8
---commas always
+--commas collections-only
 --decimalgrouping 3,6
 --elseposition same-line
 --voidtype void

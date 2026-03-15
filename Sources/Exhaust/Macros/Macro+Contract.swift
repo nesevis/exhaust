@@ -63,7 +63,7 @@ import ExhaustCore
 ///         list.elements == list.elements.sorted()
 ///     }
 ///
-///     @Command(weight: 3, #gen(.int(in: 0...99)))
+///     @Command(weight: 3, .int(in: 0...99))
 ///     mutating func insert(value: Int) throws {
 ///         list.insert(value)
 ///     }
@@ -93,7 +93,7 @@ public macro SUT() = #externalMacro(module: "ExhaustMacros", type: "SUTMacro")
 /// - `#gen(...)`: Generators for the method's parameters. Must match the parameter count and types.
 ///
 /// ```swift
-/// @Command(weight: 3, #gen(.int(in: 0...99)))
+/// @Command(weight: 3, .int(in: 0...99))
 /// mutating func enqueue(value: Int) throws {
 ///     guard contents.count < 4 else { throw skip() }
 ///     queue.enqueue(value)
@@ -101,15 +101,7 @@ public macro SUT() = #externalMacro(module: "ExhaustMacros", type: "SUTMacro")
 /// }
 /// ```
 @attached(peer)
-public macro Command(weight: Int = 1) = #externalMacro(module: "ExhaustMacros", type: "CommandMacro")
-
-/// Marks a method as a command with argument generators in a `@Contract` struct.
-///
-/// - Parameters:
-///   - weight: Relative frequency for command selection (default 1).
-///   - generators: One or more generators for the method's parameters, specified using the `#gen(...)` syntax.
-@attached(peer)
-public macro Command(weight: Int = 1, _ generators: Any...) = #externalMacro(module: "ExhaustMacros", type: "CommandMacro")
+public macro Command<each Generator>(weight: Int = 1, _ generators: repeat ReflectiveGenerator<each Generator>) = #externalMacro(module: "ExhaustMacros", type: "CommandMacro")
 
 /// Marks a method as a global postcondition in a `@Contract` struct.
 ///

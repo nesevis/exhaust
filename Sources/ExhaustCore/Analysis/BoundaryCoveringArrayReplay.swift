@@ -27,7 +27,7 @@ public enum BoundaryCoveringArrayReplay {
         in tree: ChoiceTree,
         row: CoveringArrayRow,
         profile: BoundaryDomainProfile,
-        paramIndex: inout Int,
+        paramIndex: inout Int
     ) -> ChoiceTree? {
         switch tree {
         case let .choice(_, metadata):
@@ -123,7 +123,7 @@ public enum BoundaryCoveringArrayReplay {
                     param: param,
                     valueIndex: valueIndex,
                     range: range,
-                    tag: tag,
+                    tag: tag
                 ) else { return nil }
                 trees.append(tree)
                 i += 1
@@ -134,7 +134,7 @@ public enum BoundaryCoveringArrayReplay {
                     lengthValueIndex: valueIndex,
                     lengthRange: lengthRange,
                     remainingParams: Array(profile.parameters.dropFirst(i + 1)),
-                    remainingValues: Array(row.values.dropFirst(i + 1)),
+                    remainingValues: Array(row.values.dropFirst(i + 1))
                 ) else { return nil }
                 trees.append(tree)
                 i += 1 + consumed
@@ -146,7 +146,7 @@ public enum BoundaryCoveringArrayReplay {
                 guard let tree = buildPickTree(
                     param: param,
                     valueIndex: valueIndex,
-                    choices: choices,
+                    choices: choices
                 ) else { return nil }
                 trees.append(tree)
                 i += 1
@@ -165,7 +165,7 @@ public enum BoundaryCoveringArrayReplay {
         param: BoundaryParameter,
         valueIndex: UInt64,
         range: ClosedRange<UInt64>,
-        tag: TypeTag,
+        tag: TypeTag
     ) -> ChoiceTree? {
         guard Int(valueIndex) < param.values.count else { return nil }
         let bitPattern = param.values[Int(valueIndex)]
@@ -179,7 +179,7 @@ public enum BoundaryCoveringArrayReplay {
         lengthValueIndex: UInt64,
         lengthRange: ClosedRange<UInt64>,
         remainingParams: [BoundaryParameter],
-        remainingValues: [UInt64],
+        remainingValues: [UInt64]
     ) -> (tree: ChoiceTree, consumedParams: Int)? {
         guard Int(lengthValueIndex) < lengthParam.values.count else { return nil }
         let length = lengthParam.values[Int(lengthValueIndex)]
@@ -214,7 +214,7 @@ public enum BoundaryCoveringArrayReplay {
                     param: param,
                     valueIndex: valueIndex,
                     range: range,
-                    tag: tag,
+                    tag: tag
                 ) else { return nil }
                 elementTrees.append(tree)
 
@@ -231,7 +231,7 @@ public enum BoundaryCoveringArrayReplay {
     private static func buildPickTree(
         param _: BoundaryParameter,
         valueIndex: UInt64,
-        choices: ContiguousArray<ReflectiveOperation.PickTuple>,
+        choices: ContiguousArray<ReflectiveOperation.PickTuple>
     ) -> ChoiceTree? {
         guard valueIndex < choices.count else { return nil }
         let chosen = choices[Int(valueIndex)]
@@ -246,7 +246,7 @@ public enum BoundaryCoveringArrayReplay {
             weight: chosen.weight,
             id: chosen.id,
             branchIDs: branchIDs,
-            choice: subTree,
+            choice: subTree
         )
         return .group([.selected(branch)])
     }
@@ -276,13 +276,13 @@ extension BoundaryParameter {
     var tag: TypeTag {
         switch kind {
         case let .chooseBits(_, tag), let .finiteChooseBits(_, tag):
-            return tag
+            tag
         case let .sequenceElement(_, _, tag):
-            return tag
+            tag
         case .sequenceLength:
-            return .uint64
+            .uint64
         case .pick:
-            return .uint64
+            .uint64
         }
     }
 }

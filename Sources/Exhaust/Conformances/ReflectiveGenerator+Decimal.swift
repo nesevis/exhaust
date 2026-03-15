@@ -30,7 +30,7 @@ public extension ReflectiveGenerator {
     /// ```
     static func decimal(
         in range: ClosedRange<Decimal>,
-        precision: UInt8,
+        precision: UInt8
     ) -> ReflectiveGenerator<Decimal> {
         let multiplier = pow(10, Int(precision)) as Decimal
         let lowerStep = Int64(truncating: (range.lowerBound * multiplier) as NSDecimalNumber)
@@ -47,7 +47,7 @@ public extension ReflectiveGenerator {
             backward: { target in
                 let scaled = Int64(truncating: (target * multiplier) as NSDecimalNumber)
                 return min(max(scaled, lowerStep), upperStep)
-            },
+            }
         )
     }
 }
