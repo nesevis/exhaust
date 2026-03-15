@@ -9,6 +9,15 @@ public struct ReorderSiblingsEncoder: BatchEncoder {
         ReductionGrade(approximation: .exact, maxMaterializations: 0)
     }
 
+    public func estimatedCost(sequence: ChoiceSequence, bindIndex: BindSpanIndex?) -> Int? {
+        let count = ChoiceSequence.extractSiblingGroups(from: sequence).count
+        guard count > 0 else { return nil }
+        // Reordering is a cleanup pass — it should run after value minimization
+        // has settled values, not before. Cost is set high so cost-based sorting
+        // always places it last among eligible value encoders.
+        return Int.max - 1
+    }
+
     public func encode(
         sequence: ChoiceSequence,
         targets: TargetSet

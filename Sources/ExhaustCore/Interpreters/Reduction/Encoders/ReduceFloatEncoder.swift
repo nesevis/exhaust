@@ -25,6 +25,17 @@ struct ReduceFloatEncoder: AdaptiveEncoder {
         ReductionGrade(approximation: .exact, maxMaterializations: 0)
     }
 
+    func estimatedCost(sequence: ChoiceSequence, bindIndex: BindSpanIndex?) -> Int? {
+        let spans = ChoiceSequence.extractAllValueSpans(from: sequence)
+        let t = spans.filter { span in
+            let seqIdx = span.range.lowerBound
+            guard let v = sequence[seqIdx].value else { return false }
+            return v.choice.tag == .double || v.choice.tag == .float
+        }.count
+        guard t > 0 else { return nil }
+        return t * 94
+    }
+
     // MARK: - Types
 
     private struct FloatTarget {

@@ -24,6 +24,12 @@ public struct CrossStageRedistributeEncoder: AdaptiveEncoder {
         ReductionGrade(approximation: .bounded, maxMaterializations: 0)
     }
 
+    public func estimatedCost(sequence: ChoiceSequence, bindIndex: BindSpanIndex?) -> Int? {
+        let t = ChoiceSequence.extractAllValueSpans(from: sequence).count
+        guard t >= 2 else { return nil }
+        return min(t * (t - 1), 240) * 10
+    }
+
     // MARK: - Internal types
 
     private struct NumericCandidate {

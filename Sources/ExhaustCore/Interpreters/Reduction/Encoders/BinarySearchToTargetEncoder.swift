@@ -11,6 +11,12 @@ public struct BinarySearchToTargetEncoder: AdaptiveEncoder {
         ReductionGrade(approximation: .exact, maxMaterializations: 0)
     }
 
+    public func estimatedCost(sequence: ChoiceSequence, bindIndex: BindSpanIndex?) -> Int? {
+        let t = ChoiceSequence.extractAllValueSpans(from: sequence).count
+        guard t > 0 else { return nil }
+        return t * 64
+    }
+
     // MARK: - State
 
     private struct TargetState {

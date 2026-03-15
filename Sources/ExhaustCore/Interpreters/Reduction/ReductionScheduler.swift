@@ -1,9 +1,50 @@
-/// V-cycle scheduler for principled test case reduction.
+/// Bonsai cultivation cycle scheduler for principled test case reduction.
 ///
-/// Orchestrates encoders and decoders in the multigrid V-cycle pattern: contravariant sweep (depths max→1, exact), deletion sweep (depths 0→max, guided), covariant sweep (depth 0, guided for binds), post-processing merge, and redistribution.
+/// Orchestrates encoders and decoders in the cultivation cycle: snip (contravariant sweep, depths max→1, exact), prune (deletion sweep, depths 0→max, guided), train (covariant sweep, depth 0, guided for binds), post-processing merge, and shape (redistribution).
 ///
 /// Resource tracking uses per-leg budgets with unused-budget forwarding. Each leg has a hard cap (maximum materializations) and a stall patience (maximum consecutive fruitless materializations). Forwarded budget extends productive legs but does not increase patience for unproductive ones.
+///
+/// Encoder ordering within each leg uses move-to-front: when an encoder succeeds, it is promoted to the front of its leg's order for subsequent iterations. This adapts to generator structure without parameters — productive encoders are tried first, reducing wasted materializations on consistently fruitless encoders.
 enum ReductionScheduler {
+
+    // MARK: - Encoder Ordering
+
+    /// Value minimization and reordering encoder slots, used by the snip and train legs.
+    enum ValueEncoderSlot: CaseIterable {
+        case zeroValue
+        case binarySearchToZero
+        case binarySearchToTarget
+        case reduceFloat
+        case reorderSiblings
+    }
+
+    /// Deletion encoder slots, used by the prune leg.
+    enum DeletionEncoderSlot: CaseIterable {
+        case containerSpans
+        case sequenceElements
+        case sequenceBoundaries
+        case freeStandingValues
+        case alignedWindows
+        case speculativeDelete
+
+        var spanCategory: DeletionSpanCategory {
+            switch self {
+            case .containerSpans: .containerSpans
+            case .sequenceElements: .sequenceElements
+            case .sequenceBoundaries: .sequenceBoundaries
+            case .freeStandingValues: .freeStandingValues
+            case .alignedWindows: .containerSpans
+            case .speculativeDelete: .mixed
+            }
+        }
+    }
+
+    /// Promotes `slot` to the front of `order`. No-op if already at front.
+    static func moveToFront<Slot: Equatable>(_ slot: Slot, in order: inout [Slot]) {
+        guard let index = order.firstIndex(of: slot), index > 0 else { return }
+        order.remove(at: index)
+        order.insert(slot, at: 0)
+    }
 
     // MARK: - Merge
 
@@ -133,7 +174,7 @@ enum ReductionScheduler {
         var deleteSequenceBoundaries = DeleteSequenceBoundariesEncoder()
         var deleteFreeStandingValues = DeleteFreeStandingValuesEncoder()
         var speculativeDelete = SpeculativeDeleteEncoder()
-        let zeroValueEncoder = ZeroValueEncoder()
+        var zeroValueEncoder = ZeroValueEncoder()
         var binarySearchToZeroEncoder = BinarySearchToZeroEncoder()
         var binarySearchToTargetEncoder = BinarySearchToTargetEncoder()
         let reorderEncoder = ReorderSiblingsEncoder()
@@ -146,6 +187,11 @@ enum ReductionScheduler {
         var redistributeEncoder = CrossStageRedistributeEncoder()
         var bindAwareRedistributeEncoder = BindAwareRedistributeEncoder()
         var lattice = DominanceLattice()
+
+        // Encoder ordering: move-to-front per leg, persists across cycles.
+        var snipOrder: [ValueEncoderSlot] = ValueEncoderSlot.allCases
+        var pruneOrder: [DeletionEncoderSlot] = DeletionEncoderSlot.allCases
+        var trainOrder: [ValueEncoderSlot] = ValueEncoderSlot.allCases
 
         // MARK: - Helpers
 
@@ -366,6 +412,46 @@ enum ReductionScheduler {
             // Per-cycle budget with unused-budget forwarding.
             var remaining = cycleBudget.total
 
+            // ── Cost-based encoder ordering ──
+            // Reset from allCases each cycle, sort by estimated probe cost
+            // (each encoder's estimatedCost inspects the ChoiceSequence), and
+            // filter out ineligible encoders (nil cost = no targets). Move-to-front
+            // adjusts within this baseline during the cycle.
+            do {
+                func valueCost(_ slot: ValueEncoderSlot) -> Int? {
+                    switch slot {
+                    case .zeroValue: zeroValueEncoder.estimatedCost(sequence: sequence, bindIndex: bindIndex)
+                    case .binarySearchToZero: binarySearchToZeroEncoder.estimatedCost(sequence: sequence, bindIndex: bindIndex)
+                    case .binarySearchToTarget: binarySearchToTargetEncoder.estimatedCost(sequence: sequence, bindIndex: bindIndex)
+                    case .reduceFloat: reduceFloatEncoder.estimatedCost(sequence: sequence, bindIndex: bindIndex)
+                    case .reorderSiblings: reorderEncoder.estimatedCost(sequence: sequence, bindIndex: bindIndex)
+                    }
+                }
+
+                func deletionCost(_ slot: DeletionEncoderSlot) -> Int? {
+                    switch slot {
+                    case .containerSpans: deleteContainerSpans.estimatedCost(sequence: sequence, bindIndex: bindIndex)
+                    case .sequenceElements: deleteSequenceElements.estimatedCost(sequence: sequence, bindIndex: bindIndex)
+                    case .sequenceBoundaries: deleteSequenceBoundaries.estimatedCost(sequence: sequence, bindIndex: bindIndex)
+                    case .freeStandingValues: deleteFreeStandingValues.estimatedCost(sequence: sequence, bindIndex: bindIndex)
+                    case .alignedWindows: deleteAlignedWindowsEncoder.estimatedCost(sequence: sequence, bindIndex: bindIndex)
+                    case .speculativeDelete: speculativeDelete.estimatedCost(sequence: sequence, bindIndex: bindIndex)
+                    }
+                }
+
+                snipOrder = ValueEncoderSlot.allCases
+                    .filter { valueCost($0) != nil }
+                    .sorted { (valueCost($0) ?? 0) < (valueCost($1) ?? 0) }
+
+                trainOrder = ValueEncoderSlot.allCases
+                    .filter { valueCost($0) != nil }
+                    .sorted { (valueCost($0) ?? 0) < (valueCost($1) ?? 0) }
+
+                pruneOrder = DeletionEncoderSlot.allCases
+                    .filter { deletionCost($0) != nil }
+                    .sorted { (deletionCost($0) ?? 0) < (deletionCost($1) ?? 0) }
+            }
+
             if isInstrumented {
                 ExhaustLog.debug(
                     category: .reducer,
@@ -395,7 +481,7 @@ enum ReductionScheduler {
                 remaining -= branchBudget.used
             }
 
-            // ── Leg 1: Contravariant sweep (depths max → 1) ──
+            // ── Leg 1: Snip — contravariant sweep (depths max → 1) ──
             do {
                 let target = cycleBudget.initialBudget(for: .contravariant)
                 var legBudget = LegBudget(hardCap: remaining, stallPatience: target)
@@ -409,37 +495,53 @@ enum ReductionScheduler {
                             depthProgress = false
                             let context = DecoderContext(depth: .specific(depth), bindIndex: bindIndex, fallbackTree: fallbackTree, strictness: .normal, useReductionMaterializer: config.useReductionMaterializer)
                             let decoder = SequenceDecoder.for(context)
-
                             let vSpans = valueSpans(at: depth)
-                            if vSpans.isEmpty == false {
-                                let targets = TargetSet.spans(vSpans)
-                                if try runBatch(zeroValueEncoder, decoder: decoder, targets: targets, structureChanged: false, cache: &rejectCache, budget: &legBudget) {
-                                    depthProgress = true
-                                    contravariantAccepted += 1
-                                }
-                                if try runAdaptive(&binarySearchToZeroEncoder, decoder: decoder, targets: targets, structureChanged: false, cache: &rejectCache, budget: &legBudget) {
-                                    depthProgress = true
-                                    contravariantAccepted += 1
-                                }
-                                if try runAdaptive(&binarySearchToTargetEncoder, decoder: decoder, targets: targets, structureChanged: false, cache: &rejectCache, budget: &legBudget) {
-                                    depthProgress = true
-                                    contravariantAccepted += 1
-                                }
-                            }
-
                             let fSpans = floatSpans(at: depth)
-                            if fSpans.isEmpty == false {
-                                if try runAdaptive(&reduceFloatEncoder, decoder: decoder, targets: .spans(fSpans), structureChanged: false, cache: &rejectCache, budget: &legBudget) {
-                                    depthProgress = true
-                                    contravariantAccepted += 1
-                                }
-                            }
-
                             let sGroups = siblingGroups(at: depth)
-                            if sGroups.isEmpty == false {
-                                if try runBatch(reorderEncoder, decoder: decoder, targets: .siblingGroups(sGroups), structureChanged: false, cache: &rejectCache, budget: &legBudget) {
-                                    depthProgress = true
-                                    contravariantAccepted += 1
+
+                            for slot in snipOrder {
+                                guard legBudget.isExhausted == false else { break }
+                                switch slot {
+                                case .zeroValue:
+                                    if vSpans.isEmpty == false {
+                                        if try runAdaptive(&zeroValueEncoder, decoder: decoder, targets: .spans(vSpans), structureChanged: false, cache: &rejectCache, budget: &legBudget) {
+                                            depthProgress = true
+                                            contravariantAccepted += 1
+                                            Self.moveToFront(.zeroValue, in: &snipOrder)
+                                        }
+                                    }
+                                case .binarySearchToZero:
+                                    if vSpans.isEmpty == false {
+                                        if try runAdaptive(&binarySearchToZeroEncoder, decoder: decoder, targets: .spans(vSpans), structureChanged: false, cache: &rejectCache, budget: &legBudget) {
+                                            depthProgress = true
+                                            contravariantAccepted += 1
+                                            Self.moveToFront(.binarySearchToZero, in: &snipOrder)
+                                        }
+                                    }
+                                case .binarySearchToTarget:
+                                    if vSpans.isEmpty == false {
+                                        if try runAdaptive(&binarySearchToTargetEncoder, decoder: decoder, targets: .spans(vSpans), structureChanged: false, cache: &rejectCache, budget: &legBudget) {
+                                            depthProgress = true
+                                            contravariantAccepted += 1
+                                            Self.moveToFront(.binarySearchToTarget, in: &snipOrder)
+                                        }
+                                    }
+                                case .reduceFloat:
+                                    if fSpans.isEmpty == false {
+                                        if try runAdaptive(&reduceFloatEncoder, decoder: decoder, targets: .spans(fSpans), structureChanged: false, cache: &rejectCache, budget: &legBudget) {
+                                            depthProgress = true
+                                            contravariantAccepted += 1
+                                            Self.moveToFront(.reduceFloat, in: &snipOrder)
+                                        }
+                                    }
+                                case .reorderSiblings:
+                                    if sGroups.isEmpty == false {
+                                        if try runBatch(reorderEncoder, decoder: decoder, targets: .siblingGroups(sGroups), structureChanged: false, cache: &rejectCache, budget: &legBudget) {
+                                            depthProgress = true
+                                            contravariantAccepted += 1
+                                            Self.moveToFront(.reorderSiblings, in: &snipOrder)
+                                        }
+                                    }
                                 }
                             }
                         }
@@ -448,7 +550,7 @@ enum ReductionScheduler {
                 remaining -= legBudget.used
             }
 
-            // ── Leg 2: Deletion sweep (depths 0 → max) ──
+            // ── Leg 2: Prune — deletion sweep (depths 0 → max) ──
             do {
                 let target = cycleBudget.initialBudget(for: .deletion)
                 var legBudget = LegBudget(hardCap: remaining, stallPatience: target)
@@ -457,31 +559,31 @@ enum ReductionScheduler {
                 for depth in 0 ... maxBindDepth {
                     guard legBudget.isExhausted == false else { break }
 
-                    if try runAdaptive(&deleteContainerSpans, decoder: makeDeletionDecoder(at: depth), targets: .spans(deletionTargets(category: .containerSpans, depth: depth)), structureChanged: true, cache: &rejectCache, budget: &legBudget) {
-                        deletionAccepted += 1
-                        cycleImproved = true
-                    }
-                    if try runAdaptive(&deleteSequenceElements, decoder: makeDeletionDecoder(at: depth), targets: .spans(deletionTargets(category: .sequenceElements, depth: depth)), structureChanged: true, cache: &rejectCache, budget: &legBudget) {
-                        deletionAccepted += 1
-                        cycleImproved = true
-                    }
-                    if try runAdaptive(&deleteSequenceBoundaries, decoder: makeDeletionDecoder(at: depth), targets: .spans(deletionTargets(category: .sequenceBoundaries, depth: depth)), structureChanged: true, cache: &rejectCache, budget: &legBudget) {
-                        deletionAccepted += 1
-                        cycleImproved = true
-                    }
-                    if try runAdaptive(&deleteFreeStandingValues, decoder: makeDeletionDecoder(at: depth), targets: .spans(deletionTargets(category: .freeStandingValues, depth: depth)), structureChanged: true, cache: &rejectCache, budget: &legBudget) {
-                        deletionAccepted += 1
-                        cycleImproved = true
-                    }
-
-                    if try runAdaptive(&deleteAlignedWindowsEncoder, decoder: makeDeletionDecoder(at: depth), targets: .spans(deletionTargets(category: .containerSpans, depth: depth)), structureChanged: true, cache: &rejectCache, budget: &legBudget) {
-                        deletionAccepted += 1
-                        cycleImproved = true
-                    }
-
-                    if try runAdaptive(&speculativeDelete, decoder: makeDeletionDecoder(at: depth), targets: .spans(deletionTargets(category: .mixed, depth: depth)), structureChanged: true, cache: &rejectCache, budget: &legBudget) {
-                        deletionAccepted += 1
-                        cycleImproved = true
+                    for slot in pruneOrder {
+                        guard legBudget.isExhausted == false else { break }
+                        // Targets and decoder are extracted per-slot because
+                        // accept(structureChanged: true) can change span structure
+                        // between encoder calls.
+                        let accepted: Bool
+                        switch slot {
+                        case .containerSpans:
+                            accepted = try runAdaptive(&deleteContainerSpans, decoder: makeDeletionDecoder(at: depth), targets: .spans(deletionTargets(category: slot.spanCategory, depth: depth)), structureChanged: true, cache: &rejectCache, budget: &legBudget)
+                        case .sequenceElements:
+                            accepted = try runAdaptive(&deleteSequenceElements, decoder: makeDeletionDecoder(at: depth), targets: .spans(deletionTargets(category: slot.spanCategory, depth: depth)), structureChanged: true, cache: &rejectCache, budget: &legBudget)
+                        case .sequenceBoundaries:
+                            accepted = try runAdaptive(&deleteSequenceBoundaries, decoder: makeDeletionDecoder(at: depth), targets: .spans(deletionTargets(category: slot.spanCategory, depth: depth)), structureChanged: true, cache: &rejectCache, budget: &legBudget)
+                        case .freeStandingValues:
+                            accepted = try runAdaptive(&deleteFreeStandingValues, decoder: makeDeletionDecoder(at: depth), targets: .spans(deletionTargets(category: slot.spanCategory, depth: depth)), structureChanged: true, cache: &rejectCache, budget: &legBudget)
+                        case .alignedWindows:
+                            accepted = try runAdaptive(&deleteAlignedWindowsEncoder, decoder: makeDeletionDecoder(at: depth), targets: .spans(deletionTargets(category: slot.spanCategory, depth: depth)), structureChanged: true, cache: &rejectCache, budget: &legBudget)
+                        case .speculativeDelete:
+                            accepted = try runAdaptive(&speculativeDelete, decoder: makeDeletionDecoder(at: depth), targets: .spans(deletionTargets(category: slot.spanCategory, depth: depth)), structureChanged: true, cache: &rejectCache, budget: &legBudget)
+                        }
+                        if accepted {
+                            deletionAccepted += 1
+                            cycleImproved = true
+                            Self.moveToFront(slot, in: &pruneOrder)
+                        }
                     }
                 }
                 remaining -= legBudget.used
@@ -490,7 +592,7 @@ enum ReductionScheduler {
                 }
             }
 
-            // ── Leg 3: Covariant sweep (depth 0) ──
+            // ── Leg 3: Train — covariant sweep (depth 0) ──
             do {
                 let target = cycleBudget.initialBudget(for: .covariant)
                 var legBudget = LegBudget(hardCap: remaining, stallPatience: target)
@@ -500,76 +602,61 @@ enum ReductionScheduler {
                 let preCovariantBindIndex = bindIndex
                 let preCovariantTree = tree
 
-                // Re-derive after covariant value changes when the generator has
-                // dynamic range dependencies (from ._bind or .bind()). When
-                // hasDynamicRanges is false (detected via choice tree sampling),
-                // re-derivation is only needed if the tree has explicit .bind nodes.
-                //
-                // With ReductionMaterializer, every materialization returns a fresh tree
-                // with current validRange, so hasDynamicRanges is not load-bearing —
-                // the decoder already handles re-derivation. Still pass structureChanged
-                // to accept() for bind index refresh.
-                let structureChangedOnCovariant: Bool
-                if config.useReductionMaterializer {
-                    structureChangedOnCovariant = hasBind
-                } else {
-                    structureChangedOnCovariant = hasBind || config.hasDynamicRanges
-                }
+                // ReductionMaterializer produces fresh trees with current validRange
+                // on every materialization, so no separate re-derivation is needed
+                // for range refreshes. Pass structureChanged to accept() for bind
+                // index refresh when binds are present.
+                let structureChangedOnCovariant = hasBind
 
-                // Zero values.
-                do {
-                    let vSpansZero = valueSpans(at: 0)
-                    if vSpansZero.isEmpty == false {
-                        let targets = TargetSet.spans(vSpansZero)
-                        if try runBatch(zeroValueEncoder, decoder: makeDepthZeroDecoder(), targets: targets, structureChanged: structureChangedOnCovariant, cache: &rejectCache, budget: &legBudget) {
-                            covariantAccepted += 1
-                            cycleImproved = true
+                // Targets are re-extracted per slot because
+                // accept(structureChanged: true) can change span structure.
+                for slot in trainOrder {
+                    guard legBudget.isExhausted == false else { break }
+                    switch slot {
+                    case .zeroValue:
+                        let vSpans = valueSpans(at: 0)
+                        if vSpans.isEmpty == false {
+                            if try runAdaptive(&zeroValueEncoder, decoder: makeDepthZeroDecoder(), targets: .spans(vSpans), structureChanged: structureChangedOnCovariant, cache: &rejectCache, budget: &legBudget) {
+                                covariantAccepted += 1
+                                cycleImproved = true
+                                Self.moveToFront(.zeroValue, in: &trainOrder)
+                            }
                         }
-                    }
-                }
-
-                // Binary search to zero.
-                do {
-                    let vSpansZero = valueSpans(at: 0)
-                    if vSpansZero.isEmpty == false {
-                        let targets = TargetSet.spans(vSpansZero)
-                        if try runAdaptive(&binarySearchToZeroEncoder, decoder: makeDepthZeroDecoder(), targets: targets, structureChanged: structureChangedOnCovariant, cache: &rejectCache, budget: &legBudget) {
-                            covariantAccepted += 1
-                            cycleImproved = true
+                    case .binarySearchToZero:
+                        let vSpans = valueSpans(at: 0)
+                        if vSpans.isEmpty == false {
+                            if try runAdaptive(&binarySearchToZeroEncoder, decoder: makeDepthZeroDecoder(), targets: .spans(vSpans), structureChanged: structureChangedOnCovariant, cache: &rejectCache, budget: &legBudget) {
+                                covariantAccepted += 1
+                                cycleImproved = true
+                                Self.moveToFront(.binarySearchToZero, in: &trainOrder)
+                            }
                         }
-                    }
-                }
-
-                // Binary search to target.
-                do {
-                    let vSpansZero = valueSpans(at: 0)
-                    if vSpansZero.isEmpty == false {
-                        let targets = TargetSet.spans(vSpansZero)
-                        if try runAdaptive(&binarySearchToTargetEncoder, decoder: makeDepthZeroDecoder(), targets: targets, structureChanged: structureChangedOnCovariant, cache: &rejectCache, budget: &legBudget) {
-                            covariantAccepted += 1
-                            cycleImproved = true
+                    case .binarySearchToTarget:
+                        let vSpans = valueSpans(at: 0)
+                        if vSpans.isEmpty == false {
+                            if try runAdaptive(&binarySearchToTargetEncoder, decoder: makeDepthZeroDecoder(), targets: .spans(vSpans), structureChanged: structureChangedOnCovariant, cache: &rejectCache, budget: &legBudget) {
+                                covariantAccepted += 1
+                                cycleImproved = true
+                                Self.moveToFront(.binarySearchToTarget, in: &trainOrder)
+                            }
                         }
-                    }
-                }
-
-                // Float reduction.
-                do {
-                    let fSpansZero = floatSpans(at: 0)
-                    if fSpansZero.isEmpty == false {
-                        if try runAdaptive(&reduceFloatEncoder, decoder: makeDepthZeroDecoder(), targets: .spans(fSpansZero), structureChanged: structureChangedOnCovariant, cache: &rejectCache, budget: &legBudget) {
-                            covariantAccepted += 1
-                            cycleImproved = true
+                    case .reduceFloat:
+                        let fSpans = floatSpans(at: 0)
+                        if fSpans.isEmpty == false {
+                            if try runAdaptive(&reduceFloatEncoder, decoder: makeDepthZeroDecoder(), targets: .spans(fSpans), structureChanged: structureChangedOnCovariant, cache: &rejectCache, budget: &legBudget) {
+                                covariantAccepted += 1
+                                cycleImproved = true
+                                Self.moveToFront(.reduceFloat, in: &trainOrder)
+                            }
                         }
-                    }
-                }
-
-                // Sibling reordering.
-                do {
-                    let sGroupsZero = siblingGroups(at: 0)
-                    if sGroupsZero.isEmpty == false {
-                        if try runBatch(reorderEncoder, decoder: makeDepthZeroDecoder(), targets: .siblingGroups(sGroupsZero), structureChanged: structureChangedOnCovariant, cache: &rejectCache, budget: &legBudget) {
-                            covariantAccepted += 1
-                            cycleImproved = true
+                    case .reorderSiblings:
+                        let sGroups = siblingGroups(at: 0)
+                        if sGroups.isEmpty == false {
+                            if try runBatch(reorderEncoder, decoder: makeDepthZeroDecoder(), targets: .siblingGroups(sGroups), structureChanged: structureChangedOnCovariant, cache: &rejectCache, budget: &legBudget) {
+                                covariantAccepted += 1
+                                cycleImproved = true
+                                Self.moveToFront(.reorderSiblings, in: &trainOrder)
+                            }
                         }
                     }
                 }

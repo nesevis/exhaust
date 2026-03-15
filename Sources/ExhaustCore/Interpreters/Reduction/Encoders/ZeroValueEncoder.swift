@@ -1,8 +1,11 @@
 /// Sets each target value to its semantic simplest form (zero for numerics), or to the
 /// range's lower bound when zero falls outside an explicit valid range.
 ///
-/// Produces one candidate per target span. The scheduler evaluates in order, stopping at the first success. The 2-cell chain ZeroValue => BinarySearchToZero means that targets where ZeroValue succeeds can skip binary search entirely.
-public struct ZeroValueEncoder: BatchEncoder {
+/// Two phases: first tries setting ALL values to simplest simultaneously (handles
+/// filter-coupled generators), then iterates individually. The 2-cell chain
+/// ZeroValue => BinarySearchToZero means that targets where ZeroValue succeeds
+/// can skip binary search entirely.
+public struct ZeroValueEncoder: AdaptiveEncoder {
     public let name = "zeroValue"
     public let phase = ReductionPhase.valueMinimization
 
@@ -10,48 +13,94 @@ public struct ZeroValueEncoder: BatchEncoder {
         ReductionGrade(approximation: .exact, maxMaterializations: 0)
     }
 
-    public func encode(
-        sequence: ChoiceSequence,
-        targets: TargetSet
-    ) -> any Sequence<ChoiceSequence> {
-        guard case let .spans(spans) = targets else { return [] as [ChoiceSequence] }
+    public func estimatedCost(sequence: ChoiceSequence, bindIndex: BindSpanIndex?) -> Int? {
+        let t = ChoiceSequence.extractAllValueSpans(from: sequence).count
+        guard t > 0 else { return nil }
+        return 1 + t
+    }
 
-        // First: try setting ALL values to their simplest simultaneously.
-        // This handles filter-coupled generators where individual changes break
-        // coupling constraints but the all-simplest candidate preserves them.
-        // Matches the legacy reducer's naiveSimplifyValuesToSemanticSimplest pass.
-        var allSimplest = sequence
-        var anyChanged = false
+    // MARK: - State
+
+    private enum ZeroValuePhase {
+        case allAtOnce
+        case individual
+    }
+
+    private var sequence = ChoiceSequence()
+    private var filteredSpans: [(seqIdx: Int, target: ChoiceValue, validRange: ClosedRange<UInt64>?, isRangeExplicit: Bool)] = []
+    private var zeroPhase = ZeroValuePhase.allAtOnce
+    private var spanIndex = 0
+
+    // MARK: - AdaptiveEncoder
+
+    public mutating func start(sequence: ChoiceSequence, targets: TargetSet) {
+        self.sequence = sequence
+        self.zeroPhase = .allAtOnce
+        self.spanIndex = 0
+        self.filteredSpans = []
+
+        guard case let .spans(spans) = targets else { return }
+
         for span in spans {
             let seqIdx = span.range.lowerBound
             guard let v = sequence[seqIdx].value else { continue }
             let target = Self.simplestTarget(for: v)
             guard target != v.choice else { continue }
-            allSimplest[seqIdx] = .value(.init(
-                choice: target,
-                validRange: v.validRange,
-                isRangeExplicit: v.isRangeExplicit
-            ))
-            anyChanged = true
+            filteredSpans.append((seqIdx: seqIdx, target: target, validRange: v.validRange, isRangeExplicit: v.isRangeExplicit))
         }
-        let allSimplestPrefix: [ChoiceSequence] = anyChanged ? [allSimplest] : []
+    }
 
-        // Then: try each value individually.
-        let individual = spans.lazy.compactMap { span -> ChoiceSequence? in
-            let seqIdx = span.range.lowerBound
-            guard let v = sequence[seqIdx].value else { return nil }
-            let target = Self.simplestTarget(for: v)
-            guard target != v.choice else { return nil }
-            var candidate = sequence
-            candidate[seqIdx] = .value(.init(
-                choice: target,
-                validRange: v.validRange,
-                isRangeExplicit: v.isRangeExplicit
-            ))
-            return candidate
+    public mutating func nextProbe(lastAccepted: Bool) -> ChoiceSequence? {
+        guard filteredSpans.isEmpty == false else { return nil }
+
+        switch zeroPhase {
+        case .allAtOnce:
+            // Transition to individual regardless of acceptance.
+            zeroPhase = .individual
+            spanIndex = 0
+
+            // Build the all-simplest candidate.
+            var allSimplest = sequence
+            for entry in filteredSpans {
+                allSimplest[entry.seqIdx] = .value(.init(
+                    choice: entry.target,
+                    validRange: entry.validRange,
+                    isRangeExplicit: entry.isRangeExplicit
+                ))
+            }
+            return allSimplest
+
+        case .individual:
+            if lastAccepted, spanIndex > 0 {
+                // Update base sequence with the previously accepted value.
+                let prev = filteredSpans[spanIndex - 1]
+                sequence[prev.seqIdx] = .value(.init(
+                    choice: prev.target,
+                    validRange: prev.validRange,
+                    isRangeExplicit: prev.isRangeExplicit
+                ))
+            }
+
+            while spanIndex < filteredSpans.count {
+                let entry = filteredSpans[spanIndex]
+                spanIndex += 1
+
+                // Re-check: if the all-at-once pass was accepted, the base sequence
+                // was updated and this span may already be at the target.
+                guard let v = sequence[entry.seqIdx].value, entry.target != v.choice else {
+                    continue
+                }
+
+                var candidate = sequence
+                candidate[entry.seqIdx] = .value(.init(
+                    choice: entry.target,
+                    validRange: entry.validRange,
+                    isRangeExplicit: entry.isRangeExplicit
+                ))
+                return candidate
+            }
+            return nil
         }
-
-        return allSimplestPrefix + Array(individual)
     }
 
     /// Returns the simplest valid target for a value.

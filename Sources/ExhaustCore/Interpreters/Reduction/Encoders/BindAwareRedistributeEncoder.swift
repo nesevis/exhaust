@@ -34,6 +34,12 @@ public struct BindAwareRedistributeEncoder: AdaptiveEncoder {
         ReductionGrade(approximation: .bounded, maxMaterializations: 0)
     }
 
+    public func estimatedCost(sequence: ChoiceSequence, bindIndex: BindSpanIndex?) -> Int? {
+        guard let bindIndex, bindIndex.regions.count >= 2 else { return nil }
+        let r = bindIndex.regions.count
+        return min(r * r, 32) * 14
+    }
+
     // MARK: - Types
 
     /// A bind region with its extracted inner numeric value.

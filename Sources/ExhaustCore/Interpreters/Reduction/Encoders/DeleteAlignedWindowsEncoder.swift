@@ -24,6 +24,12 @@ struct DeleteAlignedWindowsEncoder: AdaptiveEncoder {
         ReductionGrade(approximation: .exact, maxMaterializations: 0)
     }
 
+    func estimatedCost(sequence: ChoiceSequence, bindIndex: BindSpanIndex?) -> Int? {
+        let t = ChoiceSequence.extractContainerSpans(from: sequence).count
+        guard t > 0 else { return nil }
+        return t * 50
+    }
+
     // MARK: - Configuration
 
     private let beamTuning: Interpreters.TCRConfiguration.AlignedDeletionBeamSearchTuning
@@ -58,6 +64,7 @@ struct DeleteAlignedWindowsEncoder: AdaptiveEncoder {
     private var nonMonotonicSizes: [Int] = []
     private var nonMonotonicIndex = 0
     private var phaseOneFoundAnything = false
+    private var anyContiguousEverAccepted = false
     private var needsFirstProbe = true
     private var maxBatch = 0
 
@@ -77,6 +84,7 @@ struct DeleteAlignedWindowsEncoder: AdaptiveEncoder {
         self.cohortIndex = 0
         self.searchPhase = .contiguous
         self.needsFirstProbe = true
+        self.anyContiguousEverAccepted = false
 
         let siblingGroups = ChoiceSequence.extractSiblingGroups(from: sequence)
         self.cohorts = AlignedDeletionCohortBuilder.buildCohorts(from: sequence, siblingGroups: siblingGroups)
@@ -155,6 +163,7 @@ struct DeleteAlignedWindowsEncoder: AdaptiveEncoder {
             if let nextSize = stepper.advance(lastAccepted: lastAccepted) {
                 if lastAccepted {
                     phaseOneFoundAnything = true
+                    anyContiguousEverAccepted = true
                 }
                 if let candidate = buildContiguousCandidate(slotStart: slotPosition, size: nextSize, ranges: ranges) {
                     return candidate
@@ -165,6 +174,7 @@ struct DeleteAlignedWindowsEncoder: AdaptiveEncoder {
             // Stepper converged.
             if lastAccepted {
                 phaseOneFoundAnything = true
+                anyContiguousEverAccepted = true
             }
             let bestAccepted = stepper.bestAccepted
 
@@ -191,6 +201,7 @@ struct DeleteAlignedWindowsEncoder: AdaptiveEncoder {
     private mutating func nextNonMonotonicProbe(lastAccepted: Bool, ranges: AlignedDeletionCohortRanges) -> ChoiceSequence? {
         if lastAccepted {
             phaseOneFoundAnything = true
+            anyContiguousEverAccepted = true
         }
         while nonMonotonicIndex < nonMonotonicSizes.count {
             let size = nonMonotonicSizes[nonMonotonicIndex]
@@ -370,7 +381,18 @@ struct DeleteAlignedWindowsEncoder: AdaptiveEncoder {
                 }
                 return false
             }
-            // Contiguous found nothing — try beam search for this cohort.
+            // Contiguous found nothing — try beam search only if contiguous
+            // deletion succeeded in some prior cohort (or this is the first cohort).
+            // If no contiguous deletion has ever been accepted, beam search
+            // (which tries subsets of the same slots) is very unlikely to succeed.
+            if anyContiguousEverAccepted == false, cohortIndex > 0 {
+                cohortIndex += 1
+                if cohortIndex < cohorts.count {
+                    prepareCohort()
+                    return true
+                }
+                return false
+            }
             searchPhase = .beamSearch
             prepareBeamSearch()
             if beamFrontier.isEmpty {

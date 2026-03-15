@@ -13,6 +13,11 @@ public struct PivotBranchesEncoder: BatchEncoder {
         ReductionGrade(approximation: .exact, maxMaterializations: 0)
     }
 
+    public func estimatedCost(sequence: ChoiceSequence, bindIndex: BindSpanIndex?) -> Int? {
+        guard sequence.isEmpty == false else { return nil }
+        return 10
+    }
+
     /// The tree to search for pivot candidates. Set by the scheduler before each pass.
     var currentTree: ChoiceTree?
 

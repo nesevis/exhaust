@@ -16,6 +16,12 @@ public struct BinarySearchToZeroEncoder: AdaptiveEncoder {
         ReductionGrade(approximation: .exact, maxMaterializations: 0)
     }
 
+    public func estimatedCost(sequence: ChoiceSequence, bindIndex: BindSpanIndex?) -> Int? {
+        let t = ChoiceSequence.extractAllValueSpans(from: sequence).count
+        guard t > 0 else { return nil }
+        return t * 80
+    }
+
     // MARK: - State
 
     private enum DirectionalStepper {

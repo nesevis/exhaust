@@ -8,6 +8,16 @@ public protocol SequenceEncoderBase {
 
     /// Which phase this encoder belongs to.
     var phase: ReductionPhase { get }
+
+    /// Estimates the number of probes this encoder will generate for the given sequence, or returns `nil` if the encoder has no applicable targets and should be skipped entirely.
+    ///
+    /// The scheduler calls this once per cycle to sort encoders cheapest-first and filter out ineligible ones. The estimate is derived from the encoder's algorithmic complexity and the target count visible in the choice sequence.
+    ///
+    /// - Parameters:
+    ///   - sequence: The current choice sequence.
+    ///   - bindIndex: The bind span index, or `nil` if the generator has no binds.
+    /// - Returns: Estimated probe count, or `nil` if this encoder has no work to do.
+    func estimatedCost(sequence: ChoiceSequence, bindIndex: BindSpanIndex?) -> Int?
 }
 
 /// Batch encoding: all candidates produced upfront, scheduler picks first success.

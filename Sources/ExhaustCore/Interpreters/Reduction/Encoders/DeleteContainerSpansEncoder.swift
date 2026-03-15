@@ -11,6 +11,12 @@ public struct DeleteContainerSpansEncoder: AdaptiveEncoder {
         ReductionGrade(approximation: .exact, maxMaterializations: 0)
     }
 
+    public func estimatedCost(sequence: ChoiceSequence, bindIndex: BindSpanIndex?) -> Int? {
+        let t = ChoiceSequence.extractContainerSpans(from: sequence).count
+        guard t > 0 else { return nil }
+        return t * 10
+    }
+
     private var driver = AdaptiveDeletionEncoder()
 
     public mutating func start(sequence: ChoiceSequence, targets: TargetSet) {

@@ -13,6 +13,11 @@ public struct PromoteBranchesEncoder: BatchEncoder {
         ReductionGrade(approximation: .exact, maxMaterializations: 0)
     }
 
+    public func estimatedCost(sequence: ChoiceSequence, bindIndex: BindSpanIndex?) -> Int? {
+        guard sequence.isEmpty == false else { return nil }
+        return 20
+    }
+
     /// The tree to search for branch promotion candidates. Set by the scheduler before each pass.
     var currentTree: ChoiceTree?
 

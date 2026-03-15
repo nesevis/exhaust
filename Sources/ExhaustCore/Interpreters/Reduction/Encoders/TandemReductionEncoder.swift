@@ -22,6 +22,12 @@ public struct TandemReductionEncoder: AdaptiveEncoder {
         ReductionGrade(approximation: .bounded, maxMaterializations: 0)
     }
 
+    public func estimatedCost(sequence: ChoiceSequence, bindIndex: BindSpanIndex?) -> Int? {
+        let g = ChoiceSequence.extractSiblingGroups(from: sequence).count
+        guard g > 0 else { return nil }
+        return g * 20
+    }
+
     // MARK: - Internal types
 
     private struct WindowPlan {
