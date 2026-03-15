@@ -1,8 +1,12 @@
 # Principled Test Case Reduction: Implementation Plan
 
 > Companion document to [kleisli-reducer-paper-audit.md](kleisli-reducer-paper-audit.md), which maps the
-> Sepulveda-Jimenez categorical framework onto the current KleisliReducer implementation.
+> Sepulveda-Jimenez categorical framework onto the BonsaiReducer implementation.
 > This plan uses that audit's findings to redesign reduction from first principles.
+>
+> See [bonsai-naming-analysis.md](bonsai-naming-analysis.md) for why the reducer is named
+> after its scheduling layer (iterative tree miniaturization) rather than the categorical
+> algebra (Kleisli generalization) that guarantees its correctness.
 
 ## Context
 
@@ -72,14 +76,16 @@ This means:
 
 The paper defines covariant and contravariant functors on the reduction category (paper §4): Cand is covariant (maps enc forward), Sol is contravariant (maps dec backward). We borrow this terminology for a related but distinct operational classification: "covariant" passes propagate changes *forward* through the Kleisli chain (inner → bound via re-derivation), "contravariant" passes reduce values *against* fixed ranges without forward propagation. This is an analogy to the paper's functorial direction, not a formal instantiation — the paper's covariant/contravariant is about functors on OptRed, while ours is about information flow in the bind chain. In practice, reducer passes fall into three operationally distinct categories, each with its own decoder, approximation class, and lattice implications. The V-cycle (Section 1.5) gives each category its own leg.
 
-**Contravariant passes** (against the chain: depth max → depth 1):
+The bonsai vocabulary ([bonsai-naming-analysis.md](bonsai-naming-analysis.md)) names each category by its horticultural analogue: **snip** (contravariant), **prune** (deletion), **train** (covariant), **shape** (redistribution). The bonsai term leads in doc comments; the technical definition follows.
+
+**Contravariant passes / snip** (against the chain: depth max → depth 1):
 - **Value minimization and reordering only.** Reduce bound values *within fixed ranges* — moving backward through the bind chain without disturbing the inner generators that determined those ranges.
 - **Structure-preserving**: span boundaries, container groupings, sibling relationships are unchanged. The dominance lattice computed at sweep start remains valid throughout.
 - **Exact**: no re-derivation needed. Grade: `(.exact, w)`. The `dec` is `Interpreters.materialize()` with a fixed tree.
 - **Can get stuck**: limited to the current feasible region. If the property failure requires a specific structural shape, contravariant passes can only minimize values within that shape, never escape it.
 - In the paper's terms: these operate on the `Cand^op` functor (paper §4.2) — decoding maps candidates backward.
 
-**Deletion passes** (all depths, 0 → max):
+**Deletion passes / prune** (all depths, 0 → max):
 - **Pragmatic addition beyond the paper's framework.** The paper models reductions over fixed-structure candidate spaces — candidates are fixed-dimensional vectors whose values are optimized within a fixed topology. Deletion is orthogonal: it changes the candidate's *structure* (length), not just its values. This operation arises because Exhaust optimizes under a shortlex order where length is the primary axis, unlike the fixed-structure optimization problems the paper addresses. Deletion has no analogue in the paper's covariant/contravariant functor framework — it operates on the sequence's shape, not on information flow through the bind chain.
 - **Structure-destroying at every depth.** Deletion removes spans, invalidating the tree's positional mapping. Even at depth > 0, the tree must be rebuilt — `TacticEvaluation.evaluate()` routes all `.relaxed` strictness through `GuidedMaterializer` regardless of depth.
 - **All depths, not just depth 0.** Deletion at depth 2 removes bound spans; deletion at depth 0 can eliminate entire bind regions. Both require the same decoder (`.guided`).
@@ -87,114 +93,112 @@ The paper defines covariant and contravariant functors on the reduction category
 - **Lattice-invalidating**: span positions shift after deletion, so the dominance lattice must be rebuilt after each success. This is why deletion cannot share a leg with the contravariant sweep (which depends on lattice stability).
 - Categorically distinct from both contravariant (not structure-preserving, not exact) and covariant (not depth-0-specific, not about shifting bound ranges via inner-value changes). Deletion shares the covariant property of using GuidedMaterializer, but its operational characteristics — all-depth scope, shortening purpose, per-success lattice rebuild — justify a separate leg.
 
-**Covariant passes** (with the chain: depth 0):
+**Covariant passes / train** (with the chain: depth 0):
 - **Value minimization and reordering at the inner level.** Reduce inner values, causing bound content to be *re-derived forward* through the Kleisli chain via GuidedMaterializer (prolongation).
 - **Bounded**: re-derivation is nondeterministic, but the shortlex guard rejects regressions. Grade: `(.bounded, w)`. Can explore entirely new regions of the candidate space.
 - **Can escape local minima**: by changing inner values (depth 0), the covariant sweep changes the bound ranges themselves — opening new territory for the next contravariant sweep. Re-derivation via PRNG/fallback may find shorter bound content than the current state.
 - In the paper's terms: these operate on the `Cand` functor (paper §4.1) — encoding maps candidates forward.
 
-### 1.5 The Multigrid V-Cycle
+### 1.5 The Cultivation Cycle (V-Cycle)
 
 The optimal cycle structure interleaves the three pass categories. The structure is analogous to multigrid V-cycles (paper §14.4), though the mapping is loose: the paper's §14.4 treats literal discretization levels of a continuous problem, while Exhaust's "levels" are bind depths in a Kleisli chain. The shared pattern is "smooth fine levels → correct coarse level → re-smooth":
 
 ```
-  Branch tactics (pre-cycle):
+  Top-work / re-head (pre-cycle):
     Promote/pivot. May change tree shape at any depth.
     If any succeed, rebuild all derived structures (lattice, bind index).
          │
          ▼
-  Lattice computation:
-    Built on post-branch state. Valid for the entire contravariant sweep.
+  Lattice computation (triage):
+    Built on post-branch state. Valid for the entire snip sweep.
          │
          ▼
-  Contravariant sweep (depth max → 1):
+  Snip — contravariant sweep (depth max → 1):
     Value minimization + reordering ONLY.
     Exact, structure-preserving, lattice-stable.
     Converges to local minimum within fixed bound ranges.
          │
          ▼
-  Deletion sweep (depth 0 → max):
+  Prune — deletion sweep (depth 0 → max):
     Structure-destroying at ALL depths. GuidedMaterializer.
-    Lattice rebuilt after each success. Separate from contravariant
+    Lattice rebuilt after each success. Separate from snip
     because deletion invalidates span structure even at depth > 0.
     Direction 0→max: depth-0 deletions can eliminate entire bind
     regions. The Gauss-Seidel argument does not apply — GuidedMaterializer
     re-derives from scratch regardless of depth.
          │
          ▼
-  Covariant sweep (depth 0):
+  Train — covariant sweep (depth 0):
     Value minimization + reordering at the inner level.
     With binds: bounded (.bounded), lattice-invalidating. Changes bound
     ranges via inner value reduction. Fallback tree (containing
-    pre-covariant improvements) minimizes re-derivation regression.
+    pre-snip improvements) minimizes re-derivation regression.
     Without binds: exact (.exact) — no re-derivation, no bound ranges.
          │
          ▼
   Post-processing (natural transformation):
-    Shortlex merge to recover contravariant improvements that
+    Shortlex merge to recover snip improvements that
     re-derivation degraded. Inspired by the paper §5.3
     endotransformation concept (representation-invariant
     post-processing), though the merge is technically a binary
-    operation on (pre-covariant, post-covariant) states rather
+    operation on (pre-train, post-train) states rather
     than a unary Cand → Cand natural transformation.
     NOT a budget leg — fixed per-cycle overhead (at most one
     materialization), gated by cheap pre-checks.
          │
          ▼
-  Redistribution (if contravariant + deletion stalled, or deferral cap):
+  Shape — redistribution (if snip + prune stalled, or deferral cap):
     Cross-stage mass transfer between coordinates.
     Bounded (.bounded). Operates at depth -1 on whole sequence.
     Addresses joint-configuration stalls orthogonal to inner-value progress.
          │
          ▼
-  (repeat — dirty depths only, see Section 4.2)
+  (repeat until settled — dirty depths only, see Section 4.2)
 ```
 
-**Why this ordering minimizes re-derivation regression:**
-- Contravariant reductions at depth > 0 are `.exact` — no regression possible.
-- The subsequent deletion and covariant reductions are both `.bounded` — the shortlex guard rejects regressions, but re-derivation can still produce suboptimal values at bound positions. The quality of those values depends on the tiered resolution inputs:
+**Why this ordering minimizes re-derivation regression (snip before prune before train):**
+- Snip reductions at depth > 0 are `.exact` — no regression possible.
+- The subsequent prune and train reductions are both `.bounded` — the shortlex guard rejects regressions, but re-derivation can still produce suboptimal values at bound positions. The quality of those values depends on the tiered resolution inputs:
   1. **Prefix mechanism (tier 1).** The candidate sequence carries contravariant-improved bound values directly. When a covariant encoder mutates inner values, bound positions retain their old (optimized) values in the prefix. If the bound ranges haven't shifted, GuidedMaterializer uses these directly — no regression.
   2. **Fallback tree mechanism (tier 2).** For bound values that *are* out of range after an inner value change, GuidedMaterializer clamps to the fallback tree's value. When the fallback tree contains contravariant-improved values, clamping lands near the optimum rather than at a random point.
 - If covariant ran first (top-down), *both* mechanisms have worse inputs: the prefix contains unoptimized bound values, and the fallback tree does too. Re-derivation regresses more, and more candidates fail the shortlex guard (wasting materializations).
 
-This is Gauss-Seidel ordering applied to block coordinate descent with one-directional dependencies (inner → bound): process unconstrained blocks (contravariant, bound depths) before constraining blocks (covariant, inner depth).
+This is Gauss-Seidel ordering applied to block coordinate descent with one-directional dependencies (inner → bound): process unconstrained blocks (snip, bound depths) before constraining blocks (train, inner depth).
 
-**The cat-stroking algorithm.** Smooth the fur, then ruffle. The contravariant sweep is the stroking — getting all bound values into their smoothest state. The deletion sweep then ruffles some of the groomed fur: values after a deletion site are structurally misaligned and may fall to tier 2 or tier 3 (see Section 4.3). The covariant sweep ruffles further — changing inner values, disrupting bound ranges. But because the fallback tree and prefix still carry surviving contravariant improvements, re-derivation clamps back toward them. The re-derivation regression is how much fur sticks up after both ruffles.
-
-**The real claim is "contravariant before deletion before covariant," not "contravariant directly feeds covariant."** Deletion inserts noise between the two value-reduction sweeps. The Gauss-Seidel argument survives in weakened form:
+**The real claim is "snip before prune before train," not "snip directly feeds train."** Pruning inserts noise between the two value-reduction sweeps. The Gauss-Seidel argument survives in weakened form:
 - **Values before a deletion site** are fully preserved in the prefix (tier 1) — no degradation.
-- **Values after a deletion site** may degrade, but the fallback tree (containing contravariant-optimized values) provides tier-2 clamping at structurally aligned positions. Without the contravariant sweep, the fallback tree would contain unoptimized values — strictly worse.
-- **The net: contravariant-first is still better than any other ordering**, but the benefit is attenuated by deletion. The more deletions succeed (and the more content follows each deletion site), the more contravariant work is lost. The merge (post-processing step) exists precisely to recover what deletion and covariant re-derivation degraded.
+- **Values after a deletion site** may degrade, but the fallback tree (containing snip-optimized values) provides tier-2 clamping at structurally aligned positions. Without the snip sweep, the fallback tree would contain unoptimized values — strictly worse.
+- **The net: snip-first is still better than any other ordering**, but the benefit is attenuated by pruning. The more deletions succeed (and the more content follows each deletion site), the more snip work is lost. The merge (post-processing step) exists precisely to recover what pruning and training degraded.
 
-If you ruffle first (top-down without pre-stroking), the fur goes everywhere — bound values are re-derived from PRNG before they've been optimized, and re-derivation regression is maximal. Pre-stroking reduces the regression even though deletion partially undoes it.
+Training without prior snipping is like heavy root pruning on an untrained tree — the regrowth (re-derivation) has no optimized scaffold to clamp toward, and the shortlex guard rejects more candidates. Snipping first provides the scaffold; pruning and training disrupt parts of it, but the surviving structure constrains regrowth toward the desired minimal form.
 
-> *Basin hopping.* The V-cycle is structurally equivalent to monotonic basin hopping: the contravariant sweep finds the basin bottom (local minimum within fixed bound ranges), the covariant sweep hops to a new basin (changes inner values, shifting the landscape), and the shortlex guard is a strict acceptance criterion (only downhill). Redistribution is the perturbation-strength increase when monotonic hopping stalls.
+> *Basin hopping.* The cultivation cycle is structurally equivalent to monotonic basin hopping: snipping finds the basin bottom (local minimum within fixed bound ranges), training hops to a new basin (changes inner values, shifting the landscape), and the shortlex guard is a strict acceptance criterion (only downhill). Shaping is the perturbation-strength increase when monotonic hopping stalls.
 
-> *Exploitation–exploration.* The contravariant sweep is pure exploitation (extract all value from the current landscape). The covariant sweep is exploration (change the landscape at the cost of re-derivation regression). Redistribution is reshaping — neither exploiting nor exploring, but trying a different joint configuration within the current landscape. The V-cycle is a structured exploitation–exploration schedule: exploit fully, explore once, exploit the new landscape.
+> *Exploitation–exploration.* Snipping is pure exploitation (extract all value from the current landscape). Training is exploration (change the landscape at the cost of re-derivation regression). Shaping is redistribution — neither exploiting nor exploring, but trying a different joint configuration within the current landscape. The cultivation cycle is a structured exploitation–exploration schedule: exploit fully, explore once, exploit the new landscape.
 
-> *MCTS/UCB.* The scheduler navigates a tree of possible reduction sequences. The contravariant sweep is deepening a promising subtree (exploitation within known structure). The covariant sweep is backing up to the root and trying a different branch (exploration via landscape change). The 2-cell dominance lattice is static UCB pruning — provably dominated encoders are never visited. Within equivalence classes (where dominance gives no ordering), adaptive encoder selection via Thompson Sampling serves as the UCB exploration term (see Section 4.7).
+> *MCTS/UCB.* The scheduler navigates a tree of possible reduction sequences. Snipping is deepening a promising subtree (exploitation within known structure). Training is backing up to the root and trying a different branch (exploration via landscape change). The 2-cell dominance lattice (triage) is static UCB pruning — provably dominated encoders are never visited. Within equivalence classes (where dominance gives no ordering), adaptive encoder selection via Thompson Sampling serves as the UCB exploration term (see Section 4.7).
 
-**Lattice stability implication:** During the contravariant sweep, the dominance lattice is computed once and remains valid — no span deletion or structural change occurs. The 2-cell pruning from paper §15 can safely skip dominated encoders throughout the entire sweep. During the deletion and covariant sweeps, the lattice is invalidated after each success (spans may have changed) and rebuilt before the next encoder is tried. This means lattice pruning is most valuable during the contravariant phase, where it avoids redundant materializations across many depths.
+**Lattice stability implication:** During the snip sweep, the dominance lattice (triage) is computed once and remains valid — no span deletion or structural change occurs. The 2-cell pruning from paper §15 can safely skip dominated encoders throughout the entire sweep. During the prune and train sweeps, the lattice is invalidated after each success (spans may have changed) and rebuilt before the next encoder is tried. This means lattice pruning is most valuable during the snip phase, where it avoids redundant materializations across many depths.
 
 ### 1.6 Local Minima and Termination
 
 The three-category distinction gives a precise characterization of local minima:
 
-**A local minimum is a contravariant fixed point** — a state where `.direct` rejects every candidate from every encoder at every bound depth. All exact, structure-preserving passes have stalled. The bound values are individually minimal within their current ranges, but those ranges are determined by the inner values at depth 0.
+**A local minimum is a snip fixed point** — a state where `.direct` rejects every candidate from every encoder at every bound depth. All exact, structure-preserving passes have stalled. The bound values are individually minimal within their current ranges, but those ranges are determined by the inner values at depth 0.
 
-**Deletion and covariant passes escape the contravariant fixed point.** Deletion removes structure at any depth, potentially unlocking new value-minimization opportunities in the next cycle. The covariant sweep changes inner values (depth 0), shifting the bound ranges themselves — opening new territory for the next contravariant sweep. Re-derivation via `.guided` produces new bound content that may be shorter than the contravariant fixed point.
+**Pruning and training escape the snip fixed point.** Pruning removes structure at any depth, potentially unlocking new value-minimization opportunities in the next cycle. Training changes inner values (depth 0), shifting the bound ranges themselves — opening new territory for the next snip sweep. Re-derivation via `.guided` produces new bound content that may be shorter than the snip fixed point.
 
-**If the covariant sweep also stalls, the pipeline has reached a deletion + covariant fixed point** — escape via redistribution. If redistribution also stalls, the pipeline has reached a global fixed point. This gives a clean termination criterion: the reducer is done when one full V-cycle produces zero accepted candidates across all legs (including redistribution and post-processing merge). No stall counters, no heuristic patience — just "did any morphism fire?"
+**If training also stalls, the pipeline has reached a prune + train fixed point** — escape via shaping (redistribution). If shaping also stalls, the pipeline has reached a global fixed point — the tree is settled. This gives a clean termination criterion: the reducer is done when one full cultivation cycle produces zero accepted candidates across all legs (including shaping and post-processing merge). No stall counters, no heuristic patience — just "did any morphism fire?"
 
-**Redistribution as a second-order escape.** Phase 4 (redistribution) addresses a different kind of stall: cases where inner values are already minimal and the covariant sweep can't improve them, but bound values are "stuck" because they're individually minimal even though their *joint* configuration isn't. Redistribution transfers mass between coordinates — it's `.bounded` (shortlex-guarded), but it can create new attack surfaces for the next contravariant sweep. In terms of the fixed-point hierarchy:
+**Shaping as a second-order escape.** Phase 4 (shaping/redistribution) addresses a different kind of stall: cases where inner values are already minimal and the train sweep cannot improve them, but bound values are "stuck" because they are individually minimal even though their *joint* configuration is not. Shaping transfers mass between coordinates — it is `.bounded` (shortlex-guarded), but it can create new attack surfaces for the next snip sweep. In terms of the fixed-point hierarchy:
 
-1. **Contravariant fixed point** → escape via deletion + covariant sweep (change structure, change inner values, re-derive bounds). Branch tactics run unconditionally at the start of every cycle (Section 4.6), so they don't appear as a separate prerequisite — they're always tried before the hierarchy is evaluated.
-2. **Contravariant + deletion fixed point** → escape via redistribution (transfer mass between coordinates). The covariant sweep may still be making progress — redistribution addresses an orthogonal stall mode (bound-value joint configurations vs. inner-value minima). The deferral cap (Section 3, Phase 4) ensures redistribution fires even when marginal contravariant/deletion progress would suppress the primary trigger.
-3. **All fixed point** → global fixed point, reducer terminates. All legs including redistribution and merge produced zero acceptances.
+1. **Snip fixed point** → escape via pruning + training (change structure, change inner values, re-derive bounds). Branch tactics (top-work/re-head) run unconditionally at the start of every cycle (Section 4.6), so they do not appear as a separate prerequisite — they are always tried before the hierarchy is evaluated.
+2. **Snip + prune fixed point** → escape via shaping (transfer mass between coordinates). The train sweep may still be making progress — shaping addresses an orthogonal stall mode (bound-value joint configurations versus inner-value minima). The deferral cap (Section 3, Phase 4) ensures shaping fires even when marginal snip/prune progress would suppress the primary trigger.
+3. **All fixed point** → the tree is settled, reducer terminates. All legs including shaping and merge produced zero acceptances.
 
-**Branch tactics are part of the first level**, not a separate escape mechanism. They run at the start of every cycle (Section 4.6), so a redistribution success that enables a branch change is caught on the next cycle's branch pass. Branch tactics don't need their own tier in the hierarchy because they're tried unconditionally — the hierarchy describes *conditional* escalation (what runs when the previous level stalls), not the full per-cycle execution order.
+**Branch tactics (top-work/re-head) are part of the first level**, not a separate escape mechanism. They run at the start of every cycle (Section 4.6), so a shaping success that enables a branch change is caught on the next cycle's branch pass. Branch tactics do not need their own tier in the hierarchy because they are tried unconditionally — the hierarchy describes *conditional* escalation (what runs when the previous level stalls), not the full per-cycle execution order.
 
-**Cycling between levels is possible and expected.** Redistribution can unlock contravariant progress (transferred mass creates new minimization opportunities), which can enable covariant progress (inner values freed by the new contravariant state), which can enable further redistribution. This is a feature, not a bug — each round of the cycle explores new territory that was previously unreachable.
+**Cycling between levels is possible and expected.** Shaping can unlock snip progress (transferred mass creates new minimization opportunities), which can enable training progress (inner values freed by the new snip state), which can enable further shaping. This is a feature, not a bug — each round of the cultivation cycle explores new territory that was previously unreachable.
 
 **Termination guarantee (theoretical).** Every accepted candidate is strictly shortlex-smaller than its predecessor. The shortlex order on choice sequences (finite length, bounded entries) is a well-order: any strictly decreasing chain is finite. The cycle above must terminate because each round strictly decreases the sequence. No stall counter or heuristic patience is needed for *correctness* — the reducer converges unconditionally.
 
@@ -467,10 +471,20 @@ enum SequenceDecoder {
     /// Routes to direct if only bound values changed, guided if inner values changed.
     case crossStage(bindIndex: BindSpanIndex, fallbackTree: ChoiceTree?, strictness: Interpreters.Strictness)
 
+    /// ReductionMaterializer exact mode. Produces a fresh tree with current
+    /// `validRange` and all branch alternatives. Inner values are rejected
+    /// if out-of-range; bound values are clamped.
+    case exactFresh
+
+    /// ReductionMaterializer guided mode. Produces a fresh tree with current
+    /// `validRange` and all branch alternatives. Tiered resolution:
+    /// prefix → fallback → PRNG. Cursor suspension at bind sites.
+    case guidedFresh(fallbackTree: ChoiceTree, maximizeBoundRegionIndices: Set<Int>)
+
     var approximation: ApproximationClass {
         switch self {
-        case .direct: .exact
-        case .guided, .crossStage: .bounded
+        case .direct, .exactFresh: .exact
+        case .guided, .crossStage, .guidedFresh: .bounded
         }
     }
 
@@ -559,6 +573,12 @@ Three cases:
 
 - **`.guided`**: Wraps `GuidedMaterializer.materialize()`. Sequence-driven with tiered value resolution. Used whenever the tree must be rebuilt: deletion at any depth (even without binds — the tree's positional mapping is invalidated), and value minimization/reordering at depth 0 with binds (bound content must be re-derived). Nondeterministic. `approximation = .bounded`. The shortlex guard (`reDerivedSequence.shortLexPrecedes(originalSequence)`) is the runtime enforcement — it rejects any re-derivation that regresses past the original.
 
+- **`.exactFresh`**: ``ReductionMaterializer`` exact mode. Produces a fresh ``ChoiceTree`` with current ``validRange`` and all branch alternatives (materialized picks via jumped PRNG, VACTI pattern). Inner values outside the generator's computed range are rejected; bound values are clamped. Unlike `.direct`, which replays against the existing (potentially stale) tree, `.exactFresh` re-runs the generator and produces a tree with current metadata. This eliminates the stale-range workarounds needed by `.direct` (stale-range escape hatches in encoders, ``isExplicitRange`` stripping on promoted branches). `approximation = .exact`.
+
+- **`.guidedFresh`**: ``ReductionMaterializer`` guided mode. Same fresh-tree guarantees as `.exactFresh`, but with tiered resolution (prefix → fallback → PRNG) and cursor suspension at bind sites — the same semantics as `.guided` but producing a fresh tree with all branch alternatives. `approximation = .bounded`. The `maximizeBoundRegionIndices` parameter identifies bind regions where the decoder should maximize (rather than minimize) bound values during regrowth — used by bind-aware redistribution to explore the bound-value landscape.
+
+- **Decoder selection (`useReductionMaterializer` flag).** ``SequenceDecoder.for(_:)`` dispatches to either the fresh decoders (`.exactFresh`, `.guidedFresh`) or the legacy decoders (`.direct`, `.guided`) based on ``DecoderContext.useReductionMaterializer``. The fresh decoders are gated by ``BonsaiReducerConfiguration.useReductionMaterializer`` (default: `true` for both `.fast` and `.slow` presets). With fresh decoders, covariant re-derivation after value changes is not needed — every materialization returns a tree with current ``validRange`` — so the `hasDynamicRanges` flag is not load-bearing.
+
 - **`.crossStage`**: Per-candidate routing for cross-stage tactics (redistribution, tandem). These operate at depth -1 on the whole sequence and may or may not modify inner values — the re-derivation need is a property of the *specific candidate*, not the decoder context. On each `decode` call, the decoder compares the candidate against the original sequence at inner positions (via `BindSpanIndex.regions[*].innerRange`). If only bound values changed: `.direct` path — the strategy's carefully redistributed values are authoritative, and re-derivation would replace them with PRNG noise. If inner values changed: `.guided` path — bound ranges have shifted, re-derivation is needed. `approximation = .bounded` (conservative — some candidates take the exact path, but the decoder can't promise this statically).
 
   **BindIndex staleness after redistribution.** The `.crossStage` case routes using `BindSpanIndex.regions[*].innerRange` to classify positions as inner vs bound. After redistribution changes values, could the `innerRange` indices be stale? No — the inner/bound classification is a *structural* property of the generator's bind sites, not a property of the values at those positions. The k-th bind in the generator always produces inner values at the same sequence positions (determined by the generator's evaluation order) and bound values at subsequent positions. Redistribution changes the *values* at those positions but not the positions themselves (it doesn't insert or delete). The `bindIndex` correctly classifies which positions the encoder intended to modify — the routing's purpose is to detect whether the encoder touched inner positions, not whether ranges are still valid. Range validation is the decoder's job (GuidedMaterializer handles it during materialization).
@@ -567,13 +587,13 @@ Three cases:
 
   **Tiered value resolution** (this is the mechanism that makes the Section 1.5 ordering argument work):
 
-  1. **Tier 1 — candidate prefix.** GuidedMaterializer replays the generator using the candidate sequence as a prefix. At each choice point, the candidate's value is used if it falls within the current valid range. For bound positions that the encoder didn't modify, the candidate still carries the old (potentially contravariant-optimized) values. If the bound ranges haven't shifted, these are used directly — no approximation.
+  1. **Tier 1 — candidate prefix.** GuidedMaterializer replays the generator using the candidate sequence as a prefix. At each choice point, the candidate's value is used if it falls within the current valid range. For bound positions that the encoder didn't modify, the candidate still carries the old (potentially snip-optimized) values. If the bound ranges haven't shifted, these are used directly — no approximation.
 
-  2. **Tier 2 — fallback tree.** When a prefix value is out of the current valid range (e.g., an inner value change shifted the bound range), or when the prefix is exhausted (deletion shortened it), GuidedMaterializer clamps to the fallback tree's value for that position. The fallback tree is the tree from the last accepted state — if the contravariant sweep already optimized bound values, clamping lands near the optimum.
+  2. **Tier 2 — fallback tree.** When a prefix value is out of the current valid range (for example, an inner value change shifted the bound range), or when the prefix is exhausted (pruning shortened it), GuidedMaterializer clamps to the fallback tree's value for that position. The fallback tree is the tree from the last accepted state — if the snip sweep already optimized bound values, clamping lands near the optimum.
 
   3. **Tier 3 — PRNG.** When neither the prefix nor the fallback tree has a value (new positions created by re-derivation), a seeded PRNG provides the value. The seed is derived from the candidate's zobrist hash for determinism.
 
-  **Why contravariant-first minimizes re-derivation regression:** After the contravariant sweep, the candidate prefix (tier 1) carries optimized bound values, and the fallback tree (tier 2) contains the same optimized values. Both tiers feed `.guided` with good starting points. If the covariant sweep ran first, both tiers would contain unoptimized values — tier-2 clamping would land at arbitrary points, and tier-3 PRNG would be reached more often. Better tier-1 and tier-2 inputs → smaller regression → fewer candidates rejected by the shortlex guard → fewer wasted materializations.
+  **Why snip-first minimizes re-derivation regression:** After the snip sweep, the candidate prefix (tier 1) carries optimized bound values, and the fallback tree (tier 2) contains the same optimized values. Both tiers feed `.guided` with good starting points. If the train sweep ran first, both tiers would contain unoptimized values — tier-2 clamping would land at arbitrary points, and tier-3 PRNG would be reached more often. Better tier-1 and tier-2 inputs → smaller regression → fewer candidates rejected by the shortlex guard → fewer wasted materializations.
 
 ### 2.7 ReductionPhase
 
@@ -654,17 +674,17 @@ Single encoder, no 2-cell structure needed.
 
 **Decoder:** `.crossStage` via `SequenceDecoder.for(_:)` (depth -1, binds present). Per-candidate routing: if only bound values changed, the strategy's redistributed values are authoritative (no re-derivation — would replace carefully chosen values with PRNG noise). If inner values changed, re-derives via `GuidedMaterializer` with fallback tree clamping. Without binds, `SequenceDecoder.for(_:)` returns `.direct` (no cross-stage concerns).
 
-**Trigger criterion.** The scheduler runs redistribution when the *contravariant and deletion sweeps* made zero progress in the current cycle, **or** when a deferral cap has been reached.
+**Trigger criterion.** The scheduler runs shaping when the *snip and prune sweeps* made zero progress in the current cycle, **or** when a deferral cap has been reached.
 
-The primary trigger checks `contravariantAccepted == 0 && deletionAccepted == 0`. If the covariant sweep also stalled, redistribution is the only escape before the global fixed point. If the covariant sweep made progress, redistribution still runs — the two address orthogonal stall modes (inner-value minima vs. bound-value joint configurations). The shortlex guard prevents redistribution from introducing regressions regardless.
+The primary trigger checks `contravariantAccepted == 0 && deletionAccepted == 0`. If training also stalled, shaping is the only escape before the tree settles. If training made progress, shaping still runs — the two address orthogonal stall modes (inner-value minima versus bound-value joint configurations). The shortlex guard prevents shaping from introducing regressions regardless.
 
-**Deferral cap: redistribution starvation guard.** A subtle failure mode: marginal covariant progress (reducing one inner value by 1 per cycle) shifts bound ranges slightly, enabling marginal contravariant progress (reducing one bound value by 1). This keeps `contravariantAccepted > 0`, preventing the primary trigger from firing — even though redistribution could unlock a much larger bound-value improvement by transferring mass between coordinates. The covariant and contravariant sweeps are making progress, but they're grinding linearly through a landscape that redistribution could reshape in one step.
+**Deferral cap: shaping starvation guard.** A subtle failure mode: marginal training progress (reducing one inner value by 1 per cycle) shifts bound ranges slightly, enabling marginal snip progress (reducing one bound value by 1). This keeps `contravariantAccepted > 0`, preventing the primary trigger from firing — even though shaping could unlock a much larger bound-value improvement by transferring mass between coordinates. The train and snip sweeps are making progress, but they are grinding linearly through a landscape that shaping could reshape in one step.
 
-Fix: the scheduler tracks `cyclesSinceRedistribution` — incremented each cycle where redistribution was skipped, reset to 0 when redistribution runs. When `cyclesSinceRedistribution >= redistributionDeferralCap` (default: 3), redistribution fires regardless of contravariant/deletion progress. If redistribution finds an improvement, the deferral counter resets and normal triggering resumes. If redistribution finds nothing, the counter resets anyway — the cap is a periodic probe, not a persistent mode change. The cost of a fruitless redistribution probe is bounded by Phase 4's budget allocation (10%), which flows forward to subsequent legs if unspent (Section 4.5).
+Fix: the scheduler tracks `cyclesSinceRedistribution` — incremented each cycle where shaping was skipped, reset to 0 when shaping runs. When `cyclesSinceRedistribution >= redistributionDeferralCap` (default: 3), shaping fires regardless of snip/prune progress. If shaping finds an improvement, the deferral counter resets and normal triggering resumes. If shaping finds nothing, the counter resets anyway — the cap is a periodic probe, not a persistent mode change. The cost of a fruitless shaping probe is bounded by Phase 4's budget allocation (10%), which flows forward to subsequent legs if unspent (Section 4.5).
 
 Why 3 cycles? Binary search halves the search space per cycle, so 3 cycles of binary-search-driven progress represent substantial exploitation. If the progress is slower than binary search (i.e., the sweeps are grinding), 3 cycles detects this before the budget cost becomes significant. The value is not critical — 2–5 all work. Empirical tuning may adjust it.
 
-**Why not run redistribution unconditionally?** Redistribution's `.bounded` approximation class means each application risks tier-2/3 degradation at bound positions (for candidates that modify inner values). Running it when the contravariant sweep is still making progress wastes budget: the contravariant sweep's `.exact` morphisms are strictly cheaper per improvement. Running redistribution after contravariant stalls is the Pareto-efficient trigger — exact morphisms have been exhausted, so the `.bounded` cost is unavoidable.
+**Why not run shaping unconditionally?** Shaping's `.bounded` approximation class means each application risks tier-2/3 degradation at bound positions (for candidates that modify inner values). Running it when the snip sweep is still making progress wastes budget: the snip sweep's `.exact` morphisms are strictly cheaper per improvement. Running shaping after snipping stalls is the Pareto-efficient trigger — exact morphisms have been exhausted, so the `.bounded` cost is unavoidable.
 
 ### Phase 5: Exploration (Approximate, Future)
 
@@ -694,7 +714,7 @@ The following features are designed but not yet implemented. All three are *corr
 
 ### Post-Processing (Natural Transformation)
 
-After the covariant sweep, before the next cycle. The merge recovers pre-covariant bound values that the covariant sweep's re-derivation degraded. ("Pre-covariant" = post-deletion state, which includes contravariant optimizations minus any degradation from the deletion sweep.)
+After the train sweep, before the next cycle. The merge recovers pre-train bound values that training's re-derivation degraded. ("Pre-train" = post-prune state, which includes snip optimizations minus any degradation from the prune sweep.)
 
 **Alignment model.** The pre-covariant sequence `S_pre` and post-covariant sequence `S_post` may have different structures — re-derivation from changed inner values can produce different numbers of bind regions, different region sizes, and different absolute indices. Alignment uses **bind region ordinals**, not absolute indices: the k-th `bind` operation in the generator produces the k-th `BindRegion` in both sequences (GuidedMaterializer processes binds in generator order). Within matched regions, bound values align by relative offset within the bound range.
 
@@ -735,7 +755,7 @@ At most one `GuidedMaterializer` call per cycle, and only when the pre-checks in
 
 ## 4. The Scheduler
 
-### 4.1 Cycle Structure: The Multigrid V-Cycle
+### 4.1 Cycle Structure: The Cultivation Cycle
 
 Each cycle has five legs (one pre-cycle) plus post-processing:
 
@@ -760,7 +780,7 @@ for each cycle:
         }
     }
 
-    // ── Pre-cycle: Branch tactics ──
+    // ── Pre-cycle: Top-work / re-head ──
     // Promote/pivot. May change tree shape at any depth.
     for branchEncoder in branchEncoders:
         if let result = tryBranch(branchEncoder, sequence, tree):
@@ -778,7 +798,7 @@ for each cycle:
     // Note: 1 ... 0 is a fatal error in Swift. Guard the range.
     var dirtyDepths: Set<Int> = maxBindDepth > 0 ? Set(1 ... maxBindDepth) : []
 
-    // ── Leg 1: Contravariant sweep (fine → coarse) ──
+    // ── Leg 1: Snip — contravariant sweep (fine → coarse) ──
     // Value minimization + reordering ONLY. Structure-preserving, exact.
     // Depth-major: all phases at depth d before moving to d−1.
     var rejectCache = ReducerCache()  // fresh per leg
@@ -809,7 +829,7 @@ for each cycle:
             depthProgress = runReordering(lattice, siblingTargets, decoder, ...) || depthProgress
         }
 
-    // ── Leg 2: Deletion sweep (all depths, coarse → fine) ──
+    // ── Leg 2: Prune — deletion sweep (all depths, coarse → fine) ──
     // Structure-destroying at ALL depths. GuidedMaterializer.
     // Direction 0→max: see Section 4.3 for justification.
     rejectCache = ReducerCache()  // fresh: different decoder than Leg 1
@@ -823,9 +843,9 @@ for each cycle:
             let decoder = SequenceDecoder.for( context)  // .relaxed → Guided
             // ... encode, decode, accept(result, structureChanged: true)
 
-    // ── Leg 3: Covariant sweep (depth 0) ──
+    // ── Leg 3: Train — covariant sweep (depth 0) ──
     // Value minimization + reordering at the inner level.
-    // Speculative (for bind generators), can escape local minima.
+    // Bounded (for bind generators), can escape local minima.
     rejectCache = ReducerCache()  // fresh: different decoder than Legs 1–2
     // Snapshots for post-processing merge.
     // The merge aligns pre- and post-covariant bind regions by ordinal,
@@ -910,12 +930,12 @@ for each cycle:
         // configuration stall that redistribution targets. The deferral
         // cap fires correctly after 3 such ping-pong cycles.
 
-    // ── Cross-cutting: redistribution ──
-    // Primary trigger: contravariant + deletion stalled (zero acceptances).
-    // Deferral cap: even if contravariant/deletion made progress, fire
-    // redistribution after `redistributionDeferralCap` consecutive cycles
-    // of deferral (default 3). Prevents marginal covariant/contravariant
-    // progress from starving redistribution indefinitely.
+    // ── Cross-cutting: Shape — redistribution ──
+    // Primary trigger: snip + prune stalled (zero acceptances).
+    // Deferral cap: even if snip/prune made progress, fire
+    // shaping after `redistributionDeferralCap` consecutive cycles
+    // of deferral (default 3). Prevents marginal train/snip
+    // progress from starving shaping indefinitely.
     let redistributionTriggered =
         (contravariantAccepted == 0 && deletionAccepted == 0)
         || cyclesSinceRedistribution >= redistributionDeferralCap
@@ -937,7 +957,7 @@ for each cycle:
     // Stall logic, termination
 ```
 
-**Key difference from the current KleisliReducer:** The current implementation runs all phases at all depths in a single bottom-up sweep, breaking on first success. The V-cycle separates three structurally different operations: the contravariant sweep (value minimization at depths > 0, exact, lattice-stable), the deletion sweep (structure-destroying at all depths, GuidedMaterializer, lattice rebuilt), and the covariant sweep (depth 0, speculative, lattice-rebuilding). This lets the lattice be computed once for the contravariant leg, and makes subsequent legs' re-derivation benefit from the contravariant improvements.
+**Key difference from the legacy reducer:** The legacy implementation runs all phases at all depths in a single bottom-up sweep, breaking on first success. The cultivation cycle separates three structurally different operations: snip (value minimization at depths > 0, exact, lattice-stable), prune (structure-destroying at all depths, GuidedMaterializer, lattice rebuilt), and train (depth 0, bounded, lattice-rebuilding). This lets the lattice be computed once for the snip leg, and makes subsequent legs' re-derivation benefit from the snip improvements.
 
 **Reject cache scoping.** The reject cache is **cleared at each leg boundary**. Within a leg, all encoders share the same decoder (same hom-set), so a rejection is valid for every encoder in that leg — the same candidate against the same decoder will produce the same result. Across legs, the decoder changes: a candidate rejected by `.direct` (tree says out-of-range at the existing structure) could succeed under `.guided` (rebuilds the tree from scratch, finds different valid ranges). Sharing the cache across legs would silently suppress valid candidates. The cost of clearing is negligible — different legs generate structurally different candidates (same-length for value minimization, shorter for deletion, re-derived for covariant), so cross-leg cache hits are rare.
 
@@ -968,13 +988,13 @@ The `DecoderContext` is reconstructed per encoder invocation (not per leg or per
 
 Both functions are O(n) scans over the sequence with a bind-depth lookup per span. The bind-depth lookup is O(log r) where r is the number of bind regions (binary search over sorted region bounds).
 
-### 4.2 Contravariant Sweep Details
+### 4.2 Snip (Contravariant Sweep) Details
 
-The contravariant sweep handles value minimization and reordering at bound depths with exact guarantees:
+The snip sweep handles value minimization and reordering at bound depths with exact guarantees:
 
-- **Value minimization and reordering only.** Deletion is excluded — it invalidates span structure even at depth > 0 (see Section 1.4). This is what makes the lattice stable.
+- **Value minimization and reordering only.** Pruning is excluded — it invalidates span structure even at depth > 0 (see Section 1.4). This is what makes the lattice stable.
 
-- **Lattice computed once** at sweep start and reused across all depths. Contravariant passes modify values within existing spans without changing span boundaries, so the lattice edges remain valid. 2-cell pruning is effective here: if `ZeroValueEncoder` succeeds at depth 2, `BinarySearchToZeroEncoder` can be skipped at depth 2 (dominated). This pruning carries across the entire sweep.
+- **Lattice computed once** at sweep start and reused across all depths. Snip passes modify values within existing spans without changing span boundaries, so the lattice edges remain valid. 2-cell pruning is effective here: if `ZeroValueEncoder` succeeds at depth 2, `BinarySearchToZeroEncoder` can be skipped at depth 2 (dominated). This pruning carries across the entire sweep.
 
 - **Decoder: `.direct`** — uses `Interpreters.materialize()` with the fixed tree. No GuidedMaterializer, no re-derivation. Grade: `(.exact, w)`.
 
@@ -999,7 +1019,7 @@ The contravariant sweep handles value minimization and reordering at bound depth
 
   **Interleaving granularity.** The fixpoint alternates at the *phase* level: all value-min encoders run to completion (including adaptive encoders like `BinarySearchToZeroEncoder`, which run their full probe loop — O(n × log V) across all targets), then all reordering encoders run to completion. There is no finer interleaving — the scheduler does not interrupt an adaptive encoder mid-convergence. Per-probe interleaving (one binary search step, then try reordering) would require breaking the `start()`/`nextProbe()` protocol, and is wasteful: reordering is only useful after multiple values have settled, not after each individual step. Per-target interleaving (converge one value, try reordering, converge next value) is expensive for the same reason. Binary search converges fast (O(log V) per target), so running to full convergence before reordering doesn't leave meaningful opportunities on the table — the fixpoint's second iteration catches anything reordering opens up.
 
-- **No break-on-success:** Unlike the current `break depthLoop`, a success at depth 3 does not restart the cycle. The contravariant sweep is a thorough "smoothing" pass — it extracts all available improvements from all bound depths before handing control to subsequent legs.
+- **No break-on-success:** Unlike the current `break depthLoop`, a success at depth 3 does not restart the cycle. The snip sweep is a thorough pass — it extracts all available improvements from all bound depths before handing control to subsequent legs.
 
   **Tree update after acceptance.** When a depth-2 value is reduced, `accept()` updates `sequence` and `tree`. But does the tree "know" about the tighter range at depth 3? The answer is that the tree doesn't store ranges — it stores branching structure and element metadata. `Interpreters.materialize()` (the `.direct` path) replays the full generator at materialization time, computing ranges dynamically from the current sequence values. So after a depth-2 acceptance, subsequent depth-3 encoders produce candidates with depth-3 values based on the old (pre-depth-2-change) ranges. When the scheduler decodes those candidates, `Interpreters.materialize()` replays the generator with the *updated* depth-2 values, computes the *new* (tighter) depth-3 range, and rejects any depth-3 value that's now out of range. This is safe (no invalid candidates accepted) but wasteful — the encoder generates candidates against stale ranges, and the decoder rejects them. The cost is bounded: binary search converges in O(log V) probes regardless, and the `lastAccepted: false` feedback steers the adaptive encoder away from the now-invalid region. The max→1 direction minimizes this waste by processing deeper depths first (before shallower changes tighten their ranges), at the cost of slower cross-depth convergence (Section 4.2, convergence bound).
 
@@ -1009,9 +1029,9 @@ The contravariant sweep handles value minimization and reordering at bound depth
 
   For the common case (single bind chain), dirty-depth tracking degenerates to "any depth-0 change dirties all bound depths." The optimization buys nothing there. For generators with multiple independent binds, it avoids re-sweeping unaffected chains. The scheduler should use the per-region information when available but not assume it provides fine-grained depth skipping in general.
 
-### 4.3 Deletion Sweep Details
+### 4.3 Prune (Deletion Sweep) Details
 
-The deletion sweep runs after the contravariant sweep, at all depths (0 → max):
+The prune sweep runs after snipping, at all depths (0 → max):
 
 - **Direction 0→max: most aggressive first.** Depth-0 deletions can eliminate entire bind regions — all spans at depths 1+ within that region cease to exist. Processing 0→max means we don't waste materializations trying to delete individual spans within a region that a depth-0 deletion will remove wholesale. This is the same principle as the encoder ordering within the deletion phase (container spans before free-standing values) — applied to depth ordering. The Gauss-Seidel dependency argument from the contravariant sweep does not apply here: GuidedMaterializer re-derives from scratch regardless of depth, so there's no constraint-propagation benefit to either direction. The alternative (max→0) would try small, low-impact deletions first. A depth-3 deletion that removes a small span preserves more contravariant work, but its shortlex impact is small. The 0→max ordering prioritizes shortlex impact — shorter sequences from aggressive deletions outweigh the value degradation that the next contravariant sweep will repair. Neither direction is categorically optimal; 0→max is the waste-avoidance heuristic.
 
@@ -1023,21 +1043,21 @@ The deletion sweep runs after the contravariant sweep, at all depths (0 → max)
 
 - **Separate from the contravariant sweep** because deletion at depth > 0 is `.bounded` — re-derivation via GuidedMaterializer can produce different content for the gap left by the deleted span. Grouping it with the exact contravariant sweep would violate the lattice stability guarantee.
 
-- **Deletion can degrade contravariant-optimized bound values.** When deletion at depth d removes a span, GuidedMaterializer re-derives the sequence using the shortened candidate as a prefix. Values *before* the deletion site are intact in the prefix (tier 1) — fully preserved. Values *after* the deletion site are structurally misaligned: they were optimized for their original generator request points, but are now consumed at shifted positions. If out of range for the new requests, they fall to tier 2 (fallback tree) — but the fallback tree also has the pre-deletion structure, so it may not align either, dropping to tier 3 (PRNG). The damage is proportional to how much content follows the deletion site. This is the inherent cost of structure-destroying operations — the payoff is a shorter sequence (shortlex improvement from deletion outweighs value degradation). The next cycle's contravariant sweep re-optimizes the post-deletion state.
+- **Pruning can degrade snip-optimized bound values.** When pruning at depth d removes a span, GuidedMaterializer re-derives the sequence using the shortened candidate as a prefix. Values *before* the deletion site are intact in the prefix (tier 1) — fully preserved. Values *after* the deletion site are structurally misaligned: they were optimized for their original generator request points, but are now consumed at shifted positions. If out of range for the new requests, they fall to tier 2 (fallback tree) — but the fallback tree also has the pre-deletion structure, so it may not align either, dropping to tier 3 (PRNG). The damage is proportional to how much content follows the deletion site. This is the inherent cost of structure-destroying operations — the payoff is a shorter sequence (shortlex improvement from pruning outweighs value degradation). The next cycle's snip sweep re-optimizes the post-prune state.
 
-- **Contravariant-before-deletion ordering is still correct.** The fallback tree containing contravariant-optimized values gives tier 2 the best possible clamping targets for structurally aligned positions (before the deletion site, and at positions where the shift happens to preserve structural correspondence). Running deletion first would mean the fallback tree has un-optimized values — strictly worse for the positions where tier 2 does apply.
+- **Snip-before-prune ordering is still correct.** The fallback tree containing snip-optimized values gives tier 2 the best possible clamping targets for structurally aligned positions (before the deletion site, and at positions where the shift happens to preserve structural correspondence). Pruning first would mean the fallback tree has un-optimized values — strictly worse for the positions where tier 2 does apply.
 
-### 4.4 Covariant Sweep Details
+### 4.4 Train (Covariant Sweep) Details
 
-The covariant sweep runs at depth 0 only, after the deletion sweep:
+The train sweep runs at depth 0 only, after pruning:
 
-- **Value minimization and reordering only** (deletion at depth 0 is handled by the deletion sweep).
+- **Value minimization and reordering only** (deletion at depth 0 is handled by the prune sweep).
 
-- **Decoder:** With binds present: `.guided` with fallback tree containing the contravariant-improved bound values. Re-derivation uses tier-1 prefix values and tier-2 clamping to preserve those improvements where the new bound ranges permit. Grade: `(.bounded, w)`. Without binds: `.direct` — no re-derivation needed, no bound ranges to shift. Grade: `(.exact, w)`. `SequenceDecoder.for(_:)` handles the routing based on `DecoderContext(.specific(0), bindIndex, fallbackTree, .normal)`.
+- **Decoder:** With binds present: `.guided` with fallback tree containing the snip-improved bound values. Re-derivation uses tier-1 prefix values and tier-2 clamping to preserve those improvements where the new bound ranges permit. Grade: `(.bounded, w)`. Without binds: `.direct` — no re-derivation needed, no bound ranges to shift. Grade: `(.exact, w)`. `SequenceDecoder.for(_:)` handles the routing based on `DecoderContext(.specific(0), bindIndex, fallbackTree, .normal)`.
 
-- **On success:** Mark affected bind chains dirty. `BindSpanIndex.bindRegionForInnerIndex` identifies which bind region the mutated inner value feeds. All depths within that region's chain are dirty (bound ranges may have shifted at every nesting level). For generators with multiple independent bind chains, only the affected chain is dirtied — unaffected chains are skipped on the next contravariant sweep. For the common case (single bind chain), all bound depths are dirty and the next contravariant sweep is a full re-sweep. For deletion successes in the deletion sweep, all depths are dirty (span positions are invalidated globally).
+- **On success:** Mark affected bind chains dirty. `BindSpanIndex.bindRegionForInnerIndex` identifies which bind region the mutated inner value feeds. All depths within that region's chain are dirty (bound ranges may have shifted at every nesting level). For generators with multiple independent bind chains, only the affected chain is dirtied — unaffected chains are skipped on the next snip sweep. For the common case (single bind chain), all bound depths are dirty and the next snip sweep is a full re-sweep. For prune successes in the prune sweep, all depths are dirty (span positions are invalidated globally).
 
-- **Can escape local minima:** If the contravariant sweep converged (all bound values minimized within their ranges), the covariant sweep can change those ranges by reducing inner values. This opens new territory for the next contravariant sweep.
+- **Can escape local minima:** If the snip sweep converged (all bound values minimized within their ranges), training can change those ranges by reducing inner values. This opens new territory for the next snip sweep.
 
 ### 4.5 Resource Budget
 
@@ -1066,17 +1086,17 @@ enum ReductionLeg: CaseIterable {
 ```
 
 Default leg weights:
-- Branch tactics: 5%
-- Contravariant sweep: 30%
-- Deletion sweep: 30%
-- Covariant sweep: 25%
-- Redistribution: 10%
+- Top-work / re-head (branch tactics): 5%
+- Snip (contravariant sweep): 30%
+- Prune (deletion sweep): 30%
+- Train (covariant sweep): 25%
+- Shape (redistribution): 10%
 
 **No within-leg phase splits.** The contravariant and covariant legs both run a fixpoint loop that alternates value minimization and reordering. Value-min and reordering draw from a single undivided leg budget — no per-phase allocation. Reordering is inherently cheap (one pass over sibling groups, O(n) candidates) and self-limits by exhaustion long before it could starve value-min. The fixpoint loop's natural termination (neither phase makes progress) is the scheduling mechanism; per-phase weights would conflict with the alternating structure and create the allocation problem described below.
 
 > *Why not per-phase splits within the fixpoint?* A one-shot 85/15 split assumes value-min runs once, then reordering runs once. The fixpoint loop interleaves them: value-min → reorder → value-min → .... If value-min exhausts its 85% allocation on iteration 1, iteration 2's value-min gets zero budget — even though reordering just created new opportunities. Re-allocating the remaining leg budget at each iteration would work but adds complexity for no benefit: the leg budget already caps total spending, and reordering's cheapness means it can't starve value-min in practice.
 
-The covariant sweep gets its own 25%, independent of how many depths the contravariant sweep processes. A 4-depth contravariant sweep consumes its 30% across 4 depths; the covariant sweep's 25% is reserved for the single depth-0 pass that escapes fixed points. Without per-leg budgets, the covariant sweep would starve whenever `maxBindDepth` is large.
+The train sweep gets its own 25%, independent of how many depths the snip sweep processes. A 4-depth snip sweep consumes its 30% across four depths; the train sweep's 25% is reserved for the single depth-0 pass that escapes fixed points. Without per-leg budgets, the train sweep would starve whenever `maxBindDepth` is large.
 
 **Leg weights are fixed across cycles — no cross-cycle adaptation.** The weights are structurally motivated: the covariant sweep gets 25% because it operates at a single depth while the contravariant sweep distributes its 30% across many. This rationale doesn't change between cycles, so adapting weights would undermine the starvation guarantee that justified the allocation.
 
@@ -1207,51 +1227,16 @@ If profiling later shows that single-candidate materialization is the bottleneck
 
 ## 5. Migration Path
 
-### Step 1: Core Types (No behavioral change)
+### Steps 1–6: Complete
 
-Add `ReductionGrade`, `TargetSet`, `ReductionPhase`, `DecoderContext`.
+Steps 1 through 6 have been implemented:
 
-**Files:** New file `Sources/ExhaustCore/Interpreters/Reduction/ReductionGrade.swift`.
-
-### Step 2: Decoder Extraction
-
-Extract the two materialization pipelines from `TacticEvaluation` and `TacticReDerivation` into the `SequenceDecoder` enum cases (`.direct`, `.guided`, `.crossStage`).
-
-**Files:**
-- New `Sources/ExhaustCore/Interpreters/Reduction/SequenceDecoder.swift`
-- The `SequenceDecoder.for(_:)` static method lives in the `SequenceDecoder` protocol file
-
-`TacticEvaluation` and `TacticReDerivation` remain temporarily for backward compatibility with the existing KleisliReducer. Removed in Step 7 once the new scheduler is verified.
-
-### Step 3: Encoder Extraction
-
-For each existing tactic, extract the encoding logic into a `BatchEncoder` or `AdaptiveEncoder` conformance. The existing tactic's `apply()` becomes: call `encode()` / the `start()`+`nextProbe()` loop, then call the shared decoder.
-
-Start with the simplest: `ZeroValueEncoder`, `DeleteContainerSpansEncoder`. Verify that the decomposed version produces identical results on the existing test suite.
-
-**Files:**
-- New `Sources/ExhaustCore/Interpreters/Reduction/Encoders/` directory
-- One file per encoder (mirrors existing `Tactics/` structure)
-
-### Step 4: The Scheduler
-
-Build the new `ReductionScheduler` that orchestrates encoders + decoders + grades with Gauss-Seidel depth ordering.
-
-**Files:**
-- New `Sources/ExhaustCore/Interpreters/Reduction/ReductionScheduler.swift`
-- Modify `KleisliReducer.swift` to delegate to the scheduler
-
-### Step 5: Grade-Based Scheduling
-
-Add resource tracking and per-leg budget allocation. Measure against the existing shrinking challenge benchmarks.
-
-**Files:** Modify `ReductionScheduler.swift`.
-
-### Step 6: Approximate Passes
-
-Enable redistribution and tandem reduction as `.bounded` passes. The shortlex guard is the runtime enforcement for all `.bounded` morphisms.
-
-**Files:** New `CrossStageRedistributeEncoder`, `TandemReductionEncoder`.
+1. **Core types** — `ReductionGrade`, `TargetSet`, `ReductionPhase`, `DecoderContext` added.
+2. **Decoder extraction** — `SequenceDecoder` enum with `.direct`, `.guided`, `.crossStage`, `.exactFresh`, `.guidedFresh` cases. `SequenceDecoder.for(_:)` dispatches based on `DecoderContext`.
+3. **Encoder extraction** — All tactics extracted to `BatchEncoder` / `AdaptiveEncoder` conformances in `Sources/ExhaustCore/Interpreters/Reduction/Encoders/`.
+4. **Scheduler** — `ReductionScheduler` orchestrates the cultivation cycle. `BonsaiReducer.swift` delegates to it.
+5. **Budget allocation** — Per-leg budgets with unused-budget forwarding via `CycleBudget` and `LegBudget`.
+6. **Approximate passes** — `CrossStageRedistributeEncoder`, `TandemReductionEncoder`, `BindAwareRedistributeEncoder` running as `.bounded` passes. `ReductionMaterializer` provides fresh-tree decoders (`.exactFresh`, `.guidedFresh`) that eliminate stale-range workarounds.
 
 ### Step 7: Legacy Removal
 
@@ -1260,7 +1245,6 @@ Once the new scheduler passes the full test suite and shrinking challenge benchm
 - Delete `TacticEvaluation` and `TacticReDerivation` (replaced by `SequenceDecoder` conformances)
 - Delete the four tactic protocols (`ShrinkTactic`, `BranchShrinkTactic`, `SiblingGroupShrinkTactic`, `CrossStageShrinkTactic`) and all conformances in `Tactics/`
 - Delete `ReducerStrategies` method implementations that have been extracted into encoders
-- Remove the old tactic-dispatch logic from `KleisliReducer` (now fully delegating to `ReductionScheduler`)
 - Delete `EvaluationCounter` (the scheduler tracks materializations directly via the grade)
 
 **Gate:** All shrinking challenge benchmarks produce equal or better results (same or smaller final counterexample, same or fewer materializations). No test assertion changes.
@@ -1401,3 +1385,5 @@ Each site should carry a brief comment explaining the choice: `// while-loop: av
 ### 8.3 Documentation
 
 All reducer code is internal to ExhaustCore. Follow `DOCUMENTATION_STYLE.md` with the internal API conventions: technical terminology (ChoiceTree, shortlex, Kleisli, dominance lattice) is expected without explanation. Summary lines on all types and non-trivial methods. `// MARK: -` with plain `//` for implementation notes (algorithm sketches, bit layouts, design rationale). No `///` on trivial private helpers under three lines called from a single site.
+
+Use bonsai vocabulary (snip, prune, train, shape, top-work, re-head, triage, regrowth, settled) as the leading term in doc comments, followed by the technical definition. See [bonsai-naming-analysis.md](bonsai-naming-analysis.md) for the vocabulary table and the supporting-vocabulary section for the full correspondence.
