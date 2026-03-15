@@ -67,6 +67,8 @@ public extension Interpreters {
         config: BonsaiReducerConfiguration,
         property: (Output) -> Bool
     ) throws -> (ChoiceSequence, Output)? {
-        try ReductionScheduler.run(gen: gen, initialTree: tree, config: config, property: property)
+        try withoutActuallyEscaping(property) { escapingProperty in
+            try ReductionScheduler.run(gen: gen, initialTree: tree, config: config, property: escapingProperty)
+        }
     }
 }
