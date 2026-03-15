@@ -20,7 +20,7 @@ struct SCABenchmark {
             _ = #exhaust(
                 BuggyCounterSpec.self,
                 commandLimit: length,
-                .suppressIssueReporting,
+                .suppressIssueReporting
             )
             times.append(ContinuousClock.now - start)
         }

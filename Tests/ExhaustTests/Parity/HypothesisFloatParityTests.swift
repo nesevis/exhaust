@@ -83,11 +83,11 @@ private enum HypothesisFloatParityHelpers {
         _ gen: ReflectiveGenerator<Output>,
         startingAt value: Output,
         config: Interpreters.TCRConfiguration = .fast,
-        property: (Output) -> Bool,
+        property: (Output) -> Bool
     ) throws -> Output {
         let tree = try #require(try Interpreters.reflect(gen, with: value))
         let (_, output) = try #require(
-            try Interpreters.reduce(gen: gen, tree: tree, config: config, property: property),
+            try Interpreters.reduce(gen: gen, tree: tree, config: config, property: property)
         )
         return output
     }
@@ -95,7 +95,7 @@ private enum HypothesisFloatParityHelpers {
     static func minimalDouble(
         from start: Double,
         in range: ClosedRange<Double>? = nil,
-        where condition: (Double) -> Bool,
+        where condition: (Double) -> Bool
     ) throws -> Double {
         let gen: ReflectiveGenerator<Double> = if let range {
             #gen(.double(in: range))
@@ -111,7 +111,7 @@ private enum HypothesisFloatParityHelpers {
     static func sample<Output>(
         _ gen: ReflectiveGenerator<Output>,
         seed: UInt64 = 42,
-        count: Int = 256,
+        count: Int = 256
     ) throws -> [Output] {
         var iter = ValueInterpreter(gen, seed: seed, maxRuns: UInt64(count))
         return try iter.prefix(count)
@@ -126,7 +126,7 @@ struct HypothesisFloatShrinkingParityTests {
         // into a dedicated single-goal test using an explicit starting value.
         let output = try HypothesisFloatParityHelpers.minimalDouble(
             from: 3.14159,
-            where: { $0 > 1 },
+            where: { $0 > 1 }
         )
         #expect(output == 2.0)
     }
@@ -137,7 +137,7 @@ struct HypothesisFloatShrinkingParityTests {
         // into a dedicated single-goal test using an explicit starting value.
         let output = try HypothesisFloatParityHelpers.minimalDouble(
             from: 3.14159,
-            where: { $0 > 0 },
+            where: { $0 > 0 }
         )
         #expect(output == 1.0)
     }
@@ -153,7 +153,7 @@ struct HypothesisFloatShrinkingParityTests {
 
             let output = try HypothesisFloatParityHelpers.reduce(
                 gen,
-                startingAt: start,
+                startingAt: start
             ) { value in
                 value.count != n || !value.contains(where: { $0 != 0.0 })
             }
@@ -174,7 +174,7 @@ struct HypothesisFloatShrinkingParityTests {
             let output = try HypothesisFloatParityHelpers.minimalDouble(
                 from: 100.125,
                 in: minValue ... 1000.0,
-                where: { $0 >= minValue },
+                where: { $0 >= minValue }
             )
             #expect(output == ceil(minValue))
         }
@@ -194,7 +194,7 @@ struct HypothesisFloatShrinkingParityTests {
 
             let output = try HypothesisFloatParityHelpers.reduce(
                 gen,
-                startingAt: lower + 0.875,
+                startingAt: lower + 0.875
             ) { _ in
                 false
             }
@@ -208,7 +208,7 @@ struct HypothesisFloatShrinkingParityTests {
         // Direct port of `test_shrink_to_integer_upper_bound`.
         let output = try HypothesisFloatParityHelpers.minimalDouble(
             from: 1.1,
-            where: { $0 > 1 && $0 <= 2 },
+            where: { $0 > 1 && $0 <= 2 }
         )
         #expect(output == 2.0)
     }
@@ -218,7 +218,7 @@ struct HypothesisFloatShrinkingParityTests {
         // Direct port of `test_shrink_up_to_one`.
         let output = try HypothesisFloatParityHelpers.minimalDouble(
             from: 0.5,
-            where: { $0 >= 0.5 && $0 <= 1.5 },
+            where: { $0 >= 0.5 && $0 <= 1.5 }
         )
         #expect(output == 1.0)
     }
@@ -228,7 +228,7 @@ struct HypothesisFloatShrinkingParityTests {
         // Direct port of `test_shrink_down_to_half`.
         let output = try HypothesisFloatParityHelpers.minimalDouble(
             from: 0.75,
-            where: { $0 > 0 && $0 < 1 },
+            where: { $0 > 0 && $0 < 1 }
         )
         #expect(output == 0.5)
     }
@@ -238,7 +238,7 @@ struct HypothesisFloatShrinkingParityTests {
         // Direct port of `test_shrink_fractional_part`.
         let output = try HypothesisFloatParityHelpers.minimalDouble(
             from: 2.5,
-            where: { $0.truncatingRemainder(dividingBy: 1.0) == 0.5 },
+            where: { $0.truncatingRemainder(dividingBy: 1.0) == 0.5 }
         )
         #expect(output == 1.5)
     }
@@ -248,7 +248,7 @@ struct HypothesisFloatShrinkingParityTests {
         // Direct port of `test_does_not_shrink_across_one`.
         let output = try HypothesisFloatParityHelpers.minimalDouble(
             from: 1.1,
-            where: { $0 == 1.1 || ($0 > 0 && $0 < 1) },
+            where: { $0 == 1.1 || ($0 > 0 && $0 < 1) }
         )
         #expect(output == 1.1)
     }
@@ -261,7 +261,7 @@ struct HypothesisFloatShrinkingParityTests {
         let output = try HypothesisFloatParityHelpers.minimalDouble(
             from: 103.1,
             in: 103.0 ... 200.0,
-            where: { $0 >= 103.0 },
+            where: { $0 >= 103.0 }
         )
         #expect(output == 103.0)
     }

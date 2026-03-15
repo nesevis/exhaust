@@ -38,7 +38,7 @@ import ExhaustCore
 @freestanding(expression)
 public macro gen<each T, R>(
     _ generators: repeat ReflectiveGenerator<each T>,
-    transform: (repeat each T) -> R,
+    transform: (repeat each T) -> R
 ) -> ReflectiveGenerator<R> = #externalMacro(module: "ExhaustMacros", type: "GenerateMacro")
 
 /// Passes a single generator through unchanged.
@@ -50,7 +50,7 @@ public macro gen<each T, R>(
 /// ```
 @freestanding(expression)
 public macro gen<T>(
-    _ generator: ReflectiveGenerator<T>,
+    _ generator: ReflectiveGenerator<T>
 ) -> ReflectiveGenerator<T> = #externalMacro(module: "ExhaustMacros", type: "GenerateMacro")
 
 /// Composes two or more generators without a transform closure, combining them with `Gen.zip` to produce a tuple generator.
@@ -60,5 +60,5 @@ public macro gen<T>(
 /// ```
 @freestanding(expression)
 public macro gen<each T>(
-    _ generators: repeat ReflectiveGenerator<each T>,
+    _ generators: repeat ReflectiveGenerator<each T>
 ) -> ReflectiveGenerator<(repeat each T)> = #externalMacro(module: "ExhaustMacros", type: "GenerateMacro")

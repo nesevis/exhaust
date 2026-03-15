@@ -6,14 +6,14 @@ import SwiftSyntaxMacros
 public struct ExtractMacro: ExpressionMacro {
     public static func expansion(
         of node: some FreestandingMacroExpansionSyntax,
-        in context: some MacroExpansionContext,
+        in context: some MacroExpansionContext
     ) throws -> ExprSyntax {
         let args = node.arguments.map(\.self)
 
         guard !args.isEmpty else {
             context.diagnose(Diagnostic(
                 node: Syntax(node),
-                message: ExhaustMacroDiagnostic.extractMissingGenerator,
+                message: ExhaustMacroDiagnostic.extractMissingGenerator
             ))
             return "fatalError(\"#extract requires a generator argument\")"
         }

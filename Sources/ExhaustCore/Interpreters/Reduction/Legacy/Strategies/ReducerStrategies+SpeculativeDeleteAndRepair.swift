@@ -19,7 +19,7 @@ extension ReducerStrategies {
         sequence: ChoiceSequence,
         spans: [ChoiceSpan],
         rejectCache: inout ReducerCache,
-        bindIndex _: BindSpanIndex? = nil,
+        bindIndex _: BindSpanIndex? = nil
     ) throws -> (ChoiceSequence, Output)? {
         guard rejectCache.contains(sequence) == false else {
             return nil
@@ -36,7 +36,7 @@ extension ReducerStrategies {
 
             if let result = try divideAndConquerDeleteRepair(
                 gen, tree: tree, property: property,
-                sequence: sequence, spans: depthSpans[...], rejectCache: &rejectCache,
+                sequence: sequence, spans: depthSpans[...], rejectCache: &rejectCache
             ) {
                 return result
             }
@@ -51,7 +51,7 @@ extension ReducerStrategies {
         property: (Output) -> Bool,
         sequence: ChoiceSequence,
         spans: ArraySlice<ChoiceSpan>,
-        rejectCache: inout ReducerCache,
+        rejectCache: inout ReducerCache
     ) throws -> (ChoiceSequence, Output)? {
         guard !spans.isEmpty else { return nil }
 
@@ -77,7 +77,7 @@ extension ReducerStrategies {
             // Materialization failed — try uniform value repair to find a valid configuration.
             if let result = try repairAfterDeletion(
                 gen, tree: tree, property: property,
-                original: sequence, shortened: shortened, rejectCache: &rejectCache,
+                original: sequence, shortened: shortened, rejectCache: &rejectCache
             ) {
                 return result
             }
@@ -90,13 +90,13 @@ extension ReducerStrategies {
         let mid = spans.startIndex + spans.count / 2
         if let result = try divideAndConquerDeleteRepair(
             gen, tree: tree, property: property,
-            sequence: sequence, spans: spans[spans.startIndex ..< mid], rejectCache: &rejectCache,
+            sequence: sequence, spans: spans[spans.startIndex ..< mid], rejectCache: &rejectCache
         ) {
             return result
         }
         return try divideAndConquerDeleteRepair(
             gen, tree: tree, property: property,
-            sequence: sequence, spans: spans[mid ..< spans.endIndex], rejectCache: &rejectCache,
+            sequence: sequence, spans: spans[mid ..< spans.endIndex], rejectCache: &rejectCache
         )
     }
 
@@ -110,7 +110,7 @@ extension ReducerStrategies {
         property: (Output) -> Bool,
         original: ChoiceSequence,
         shortened: ChoiceSequence,
-        rejectCache: inout ReducerCache,
+        rejectCache: inout ReducerCache
     ) throws -> (ChoiceSequence, Output)? {
         typealias ValueInfo = (index: Int, bp: UInt64, target: UInt64, distance: UInt64, upward: Bool, value: ChoiceSequenceValue.Value)
         var values = [ValueInfo]()
@@ -213,7 +213,7 @@ extension ReducerStrategies {
     static func applyUniformRepair(
         _ sequence: ChoiceSequence,
         values: [(index: Int, bp: UInt64, target: UInt64, distance: UInt64, upward: Bool, value: ChoiceSequenceValue.Value)],
-        k: UInt64,
+        k: UInt64
     ) -> ChoiceSequence {
         var result = sequence
         for v in values {
@@ -222,7 +222,7 @@ extension ReducerStrategies {
             let newBP = v.upward ? v.bp + delta : v.bp - delta
             let newChoice = ChoiceValue(
                 v.value.choice.tag.makeConvertible(bitPattern64: newBP),
-                tag: v.value.choice.tag,
+                tag: v.value.choice.tag
             )
             result[v.index] = .reduced(.init(choice: newChoice, validRange: v.value.validRange, isRangeExplicit: v.value.isRangeExplicit))
         }

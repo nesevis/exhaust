@@ -1,5 +1,4 @@
 import Exhaust
-import ExhaustCore
 import Testing
 
 // MARK: - Tests
@@ -17,7 +16,8 @@ struct ALUTests {
                 commandLimit: 8,
                 .argumentAwareCoverage,
                 .suppressIssueReporting,
-            ),
+                .useBonsaiReducer
+            )
         )
 
         #expect(result.trace.contains { step in

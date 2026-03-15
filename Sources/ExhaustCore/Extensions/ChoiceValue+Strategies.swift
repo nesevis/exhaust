@@ -92,7 +92,7 @@ public extension ChoiceValue {
 
     private func floatingReductionTarget(
         in range: ClosedRange<UInt64>?,
-        tag: TypeTag,
+        tag: TypeTag
     ) -> UInt64? {
         guard let range else { return nil }
 
@@ -147,7 +147,7 @@ public extension ChoiceValue {
 
     private func floatingValue(
         for bitPattern: UInt64,
-        tag: TypeTag,
+        tag: TypeTag
     ) -> Double? {
         switch tag {
         case .double: Double(Double(bitPattern64: bitPattern))
@@ -158,7 +158,7 @@ public extension ChoiceValue {
 
     private func floatingBitPattern(
         for value: Double,
-        tag: TypeTag,
+        tag: TypeTag
     ) -> UInt64? {
         switch tag {
         case .double: Double(value).bitPattern64

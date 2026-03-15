@@ -16,21 +16,21 @@ public extension Gen {
     @inlinable
     static func arrayOf<Output>(
         _ elementGenerator: ReflectiveGenerator<Output>,
-        _ length: ReflectiveGenerator<UInt64>? = nil,
+        _ length: ReflectiveGenerator<UInt64>? = nil
     ) -> ReflectiveGenerator<[Output]> {
         // Use `bind` to get the result of the length generator.
         let sequenceOperation = ReflectiveOperation.sequence(
             length: length ?? Gen.getSize()._bind {
                 Gen.chooseDerived(in: ($0 / 10) ... $0)
             },
-            gen: elementGenerator.erase(),
+            gen: elementGenerator.erase()
         )
         // Lift the operation. The continuation will decode the `[Any]` result.
         return .impure(operation: sequenceOperation) { result in
             guard let array = result as? [Output] else {
                 throw GeneratorError.typeMismatch(
                     expected: String(describing: type(of: [Output].self)),
-                    actual: String(describing: type(of: result)),
+                    actual: String(describing: type(of: result))
                 )
             }
             return .pure(array)
@@ -55,11 +55,11 @@ public extension Gen {
     static func arrayOf<Output>(
         _ elementGenerator: ReflectiveGenerator<Output>,
         within range: ClosedRange<UInt64>,
-        scaling: SizeScaling<UInt64> = .linear,
+        scaling: SizeScaling<UInt64> = .linear
     ) -> ReflectiveGenerator<[Output]> {
         let sequenceOperation = ReflectiveOperation.sequence(
             length: Gen.choose(in: range, scaling: scaling),
-            gen: elementGenerator.erase(),
+            gen: elementGenerator.erase()
         )
         // Lift the operation. The continuation will decode the `[Any]` result.
         return .impure(operation: sequenceOperation) { result in
@@ -78,7 +78,7 @@ public extension Gen {
     @inlinable
     static func arrayOf<Output>(
         _ elementGenerator: ReflectiveGenerator<Output>,
-        exactly: UInt64,
+        exactly: UInt64
     ) -> ReflectiveGenerator<[Output]> {
         arrayOf(elementGenerator, Gen.choose(in: exactly ... exactly))
     }
@@ -96,12 +96,12 @@ public extension Gen {
     @inlinable
     static func dictionaryOf<KeyOutput: Hashable, ValueOutput>(
         _ keyGenerator: ReflectiveGenerator<KeyOutput>,
-        _ valueGenerator: ReflectiveGenerator<ValueOutput>,
+        _ valueGenerator: ReflectiveGenerator<ValueOutput>
     ) -> ReflectiveGenerator<[KeyOutput: ValueOutput]> {
         let zipped = Gen.zip(
             // These arrays use `getSize()` under the hood and will be the same length
             Gen.arrayOf(keyGenerator),
-            Gen.arrayOf(valueGenerator),
+            Gen.arrayOf(valueGenerator)
         )
 
         return Gen.contramap(
@@ -112,9 +112,9 @@ public extension Gen {
             zipped._map { keys, values in
                 Dictionary(
                     Swift.zip(keys, values).map { ($0.0, $0.1) },
-                    uniquingKeysWith: { key, _ in key },
+                    uniquingKeysWith: { key, _ in key }
                 )
-            },
+            }
         )
     }
 
@@ -129,7 +129,7 @@ public extension Gen {
     @inlinable
     static func setOf<Element: Hashable>(
         _ elementGenerator: ReflectiveGenerator<Element>,
-        _ length: ReflectiveGenerator<UInt64>? = nil,
+        _ length: ReflectiveGenerator<UInt64>? = nil
     ) -> ReflectiveGenerator<Set<Element>> {
         arrayOf(elementGenerator, length)._map { Set($0) }
     }
@@ -145,7 +145,7 @@ public extension Gen {
     static func setOf<Element: Hashable>(
         _ elementGenerator: ReflectiveGenerator<Element>,
         within range: ClosedRange<UInt64>,
-        scaling: SizeScaling<UInt64> = .linear,
+        scaling: SizeScaling<UInt64> = .linear
     ) -> ReflectiveGenerator<Set<Element>> {
         arrayOf(elementGenerator, within: range, scaling: scaling)._map { Set($0) }
     }
@@ -159,7 +159,7 @@ public extension Gen {
     @inlinable
     static func setOf<Element: Hashable>(
         _ elementGenerator: ReflectiveGenerator<Element>,
-        exactly: UInt64,
+        exactly: UInt64
     ) -> ReflectiveGenerator<Set<Element>> {
         arrayOf(elementGenerator, exactly: exactly)._map { Set($0) }
     }
@@ -172,13 +172,13 @@ public extension Gen {
     /// - Returns: A generator that produces a randomly permuted array
     @inlinable
     static func shuffled<Element>(
-        _ gen: ReflectiveGenerator<some Collection<Element>>,
+        _ gen: ReflectiveGenerator<some Collection<Element>>
     ) -> ReflectiveGenerator<[Element]> {
         gen._bind { array in
             guard array.count > 1 else { return .pure(Array(array)) }
             return Gen.arrayOf(
                 Gen.choose(in: UInt64.min ... UInt64.max),
-                exactly: UInt64(array.count),
+                exactly: UInt64(array.count)
             )
             ._map { keys in
                 Swift.zip(array, keys)
@@ -199,7 +199,7 @@ public extension Gen {
     @inlinable
     static func sized<Output>(
         _ elementGenerator: ReflectiveGenerator<Output>,
-        lengthRange: ClosedRange<UInt64>? = nil,
+        lengthRange: ClosedRange<UInt64>? = nil
     ) -> ReflectiveGenerator<[Output]> {
         getSize()._bind { size in
             let actualRange = lengthRange ?? (0 ... size)
@@ -213,7 +213,7 @@ public extension Gen {
 
     @inlinable
     static func slice<AnyCollection: Collection>(
-        of collection: AnyCollection,
+        of collection: AnyCollection
     ) -> ReflectiveGenerator<AnyCollection.SubSequence> {
         getSize()._bind { size in
             let count = collection.count
@@ -229,7 +229,7 @@ public extension Gen {
 
             let zipped = Gen.zip(
                 Gen.chooseDerived(in: 1 ... maxLength), // subset length
-                Gen.chooseDerived(in: 0 ... (count - 1)), // start position index
+                Gen.chooseDerived(in: 0 ... (count - 1)) // start position index
             )
 
             let filtered: ReflectiveGenerator<(Int, Int)> = .impure(
@@ -240,9 +240,9 @@ public extension Gen {
                     predicate: { value in
                         let (length, startIndexPos) = value as! (Int, Int)
                         return startIndexPos + length <= count
-                    },
+                    }
                 ),
-                continuation: { .pure($0 as! (Int, Int)) },
+                continuation: { .pure($0 as! (Int, Int)) }
             )
 
             return Gen.contramap(
@@ -256,7 +256,7 @@ public extension Gen {
                     let endIndexPos = min(startIndexPos + length, indices.count)
                     let endIndex = endIndexPos < indices.count ? indices[endIndexPos] : collection.endIndex
                     return collection[startIndex ..< endIndex]
-                },
+                }
             )
         }
     }
@@ -269,7 +269,7 @@ public extension Gen {
     /// - Returns: A generator that produces a contiguous subrange of the generated collection
     @inlinable
     static func slice<C: Collection>(
-        of gen: ReflectiveGenerator<C>,
+        of gen: ReflectiveGenerator<C>
     ) -> ReflectiveGenerator<C.SubSequence> {
         gen._bind { collection in
             slice(of: collection)
@@ -284,7 +284,7 @@ public extension Gen {
     /// - Returns: A generator that produces random elements from the collection
     @inlinable
     static func element<AnyCollection: Collection>(
-        from collection: AnyCollection,
+        from collection: AnyCollection
     ) -> ReflectiveGenerator<AnyCollection.Element> {
         precondition(collection.isEmpty == false, "Cannot return random element from empty collection")
         let count = collection.count
@@ -302,7 +302,7 @@ public extension Gen {
                 }
                 return 0
             },
-            Gen.choose(in: 0 ... (count - 1))._map { dict[$0]! },
+            Gen.choose(in: 0 ... (count - 1))._map { dict[$0]! }
         )
     }
 
@@ -314,7 +314,7 @@ public extension Gen {
     /// - Returns: A generator that produces random elements from the collection
     @inlinable
     static func element<AnyCollection: Collection>(
-        from collection: AnyCollection,
+        from collection: AnyCollection
     ) -> ReflectiveGenerator<AnyCollection.Element> where AnyCollection.Element: Hashable {
         precondition(collection.isEmpty == false, "Cannot return random element from empty collection")
         var elementToOffset: [AnyCollection.Element: Int] = [:]
@@ -332,7 +332,7 @@ public extension Gen {
 
         return Gen.contramap(
             { (element: AnyCollection.Element) -> Int in elementToOffset[element]! },
-            Gen.choose(in: 0 ... (collection.count - 1))._map { offsetToElement[$0]! },
+            Gen.choose(in: 0 ... (collection.count - 1))._map { offsetToElement[$0]! }
         )
     }
 }

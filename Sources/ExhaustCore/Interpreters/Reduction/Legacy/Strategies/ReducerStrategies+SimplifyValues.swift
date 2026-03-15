@@ -17,7 +17,7 @@ extension ReducerStrategies {
         sequence: ChoiceSequence,
         valueSpans: [ChoiceSpan],
         rejectCache: inout ReducerCache,
-        bindIndex: BindSpanIndex? = nil,
+        bindIndex: BindSpanIndex? = nil
     ) throws -> (ChoiceSequence, Output)? {
         // Filter to spans whose values can actually be simplified
         var valueIndices: [Int] = []

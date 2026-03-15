@@ -32,7 +32,7 @@ struct CalculatorShrinkingChallenge {
             gen,
             .suppressIssueReporting,
             .useBonsaiReducer,
-            .replay(1_117_838_118_804_311_299),
+            .replay(1_117_838_118_804_311_299)
         ) { expr in
             guard Self.containsLiteralDivisionByZero(expr) == false else {
                 return true
@@ -52,7 +52,7 @@ struct CalculatorShrinkingChallenge {
             result == .div(.value(0), .div(.value(0), .value(1))) ||
                 result == .div(.value(0), .div(.value(0), .value(-1))) ||
                 // The Bonsai reducer gets it to the minimum!
-                result == .div(.value(0), .add(.value(0), .value(0))),
+                result == .div(.value(0), .add(.value(0), .value(0)))
         )
     }
 
@@ -138,7 +138,7 @@ struct CalculatorShrinkingChallenge {
                     case .value:
                         (value, value)
                     }
-                },
+                }
             )
         let div = #gen(leaf, child)
             .mapped(
@@ -150,7 +150,7 @@ struct CalculatorShrinkingChallenge {
                     case .value:
                         (value, value)
                     }
-                },
+                }
             )
 
         return #gen(.oneOf(weighted:

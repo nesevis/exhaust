@@ -43,7 +43,7 @@ struct DeletionShrinkingChallenge {
             gen,
             .suppressIssueReporting,
             .useBonsaiReducer,
-            property: property,
+            property: property
         )
 
         #expect(output?.0 == [0, 0])

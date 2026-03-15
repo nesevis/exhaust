@@ -10,7 +10,7 @@ struct BuildMergedSequenceTests {
         let pre = makeBindSequence(innerValues: [5], boundValues: [10])
         let post = makeTwoBindSequence(
             bind1Inner: [3], bind1Bound: [20],
-            bind2Inner: [1], bind2Bound: [30],
+            bind2Inner: [1], bind2Bound: [30]
         )
         let preBi = BindSpanIndex(from: pre)
         let postBi = BindSpanIndex(from: post)
@@ -19,7 +19,7 @@ struct BuildMergedSequenceTests {
             preCovariantSequence: pre,
             postCovariantSequence: post,
             preBindIndex: preBi,
-            postBindIndex: postBi,
+            postBindIndex: postBi
         )
         #expect(result == nil)
     }
@@ -37,7 +37,7 @@ struct BuildMergedSequenceTests {
             preCovariantSequence: pre,
             postCovariantSequence: post,
             preBindIndex: preBi,
-            postBindIndex: postBi,
+            postBindIndex: postBi
         )
         #expect(result == nil)
     }
@@ -54,7 +54,7 @@ struct BuildMergedSequenceTests {
             preCovariantSequence: pre,
             postCovariantSequence: post,
             preBindIndex: preBi,
-            postBindIndex: postBi,
+            postBindIndex: postBi
         )
         #expect(result == nil)
     }
@@ -70,7 +70,7 @@ struct BuildMergedSequenceTests {
             preCovariantSequence: pre,
             postCovariantSequence: post,
             preBindIndex: preBi,
-            postBindIndex: postBi,
+            postBindIndex: postBi
         )
         #expect(result == nil)
     }
@@ -88,7 +88,7 @@ struct BuildMergedSequenceTests {
             preCovariantSequence: pre,
             postCovariantSequence: post,
             preBindIndex: preBi,
-            postBindIndex: postBi,
+            postBindIndex: postBi
         )
         #expect(result == nil)
     }
@@ -106,7 +106,7 @@ struct BuildMergedSequenceTests {
             preCovariantSequence: pre,
             postCovariantSequence: post,
             preBindIndex: preBi,
-            postBindIndex: postBi,
+            postBindIndex: postBi
         )
         #expect(result != nil)
         // The merged sequence should keep post's inner (3) but substitute pre's bound (15).
@@ -130,7 +130,7 @@ struct BuildMergedSequenceTests {
             preCovariantSequence: pre,
             postCovariantSequence: post,
             preBindIndex: preBi,
-            postBindIndex: postBi,
+            postBindIndex: postBi
         )
         #expect(result != nil)
         // +1 to skip the .group(true) marker at the start of the bound range.
@@ -145,11 +145,11 @@ struct BuildMergedSequenceTests {
         // Second has matching inner sizes and a regression → merged.
         let pre = makeTwoBindSequence(
             bind1Inner: [1, 2], bind1Bound: [10],
-            bind2Inner: [5], bind2Bound: [10],
+            bind2Inner: [5], bind2Bound: [10]
         )
         let post = makeTwoBindSequence(
             bind1Inner: [1], bind1Bound: [20],
-            bind2Inner: [3], bind2Bound: [20],
+            bind2Inner: [3], bind2Bound: [20]
         )
         let preBi = BindSpanIndex(from: pre)
         let postBi = BindSpanIndex(from: post)
@@ -158,7 +158,7 @@ struct BuildMergedSequenceTests {
             preCovariantSequence: pre,
             postCovariantSequence: post,
             preBindIndex: preBi,
-            postBindIndex: postBi,
+            postBindIndex: postBi
         )
         // Region 1 is skipped (inner size mismatch). Region 2 has regression (10 < 20).
         #expect(result != nil)
@@ -199,7 +199,7 @@ struct CovariantDecoderFreshnessTests {
             try ReductionScheduler.run(gen: gen, initialTree: tree, config: config) { output in
                 let arr = output as! [Any]
                 return arr.count <= 3
-            },
+            }
         )
 
         // The reducer should find a counterexample with count > 3.
@@ -234,7 +234,7 @@ struct DeletionDecoderFreshnessTests {
             try ReductionScheduler.run(gen: gen, initialTree: tree, config: config) { output in
                 let arr = output as! [Any]
                 return arr.count < 3
-            },
+            }
         )
 
         // The reducer should find a 3-element array (minimal violation).
@@ -251,7 +251,7 @@ private func makeBindSequence(
     innerValues: [UInt64],
     boundValues: [UInt64],
     innerRange: ClosedRange<UInt64> = 0 ... UInt64.max,
-    boundRange: ClosedRange<UInt64> = 0 ... UInt64.max,
+    boundRange: ClosedRange<UInt64> = 0 ... UInt64.max
 ) -> ChoiceSequence {
     var seq = ChoiceSequence()
     seq.append(.bind(true))
@@ -272,7 +272,7 @@ private func makeBindSequence(
 /// Builds a choice sequence with two consecutive bind regions.
 private func makeTwoBindSequence(
     bind1Inner: [UInt64], bind1Bound: [UInt64],
-    bind2Inner: [UInt64], bind2Bound: [UInt64],
+    bind2Inner: [UInt64], bind2Bound: [UInt64]
 ) -> ChoiceSequence {
     var seq = ChoiceSequence()
     seq.append(.bind(true))
@@ -306,7 +306,7 @@ private func makeTwoBindSequence(
 /// Returns `ReflectiveGenerator<Any>` since `_bound` is in the Exhaust target.
 private func makeBoundArrayGen(
     innerRange: ClosedRange<UInt64>,
-    elementRange: ClosedRange<UInt64>,
+    elementRange: ClosedRange<UInt64>
 ) -> ReflectiveGenerator<Any> {
     let innerGen: ReflectiveGenerator<UInt64> = Gen.choose(in: innerRange)
     let elementGen: ReflectiveGenerator<UInt64> = Gen.choose(in: elementRange)
@@ -322,8 +322,8 @@ private func makeBoundArrayGen(
                 return UInt64(arr.count) as Any
             },
             inputType: "UInt64",
-            outputType: "[UInt64]",
+            outputType: "[UInt64]"
         ),
-        inner: innerGen.erase(),
+        inner: innerGen.erase()
     ))
 }

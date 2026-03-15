@@ -239,7 +239,7 @@ struct DeleteAlignedWindowsEncoder: AdaptiveEncoder {
             deletionCount: 0,
             slotIndexSum: 0,
             heuristicScore: 0,
-            rangeSet: RangeSet<Int>(),
+            rangeSet: RangeSet<Int>()
         )]
         beamLayer = 0
         beamCandidateIndex = 0
@@ -275,7 +275,7 @@ struct DeleteAlignedWindowsEncoder: AdaptiveEncoder {
                     deletionCount: beamLayer,
                     slotIndexSum: slotIndexSum,
                     heuristicScore: beamHeuristicScore(deletionCount: beamLayer, slotIndexSum: slotIndexSum),
-                    rangeSet: rangeSet,
+                    rangeSet: rangeSet
                 ))
             }
         }
@@ -296,7 +296,7 @@ struct DeleteAlignedWindowsEncoder: AdaptiveEncoder {
 
         beamEvaluationCount = beamTuning.evaluationsPerLayer(
             for: ranges.slotCount,
-            beamWidth: beamWidth,
+            beamWidth: beamWidth
         )
     }
 

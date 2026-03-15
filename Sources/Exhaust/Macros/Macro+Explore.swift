@@ -26,5 +26,5 @@ public macro explore<T>(
     _ gen: ReflectiveGenerator<T>,
     _ settings: ExploreSettings...,
     scorer: (T) -> Double,
-    property: (T) throws -> Bool,
+    property: (T) throws -> Bool
 ) -> T? = #externalMacro(module: "ExhaustMacros", type: "ExploreMacro")

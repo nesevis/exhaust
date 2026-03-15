@@ -21,7 +21,7 @@ struct ReductionMaterializerTests {
 
         // Exact round-trip should reproduce the same value.
         guard case let .success(value, tree) = ReductionMaterializer.materialize(
-            gen, prefix: prefix, mode: .exact,
+            gen, prefix: prefix, mode: .exact
         ) else {
             Issue.record("Expected .success, got rejected/failed")
             return
@@ -38,7 +38,7 @@ struct ReductionMaterializerTests {
     func exactRoundTripZip() throws {
         let gen = Gen.zip(
             Gen.choose(in: 0 ... 50 as ClosedRange<Int>),
-            Gen.choose(in: 0 ... 50 as ClosedRange<Int>),
+            Gen.choose(in: 0 ... 50 as ClosedRange<Int>)
         )
 
         var interpreter = ValueAndChoiceTreeInterpreter(gen, materializePicks: true, seed: 99)
@@ -46,7 +46,7 @@ struct ReductionMaterializerTests {
         let prefix = ChoiceSequence(originalTree)
 
         guard case let .success(value, _) = ReductionMaterializer.materialize(
-            gen, prefix: prefix, mode: .exact,
+            gen, prefix: prefix, mode: .exact
         ) else {
             Issue.record("Expected .success")
             return
@@ -78,7 +78,7 @@ struct ReductionMaterializerTests {
     func exactRejectsExhaustedPrefix() {
         let gen = Gen.zip(
             Gen.choose(in: 0 ... 10 as ClosedRange<UInt64>),
-            Gen.choose(in: 0 ... 10 as ClosedRange<UInt64>),
+            Gen.choose(in: 0 ... 10 as ClosedRange<UInt64>)
         )
 
         // Prefix only has one value, but generator needs two.
@@ -106,9 +106,9 @@ struct ReductionMaterializerTests {
                 },
                 backward: nil,
                 inputType: "Int",
-                outputType: "Int",
+                outputType: "Int"
             ),
-            inner: Gen.choose(in: 1 ... 10 as ClosedRange<Int>).erase(),
+            inner: Gen.choose(in: 1 ... 10 as ClosedRange<Int>).erase()
         ))
 
         // Generate a value via VACTI.
@@ -118,7 +118,7 @@ struct ReductionMaterializerTests {
 
         // Exact mode should replay both inner AND bound values from prefix.
         guard case let .success(value, tree) = ReductionMaterializer.materialize(
-            gen, prefix: prefix, mode: .exact,
+            gen, prefix: prefix, mode: .exact
         ) else {
             Issue.record("Expected .success for bind replay")
             return
@@ -142,9 +142,9 @@ struct ReductionMaterializerTests {
                 },
                 backward: nil,
                 inputType: "UInt64",
-                outputType: "UInt64",
+                outputType: "UInt64"
             ),
-            inner: Gen.choose(in: 0 ... 10 as ClosedRange<UInt64>).erase(),
+            inner: Gen.choose(in: 0 ... 10 as ClosedRange<UInt64>).erase()
         ))
 
         // Construct a prefix where inner = 5, bound = 8 (out of 0...5 but was valid for 0...10).
@@ -156,7 +156,7 @@ struct ReductionMaterializerTests {
         ]
 
         guard case let .success(value, _) = ReductionMaterializer.materialize(
-            gen, prefix: prefix, mode: .exact,
+            gen, prefix: prefix, mode: .exact
         ) else {
             Issue.record("Expected .success — bound value should be clamped, not rejected")
             return
@@ -179,7 +179,7 @@ struct ReductionMaterializerTests {
 
         guard case let .success(value, tree) = ReductionMaterializer.materialize(
             gen, prefix: prefix,
-            mode: .guided(seed: 42, fallbackTree: nil),
+            mode: .guided(seed: 42, fallbackTree: nil)
         ) else {
             Issue.record("Expected .success — guided should clamp, not reject")
             return
@@ -202,7 +202,7 @@ struct ReductionMaterializerTests {
 
         guard case let .success(value, _) = ReductionMaterializer.materialize(
             gen, prefix: prefix,
-            mode: .guided(seed: 42, fallbackTree: nil),
+            mode: .guided(seed: 42, fallbackTree: nil)
         ) else {
             Issue.record("Expected .success — guided should fall back to PRNG")
             return
@@ -223,9 +223,9 @@ struct ReductionMaterializerTests {
                 },
                 backward: nil,
                 inputType: "Int",
-                outputType: "Int",
+                outputType: "Int"
             ),
-            inner: Gen.choose(in: 1 ... 10 as ClosedRange<Int>).erase(),
+            inner: Gen.choose(in: 1 ... 10 as ClosedRange<Int>).erase()
         ))
 
         // Generate via VACTI to get a well-formed prefix.
@@ -236,7 +236,7 @@ struct ReductionMaterializerTests {
         // Guided mode with fallback tree should succeed.
         guard case let .success(_, tree) = ReductionMaterializer.materialize(
             gen, prefix: prefix,
-            mode: .guided(seed: ZobristHash.hash(of: prefix), fallbackTree: originalTree),
+            mode: .guided(seed: ZobristHash.hash(of: prefix), fallbackTree: originalTree)
         ) else {
             Issue.record("Expected .success for guided bind materialization")
             return
@@ -263,7 +263,7 @@ struct ReductionMaterializerTests {
 
         // ReductionMaterializer should produce all branches.
         guard case let .success(value, tree) = ReductionMaterializer.materialize(
-            gen, prefix: prefix, mode: .exact,
+            gen, prefix: prefix, mode: .exact
         ) else {
             Issue.record("Expected .success for pick materialization")
             return
@@ -294,13 +294,13 @@ struct ReductionMaterializerTests {
 
         // Run twice with same prefix — should produce deterministic results.
         guard case let .success(value1, tree1) = ReductionMaterializer.materialize(
-            gen, prefix: prefix, mode: .exact,
+            gen, prefix: prefix, mode: .exact
         ) else {
             Issue.record("First materialization failed")
             return
         }
         guard case let .success(value2, tree2) = ReductionMaterializer.materialize(
-            gen, prefix: prefix, mode: .exact,
+            gen, prefix: prefix, mode: .exact
         ) else {
             Issue.record("Second materialization failed")
             return
@@ -322,7 +322,7 @@ struct ReductionMaterializerTests {
         ]
 
         guard case let .success(_, tree) = ReductionMaterializer.materialize(
-            gen, prefix: prefix, mode: .exact,
+            gen, prefix: prefix, mode: .exact
         ) else {
             Issue.record("Expected .success")
             return
@@ -348,7 +348,7 @@ struct ReductionMaterializerTests {
         ]
 
         guard case let .success(_, tree) = ReductionMaterializer.materialize(
-            gen, prefix: prefix, mode: .exact,
+            gen, prefix: prefix, mode: .exact
         ) else {
             Issue.record("Expected .success")
             return
@@ -372,9 +372,9 @@ struct ReductionMaterializerTests {
                 },
                 backward: nil,
                 inputType: "UInt64",
-                outputType: "UInt64",
+                outputType: "UInt64"
             ),
-            inner: Gen.choose(in: 1 ... 100 as ClosedRange<UInt64>).erase(),
+            inner: Gen.choose(in: 1 ... 100 as ClosedRange<UInt64>).erase()
         ))
 
         // Generate a value via VACTI.
@@ -389,14 +389,14 @@ struct ReductionMaterializerTests {
                 prefix[idx] = .value(.init(
                     choice: .unsigned(10, .uint64),
                     validRange: 1 ... 100,
-                    isRangeExplicit: true,
+                    isRangeExplicit: true
                 ))
                 break
             }
         }
 
         guard case let .success(_, tree) = ReductionMaterializer.materialize(
-            gen, prefix: prefix, mode: .exact,
+            gen, prefix: prefix, mode: .exact
         ) else {
             Issue.record("Expected .success")
             return
@@ -421,11 +421,11 @@ struct ReductionMaterializerTests {
         while let (_, originalTree) = try interpreter.next() {
             let sequence = ChoiceSequence(originalTree)
             let legacyOutput = try #require(
-                try Interpreters.materialize(gen, with: originalTree, using: sequence),
+                try Interpreters.materialize(gen, with: originalTree, using: sequence)
             )
 
             guard case let .success(freshOutput, _) = ReductionMaterializer.materialize(
-                gen, prefix: sequence, mode: .exact,
+                gen, prefix: sequence, mode: .exact
             ) else {
                 Issue.record("ReductionMaterializer rejected valid sequence")
                 return
@@ -440,18 +440,18 @@ struct ReductionMaterializerTests {
     func compatibilityWithLegacySequence() throws {
         let gen = Gen.arrayOf(
             Gen.choose(in: 0 ... 50 as ClosedRange<Int>),
-            exactly: 3,
+            exactly: 3
         )
 
         var interpreter = ValueAndChoiceTreeInterpreter(gen, materializePicks: false, seed: 42, maxRuns: 10)
         while let (_, originalTree) = try interpreter.next() {
             let sequence = ChoiceSequence(originalTree)
             let legacyOutput = try #require(
-                try Interpreters.materialize(gen, with: originalTree, using: sequence),
+                try Interpreters.materialize(gen, with: originalTree, using: sequence)
             )
 
             guard case let .success(freshOutput, _) = ReductionMaterializer.materialize(
-                gen, prefix: sequence, mode: .exact,
+                gen, prefix: sequence, mode: .exact
             ) else {
                 Issue.record("ReductionMaterializer rejected valid sequence")
                 return
@@ -474,7 +474,7 @@ struct ReductionMaterializerTests {
         // Empty prefix, with fallback tree — should use fallback value.
         guard case let .success(value, _) = ReductionMaterializer.materialize(
             gen, prefix: [],
-            mode: .guided(seed: 42, fallbackTree: fallbackTree),
+            mode: .guided(seed: 42, fallbackTree: fallbackTree)
         ) else {
             Issue.record("Expected .success")
             return
@@ -491,7 +491,7 @@ struct ReductionMaterializerTests {
         let gen = Gen.arrayOf(
             Gen.choose(in: 0 ... 10 as ClosedRange<Int>),
             within: 1 ... 5,
-            scaling: .constant,
+            scaling: .constant
         )
 
         var interpreter = ValueAndChoiceTreeInterpreter(gen, materializePicks: true, seed: 42)
@@ -499,7 +499,7 @@ struct ReductionMaterializerTests {
         let prefix = ChoiceSequence(originalTree)
 
         guard case let .success(value, _) = ReductionMaterializer.materialize(
-            gen, prefix: prefix, mode: .exact,
+            gen, prefix: prefix, mode: .exact
         ) else {
             Issue.record("Expected .success")
             return

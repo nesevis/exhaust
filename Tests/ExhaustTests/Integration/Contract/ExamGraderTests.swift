@@ -34,8 +34,8 @@ struct ExamGraderTests {
             #exhaust(
                 ExamGraderContract.self,
                 commandLimit: 8,
-                .suppressIssueReporting,
-            ),
+                .suppressIssueReporting
+            )
         )
         #expect(result.trace.contains { step in
             switch step.outcome {
@@ -57,7 +57,7 @@ struct ExamGraderTests {
             gen,
             .samplingBudget(500),
             .suppressIssueReporting,
-            .useBonsaiReducer,
+            .useBonsaiReducer
         ) { exam, answers in
             let instance = ExamInstance(student: "student", exam: exam, answers: answers)
             let score = grader.grade(instance)
@@ -143,7 +143,7 @@ private func examWithMatchingAnswers() -> ReflectiveGenerator<(Exam, [Int?])> {
             let keyGen = #gen(.int(in: 1 ... 5)).array(length: UInt64(keyLength))
             let answersGen: ReflectiveGenerator<[Int?]> = ReflectiveGenerator.oneOf(
                 weighted: (1, .just(nil)),
-                (2, #gen(.int(in: 1 ... 5)).map { Optional($0) }),
+                (2, #gen(.int(in: 1 ... 5)).map { Optional($0) })
             ).array(length: UInt64(keyLength))
             return Gen.zip(keyGen, answersGen).map { answerKey, answers in
                 (Exam(name: "exam", answerKey: answerKey), answers)

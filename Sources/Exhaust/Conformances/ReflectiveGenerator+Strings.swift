@@ -63,7 +63,7 @@ public extension ReflectiveGenerator {
     static func string(
         from characterSet: CharacterSet,
         length: ClosedRange<UInt64>? = nil,
-        scaling: SizeScaling<UInt64> = .linear,
+        scaling: SizeScaling<UInt64> = .linear
     ) -> ReflectiveGenerator<String> {
         stringGenerator(from: characterSet.scalarRangeSet(), length: length, scaling: scaling)
     }
@@ -77,13 +77,13 @@ private func characterGenerator(from srs: ScalarRangeSet) -> ReflectiveGenerator
         { (char: Character) throws -> Int in
             guard let scalar = char.unicodeScalars.first else {
                 throw Interpreters.ReflectionError.couldNotReflectOnSequenceElement(
-                    "Character has no scalars",
+                    "Character has no scalars"
                 )
             }
             return srs.index(of: scalar)
         },
         Gen.choose(in: 0 ... srs.scalarCount - 1)
-            ._map { Character(srs.scalar(at: $0)) },
+            ._map { Character(srs.scalar(at: $0)) }
     )
 }
 
@@ -94,20 +94,20 @@ private func characterGenerator(from srs: ScalarRangeSet) -> ReflectiveGenerator
 private func stringGenerator(
     from srs: ScalarRangeSet,
     length: ClosedRange<UInt64>? = nil,
-    scaling: SizeScaling<UInt64> = .linear,
+    scaling: SizeScaling<UInt64> = .linear
 ) -> ReflectiveGenerator<String> {
     let charGen = characterGenerator(from: srs)
     if let length {
         return Gen.arrayOf(charGen, within: length, scaling: scaling)
             .mapped(
                 forward: { String($0) },
-                backward: { $0.unicodeScalars.map { Character($0) } },
+                backward: { $0.unicodeScalars.map { Character($0) } }
             )
     }
     return Gen.arrayOf(charGen)
         .mapped(
             forward: { String($0) },
-            backward: { $0.unicodeScalars.map { Character($0) } },
+            backward: { $0.unicodeScalars.map { Character($0) } }
         )
 }
 

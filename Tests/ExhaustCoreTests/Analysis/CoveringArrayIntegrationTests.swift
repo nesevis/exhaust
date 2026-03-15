@@ -23,9 +23,9 @@ struct CoveringArrayIntegrationTests {
                 },
                 backward: nil,
                 inputType: "Int",
-                outputType: "[Int]",
+                outputType: "[Int]"
             ),
-            inner: Gen.choose(in: 0 ... 2 as ClosedRange<Int>).erase(),
+            inner: Gen.choose(in: 0 ... 2 as ClosedRange<Int>).erase()
         ))
         let gen = Gen.zip(bindGen, Gen.choose(in: 0 ... 3 as ClosedRange<Int>), Gen.choose(in: 0 ... 3 as ClosedRange<Int>))
 
@@ -39,7 +39,7 @@ struct CoveringArrayIntegrationTests {
         #expect(profile.originalTree?.containsBind == true)
 
         let covering = try #require(
-            CoveringArray.generate(profile: profile, strength: profile.parameters.count),
+            CoveringArray.generate(profile: profile, strength: profile.parameters.count)
         )
 
         var replayedValues: [([Int], Int, Int)] = []
@@ -76,7 +76,7 @@ struct CoveringArrayIntegrationTests {
         let gen = Gen.zip(
             Gen.choose(from: [true, false]),
             Gen.choose(from: [true, false]),
-            Gen.choose(in: 0 ... 2 as ClosedRange<Int>),
+            Gen.choose(in: 0 ... 2 as ClosedRange<Int>)
         )
 
         guard case let .finite(profile) = ChoiceTreeAnalysis.analyze(gen) else {
@@ -85,7 +85,7 @@ struct CoveringArrayIntegrationTests {
         }
 
         let covering = try #require(
-            CoveringArray.generate(profile: profile, strength: profile.parameters.count),
+            CoveringArray.generate(profile: profile, strength: profile.parameters.count)
         )
 
         // Full exhaustive enumeration: 2 * 2 * 3 = 12 rows
@@ -113,7 +113,7 @@ struct CoveringArrayIntegrationTests {
         }
 
         let covering = try #require(
-            CoveringArray.generate(profile: profile, strength: profile.parameters.count),
+            CoveringArray.generate(profile: profile, strength: profile.parameters.count)
         )
 
         var foundFailure = false
@@ -162,7 +162,7 @@ struct CoveringArrayIntegrationTests {
             Gen.choose(in: 0 ... 3 as ClosedRange<Int>),
             Gen.choose(in: 0 ... 3 as ClosedRange<Int>),
             Gen.choose(in: 0 ... 3 as ClosedRange<Int>),
-            Gen.choose(in: 0 ... 3 as ClosedRange<Int>),
+            Gen.choose(in: 0 ... 3 as ClosedRange<Int>)
         )
 
         guard case let .finite(profile) = ChoiceTreeAnalysis.analyze(gen) else {
@@ -172,7 +172,7 @@ struct CoveringArrayIntegrationTests {
 
         // Generate a 3-way covering array
         let covering = try #require(
-            CoveringArray.generate(profile: profile, strength: 3),
+            CoveringArray.generate(profile: profile, strength: 3)
         )
 
         var foundFailure = false
@@ -203,7 +203,7 @@ struct CoveringArrayIntegrationTests {
             Gen.choose(in: 0 ... 3 as ClosedRange<Int>),
             Gen.choose(in: 0 ... 3 as ClosedRange<Int>),
             Gen.choose(in: 0 ... 3 as ClosedRange<Int>),
-            Gen.choose(in: 0 ... 3 as ClosedRange<Int>),
+            Gen.choose(in: 0 ... 3 as ClosedRange<Int>)
         )
 
         var missCount = 0

@@ -20,7 +20,7 @@ struct BonsaiReducerIntegrationTests {
         try #require(value > 5)
 
         let bonsaiResult = try #require(
-            try Interpreters.bonsaiReduce(gen: gen, tree: tree, config: .fast) { $0 < 5 },
+            try Interpreters.bonsaiReduce(gen: gen, tree: tree, config: .fast) { $0 < 5 }
         )
 
         #expect(bonsaiResult.1 == 5)
@@ -31,7 +31,7 @@ struct BonsaiReducerIntegrationTests {
         let gen = #gen(.int(in: 1 ... 10))
             .bound(
                 forward: { n in Gen.int(in: 0 ... 100).array(length: UInt64(n)) },
-                backward: { (arr: [Int]) in arr.count },
+                backward: { (arr: [Int]) in arr.count }
             )
 
         ExhaustLog.setConfiguration(.init(isEnabled: true, minimumLevel: .info, categoryMinimumLevels: [.reducer: .debug], format: .human))
@@ -48,7 +48,7 @@ struct BonsaiReducerIntegrationTests {
         #expect(tree.containsBind)
 
         let (_, shrunk) = try #require(
-            try Interpreters.bonsaiReduce(gen: gen, tree: tree, config: .fast) { $0.count <= 2 },
+            try Interpreters.bonsaiReduce(gen: gen, tree: tree, config: .fast) { $0.count <= 2 }
         )
 
         #expect(shrunk == [0, 0, 0])
@@ -74,7 +74,7 @@ struct BonsaiReducerIntegrationTests {
         let (_, shrunk) = try #require(
             try Interpreters.bonsaiReduce(gen: gen, tree: tree, config: .fast) {
                 $0.reduce(0, +) <= 10
-            },
+            }
         )
 
         #expect(shrunk.reduce(0, +) > 10)
@@ -104,7 +104,7 @@ struct BonsaiReducerIntegrationTests {
         let gen = #gen(.int(in: 1 ... 5))
             .bound(
                 forward: { n in Gen.int(in: 0 ... 50).array(length: UInt64(n)) },
-                backward: { (arr: [Int]) in arr.count },
+                backward: { (arr: [Int]) in arr.count }
             )
 
         let property: ([Int]) -> Bool = { $0.count < 3 || $0.allSatisfy { $0 <= 10 } }
@@ -120,7 +120,7 @@ struct BonsaiReducerIntegrationTests {
 
         let tree = try #require(failingTree)
         let (shrunkSequence, shrunkOutput) = try #require(
-            try Interpreters.bonsaiReduce(gen: gen, tree: tree, config: .fast, property: property),
+            try Interpreters.bonsaiReduce(gen: gen, tree: tree, config: .fast, property: property)
         )
 
         // The shrunk output must still violate the property
@@ -128,7 +128,7 @@ struct BonsaiReducerIntegrationTests {
 
         // The shrunk sequence must be valid (materializable)
         let replayedOutput = try #require(
-            try Interpreters.materialize(gen, with: tree, using: shrunkSequence),
+            try Interpreters.materialize(gen, with: tree, using: shrunkSequence)
         )
         // Replayed output must also violate the property
         #expect(property(replayedOutput) == false)

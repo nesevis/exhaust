@@ -152,7 +152,7 @@ struct IPOGCoveringArrayTests {
             Gen.choose(from: [true, false]),
             Gen.choose(from: [true, false]),
             Gen.choose(from: [true, false]),
-            Gen.choose(from: [true, false]),
+            Gen.choose(from: [true, false])
         )
         let profile = analyzeFinite(gen)!
         let covering = CoveringArray.generate(profile: profile, strength: 2)!
@@ -186,7 +186,7 @@ struct IPOGCoveringArrayTests {
             Gen.choose(in: 0 ... 2),
             Gen.choose(in: 0 ... 2),
             Gen.choose(in: 0 ... 2),
-            Gen.choose(in: 0 ... 2),
+            Gen.choose(in: 0 ... 2)
         )
         let profile = analyzeFinite(gen)!
 
@@ -250,7 +250,7 @@ struct CoveringArrayReplayTests {
 private func verifyTWayCoverage(
     covering: CoveringArray,
     profile: FiniteDomainProfile,
-    strength: Int,
+    strength: Int
 ) {
     let params = profile.parameters
     let n = params.count
@@ -270,7 +270,7 @@ private func verifyTWayCoverage(
 
         #expect(
             UInt64(seen.count) == expected,
-            "Missing coverage for parameter combination \(combo): got \(seen.count), expected \(expected)",
+            "Missing coverage for parameter combination \(combo): got \(seen.count), expected \(expected)"
         )
     }
 }
@@ -311,13 +311,13 @@ private func asciiStringGen(length: ClosedRange<Int>) -> ReflectiveGenerator<Str
         { (char: Character) throws -> Int in
             guard let scalar = char.unicodeScalars.first else {
                 throw Interpreters.ReflectionError.couldNotReflectOnSequenceElement(
-                    "Character has no scalars",
+                    "Character has no scalars"
                 )
             }
             return asciiSRS.index(of: scalar)
         },
         Gen.choose(in: 0 ... asciiSRS.scalarCount - 1)
-            ._map { Character(asciiSRS.scalar(at: $0)) },
+            ._map { Character(asciiSRS.scalar(at: $0)) }
     )
     return Gen.arrayOf(charGen, within: UInt64(length.lowerBound) ... UInt64(length.upperBound))
         ._map { String($0) }

@@ -40,7 +40,7 @@ public struct ExploreRunner<Output>: ~Copyable {
         poolCapacity: Int = 256,
         generateRatio: Double = 0.2,
         seed: UInt64? = nil,
-        scorer: @escaping (Output) -> Double,
+        scorer: @escaping (Output) -> Double
     ) {
         self.gen = gen
         self.property = property
@@ -51,7 +51,7 @@ public struct ExploreRunner<Output>: ~Copyable {
         pool = DefaultSeedPool(
             capacity: poolCapacity,
             generateRatio: generateRatio,
-            useFitness: true,
+            useFitness: true
         )
         tracker = NoveltyTracker()
         schedule = LogarithmicSchedule()
@@ -77,7 +77,7 @@ public struct ExploreRunner<Output>: ~Copyable {
             gen,
             materializePicks: false,
             seed: prng.seed,
-            maxRuns: initialBatch,
+            maxRuns: initialBatch
         )
 
         while let (value, tree) = try? interpreter.next() {
@@ -96,7 +96,7 @@ public struct ExploreRunner<Output>: ~Copyable {
                     tree: tree,
                     noveltyScore: novelty,
                     fitness: fitness,
-                    generation: iteration,
+                    generation: iteration
                 ))
             }
         }
@@ -117,7 +117,7 @@ public struct ExploreRunner<Output>: ~Copyable {
                 let energy = schedule.energy(
                     for: seed,
                     poolSize: pool.count,
-                    averagePoolFitness: pool.averageFitness,
+                    averagePoolFitness: pool.averageFitness
                 )
 
                 let climbBudget = min(energy * 4, Int(samplingBudget - iteration))
@@ -129,7 +129,7 @@ public struct ExploreRunner<Output>: ~Copyable {
                     scorer: scorer,
                     property: property,
                     budget: climbBudget,
-                    prng: &prng,
+                    prng: &prng
                 )
 
                 switch result {
@@ -160,7 +160,7 @@ public struct ExploreRunner<Output>: ~Copyable {
             gen,
             materializePicks: false,
             seed: runSeed,
-            maxRuns: 1,
+            maxRuns: 1
         )
 
         guard let (value, tree) = try? singleInterpreter.next() else { return nil }
@@ -178,7 +178,7 @@ public struct ExploreRunner<Output>: ~Copyable {
                 tree: tree,
                 noveltyScore: novelty,
                 fitness: fitness,
-                generation: iteration,
+                generation: iteration
             ))
         }
 
@@ -192,7 +192,7 @@ public struct ExploreRunner<Output>: ~Copyable {
         value: Output,
         tree: ChoiceTree,
         iteration: UInt64,
-        fromMutation _: Bool = false,
+        fromMutation _: Bool = false
     ) -> ExploreResult<Output> {
         do {
             let shrinkTree: ChoiceTree = if let reflected = try Interpreters.reflect(gen, with: value) {
@@ -206,20 +206,20 @@ public struct ExploreRunner<Output>: ~Copyable {
                 tree: shrinkTree,
                 config: reductionConfig,
                 useBonsai: useBonsaiReducer,
-                property: property,
+                property: property
             ) {
                 return .failure(
                     counterexample: shrunkValue,
                     shrunkSequence: shrunkSequence,
                     original: value,
-                    iteration: iteration,
+                    iteration: iteration
                 )
             }
         } catch {
             ExhaustLog.error(
                 category: .propertyTest,
                 event: "explore_shrink_error",
-                "\(error)",
+                "\(error)"
             )
         }
         return .unshrunkFailure(counterexample: value, iteration: iteration)

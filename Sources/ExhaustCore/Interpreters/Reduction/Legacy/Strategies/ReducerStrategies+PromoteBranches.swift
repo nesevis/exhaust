@@ -13,7 +13,7 @@ extension ReducerStrategies {
         property: (Output) -> Bool,
         sequence: ChoiceSequence,
         rejectCache: inout ReducerCache,
-        bindIndex _: BindSpanIndex? = nil,
+        bindIndex _: BindSpanIndex? = nil
     ) throws -> (ChoiceTree, ChoiceSequence, Output)? {
         guard tree.contains(\.unwrapped.isBranch) else {
             return nil
@@ -66,7 +66,7 @@ extension ReducerStrategies {
                     gen,
                     with: candidateTree,
                     using: candidateSequence,
-                    strictness: .relaxed,
+                    strictness: .relaxed
                 ) else {
                     rejectCache.insert(candidateSequence)
                     continue
@@ -84,7 +84,7 @@ extension ReducerStrategies {
     /// Extracts all branch nodes from the tree as `(fingerprint, node)` pairs.
     /// Fingerprints point to the `.branch` node itself (inside any `.selected` wrapper).
     private static func extractBranchNodes(
-        from tree: ChoiceTree,
+        from tree: ChoiceTree
     ) -> [(fingerprint: Fingerprint, node: ChoiceTree)] {
         var results: [(fingerprint: Fingerprint, node: ChoiceTree)] = []
         for element in tree.walk() {

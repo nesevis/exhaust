@@ -76,7 +76,7 @@ enum AlignedDeletionCohortBuilder {
     /// 3. Root sequence container cohorts (content spans of top-level lists)
     static func buildCohorts(
         from sequence: ChoiceSequence,
-        siblingGroups: [SiblingGroup],
+        siblingGroups: [SiblingGroup]
     ) -> [[AlignedDeletionSlot]] {
         alignedContainerCohorts(in: sequence)
             + alignedSiblingGroupCohorts(from: siblingGroups)
@@ -86,7 +86,7 @@ enum AlignedDeletionCohortBuilder {
     // MARK: - Sibling Group Cohorts
 
     private static func alignedSiblingGroupCohorts(
-        from siblingGroups: [SiblingGroup],
+        from siblingGroups: [SiblingGroup]
     ) -> [[AlignedDeletionSlot]] {
         var cohorts = [[AlignedDeletionSlot]]()
         for group in siblingGroups where group.ranges.count >= 2 {
@@ -99,7 +99,7 @@ enum AlignedDeletionCohortBuilder {
     // MARK: - Root Sequence Container Cohorts
 
     private static func rootSequenceContainerCohorts(
-        in sequence: ChoiceSequence,
+        in sequence: ChoiceSequence
     ) -> [[AlignedDeletionSlot]] {
         let sequenceContainerSpans = ChoiceSequence.extractContainerSpans(from: sequence).filter { span in
             guard case .sequence(true, isLengthExplicit: _) = span.kind else { return false }
@@ -131,7 +131,7 @@ enum AlignedDeletionCohortBuilder {
     // MARK: - Aligned Container Cohorts
 
     private static func alignedContainerCohorts(
-        in sequence: ChoiceSequence,
+        in sequence: ChoiceSequence
     ) -> [[AlignedDeletionSlot]] {
         let descriptors = ChoiceSequence.extractContainerSpans(from: sequence).compactMap { span in
             alignedContainerDescriptor(in: sequence, range: span.range, depth: span.depth)
@@ -175,7 +175,7 @@ enum AlignedDeletionCohortBuilder {
     static func alignedContainerDescriptor(
         in sequence: ChoiceSequence,
         range: ClosedRange<Int>,
-        depth: Int,
+        depth: Int
     ) -> AlignedContainerDescriptor? {
         let children = effectiveAlignedChildren(in: sequence, from: range)
         guard children.isEmpty == false else { return nil }
@@ -201,7 +201,7 @@ enum AlignedDeletionCohortBuilder {
     /// Returns the effective children of a container range, unwrapping up to 16 layers of single-child wrapper nodes.
     static func effectiveAlignedChildren(
         in sequence: ChoiceSequence,
-        from range: ClosedRange<Int>,
+        from range: ClosedRange<Int>
     ) -> [(range: ClosedRange<Int>, kind: SiblingChildKind)] {
         var currentRange = range
         var remainingUnwraps = 16
@@ -224,7 +224,7 @@ enum AlignedDeletionCohortBuilder {
 
     static func alignedChildrenMatch(
         _ lhs: AlignedContainerChild,
-        _ rhs: AlignedContainerChild,
+        _ rhs: AlignedContainerChild
     ) -> Bool {
         guard lhs.kind == rhs.kind else { return false }
         if lhs.kind == .bareValue {

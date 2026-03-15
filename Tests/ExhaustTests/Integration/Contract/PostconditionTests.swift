@@ -12,8 +12,8 @@ struct PostconditionTests {
             #exhaust(
                 SetUniquenessContract.self,
                 commandLimit: 5,
-                .suppressIssueReporting,
-            ),
+                .suppressIssueReporting
+            )
         )
 
         #expect(result.trace.contains { step in
@@ -29,8 +29,8 @@ struct PostconditionTests {
                 StackLIFOContract.self,
                 commandLimit: 4,
                 .suppressIssueReporting,
-                .useBonsaiReducer,
-            ),
+                .useBonsaiReducer
+            )
         )
 
         #expect(result.trace.contains { step in
@@ -45,8 +45,8 @@ struct PostconditionTests {
             #exhaust(
                 DictionaryConsistencyContract.self,
                 commandLimit: 6,
-                .suppressIssueReporting,
-            ),
+                .suppressIssueReporting
+            )
         )
 
         // Could be either invariant failure (count mismatch) or check failure

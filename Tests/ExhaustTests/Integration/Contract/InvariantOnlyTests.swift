@@ -12,8 +12,8 @@ struct InvariantOnlyTests {
             #exhaust(
                 CircularBufferContract.self,
                 commandLimit: 6,
-                .suppressIssueReporting,
-            ),
+                .suppressIssueReporting
+            )
         )
 
         #expect(result.trace.contains { step in
@@ -28,8 +28,8 @@ struct InvariantOnlyTests {
             #exhaust(
                 SortedBackingContract.self,
                 commandLimit: 5,
-                .suppressIssueReporting,
-            ),
+                .suppressIssueReporting
+            )
         )
 
         #expect(result.trace.contains { step in
@@ -125,9 +125,8 @@ struct CircularBuffer {
         return value
     }
 
-    // swiftlint:disable:next empty_count
     var isEmpty: Bool {
-        count <= 0
+        count <= 0 // swiftlint:disable:this empty_count
     }
 
     var isFull: Bool {

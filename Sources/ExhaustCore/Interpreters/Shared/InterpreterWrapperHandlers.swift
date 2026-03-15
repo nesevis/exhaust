@@ -9,7 +9,7 @@ public enum InterpreterWrapperHandlers {
     @inline(__always)
     public static func continueAfterSubgenerator<SubResult, Output>(
         runSubgenerator: () throws -> SubResult?,
-        runContinuation: (SubResult) throws -> Output?,
+        runContinuation: (SubResult) throws -> Output?
     ) throws -> Output? {
         guard let subResult = try runSubgenerator() else {
             return nil

@@ -56,7 +56,7 @@ public struct BinarySearchToTargetEncoder: AdaptiveEncoder {
                 validRange: v.validRange,
                 isRangeExplicit: v.isRangeExplicit,
                 choiceTag: v.choice.tag,
-                stepper: BinarySearchStepper(lo: targetBP, hi: currentBP),
+                stepper: BinarySearchStepper(lo: targetBP, hi: currentBP)
             ))
             i += 1
         }
@@ -75,7 +75,7 @@ public struct BinarySearchToTargetEncoder: AdaptiveEncoder {
                     sequence[state.seqIdx] = .value(.init(
                         choice: ChoiceValue(state.choiceTag.makeConvertible(bitPattern64: state.stepper.bestAccepted), tag: state.choiceTag),
                         validRange: state.validRange,
-                        isRangeExplicit: state.isRangeExplicit,
+                        isRangeExplicit: state.isRangeExplicit
                     ))
                 } else if let saved = savedEntry {
                     sequence[state.seqIdx] = saved
@@ -92,7 +92,7 @@ public struct BinarySearchToTargetEncoder: AdaptiveEncoder {
                 sequence[state.seqIdx] = .value(.init(
                     choice: ChoiceValue(state.choiceTag.makeConvertible(bitPattern64: bp), tag: state.choiceTag),
                     validRange: state.validRange,
-                    isRangeExplicit: state.isRangeExplicit,
+                    isRangeExplicit: state.isRangeExplicit
                 ))
                 return sequence
             }

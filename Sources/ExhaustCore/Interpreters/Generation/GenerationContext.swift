@@ -37,7 +37,7 @@ public struct GenerationContext: ~Copyable {
             size: size,
             prng: .init(seed: seed),
             materializePicks: materializePicks,
-            runs: runs,
+            runs: runs
         )
     }
 
@@ -47,7 +47,7 @@ public struct GenerationContext: ~Copyable {
         for (_, classifications) in classifications {
             ExhaustLog.info(
                 category: .generation,
-                event: "classifications_summary",
+                event: "classifications_summary"
             )
             for (label, runs) in classifications {
                 ExhaustLog.info(
@@ -56,7 +56,7 @@ public struct GenerationContext: ~Copyable {
                     metadata: [
                         "label": label,
                         "count": "\(runs.count)",
-                    ],
+                    ]
                 )
             }
         }

@@ -36,7 +36,7 @@ public struct BindSpanIndex {
             regions.append(BindRegion(
                 bindSpanRange: span.range,
                 innerRange: children[0].range,
-                boundRange: children[1].range,
+                boundRange: children[1].range
             ))
         }
         self.regions = regions

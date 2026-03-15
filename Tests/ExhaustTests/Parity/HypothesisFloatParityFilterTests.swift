@@ -15,11 +15,11 @@ private enum HypothesisFloatParityHelpers {
         _ gen: ReflectiveGenerator<Output>,
         startingAt value: Output,
         config: Interpreters.TCRConfiguration = .fast,
-        property: (Output) -> Bool,
+        property: (Output) -> Bool
     ) throws -> Output {
         let tree = try #require(try Interpreters.reflect(gen, with: value))
         let (_, output) = try #require(
-            try Interpreters.reduce(gen: gen, tree: tree, config: config, property: property),
+            try Interpreters.reduce(gen: gen, tree: tree, config: config, property: property)
         )
         return output
     }
@@ -41,7 +41,7 @@ struct HypothesisFloatShrinkingFilterTests {
 
             let output = try HypothesisFloatParityHelpers.reduce(
                 gen,
-                startingAt: lower + 0.875,
+                startingAt: lower + 0.875
             ) { _ in
                 false
             }

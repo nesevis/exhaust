@@ -26,7 +26,7 @@ public struct LogarithmicSchedule: PowerSchedule {
     public func energy(
         for seed: Seed,
         poolSize: Int,
-        averagePoolFitness: Double = 0,
+        averagePoolFitness: Double = 0
     ) -> Int {
         let scoreFactor: Double = if averagePoolFitness > 0 {
             // Fitness mode: seeds with above-average fitness get more energy

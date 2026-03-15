@@ -54,7 +54,7 @@ enum ReductionScheduler {
         preCovariantSequence: ChoiceSequence,
         postCovariantSequence: ChoiceSequence,
         preBindIndex: BindSpanIndex,
-        postBindIndex: BindSpanIndex,
+        postBindIndex: BindSpanIndex
     ) -> ChoiceSequence? {
         guard preBindIndex.regions.count == postBindIndex.regions.count else { return nil }
 
@@ -141,7 +141,7 @@ enum ReductionScheduler {
         gen: ReflectiveGenerator<Output>,
         initialTree: ChoiceTree,
         config: Interpreters.BonsaiReducerConfiguration,
-        property: (Output) -> Bool,
+        property: (Output) -> Bool
     ) throws -> (ChoiceSequence, Output)? {
         let isInstrumented = ExhaustLog.isEnabled(.debug, for: .reducer)
 
@@ -180,7 +180,7 @@ enum ReductionScheduler {
 
         var reduceFloatEncoder = ReduceFloatEncoder()
         var deleteAlignedWindowsEncoder = DeleteAlignedWindowsEncoder(
-            beamTuning: config.alignedDeletionBeamSearchTuning,
+            beamTuning: config.alignedDeletionBeamSearchTuning
         )
         var tandemEncoder = TandemReductionEncoder()
         var redistributeEncoder = CrossStageRedistributeEncoder()
@@ -241,7 +241,7 @@ enum ReductionScheduler {
             targets: TargetSet,
             structureChanged: Bool,
             cache: inout ReducerCache,
-            budget: inout LegBudget,
+            budget: inout LegBudget
         ) throws -> Bool {
             guard budget.isExhausted == false else { return false }
             if lattice.shouldSkip(encoder.name, phase: encoder.phase) { return false }
@@ -256,7 +256,7 @@ enum ReductionScheduler {
                     gen: gen,
                     tree: tree,
                     originalSequence: sequence,
-                    property: property,
+                    property: property
                 ) {
                     budget.recordMaterialization(accepted: true)
                     accept(result, structureChanged: structureChanged)
@@ -300,7 +300,7 @@ enum ReductionScheduler {
             targets: TargetSet,
             structureChanged: Bool,
             cache _: inout ReducerCache,
-            budget: inout LegBudget,
+            budget: inout LegBudget
         ) throws -> Bool {
             guard budget.isExhausted == false else { return false }
             if lattice.shouldSkip(encoder.name, phase: encoder.phase) { return false }
@@ -315,7 +315,7 @@ enum ReductionScheduler {
                 probes += 1
                 if let result = try decoder.decode(
                     candidate: probe, gen: gen, tree: tree,
-                    originalSequence: sequence, property: property,
+                    originalSequence: sequence, property: property
                 ) {
                     budget.recordMaterialization(accepted: true)
                     accept(result, structureChanged: structureChanged)
@@ -416,7 +416,7 @@ enum ReductionScheduler {
                 ExhaustLog.debug(
                     category: .reducer,
                     event: "vcycle_start",
-                    metadata: ["cycle": "\(cycles)", "stall_budget": "\(stallBudget)", "max_bind_depth": "\(maxBindDepth)", "cycle_budget": "\(remaining)"],
+                    metadata: ["cycle": "\(cycles)", "stall_budget": "\(stallBudget)", "max_bind_depth": "\(maxBindDepth)", "cycle_budget": "\(remaining)"]
                 )
             }
 
@@ -641,7 +641,7 @@ enum ReductionScheduler {
                         preCovariantSequence: preCovariantSequence,
                         postCovariantSequence: sequence,
                         preBindIndex: preBi,
-                        postBindIndex: postBi,
+                        postBindIndex: postBi
                     ) {
                         let seed = ZobristHash.hash(of: mergedSeq)
                         if case let .success(mergedOutput, mergedFinalSeq, mergedTree) =
@@ -679,7 +679,7 @@ enum ReductionScheduler {
                 // where the cross-stage encoder cannot make progress.
                 if hasBind, let bi = bindIndex, bi.regions.count >= 2 {
                     let regionPairs = BindAwareRedistributeEncoder.buildPlans(
-                        from: sequence, bindIndex: bi,
+                        from: sequence, bindIndex: bi
                     )
                     for plan in regionPairs {
                         guard legBudget.isExhausted == false else { break }
@@ -687,24 +687,24 @@ enum ReductionScheduler {
                         let bindRedistDecoder: SequenceDecoder = if config.useReductionMaterializer {
                             .guidedFresh(
                                 fallbackTree: fallbackTree ?? tree,
-                                maximizeBoundRegionIndices: Set([sinkRegionIndex]),
+                                maximizeBoundRegionIndices: Set([sinkRegionIndex])
                             )
                         } else {
                             .guided(
                                 fallbackTree: fallbackTree ?? tree,
                                 strictness: .normal,
-                                maximizeBoundRegionIndices: Set([sinkRegionIndex]),
+                                maximizeBoundRegionIndices: Set([sinkRegionIndex])
                             )
                         }
                         bindAwareRedistributeEncoder.startPlan(
-                            sequence: sequence, plan: plan,
+                            sequence: sequence, plan: plan
                         )
                         var lastAccepted = false
                         while let probe = bindAwareRedistributeEncoder.nextProbe(lastAccepted: lastAccepted) {
                             guard legBudget.isExhausted == false else { break }
                             if let result = try bindRedistDecoder.decode(
                                 candidate: probe, gen: gen, tree: tree,
-                                originalSequence: sequence, property: property,
+                                originalSequence: sequence, property: property
                             ) {
                                 legBudget.recordMaterialization(accepted: true)
                                 accept(result, structureChanged: true)

@@ -56,7 +56,7 @@ struct BidirectionalResult {
 /// 6. There is a 1:1 correspondence between parameters and arguments
 func analyzeClosureForBidirectional(
     _ closure: ClosureExprSyntax,
-    generatorCount: Int,
+    generatorCount: Int
 ) -> ClosureAnalysisOutcome {
     // Step 1: Extract named closure parameters
     let parameterNames: [String]
@@ -87,7 +87,7 @@ func analyzeClosureForBidirectional(
 /// Shorthand params provide implicit positional ordering — `$0` corresponds to the first generator, `$1` to the second, etc. The labels needed for Mirror-based backward extraction come from the function call argument labels, not from parameter names.
 private func analyzeShorthandClosure(
     _ closure: ClosureExprSyntax,
-    generatorCount: Int,
+    generatorCount: Int
 ) -> ClosureAnalysisOutcome {
     guard let singleExpr = extractSingleExpression(from: closure.statements) else {
         return .forwardOnly(.forwardOnlyMultiStatement)
@@ -147,7 +147,7 @@ private func analyzeShorthandClosure(
         parameterNames: parameterNames,
         argumentParamRefs: argumentParamRefs,
         caseName: caseName,
-        originalArgumentLabels: originalArgumentLabels,
+        originalArgumentLabels: originalArgumentLabels
     ))
 }
 
@@ -159,7 +159,7 @@ private func analyzeShorthandClosure(
 private func analyzeFunctionCall(
     _ singleExpr: ExprSyntax,
     parameterNames: [String],
-    generatorCount: Int,
+    generatorCount: Int
 ) -> ClosureAnalysisOutcome {
     guard let funcCall = singleExpr.as(FunctionCallExprSyntax.self) else {
         return .forwardOnly(.forwardOnlyNotFunctionCall)
@@ -212,7 +212,7 @@ private func analyzeFunctionCall(
         parameterNames: parameterNames,
         argumentParamRefs: argumentParamRefs,
         caseName: caseName,
-        originalArgumentLabels: originalArgumentLabels,
+        originalArgumentLabels: originalArgumentLabels
     ))
 }
 

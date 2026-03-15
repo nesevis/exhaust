@@ -42,7 +42,7 @@ public struct Xoshiro256: ~Copyable {
             splitmix.next(),
             splitmix.next(),
             splitmix.next(),
-            splitmix.next(),
+            splitmix.next()
         )
     }
 

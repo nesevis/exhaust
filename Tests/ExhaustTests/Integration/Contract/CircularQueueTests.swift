@@ -32,8 +32,8 @@ struct CircularQueueTests {
                 .samplingBudget(500),
                 .suppressIssueReporting,
                 .replay(12_892_450_489_757_532_783),
-                .useBonsaiReducer,
-            ),
+                .useBonsaiReducer
+            )
         )
 
         #expect(result.trace.contains { step in
@@ -124,5 +124,9 @@ struct BuggyCircularQueue {
 
     var size: Int {
         count
+    }
+    
+    var isEmpty: Bool {
+        size == 0
     }
 }

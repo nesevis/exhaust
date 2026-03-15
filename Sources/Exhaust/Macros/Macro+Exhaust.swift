@@ -45,7 +45,7 @@ import ExhaustCore
 public macro exhaust<T>(
     _ gen: ReflectiveGenerator<T>,
     _ settings: ExhaustSettings<T>...,
-    property: (T) throws -> Bool,
+    property: (T) throws -> Bool
 ) -> T? = #externalMacro(module: "ExhaustMacros", type: "ExhaustTestMacro")
 
 /// Runs a contract property test that generates command sequences, executes them against the system under test, and verifies that contracts (invariants, postconditions, and optional model comparisons) hold after every step.
@@ -87,7 +87,7 @@ public macro exhaust<T>(
 public macro exhaust<Spec: ContractSpec>(
     _ specType: Spec.Type,
     commandLimit: Int,
-    _ settings: ContractSettings...,
+    _ settings: ContractSettings...
 ) -> ContractResult<Spec>? = #externalMacro(module: "ExhaustMacros", type: "ExhaustContractMacro")
 
 /// Runs an async contract property test that generates command sequences, executes them against an async system under test, and verifies that contracts hold after every step.
@@ -100,5 +100,5 @@ public macro exhaust<Spec: ContractSpec>(
 public macro exhaust<Spec: AsyncContractSpec>(
     _ specType: Spec.Type,
     commandLimit: Int,
-    _ settings: ContractSettings...,
+    _ settings: ContractSettings...
 ) -> ContractResult<Spec>? = #externalMacro(module: "ExhaustMacros", type: "ExhaustAsyncContractMacro")

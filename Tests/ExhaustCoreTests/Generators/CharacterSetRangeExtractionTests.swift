@@ -73,7 +73,7 @@ struct CharacterSetRangeExtractionTests {
     func compositeAlphanumericsPunctuation() {
         verifyRoundTrip(
             CharacterSet.alphanumerics.union(.punctuationCharacters),
-            name: "alphanumerics ∪ punctuation",
+            name: "alphanumerics ∪ punctuation"
         )
     }
 
@@ -135,7 +135,7 @@ struct CharacterSetRangeExtractionTests {
             let srs = characterSet.scalarRangeSet()
             #expect(
                 srs.rangeCount > 0,
-                "Expected positive range count for \(name)",
+                "Expected positive range count for \(name)"
             )
         }
     }
@@ -216,7 +216,7 @@ struct CharacterSetRangeExtractionTests {
         while let (value, tree) = try iterator.next() {
             guard !property(value) else { continue }
             guard let (_, shrunk) = try Interpreters.reduce(
-                gen: gen, tree: tree, config: .fast, property: property,
+                gen: gen, tree: tree, config: .fast, property: property
             ) else { continue }
             // Shrunk value should be '5' (the smallest digit failing the property)
             #expect(shrunk == "5", "Expected shrunk digit to be '5', got '\(shrunk)'")
@@ -259,25 +259,25 @@ private func characterGen(from characterSet: CharacterSet) -> ReflectiveGenerato
         { (char: Character) throws -> Int in
             guard let scalar = char.unicodeScalars.first else {
                 throw Interpreters.ReflectionError.couldNotReflectOnSequenceElement(
-                    "Character has no scalars",
+                    "Character has no scalars"
                 )
             }
             return srs.index(of: scalar)
         },
         Gen.choose(in: 0 ... srs.scalarCount - 1)
-            ._map { Character(srs.scalar(at: $0)) },
+            ._map { Character(srs.scalar(at: $0)) }
     )
 }
 
 /// Builds a string generator from a CharacterSet using ExhaustCore primitives.
 private func stringGen(
     from characterSet: CharacterSet,
-    length: ClosedRange<UInt64>,
+    length: ClosedRange<UInt64>
 ) -> ReflectiveGenerator<String> {
     let charGen = characterGen(from: characterSet)
     return Gen.contramap(
         { (s: String) throws -> [Character] in s.unicodeScalars.map { Character($0) } },
-        Gen.arrayOf(charGen, within: length)._map { String($0) },
+        Gen.arrayOf(charGen, within: length)._map { String($0) }
     )
 }
 
@@ -286,7 +286,7 @@ private func exhaustCheck<T>(
     _ gen: ReflectiveGenerator<T>,
     maxIterations: UInt64 = 100,
     seed: UInt64 = 42,
-    property: (T) -> Bool,
+    property: (T) -> Bool
 ) throws {
     var iter = ValueInterpreter(gen, seed: seed, maxRuns: maxIterations)
     while let value = try iter.next() {

@@ -18,11 +18,11 @@ public extension __ExhaustRuntime {
     static func _macroMap<Input, Output>(
         _ generator: ReflectiveGenerator<Input>,
         label: String,
-        forward: @Sendable @escaping (Input) -> Output,
+        forward: @Sendable @escaping (Input) -> Output
     ) -> ReflectiveGenerator<Output> {
         Gen.contramap(
             { _mirrorExtract($0, label: label) },
-            generator._map(forward),
+            generator._map(forward)
         )
     }
 
@@ -40,7 +40,7 @@ public extension __ExhaustRuntime {
     static func _macroMap<Input, Output>(
         _ generator: ReflectiveGenerator<Input>,
         backward: @Sendable @escaping (Output) -> Input?,
-        forward: @Sendable @escaping (Input) -> Output,
+        forward: @Sendable @escaping (Input) -> Output
     ) -> ReflectiveGenerator<Output> {
         Gen.contramap(
             { (output: Output) throws -> Input in
@@ -49,7 +49,7 @@ public extension __ExhaustRuntime {
                 }
                 return input
             },
-            generator._map(forward),
+            generator._map(forward)
         )
     }
 
@@ -70,7 +70,7 @@ public extension __ExhaustRuntime {
     static func _macroZip<each T, NewOutput>(
         _ generators: repeat ReflectiveGenerator<each T>,
         labels: [String],
-        forward: @Sendable @escaping ((repeat each T)) -> NewOutput,
+        forward: @Sendable @escaping ((repeat each T)) -> NewOutput
     ) -> ReflectiveGenerator<NewOutput> {
         var erased: ContiguousArray<ReflectiveGenerator<Any>> = []
         erased.reserveCapacity(5)
@@ -80,7 +80,7 @@ public extension __ExhaustRuntime {
 
         let impure: ReflectiveGenerator<[Any]> = .impure(
             operation: .zip(erased),
-            continuation: { .pure($0 as! [Any]) },
+            continuation: { .pure($0 as! [Any]) }
         )
 
         let forwardFromArray: ([Any]) -> NewOutput = { values in
@@ -114,7 +114,7 @@ public extension __ExhaustRuntime {
     static func _macroZip<each T, NewOutput>(
         _ generators: repeat ReflectiveGenerator<each T>,
         backward: @Sendable @escaping (NewOutput) -> [Any]?,
-        forward: @Sendable @escaping ((repeat each T)) -> NewOutput,
+        forward: @Sendable @escaping ((repeat each T)) -> NewOutput
     ) -> ReflectiveGenerator<NewOutput> {
         var erased: ContiguousArray<ReflectiveGenerator<Any>> = []
         erased.reserveCapacity(5)
@@ -124,7 +124,7 @@ public extension __ExhaustRuntime {
 
         let impure: ReflectiveGenerator<[Any]> = .impure(
             operation: .zip(erased),
-            continuation: { .pure($0 as! [Any]) },
+            continuation: { .pure($0 as! [Any]) }
         )
 
         let forwardFromArray: ([Any]) -> NewOutput = { values in
@@ -154,7 +154,7 @@ public extension __ExhaustRuntime {
     @inlinable
     static func _macroMapScalar<Input: BinaryInteger, Output: BinaryInteger>(
         _ generator: ReflectiveGenerator<Input>,
-        forward: @Sendable @escaping (Input) -> Output,
+        forward: @Sendable @escaping (Input) -> Output
     ) -> ReflectiveGenerator<Output> {
         generator._mapped(forward: forward, backward: { Input($0) })
     }
@@ -163,7 +163,7 @@ public extension __ExhaustRuntime {
     @inlinable
     static func _macroMapScalar<Input: BinaryFloatingPoint, Output: BinaryFloatingPoint>(
         _ generator: ReflectiveGenerator<Input>,
-        forward: @Sendable @escaping (Input) -> Output,
+        forward: @Sendable @escaping (Input) -> Output
     ) -> ReflectiveGenerator<Output> {
         generator._mapped(forward: forward, backward: { Input($0) })
     }
@@ -172,7 +172,7 @@ public extension __ExhaustRuntime {
     @inlinable
     static func _macroMapScalar<Input, Output>(
         _ generator: ReflectiveGenerator<Input>,
-        forward: @Sendable @escaping (Input) -> Output,
+        forward: @Sendable @escaping (Input) -> Output
     ) -> ReflectiveGenerator<Output> {
         generator.map(forward)
     }
@@ -181,7 +181,7 @@ public extension __ExhaustRuntime {
 
     /// Forwarding wrapper for `Gen.zip`, used by macro expansion for the no-closure multi-generator overload (e.g. `#gen(a, b)` with no trailing closure).
     static func __zip<each T>(
-        _ generators: repeat ReflectiveGenerator<each T>,
+        _ generators: repeat ReflectiveGenerator<each T>
     ) -> ReflectiveGenerator<(repeat each T)> {
         Gen.zip(repeat each generators)
     }

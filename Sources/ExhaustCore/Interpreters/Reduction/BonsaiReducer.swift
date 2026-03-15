@@ -22,7 +22,7 @@ public extension Interpreters {
             recentCycleWindow: Int,
             probeBudgets: TCRConfiguration.ProbeBudgets,
             alignedDeletionBeamSearchTuning: TCRConfiguration.AlignedDeletionBeamSearchTuning,
-            useReductionMaterializer: Bool = true,
+            useReductionMaterializer: Bool = true
         ) {
             self.maxStalls = maxStalls
             self.recentCycleWindow = recentCycleWindow
@@ -43,14 +43,14 @@ public extension Interpreters {
             maxStalls: 1,
             recentCycleWindow: 6,
             probeBudgets: .fast,
-            alignedDeletionBeamSearchTuning: .fast,
+            alignedDeletionBeamSearchTuning: .fast
         )
 
         public static let slow = Self(
             maxStalls: 8,
             recentCycleWindow: 12,
             probeBudgets: .slow,
-            alignedDeletionBeamSearchTuning: .slow,
+            alignedDeletionBeamSearchTuning: .slow
         )
     }
 }
@@ -65,7 +65,7 @@ public extension Interpreters {
         gen: ReflectiveGenerator<Output>,
         tree: ChoiceTree,
         config: BonsaiReducerConfiguration,
-        property: (Output) -> Bool,
+        property: (Output) -> Bool
     ) throws -> (ChoiceSequence, Output)? {
         try ReductionScheduler.run(gen: gen, initialTree: tree, config: config, property: property)
     }

@@ -32,7 +32,7 @@ struct SIMDGeneratorTests {
     func simd4PerLane() {
         #examine(
             .simd4(.float(in: 0 ... 1), .float(in: 1 ... 2), .float(in: 2 ... 3), .float(in: 3 ... 4)),
-            samples: 50,
+            samples: 50
         )
     }
 

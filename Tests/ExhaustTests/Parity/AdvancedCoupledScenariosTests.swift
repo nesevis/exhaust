@@ -102,11 +102,11 @@ struct AdvancedCoupledScenariosTests {
         _ gen: ReflectiveGenerator<Output>,
         startingAt value: Output,
         config: Interpreters.TCRConfiguration = .fast,
-        property: (Output) -> Bool,
+        property: (Output) -> Bool
     ) throws -> Output {
         let tree = try #require(try Interpreters.reflect(gen, with: value))
         let (_, output) = try #require(
-            try Interpreters.reduce(gen: gen, tree: tree, config: config, property: property),
+            try Interpreters.reduce(gen: gen, tree: tree, config: config, property: property)
         )
         return output
     }
@@ -115,7 +115,7 @@ struct AdvancedCoupledScenariosTests {
     func coupledIntegersFastCheckStyle() throws {
         let gen = #gen(
             .int(in: 0 ... 1_000_000),
-            .int(in: 0 ... 1_000_000),
+            .int(in: 0 ... 1_000_000)
         )
 
         let property: ((Int, Int)) -> Bool = { pair in
@@ -131,7 +131,7 @@ struct AdvancedCoupledScenariosTests {
         let output = try reduce(
             gen,
             startingAt: (500_000, 500_500),
-            property: property,
+            property: property
         )
 
         #expect(property(output) == false)
@@ -142,7 +142,7 @@ struct AdvancedCoupledScenariosTests {
     func statefulStackBugJqwikStyle() throws {
         let actionGen: ReflectiveGenerator<AdvancedCoupledFixtures.StackAction> = #gen(
             .int(in: 0 ... 1),
-            Gen.element(from: ["a", "b", "c"]),
+            Gen.element(from: ["a", "b", "c"])
         )
         .mapped(
             forward: { tag, value in
@@ -155,7 +155,7 @@ struct AdvancedCoupledScenariosTests {
                 case let .push(value):
                     (1, value)
                 }
-            },
+            }
         )
 
         let gen = actionGen.array(length: 1 ... 40)
@@ -166,7 +166,7 @@ struct AdvancedCoupledScenariosTests {
         let output = try reduce(
             gen,
             startingAt: [.push("c"), .pop, .push("b")],
-            property: property,
+            property: property
         )
 
         #expect(property(output) == false)
@@ -179,7 +179,7 @@ struct AdvancedCoupledScenariosTests {
             .array(length: 0 ... 40)
             .mapped(
                 forward: { chars in String(chars) },
-                backward: { string in Array(string) },
+                backward: { string in Array(string) }
             )
 
         let property: (String) -> Bool = { s in
@@ -189,7 +189,7 @@ struct AdvancedCoupledScenariosTests {
         let output = try reduce(
             binaryStringGen,
             startingAt: "11001",
-            property: property,
+            property: property
         )
 
         #expect(property(output) == false)
@@ -200,7 +200,7 @@ struct AdvancedCoupledScenariosTests {
     func floatingPointSummationHypothesisStyle() throws {
         let gen = #gen(
             .double(in: 0.0 ... 1000.0),
-            .double(in: 0.0 ... 1000.0),
+            .double(in: 0.0 ... 1000.0)
         )
 
         let property: ((Double, Double)) -> Bool = { pair in
@@ -210,7 +210,7 @@ struct AdvancedCoupledScenariosTests {
         let output = try reduce(
             gen,
             startingAt: (700.25, 450.75),
-            property: property,
+            property: property
         )
 
         #expect(property(output) == false)
@@ -225,7 +225,7 @@ struct AdvancedCoupledScenariosTests {
             .array(length: 0 ... 40)
             .mapped(
                 forward: { chars in String(chars) },
-                backward: { string in Array(string) },
+                backward: { string in Array(string) }
             )
 
         let property: (String) -> Bool = { s in
@@ -235,7 +235,7 @@ struct AdvancedCoupledScenariosTests {
         let output = try reduce(
             unicodeStringGen,
             startingAt: "xx\(marker)yy",
-            property: property,
+            property: property
         )
 
         #expect(property(output) == false)
@@ -246,7 +246,7 @@ struct AdvancedCoupledScenariosTests {
     func differenceWithGapCsCheckStyle() throws {
         let gen = #gen(
             .int(in: 0 ... 1_000_000),
-            .int(in: 0 ... 1_000_000),
+            .int(in: 0 ... 1_000_000)
         )
 
         let property: ((Int, Int)) -> Bool = { pair in
@@ -258,7 +258,7 @@ struct AdvancedCoupledScenariosTests {
         let output = try reduce(
             gen,
             startingAt: (700, 702),
-            property: property,
+            property: property
         )
 
         #expect(property(output) == false)

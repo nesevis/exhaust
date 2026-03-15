@@ -32,7 +32,7 @@ struct LargeUnionListShrinkingChallenge {
             .suppressIssueReporting,
             .replay(15_224_596_561_927_679_090),
 //            .useBonsaiReducer,
-            property: Self.property,
+            property: Self.property
         )
 
         // 460 invocations with legacy, 797 with bonsai
@@ -54,7 +54,7 @@ struct LargeUnionListShrinkingChallenge {
             .suppressIssueReporting,
             .reflecting(value),
             .useBonsaiReducer,
-            property: Self.property,
+            property: Self.property
         )
 
         // 738 invocations with legacy, 966 with bonsai
@@ -71,7 +71,7 @@ struct LargeUnionListShrinkingChallenge {
             .suppressIssueReporting,
             .reflecting(value),
 //            .useBonsaiReducer,
-            property: Self.property,
+            property: Self.property
         )
 
         // 619 invocations with legacy (20ms), 443 with bonsai (29ms)
@@ -87,7 +87,7 @@ struct LargeUnionListShrinkingChallenge {
             .suppressIssueReporting,
             .reflecting(value),
             .useBonsaiReducer,
-            property: Self.property,
+            property: Self.property
         )
 
         // 507 invocation with legacy (17ms), 460 with bonsai (11ms)
@@ -107,7 +107,7 @@ struct LargeUnionListShrinkingChallenge {
                 .suppressIssueReporting,
                 .reflecting(list),
 //                .useBonsaiReducer,
-                property: Self.property,
+                property: Self.property
             )
 
             // ~650–750 invocations with legacy in 962ms. 845ms with bonsai

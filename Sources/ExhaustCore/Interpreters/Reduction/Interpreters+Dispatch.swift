@@ -12,14 +12,14 @@ public extension Interpreters {
         tree: ChoiceTree,
         config: TCRConfiguration,
         useBonsai: Bool,
-        property: (Output) -> Bool,
+        property: (Output) -> Bool
     ) throws -> (ChoiceSequence, Output)? {
         if useBonsai {
             try bonsaiReduce(
                 gen: gen,
                 tree: tree,
                 config: .init(from: config),
-                property: property,
+                property: property
             )
         } else {
             try reduce(gen: gen, tree: tree, config: config, property: property)

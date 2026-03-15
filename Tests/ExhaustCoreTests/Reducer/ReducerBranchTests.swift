@@ -15,7 +15,7 @@ private func generate<Output>(
     _ gen: ReflectiveGenerator<Output>,
     materializePicks: Bool = true,
     seed: UInt64 = 42,
-    iteration: Int = 0,
+    iteration: Int = 0
 ) throws -> (value: Output, tree: ChoiceTree) {
     var iter = ValueAndChoiceTreeInterpreter(gen, materializePicks: materializePicks, seed: seed)
     return try #require(iter.prefix(iteration + 1).last)
@@ -45,14 +45,14 @@ private func makeTaggedGen() -> ReflectiveGenerator<Tagged> {
             if case let .small(a) = tagged { return a }
             return 0
         },
-        Gen.choose(in: 0 ... 100 as ClosedRange<Int>)._map { Tagged.small($0) },
+        Gen.choose(in: 0 ... 100 as ClosedRange<Int>)._map { Tagged.small($0) }
     )
     let bigBranch = Gen.contramap(
         { (tagged: Tagged) throws -> (Int, Int) in
             if case let .big(a, b) = tagged { return (a, b) }
             return (0, 0)
         },
-        Gen.zip(Gen.choose(in: 0 ... 100 as ClosedRange<Int>), Gen.choose(in: 0 ... 100 as ClosedRange<Int>))._map { Tagged.big($0, $1) },
+        Gen.zip(Gen.choose(in: 0 ... 100 as ClosedRange<Int>), Gen.choose(in: 0 ... 100 as ClosedRange<Int>))._map { Tagged.big($0, $1) }
     )
     return Gen.pick(choices: [(1, smallBranch), (1, bigBranch)])
 }
@@ -64,7 +64,7 @@ private func makeTaggedGen() -> ReflectiveGenerator<Tagged> {
 private func makeThreeWayGen() -> ReflectiveGenerator<Int> {
     let pairBranch = Gen.contramap(
         { (value: Int) -> (Int, Int) in (value / 2, value - value / 2) },
-        Gen.zip(Gen.choose(in: 1 ... 50 as ClosedRange<Int>), Gen.choose(in: 1 ... 50 as ClosedRange<Int>))._map { $0 + $1 },
+        Gen.zip(Gen.choose(in: 1 ... 50 as ClosedRange<Int>), Gen.choose(in: 1 ... 50 as ClosedRange<Int>))._map { $0 + $1 }
     )
     return Gen.pick(choices: [(1, Gen.choose(in: 0 ... 0 as ClosedRange<Int>)), (1, Gen.choose(in: 1 ... 100 as ClosedRange<Int>)), (1, pairBranch)])
 }
@@ -84,7 +84,7 @@ struct PromoteBranchesTests {
         let sequence = ChoiceSequence(tree)
 
         let result = try ReducerStrategies.promoteBranches(
-            gen, tree: tree, property: { _ in false }, sequence: sequence, rejectCache: &cache,
+            gen, tree: tree, property: { _ in false }, sequence: sequence, rejectCache: &cache
         )
         #expect(result == nil)
     }
@@ -96,7 +96,7 @@ struct PromoteBranchesTests {
         let sequence = ChoiceSequence(tree)
 
         let result = try ReducerStrategies.promoteBranches(
-            taggedGen, tree: tree, property: { _ in false }, sequence: sequence, rejectCache: &cache,
+            taggedGen, tree: tree, property: { _ in false }, sequence: sequence, rejectCache: &cache
         )
         // Only 1 pick site → nothing to replace
         #expect(result == nil)
@@ -119,7 +119,7 @@ struct PromoteBranchesTests {
 
                 // Property that always fails — any replacement that shortlex-precedes is accepted
                 if let (_, candidateSeq, _) = try ReducerStrategies.promoteBranches(
-                    pairGen, tree: tree, property: { _ in false }, sequence: sequence, rejectCache: &cache,
+                    pairGen, tree: tree, property: { _ in false }, sequence: sequence, rejectCache: &cache
                 ) {
                     print()
                     // The candidate must be strictly simpler
@@ -146,7 +146,7 @@ struct PromoteBranchesTests {
                 var cache = ReducerCache()
 
                 if let (_, candidateSeq, _) = try ReducerStrategies.promoteBranches(
-                    pairGen, tree: tree, property: { _ in false }, sequence: sequence, rejectCache: &cache,
+                    pairGen, tree: tree, property: { _ in false }, sequence: sequence, rejectCache: &cache
                 ) {
                     print()
                     #expect(sequence.shortString != candidateSeq.shortString)
@@ -170,7 +170,7 @@ struct PromoteBranchesTests {
                 // First call: get a result
                 var cache1 = ReducerCache()
                 guard let (_, candidateSeq, _) = try ReducerStrategies.promoteBranches(
-                    pairGen, tree: tree, property: { _ in false }, sequence: sequence, rejectCache: &cache1,
+                    pairGen, tree: tree, property: { _ in false }, sequence: sequence, rejectCache: &cache1
                 ) else {
                     continue
                 }
@@ -179,7 +179,7 @@ struct PromoteBranchesTests {
                 var cache2 = ReducerCache()
                 cache2.insert(candidateSeq)
                 let result2 = try ReducerStrategies.promoteBranches(
-                    pairGen, tree: tree, property: { _ in false }, sequence: sequence, rejectCache: &cache2,
+                    pairGen, tree: tree, property: { _ in false }, sequence: sequence, rejectCache: &cache2
                 )
 
                 // Should either return a different candidate or nil
@@ -205,7 +205,7 @@ struct PromoteBranchesTests {
 
                 // Property always passes — no shrink result should be returned
                 let result = try ReducerStrategies.promoteBranches(
-                    pairGen, tree: tree, property: { _ in true }, sequence: sequence, rejectCache: &cache,
+                    pairGen, tree: tree, property: { _ in true }, sequence: sequence, rejectCache: &cache
                 )
                 #expect(result == nil)
             }
@@ -225,12 +225,12 @@ struct PromoteBranchesTests {
                 var cache = ReducerCache()
 
                 if let (candidateTree, candidateSeq, output) = try ReducerStrategies.promoteBranches(
-                    pairGen, tree: tree, property: { _ in false }, sequence: sequence, rejectCache: &cache,
+                    pairGen, tree: tree, property: { _ in false }, sequence: sequence, rejectCache: &cache
                 ) {
                     // The returned output must match what materialisation produces
                     #expect(sequence.shortString != candidateSeq.shortString)
                     let rematerialised = try #require(
-                        try Interpreters.materialize(pairGen, with: candidateTree, using: candidateSeq),
+                        try Interpreters.materialize(pairGen, with: candidateTree, using: candidateSeq)
                     )
                     #expect(rematerialised == output)
                     return
@@ -256,7 +256,7 @@ struct PivotBranchesTests {
         let sequence = ChoiceSequence(tree)
 
         let result = try ReducerStrategies.pivotBranches(
-            gen, tree: tree, property: { _ in false }, sequence: sequence, rejectCache: &cache,
+            gen, tree: tree, property: { _ in false }, sequence: sequence, rejectCache: &cache
         )
         #expect(result == nil)
     }
@@ -269,7 +269,7 @@ struct PivotBranchesTests {
         let sequence = ChoiceSequence(tree)
 
         let result = try ReducerStrategies.pivotBranches(
-            taggedGen, tree: tree, property: { _ in false }, sequence: sequence, rejectCache: &cache,
+            taggedGen, tree: tree, property: { _ in false }, sequence: sequence, rejectCache: &cache
         )
         #expect(result == nil)
     }
@@ -291,7 +291,7 @@ struct PivotBranchesTests {
 
                 // Property: always fails — any pivot that shortlex-precedes is accepted
                 if let (_, candidateSeq, output) = try ReducerStrategies.pivotBranches(
-                    taggedGen, tree: tree, property: { _ in false }, sequence: sequence, rejectCache: &cache,
+                    taggedGen, tree: tree, property: { _ in false }, sequence: sequence, rejectCache: &cache
                 ) {
                     #expect(sequence.shortString != candidateSeq.shortString)
                     #expect(candidateSeq.shortLexPrecedes(sequence))
@@ -316,10 +316,10 @@ struct PivotBranchesTests {
                 var cache = ReducerCache()
 
                 if let (candidateTree, candidateSeq, output) = try ReducerStrategies.pivotBranches(
-                    taggedGen, tree: tree, property: { _ in false }, sequence: sequence, rejectCache: &cache,
+                    taggedGen, tree: tree, property: { _ in false }, sequence: sequence, rejectCache: &cache
                 ) {
                     let rematerialised = try #require(
-                        try Interpreters.materialize(taggedGen, with: candidateTree, using: candidateSeq),
+                        try Interpreters.materialize(taggedGen, with: candidateTree, using: candidateSeq)
                     )
                     #expect(rematerialised == output)
                     return
@@ -336,7 +336,7 @@ struct PivotBranchesTests {
             var cache = ReducerCache()
 
             let result = try ReducerStrategies.pivotBranches(
-                taggedGen, tree: tree, property: { _ in true }, sequence: sequence, rejectCache: &cache,
+                taggedGen, tree: tree, property: { _ in true }, sequence: sequence, rejectCache: &cache
             )
             #expect(result == nil)
         }
@@ -353,14 +353,14 @@ struct PivotBranchesTests {
 
                 var cache1 = ReducerCache()
                 guard let (_, candidateSeq, _) = try ReducerStrategies.pivotBranches(
-                    taggedGen, tree: tree, property: { _ in false }, sequence: sequence, rejectCache: &cache1,
+                    taggedGen, tree: tree, property: { _ in false }, sequence: sequence, rejectCache: &cache1
                 ) else { continue }
 
                 // Pre-populate with the candidate
                 var cache2 = ReducerCache()
                 cache2.insert(candidateSeq)
                 let result2 = try ReducerStrategies.pivotBranches(
-                    taggedGen, tree: tree, property: { _ in false }, sequence: sequence, rejectCache: &cache2,
+                    taggedGen, tree: tree, property: { _ in false }, sequence: sequence, rejectCache: &cache2
                 )
                 // With only 2 branches and the one candidate cached, there's nothing left
                 #expect(result2 == nil)
@@ -380,7 +380,7 @@ struct PivotBranchesTests {
                 var cache = ReducerCache()
 
                 if let (_, candidateSeq, _) = try ReducerStrategies.pivotBranches(
-                    taggedGen, tree: tree, property: { _ in false }, sequence: sequence, rejectCache: &cache,
+                    taggedGen, tree: tree, property: { _ in false }, sequence: sequence, rejectCache: &cache
                 ) {
                     #expect(sequence.shortString != candidateSeq.shortString)
                     #expect(candidateSeq.shortLexPrecedes(sequence))
@@ -406,7 +406,7 @@ struct PivotBranchesTests {
                 var cache = ReducerCache()
 
                 if let (_, candidateSeq, output) = try ReducerStrategies.pivotBranches(
-                    threeWayGen, tree: tree, property: { _ in false }, sequence: sequence, rejectCache: &cache,
+                    threeWayGen, tree: tree, property: { _ in false }, sequence: sequence, rejectCache: &cache
                 ) {
                     #expect(candidateSeq.shortLexPrecedes(sequence))
                     // The simplest alternative (constant 0) should have been picked first
@@ -432,7 +432,7 @@ struct PivotBranchesTests {
                 var cache = ReducerCache()
 
                 if let (_, candidateSeq, _) = try ReducerStrategies.pivotBranches(
-                    pairGen, tree: tree, property: { _ in false }, sequence: sequence, rejectCache: &cache,
+                    pairGen, tree: tree, property: { _ in false }, sequence: sequence, rejectCache: &cache
                 ) {
                     #expect(candidateSeq.shortLexPrecedes(sequence))
                     pivotCount += 1
@@ -454,7 +454,7 @@ struct PivotBranchesTests {
                 var cache = ReducerCache()
 
                 if let (candidateTree, candidateSeq, output) = try ReducerStrategies.pivotBranches(
-                    taggedGen, tree: tree, property: { _ in false }, sequence: sequence, rejectCache: &cache,
+                    taggedGen, tree: tree, property: { _ in false }, sequence: sequence, rejectCache: &cache
                 ) {
                     // Verify the candidate sequence is valid (balanced markers)
                     #expect(ChoiceSequence.validate(candidateSeq))
@@ -465,7 +465,7 @@ struct PivotBranchesTests {
 
                     // Verify materialisation reproduces the output
                     let rematerialised = try #require(
-                        try Interpreters.materialize(taggedGen, with: candidateTree, using: candidateSeq),
+                        try Interpreters.materialize(taggedGen, with: candidateTree, using: candidateSeq)
                     )
                     #expect(rematerialised == output)
                     return

@@ -103,7 +103,7 @@ struct ReduceFloatEncoder: AdaptiveEncoder {
                 validRange: v.validRange,
                 isRangeExplicit: v.isRangeExplicit,
                 currentValue: floatingValue,
-                currentBitPattern: v.choice.bitPattern64,
+                currentBitPattern: v.choice.bitPattern64
             ))
         }
     }
@@ -299,7 +299,7 @@ struct ReduceFloatEncoder: AdaptiveEncoder {
             let candidateEntry = ChoiceSequenceValue.reduced(.init(
                 choice: candidateChoice,
                 validRange: target.validRange,
-                isRangeExplicit: target.isRangeExplicit,
+                isRangeExplicit: target.isRangeExplicit
             ))
             guard candidateEntry.shortLexCompare(sequence[target.seqIdx]) == .lt else {
                 continue
@@ -363,7 +363,7 @@ struct ReduceFloatEncoder: AdaptiveEncoder {
         let candidateEntry = ChoiceSequenceValue.reduced(.init(
             choice: candidateChoice,
             validRange: target.validRange,
-            isRangeExplicit: target.isRangeExplicit,
+            isRangeExplicit: target.isRangeExplicit
         ))
         guard candidateEntry.shortLexCompare(sequence[target.seqIdx]) == .lt else {
             return nextIntegralBinarySearchCandidate(lastAccepted: false)
@@ -387,7 +387,7 @@ struct ReduceFloatEncoder: AdaptiveEncoder {
         let candidateEntry = ChoiceSequenceValue.reduced(.init(
             choice: candidateChoice,
             validRange: target.validRange,
-            isRangeExplicit: target.isRangeExplicit,
+            isRangeExplicit: target.isRangeExplicit
         ))
         sequence[target.seqIdx] = candidateEntry
         targets[currentTargetIndex].currentValue = candidateDouble
@@ -448,7 +448,7 @@ struct ReduceFloatEncoder: AdaptiveEncoder {
         let candidateEntry = ChoiceSequenceValue.reduced(.init(
             choice: candidateChoice,
             validRange: target.validRange,
-            isRangeExplicit: target.isRangeExplicit,
+            isRangeExplicit: target.isRangeExplicit
         ))
         guard candidateEntry.shortLexCompare(sequence[target.seqIdx]) == .lt else {
             return nextRatioBinarySearchCandidate(lastAccepted: false)
@@ -474,7 +474,7 @@ struct ReduceFloatEncoder: AdaptiveEncoder {
         let candidateEntry = ChoiceSequenceValue.reduced(.init(
             choice: candidateChoice,
             validRange: target.validRange,
-            isRangeExplicit: target.isRangeExplicit,
+            isRangeExplicit: target.isRangeExplicit
         ))
         sequence[target.seqIdx] = candidateEntry
         targets[currentTargetIndex].currentValue = candidateValue
@@ -494,7 +494,7 @@ struct ReduceFloatEncoder: AdaptiveEncoder {
                 let entry = ChoiceSequenceValue.reduced(.init(
                     choice: choice,
                     validRange: target.validRange,
-                    isRangeExplicit: target.isRangeExplicit,
+                    isRangeExplicit: target.isRangeExplicit
                 ))
                 sequence[target.seqIdx] = entry
                 if case let .floating(v, _, _) = choice {

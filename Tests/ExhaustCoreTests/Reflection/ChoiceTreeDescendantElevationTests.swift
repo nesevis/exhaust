@@ -34,7 +34,7 @@ struct ChoiceTreeDescendantElevationTests {
             weight: 1,
             id: 302,
             branchIDs: [301, 302],
-            choice: .group([ChoiceTree.just("node"), deepestLeafGroup]),
+            choice: .group([ChoiceTree.just("node"), deepestLeafGroup])
         ))
         let deepOther = ChoiceTree.branch(siteID: 0, weight: 1, id: 301, branchIDs: [301, 302], choice: .just("alt"))
 
@@ -43,7 +43,7 @@ struct ChoiceTreeDescendantElevationTests {
             weight: 1,
             id: 202,
             branchIDs: [201, 202],
-            choice: .group([deepSelected, deepOther]),
+            choice: .group([deepSelected, deepOther])
         ))
         let midOther = ChoiceTree.branch(siteID: 0, weight: 1, id: 201, branchIDs: [201, 202], choice: .just("mid-alt"))
 
@@ -52,7 +52,7 @@ struct ChoiceTreeDescendantElevationTests {
             weight: 1,
             id: 102,
             branchIDs: [101, 102, 103],
-            choice: .group([midSelected, midOther, ChoiceTree.just("tail")]),
+            choice: .group([midSelected, midOther, ChoiceTree.just("tail")])
         ))
         let rootLeft = ChoiceTree.branch(siteID: 0, weight: 1, id: 101, branchIDs: [101, 102, 103], choice: .just("left"))
         let rootRight = ChoiceTree.branch(siteID: 0, weight: 1, id: 103, branchIDs: [101, 102, 103], choice: .just("right"))

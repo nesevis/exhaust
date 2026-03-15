@@ -21,7 +21,7 @@ public struct PromoteBranchesEncoder: BatchEncoder {
 
     public func encode(
         sequence: ChoiceSequence,
-        targets _: TargetSet,
+        targets _: TargetSet
     ) -> any Sequence<ChoiceSequence> {
         guard let tree = currentTree else { return AnySequence([]) }
         guard tree.contains(\.unwrapped.isBranch) else { return AnySequence([]) }
@@ -60,7 +60,7 @@ public struct PromoteBranchesEncoder: BatchEncoder {
 // MARK: - Helpers
 
 private func extractBranchNodes(
-    from tree: ChoiceTree,
+    from tree: ChoiceTree
 ) -> [(fingerprint: Fingerprint, node: ChoiceTree)] {
     var results: [(fingerprint: Fingerprint, node: ChoiceTree)] = []
     for element in tree.walk() {

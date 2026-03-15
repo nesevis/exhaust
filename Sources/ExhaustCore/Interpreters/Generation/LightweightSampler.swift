@@ -11,7 +11,7 @@ public enum LightweightSampler {
     public static func sample<Output>(
         _ gen: ReflectiveGenerator<Output>,
         using rng: inout Xoshiro256,
-        size: UInt64 = 50,
+        size: UInt64 = 50
     ) throws -> Output? {
         try eval(gen, with: (), rng: &rng, size: size)
     }
@@ -22,7 +22,7 @@ public enum LightweightSampler {
         _ gen: ReflectiveGenerator<Output>,
         with inputValue: some Any,
         rng: inout Xoshiro256,
-        size: UInt64,
+        size: UInt64
     ) throws -> Output? {
         switch gen {
         case let .pure(value):
@@ -139,7 +139,7 @@ public enum LightweightSampler {
         _ continuation: (Any) throws -> ReflectiveGenerator<Output>,
         inputValue: some Any,
         rng: inout Xoshiro256,
-        size: UInt64,
+        size: UInt64
     ) throws -> Output? {
         let nextGen = try continuation(result)
         return try eval(nextGen, with: inputValue, rng: &rng, size: size)

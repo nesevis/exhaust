@@ -64,7 +64,7 @@ public enum ZobristHash {
         _ hash: UInt64,
         at position: Int,
         replacing oldValue: ChoiceSequenceValue,
-        with newValue: ChoiceSequenceValue,
+        with newValue: ChoiceSequenceValue
     ) -> UInt64 {
         hash ^ contribution(at: position, oldValue) ^ contribution(at: position, newValue)
     }

@@ -30,7 +30,7 @@ struct GenerateMacroIntegrationTests {
         let ageGen = Gen.choose(in: 0 ... 120) as ReflectiveGenerator<Int>
         let personGen = Gen.contramap(
             { (p: Person) -> (String, Int) in (p.name, p.age) },
-            Gen.zip(nameGen, ageGen)._map { Person(name: $0, age: $1) },
+            Gen.zip(nameGen, ageGen)._map { Person(name: $0, age: $1) }
         )
 
         let target = Person(name: "Alice", age: 30)
@@ -38,7 +38,7 @@ struct GenerateMacroIntegrationTests {
 
         let sequence = ChoiceSequence(tree)
         let materialized = try #require(
-            try Interpreters.materialize(personGen, with: tree, using: sequence),
+            try Interpreters.materialize(personGen, with: tree, using: sequence)
         )
         #expect(materialized == target)
     }
@@ -52,14 +52,14 @@ struct GenerateMacroIntegrationTests {
         let catGen = Gen.contramap(
             { (p: Pet) -> Int? in guard case let .cat(n) = p else { return nil }; return n },
             (Gen.choose(in: Int.min ... Int.max, scaling: Int.defaultScaling) as ReflectiveGenerator<Int>)
-                ._map { Pet.cat($0) },
+                ._map { Pet.cat($0) }
         )
         let dogGen = Gen.contramap(
             { (p: Pet) -> (Int, String)? in guard case let .dog(n, s) = p else { return nil }; return (n, s) },
             Gen.zip(
                 Gen.choose(in: Int.min ... Int.max, scaling: Int.defaultScaling) as ReflectiveGenerator<Int>,
-                asciiStringGen(),
-            )._map { Pet.dog($0, $1) },
+                asciiStringGen()
+            )._map { Pet.dog($0, $1) }
         )
         let petGen = Gen.pick(choices: [(1, catGen), (1, dogGen)])
         let target = Pet.dog(13, "Buddy")
@@ -78,7 +78,7 @@ struct GenerateMacroIntegrationTests {
         let zGen = Gen.choose(in: -100 ... 100) as ReflectiveGenerator<Int>
         let coordGen = Gen.contramap(
             { (c: Coordinate) -> (Int, Int, Int) in (c.x, c.y, c.z) },
-            Gen.zip(xGen, yGen, zGen)._map { Coordinate(x: $0, y: $1, z: $2) },
+            Gen.zip(xGen, yGen, zGen)._map { Coordinate(x: $0, y: $1, z: $2) }
         )
 
         let target = Coordinate(x: 42, y: -7, z: 99)
@@ -86,7 +86,7 @@ struct GenerateMacroIntegrationTests {
 
         let sequence = ChoiceSequence(tree)
         let materialized = try #require(
-            try Interpreters.materialize(coordGen, with: tree, using: sequence),
+            try Interpreters.materialize(coordGen, with: tree, using: sequence)
         )
         #expect(materialized == target)
     }
@@ -99,7 +99,7 @@ struct GenerateMacroIntegrationTests {
         let ageGen = Gen.choose(in: 0 ... 120) as ReflectiveGenerator<Int>
         let personGen = Gen.contramap(
             { (p: Person) -> (String, Int) in (p.name, p.age) },
-            Gen.zip(nameGen, ageGen)._map { Person(name: $0, age: $1) },
+            Gen.zip(nameGen, ageGen)._map { Person(name: $0, age: $1) }
         )
 
         var iterator = ValueAndChoiceTreeInterpreter(personGen, seed: 7, maxRuns: 10)
@@ -107,7 +107,7 @@ struct GenerateMacroIntegrationTests {
             let reflectedTree = try #require(try Interpreters.reflect(personGen, with: generated))
             let sequence = ChoiceSequence(reflectedTree)
             let roundTripped = try #require(
-                try Interpreters.materialize(personGen, with: reflectedTree, using: sequence),
+                try Interpreters.materialize(personGen, with: reflectedTree, using: sequence)
             )
             #expect(roundTripped == generated)
         }
@@ -121,7 +121,7 @@ struct GenerateMacroIntegrationTests {
         let ageGen = Gen.choose(in: 0 ... 120) as ReflectiveGenerator<Int>
         let personGen = Gen.contramap(
             { (p: Person) -> (String, Int) in (p.name, p.age) },
-            Gen.zip(nameGen, ageGen)._map { Person(name: $0, age: $1) },
+            Gen.zip(nameGen, ageGen)._map { Person(name: $0, age: $1) }
         )
 
         let target = Person(name: "Bob", age: 25)
@@ -129,7 +129,7 @@ struct GenerateMacroIntegrationTests {
 
         let sequence = ChoiceSequence(tree)
         let materialized = try #require(
-            try Interpreters.materialize(personGen, with: tree, using: sequence),
+            try Interpreters.materialize(personGen, with: tree, using: sequence)
         )
         #expect(materialized == target)
     }
@@ -142,7 +142,7 @@ struct GenerateMacroIntegrationTests {
         let ageGen = Gen.choose(in: 0 ... 1000) as ReflectiveGenerator<Int>
         let personGen = Gen.contramap(
             { (p: Person) -> (String, Int) in (p.name, p.age) },
-            Gen.zip(nameGen, ageGen)._map { Person(name: $0, age: $1) },
+            Gen.zip(nameGen, ageGen)._map { Person(name: $0, age: $1) }
         )
 
         let failing = Person(name: "zqmfkwvxl", age: 500)
@@ -152,7 +152,7 @@ struct GenerateMacroIntegrationTests {
         #expect(property(failing) == false)
 
         let (_, shrunk) = try #require(
-            try Interpreters.reduce(gen: personGen, tree: tree, config: .fast, property: property),
+            try Interpreters.reduce(gen: personGen, tree: tree, config: .fast, property: property)
         )
         #expect(property(shrunk) == false)
         #expect(shrunk.age <= failing.age)

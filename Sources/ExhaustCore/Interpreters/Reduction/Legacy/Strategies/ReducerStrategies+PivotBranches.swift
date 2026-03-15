@@ -15,7 +15,7 @@ extension ReducerStrategies {
         property: (Output) -> Bool,
         sequence: ChoiceSequence,
         rejectCache: inout ReducerCache,
-        bindIndex _: BindSpanIndex? = nil,
+        bindIndex _: BindSpanIndex? = nil
     ) throws -> (ChoiceTree, ChoiceSequence, Output)? {
         let pickSites = extractPickSites(from: tree)
         guard !pickSites.isEmpty else { return nil }
@@ -56,7 +56,7 @@ extension ReducerStrategies {
                     gen,
                     with: candidateTree,
                     using: candidateSequence,
-                    strictness: .relaxed,
+                    strictness: .relaxed
                 ) else {
                     rejectCache.insert(candidateSequence)
                     continue

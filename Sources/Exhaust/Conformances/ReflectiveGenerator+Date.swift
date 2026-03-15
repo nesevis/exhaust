@@ -57,7 +57,7 @@ public extension ReflectiveGenerator {
     static func date(
         between range: ClosedRange<Date>,
         interval: DateSpan,
-        timeZone: TimeZone = .current,
+        timeZone: TimeZone = .current
     ) -> ReflectiveGenerator<Date> {
         let lowerSeconds = Int64(range.lowerBound.timeIntervalSinceReferenceDate)
         let upperSeconds = Int64(range.upperBound.timeIntervalSinceReferenceDate)
@@ -74,8 +74,8 @@ public extension ReflectiveGenerator {
                 min: Int64(0).bitPattern64,
                 max: numSteps.bitPattern64,
                 tag: .date(lowerSeconds: lowerSeconds, intervalSeconds: intervalSeconds, timeZoneID: timeZone.identifier),
-                isRangeExplicit: true,
-            ),
+                isRangeExplicit: true
+            )
         ) { .pure(Int64(bitPattern64: ($0 as! any BitPatternConvertible).bitPattern64)) }
 
         return inner.mapped(
@@ -84,7 +84,7 @@ public extension ReflectiveGenerator {
             },
             backward: { date in
                 Int64(floor((date.timeIntervalSinceReferenceDate - Double(lowerSeconds)) / Double(intervalSeconds)))
-            },
+            }
         )
     }
 
@@ -97,7 +97,7 @@ public extension ReflectiveGenerator {
         within span: DateSpan,
         of anchor: Date,
         interval: DateSpan,
-        timeZone: TimeZone = .current,
+        timeZone: TimeZone = .current
     ) -> ReflectiveGenerator<Date> {
         let offsetSeconds = TimeInterval(span.fixedSeconds)
         let range = anchor.addingTimeInterval(-offsetSeconds) ... anchor.addingTimeInterval(offsetSeconds)
@@ -115,7 +115,7 @@ public extension ReflectiveGenerator {
         within span: ClosedRange<DateSpan>,
         of anchor: Date,
         interval: DateSpan,
-        timeZone: TimeZone = .current,
+        timeZone: TimeZone = .current
     ) -> ReflectiveGenerator<Date> {
         let lower = anchor.addingTimeInterval(TimeInterval(span.lowerBound.fixedSeconds))
         let upper = anchor.addingTimeInterval(TimeInterval(span.upperBound.fixedSeconds))

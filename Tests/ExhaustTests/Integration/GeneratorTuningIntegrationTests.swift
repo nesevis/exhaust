@@ -70,7 +70,7 @@ struct GeneratorTuningIntegrationTests {
         let lengthGen = #gen(.uint64(in: 1 ... 50))
         let elementGen = #gen(.int(in: 1 ... 10))
         let gen = ReflectiveGenerator<[Int]>.impure(
-            operation: .sequence(length: lengthGen, gen: elementGen.erase()),
+            operation: .sequence(length: lengthGen, gen: elementGen.erase())
         ) { result in
             .pure(result as! [Int])
         }.filter(.probeSampling) { $0.count <= 3 }

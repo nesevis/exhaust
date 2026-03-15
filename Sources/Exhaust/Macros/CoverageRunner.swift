@@ -23,7 +23,7 @@ enum CoverageRunner {
     static func run<Output>(
         _ gen: ReflectiveGenerator<Output>,
         coverageBudget: UInt64,
-        property: (Output) -> Bool,
+        property: (Output) -> Bool
     ) -> Result<Output> {
         guard let analysis = ChoiceTreeAnalysis.analyze(gen) else {
             return .notApplicable
@@ -42,7 +42,7 @@ enum CoverageRunner {
         _ gen: ReflectiveGenerator<Output>,
         profile: FiniteDomainProfile,
         coverageBudget: UInt64,
-        property: (Output) -> Bool,
+        property: (Output) -> Bool
     ) -> Result<Output> {
         // When the original tree contains bind nodes, coverage only exhausts the inner
         // parameter space — the bound subtree varies per inner value and isn't covered.
@@ -106,7 +106,7 @@ enum CoverageRunner {
             rows: covering.rows.count,
             parameters: profile.parameters.count,
             totalSpace: profile.totalSpace,
-            kind: .finiteDomain,
+            kind: .finiteDomain
         )
     }
 
@@ -114,7 +114,7 @@ enum CoverageRunner {
         _ gen: ReflectiveGenerator<Output>,
         profile: BoundaryDomainProfile,
         coverageBudget: UInt64,
-        property: (Output) -> Bool,
+        property: (Output) -> Bool
     ) -> Result<Output> {
         guard let covering = CoveringArray.bestFitting(budget: coverageBudget, boundaryProfile: profile) else {
             return .notApplicable
@@ -163,7 +163,7 @@ enum CoverageRunner {
             rows: covering.rows.count,
             parameters: profile.parameters.count,
             totalSpace: covering.profile.totalSpace,
-            kind: .boundaryValue,
+            kind: .boundaryValue
         )
     }
 }

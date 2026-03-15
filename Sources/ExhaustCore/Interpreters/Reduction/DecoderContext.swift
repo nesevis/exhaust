@@ -15,7 +15,7 @@ public struct DecoderContext {
         bindIndex: BindSpanIndex?,
         fallbackTree: ChoiceTree?,
         strictness: Interpreters.Strictness,
-        useReductionMaterializer: Bool = false,
+        useReductionMaterializer: Bool = false
     ) {
         self.depth = depth
         self.bindIndex = bindIndex

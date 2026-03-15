@@ -28,7 +28,7 @@ public enum HillClimber {
         scorer: (Output) -> Double,
         property: (Output) -> Bool,
         budget: Int,
-        prng: inout Xoshiro256,
+        prng: inout Xoshiro256
     ) -> HillClimbResult<Output> {
         var currentSequence = seed.sequence
         var probesUsed = 0
@@ -37,13 +37,13 @@ public enum HillClimber {
         // so the external prng stream isn't perturbed by probe count.
         let probePRNGSeed = GenerationContext.runSeed(
             base: seed.generation &+ UInt64(seed.sequence.count),
-            runIndex: UInt64(bitPattern: Int64(seed.fitness.bitPattern)),
+            runIndex: UInt64(bitPattern: Int64(seed.fitness.bitPattern))
         )
         var probePRNG = Xoshiro256(seed: probePRNGSeed)
 
         // Materialize the seed via GuidedMaterializer to get baseline
         guard case let .success(baselineValue, _, _) = GuidedMaterializer.materialize(
-            gen, prefix: currentSequence, seed: probePRNG.next(),
+            gen, prefix: currentSequence, seed: probePRNG.next()
         ) else {
             return .unchanged(probesUsed: 0)
         }
@@ -100,19 +100,19 @@ public enum HillClimber {
 
                         let newChoice = ChoiceValue(
                             choiceTag.makeConvertible(bitPattern64: newBP),
-                            tag: choiceTag,
+                            tag: choiceTag
                         )
                         let newEntry = ChoiceSequenceValue.value(.init(
                             choice: newChoice,
                             validRange: validRange,
-                            isRangeExplicit: isRangeExplicit,
+                            isRangeExplicit: isRangeExplicit
                         ))
 
                         var probe = currentSequence
                         probe[i] = newEntry
 
                         guard case let .success(value, sequence, tree) = GuidedMaterializer.materialize(
-                            gen, prefix: probe, seed: probePRNG.next(),
+                            gen, prefix: probe, seed: probePRNG.next()
                         ) else {
                             probesUsed += 1
                             return false
@@ -176,7 +176,7 @@ public enum HillClimber {
                     probe[i] = .branch(.init(id: altID, validIDs: b.validIDs))
 
                     guard case let .success(value, sequence, tree) = GuidedMaterializer.materialize(
-                        gen, prefix: probe, seed: probePRNG.next(),
+                        gen, prefix: probe, seed: probePRNG.next()
                     ) else {
                         probesUsed += 1
                         continue
@@ -216,7 +216,7 @@ public enum HillClimber {
                 tree: currentTree,
                 noveltyScore: 0,
                 fitness: currentScore,
-                generation: seed.generation,
+                generation: seed.generation
             )
             return .improved(seed: newSeed, output: bestOutput, probesUsed: probesUsed)
         }
@@ -230,7 +230,7 @@ public enum HillClimber {
         newScore: Double,
         currentScore: Double,
         newLength: Int,
-        currentLength: Int,
+        currentLength: Int
     ) -> Bool {
         if newScore > currentScore { return true }
         if newScore == currentScore, newLength <= currentLength { return true }
@@ -241,7 +241,7 @@ public enum HillClimber {
     private static func reflectOrFallback<Output>(
         gen: ReflectiveGenerator<Output>,
         value: Output,
-        fallback: ChoiceTree,
+        fallback: ChoiceTree
     ) -> ChoiceTree {
         (try? Interpreters.reflect(gen, with: value)) ?? fallback
     }

@@ -111,7 +111,7 @@ public extension ReflectiveGenerator where Operation == ReflectiveOperation {
         fileID: StaticString = #fileID,
         filePath: StaticString = #filePath,
         line: UInt = #line,
-        column: UInt = #column,
+        column: UInt = #column
     ) -> ValidationReport {
         _validate(samples: samples, seed: seed, differ: nil, fileID: fileID, filePath: filePath, line: line, column: column)
     }
@@ -135,7 +135,7 @@ public extension ReflectiveGenerator where Operation == ReflectiveOperation, Val
         fileID: StaticString = #fileID,
         filePath: StaticString = #filePath,
         line: UInt = #line,
-        column: UInt = #column,
+        column: UInt = #column
     ) -> ValidationReport {
         _validate(
             samples: samples,
@@ -150,7 +150,7 @@ public extension ReflectiveGenerator where Operation == ReflectiveOperation, Val
             fileID: fileID,
             filePath: filePath,
             line: line,
-            column: column,
+            column: column
         )
     }
 }
@@ -178,7 +178,7 @@ private extension ReflectiveGenerator where Operation == ReflectiveOperation {
         fileID: StaticString,
         filePath: StaticString,
         line: UInt,
-        column: UInt,
+        column: UInt
     ) -> ValidationReport {
         let maxFailures = 20
         var failures: [ValidationFailure] = []
@@ -192,7 +192,7 @@ private extension ReflectiveGenerator where Operation == ReflectiveOperation {
         var iterator = ValueAndChoiceTreeInterpreter(
             self,
             seed: seed,
-            maxRuns: UInt64(samples),
+            maxRuns: UInt64(samples)
         )
 
         for sampleIndex in 0 ..< samples {
@@ -217,7 +217,7 @@ private extension ReflectiveGenerator where Operation == ReflectiveOperation {
                             case let .notEqual(detail):
                                 failures.append(.reflectionRoundTripMismatch(
                                     sampleIndex: sampleIndex,
-                                    detail: detail,
+                                    detail: detail
                                 ))
                             }
                         } else {
@@ -231,7 +231,7 @@ private extension ReflectiveGenerator where Operation == ReflectiveOperation {
                         } else {
                             failures.append(.reflectionRoundTripMismatch(
                                 sampleIndex: sampleIndex,
-                                detail: "choice sequences differ: \(generatedSequence.shortString) vs \(reflectedSequence.shortString)",
+                                detail: "choice sequences differ: \(generatedSequence.shortString) vs \(reflectedSequence.shortString)"
                             ))
                         }
                     }
@@ -292,7 +292,7 @@ private extension ReflectiveGenerator where Operation == ReflectiveOperation {
             replayDeterminismSuccesses: determinismSuccesses,
             uniqueChoiceSequences: uniqueSequences.count,
             failures: failures,
-            elapsedTime: elapsedSeconds,
+            elapsedTime: elapsedSeconds
         )
 
         for failure in report.failures {
@@ -301,7 +301,7 @@ private extension ReflectiveGenerator where Operation == ReflectiveOperation {
                 fileID: fileID,
                 filePath: filePath,
                 line: line,
-                column: column,
+                column: column
             )
         }
 

@@ -21,7 +21,7 @@ public struct PivotBranchesEncoder: BatchEncoder {
 
     public func encode(
         sequence: ChoiceSequence,
-        targets _: TargetSet,
+        targets _: TargetSet
     ) -> any Sequence<ChoiceSequence> {
         guard let tree = currentTree else { return AnySequence([]) }
         let pickSites = extractPickSites(from: tree)

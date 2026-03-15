@@ -242,7 +242,7 @@ struct CompositionTests {
             let gen = #gen(.int(in: 1 ... 5))
                 .bound(
                     forward: { n in Gen.just(Array(repeating: 0, count: n)) },
-                    backward: { (arr: [Int]) in arr.count },
+                    backward: { (arr: [Int]) in arr.count }
                 )
 
             for _ in 0 ..< 20 {
@@ -258,7 +258,7 @@ struct CompositionTests {
             let gen = #gen(.int(in: 1 ... 5))
                 .bound(
                     forward: { n in Gen.just(Array(repeating: 0, count: n)) },
-                    backward: { (arr: [Int]) in arr.count },
+                    backward: { (arr: [Int]) in arr.count }
                 )
 
             #examine(gen, samples: 50, seed: 42)
@@ -283,7 +283,7 @@ struct CompositionTests {
             // Generate a max value, then generate an int within that range
             let gen = #gen(.int(in: 10 ... 20)).bound(
                 forward: { max in #gen(.int(in: 0 ... max)) },
-                backward: { (_: Int) in 15 }, // conservative: always claim max was 15
+                backward: { (_: Int) in 15 } // conservative: always claim max was 15
             )
 
             // Forward generation should work
@@ -315,7 +315,7 @@ struct CompositionTests {
         func bimapIsReplayable() throws {
             let gen = #gen(.int()).mapped(
                 forward: { $0.bitPattern64 },
-                backward: { Int(bitPattern64: $0) },
+                backward: { Int(bitPattern64: $0) }
             )
 
             var iterator = ValueInterpreter(gen)

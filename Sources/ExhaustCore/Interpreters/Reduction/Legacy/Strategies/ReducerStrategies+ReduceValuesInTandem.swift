@@ -36,7 +36,7 @@ extension ReducerStrategies {
         rejectCache: inout ReducerCache,
         probeBudget: Int,
         onBudgetExhausted: ((String) -> Void)? = nil,
-        bindIndex: BindSpanIndex? = nil,
+        bindIndex: BindSpanIndex? = nil
     ) throws -> (ChoiceSequence, Output)? {
         var current = sequence
         var progress = false
@@ -65,7 +65,7 @@ extension ReducerStrategies {
                 let windowPlans = tandemWindowPlans(
                     for: indexSet,
                     in: current,
-                    groupKind: group.kind,
+                    groupKind: group.kind
                 )
                 for plan in windowPlans {
                     if budgetExhausted {
@@ -80,7 +80,7 @@ extension ReducerStrategies {
                     if let targetCandidate = tandemCandidate(
                         plan: plan,
                         current: current,
-                        delta: plan.distance,
+                        delta: plan.distance
                     ) {
                         let probe = targetCandidate.sequence
                         if rejectCache.contains(probe) == false {
@@ -118,7 +118,7 @@ extension ReducerStrategies {
                             guard let probeCandidate = tandemCandidate(
                                 plan: plan,
                                 current: current,
-                                delta: delta,
+                                delta: delta
                             ) else {
                                 return false
                             }
@@ -149,7 +149,7 @@ extension ReducerStrategies {
                             return success
                         },
                         low: UInt64(0),
-                        high: plan.distance,
+                        high: plan.distance
                     )
 
                     if budgetExhausted {
@@ -173,7 +173,7 @@ extension ReducerStrategies {
                        let fallbackCandidate = tandemCandidate(
                            plan: plan,
                            current: current,
-                           delta: bestDelta,
+                           delta: bestDelta
                        )
                     {
                         let candidate = fallbackCandidate.sequence
@@ -215,7 +215,7 @@ extension ReducerStrategies {
     private static func tandemWindowPlans(
         for indexSet: [Int],
         in sequence: ChoiceSequence,
-        groupKind: SiblingChildKind,
+        groupKind: SiblingChildKind
     ) -> [TandemWindowPlan] {
         guard indexSet.count >= 2 else { return [] }
 
@@ -227,7 +227,7 @@ extension ReducerStrategies {
             guard let plan = makeTandemWindowPlan(
                 windowIndices: windowIndices,
                 in: sequence,
-                groupKind: groupKind,
+                groupKind: groupKind
             ) else {
                 continue
             }
@@ -240,7 +240,7 @@ extension ReducerStrategies {
     private static func makeTandemWindowPlan(
         windowIndices: [Int],
         in sequence: ChoiceSequence,
-        groupKind: SiblingChildKind,
+        groupKind: SiblingChildKind
     ) -> TandemWindowPlan? {
         guard let firstValueIndex = windowIndices.first,
               let firstValue = sequence[firstValueIndex].value
@@ -270,7 +270,7 @@ extension ReducerStrategies {
             }
             let targetChoice = ChoiceValue(
                 tag.makeConvertible(bitPattern64: targetBP),
-                tag: tag,
+                tag: tag
             )
             guard case let .floating(targetFloatingValue, _, _) = targetChoice,
                   currentFloatingValue.isFinite,
@@ -310,14 +310,14 @@ extension ReducerStrategies {
             disallowAwayMoves: groupKind != .bareValue,
             usesFloatingSteps: usesFloatingSteps,
             searchUpward: searchUpward,
-            distance: distance,
+            distance: distance
         )
     }
 
     private static func tandemCandidate(
         plan: TandemWindowPlan,
         current: ChoiceSequence,
-        delta: UInt64,
+        delta: UInt64
     ) -> TandemWindowCandidate? {
         guard delta > 0 else { return nil }
 
@@ -355,7 +355,7 @@ extension ReducerStrategies {
                     : value.choice.bitPattern64 - delta
                 newChoice = ChoiceValue(
                     plan.tag.makeConvertible(bitPattern64: newValue),
-                    tag: plan.tag,
+                    tag: plan.tag
                 )
             }
             guard !value.isRangeExplicit || newChoice.fits(in: value.validRange) else {
@@ -372,7 +372,7 @@ extension ReducerStrategies {
             let newEntry = ChoiceSequenceValue.value(.init(
                 choice: newChoice,
                 validRange: value.validRange,
-                isRangeExplicit: value.isRangeExplicit,
+                isRangeExplicit: value.isRangeExplicit
             ))
             let order = newEntry.shortLexCompare(originalEntry)
             guard order != .eq else { continue }
@@ -394,7 +394,7 @@ extension ReducerStrategies {
 
     private static func tandemIndexSets(
         for group: SiblingGroup,
-        in sequence: ChoiceSequence,
+        in sequence: ChoiceSequence
     ) -> [[Int]] {
         if let valueRanges = group.valueRanges, valueRanges.count >= 2 {
             let indices = valueRanges.map(\.lowerBound)
@@ -474,7 +474,7 @@ extension ReducerStrategies {
 
     private static func valueIndices(
         in sequence: ChoiceSequence,
-        within range: ClosedRange<Int>,
+        within range: ClosedRange<Int>
     ) -> [Int] {
         var indices = [Int]()
         indices.reserveCapacity(range.count)

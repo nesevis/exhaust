@@ -44,7 +44,7 @@ struct DifferenceShrinkingChallenge {
             .suppressIssueReporting,
             .reflecting([700, 700]),
             .useBonsaiReducer,
-            property: property,
+            property: property
         )
 
         #expect(output == [10, 10])
@@ -64,7 +64,7 @@ struct DifferenceShrinkingChallenge {
             .suppressIssueReporting,
             .reflecting([700, 701]),
             .useBonsaiReducer,
-            property: property,
+            property: property
         )
 
         #expect(output == [10, 6])
@@ -77,7 +77,7 @@ struct DifferenceShrinkingChallenge {
         let output = #exhaust(
             gen,
             .suppressIssueReporting,
-            .useBonsaiReducer,
+            .useBonsaiReducer
         ) { arr in
             let diff = abs(arr[0] - arr[1])
             return arr[0] < 10 || diff != 1

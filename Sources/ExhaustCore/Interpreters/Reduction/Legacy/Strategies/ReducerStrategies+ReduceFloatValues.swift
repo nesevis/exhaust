@@ -24,7 +24,7 @@ extension ReducerStrategies {
         sequence: ChoiceSequence,
         valueSpans: [ChoiceSpan],
         rejectCache: inout ReducerCache,
-        bindIndex: BindSpanIndex? = nil,
+        bindIndex: BindSpanIndex? = nil
     ) throws -> (ChoiceSequence, Output)? {
         var current = sequence
         var currentHash = ZobristHash.hash(of: current)
@@ -52,7 +52,7 @@ extension ReducerStrategies {
             // Try target directly
             let targetChoice = ChoiceValue(
                 choiceTag.makeConvertible(bitPattern64: targetBP),
-                tag: choiceTag,
+                tag: choiceTag
             )
             let targetEntry = ChoiceSequenceValue.reduced(.init(choice: targetChoice, validRange: validRange, isRangeExplicit: isRangeExplicit))
             let targetHash = ZobristHash.updating(currentHash, at: seqIdx, replacing: current[seqIdx], with: targetEntry)
@@ -85,7 +85,7 @@ extension ReducerStrategies {
                 latestOutput: &latestOutput,
                 progress: &progress,
                 rejectCache: &rejectCache,
-                bindIndex: bindIndex,
+                bindIndex: bindIndex
             ) {
                 currentHash = ZobristHash.hash(of: current)
                 continue
@@ -104,7 +104,7 @@ extension ReducerStrategies {
                 latestOutput: &latestOutput,
                 progress: &progress,
                 rejectCache: &rejectCache,
-                bindIndex: bindIndex,
+                bindIndex: bindIndex
             ) {
                 currentHash = ZobristHash.hash(of: current)
                 continue
@@ -123,7 +123,7 @@ extension ReducerStrategies {
                 latestOutput: &latestOutput,
                 progress: &progress,
                 rejectCache: &rejectCache,
-                bindIndex: bindIndex,
+                bindIndex: bindIndex
             ) {
                 currentHash = ZobristHash.hash(of: current)
                 continue
@@ -142,7 +142,7 @@ extension ReducerStrategies {
                 latestOutput: &latestOutput,
                 progress: &progress,
                 rejectCache: &rejectCache,
-                bindIndex: bindIndex,
+                bindIndex: bindIndex
             ) {
                 currentHash = ZobristHash.hash(of: current)
                 continue
@@ -171,7 +171,7 @@ extension ReducerStrategies {
         latestOutput: inout Output?,
         progress: inout Bool,
         rejectCache: inout ReducerCache,
-        bindIndex: BindSpanIndex? = nil,
+        bindIndex: BindSpanIndex? = nil
     ) -> Bool {
         guard case .floating = value.choice else {
             return false
@@ -193,7 +193,7 @@ extension ReducerStrategies {
                 latestOutput: &latestOutput,
                 progress: &progress,
                 rejectCache: &rejectCache,
-                bindIndex: bindIndex,
+                bindIndex: bindIndex
             ) {
                 return true
             }
@@ -216,7 +216,7 @@ extension ReducerStrategies {
         latestOutput: inout Output?,
         progress: inout Bool,
         rejectCache: inout ReducerCache,
-        bindIndex: BindSpanIndex? = nil,
+        bindIndex: BindSpanIndex? = nil
     ) -> Bool {
         guard case let .floating(currentFloatingValue, _, _) = value.choice,
               currentFloatingValue.isFinite
@@ -258,7 +258,7 @@ extension ReducerStrategies {
                     latestOutput: &latestOutput,
                     progress: &progress,
                     rejectCache: &rejectCache,
-                    bindIndex: bindIndex,
+                    bindIndex: bindIndex
                 ) {
                     return true
                 }
@@ -295,7 +295,7 @@ extension ReducerStrategies {
         latestOutput: inout Output?,
         progress: inout Bool,
         rejectCache: inout ReducerCache,
-        bindIndex: BindSpanIndex? = nil,
+        bindIndex: BindSpanIndex? = nil
     ) -> Bool {
         guard candidateChoice.bitPattern64 != currentValue.choice.bitPattern64 else {
             return false
@@ -307,7 +307,7 @@ extension ReducerStrategies {
         let candidateEntry = ChoiceSequenceValue.reduced(.init(
             choice: candidateChoice,
             validRange: currentValue.validRange,
-            isRangeExplicit: currentValue.isRangeExplicit,
+            isRangeExplicit: currentValue.isRangeExplicit
         ))
         guard candidateEntry.shortLexCompare(currentSequence[seqIdx]) == .lt else {
             return false
@@ -345,7 +345,7 @@ extension ReducerStrategies {
         latestOutput: inout Output?,
         progress: inout Bool,
         rejectCache: inout ReducerCache,
-        bindIndex: BindSpanIndex? = nil,
+        bindIndex: BindSpanIndex? = nil
     ) -> Bool {
         guard case let .floating(currentFloatingValue, _, _) = value.choice,
               currentFloatingValue.isFinite,
@@ -405,7 +405,7 @@ extension ReducerStrategies {
                 let candidateEntry = ChoiceSequenceValue.reduced(.init(
                     choice: candidateChoice,
                     validRange: value.validRange,
-                    isRangeExplicit: value.isRangeExplicit,
+                    isRangeExplicit: value.isRangeExplicit
                 ))
                 if isWithinRecordedRange, candidateChoice.fits(in: value.validRange) == false {
                     return false
@@ -431,7 +431,7 @@ extension ReducerStrategies {
                 return fails
             },
             low: UInt64(0),
-            high: searchUpperBound,
+            high: searchUpperBound
         )
 
         guard bestQuantum > 0,
@@ -461,7 +461,7 @@ extension ReducerStrategies {
         latestOutput: inout Output?,
         progress: inout Bool,
         rejectCache: inout ReducerCache,
-        bindIndex: BindSpanIndex? = nil,
+        bindIndex: BindSpanIndex? = nil
     ) -> Bool {
         guard case let .floating(currentFloatingValue, _, _) = value.choice,
               currentFloatingValue.isFinite,
@@ -517,7 +517,7 @@ extension ReducerStrategies {
                 let candidateEntry = ChoiceSequenceValue.reduced(.init(
                     choice: candidateChoice,
                     validRange: value.validRange,
-                    isRangeExplicit: value.isRangeExplicit,
+                    isRangeExplicit: value.isRangeExplicit
                 ))
                 if isWithinRecordedRange, candidateChoice.fits(in: value.validRange) == false {
                     return false
@@ -547,7 +547,7 @@ extension ReducerStrategies {
                 return fails
             },
             low: UInt64(0),
-            high: searchUpperBound,
+            high: searchUpperBound
         )
 
         guard bestDelta > 0,

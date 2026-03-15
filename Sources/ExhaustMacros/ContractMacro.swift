@@ -7,14 +7,14 @@ import SwiftSyntaxMacros
 public struct ExhaustContractMacro: ExpressionMacro {
     public static func expansion(
         of node: some FreestandingMacroExpansionSyntax,
-        in context: some MacroExpansionContext,
+        in context: some MacroExpansionContext
     ) throws -> ExprSyntax {
         let args = node.arguments.map(\.self)
 
         guard args.count >= 2 else {
             context.diagnose(Diagnostic(
                 node: Syntax(node),
-                message: ExhaustMacroDiagnostic.exhaustContractMissingSpec,
+                message: ExhaustMacroDiagnostic.exhaustContractMissingSpec
             ))
             return "fatalError(\"#exhaust requires a spec type and commandLimit argument\")"
         }
@@ -42,14 +42,14 @@ public struct ExhaustContractMacro: ExpressionMacro {
 public struct ExhaustAsyncContractMacro: ExpressionMacro {
     public static func expansion(
         of node: some FreestandingMacroExpansionSyntax,
-        in context: some MacroExpansionContext,
+        in context: some MacroExpansionContext
     ) throws -> ExprSyntax {
         let args = node.arguments.map(\.self)
 
         guard args.count >= 2 else {
             context.diagnose(Diagnostic(
                 node: Syntax(node),
-                message: ExhaustMacroDiagnostic.exhaustContractMissingSpec,
+                message: ExhaustMacroDiagnostic.exhaustContractMissingSpec
             ))
             return "fatalError(\"#exhaust requires a spec type and commandLimit argument\")"
         }

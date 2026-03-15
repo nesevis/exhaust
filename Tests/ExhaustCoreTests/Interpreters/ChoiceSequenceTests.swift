@@ -14,7 +14,7 @@ struct ChoiceSequenceTests {
     func flattenSimpleChoice() {
         let tree = ChoiceTree.choice(
             .unsigned(42, .uint64),
-            ChoiceMetadata(validRange: 0 ... 100),
+            ChoiceMetadata(validRange: 0 ... 100)
         )
 
         let flattened = ChoiceSequence.flatten(tree)
@@ -45,7 +45,7 @@ struct ChoiceSequenceTests {
                 .choice(.unsigned(5, .uint64), ChoiceMetadata(validRange: 0 ... 10)),
                 .choice(.unsigned(8, .uint64), ChoiceMetadata(validRange: 0 ... 10)),
             ],
-            ChoiceMetadata(validRange: 0 ... 10),
+            ChoiceMetadata(validRange: 0 ... 10)
         )
 
         let flattened = ChoiceSequence.flatten(tree)
@@ -65,17 +65,17 @@ struct ChoiceSequenceTests {
                         .choice(.unsigned(5, .uint64), ChoiceMetadata(validRange: 0 ... 10)),
                         .choice(.unsigned(8, .uint64), ChoiceMetadata(validRange: 0 ... 10)),
                     ],
-                    ChoiceMetadata(validRange: 0 ... 10),
+                    ChoiceMetadata(validRange: 0 ... 10)
                 ),
                 .sequence(
                     length: 1,
                     elements: [
                         .choice(.unsigned(3, .uint64), ChoiceMetadata(validRange: 0 ... 10)),
                     ],
-                    ChoiceMetadata(validRange: 0 ... 10),
+                    ChoiceMetadata(validRange: 0 ... 10)
                 ),
             ],
-            ChoiceMetadata(validRange: 0 ... 10),
+            ChoiceMetadata(validRange: 0 ... 10)
         )
 
         let flattened = ChoiceSequence.flatten(tree)
@@ -121,7 +121,7 @@ struct ChoiceSequenceTests {
             newSize: 100,
             choices: [
                 .choice(.unsigned(42, .uint64), ChoiceMetadata(validRange: 0 ... 100)),
-            ],
+            ]
         )
 
         let flattened = ChoiceSequence.flatten(tree)
@@ -149,7 +149,7 @@ struct ChoiceSequenceTests {
     @Test("Flatten selected marker is transparent")
     func flattenSelected() {
         let tree = ChoiceTree.selected(
-            .choice(.unsigned(42, .uint64), ChoiceMetadata(validRange: 0 ... 100)),
+            .choice(.unsigned(42, .uint64), ChoiceMetadata(validRange: 0 ... 100))
         )
 
         let flattened = ChoiceSequence.flatten(tree)
@@ -204,7 +204,7 @@ struct ChoiceSequenceTests {
         let tree = ChoiceTree.sequence(
             length: 0,
             elements: [],
-            ChoiceMetadata(validRange: 0 ... 10),
+            ChoiceMetadata(validRange: 0 ... 10)
         )
 
         let flattened = ChoiceSequence.flatten(tree)
@@ -218,7 +218,7 @@ struct ChoiceSequenceTests {
         let customRange: ClosedRange<UInt64> = 0 ... 200
         let tree = ChoiceTree.choice(
             .unsigned(42, .uint64),
-            ChoiceMetadata(validRange: customRange),
+            ChoiceMetadata(validRange: customRange)
         )
 
         let flattened = ChoiceSequence.flatten(tree)
@@ -285,7 +285,7 @@ struct ChoiceSequenceTests {
                     .choice(.unsigned(1, .uint64), ChoiceMetadata(validRange: 0 ... 10)),
                 ]),
             ],
-            ChoiceMetadata(validRange: 0 ... 10),
+            ChoiceMetadata(validRange: 0 ... 10)
         )
 
         let flattened = ChoiceSequence.flatten(tree)

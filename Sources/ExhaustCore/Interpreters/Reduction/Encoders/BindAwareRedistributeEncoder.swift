@@ -77,7 +77,7 @@ public struct BindAwareRedistributeEncoder: AdaptiveEncoder {
     /// Builds redistribution plans from a sequence and bind index.
     static func buildPlans(
         from sequence: ChoiceSequence,
-        bindIndex: BindSpanIndex,
+        bindIndex: BindSpanIndex
     ) -> [RegionPairPlan] {
         var profiles = [RegionProfile]()
 
@@ -109,7 +109,7 @@ public struct BindAwareRedistributeEncoder: AdaptiveEncoder {
                 regionIndex: regionIndex,
                 region: region,
                 innerIndex: innerIdx,
-                innerValue: innerVal,
+                innerValue: innerVal
             ))
         }
 
@@ -156,7 +156,7 @@ public struct BindAwareRedistributeEncoder: AdaptiveEncoder {
         else { return nil }
 
         let sourceTargetBP = sourceChoice.reductionTarget(
-            in: source.innerValue.isRangeExplicit ? source.innerValue.validRange : nil,
+            in: source.innerValue.isRangeExplicit ? source.innerValue.validRange : nil
         )
         guard let targetRatio = rationalForTarget(sourceChoice, targetBitPattern: sourceTargetBP)
         else { return nil }
@@ -202,7 +202,7 @@ public struct BindAwareRedistributeEncoder: AdaptiveEncoder {
             commonDenominator: commonDenominator,
             stepSize: stepSize,
             maxDelta: maxDelta,
-            sourceMovesUpward: sourceMovesUpward,
+            sourceMovesUpward: sourceMovesUpward
         )
     }
 
@@ -358,10 +358,10 @@ public struct BindAwareRedistributeEncoder: AdaptiveEncoder {
 
         // Convert back to ChoiceValues.
         guard let newSourceChoice = Self.choiceFromNumerator(
-            newSourceNum, denominator: plan.commonDenominator, original: plan.source.innerValue.choice,
+            newSourceNum, denominator: plan.commonDenominator, original: plan.source.innerValue.choice
         ) else { return nil }
         guard let newSinkChoice = Self.choiceFromNumerator(
-            newSinkNum, denominator: plan.commonDenominator, original: plan.sink.innerValue.choice,
+            newSinkNum, denominator: plan.commonDenominator, original: plan.sink.innerValue.choice
         ) else { return nil }
 
         // Validate range constraints.
@@ -379,12 +379,12 @@ public struct BindAwareRedistributeEncoder: AdaptiveEncoder {
         let sourceEntry = ChoiceSequenceValue.reduced(.init(
             choice: newSourceChoice,
             validRange: plan.source.innerValue.validRange,
-            isRangeExplicit: plan.source.innerValue.isRangeExplicit,
+            isRangeExplicit: plan.source.innerValue.isRangeExplicit
         ))
         let sinkEntry = ChoiceSequenceValue.value(.init(
             choice: newSinkChoice,
             validRange: plan.sink.innerValue.validRange,
-            isRangeExplicit: plan.sink.innerValue.isRangeExplicit,
+            isRangeExplicit: plan.sink.innerValue.isRangeExplicit
         ))
 
         var candidate = sequence
@@ -400,7 +400,7 @@ public struct BindAwareRedistributeEncoder: AdaptiveEncoder {
     // MARK: - Rational arithmetic helpers
 
     static func rationalForChoice(
-        _ choice: ChoiceValue,
+        _ choice: ChoiceValue
     ) -> (numerator: Int64, denominator: UInt64)? {
         switch choice {
         case let .floating(value, _, tag):
@@ -416,13 +416,13 @@ public struct BindAwareRedistributeEncoder: AdaptiveEncoder {
 
     static func rationalForTarget(
         _ choice: ChoiceValue,
-        targetBitPattern: UInt64,
+        targetBitPattern: UInt64
     ) -> (numerator: Int64, denominator: UInt64)? {
         switch choice {
         case let .floating(_, _, tag):
             let targetChoice = ChoiceValue(
                 tag.makeConvertible(bitPattern64: targetBitPattern),
-                tag: tag,
+                tag: tag
             )
             guard case let .floating(targetValue, _, _) = targetChoice,
                   targetValue.isFinite
@@ -431,14 +431,14 @@ public struct BindAwareRedistributeEncoder: AdaptiveEncoder {
         case let .signed(_, _, tag):
             let targetChoice = ChoiceValue(
                 tag.makeConvertible(bitPattern64: targetBitPattern),
-                tag: tag,
+                tag: tag
             )
             guard case let .signed(targetValue, _, _) = targetChoice else { return nil }
             return (targetValue, 1)
         case let .unsigned(_, tag):
             let targetChoice = ChoiceValue(
                 tag.makeConvertible(bitPattern64: targetBitPattern),
-                tag: tag,
+                tag: tag
             )
             guard case let .unsigned(targetValue, _) = targetChoice else { return nil }
             guard targetValue <= UInt64(Int64.max) else { return nil }
@@ -449,7 +449,7 @@ public struct BindAwareRedistributeEncoder: AdaptiveEncoder {
     static func choiceFromNumerator(
         _ numerator: Int64,
         denominator: UInt64,
-        original: ChoiceValue,
+        original: ChoiceValue
     ) -> ChoiceValue? {
         switch original {
         case let .floating(_, _, tag):
@@ -504,7 +504,7 @@ public struct BindAwareRedistributeEncoder: AdaptiveEncoder {
 
     static func scaledNumerator(
         _ ratio: (numerator: Int64, denominator: UInt64),
-        to denominator: UInt64,
+        to denominator: UInt64
     ) -> Int64? {
         guard denominator % ratio.denominator == 0 else { return nil }
         let scale = denominator / ratio.denominator

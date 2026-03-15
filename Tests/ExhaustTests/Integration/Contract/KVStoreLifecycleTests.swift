@@ -32,8 +32,8 @@ struct KVStoreLifecycleTests {
                 KVStoreLifecycleContract.self,
                 commandLimit: 10,
                 .suppressIssueReporting,
-                .useBonsaiReducer,
-            ),
+                .useBonsaiReducer
+            )
         )
 
         #expect(result.trace.contains { step in

@@ -34,7 +34,7 @@ public extension ReducerStrategies {
         bindIndex: BindSpanIndex?,
         mutatedIndex: Int,
         strictness: Interpreters.Strictness = .normal,
-        maximizeBoundRegionIndices: Set<Int>? = nil,
+        maximizeBoundRegionIndices: Set<Int>? = nil
     ) throws -> Output? {
         if let bindIndex, bindIndex.bindRegionForInnerIndex(mutatedIndex) != nil {
             let seed = ZobristHash.hash(of: candidate)
@@ -68,7 +68,7 @@ public extension ReducerStrategies {
         bindIndex: BindSpanIndex?,
         mutatedIndices: some Collection<Int>,
         strictness: Interpreters.Strictness = .normal,
-        maximizeBoundRegionIndices: Set<Int>? = nil,
+        maximizeBoundRegionIndices: Set<Int>? = nil
     ) throws -> Output? {
         if let bindIndex, bindIndex.isEmpty == false,
            mutatedIndices.contains(where: { bindIndex.bindRegionForInnerIndex($0) != nil })

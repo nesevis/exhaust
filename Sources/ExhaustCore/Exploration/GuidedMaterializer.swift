@@ -28,13 +28,13 @@ public enum GuidedMaterializer {
         seed: UInt64,
         abortOnFilter: Bool = false,
         fallbackTree: ChoiceTree? = nil,
-        maximizeBoundRegionIndices: Set<Int>? = nil,
+        maximizeBoundRegionIndices: Set<Int>? = nil
     ) -> Result<Output> {
         var context = GuidedContext(
             cursor: GuidedCursor(from: prefix),
             prng: Xoshiro256(seed: seed),
             abortOnFilter: abortOnFilter,
-            maximizeBoundRegionIndices: maximizeBoundRegionIndices,
+            maximizeBoundRegionIndices: maximizeBoundRegionIndices
         )
         do {
             guard let (value, tree) = try generateRecursive(gen, with: (), context: &context, fallbackTree: fallbackTree) else {
@@ -81,7 +81,7 @@ private extension GuidedMaterializer {
     /// misinterpreting a data group (e.g. zip of 2 generators) as continuation wrapping.
     static func decomposeFallback(
         _ tree: ChoiceTree?,
-        calleeKind: CalleeTreeKind,
+        calleeKind: CalleeTreeKind
     ) -> (callee: ChoiceTree?, continuation: ChoiceTree?) {
         guard let tree else { return (nil, nil) }
         switch calleeKind {
@@ -115,7 +115,7 @@ private extension GuidedMaterializer {
         _ gen: ReflectiveGenerator<Output>,
         with inputValue: some Any,
         context: inout GuidedContext,
-        fallbackTree: ChoiceTree? = nil,
+        fallbackTree: ChoiceTree? = nil
     ) throws -> (Output, ChoiceTree)? {
         switch gen {
         case let .pure(value):
@@ -145,7 +145,7 @@ private extension GuidedMaterializer {
                     inputValue: inputValue,
                     context: &context,
                     calleeFallback: calleeFallback,
-                    continuationFallback: continuationFallback,
+                    continuationFallback: continuationFallback
                 )
 
             case let .prune(nextGen):
@@ -155,7 +155,7 @@ private extension GuidedMaterializer {
                     inputValue: inputValue,
                     context: &context,
                     calleeFallback: calleeFallback,
-                    continuationFallback: continuationFallback,
+                    continuationFallback: continuationFallback
                 )
 
             case let .pick(choices):
@@ -165,7 +165,7 @@ private extension GuidedMaterializer {
                     inputValue: inputValue,
                     context: &context,
                     calleeFallback: calleeFallback,
-                    continuationFallback: continuationFallback,
+                    continuationFallback: continuationFallback
                 )
 
             case let .chooseBits(min, max, tag, isRangeExplicit):
@@ -178,7 +178,7 @@ private extension GuidedMaterializer {
                     inputValue: inputValue,
                     context: &context,
                     calleeFallback: calleeFallback,
-                    continuationFallback: continuationFallback,
+                    continuationFallback: continuationFallback
                 )
 
             case let .sequence(lengthGen, elementGen):
@@ -189,7 +189,7 @@ private extension GuidedMaterializer {
                     inputValue: inputValue,
                     context: &context,
                     calleeFallback: calleeFallback,
-                    continuationFallback: continuationFallback,
+                    continuationFallback: continuationFallback
                 )
 
             case let .zip(generators, _):
@@ -199,7 +199,7 @@ private extension GuidedMaterializer {
                     inputValue: inputValue,
                     context: &context,
                     calleeFallback: calleeFallback,
-                    continuationFallback: continuationFallback,
+                    continuationFallback: continuationFallback
                 )
 
             case let .just(value):
@@ -209,7 +209,7 @@ private extension GuidedMaterializer {
                     continuation: continuation,
                     inputValue: inputValue,
                     context: &context,
-                    continuationFallback: continuationFallback,
+                    continuationFallback: continuationFallback
                 )
 
             case .getSize:
@@ -221,7 +221,7 @@ private extension GuidedMaterializer {
                     continuation: continuation,
                     inputValue: inputValue,
                     context: &context,
-                    continuationFallback: continuationFallback,
+                    continuationFallback: continuationFallback
                 )
 
             case let .resize(newSize, gen):
@@ -232,7 +232,7 @@ private extension GuidedMaterializer {
                     inputValue: inputValue,
                     context: &context,
                     calleeFallback: calleeFallback,
-                    continuationFallback: continuationFallback,
+                    continuationFallback: continuationFallback
                 )
 
             case let .filter(gen, _, _, predicate):
@@ -251,7 +251,7 @@ private extension GuidedMaterializer {
                     continuation: continuation,
                     inputValue: inputValue,
                     context: &context,
-                    continuationFallback: continuationFallback,
+                    continuationFallback: continuationFallback
                 )
 
             case let .classify(gen, _, _):
@@ -264,7 +264,7 @@ private extension GuidedMaterializer {
                     continuation: continuation,
                     inputValue: inputValue,
                     context: &context,
-                    continuationFallback: continuationFallback,
+                    continuationFallback: continuationFallback
                 )
 
             case let .unique(gen, _, _):
@@ -277,7 +277,7 @@ private extension GuidedMaterializer {
                     continuation: continuation,
                     inputValue: inputValue,
                     context: &context,
-                    continuationFallback: continuationFallback,
+                    continuationFallback: continuationFallback
                 )
 
             case let .transform(kind, inner):
@@ -293,7 +293,7 @@ private extension GuidedMaterializer {
                         continuation: continuation,
                         inputValue: inputValue,
                         context: &context,
-                        continuationFallback: continuationFallback,
+                        continuationFallback: continuationFallback
                     )
                 case let .bind(forward, _, _, _):
                     let innerFallback: ChoiceTree?
@@ -324,7 +324,7 @@ private extension GuidedMaterializer {
                         continuation: continuation,
                         inputValue: inputValue,
                         context: &context,
-                        continuationFallback: continuationFallback,
+                        continuationFallback: continuationFallback
                     )
                 }
             }
@@ -340,7 +340,7 @@ private extension GuidedMaterializer {
         continuation: (Any) throws -> ReflectiveGenerator<Output>,
         inputValue: some Any,
         context: inout GuidedContext,
-        continuationFallback: ChoiceTree? = nil,
+        continuationFallback: ChoiceTree? = nil
     ) throws -> (Output, ChoiceTree)? {
         let nextGen = try continuation(result)
 
@@ -351,7 +351,7 @@ private extension GuidedMaterializer {
             nextGen,
             with: inputValue,
             context: &context,
-            fallbackTree: continuationFallback,
+            fallbackTree: continuationFallback
         ) {
             if nextGen.isPure {
                 return (continuationResult, calleeChoiceTree)
@@ -371,7 +371,7 @@ private extension GuidedMaterializer {
         inputValue: some Any,
         context: inout GuidedContext,
         calleeFallback: ChoiceTree? = nil,
-        continuationFallback: ChoiceTree? = nil,
+        continuationFallback: ChoiceTree? = nil
     ) throws -> (Output, ChoiceTree)? {
         guard let (result, tree) = try generateRecursive(nextGen, with: inputValue, context: &context, fallbackTree: calleeFallback) else { return nil }
         return try runContinuation(
@@ -380,7 +380,7 @@ private extension GuidedMaterializer {
             continuation: continuation,
             inputValue: inputValue,
             context: &context,
-            continuationFallback: continuationFallback,
+            continuationFallback: continuationFallback
         )
     }
 
@@ -391,7 +391,7 @@ private extension GuidedMaterializer {
         inputValue: some Any,
         context: inout GuidedContext,
         calleeFallback: ChoiceTree? = nil,
-        continuationFallback: ChoiceTree? = nil,
+        continuationFallback: ChoiceTree? = nil
     ) throws -> (Output, ChoiceTree)? {
         guard let wrappedValue = InterpreterWrapperHandlers.unwrapPruneInput(inputValue) else {
             return nil
@@ -403,7 +403,7 @@ private extension GuidedMaterializer {
             continuation: continuation,
             inputValue: inputValue,
             context: &context,
-            continuationFallback: continuationFallback,
+            continuationFallback: continuationFallback
         )
     }
 
@@ -417,7 +417,7 @@ private extension GuidedMaterializer {
         inputValue: some Any,
         context: inout GuidedContext,
         calleeFallback: ChoiceTree? = nil,
-        continuationFallback: ChoiceTree? = nil,
+        continuationFallback: ChoiceTree? = nil
     ) throws -> (Output, ChoiceTree)? {
         let randomBits: UInt64
 
@@ -442,7 +442,7 @@ private extension GuidedMaterializer {
 
         let choiceTree = ChoiceTree.choice(
             ChoiceValue(randomBits, tag: tag),
-            .init(validRange: min ... max, isRangeExplicit: isRangeExplicit),
+            .init(validRange: min ... max, isRangeExplicit: isRangeExplicit)
         )
         return try runContinuation(
             result: randomBits,
@@ -450,7 +450,7 @@ private extension GuidedMaterializer {
             continuation: continuation,
             inputValue: inputValue,
             context: &context,
-            continuationFallback: continuationFallback,
+            continuationFallback: continuationFallback
         )
     }
 
@@ -461,7 +461,7 @@ private extension GuidedMaterializer {
         inputValue: some Any,
         context: inout GuidedContext,
         calleeFallback: ChoiceTree? = nil,
-        continuationFallback: ChoiceTree? = nil,
+        continuationFallback: ChoiceTree? = nil
     ) throws -> (Output, ChoiceTree)? {
         let branchIDs = choices.map(\.id)
 
@@ -502,7 +502,7 @@ private extension GuidedMaterializer {
             selectedChoice.generator,
             with: inputValue,
             context: &context,
-            fallbackTree: branchBodyFallback,
+            fallbackTree: branchBodyFallback
         ) else { return nil }
 
         guard let (finalValue, contTree) = try runContinuation(
@@ -511,7 +511,7 @@ private extension GuidedMaterializer {
             continuation: continuation,
             inputValue: inputValue,
             context: &context,
-            continuationFallback: branchContFallback ?? continuationFallback,
+            continuationFallback: branchContFallback ?? continuationFallback
         ) else { return nil }
 
         let branch = ChoiceTree.branch(
@@ -519,7 +519,7 @@ private extension GuidedMaterializer {
             weight: selectedChoice.weight,
             id: selectedChoice.id,
             branchIDs: branchIDs,
-            choice: contTree,
+            choice: contTree
         )
 
         return (finalValue, .group([.selected(branch)]))
@@ -533,7 +533,7 @@ private extension GuidedMaterializer {
         inputValue: some Any,
         context: inout GuidedContext,
         calleeFallback: ChoiceTree? = nil,
-        continuationFallback: ChoiceTree? = nil,
+        continuationFallback: ChoiceTree? = nil
     ) throws -> (Output, ChoiceTree)? {
         let length: UInt64
         let lengthMeta: ChoiceMetadata
@@ -555,7 +555,7 @@ private extension GuidedMaterializer {
                 guard let (genLength, lengthTree) = try generateRecursive(
                     lengthGen,
                     with: inputValue,
-                    context: &context,
+                    context: &context
                 ) else {
                     return nil
                 }
@@ -566,7 +566,7 @@ private extension GuidedMaterializer {
                 length = UInt64(seqInfo.elementCount)
                 lengthMeta = ChoiceMetadata(
                     validRange: nil,
-                    isRangeExplicit: false,
+                    isRangeExplicit: false
                 )
             }
         } else {
@@ -574,7 +574,7 @@ private extension GuidedMaterializer {
             guard let (freshLength, lengthTree) = try generateRecursive(
                 lengthGen,
                 with: inputValue,
-                context: &context,
+                context: &context
             ) else {
                 return nil
             }
@@ -608,7 +608,7 @@ private extension GuidedMaterializer {
         let choiceTree = ChoiceTree.sequence(
             length: length,
             elements: elements,
-            lengthMeta,
+            lengthMeta
         )
 
         if let (result, _) = try runContinuation(
@@ -617,7 +617,7 @@ private extension GuidedMaterializer {
             continuation: continuation,
             inputValue: inputValue,
             context: &context,
-            continuationFallback: continuationFallback,
+            continuationFallback: continuationFallback
         ) {
             return (result, choiceTree)
         }
@@ -631,7 +631,7 @@ private extension GuidedMaterializer {
         inputValue: some Any,
         context: inout GuidedContext,
         calleeFallback: ChoiceTree? = nil,
-        continuationFallback: ChoiceTree? = nil,
+        continuationFallback: ChoiceTree? = nil
     ) throws -> (Output, ChoiceTree)? {
         let childFallbacks: [ChoiceTree?] = if let calleeFallback, case let .group(children, _) = calleeFallback,
                                                children.count == generators.count
@@ -683,7 +683,7 @@ private extension GuidedMaterializer {
             continuation: continuation,
             inputValue: inputValue,
             context: &context,
-            continuationFallback: continuationFallback,
+            continuationFallback: continuationFallback
         )
     }
 
@@ -695,7 +695,7 @@ private extension GuidedMaterializer {
         inputValue: some Any,
         context: inout GuidedContext,
         calleeFallback: ChoiceTree? = nil,
-        continuationFallback: ChoiceTree? = nil,
+        continuationFallback: ChoiceTree? = nil
     ) throws -> (Output, ChoiceTree)? {
         let innerFallback: ChoiceTree? = if let calleeFallback, case let .resize(_, choices) = calleeFallback, let inner = choices.first {
             inner
@@ -712,7 +712,7 @@ private extension GuidedMaterializer {
             continuation: continuation,
             inputValue: inputValue,
             context: &context,
-            continuationFallback: continuationFallback,
+            continuationFallback: continuationFallback
         )
     }
 }

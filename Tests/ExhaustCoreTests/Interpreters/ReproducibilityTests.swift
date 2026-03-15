@@ -74,7 +74,7 @@ private func exhaustCheck<T>(
     _ gen: ReflectiveGenerator<T>,
     maxIterations: UInt64 = 100,
     seed: UInt64 = 42,
-    property: (T) -> Bool,
+    property: (T) -> Bool
 ) throws {
     var iter = ValueInterpreter(gen, seed: seed, maxRuns: maxIterations)
     while let value = try iter.next() {

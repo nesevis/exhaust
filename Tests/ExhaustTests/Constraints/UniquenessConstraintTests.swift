@@ -21,7 +21,7 @@ struct UniquenessConstraintTests {
         var iterator = ValueAndChoiceTreeInterpreter(
             gen,
             seed: 42,
-            maxRuns: maxRuns,
+            maxRuns: maxRuns
         )
 
         var values = [UInt64]()
@@ -41,7 +41,7 @@ struct UniquenessConstraintTests {
         var iterator = ValueAndChoiceTreeInterpreter(
             gen,
             seed: 1,
-            maxRuns: 10,
+            maxRuns: 10
         )
 
         var count = 0
@@ -58,7 +58,7 @@ struct UniquenessConstraintTests {
         var iterator = ValueAndChoiceTreeInterpreter(
             gen,
             seed: 42,
-            maxRuns: 100,
+            maxRuns: 100
         )
 
         var values = Set<Bool>()
@@ -78,10 +78,10 @@ struct UniquenessConstraintTests {
         let maxRuns: UInt64 = 20
 
         var iter1 = ValueAndChoiceTreeInterpreter(
-            gen, seed: seed, maxRuns: maxRuns,
+            gen, seed: seed, maxRuns: maxRuns
         )
         var iter2 = ValueAndChoiceTreeInterpreter(
-            gen, seed: seed, maxRuns: maxRuns,
+            gen, seed: seed, maxRuns: maxRuns
         )
 
         var values1 = [UInt64]()
@@ -124,13 +124,13 @@ struct UniquenessConstraintTests {
         let secondGen = #gen(.uint64(in: 0 ... 4))
         let pairGen = #gen(
             .uint64(),
-            secondGen,
+            secondGen
         ).unique(by: \.1)
 
         var iterator = ValueAndChoiceTreeInterpreter(
             pairGen,
             seed: 42,
-            maxRuns: 100,
+            maxRuns: 100
         )
 
         var seenKeys = Set<UInt64>()
@@ -158,7 +158,7 @@ struct UniquenessConstraintTests {
         var iterator = ValueAndChoiceTreeInterpreter(
             gen,
             seed: 42,
-            maxRuns: 100,
+            maxRuns: 100
         )
 
         var seenRemainders = Set<UInt64>()
@@ -186,7 +186,7 @@ struct UniquenessConstraintTests {
             gen,
             predicate: { _ in true },
             seed: 42,
-            maxRuns: 100,
+            maxRuns: 100
         )
 
         var values = Set<Int>()

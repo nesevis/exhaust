@@ -45,8 +45,8 @@ struct CouplingShrinkingChallenge {
                 Self.gen,
                 .suppressIssueReporting,
                 .useBonsaiReducer,
-                property: Self.property,
-            ),
+                property: Self.property
+            )
         )
         #expect(value.count == 2)
         #expect(value == [1, 0])

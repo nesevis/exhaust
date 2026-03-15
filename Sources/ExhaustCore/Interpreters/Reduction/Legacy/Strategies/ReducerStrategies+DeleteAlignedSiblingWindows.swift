@@ -99,7 +99,7 @@ extension ReducerStrategies {
         probeBudget: Int,
         subsetBeamSearchTuning: AlignedDeletionBeamSearchTuning,
         onBudgetExhausted: ((String) -> Void)? = nil,
-        bindIndex _: BindSpanIndex? = nil,
+        bindIndex _: BindSpanIndex? = nil
     ) throws -> (ChoiceSequence, Output)? {
         let cohorts = alignedContainerCohorts(in: sequence)
             + alignedSiblingGroupCohorts(from: siblingGroups)
@@ -109,7 +109,7 @@ extension ReducerStrategies {
             tree: tree,
             onBudgetExhausted: onBudgetExhausted,
             rejectCache: rejectCache,
-            budget: ProbeBudget(passName: "deleteAlignedSiblingWindows", limit: probeBudget),
+            budget: ProbeBudget(passName: "deleteAlignedSiblingWindows", limit: probeBudget)
         )
         defer { rejectCache = context.rejectCache }
 
@@ -142,7 +142,7 @@ extension ReducerStrategies {
                     if let output = evaluateDeletionCandidate(
                         candidate: candidate,
                         property: property,
-                        context: &context,
+                        context: &context
                     ) {
                         if size >= bestSize {
                             bestSize = size
@@ -172,7 +172,7 @@ extension ReducerStrategies {
                     let evaluatedOutput: Output? = evaluateDeletionCandidate(
                         candidate: candidate,
                         property: property,
-                        context: &context,
+                        context: &context
                     )
 
                     if candidate.shortLexPrecedes(sequence),
@@ -209,7 +209,7 @@ extension ReducerStrategies {
                         let evaluatedOutput: Output? = evaluateDeletionCandidate(
                             candidate: candidate,
                             property: property,
-                            context: &context,
+                            context: &context
                         )
                         if let output = evaluatedOutput {
                             if size >= bestNonMonotoneSize {
@@ -236,7 +236,7 @@ extension ReducerStrategies {
                 cohortRanges: cohortRanges,
                 property: property,
                 beamTuning: subsetBeamSearchTuning,
-                context: &context,
+                context: &context
             )
             if let (candidate, output) = subsetResult {
                 return (candidate, output)
@@ -250,7 +250,7 @@ extension ReducerStrategies {
     }
 
     private static func alignedSiblingGroupCohorts(
-        from siblingGroups: [SiblingGroup],
+        from siblingGroups: [SiblingGroup]
     ) -> [[AlignedDeletionSlot]] {
         var cohorts = [[AlignedDeletionSlot]]()
         for group in siblingGroups where group.ranges.count >= 2 {
@@ -264,7 +264,7 @@ extension ReducerStrategies {
     }
 
     private static func rootSequenceContainerCohorts(
-        in sequence: ChoiceSequence,
+        in sequence: ChoiceSequence
     ) -> [[AlignedDeletionSlot]] {
         let sequenceContainerSpans = ChoiceSequence.extractContainerSpans(from: sequence).filter { span in
             guard case .sequence(true, isLengthExplicit: _) = span.kind else { return false }
@@ -300,7 +300,7 @@ extension ReducerStrategies {
         cohortRanges: AlignedDeletionCohortRanges,
         property: (Output) -> Bool,
         beamTuning: AlignedDeletionBeamSearchTuning,
-        context: inout AlignedDeletionContext<Output>,
+        context: inout AlignedDeletionContext<Output>
     ) -> (ChoiceSequence, Output)? {
         guard cohortRanges.slotCount >= 2 else { return nil }
         // We encode subsets as bitmasks.
@@ -313,7 +313,7 @@ extension ReducerStrategies {
         let beamWidth = beamTuning.beamWidth(for: cohortRanges.slotCount)
         let evaluationsPerLayer = beamTuning.evaluationsPerLayer(
             for: cohortRanges.slotCount,
-            beamWidth: beamWidth,
+            beamWidth: beamWidth
         )
         var frontier = [AlignedDeletionBeamState(
             mask: 0,
@@ -321,7 +321,7 @@ extension ReducerStrategies {
             deletionCount: 0,
             slotIndexSum: 0,
             heuristicScore: 0,
-            rangeSet: RangeSet<Int>(),
+            rangeSet: RangeSet<Int>()
         )]
 
         for layer in 1 ... cohortRanges.slotCount {
@@ -348,9 +348,9 @@ extension ReducerStrategies {
                         slotIndexSum: slotIndexSum,
                         heuristicScore: beamHeuristicScore(
                             deletionCount: layer,
-                            slotIndexSum: slotIndexSum,
+                            slotIndexSum: slotIndexSum
                         ),
-                        rangeSet: rangeSet,
+                        rangeSet: rangeSet
                     ))
                 }
             }
@@ -380,7 +380,7 @@ extension ReducerStrategies {
                 if let output = evaluateDeletionCandidate(
                     candidate: candidate,
                     property: property,
-                    context: &context,
+                    context: &context
                 ) {
                     resultCandidate = candidate
                     resultOutput = output
@@ -392,7 +392,7 @@ extension ReducerStrategies {
                         property: property,
                         original: sequence,
                         shortened: candidate,
-                        rejectCache: &context.rejectCache,
+                        rejectCache: &context.rejectCache
                     ) else {
                         continue
                     }
@@ -435,7 +435,7 @@ extension ReducerStrategies {
 
     private static func beamHeuristicScore(
         deletionCount: Int,
-        slotIndexSum: Int,
+        slotIndexSum: Int
     ) -> Int {
         // Strongly prefer larger subsets and, within a subset size, earlier slots.
         (deletionCount * 1024) - slotIndexSum
@@ -443,7 +443,7 @@ extension ReducerStrategies {
 
     private static func beamStatePrecedes(
         _ lhs: AlignedDeletionBeamState,
-        _ rhs: AlignedDeletionBeamState,
+        _ rhs: AlignedDeletionBeamState
     ) -> Bool {
         if lhs.deletionCount != rhs.deletionCount {
             return lhs.deletionCount > rhs.deletionCount
@@ -460,7 +460,7 @@ extension ReducerStrategies {
     private static func evaluateDeletionCandidate<Output>(
         candidate: ChoiceSequence,
         property: (Output) -> Bool,
-        context: inout AlignedDeletionContext<Output>,
+        context: inout AlignedDeletionContext<Output>
     ) -> Output? {
         guard context.rejectCache.contains(candidate) == false else {
             return nil
@@ -472,7 +472,7 @@ extension ReducerStrategies {
         guard let output = try? Interpreters.materialize(
             context.gen,
             with: context.tree,
-            using: candidate,
+            using: candidate
         ) else {
             context.rejectCache.insert(candidate)
             return nil
@@ -485,7 +485,7 @@ extension ReducerStrategies {
     }
 
     private static func consumeBudget(
-        context: inout AlignedDeletionContext<some Any>,
+        context: inout AlignedDeletionContext<some Any>
     ) -> Bool {
         guard context.budget.consume() else {
             context.budgetExhausted = true
@@ -496,7 +496,7 @@ extension ReducerStrategies {
     }
 
     private static func alignedContainerCohorts(
-        in sequence: ChoiceSequence,
+        in sequence: ChoiceSequence
     ) -> [[AlignedDeletionSlot]] {
         let descriptors = ChoiceSequence.extractContainerSpans(from: sequence).compactMap { span in
             alignedContainerDescriptor(in: sequence, range: span.range, depth: span.depth)
@@ -537,7 +537,7 @@ extension ReducerStrategies {
     private static func alignedContainerDescriptor(
         in sequence: ChoiceSequence,
         range: ClosedRange<Int>,
-        depth: Int,
+        depth: Int
     ) -> AlignedContainerDescriptor? {
         let children = effectiveAlignedChildren(in: sequence, from: range)
         guard !children.isEmpty else { return nil }
@@ -562,7 +562,7 @@ extension ReducerStrategies {
 
     private static func effectiveAlignedChildren(
         in sequence: ChoiceSequence,
-        from range: ClosedRange<Int>,
+        from range: ClosedRange<Int>
     ) -> [(range: ClosedRange<Int>, kind: SiblingChildKind)] {
         var currentRange = range
         var remainingUnwraps = 16
@@ -587,7 +587,7 @@ extension ReducerStrategies {
 
     private static func alignedChildrenMatch(
         _ lhs: AlignedContainerChild,
-        _ rhs: AlignedContainerChild,
+        _ rhs: AlignedContainerChild
     ) -> Bool {
         guard lhs.kind == rhs.kind else { return false }
         if lhs.kind == .bareValue {

@@ -24,7 +24,7 @@ struct SequenceDecoderForTests {
         // pair and applies the shortlex guard.
         let context = DecoderContext(
             depth: .specific(0), bindIndex: nil,
-            fallbackTree: nil, strictness: .relaxed,
+            fallbackTree: nil, strictness: .relaxed
         )
         let decoder = SequenceDecoder.for(context)
         guard case .guided = decoder else {
@@ -37,7 +37,7 @@ struct SequenceDecoderForTests {
     func relaxedStrictnessDeepDepth() {
         let context = DecoderContext(
             depth: .specific(2), bindIndex: nil,
-            fallbackTree: nil, strictness: .relaxed,
+            fallbackTree: nil, strictness: .relaxed
         )
         let decoder = SequenceDecoder.for(context)
         guard case .guided = decoder else {
@@ -52,7 +52,7 @@ struct SequenceDecoderForTests {
     func normalDeepNoBind() {
         let context = DecoderContext(
             depth: .specific(3), bindIndex: nil,
-            fallbackTree: nil, strictness: .normal,
+            fallbackTree: nil, strictness: .normal
         )
         let decoder = SequenceDecoder.for(context)
         guard case .direct = decoder else {
@@ -68,7 +68,7 @@ struct SequenceDecoderForTests {
         let bindIndex = Self.makeBoundBindIndex()
         let context = DecoderContext(
             depth: .specific(0), bindIndex: bindIndex,
-            fallbackTree: nil, strictness: .normal,
+            fallbackTree: nil, strictness: .normal
         )
         let decoder = SequenceDecoder.for(context)
         guard case .guided = decoder else {
@@ -83,7 +83,7 @@ struct SequenceDecoderForTests {
     func normalDepth0NoBind() {
         let context = DecoderContext(
             depth: .specific(0), bindIndex: nil,
-            fallbackTree: nil, strictness: .normal,
+            fallbackTree: nil, strictness: .normal
         )
         let decoder = SequenceDecoder.for(context)
         guard case .direct = decoder else {
@@ -99,7 +99,7 @@ struct SequenceDecoderForTests {
         let bindIndex = Self.makeBoundBindIndex()
         let context = DecoderContext(
             depth: .global, bindIndex: bindIndex,
-            fallbackTree: nil, strictness: .normal,
+            fallbackTree: nil, strictness: .normal
         )
         let decoder = SequenceDecoder.for(context)
         guard case .crossStage = decoder else {
@@ -114,7 +114,7 @@ struct SequenceDecoderForTests {
     func globalNoBind() {
         let context = DecoderContext(
             depth: .global, bindIndex: nil,
-            fallbackTree: nil, strictness: .normal,
+            fallbackTree: nil, strictness: .normal
         )
         let decoder = SequenceDecoder.for(context)
         guard case .direct = decoder else {
@@ -131,7 +131,7 @@ struct SequenceDecoderForTests {
         #expect(emptyBindIndex.isEmpty)
         let context = DecoderContext(
             depth: .specific(0), bindIndex: emptyBindIndex,
-            fallbackTree: nil, strictness: .normal,
+            fallbackTree: nil, strictness: .normal
         )
         let decoder = SequenceDecoder.for(context)
         guard case .direct = decoder else {
@@ -145,7 +145,7 @@ struct SequenceDecoderForTests {
         let emptyBindIndex = BindSpanIndex(from: ChoiceSequence())
         let context = DecoderContext(
             depth: .global, bindIndex: emptyBindIndex,
-            fallbackTree: nil, strictness: .normal,
+            fallbackTree: nil, strictness: .normal
         )
         let decoder = SequenceDecoder.for(context)
         guard case .direct = decoder else {

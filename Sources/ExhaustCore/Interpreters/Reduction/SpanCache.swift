@@ -68,7 +68,7 @@ struct SpanCache {
     // MARK: - Depth-filtered accessors
 
     mutating func valueSpans(
-        at depth: Int, from sequence: ChoiceSequence, bindIndex: BindSpanIndex?,
+        at depth: Int, from sequence: ChoiceSequence, bindIndex: BindSpanIndex?
     ) -> [ChoiceSpan] {
         let all = allValueSpans(from: sequence)
         if let bi = bindIndex {
@@ -78,7 +78,7 @@ struct SpanCache {
     }
 
     mutating func siblingGroups(
-        at depth: Int, from sequence: ChoiceSequence, bindIndex: BindSpanIndex?,
+        at depth: Int, from sequence: ChoiceSequence, bindIndex: BindSpanIndex?
     ) -> [SiblingGroup] {
         let all = allSiblingGroups(from: sequence)
         if let bi = bindIndex {
@@ -88,7 +88,7 @@ struct SpanCache {
     }
 
     mutating func floatSpans(
-        at depth: Int, from sequence: ChoiceSequence, bindIndex: BindSpanIndex?,
+        at depth: Int, from sequence: ChoiceSequence, bindIndex: BindSpanIndex?
     ) -> [ChoiceSpan] {
         valueSpans(at: depth, from: sequence, bindIndex: bindIndex).filter { span in
             guard let v = sequence[span.range.lowerBound].value else { return false }
@@ -98,7 +98,7 @@ struct SpanCache {
 
     mutating func deletionTargets(
         category: DeletionSpanCategory, depth: Int,
-        from sequence: ChoiceSequence, bindIndex: BindSpanIndex?,
+        from sequence: ChoiceSequence, bindIndex: BindSpanIndex?
     ) -> [ChoiceSpan] {
         let spans: [ChoiceSpan] = switch category {
         case .containerSpans:

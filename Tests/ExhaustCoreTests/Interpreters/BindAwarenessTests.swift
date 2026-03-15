@@ -169,9 +169,9 @@ struct BindAwarenessTests {
                     (finalOutput as! [Int]).count
                 },
                 inputType: "Int",
-                outputType: "[Int]",
+                outputType: "[Int]"
             ),
-            inner: Gen.choose(in: 0 ... 5 as ClosedRange<Int>).erase(),
+            inner: Gen.choose(in: 0 ... 5 as ClosedRange<Int>).erase()
         ))
 
         var interpreter = ValueAndChoiceTreeInterpreter(gen, seed: 42)
@@ -203,9 +203,9 @@ struct BindAwarenessTests {
                     (finalOutput as! [Int]).count
                 },
                 inputType: "Int",
-                outputType: "[Int]",
+                outputType: "[Int]"
             ),
-            inner: Gen.choose(in: 0 ... 3 as ClosedRange<Int>).erase(),
+            inner: Gen.choose(in: 0 ... 3 as ClosedRange<Int>).erase()
         ))
 
         let result = ChoiceTreeAnalysis.analyze(gen)

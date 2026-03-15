@@ -133,7 +133,7 @@ public struct CrossStageRedistributeEncoder: AdaptiveEncoder {
                     if let orientation = makeOrientation(
                         lhs: candidates[lhs],
                         rhs: candidates[rhs],
-                        sequence: sequence,
+                        sequence: sequence
                     ) {
                         orientations.append(orientation)
                     }
@@ -169,23 +169,23 @@ public struct CrossStageRedistributeEncoder: AdaptiveEncoder {
     private func makeOrientation(
         lhs: NumericCandidate,
         rhs: NumericCandidate,
-        sequence _: ChoiceSequence,
+        sequence _: ChoiceSequence
     ) -> PairOrientation? {
         let bp1 = lhs.value.choice.bitPattern64
         let target1 = lhs.value.choice.reductionTarget(
-            in: lhs.value.isRangeExplicit ? lhs.value.validRange : nil,
+            in: lhs.value.isRangeExplicit ? lhs.value.validRange : nil
         )
 
         let floatCtx = makeFloatRedistributionContext(
             lhs: lhs.value.choice,
             rhs: rhs.value.choice,
-            lhsTargetBitPattern: target1,
+            lhsTargetBitPattern: target1
         )
         let mixedCtx: MixedRedistributionContext? = floatCtx == nil
             ? makeMixedRedistributionContext(
                 lhs: lhs.value.choice,
                 rhs: rhs.value.choice,
-                lhsTargetBitPattern: target1,
+                lhsTargetBitPattern: target1
             )
             : nil
 
@@ -211,7 +211,7 @@ public struct CrossStageRedistributeEncoder: AdaptiveEncoder {
         // Skip if rhs is already at its target — no room to compensate.
         let rhsSemanticDistance = absDiff(
             rhs.value.choice.shortlexKey,
-            rhs.value.choice.semanticSimplest.shortlexKey,
+            rhs.value.choice.semanticSimplest.shortlexKey
         )
         guard rhsSemanticDistance > 0 else { return nil }
 
@@ -221,7 +221,7 @@ public struct CrossStageRedistributeEncoder: AdaptiveEncoder {
             decrease1Upward: decreaseUpward,
             distance: distance,
             floatContext: floatCtx,
-            mixedContext: mixedCtx,
+            mixedContext: mixedCtx
         )
     }
 
@@ -290,7 +290,7 @@ public struct CrossStageRedistributeEncoder: AdaptiveEncoder {
             orient: orient,
             fresh1: fresh1,
             fresh2: fresh2,
-            delta: delta,
+            delta: delta
         )
     }
 
@@ -308,7 +308,7 @@ public struct CrossStageRedistributeEncoder: AdaptiveEncoder {
             orient: orient,
             fresh1: fresh1,
             fresh2: fresh2,
-            delta: k,
+            delta: k
         ) else { return }
 
         let beforePair = sortedPairKeys(fresh1.choice, fresh2.choice)
@@ -320,16 +320,16 @@ public struct CrossStageRedistributeEncoder: AdaptiveEncoder {
         let probeEntry1 = ChoiceSequenceValue.reduced(.init(
             choice: newChoice1,
             validRange: fresh1.validRange,
-            isRangeExplicit: fresh1.isRangeExplicit,
+            isRangeExplicit: fresh1.isRangeExplicit
         ))
         let probeEntry2 = ChoiceSequenceValue.value(.init(
             choice: newChoice2,
             validRange: fresh2.validRange,
-            isRangeExplicit: fresh2.isRangeExplicit,
+            isRangeExplicit: fresh2.isRangeExplicit
         ))
         let probeNonSemantic = semanticStats.nonSemanticCount(
             afterReplacing: (orient.lhsIndex, probeEntry1),
-            and: (orient.rhsIndex, probeEntry2),
+            and: (orient.rhsIndex, probeEntry2)
         )
 
         bestMonotoneCandidate = {
@@ -363,7 +363,7 @@ public struct CrossStageRedistributeEncoder: AdaptiveEncoder {
             }
             if let wrapK = wrappingBoundaryDelta(
                 for: fresh2.choice.tag,
-                bitPattern: fresh2.choice.bitPattern64,
+                bitPattern: fresh2.choice.bitPattern64
             ), wrapK > 0, wrapK <= distance {
                 deltas.append(wrapK)
                 if wrapK > 1 { deltas.append(wrapK - 1) }
@@ -409,7 +409,7 @@ public struct CrossStageRedistributeEncoder: AdaptiveEncoder {
                 fresh2: fresh2,
                 delta: k,
                 beforePair: beforePair,
-                currentNonSemanticCount: currentNonSemanticCount,
+                currentNonSemanticCount: currentNonSemanticCount
             ) else {
                 continue
             }
@@ -441,7 +441,7 @@ public struct CrossStageRedistributeEncoder: AdaptiveEncoder {
             orient: orient,
             fresh1: fresh1,
             fresh2: fresh2,
-            delta: k,
+            delta: k
         ) else { return }
 
         let beforePair = sortedPairKeys(fresh1.choice, fresh2.choice)
@@ -451,16 +451,16 @@ public struct CrossStageRedistributeEncoder: AdaptiveEncoder {
         let probeEntry1 = ChoiceSequenceValue.reduced(.init(
             choice: newChoice1,
             validRange: fresh1.validRange,
-            isRangeExplicit: fresh1.isRangeExplicit,
+            isRangeExplicit: fresh1.isRangeExplicit
         ))
         let probeEntry2 = ChoiceSequenceValue.value(.init(
             choice: newChoice2,
             validRange: fresh2.validRange,
-            isRangeExplicit: fresh2.isRangeExplicit,
+            isRangeExplicit: fresh2.isRangeExplicit
         ))
         let probeNonSemantic = semanticStats.nonSemanticCount(
             afterReplacing: (orient.lhsIndex, probeEntry1),
-            and: (orient.rhsIndex, probeEntry2),
+            and: (orient.rhsIndex, probeEntry2)
         )
 
         if bestFallbackCandidate == nil
@@ -488,13 +488,13 @@ public struct CrossStageRedistributeEncoder: AdaptiveEncoder {
         orient: PairOrientation,
         fresh1: ChoiceSequenceValue.Value,
         fresh2: ChoiceSequenceValue.Value,
-        delta: UInt64,
+        delta: UInt64
     ) -> ChoiceSequence? {
         guard let (newChoice1, newChoice2) = computeNewChoices(
             orient: orient,
             fresh1: fresh1,
             fresh2: fresh2,
-            delta: delta,
+            delta: delta
         ) else { return nil }
 
         // Range validation for float and mixed pairs.
@@ -510,18 +510,18 @@ public struct CrossStageRedistributeEncoder: AdaptiveEncoder {
         let probeEntry1 = ChoiceSequenceValue.reduced(.init(
             choice: newChoice1,
             validRange: fresh1.validRange,
-            isRangeExplicit: fresh1.isRangeExplicit,
+            isRangeExplicit: fresh1.isRangeExplicit
         ))
         let probeEntry2 = ChoiceSequenceValue.value(.init(
             choice: newChoice2,
             validRange: fresh2.validRange,
-            isRangeExplicit: fresh2.isRangeExplicit,
+            isRangeExplicit: fresh2.isRangeExplicit
         ))
 
         let currentNonSemanticCount = semanticStats.nonSemanticCount
         let probeNonSemanticCount = semanticStats.nonSemanticCount(
             afterReplacing: (orient.lhsIndex, probeEntry1),
-            and: (orient.rhsIndex, probeEntry2),
+            and: (orient.rhsIndex, probeEntry2)
         )
 
         let beforePair = sortedPairKeys(fresh1.choice, fresh2.choice)
@@ -547,13 +547,13 @@ public struct CrossStageRedistributeEncoder: AdaptiveEncoder {
         fresh2: ChoiceSequenceValue.Value,
         delta: UInt64,
         beforePair: [UInt64],
-        currentNonSemanticCount: Int,
+        currentNonSemanticCount: Int
     ) -> ChoiceSequence? {
         guard let (newChoice1, newChoice2) = computeNewChoices(
             orient: orient,
             fresh1: fresh1,
             fresh2: fresh2,
-            delta: delta,
+            delta: delta
         ) else { return nil }
 
         if orient.floatContext != nil || orient.mixedContext != nil {
@@ -568,17 +568,17 @@ public struct CrossStageRedistributeEncoder: AdaptiveEncoder {
         let probeEntry1 = ChoiceSequenceValue.reduced(.init(
             choice: newChoice1,
             validRange: fresh1.validRange,
-            isRangeExplicit: fresh1.isRangeExplicit,
+            isRangeExplicit: fresh1.isRangeExplicit
         ))
         let probeEntry2 = ChoiceSequenceValue.value(.init(
             choice: newChoice2,
             validRange: fresh2.validRange,
-            isRangeExplicit: fresh2.isRangeExplicit,
+            isRangeExplicit: fresh2.isRangeExplicit
         ))
 
         let probeNonSemanticCount = semanticStats.nonSemanticCount(
             afterReplacing: (orient.lhsIndex, probeEntry1),
-            and: (orient.rhsIndex, probeEntry2),
+            and: (orient.rhsIndex, probeEntry2)
         )
 
         let afterPair = sortedPairKeys(newChoice1, newChoice2)
@@ -626,7 +626,7 @@ public struct CrossStageRedistributeEncoder: AdaptiveEncoder {
         sequence = probe
         semanticStats.applyReplacements(
             (orient.lhsIndex, entry1),
-            (orient.rhsIndex, entry2),
+            (orient.rhsIndex, entry2)
         )
     }
 
@@ -655,14 +655,14 @@ public struct CrossStageRedistributeEncoder: AdaptiveEncoder {
         orient: PairOrientation,
         fresh1: ChoiceSequenceValue.Value,
         fresh2: ChoiceSequenceValue.Value,
-        delta: UInt64,
+        delta: UInt64
     ) -> (ChoiceValue, ChoiceValue)? {
         if let mixedContext = orient.mixedContext {
             return mixedRedistributedPairChoices(
                 lhs: fresh1.choice,
                 rhs: fresh2.choice,
                 delta: delta,
-                context: mixedContext,
+                context: mixedContext
             )
         }
         return redistributedPairChoices(
@@ -670,7 +670,7 @@ public struct CrossStageRedistributeEncoder: AdaptiveEncoder {
             rhs: fresh2.choice,
             delta: delta,
             lhsMovesUpward: orient.decrease1Upward,
-            floatContext: orient.floatContext,
+            floatContext: orient.floatContext
         )
     }
 
@@ -683,7 +683,7 @@ public struct CrossStageRedistributeEncoder: AdaptiveEncoder {
         rhs: ChoiceValue,
         delta: UInt64,
         lhsMovesUpward: Bool,
-        floatContext: FloatRedistributionContext?,
+        floatContext: FloatRedistributionContext?
     ) -> (ChoiceValue, ChoiceValue)? {
         if let floatContext {
             guard delta <= UInt64(Int64.max), delta <= floatContext.distance else {
@@ -720,16 +720,16 @@ public struct CrossStageRedistributeEncoder: AdaptiveEncoder {
             lhsBitPattern: lhs.bitPattern64,
             rhsBitPattern: rhs.bitPattern64,
             delta: delta,
-            lhsMovesUpward: lhsMovesUpward,
+            lhsMovesUpward: lhsMovesUpward
         ) else { return nil }
 
         let newChoice1 = ChoiceValue(
             lhs.tag.makeConvertible(bitPattern64: newBP1),
-            tag: lhs.tag,
+            tag: lhs.tag
         )
         let newChoice2 = ChoiceValue(
             rhs.tag.makeConvertible(bitPattern64: newBP2),
-            tag: rhs.tag,
+            tag: rhs.tag
         )
         return (newChoice1, newChoice2)
     }
@@ -739,7 +739,7 @@ public struct CrossStageRedistributeEncoder: AdaptiveEncoder {
         lhsBitPattern: UInt64,
         rhsBitPattern: UInt64,
         delta: UInt64,
-        lhsMovesUpward: Bool,
+        lhsMovesUpward: Bool
     ) -> (UInt64, UInt64)? {
         if lhsMovesUpward {
             guard UInt64.max - delta >= lhsBitPattern else { return nil }
@@ -760,7 +760,7 @@ public struct CrossStageRedistributeEncoder: AdaptiveEncoder {
         lhs: ChoiceValue,
         rhs: ChoiceValue,
         delta: UInt64,
-        context: MixedRedistributionContext,
+        context: MixedRedistributionContext
     ) -> (ChoiceValue, ChoiceValue)? {
         guard delta <= context.distanceInSteps else { return nil }
 
@@ -800,7 +800,7 @@ public struct CrossStageRedistributeEncoder: AdaptiveEncoder {
     private func makeFloatRedistributionContext(
         lhs: ChoiceValue,
         rhs: ChoiceValue,
-        lhsTargetBitPattern: UInt64,
+        lhsTargetBitPattern: UInt64
     ) -> FloatRedistributionContext? {
         let tag = lhs.tag
         guard tag == rhs.tag, tag == .double || tag == .float else { return nil }
@@ -812,7 +812,7 @@ public struct CrossStageRedistributeEncoder: AdaptiveEncoder {
 
         let targetChoice = ChoiceValue(
             tag.makeConvertible(bitPattern64: lhsTargetBitPattern),
-            tag: tag,
+            tag: tag
         )
         guard case let .floating(targetValue, _, _) = targetChoice,
               targetValue.isFinite
@@ -840,7 +840,7 @@ public struct CrossStageRedistributeEncoder: AdaptiveEncoder {
             rhsNumerator: rhsNumerator,
             denominator: denominator,
             lhsMovesUpward: lhsMovesUpward,
-            distance: rawDistance,
+            distance: rawDistance
         )
     }
 
@@ -853,7 +853,7 @@ public struct CrossStageRedistributeEncoder: AdaptiveEncoder {
     private func makeMixedRedistributionContext(
         lhs: ChoiceValue,
         rhs: ChoiceValue,
-        lhsTargetBitPattern: UInt64,
+        lhsTargetBitPattern: UInt64
     ) -> MixedRedistributionContext? {
         // Only applies to cross-tag pairs where at least one is floating-point.
         guard lhs.tag != rhs.tag else { return nil }
@@ -895,14 +895,14 @@ public struct CrossStageRedistributeEncoder: AdaptiveEncoder {
             lhsMovesUpward: lhsMovesUpward,
             distanceInSteps: distanceInSteps,
             lhsTag: lhs.tag,
-            rhsTag: rhs.tag,
+            rhsTag: rhs.tag
         )
     }
 
     // MARK: - Rational arithmetic helpers
 
     private func rationalForChoice(
-        _ choice: ChoiceValue,
+        _ choice: ChoiceValue
     ) -> (numerator: Int64, denominator: UInt64)? {
         switch choice {
         case let .floating(value, _, tag):
@@ -918,13 +918,13 @@ public struct CrossStageRedistributeEncoder: AdaptiveEncoder {
 
     private func rationalForTarget(
         _ choice: ChoiceValue,
-        targetBitPattern: UInt64,
+        targetBitPattern: UInt64
     ) -> (numerator: Int64, denominator: UInt64)? {
         switch choice {
         case let .floating(_, _, tag):
             let targetChoice = ChoiceValue(
                 tag.makeConvertible(bitPattern64: targetBitPattern),
-                tag: tag,
+                tag: tag
             )
             guard case let .floating(targetValue, _, _) = targetChoice,
                   targetValue.isFinite
@@ -933,14 +933,14 @@ public struct CrossStageRedistributeEncoder: AdaptiveEncoder {
         case let .signed(_, _, tag):
             let targetChoice = ChoiceValue(
                 tag.makeConvertible(bitPattern64: targetBitPattern),
-                tag: tag,
+                tag: tag
             )
             guard case let .signed(targetValue, _, _) = targetChoice else { return nil }
             return (targetValue, 1)
         case let .unsigned(_, tag):
             let targetChoice = ChoiceValue(
                 tag.makeConvertible(bitPattern64: targetBitPattern),
-                tag: tag,
+                tag: tag
             )
             guard case let .unsigned(targetValue, _) = targetChoice else { return nil }
             guard targetValue <= UInt64(Int64.max) else { return nil }
@@ -951,7 +951,7 @@ public struct CrossStageRedistributeEncoder: AdaptiveEncoder {
     private func choiceFromNumerator(
         _ numerator: Int64,
         denominator: UInt64,
-        original: ChoiceValue,
+        original: ChoiceValue
     ) -> ChoiceValue? {
         switch original {
         case let .floating(_, _, tag):
@@ -982,7 +982,7 @@ public struct CrossStageRedistributeEncoder: AdaptiveEncoder {
 
     private func scaledNumerator(
         _ ratio: (numerator: Int64, denominator: UInt64),
-        to denominator: UInt64,
+        to denominator: UInt64
     ) -> Int64? {
         guard denominator % ratio.denominator == 0 else { return nil }
         let scale = denominator / ratio.denominator
@@ -1045,7 +1045,7 @@ public struct CrossStageRedistributeEncoder: AdaptiveEncoder {
     /// onto the `FloatShortlex` scale via their absolute `Double` magnitude.
     private func sortedPairKeys(
         _ a: ChoiceValue,
-        _ b: ChoiceValue,
+        _ b: ChoiceValue
     ) -> [UInt64] {
         if a.tag == b.tag {
             return [a.shortlexKey, b.shortlexKey].sorted()

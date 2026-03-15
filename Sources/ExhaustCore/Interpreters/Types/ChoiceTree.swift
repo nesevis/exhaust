@@ -232,7 +232,7 @@ public extension ChoiceTree {
             return .sequence(
                 length: length,
                 elements: elements,
-                ChoiceMetadata(validRange: 0 ... UInt64.max, isRangeExplicit: false),
+                ChoiceMetadata(validRange: 0 ... UInt64.max, isRangeExplicit: false)
             )
         }
     }

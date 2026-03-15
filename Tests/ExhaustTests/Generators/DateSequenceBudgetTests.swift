@@ -29,7 +29,7 @@ struct DateSequenceBudgetTests {
     func dateArrayYearHourly() {
         let gen = #gen(
             .date(between: Self.year2024, interval: .hours(1))
-                .array(length: 1 ... 10),
+                .array(length: 1 ... 10)
         )
 
         // Property: dates in the array are all within the year range
@@ -44,7 +44,7 @@ struct DateSequenceBudgetTests {
     func dateArrayDSTFineGrain() {
         let gen = #gen(
             .date(between: Self.springRange, interval: .minutes(30))
-                .array(length: 1 ... 5),
+                .array(length: 1 ... 5)
         )
 
         // Property: array is generated with valid dates
@@ -62,7 +62,7 @@ struct DateSequenceBudgetTests {
         let gen = #gen(
             .date(between: Self.springRange, interval: .hours(1))
                 .array(length: 1 ... 5),
-            .date(between: Self.springRange, interval: .hours(1)),
+            .date(between: Self.springRange, interval: .hours(1))
         )
 
         // Property: sorting is idempotent
@@ -83,7 +83,7 @@ struct DateSequenceBudgetTests {
             .date(between: Self.springRange, interval: .hours(1))
                 .array(length: 0 ... 5),
             .date(between: Self.springRange, interval: .hours(1))
-                .array(length: 0 ... 5),
+                .array(length: 0 ... 5)
         )
 
         // Property: merging two sorted arrays preserves total count
@@ -102,7 +102,7 @@ struct DateSequenceBudgetTests {
         let gen = #gen(
             .date(between: Self.year2024, interval: .hours(1))
                 .array(length: 1 ... 5),
-            .int(in: -168 ... 168), // ±1 week in hours
+            .int(in: -168 ... 168) // ±1 week in hours
         )
 
         // Property: shifting all dates by the same offset preserves relative order
@@ -124,7 +124,7 @@ struct DateSequenceBudgetTests {
                 .array(length: 0 ... 5),
             .date(between: Self.springRange, interval: .hours(1))
                 .array(length: 0 ... 5),
-            .date(between: Self.springRange, interval: .hours(1)),
+            .date(between: Self.springRange, interval: .hours(1))
         )
 
         // Property: total element count is consistent

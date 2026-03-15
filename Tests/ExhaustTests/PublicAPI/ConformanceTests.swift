@@ -31,7 +31,7 @@ struct ConformanceTests {
         func staticArrayWithLength() throws {
             let gen: ReflectiveGenerator<[Int]> = .array(
                 Gen.choose(in: 0 ... 100),
-                length: 3 ... 5,
+                length: 3 ... 5
             )
             var iterator = ValueInterpreter(gen, seed: 42)
 
@@ -81,7 +81,7 @@ struct ConformanceTests {
             let gen: ReflectiveGenerator<Set<Int>> = .set(
                 Gen.choose(in: 0 ... 1000),
                 count: 2 ... 5,
-                scaling: .constant,
+                scaling: .constant
             )
             var iterator = ValueInterpreter(gen, seed: 42)
 
@@ -97,7 +97,7 @@ struct ConformanceTests {
         func staticDictionary() throws {
             let gen: ReflectiveGenerator<[Int: Int]> = .dictionary(
                 Gen.choose(in: 0 ... 100),
-                Gen.choose(in: 0 ... 100),
+                Gen.choose(in: 0 ... 100)
             )
             var iterator = ValueInterpreter(gen, seed: 42)
 
@@ -491,7 +491,7 @@ struct ConformanceTests {
         func oneOfGenerators() throws {
             let gen: ReflectiveGenerator<Int> = .oneOf(
                 Gen.choose(in: 0 ... 0),
-                Gen.choose(in: 100 ... 100),
+                Gen.choose(in: 100 ... 100)
             )
             var sawZero = false
             var sawHundred = false
@@ -513,7 +513,7 @@ struct ConformanceTests {
         func oneOfWeighted() throws {
             let gen: ReflectiveGenerator<Int> = .oneOf(
                 weighted: (100, Gen.choose(in: 0 ... 0)),
-                (1, Gen.choose(in: 100 ... 100)),
+                (1, Gen.choose(in: 100 ... 100))
             )
 
             var counts = [0: 0, 100: 0]

@@ -40,8 +40,8 @@ struct BinaryHeapShrinkingChallenge {
                 .suppressIssueReporting,
                 .useBonsaiReducer,
                 .replay(626_360_492_104_589_905),
-                property: property,
-            ),
+                property: property
+            )
         )
         let outputValues = Self.toList(output).sorted()
         // The shrunken result should have 4 values — the minimal failing heap
@@ -142,7 +142,7 @@ struct BinaryHeapShrinkingChallenge {
             .bind { value in
                 Gen.zip(
                     heapGen(min: value, depth: depth / 2),
-                    heapGen(min: value, depth: depth / 2),
+                    heapGen(min: value, depth: depth / 2)
                 )
                 .mapped(
                     forward: { left, right in Heap.node(value, left, right) },
@@ -151,7 +151,7 @@ struct BinaryHeapShrinkingChallenge {
                         case let .node(_, left, right): (left, right)
                         case .empty: (.empty, .empty)
                         }
-                    },
+                    }
                 )
             }
 

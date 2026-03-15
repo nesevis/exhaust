@@ -64,7 +64,7 @@ struct OptionalTests {
     func composesWithArray() throws {
         let gen = Gen.arrayOf(
             optionalGen(Gen.choose(in: 1 ... 10) as ReflectiveGenerator<Int>),
-            exactly: 5,
+            exactly: 5
         )
 
         var iterator = ValueInterpreter(gen)

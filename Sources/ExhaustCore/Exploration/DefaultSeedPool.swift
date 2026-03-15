@@ -25,7 +25,7 @@ public struct DefaultSeedPool: SeedPool {
     public init(
         capacity: Int = 256,
         generateRatio: Double = 0.2,
-        useFitness: Bool = false,
+        useFitness: Bool = false
     ) {
         self.capacity = capacity
         self.generateRatio = generateRatio

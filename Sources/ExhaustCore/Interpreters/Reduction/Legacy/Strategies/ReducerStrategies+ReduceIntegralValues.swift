@@ -18,7 +18,7 @@ extension ReducerStrategies {
         sequence: ChoiceSequence,
         valueSpans: [ChoiceSpan],
         rejectCache: inout ReducerCache,
-        bindIndex: BindSpanIndex? = nil,
+        bindIndex: BindSpanIndex? = nil
     ) throws -> (ChoiceSequence, Output)? {
         var current = sequence
         var currentHash = ZobristHash.hash(of: current)
@@ -54,7 +54,7 @@ extension ReducerStrategies {
                             targetBP: targetBP,
                             semanticTargetBP: semanticTargetBP,
                             validRange: validRange,
-                            isRangeExplicit: isRangeExplicit,
+                            isRangeExplicit: isRangeExplicit
                         ),
                         gen: gen,
                         tree: tree,
@@ -63,7 +63,7 @@ extension ReducerStrategies {
                         latestOutput: &latestOutput,
                         progress: &progress,
                         rejectCache: &rejectCache,
-                        bindIndex: bindIndex,
+                        bindIndex: bindIndex
                     ) {
                         currentHash = ZobristHash.hash(of: current)
                     }
@@ -90,7 +90,7 @@ extension ReducerStrategies {
             // Try target directly
             let targetChoice = ChoiceValue(
                 choiceTag.makeConvertible(bitPattern64: targetBP),
-                tag: choiceTag,
+                tag: choiceTag
             )
             let targetEntry = ChoiceSequenceValue.reduced(.init(choice: targetChoice, validRange: validRange, isRangeExplicit: isRangeExplicit))
             let targetHash = ZobristHash.updating(currentHash, at: seqIdx, replacing: currentEntry, with: targetEntry)
@@ -128,7 +128,7 @@ extension ReducerStrategies {
                             targetBP: targetBP,
                             semanticTargetBP: semanticTargetBP,
                             validRange: validRange,
-                            isRangeExplicit: isRangeExplicit,
+                            isRangeExplicit: isRangeExplicit
                         ),
                         gen: gen,
                         tree: tree,
@@ -137,7 +137,7 @@ extension ReducerStrategies {
                         latestOutput: &latestOutput,
                         progress: &progress,
                         rejectCache: &rejectCache,
-                        bindIndex: bindIndex,
+                        bindIndex: bindIndex
                     ) {
                         currentHash = ZobristHash.hash(of: current)
                     }
@@ -162,7 +162,7 @@ extension ReducerStrategies {
                     let newBP = searchUpward ? currentBP + delta : currentBP - delta
                     let newChoice = ChoiceValue(
                         choiceTag.makeConvertible(bitPattern64: newBP),
-                        tag: choiceTag,
+                        tag: choiceTag
                     )
                     if isWithinRecordedRange, newChoice.fits(in: validRange) == false {
                         return false
@@ -194,7 +194,7 @@ extension ReducerStrategies {
                     return fails
                 },
                 low: UInt64(0),
-                high: distance,
+                high: distance
             )
 
             if bestDelta > 0 {
@@ -210,7 +210,7 @@ extension ReducerStrategies {
                 let newBP = searchUpward ? currentBP + bestDelta : currentBP - bestDelta
                 let newChoice = ChoiceValue(
                     choiceTag.makeConvertible(bitPattern64: newBP),
-                    tag: choiceTag,
+                    tag: choiceTag
                 )
                 let candidateEntry = ChoiceSequenceValue.reduced(.init(choice: newChoice, validRange: validRange, isRangeExplicit: isRangeExplicit))
                 var candidate = current
@@ -277,7 +277,7 @@ extension ReducerStrategies {
                     let testBP = searchUpward ? currentBP + offset : currentBP - offset
                     let boundaryChoice = ChoiceValue(
                         choiceTag.makeConvertible(bitPattern64: testBP),
-                        tag: choiceTag,
+                        tag: choiceTag
                     )
                     if isWithinRecordedRange, boundaryChoice.fits(in: validRange) == false {
                         continue
@@ -317,7 +317,7 @@ extension ReducerStrategies {
                             targetBP: targetBP,
                             semanticTargetBP: semanticTargetBP,
                             validRange: validRange,
-                            isRangeExplicit: isRangeExplicit,
+                            isRangeExplicit: isRangeExplicit
                         ),
                         gen: gen,
                         tree: tree,
@@ -326,7 +326,7 @@ extension ReducerStrategies {
                         latestOutput: &latestOutput,
                         progress: &progress,
                         rejectCache: &rejectCache,
-                        bindIndex: bindIndex,
+                        bindIndex: bindIndex
                     ) {
                         currentHash = ZobristHash.hash(of: current)
                         continue
@@ -368,7 +368,7 @@ extension ReducerStrategies {
         latestOutput: inout Output?,
         progress: inout Bool,
         rejectCache: inout ReducerCache,
-        bindIndex: BindSpanIndex? = nil,
+        bindIndex: BindSpanIndex? = nil
     ) -> Bool {
         guard input.semanticTargetBP != input.targetBP else { return false }
         let unlockBP: UInt64? = if input.semanticTargetBP < input.targetBP {
@@ -387,7 +387,7 @@ extension ReducerStrategies {
 
         let unlockChoice = ChoiceValue(
             input.choiceTag.makeConvertible(bitPattern64: unlockBP),
-            tag: input.choiceTag,
+            tag: input.choiceTag
         )
         let unlockEntry = ChoiceSequenceValue.reduced(.init(choice: unlockChoice, validRange: input.validRange, isRangeExplicit: input.isRangeExplicit))
         var unlockCandidate = currentSequence

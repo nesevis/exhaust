@@ -67,7 +67,7 @@ struct CGSBenchmark {
             naive,
             samples: 500,
             seed: 12345,
-            predicate: isValid,
+            predicate: isValid
         )
         let tuneElapsed = ContinuousClock.now - tuneStart
         let tuneMs = Double(tuneElapsed.components.seconds) * 1000
@@ -146,7 +146,7 @@ struct CGSBenchmark {
                 naive,
                 maxRuns: maxRunsHint,
                 seed: 12345,
-                predicate: isValid,
+                predicate: isValid
             )
 
             let tuneElapsed = ContinuousClock.now - start

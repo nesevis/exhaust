@@ -12,7 +12,7 @@ struct AsyncContractTests {
             AsyncCounterSpec.self,
             commandLimit: 8,
             .samplingBudget(30),
-            .suppressIssueReporting,
+            .suppressIssueReporting
         )
         #expect(result == nil, "Async counter spec should pass — model and SUT are identical")
     }
@@ -23,7 +23,7 @@ struct AsyncContractTests {
             BuggyAsyncCounterSpec.self,
             commandLimit: 10,
             .samplingBudget(100),
-            .suppressIssueReporting,
+            .suppressIssueReporting
         )
         #expect(result != nil, "Buggy async counter should fail")
         if let result {
@@ -42,7 +42,7 @@ struct AsyncContractTests {
             AsyncSkipSpec.self,
             commandLimit: 8,
             .samplingBudget(30),
-            .suppressIssueReporting,
+            .suppressIssueReporting
         )
         #expect(result == nil, "Async skip spec should pass")
     }
@@ -60,7 +60,7 @@ struct AsyncContractTests {
             BuggyAsyncCounterSpec.self,
             commandLimit: 10,
             .replay(42),
-            .suppressIssueReporting,
+            .suppressIssueReporting
         )
         #expect(result1 != nil, "Replay with seed 42 should produce a failure")
 
@@ -68,7 +68,7 @@ struct AsyncContractTests {
             BuggyAsyncCounterSpec.self,
             commandLimit: 10,
             .replay(42),
-            .suppressIssueReporting,
+            .suppressIssueReporting
         )
         #expect(result2 != nil, "Same seed should reproduce the failure")
         if let result1, let result2 {
@@ -82,7 +82,7 @@ struct AsyncContractTests {
             BuggyAsyncCounterSpec.self,
             commandLimit: 20,
             .suppressIssueReporting,
-            .argumentAwareCoverage,
+            .argumentAwareCoverage
         )
         #expect(result != nil, "Should find a failure")
         if let result {
@@ -98,7 +98,7 @@ struct AsyncContractTests {
             BuggyCounterSpec.self,
             commandLimit: 20,
             .suppressIssueReporting,
-            .argumentAwareCoverage,
+            .argumentAwareCoverage
         )
         print()
         #expect(result1 != nil, "Replay with seed 42 should produce a failure")

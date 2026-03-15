@@ -24,7 +24,7 @@ extension ReflectiveGenerator where Operation == ReflectiveOperation {
     @inlinable
     func _mapped<NewOutput>(
         forward: @escaping (Value) throws -> NewOutput,
-        backward: @escaping (NewOutput) throws -> Value,
+        backward: @escaping (NewOutput) throws -> Value
     ) rethrows -> ReflectiveGenerator<NewOutput> {
         try Gen.contramap(backward, _map(forward))
     }
@@ -33,16 +33,16 @@ extension ReflectiveGenerator where Operation == ReflectiveOperation {
     @inlinable
     func _bound<NewValue>(
         forward: @escaping (Value) throws -> ReflectiveGenerator<NewValue>,
-        backward: @escaping (NewValue) throws -> Value,
+        backward: @escaping (NewValue) throws -> Value
     ) rethrows -> ReflectiveGenerator<NewValue> {
         Gen.liftF(.transform(
             kind: .bind(
                 forward: { try forward($0 as! Value).erase() },
                 backward: { try backward($0 as! NewValue) as Any },
                 inputType: String(describing: Value.self),
-                outputType: String(describing: NewValue.self),
+                outputType: String(describing: NewValue.self)
             ),
-            inner: erase(),
+            inner: erase()
         ))
     }
 }

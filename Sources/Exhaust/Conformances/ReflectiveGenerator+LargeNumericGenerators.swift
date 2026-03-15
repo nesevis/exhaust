@@ -19,7 +19,7 @@ public extension ReflectiveGenerator {
     static func uint128() -> ReflectiveGenerator<UInt128> {
         Gen.zip(
             Gen.chooseBits(),
-            Gen.chooseBits(),
+            Gen.chooseBits()
         ).mapped(
             forward: { high, low in
                 UInt128(high) << 64 | UInt128(low)
@@ -27,7 +27,7 @@ public extension ReflectiveGenerator {
             backward: { value in
                 (UInt64(truncatingIfNeeded: value >> 64),
                  UInt64(truncatingIfNeeded: value))
-            },
+            }
         )
     }
 
@@ -37,7 +37,7 @@ public extension ReflectiveGenerator {
     static func int128() -> ReflectiveGenerator<Int128> {
         Gen.zip(
             Gen.chooseBits(),
-            Gen.chooseBits(),
+            Gen.chooseBits()
         ).mapped(
             forward: { high, low in
                 let bits = UInt128(high) << 64 | UInt128(low)
@@ -47,7 +47,7 @@ public extension ReflectiveGenerator {
                 let bits = UInt128(bitPattern: value)
                 return (UInt64(truncatingIfNeeded: bits >> 64),
                         UInt64(truncatingIfNeeded: bits))
-            },
+            }
         )
     }
 }

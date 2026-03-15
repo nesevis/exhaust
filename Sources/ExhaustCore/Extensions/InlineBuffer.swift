@@ -68,6 +68,6 @@ struct InlineBuffer<Element> {
     }
 
     var isEmpty: Bool {
-        count == 0
-    } // swiftlint:disable:this empty_count
+        count == 0 // swiftlint:disable:this empty_count
+    }
 }

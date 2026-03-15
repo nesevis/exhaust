@@ -25,7 +25,7 @@ struct BindAwareReducerBenchmark {
         let gen = #gen(.int(in: 1 ... 20))
             .bound(
                 forward: { n in #gen(.int(in: 0 ... 100).array(length: UInt64(max(0, n)))) },
-                backward: { (arr: [Int]) in arr.count },
+                backward: { (arr: [Int]) in arr.count }
             )
 
         let result = try reduceAndMeasure(gen: gen, seed: seed) { $0.count <= 3 }
@@ -46,7 +46,7 @@ struct BindAwareReducerBenchmark {
         let gen = #gen(.int(in: 0 ... 100))
             .bound(
                 forward: { n in Gen.int(in: 0 ... max(1, n)) },
-                backward: { (m: Int) in m },
+                backward: { (m: Int) in m }
             )
 
         let result = try reduceAndMeasure(gen: gen, seed: seed) { $0 < 10 }
@@ -68,7 +68,7 @@ struct BindAwareReducerBenchmark {
         let singleBind = #gen(.int(in: 0 ... 50))
             .bound(
                 forward: { n in Gen.int(in: 0 ... max(1, n)) },
-                backward: { (m: Int) in m },
+                backward: { (m: Int) in m }
             )
 
         let gen = #gen(singleBind, singleBind)
@@ -78,10 +78,10 @@ struct BindAwareReducerBenchmark {
                 gen,
                 .useBonsaiReducer,
                 .suppressIssueReporting,
-                .reflecting((11, 15)),
+                .reflecting((11, 15))
             ) { pair in
                 pair.0 + pair.1 < 20
-            },
+            }
         )
 
         #expect(result == (0, 20))
@@ -102,7 +102,7 @@ struct BindAwareReducerBenchmark {
                     let upper = max(1, n)
                     return Gen.zip(Gen.int(in: 0 ... upper), Gen.int(in: 0 ... upper))
                 },
-                backward: { (pair: (Int, Int)) in max(pair.0, pair.1) },
+                backward: { (pair: (Int, Int)) in max(pair.0, pair.1) }
             )
 
         let result = try reduceAndMeasure(gen: gen, seed: seed) { pair in
@@ -127,7 +127,7 @@ private struct MeasuredResult<Output> {
 private func reduceAndMeasure<Output>(
     gen: ReflectiveGenerator<Output>,
     seed: UInt64,
-    property: @escaping (Output) -> Bool,
+    property: @escaping (Output) -> Bool
 ) throws -> MeasuredResult<Output>? {
     var iterator = ValueAndChoiceTreeInterpreter(gen, materializePicks: true, seed: seed)
     var failingTree: ChoiceTree?
@@ -154,7 +154,7 @@ private func reduceAndMeasure<Output>(
     }
 
     guard let (_, shrunk) = try Interpreters.reduce(
-        gen: gen, tree: tree, config: .fast, property: countingProperty,
+        gen: gen, tree: tree, config: .fast, property: countingProperty
     ) else {
         return nil
     }
@@ -162,6 +162,6 @@ private func reduceAndMeasure<Output>(
     return MeasuredResult(
         invocations: invocationCount,
         output: shrunk,
-        originalOutput: originalOutput,
+        originalOutput: originalOutput
     )
 }

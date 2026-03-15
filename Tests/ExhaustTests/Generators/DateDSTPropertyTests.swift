@@ -107,7 +107,7 @@ struct DateDSTPropertyTests {
     func closureLibraryDSTBug() {
         let gen = #gen(
             .date(between: Self.fallBackRange, interval: .hours(1), timeZone: Self.usEastern),
-            .date(between: Self.fallBackRange, interval: .hours(1), timeZone: Self.usEastern),
+            .date(between: Self.fallBackRange, interval: .hours(1), timeZone: Self.usEastern)
         )
 
         // The specific Closure Library bug: two dates on the SAME calendar day
@@ -133,7 +133,7 @@ struct DateDSTPropertyTests {
     func closureLibraryDSTBugRandomOnly() {
         let gen = #gen(
             .date(between: Self.fallBackRange, interval: .hours(1), timeZone: Self.usEastern),
-            .date(between: Self.fallBackRange, interval: .hours(1), timeZone: Self.usEastern),
+            .date(between: Self.fallBackRange, interval: .hours(1), timeZone: Self.usEastern)
         )
 
         // The specific Closure Library bug: two dates on the SAME calendar day

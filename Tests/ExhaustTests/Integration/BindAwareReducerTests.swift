@@ -185,7 +185,7 @@ struct BindAwareReductionTests {
         let gen = #gen(.int(in: 1 ... 10))
             .bound(
                 forward: { n in Gen.int(in: 0 ... 100).array(length: UInt64(n)) },
-                backward: { (arr: [Int]) in arr.count },
+                backward: { (arr: [Int]) in arr.count }
             )
 
         let output = #exhaust(gen, .suppressIssueReporting, .replay(42)) { arr in
@@ -202,7 +202,7 @@ struct BindAwareReductionTests {
         let gen = #gen(.int(in: 0 ... 100))
             .bound(
                 forward: { n in Gen.int(in: 0 ... max(1, n)) },
-                backward: { (m: Int) in m },
+                backward: { (m: Int) in m }
             )
 
         var iterator = ValueAndChoiceTreeInterpreter(gen, materializePicks: true, seed: 42)
@@ -218,7 +218,7 @@ struct BindAwareReductionTests {
         #expect(tree.containsBind)
 
         let (_, shrunk) = try #require(
-            try Interpreters.reduce(gen: gen, tree: tree, config: .fast) { $0 < 5 },
+            try Interpreters.reduce(gen: gen, tree: tree, config: .fast) { $0 < 5 }
         )
 
         #expect(shrunk >= 5)
@@ -236,7 +236,7 @@ struct BindAwareReductionTests {
         #expect(tree.containsBind == false)
 
         let (_, shrunk) = try #require(
-            try Interpreters.reduce(gen: gen, tree: tree, config: .fast) { $0 < 5 },
+            try Interpreters.reduce(gen: gen, tree: tree, config: .fast) { $0 < 5 }
         )
 
         #expect(shrunk == 5)
@@ -255,7 +255,7 @@ struct MaterializeCandidateTests {
         let sequence = ChoiceSequence.flatten(tree)
 
         let result = try ReducerStrategies.materializeCandidate(
-            gen, tree: tree, candidate: sequence, bindIndex: nil, mutatedIndex: 0,
+            gen, tree: tree, candidate: sequence, bindIndex: nil, mutatedIndex: 0
         )
         #expect(result != nil)
     }
@@ -269,7 +269,7 @@ struct MaterializeCandidateTests {
         let emptyIndex = BindSpanIndex(from: sequence)
 
         let result = try ReducerStrategies.materializeCandidate(
-            gen, tree: tree, candidate: sequence, bindIndex: emptyIndex, mutatedIndex: 0,
+            gen, tree: tree, candidate: sequence, bindIndex: emptyIndex, mutatedIndex: 0
         )
         #expect(result != nil)
     }
@@ -279,7 +279,7 @@ struct MaterializeCandidateTests {
         let gen = #gen(.int(in: 0 ... 100))
             .bound(
                 forward: { n in Gen.int(in: 0 ... max(1, n)) },
-                backward: { (m: Int) in m },
+                backward: { (m: Int) in m }
             )
 
         var iterator = ValueAndChoiceTreeInterpreter(gen, materializePicks: true, seed: 42)
@@ -290,7 +290,7 @@ struct MaterializeCandidateTests {
         #expect(genBindIndex.isEmpty == false)
         let genInnerIdx = genBindIndex.regions[0].innerRange.lowerBound
         let result = try ReducerStrategies.materializeCandidate(
-            gen, tree: genTree, candidate: genSequence, bindIndex: genBindIndex, mutatedIndex: genInnerIdx,
+            gen, tree: genTree, candidate: genSequence, bindIndex: genBindIndex, mutatedIndex: genInnerIdx
         )
         #expect(result != nil)
     }

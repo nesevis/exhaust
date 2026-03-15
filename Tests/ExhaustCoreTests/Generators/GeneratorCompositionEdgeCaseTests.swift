@@ -34,7 +34,7 @@ struct GeneratorCompositionEdgeCaseTests {
             stringGen(),
             Gen.choose(in: UInt.min ... UInt.max, scaling: UInt.defaultScaling),
             Gen.choose(in: -Double.greatestFiniteMagnitude ... Double.greatestFiniteMagnitude, scaling: Double.defaultScaling),
-            Gen.choose(in: 1 ... 100) as ReflectiveGenerator<Int>,
+            Gen.choose(in: 1 ... 100) as ReflectiveGenerator<Int>
         )
 
         // Verify all components are generated correctly
@@ -52,7 +52,7 @@ struct GeneratorCompositionEdgeCaseTests {
     func nestedCompositionLevels() throws {
         let innerGen = Gen.zip(
             Gen.choose(in: Int.min ... Int.max, scaling: Int.defaultScaling),
-            stringGen(),
+            stringGen()
         )
         let middleGen = Gen.zip(innerGen, boolGen())
         let outerGen = Gen.zip(middleGen, Gen.choose(in: UInt.min ... UInt.max, scaling: UInt.defaultScaling))
@@ -103,7 +103,7 @@ struct GeneratorCompositionEdgeCaseTests {
         let gen = Gen.zip(
             Gen.choose(in: 1 ... 100) as ReflectiveGenerator<Int>,
             stringGen(),
-            boolGen(),
+            boolGen()
         )
 
         var iterator = ValueInterpreter(gen)
@@ -118,7 +118,7 @@ struct GeneratorCompositionEdgeCaseTests {
     func arrayComposition() throws {
         let arrayGen = Gen.arrayOf(
             Gen.choose(in: Int.min ... Int.max, scaling: Int.defaultScaling),
-            within: 0 ... 5,
+            within: 0 ... 5
         )
         let scalarGen = stringGen()
 
@@ -138,11 +138,11 @@ struct GeneratorCompositionEdgeCaseTests {
             Gen.arrayOf(
                 Gen.arrayOf(
                     Gen.choose(in: Int.min ... Int.max, scaling: Int.defaultScaling),
-                    within: 1 ... 3,
+                    within: 1 ... 3
                 ),
-                within: 1 ... 2,
+                within: 1 ... 2
             ),
-            within: 1 ... 2,
+            within: 1 ... 2
         )
 
         let composed = Gen.zip(nestedGen, stringGen())

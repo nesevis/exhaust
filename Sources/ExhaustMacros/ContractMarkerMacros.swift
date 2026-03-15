@@ -6,7 +6,7 @@ public struct ModelMacro: PeerMacro {
     public static func expansion(
         of _: AttributeSyntax,
         providingPeersOf _: some DeclSyntaxProtocol,
-        in _: some MacroExpansionContext,
+        in _: some MacroExpansionContext
     ) throws -> [DeclSyntax] {
         []
     }
@@ -17,7 +17,7 @@ public struct SUTMacro: PeerMacro {
     public static func expansion(
         of _: AttributeSyntax,
         providingPeersOf _: some DeclSyntaxProtocol,
-        in _: some MacroExpansionContext,
+        in _: some MacroExpansionContext
     ) throws -> [DeclSyntax] {
         []
     }
@@ -28,7 +28,7 @@ public struct CommandMacro: PeerMacro {
     public static func expansion(
         of _: AttributeSyntax,
         providingPeersOf _: some DeclSyntaxProtocol,
-        in _: some MacroExpansionContext,
+        in _: some MacroExpansionContext
     ) throws -> [DeclSyntax] {
         []
     }
@@ -39,7 +39,7 @@ public struct InvariantMacro: PeerMacro {
     public static func expansion(
         of _: AttributeSyntax,
         providingPeersOf _: some DeclSyntaxProtocol,
-        in _: some MacroExpansionContext,
+        in _: some MacroExpansionContext
     ) throws -> [DeclSyntax] {
         []
     }

@@ -14,7 +14,7 @@ struct OneOfTests {
 
     private func roundTrip<Output: Equatable>(
         _ gen: ReflectiveGenerator<Output>,
-        seed: UInt64 = 42,
+        seed: UInt64 = 42
     ) throws -> (original: Output, materialized: Output) {
         var interpreter = ValueAndChoiceTreeInterpreter(gen, materializePicks: false, seed: seed)
         let (value, tree) = try #require(try interpreter.prefix(1).last)

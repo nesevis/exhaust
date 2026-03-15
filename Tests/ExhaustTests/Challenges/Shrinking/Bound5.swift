@@ -52,7 +52,7 @@ struct Bound5ShrinkingChallenge {
             b: [7672, 16087, 24512],
             c: [-11812, -5368, 8526, -24292, 21020, 14344, -1893, -22885],
             d: [25982, 8828, 5007, -6389],
-            e: [12744, -11152, -18025, -29069, 30825],
+            e: [12744, -11152, -18025, -29069, 30825]
         )
 
         let output = #exhaust(
@@ -60,7 +60,7 @@ struct Bound5ShrinkingChallenge {
             .suppressIssueReporting,
             .reflecting(value),
             .useBonsaiReducer,
-            property: Self.property,
+            property: Self.property
         )
 
         #expect(output?.arr.count == 2)
@@ -75,7 +75,7 @@ struct Bound5ShrinkingChallenge {
             b: [29251, 31661],
             c: [-18678],
             d: [-2824, 15387, -15932, -23458, -6124, 3327, -21001, 16059, -21211, -27710],
-            e: [16775, -32275, 813, 11044],
+            e: [16775, -32275, 813, 11044]
         )
 
         let output = #exhaust(
@@ -83,7 +83,7 @@ struct Bound5ShrinkingChallenge {
             .suppressIssueReporting,
             .reflecting(value),
 //            .useBonsaiReducer,
-            property: Self.property,
+            property: Self.property
         )
 
         #expect(output?.arr.count == 2)
@@ -97,7 +97,7 @@ struct Bound5ShrinkingChallenge {
             b: [20837, 6773, -1304, -13732, -2626, -3440, 15253, 28268, -31908, 30491],
             c: [23543, -10339, -12447, 9150, 18335, -2103, 15547, 11124],
             d: [-32635, 18394, -23954, 13750, 27692, 25639, 23372, -27650, 18759, 17794],
-            e: [-6525, 2724, -30958, 28797, -2409, -1095, 2335, -14856],
+            e: [-6525, 2724, -30958, 28797, -2409, -1095, 2335, -14856]
         )
         ExhaustLog.setConfiguration(.init(isEnabled: true, minimumLevel: .info, categoryMinimumLevels: [.reducer: .debug], format: .human))
         let output = #exhaust(
@@ -105,7 +105,7 @@ struct Bound5ShrinkingChallenge {
             .suppressIssueReporting,
             .reflecting(value),
 //            .useBonsaiReducer,
-            property: Self.property,
+            property: Self.property
         )
 
         #expect(output?.arr.count == 2)
@@ -124,7 +124,7 @@ struct Bound5ShrinkingChallenge {
                 .suppressIssueReporting,
                 .reflecting(bound5),
                 .useBonsaiReducer,
-                property: Self.property,
+                property: Self.property
             )
 
             #expect(output?.arr.count == 2)

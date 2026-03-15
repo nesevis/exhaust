@@ -21,7 +21,7 @@ public extension ReflectiveGenerator where Operation == ReflectiveOperation {
     @inlinable
     func mapped<NewOutput>(
         forward: @Sendable @escaping (Value) throws -> NewOutput,
-        backward: @Sendable @escaping (NewOutput) throws -> Value,
+        backward: @Sendable @escaping (NewOutput) throws -> Value
     ) rethrows -> ReflectiveGenerator<NewOutput> {
         try Gen.contramap(backward, _map(forward))
     }
@@ -38,7 +38,7 @@ public extension ReflectiveGenerator where Operation == ReflectiveOperation {
     @inlinable
     func mapped<NewOutput>(
         forward: @Sendable @escaping (Value) throws -> NewOutput,
-        backward: some PartialPath<NewOutput, Value>,
+        backward: some PartialPath<NewOutput, Value>
     ) rethrows -> ReflectiveGenerator<NewOutput> {
         let erasedBackward: (Any) throws -> Any = { newOutput in
             try backward.extract(from: newOutput)!
@@ -61,7 +61,7 @@ public extension ReflectiveGenerator where Operation == ReflectiveOperation {
     @inlinable
     func mapped<NewOutput>(
         forward: some PartialPath<Value, NewOutput>,
-        backward: some PartialPath<NewOutput, Value>,
+        backward: some PartialPath<NewOutput, Value>
     ) throws -> ReflectiveGenerator<NewOutput?> {
         let erasedBackward: (Any) throws -> Any = { newOutput in
             // FIXME: Should we be force unwrapping here? What if it's optional?
@@ -84,7 +84,7 @@ public extension ReflectiveGenerator where Operation == ReflectiveOperation {
     @inlinable
     func mapped<NewOutput>(
         forward: some PartialPath<Value, NewOutput>,
-        backward: @Sendable @escaping (NewOutput) throws -> Value,
+        backward: @Sendable @escaping (NewOutput) throws -> Value
     ) throws -> ReflectiveGenerator<NewOutput?> {
         let erasedBackward: (Any) throws -> Any = { try backward($0 as! NewOutput) }
         let erasedGen = try _map { try forward.extract(from: $0) }
@@ -100,15 +100,15 @@ public extension ReflectiveGenerator where Operation == ReflectiveOperation {
     /// - Returns: A generator producing optional values of the extracted type
     @inlinable
     func map<NewOutput>(
-        _ path: some PartialPath<Value, NewOutput>,
+        _ path: some PartialPath<Value, NewOutput>
     ) throws -> ReflectiveGenerator<NewOutput?> {
         Gen.liftF(.transform(
             kind: .map(
                 forward: { try path.extract(from: $0) as Any },
                 inputType: String(describing: Value.self),
-                outputType: String(describing: NewOutput.self),
+                outputType: String(describing: NewOutput.self)
             ),
-            inner: erase(),
+            inner: erase()
         ))
     }
 
@@ -131,7 +131,7 @@ public extension ReflectiveGenerator where Operation == ReflectiveOperation {
                 }
                 return result as! Value
             },
-            next: erase(),
+            next: erase()
         )) { result in
             .pure(result as? Value)
         }
@@ -149,13 +149,13 @@ public extension ReflectiveGenerator where Operation == ReflectiveOperation {
     /// ```
     @inlinable
     func classify(
-        _ classifiers: (String, @Sendable (Value) -> Bool)...,
+        _ classifiers: (String, @Sendable (Value) -> Bool)...
     ) -> ReflectiveGenerator<Value> {
         .impure(operation:
             .classify(
                 gen: erase(),
                 fingerprint: 0,
-                classifiers: classifiers.map { pair in (pair.0, { pair.1($0 as! Value) }) },
+                classifiers: classifiers.map { pair in (pair.0, { pair.1($0 as! Value) }) }
             )) { .pure($0 as! Value) }
     }
 
@@ -199,13 +199,13 @@ public extension ReflectiveGenerator where Operation == ReflectiveOperation {
         _ type: FilterType = .auto,
         _ predicate: @Sendable @escaping (Value) -> Bool,
         fileID: String = #fileID,
-        line: UInt = #line,
+        line: UInt = #line
     ) -> ReflectiveGenerator<Value> {
         let fingerprint = fileID.hashValue.bitPattern64 &+ line.bitPattern64
 
         return .impure(
             operation: .filter(gen: erase(), fingerprint: fingerprint, filterType: type, predicate: { value in predicate(value as! Value) }),
-            continuation: { .pure($0 as! Value) },
+            continuation: { .pure($0 as! Value) }
         )
     }
 
@@ -233,13 +233,13 @@ public extension ReflectiveGenerator where Operation == ReflectiveOperation {
     @inlinable
     func unique(
         fileID: String = #fileID,
-        line: UInt = #line,
+        line: UInt = #line
     ) -> ReflectiveGenerator<Value> {
         let fingerprint = fileID.hashValue.bitPattern64 &+ line.bitPattern64
 
         return .impure(
             operation: .unique(gen: erase(), fingerprint: fingerprint, keyExtractor: nil),
-            continuation: { .pure($0 as! Value) },
+            continuation: { .pure($0 as! Value) }
         )
     }
 
@@ -256,7 +256,7 @@ public extension ReflectiveGenerator where Operation == ReflectiveOperation {
     func unique(
         by keyPath: KeyPath<Value, some Hashable & Sendable>,
         fileID: String = #fileID,
-        line: UInt = #line,
+        line: UInt = #line
     ) -> ReflectiveGenerator<Value> {
         nonisolated(unsafe) let keyPath = keyPath
         return unique(by: { $0[keyPath: keyPath] }, fileID: fileID, line: line)
@@ -276,13 +276,13 @@ public extension ReflectiveGenerator where Operation == ReflectiveOperation {
     func unique(
         by transform: @Sendable @escaping (Value) -> some Hashable,
         fileID: String = #fileID,
-        line: UInt = #line,
+        line: UInt = #line
     ) -> ReflectiveGenerator<Value> {
         let fingerprint = fileID.hashValue.bitPattern64 &+ line.bitPattern64
 
         return .impure(
             operation: .unique(gen: erase(), fingerprint: fingerprint, keyExtractor: { value in AnyHashable(transform(value as! Value)) }),
-            continuation: { .pure($0 as! Value) },
+            continuation: { .pure($0 as! Value) }
         )
     }
 
@@ -308,7 +308,7 @@ public extension ReflectiveGenerator where Operation == ReflectiveOperation {
     static func recursive(
         base: Value,
         maxDepth: UInt64,
-        extend: @Sendable @escaping (@escaping () -> ReflectiveGenerator<Value>, UInt64) -> ReflectiveGenerator<Value>,
+        extend: @Sendable @escaping (@escaping () -> ReflectiveGenerator<Value>, UInt64) -> ReflectiveGenerator<Value>
     ) -> ReflectiveGenerator<Value> {
         Gen.recursive(base: base, maxDepth: maxDepth, extend: extend)
     }
@@ -337,7 +337,7 @@ public extension ReflectiveGenerator where Operation == ReflectiveOperation {
     static func recursive(
         base: ReflectiveGenerator<Value>,
         maxDepth: UInt64,
-        extend: @Sendable @escaping (@escaping () -> ReflectiveGenerator<Value>, UInt64) -> ReflectiveGenerator<Value>,
+        extend: @Sendable @escaping (@escaping () -> ReflectiveGenerator<Value>, UInt64) -> ReflectiveGenerator<Value>
     ) -> ReflectiveGenerator<Value> {
         Gen.recursive(base: base, maxDepth: maxDepth, extend: extend)
     }
@@ -373,9 +373,9 @@ public extension ReflectiveGenerator where Operation == ReflectiveOperation {
             kind: .map(
                 forward: { try transform($0 as! Value) },
                 inputType: String(describing: Value.self),
-                outputType: String(describing: NewValue.self),
+                outputType: String(describing: NewValue.self)
             ),
-            inner: erase(),
+            inner: erase()
         ))
     }
 
@@ -401,9 +401,9 @@ public extension ReflectiveGenerator where Operation == ReflectiveOperation {
                 forward: { try transform($0 as! Value).erase() },
                 backward: nil,
                 inputType: String(describing: Value.self),
-                outputType: String(describing: NewValue.self),
+                outputType: String(describing: NewValue.self)
             ),
-            inner: erase(),
+            inner: erase()
         ))
     }
 
@@ -430,7 +430,7 @@ public extension ReflectiveGenerator where Operation == ReflectiveOperation {
     @inlinable
     func bound<NewValue>(
         forward: @Sendable @escaping (Value) throws -> ReflectiveGenerator<NewValue>,
-        backward: @Sendable @escaping (NewValue) throws -> Value,
+        backward: @Sendable @escaping (NewValue) throws -> Value
     ) rethrows -> ReflectiveGenerator<NewValue> {
         try _bound(forward: forward, backward: backward)
     }
@@ -448,7 +448,7 @@ public extension ReflectiveGenerator where Operation == ReflectiveOperation {
     @inlinable
     func bound<NewValue>(
         forward: @Sendable @escaping (Value) throws -> ReflectiveGenerator<NewValue>,
-        backward: some PartialPath<NewValue, Value>,
+        backward: some PartialPath<NewValue, Value>
     ) rethrows -> ReflectiveGenerator<NewValue> {
         try _bound(forward: forward, backward: { try backward.extract(from: $0)! })
     }

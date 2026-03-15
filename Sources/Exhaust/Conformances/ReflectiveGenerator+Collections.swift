@@ -21,7 +21,7 @@ public extension ReflectiveGenerator {
     /// - Parameter gen: Generator for each array element
     /// - Returns: A generator producing arrays of random length
     static func array<Element>(
-        _ gen: ReflectiveGenerator<Element>,
+        _ gen: ReflectiveGenerator<Element>
     ) -> ReflectiveGenerator<[Element]> where Value == [Element] {
         Gen.arrayOf(gen)
     }
@@ -40,7 +40,7 @@ public extension ReflectiveGenerator {
     static func array<Element>(
         _ gen: ReflectiveGenerator<Element>,
         length: ClosedRange<Int>,
-        scaling: SizeScaling<UInt64> = .linear,
+        scaling: SizeScaling<UInt64> = .linear
     ) -> ReflectiveGenerator<[Element]> where Value == [Element] {
         precondition(length.lowerBound >= 0, "Length must be non-negative")
         return Gen.arrayOf(gen, within: UInt64(length.lowerBound) ... UInt64(length.upperBound), scaling: scaling)
@@ -58,7 +58,7 @@ public extension ReflectiveGenerator {
     /// - Returns: A generator producing arrays of the specified length
     static func array<Element>(
         _ gen: ReflectiveGenerator<Element>,
-        length: UInt64,
+        length: UInt64
     ) -> ReflectiveGenerator<[Element]> where Value == [Element] {
         Gen.arrayOf(gen, exactly: length)
     }
@@ -74,7 +74,7 @@ public extension ReflectiveGenerator {
     /// - Parameter gen: Generator for each set element
     /// - Returns: A generator producing sets of random size
     static func set<Element: Hashable>(
-        _ gen: ReflectiveGenerator<Element>,
+        _ gen: ReflectiveGenerator<Element>
     ) -> ReflectiveGenerator<Set<Element>> where Value == Set<Element> {
         Gen.setOf(gen)
     }
@@ -89,7 +89,7 @@ public extension ReflectiveGenerator {
     static func set<Element: Hashable>(
         _ gen: ReflectiveGenerator<Element>,
         count: ClosedRange<Int>,
-        scaling: SizeScaling<UInt64> = .linear,
+        scaling: SizeScaling<UInt64> = .linear
     ) -> ReflectiveGenerator<Set<Element>> where Value == Set<Element> {
         precondition(count.lowerBound >= 0, "Count must be non-negative")
         return Gen.setOf(gen, within: UInt64(count.lowerBound) ... UInt64(count.upperBound), scaling: scaling)
@@ -103,7 +103,7 @@ public extension ReflectiveGenerator {
     /// - Returns: A generator producing sets of the specified size
     static func set<Element: Hashable>(
         _ gen: ReflectiveGenerator<Element>,
-        count: UInt64,
+        count: UInt64
     ) -> ReflectiveGenerator<Set<Element>> where Value == Set<Element> {
         Gen.setOf(gen, exactly: count)
     }
@@ -122,7 +122,7 @@ public extension ReflectiveGenerator {
     /// - Returns: A generator producing dictionaries of random size
     static func dictionary<Key: Hashable, DictValue>(
         _ keyGen: ReflectiveGenerator<Key>,
-        _ valueGen: ReflectiveGenerator<DictValue>,
+        _ valueGen: ReflectiveGenerator<DictValue>
     ) -> ReflectiveGenerator<[Key: DictValue]> where Value == [Key: DictValue] {
         Gen.dictionaryOf(keyGen, valueGen)
     }
@@ -134,7 +134,7 @@ public extension ReflectiveGenerator {
     /// - Parameter gen: Generator for the source collection to slice
     /// - Returns: A generator producing random sub-sequences
     static func slice<C: Collection>(
-        _ gen: ReflectiveGenerator<C>,
+        _ gen: ReflectiveGenerator<C>
     ) -> ReflectiveGenerator<C.SubSequence> where Value == C.SubSequence {
         Gen.slice(of: gen)
     }
@@ -146,7 +146,7 @@ public extension ReflectiveGenerator {
     /// - Parameter gen: Generator for the source collection to shuffle
     /// - Returns: A generator producing shuffled arrays
     static func shuffled(
-        _ gen: ReflectiveGenerator<Value>,
+        _ gen: ReflectiveGenerator<Value>
     ) -> ReflectiveGenerator<[Value.Element]> where Value: Collection {
         Gen.shuffled(gen)
     }
@@ -241,7 +241,7 @@ public extension ReflectiveGenerator where Operation == ReflectiveOperation {
     /// - Parameter collection: The collection to pick elements from
     /// - Returns: A generator that produces random elements from the collection
     static func element<C: Collection>(
-        from collection: C,
+        from collection: C
     ) -> ReflectiveGenerator<C.Element> where Value == C.Element, C.Element: Hashable {
         Gen.element(from: collection)
     }
@@ -253,7 +253,7 @@ public extension ReflectiveGenerator where Operation == ReflectiveOperation {
     /// - Parameter collection: The collection to pick elements from
     /// - Returns: A generator that produces random elements from the collection
     static func element<C: Collection>(
-        from collection: C,
+        from collection: C
     ) -> ReflectiveGenerator<C.Element> where Value == C.Element {
         Gen.element(from: collection)
     }

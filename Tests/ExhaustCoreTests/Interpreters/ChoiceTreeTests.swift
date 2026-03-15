@@ -57,7 +57,7 @@ struct ChoiceTreeTests {
 
             let choice = ChoiceTree.choice(
                 ChoiceValue(UInt64(1), tag: .uint64),
-                ChoiceMetadata(validRange: 0 ... 10),
+                ChoiceMetadata(validRange: 0 ... 10)
             )
             #expect(!choice.containsPicks)
         }
@@ -66,7 +66,7 @@ struct ChoiceTreeTests {
         func branchReturnsTrue() {
             let branch = ChoiceTree.branch(
                 siteID: 0, weight: 1, id: 0, branchIDs: [0, 1],
-                choice: .just(""),
+                choice: .just("")
             )
             #expect(branch.containsPicks)
         }
@@ -75,7 +75,7 @@ struct ChoiceTreeTests {
         func nestedBranchInGroup() {
             let branch = ChoiceTree.branch(
                 siteID: 0, weight: 1, id: 0, branchIDs: [0],
-                choice: .just(""),
+                choice: .just("")
             )
             let group = ChoiceTree.group([.just("a"), branch])
             #expect(group.containsPicks)
@@ -85,7 +85,7 @@ struct ChoiceTreeTests {
         func selectedBranch() {
             let branch = ChoiceTree.branch(
                 siteID: 0, weight: 1, id: 0, branchIDs: [0],
-                choice: .just(""),
+                choice: .just("")
             )
             #expect(ChoiceTree.selected(branch).containsPicks)
         }
@@ -95,7 +95,7 @@ struct ChoiceTreeTests {
             let seq = ChoiceTree.sequence(
                 length: 2,
                 elements: [.just("a"), .just("b")],
-                ChoiceMetadata(validRange: 0 ... 10),
+                ChoiceMetadata(validRange: 0 ... 10)
             )
             #expect(!seq.containsPicks)
         }
@@ -104,7 +104,7 @@ struct ChoiceTreeTests {
         func resizeWithBranch() {
             let branch = ChoiceTree.branch(
                 siteID: 0, weight: 1, id: 0, branchIDs: [0],
-                choice: .just(""),
+                choice: .just("")
             )
             let resize = ChoiceTree.resize(newSize: 50, choices: [branch])
             #expect(resize.containsPicks)
@@ -125,7 +125,7 @@ struct ChoiceTreeTests {
         func singleBranch() {
             let branch = ChoiceTree.branch(
                 siteID: 0, weight: 1, id: 0, branchIDs: [0, 1, 2],
-                choice: .just(""),
+                choice: .just("")
             )
             // 3 branches * 2^0 = 3
             #expect(branch.pickComplexity == 3)
@@ -135,11 +135,11 @@ struct ChoiceTreeTests {
         func nestedBranches() {
             let inner = ChoiceTree.branch(
                 siteID: 1, weight: 1, id: 0, branchIDs: [0, 1],
-                choice: .just(""),
+                choice: .just("")
             )
             let outer = ChoiceTree.branch(
                 siteID: 0, weight: 1, id: 0, branchIDs: [0, 1],
-                choice: inner,
+                choice: inner
             )
             // outer: 2 * 2^0 = 2, inner: 2 * 2^1 = 4, max = 4
             #expect(outer.pickComplexity == 4)
@@ -175,7 +175,7 @@ struct ChoiceTreeTests {
             let seq = ChoiceTree.sequence(
                 length: 1,
                 elements: [target],
-                ChoiceMetadata(validRange: 0 ... 5),
+                ChoiceMetadata(validRange: 0 ... 5)
             )
             #expect(seq.contains { $0 == target })
         }
@@ -326,7 +326,7 @@ struct ChoiceTreeTests {
         func extractsFromBranch() {
             let tree = ChoiceTree.branch(
                 siteID: 0, weight: 1, id: 42, branchIDs: [42],
-                choice: .just(""),
+                choice: .just("")
             )
             #expect(tree.branchId == 42)
         }
@@ -335,7 +335,7 @@ struct ChoiceTreeTests {
         func extractsFromSelectedBranch() {
             let branch = ChoiceTree.branch(
                 siteID: 0, weight: 1, id: 7, branchIDs: [7],
-                choice: .just(""),
+                choice: .just("")
             )
             #expect(ChoiceTree.selected(branch).branchId == 7)
         }
@@ -352,11 +352,11 @@ struct ChoiceTreeTests {
 
 private let choiceNode = ChoiceTree.choice(
     ChoiceValue(UInt64(5), tag: .uint64),
-    ChoiceMetadata(validRange: 0 ... 10),
+    ChoiceMetadata(validRange: 0 ... 10)
 )
 private let branchNode = ChoiceTree.branch(
     siteID: 0, weight: 1, id: 1, branchIDs: [1, 2],
-    choice: .just("inner"),
+    choice: .just("inner")
 )
 private let justNode = ChoiceTree.just("hello")
 private let groupNode = ChoiceTree.group([justNode])

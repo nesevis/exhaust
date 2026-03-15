@@ -31,7 +31,7 @@ struct CollectionGeneratorTests {
         func exactCount() throws {
             let gen = Gen.setOf(
                 Gen.choose(in: 0 ... 1000) as ReflectiveGenerator<Int>,
-                exactly: 5,
+                exactly: 5
             )
             var iterator = ValueInterpreter(gen, seed: 1)
 
@@ -45,7 +45,7 @@ struct CollectionGeneratorTests {
             let gen = Gen.setOf(
                 Gen.choose(in: 0 ... 1000) as ReflectiveGenerator<Int>,
                 within: 2 ... 5,
-                scaling: .constant,
+                scaling: .constant
             )
             var iterator = ValueInterpreter(gen, seed: 10)
 
@@ -66,7 +66,7 @@ struct CollectionGeneratorTests {
         func producesDictionaries() throws {
             let gen = Gen.dictionaryOf(
                 Gen.choose(in: 0 ... 100) as ReflectiveGenerator<Int>,
-                Gen.choose(in: 0 ... 100) as ReflectiveGenerator<Int>,
+                Gen.choose(in: 0 ... 100) as ReflectiveGenerator<Int>
             )
             var iterator = ValueInterpreter(gen, seed: 7)
 
@@ -86,7 +86,7 @@ struct CollectionGeneratorTests {
             // Use a very small key range to force collisions
             let gen = Gen.dictionaryOf(
                 Gen.choose(in: 0 ... 2) as ReflectiveGenerator<Int>,
-                Gen.choose(in: 0 ... 100) as ReflectiveGenerator<Int>,
+                Gen.choose(in: 0 ... 100) as ReflectiveGenerator<Int>
             )
             var iterator = ValueInterpreter(gen, seed: 42)
 
@@ -105,7 +105,7 @@ struct CollectionGeneratorTests {
         func emptyCollection() throws {
             let gen = Gen.shuffled(Gen.arrayOf(
                 Gen.choose(in: 0 ... 10) as ReflectiveGenerator<Int>,
-                exactly: 0,
+                exactly: 0
             ))
             var iterator = ValueInterpreter(gen, seed: 1)
 
@@ -118,7 +118,7 @@ struct CollectionGeneratorTests {
         func singleElement() throws {
             let gen = Gen.shuffled(Gen.arrayOf(
                 Gen.choose(in: 42 ... 42) as ReflectiveGenerator<Int>,
-                exactly: 1,
+                exactly: 1
             ))
             var iterator = ValueInterpreter(gen, seed: 1)
 
@@ -131,7 +131,7 @@ struct CollectionGeneratorTests {
         func preservesElements() throws {
             let gen = Gen.arrayOf(
                 Gen.choose(in: 0 ... 100) as ReflectiveGenerator<Int>,
-                exactly: 5,
+                exactly: 5
             )._bind { array in
                 Gen.shuffled(ReflectiveGenerator<[Int]>.pure(array))._map { shuffled in
                     (array.sorted(), shuffled.sorted())
@@ -183,7 +183,7 @@ struct CollectionGeneratorTests {
         func lengthRangeClamped() throws {
             let gen = Gen.sized(
                 Gen.choose(in: 0 ... 10) as ReflectiveGenerator<Int>,
-                lengthRange: 0 ... 1000,
+                lengthRange: 0 ... 1000
             )
             var iterator = ValueInterpreter(gen, seed: 42)
 
@@ -234,7 +234,7 @@ struct CollectionGeneratorTests {
             let gen = Gen.arrayOf(
                 Gen.choose(in: 0 ... 10) as ReflectiveGenerator<Int>,
                 within: 3 ... 7,
-                scaling: .constant,
+                scaling: .constant
             )
             var iterator = ValueInterpreter(gen, seed: 42)
 
@@ -251,7 +251,7 @@ struct CollectionGeneratorTests {
             let gen = Gen.arrayOf(
                 Gen.choose(in: 0 ... 10) as ReflectiveGenerator<Int>,
                 within: 0 ... 10,
-                scaling: .linear,
+                scaling: .linear
             )
             var iterator = ValueInterpreter(gen, seed: 42)
 
@@ -268,7 +268,7 @@ struct CollectionGeneratorTests {
             let gen = Gen.arrayOf(
                 Gen.choose(in: 0 ... 10) as ReflectiveGenerator<Int>,
                 within: 0 ... 10,
-                scaling: .exponential,
+                scaling: .exponential
             )
             var iterator = ValueInterpreter(gen, seed: 42)
 

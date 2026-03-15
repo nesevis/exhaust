@@ -34,8 +34,8 @@ struct HeapMergeTests {
                 .samplingBudget(2000),
 //                .argumentAwareCoverage,
 //                .useBonsaiReducer,
-                .suppressIssueReporting,
-            ),
+                .suppressIssueReporting
+            )
         )
 
         #expect(result.trace.contains { step in
@@ -61,8 +61,8 @@ struct HeapAliasingTests {
                 commandLimit: 20,
                 .suppressIssueReporting,
                 .useBonsaiReducer,
-                .replay(6_161_601_321_680_111_336),
-            ),
+                .replay(6_161_601_321_680_111_336)
+            )
         )
 
         #expect(result.trace.contains { step in

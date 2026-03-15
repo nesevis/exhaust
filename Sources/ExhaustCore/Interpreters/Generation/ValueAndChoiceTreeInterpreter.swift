@@ -24,7 +24,7 @@ public struct ValueAndChoiceTreeInterpreter<FinalOutput>: ~Copyable, ExhaustIter
         _ generator: ReflectiveGenerator<FinalOutput>,
         materializePicks: Bool = false,
         seed: UInt64? = nil,
-        maxRuns: UInt64? = nil,
+        maxRuns: UInt64? = nil
     ) {
         self.generator = generator
         let baseSeed: UInt64
@@ -40,7 +40,7 @@ public struct ValueAndChoiceTreeInterpreter<FinalOutput>: ~Copyable, ExhaustIter
             isFixed: false,
             size: 0,
             prng: Xoshiro256(seed: baseSeed),
-            materializePicks: materializePicks,
+            materializePicks: materializePicks
         )
     }
 
@@ -74,7 +74,7 @@ public struct ValueAndChoiceTreeInterpreter<FinalOutput>: ~Copyable, ExhaustIter
                 metadata: [
                     "unique_count": "\(context.runs)",
                     "requested": "\(context.maxRuns)",
-                ],
+                ]
             )
             context.runs = context.maxRuns
             return nil
@@ -84,7 +84,7 @@ public struct ValueAndChoiceTreeInterpreter<FinalOutput>: ~Copyable, ExhaustIter
                 event: "sparse_validity_condition",
                 metadata: [
                     "run": "\(context.runs)",
-                ],
+                ]
             )
             return nil
         }
@@ -96,7 +96,7 @@ public struct ValueAndChoiceTreeInterpreter<FinalOutput>: ~Copyable, ExhaustIter
             generator,
             materializePicks: context.materializePicks,
             seed: context.baseSeed,
-            maxRuns: context.maxRuns,
+            maxRuns: context.maxRuns
         )
         fixed.context.isFixed = true
         fixed.context.runs = context.runs
@@ -108,7 +108,7 @@ public struct ValueAndChoiceTreeInterpreter<FinalOutput>: ~Copyable, ExhaustIter
     static func generateRecursive<Output>(
         _ gen: ReflectiveGenerator<Output>,
         with inputValue: some Any,
-        context: inout GenerationContext,
+        context: inout GenerationContext
     ) throws -> (Output, ChoiceTree)? {
         // Size override only affects the first call, not all subsequent ones
         switch gen {
@@ -126,7 +126,7 @@ public struct ValueAndChoiceTreeInterpreter<FinalOutput>: ~Copyable, ExhaustIter
                     nextGen,
                     continuation: continuation,
                     inputValue: inputValue,
-                    context: &context,
+                    context: &context
                 )
 
             // MARK: - Prune
@@ -136,7 +136,7 @@ public struct ValueAndChoiceTreeInterpreter<FinalOutput>: ~Copyable, ExhaustIter
                     nextGen,
                     continuation: continuation,
                     inputValue: inputValue,
-                    context: &context,
+                    context: &context
                 )
 
             // MARK: - Pick
@@ -146,7 +146,7 @@ public struct ValueAndChoiceTreeInterpreter<FinalOutput>: ~Copyable, ExhaustIter
                     choices,
                     continuation: continuation,
                     inputValue: inputValue,
-                    context: &context,
+                    context: &context
                 )
 
             // MARK: - Choosebits
@@ -159,7 +159,7 @@ public struct ValueAndChoiceTreeInterpreter<FinalOutput>: ~Copyable, ExhaustIter
                     isRangeExplicit: isRangeExplicit,
                     continuation: continuation,
                     inputValue: inputValue,
-                    context: &context,
+                    context: &context
                 )
 
             // MARK: - Sequence
@@ -170,7 +170,7 @@ public struct ValueAndChoiceTreeInterpreter<FinalOutput>: ~Copyable, ExhaustIter
                     elementGen: elementGen,
                     continuation: continuation,
                     inputValue: inputValue,
-                    context: &context,
+                    context: &context
                 )
 
             // MARK: - Zip
@@ -181,7 +181,7 @@ public struct ValueAndChoiceTreeInterpreter<FinalOutput>: ~Copyable, ExhaustIter
                     isOpaque: isOpaque,
                     continuation: continuation,
                     inputValue: inputValue,
-                    context: &context,
+                    context: &context
                 )
 
             // MARK: - Just
@@ -192,7 +192,7 @@ public struct ValueAndChoiceTreeInterpreter<FinalOutput>: ~Copyable, ExhaustIter
                     calleeChoiceTree: .just("\(value)"),
                     continuation: continuation,
                     inputValue: inputValue,
-                    context: &context,
+                    context: &context
                 )
 
             // MARK: - GetSize
@@ -205,7 +205,7 @@ public struct ValueAndChoiceTreeInterpreter<FinalOutput>: ~Copyable, ExhaustIter
                     calleeChoiceTree: .getSize(size),
                     continuation: continuation,
                     inputValue: inputValue,
-                    context: &context,
+                    context: &context
                 )
 
             // MARK: - Resize
@@ -216,7 +216,7 @@ public struct ValueAndChoiceTreeInterpreter<FinalOutput>: ~Copyable, ExhaustIter
                     gen: gen,
                     continuation: continuation,
                     inputValue: inputValue,
-                    context: &context,
+                    context: &context
                 )
 
             // MARK: - Filter
@@ -227,7 +227,7 @@ public struct ValueAndChoiceTreeInterpreter<FinalOutput>: ~Copyable, ExhaustIter
                     fingerprint: fingerprint,
                     filterType: filterType,
                     predicate: predicate,
-                    context: &context,
+                    context: &context
                 )
 
                 var attempts = 0 as UInt64
@@ -240,7 +240,7 @@ public struct ValueAndChoiceTreeInterpreter<FinalOutput>: ~Copyable, ExhaustIter
                             calleeChoiceTree: tree,
                             continuation: continuation,
                             inputValue: inputValue,
-                            context: &context,
+                            context: &context
                         )
                     }
                     attempts += 1
@@ -256,7 +256,7 @@ public struct ValueAndChoiceTreeInterpreter<FinalOutput>: ~Copyable, ExhaustIter
                     classifiers: classifiers,
                     continuation: continuation,
                     inputValue: inputValue,
-                    context: &context,
+                    context: &context
                 )
 
             // MARK: - Transform
@@ -267,7 +267,7 @@ public struct ValueAndChoiceTreeInterpreter<FinalOutput>: ~Copyable, ExhaustIter
                     inner: inner,
                     continuation: continuation,
                     inputValue: inputValue,
-                    context: &context,
+                    context: &context
                 )
 
             case let .unique(gen, fingerprint, keyExtractor):
@@ -280,7 +280,7 @@ public struct ValueAndChoiceTreeInterpreter<FinalOutput>: ~Copyable, ExhaustIter
                         tree: tree,
                         fingerprint: fingerprint,
                         keyExtractor: keyExtractor,
-                        context: &context,
+                        context: &context
                     )
 
                     if !isDuplicate {
@@ -289,7 +289,7 @@ public struct ValueAndChoiceTreeInterpreter<FinalOutput>: ~Copyable, ExhaustIter
                             calleeChoiceTree: tree,
                             continuation: continuation,
                             inputValue: inputValue,
-                            context: &context,
+                            context: &context
                         )
                     }
                     attempts += 1
@@ -307,7 +307,7 @@ public struct ValueAndChoiceTreeInterpreter<FinalOutput>: ~Copyable, ExhaustIter
         calleeChoiceTree: ChoiceTree,
         continuation: (Any) throws -> ReflectiveGenerator<Output>,
         inputValue: some Any,
-        context: inout GenerationContext,
+        context: inout GenerationContext
     ) throws -> (Output, ChoiceTree)? {
         let nextGen = try continuation(result)
 
@@ -319,7 +319,7 @@ public struct ValueAndChoiceTreeInterpreter<FinalOutput>: ~Copyable, ExhaustIter
         if let (continuationResult, innerChoiceTree) = try generateRecursive(
             nextGen,
             with: inputValue,
-            context: &context,
+            context: &context
         ) {
             if nextGen.isPure {
                 return (continuationResult, calleeChoiceTree)
@@ -336,7 +336,7 @@ public struct ValueAndChoiceTreeInterpreter<FinalOutput>: ~Copyable, ExhaustIter
         _ nextGen: ReflectiveGenerator<Any>,
         continuation: (Any) throws -> ReflectiveGenerator<Output>,
         inputValue: some Any,
-        context: inout GenerationContext,
+        context: inout GenerationContext
     ) throws -> (Output, ChoiceTree)? {
         guard let (result, tree) = try generateRecursive(nextGen, with: inputValue, context: &context) else { return nil }
         return try runContinuation(
@@ -344,7 +344,7 @@ public struct ValueAndChoiceTreeInterpreter<FinalOutput>: ~Copyable, ExhaustIter
             calleeChoiceTree: tree,
             continuation: continuation,
             inputValue: inputValue,
-            context: &context,
+            context: &context
         )
     }
 
@@ -353,7 +353,7 @@ public struct ValueAndChoiceTreeInterpreter<FinalOutput>: ~Copyable, ExhaustIter
         _ nextGen: ReflectiveGenerator<Any>,
         continuation: (Any) throws -> ReflectiveGenerator<Output>,
         inputValue: some Any,
-        context: inout GenerationContext,
+        context: inout GenerationContext
     ) throws -> (Output, ChoiceTree)? {
         guard let wrappedValue = InterpreterWrapperHandlers.unwrapPruneInput(inputValue) else {
             return nil
@@ -364,7 +364,7 @@ public struct ValueAndChoiceTreeInterpreter<FinalOutput>: ~Copyable, ExhaustIter
             calleeChoiceTree: tree,
             continuation: continuation,
             inputValue: inputValue,
-            context: &context,
+            context: &context
         )
     }
 
@@ -373,7 +373,7 @@ public struct ValueAndChoiceTreeInterpreter<FinalOutput>: ~Copyable, ExhaustIter
         _ choices: ContiguousArray<ReflectiveOperation.PickTuple>,
         continuation: (Any) throws -> ReflectiveGenerator<Output>,
         inputValue: some Any,
-        context: inout GenerationContext,
+        context: inout GenerationContext
     ) throws -> (Output, ChoiceTree)? {
         guard let selectedChoice = WeightedPickSelection.draw(from: choices, using: &context.prng) else {
             return nil
@@ -396,14 +396,14 @@ public struct ValueAndChoiceTreeInterpreter<FinalOutput>: ~Copyable, ExhaustIter
                 if let result = try generateRecursive(
                     choice.generator,
                     with: inputValue,
-                    context: &context,
+                    context: &context
                 ),
                     let final = try runContinuation(
                         result: result.0,
                         calleeChoiceTree: result.1,
                         continuation: continuation,
                         inputValue: inputValue,
-                        context: &context,
+                        context: &context
                     )
                 {
                     value = final.0
@@ -412,7 +412,7 @@ public struct ValueAndChoiceTreeInterpreter<FinalOutput>: ~Copyable, ExhaustIter
                         weight: choice.weight,
                         id: choice.id,
                         branchIDs: branchIDs,
-                        choice: final.1,
+                        choice: final.1
                     )
                 }
             } else if context.materializePicks {
@@ -421,14 +421,14 @@ public struct ValueAndChoiceTreeInterpreter<FinalOutput>: ~Copyable, ExhaustIter
                 if let result = try generateRecursive(
                     choice.generator,
                     with: inputValue,
-                    context: &branchContext,
+                    context: &branchContext
                 ),
                     let final = try runContinuation(
                         result: result.0,
                         calleeChoiceTree: result.1,
                         continuation: continuation,
                         inputValue: inputValue,
-                        context: &branchContext,
+                        context: &branchContext
                     )
                 {
                     value = final.0
@@ -437,7 +437,7 @@ public struct ValueAndChoiceTreeInterpreter<FinalOutput>: ~Copyable, ExhaustIter
                         weight: choice.weight,
                         id: choice.id,
                         branchIDs: branchIDs,
-                        choice: final.1,
+                        choice: final.1
                     )
                 }
             }
@@ -468,19 +468,19 @@ public struct ValueAndChoiceTreeInterpreter<FinalOutput>: ~Copyable, ExhaustIter
         isRangeExplicit: Bool,
         continuation: (Any) throws -> ReflectiveGenerator<Output>,
         inputValue: some Any,
-        context: inout GenerationContext,
+        context: inout GenerationContext
     ) throws -> (Output, ChoiceTree)? {
         let randomBits = context.prng.next(in: min ... max)
         let choiceTree = ChoiceTree.choice(
             ChoiceValue(randomBits, tag: tag),
-            .init(validRange: min ... max, isRangeExplicit: isRangeExplicit),
+            .init(validRange: min ... max, isRangeExplicit: isRangeExplicit)
         )
         return try runContinuation(
             result: randomBits,
             calleeChoiceTree: choiceTree,
             continuation: continuation,
             inputValue: inputValue,
-            context: &context,
+            context: &context
         )
     }
 
@@ -490,12 +490,12 @@ public struct ValueAndChoiceTreeInterpreter<FinalOutput>: ~Copyable, ExhaustIter
         elementGen: ReflectiveGenerator<Any>,
         continuation: (Any) throws -> ReflectiveGenerator<Output>,
         inputValue: some Any,
-        context: inout GenerationContext,
+        context: inout GenerationContext
     ) throws -> (Output, ChoiceTree)? {
         guard let (length, lengthTrees) = try generateRecursive(
             lengthGen,
             with: inputValue,
-            context: &context,
+            context: &context
         ) else {
             return nil
         }
@@ -520,7 +520,7 @@ public struct ValueAndChoiceTreeInterpreter<FinalOutput>: ~Copyable, ExhaustIter
         let choiceTree = ChoiceTree.sequence(
             length: length,
             elements: elements,
-            lengthTrees.metadata,
+            lengthTrees.metadata
         )
 
         if let (result, _) = try runContinuation(
@@ -528,7 +528,7 @@ public struct ValueAndChoiceTreeInterpreter<FinalOutput>: ~Copyable, ExhaustIter
             calleeChoiceTree: choiceTree,
             continuation: continuation,
             inputValue: inputValue,
-            context: &context,
+            context: &context
         ) {
             return (result, choiceTree)
         }
@@ -541,7 +541,7 @@ public struct ValueAndChoiceTreeInterpreter<FinalOutput>: ~Copyable, ExhaustIter
         isOpaque: Bool,
         continuation: (Any) throws -> ReflectiveGenerator<Output>,
         inputValue: some Any,
-        context: inout GenerationContext,
+        context: inout GenerationContext
     ) throws -> (Output, ChoiceTree)? {
         var results = [Any]()
         results.reserveCapacity(generators.count)
@@ -560,7 +560,7 @@ public struct ValueAndChoiceTreeInterpreter<FinalOutput>: ~Copyable, ExhaustIter
             calleeChoiceTree: .group(choiceTrees, isOpaque: isOpaque),
             continuation: continuation,
             inputValue: inputValue,
-            context: &context,
+            context: &context
         )
     }
 
@@ -570,7 +570,7 @@ public struct ValueAndChoiceTreeInterpreter<FinalOutput>: ~Copyable, ExhaustIter
         gen: ReflectiveGenerator<Any>,
         continuation: (Any) throws -> ReflectiveGenerator<Output>,
         inputValue: some Any,
-        context: inout GenerationContext,
+        context: inout GenerationContext
     ) throws -> (Output, ChoiceTree)? {
         context.sizeOverride = newSize
         guard let result = try generateRecursive(gen, with: inputValue, context: &context) else {
@@ -581,7 +581,7 @@ public struct ValueAndChoiceTreeInterpreter<FinalOutput>: ~Copyable, ExhaustIter
             calleeChoiceTree: .resize(newSize: newSize, choices: [result.1]),
             continuation: continuation,
             inputValue: inputValue,
-            context: &context,
+            context: &context
         )
     }
 
@@ -591,7 +591,7 @@ public struct ValueAndChoiceTreeInterpreter<FinalOutput>: ~Copyable, ExhaustIter
         inner: ReflectiveGenerator<Any>,
         continuation: (Any) throws -> ReflectiveGenerator<Output>,
         inputValue: some Any,
-        context: inout GenerationContext,
+        context: inout GenerationContext
     ) throws -> (Output, ChoiceTree)? {
         guard let (innerValue, innerTree) = try generateRecursive(inner, with: inputValue, context: &context) else {
             return nil
@@ -614,7 +614,7 @@ public struct ValueAndChoiceTreeInterpreter<FinalOutput>: ~Copyable, ExhaustIter
             calleeChoiceTree: resultTree,
             continuation: continuation,
             inputValue: inputValue,
-            context: &context,
+            context: &context
         )
     }
 
@@ -625,7 +625,7 @@ public struct ValueAndChoiceTreeInterpreter<FinalOutput>: ~Copyable, ExhaustIter
         classifiers: [(label: String, predicate: (Any) -> Bool)],
         continuation: (Any) throws -> ReflectiveGenerator<Output>,
         inputValue: some Any,
-        context: inout GenerationContext,
+        context: inout GenerationContext
     ) throws -> (Output, ChoiceTree)? {
         guard let (result, tree) = try generateRecursive(gen, with: inputValue, context: &context) else { return nil }
         for (label, classifier) in classifiers where classifier(result) {
@@ -636,7 +636,7 @@ public struct ValueAndChoiceTreeInterpreter<FinalOutput>: ~Copyable, ExhaustIter
             calleeChoiceTree: tree,
             continuation: continuation,
             inputValue: inputValue,
-            context: &context,
+            context: &context
         )
     }
 }

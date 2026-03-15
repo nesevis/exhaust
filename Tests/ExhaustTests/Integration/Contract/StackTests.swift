@@ -12,7 +12,7 @@ struct StackTests {
             StackSpec.self,
             commandLimit: 15,
             .samplingBudget(50),
-            .suppressIssueReporting,
+            .suppressIssueReporting
         )
         #expect(result == nil, "Stack spec should pass — model and SUT are identical")
     }

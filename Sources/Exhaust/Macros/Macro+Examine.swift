@@ -17,5 +17,5 @@ import ExhaustCore
 public macro examine<T>(
     _ gen: ReflectiveGenerator<T>,
     samples: Int = 200,
-    seed: UInt64? = nil,
+    seed: UInt64? = nil
 ) -> ValidationReport = #externalMacro(module: "ExhaustMacros", type: "ExamineMacro")

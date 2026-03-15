@@ -58,7 +58,7 @@ public struct ZeroValueEncoder: AdaptiveEncoder {
                 allSimplest[entry.seqIdx] = .value(.init(
                     choice: entry.target,
                     validRange: entry.validRange,
-                    isRangeExplicit: entry.isRangeExplicit,
+                    isRangeExplicit: entry.isRangeExplicit
                 ))
             }
             return allSimplest
@@ -70,7 +70,7 @@ public struct ZeroValueEncoder: AdaptiveEncoder {
                 sequence[prev.seqIdx] = .value(.init(
                     choice: prev.target,
                     validRange: prev.validRange,
-                    isRangeExplicit: prev.isRangeExplicit,
+                    isRangeExplicit: prev.isRangeExplicit
                 ))
             }
 
@@ -88,7 +88,7 @@ public struct ZeroValueEncoder: AdaptiveEncoder {
                 candidate[entry.seqIdx] = .value(.init(
                     choice: entry.target,
                     validRange: entry.validRange,
-                    isRangeExplicit: entry.isRangeExplicit,
+                    isRangeExplicit: entry.isRangeExplicit
                 ))
                 return candidate
             }

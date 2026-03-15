@@ -95,7 +95,7 @@ struct AdvancedFeatureTests {
                 .array(length: 1 ... 1)
                 .mapped(
                     forward: { ints in ints.map { Inner(id: $0) } },
-                    backward: { inners in inners.map(\.id) },
+                    backward: { inners in inners.map(\.id) }
                 )
 
             let innerGen2 = #gen(.uint()) { Inner(id: $0) }
@@ -149,7 +149,7 @@ struct AdvancedFeatureTests {
                     }
                     return TestGraph(nodes: nodes, edges: validEdges)
                 },
-                backward: { ($0.nodes, $0.edges) },
+                backward: { ($0.nodes, $0.edges) }
             )
 
             for _ in 0 ..< 10 {

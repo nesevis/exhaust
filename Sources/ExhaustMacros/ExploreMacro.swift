@@ -9,11 +9,11 @@ import SwiftSyntaxMacros
 public struct ExploreMacro: ExpressionMacro {
     public static func expansion(
         of node: some FreestandingMacroExpansionSyntax,
-        in context: some MacroExpansionContext,
+        in context: some MacroExpansionContext
     ) throws -> ExprSyntax {
         context.diagnose(Diagnostic(
             node: Syntax(node),
-            message: ExhaustMacroDiagnostic.exploreUnderDevelopment,
+            message: ExhaustMacroDiagnostic.exploreUnderDevelopment
         ))
 
         let args = node.arguments.map(\.self)
@@ -24,7 +24,7 @@ public struct ExploreMacro: ExpressionMacro {
             guard !args.isEmpty else {
                 context.diagnose(Diagnostic(
                     node: Syntax(node),
-                    message: ExhaustMacroDiagnostic.exploreMissingGenerator,
+                    message: ExhaustMacroDiagnostic.exploreMissingGenerator
                 ))
                 return "fatalError(\"#explore requires a generator argument\")"
             }
@@ -35,7 +35,7 @@ public struct ExploreMacro: ExpressionMacro {
             guard let scorerArg = args.first(where: { $0.label?.text == "scorer" }) else {
                 context.diagnose(Diagnostic(
                     node: Syntax(node),
-                    message: ExhaustMacroDiagnostic.exploreMissingScorer,
+                    message: ExhaustMacroDiagnostic.exploreMissingScorer
                 ))
                 return "fatalError(\"#explore requires a scorer: argument\")"
             }
@@ -71,7 +71,7 @@ public struct ExploreMacro: ExpressionMacro {
             guard args.count >= 3 else {
                 context.diagnose(Diagnostic(
                     node: Syntax(node),
-                    message: ExhaustMacroDiagnostic.exploreMissingProperty,
+                    message: ExhaustMacroDiagnostic.exploreMissingProperty
                 ))
                 return "fatalError(\"#explore requires a property argument\")"
             }
@@ -82,7 +82,7 @@ public struct ExploreMacro: ExpressionMacro {
             guard let propertyArg = args.last, propertyArg.label?.text == "property" else {
                 context.diagnose(Diagnostic(
                     node: Syntax(node),
-                    message: ExhaustMacroDiagnostic.exploreMissingProperty,
+                    message: ExhaustMacroDiagnostic.exploreMissingProperty
                 ))
                 return "fatalError(\"#explore requires a property argument\")"
             }
@@ -91,7 +91,7 @@ public struct ExploreMacro: ExpressionMacro {
             guard let scorerArg = args.first(where: { $0.label?.text == "scorer" }) else {
                 context.diagnose(Diagnostic(
                     node: Syntax(node),
-                    message: ExhaustMacroDiagnostic.exploreMissingScorer,
+                    message: ExhaustMacroDiagnostic.exploreMissingScorer
                 ))
                 return "fatalError(\"#explore requires a scorer: argument\")"
             }

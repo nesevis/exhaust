@@ -16,7 +16,7 @@ extension ReducerStrategies {
         sequence: ChoiceSequence,
         valueSpans: [ChoiceSpan],
         rejectCache: inout ReducerCache,
-        bindIndex: BindSpanIndex? = nil,
+        bindIndex: BindSpanIndex? = nil
     ) throws -> (ChoiceSequence, Output)? {
         var updatedSequence = sequence
         for span in valueSpans {

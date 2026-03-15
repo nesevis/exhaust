@@ -18,13 +18,13 @@ struct DependentStringChallenge {
         ExhaustLog.setConfiguration(.init(isEnabled: true, minimumLevel: .info, categoryMinimumLevels: [.reducer: .debug], format: .human))
         let gen = #gen(.int(in: 0 ... 10)).bound(
             forward: { .string(length: UInt64($0) ... UInt64($0)) },
-            backward: \.count,
+            backward: \.count
         )
 
         let output = #exhaust(
             gen,
             .suppressIssueReporting,
-            .useBonsaiReducer,
+            .useBonsaiReducer
         ) { value in
             !(4 ... 5 ~= value.count)
         }

@@ -205,7 +205,7 @@ struct InterpreterRNGParityTests {
     func zipTwoParity() throws {
         let gen = Gen.zip(
             Gen.choose(in: UInt64.min ... UInt64.max, scaling: UInt64.defaultScaling),
-            Gen.choose(in: Int.min ... Int.max, scaling: Int.defaultScaling),
+            Gen.choose(in: Int.min ... Int.max, scaling: Int.defaultScaling)
         )
         let seed: UInt64 = 3333
 
@@ -224,7 +224,7 @@ struct InterpreterRNGParityTests {
         let gen = Gen.zip(
             Gen.choose(in: UInt64.min ... UInt64.max, scaling: UInt64.defaultScaling),
             Gen.choose(in: Int.min ... Int.max, scaling: Int.defaultScaling),
-            Gen.choose(from: [true, false]),
+            Gen.choose(from: [true, false])
         )
         let seed: UInt64 = 4444
 
@@ -282,7 +282,7 @@ struct InterpreterRNGParityTests {
                 (1, Gen.just(UInt64(999))),
             ]),
             Gen.arrayOf(Gen.choose(from: [true, false]), exactly: 3),
-            Gen.choose(in: 0 ... 100 as ClosedRange<Int>),
+            Gen.choose(in: 0 ... 100 as ClosedRange<Int>)
         )
         let seed: UInt64 = 9999
 
@@ -302,7 +302,7 @@ struct InterpreterRNGParityTests {
     func deeplyNestedCompositionParity() throws {
         let innerGen = Gen.zip(
             Gen.choose(in: UInt64.min ... UInt64.max, scaling: UInt64.defaultScaling),
-            Gen.choose(from: [true, false]),
+            Gen.choose(from: [true, false])
         )
         let middleGen = Gen.pick(choices: [
             (1, innerGen._map { ($0.0, $0.1, 1) }),
@@ -365,7 +365,7 @@ struct InterpreterRNGParityTests {
         let gen = Gen.zip(
             Gen.choose(in: UInt64.min ... UInt64.max, scaling: UInt64.defaultScaling),
             Gen.choose(from: [true, false]),
-            Gen.choose(in: Int.min ... Int.max, scaling: Int.defaultScaling),
+            Gen.choose(in: Int.min ... Int.max, scaling: Int.defaultScaling)
         )
         let seed: UInt64 = 99999
 

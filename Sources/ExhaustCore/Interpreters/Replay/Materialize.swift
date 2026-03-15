@@ -27,7 +27,7 @@ extension Interpreters {
                         metadata: [
                             "from": values[index...].map(\.shortString).joined(),
                             "to": values[newValue...].map(\.shortString).joined(),
-                        ],
+                        ]
                     )
                 }
             }
@@ -73,7 +73,7 @@ extension Interpreters {
                                 "is_open": "\(isOpen)",
                                 "line": "\(line)",
                                 "remaining": shortString,
-                            ],
+                            ]
                         )
                     }
                     throw isOpen ? MaterializeError.groupNotOpen : .groupNotClosed
@@ -98,7 +98,7 @@ extension Interpreters {
                                 "is_open": "\(isOpen)",
                                 "line": "\(line)",
                                 "remaining": shortString,
-                            ],
+                            ]
                         )
                     }
                     throw isOpen ? MaterializeError.sequenceNotOpen : .sequenceNotClosed
@@ -119,7 +119,7 @@ extension Interpreters {
                         metadata: [
                             "line": "\(line)",
                             "remaining": shortString,
-                        ],
+                        ]
                     )
                 }
                 throw MaterializeError.wrongInputChoice
@@ -137,7 +137,7 @@ extension Interpreters {
                             "line": "\(line)",
                             "peek": peek?.shortString ?? "nil",
                             "remaining": shortString,
-                        ],
+                        ]
                     )
                 }
                 return nil
@@ -166,7 +166,7 @@ extension Interpreters {
                             "line": "\(line)",
                             "peek": peek?.shortString ?? "nil",
                             "remaining": shortString,
-                        ],
+                        ]
                     )
                 }
                 return nil
@@ -276,7 +276,7 @@ extension Interpreters {
         _ gen: ReflectiveGenerator<Output>,
         with tree: ChoiceTree,
         using values: ChoiceSequence,
-        strictness: Strictness = .normal,
+        strictness: Strictness = .normal
     ) throws -> Output? {
         let isInstrumented = ExhaustLog.isEnabled(.debug, for: .materialize)
         if isInstrumented {
@@ -285,7 +285,7 @@ extension Interpreters {
                 event: "materialize_start",
                 metadata: [
                     "sequence": values.shortString,
-                ],
+                ]
             )
         }
         // Start the recursive process. The helper returns the value and any *unconsumed*
@@ -298,7 +298,7 @@ extension Interpreters {
         if isInstrumented, context.isAtEnd == false {
             ExhaustLog.warning(
                 category: .materialize,
-                event: "materialize_unconsumed_sequence",
+                event: "materialize_unconsumed_sequence"
             )
         }
         return result
@@ -307,7 +307,7 @@ extension Interpreters {
     private static func materializeRecursive<Output>(
         _ gen: ReflectiveGenerator<Output>,
         with tree: ChoiceTree,
-        context: inout Context,
+        context: inout Context
     ) throws -> Output? {
         // Handle bind scripts by distributing choices to the generator
         if case let .bind(inner, bound) = tree {
@@ -345,7 +345,7 @@ extension Interpreters {
                 operation,
                 continuation: continuation,
                 tree: tree,
-                context: &context,
+                context: &context
             )
         }
     }
@@ -354,7 +354,7 @@ extension Interpreters {
         _ operation: ReflectiveOperation,
         continuation: @escaping (Any) throws -> ReflectiveGenerator<Output>,
         tree: ChoiceTree,
-        context: inout Context,
+        context: inout Context
     ) throws -> Output? {
         switch operation {
         case .zip(_, _), .pick:
@@ -364,7 +364,7 @@ extension Interpreters {
                 continuation: continuation,
                 tree: tree,
                 context: &context,
-                validRange: isRangeExplicit ? min ... max : nil,
+                validRange: isRangeExplicit ? min ... max : nil
             )
         case let .just(value):
             try materializeRecursiveJust(value: value, continuation: continuation, tree: tree, context: &context)
@@ -375,21 +375,21 @@ extension Interpreters {
                 resizedGen: resizedGen,
                 continuation: continuation,
                 tree: tree,
-                context: &context,
+                context: &context
             )
         case let .sequence(_, elementGenerator):
             try materializeRecursiveSequence(
                 elementGenerator: elementGenerator,
                 continuation: continuation,
                 tree: tree,
-                context: &context,
+                context: &context
             )
         case let .contramap(_, subGenerator):
             try materializeRecursiveWrapped(
                 subGenerator: subGenerator,
                 continuation: continuation,
                 tree: tree,
-                context: &context,
+                context: &context
             )
         case .prune:
             fatalError("Should not be encountered")
@@ -398,7 +398,7 @@ extension Interpreters {
                 gen: gen,
                 predicate: predicate,
                 tree: tree,
-                context: &context,
+                context: &context
             )
         case let .classify(gen, _, _):
             try materializeRecursiveClassify(gen: gen, tree: tree, context: &context)
@@ -414,7 +414,7 @@ extension Interpreters {
         continuation: @escaping (Any) throws -> ReflectiveGenerator<Output>,
         tree: ChoiceTree,
         context: inout Context,
-        validRange: ClosedRange<UInt64>?,
+        validRange: ClosedRange<UInt64>?
     ) throws -> Output? {
         guard let value = context.consumeValueIfPresent() else {
             return nil
@@ -435,7 +435,7 @@ extension Interpreters {
         value: Any,
         continuation: @escaping (Any) throws -> ReflectiveGenerator<Output>,
         tree: ChoiceTree,
-        context: inout Context,
+        context: inout Context
     ) throws -> Output? {
         guard case .just = tree else {
             return nil
@@ -452,7 +452,7 @@ extension Interpreters {
     private static func materializeRecursiveGetSize<Output>(
         continuation: @escaping (Any) throws -> ReflectiveGenerator<Output>,
         tree: ChoiceTree,
-        context: inout Context,
+        context: inout Context
     ) throws -> Output? {
         switch tree {
         case let .choice(.unsigned(value, _), _):
@@ -470,7 +470,7 @@ extension Interpreters {
         resizedGen: ReflectiveGenerator<Any>,
         continuation: @escaping (Any) throws -> ReflectiveGenerator<Output>,
         tree: ChoiceTree,
-        context: inout Context,
+        context: inout Context
     ) throws -> Output? {
         guard case let .resize(_, subChoices) = tree, let firstChoice = subChoices.first else {
             return nil
@@ -490,7 +490,7 @@ extension Interpreters {
         elementGenerator: ReflectiveGenerator<Any>,
         continuation: @escaping (Any) throws -> ReflectiveGenerator<Output>,
         tree: ChoiceTree,
-        context: inout Context,
+        context: inout Context
     ) throws -> Output? {
         guard case let .sequence(_, elements, lengthMeta) = tree else {
             return nil
@@ -502,7 +502,7 @@ extension Interpreters {
             context: &context,
             requireElements: false,
             validLengthRange: lengthMeta.validRange,
-            isLengthRangeExplicit: lengthMeta.isRangeExplicit,
+            isLengthRangeExplicit: lengthMeta.isRangeExplicit
         ) else {
             return nil
         }
@@ -516,14 +516,14 @@ extension Interpreters {
         subGenerator: ReflectiveGenerator<Any>,
         continuation: @escaping (Any) throws -> ReflectiveGenerator<Output>,
         tree: ChoiceTree,
-        context: inout Context,
+        context: inout Context
     ) throws -> Output? {
         try InterpreterWrapperHandlers.continueAfterSubgenerator(
             runSubgenerator: { try materializeRecursive(subGenerator, with: tree, context: &context) },
             runContinuation: { subResult in
                 let nextGen = try continuation(subResult)
                 return try materializeRecursive(nextGen, with: tree, context: &context)
-            },
+            }
         )
     }
 
@@ -532,7 +532,7 @@ extension Interpreters {
         gen: ReflectiveGenerator<Any>,
         predicate: (Any) -> Bool,
         tree: ChoiceTree,
-        context: inout Context,
+        context: inout Context
     ) throws -> Output? {
         guard let subResult = try materializeRecursive(gen, with: tree, context: &context),
               let result = subResult as? Output,
@@ -549,7 +549,7 @@ extension Interpreters {
         inner: ReflectiveGenerator<Any>,
         continuation: @escaping (Any) throws -> ReflectiveGenerator<Output>,
         tree: ChoiceTree,
-        context: inout Context,
+        context: inout Context
     ) throws -> Output? {
         guard let innerValue = try materializeRecursive(inner, with: tree, context: &context) else { return nil }
         let result: Any
@@ -569,7 +569,7 @@ extension Interpreters {
     private static func materializeRecursiveClassify<Output>(
         gen: ReflectiveGenerator<Any>,
         tree: ChoiceTree,
-        context: inout Context,
+        context: inout Context
     ) throws -> Output? {
         guard let subResult = try materializeRecursive(gen, with: tree, context: &context),
               let result = subResult as? Output
@@ -590,7 +590,7 @@ extension Interpreters {
         context: inout Context,
         requireElements: Bool,
         validLengthRange: ClosedRange<UInt64>? = nil,
-        isLengthRangeExplicit: Bool = false,
+        isLengthRangeExplicit: Bool = false
     ) throws -> [Any]? {
         try context.consumeSequence(true)
 
@@ -632,13 +632,13 @@ extension Interpreters {
                 case .normal:
                     throw MaterializeError.generatorConstraintViolated(
                         actualLength: count,
-                        validRange: validLengthRange,
+                        validRange: validLengthRange
                     )
                 case .relaxed:
                     if isLengthRangeExplicit {
                         throw MaterializeError.generatorConstraintViolated(
                             actualLength: count,
-                            validRange: validLengthRange,
+                            validRange: validLengthRange
                         )
                     }
                 }
@@ -653,7 +653,7 @@ extension Interpreters {
     private static func materializeWithChoices<Output>(
         _ gen: ReflectiveGenerator<Output>,
         with choices: [ChoiceTree],
-        context: inout Context,
+        context: inout Context
     ) throws -> Output? {
         var cursor = ChoiceCursor(choices: choices)
         return try materializeWithChoicesHelper(gen, with: &cursor, context: &context)
@@ -662,7 +662,7 @@ extension Interpreters {
     private static func materializeWithChoice<Output>(
         _ gen: ReflectiveGenerator<Output>,
         with choice: ChoiceTree,
-        context: inout Context,
+        context: inout Context
     ) throws -> Output? {
         var cursor = ChoiceCursor(choice: choice)
         return try materializeWithChoicesHelper(gen, with: &cursor, context: &context)
@@ -671,7 +671,7 @@ extension Interpreters {
     private static func materializeWithChoicesHelper<Output>(
         _ gen: ReflectiveGenerator<Output>,
         with choices: inout ChoiceCursor,
-        context: inout Context,
+        context: inout Context
     ) throws -> Output? {
         switch gen {
         case let .pure(value):
@@ -683,7 +683,7 @@ extension Interpreters {
                 operation,
                 continuation: continuation,
                 choices: &choices,
-                context: &context,
+                context: &context
             )
         }
     }
@@ -692,7 +692,7 @@ extension Interpreters {
         _ operation: ReflectiveOperation,
         continuation: @escaping (Any) throws -> ReflectiveGenerator<Output>,
         choices: inout ChoiceCursor,
-        context: inout Context,
+        context: inout Context
     ) throws -> Output? {
         switch operation {
         case let .chooseBits(min, max, _, isRangeExplicit):
@@ -700,74 +700,74 @@ extension Interpreters {
                 continuation: continuation,
                 choices: &choices,
                 context: &context,
-                validRange: isRangeExplicit ? min ... max : nil,
+                validRange: isRangeExplicit ? min ... max : nil
             )
         case let .pick(pickChoices):
             try materializeWithChoicesPick(
                 pickChoices: pickChoices,
                 continuation: continuation,
                 choices: &choices,
-                context: &context,
+                context: &context
             )
         case let .sequence(_, elementGenerator):
             try materializeWithChoicesSequence(
                 elementGenerator: elementGenerator,
                 continuation: continuation,
                 choices: &choices,
-                context: &context,
+                context: &context
             )
         case let .zip(generators, _):
             try materializeWithChoicesZip(
                 generators: generators,
                 continuation: continuation,
                 choices: &choices,
-                context: &context,
+                context: &context
             )
         case let .contramap(_, subGenerator), let .prune(subGenerator):
             try materializeWithChoicesWrapped(
                 subGenerator: subGenerator,
                 continuation: continuation,
                 choices: &choices,
-                context: &context,
+                context: &context
             )
         case let .just(value):
             try materializeWithChoicesJust(
                 value: value,
                 continuation: continuation,
                 choices: &choices,
-                context: &context,
+                context: &context
             )
         case .getSize:
             try materializeWithChoicesGetSize(
                 continuation: continuation,
                 choices: &choices,
-                context: &context,
+                context: &context
             )
         case let .resize(_, subGenerator):
             try materializeWithChoicesResize(
                 subGenerator: subGenerator,
                 continuation: continuation,
                 choices: &choices,
-                context: &context,
+                context: &context
             )
         case let .filter(gen, _, _, predicate):
             try materializeWithChoicesFilter(
                 gen: gen,
                 predicate: predicate,
                 choices: &choices,
-                context: &context,
+                context: &context
             )
         case let .classify(gen, _, _):
             try materializeWithChoicesClassify(
                 gen: gen,
                 choices: &choices,
-                context: &context,
+                context: &context
             )
         case let .unique(gen, _, _):
             try materializeWithChoicesClassify(
                 gen: gen,
                 choices: &choices,
-                context: &context,
+                context: &context
             )
         case let .transform(kind, inner):
             try materializeWithChoicesTransform(kind: kind, inner: inner, continuation: continuation, choices: &choices, context: &context)
@@ -779,7 +779,7 @@ extension Interpreters {
         continuation: @escaping (Any) throws -> ReflectiveGenerator<Output>,
         choices: inout ChoiceCursor,
         context: inout Context,
-        validRange: ClosedRange<UInt64>?,
+        validRange: ClosedRange<UInt64>?
     ) throws -> Output? {
         guard choices.isEmpty == false else {
             return nil
@@ -800,7 +800,7 @@ extension Interpreters {
         pickChoices: ContiguousArray<ReflectiveOperation.PickTuple>,
         continuation: @escaping (Any) throws -> ReflectiveGenerator<Output>,
         choices: inout ChoiceCursor,
-        context: inout Context,
+        context: inout Context
     ) throws -> Output? {
         guard choices.isEmpty == false, let choice = choices.removeFirst() else {
             return nil
@@ -823,14 +823,14 @@ extension Interpreters {
                 branch,
                 generators: generators,
                 continuation: continuation,
-                context: &context,
+                context: &context
             )
         } else if branchMarker == nil, let selectedBranch = PickBranchResolution.firstSelectedBranch(in: branches) {
             nextGen = try materializePickBranch(
                 selectedBranch,
                 generators: generators,
                 continuation: continuation,
-                context: &context,
+                context: &context
             )
         } else {
             for branch in branches {
@@ -838,7 +838,7 @@ extension Interpreters {
                     branch,
                     generators: generators,
                     continuation: continuation,
-                    context: &context,
+                    context: &context
                 )
                 if nextGen != nil {
                     break
@@ -861,7 +861,7 @@ extension Interpreters {
         elementGenerator: ReflectiveGenerator<Any>,
         continuation: @escaping (Any) throws -> ReflectiveGenerator<Output>,
         choices: inout ChoiceCursor,
-        context: inout Context,
+        context: inout Context
     ) throws -> Output? {
         guard choices.isEmpty == false, let choice = choices.removeFirst() else {
             return nil
@@ -879,7 +879,7 @@ extension Interpreters {
             context: &context,
             requireElements: true,
             validLengthRange: lengthMeta.validRange,
-            isLengthRangeExplicit: lengthMeta.isRangeExplicit,
+            isLengthRangeExplicit: lengthMeta.isRangeExplicit
         ) else {
             return nil
         }
@@ -892,7 +892,7 @@ extension Interpreters {
         generators: ContiguousArray<ReflectiveGenerator<Any>>,
         continuation: @escaping (Any) throws -> ReflectiveGenerator<Output>,
         choices: inout ChoiceCursor,
-        context: inout Context,
+        context: inout Context
     ) throws -> Output? {
         guard generators.isEmpty == false else {
             let nextGen = try continuation([])
@@ -964,14 +964,14 @@ extension Interpreters {
         subGenerator: ReflectiveGenerator<Any>,
         continuation: @escaping (Any) throws -> ReflectiveGenerator<Output>,
         choices: inout ChoiceCursor,
-        context: inout Context,
+        context: inout Context
     ) throws -> Output? {
         try InterpreterWrapperHandlers.continueAfterSubgenerator(
             runSubgenerator: { try materializeWithChoicesHelper(subGenerator, with: &choices, context: &context) },
             runContinuation: { subResult in
                 let nextGen = try continuation(subResult)
                 return try materializeWithChoicesHelper(nextGen, with: &choices, context: &context)
-            },
+            }
         )
     }
 
@@ -980,7 +980,7 @@ extension Interpreters {
         value: Any,
         continuation: @escaping (Any) throws -> ReflectiveGenerator<Output>,
         choices: inout ChoiceCursor,
-        context: inout Context,
+        context: inout Context
     ) throws -> Output? {
         guard choices.isEmpty == false,
               let choice = choices.removeFirst(),
@@ -997,7 +997,7 @@ extension Interpreters {
     private static func materializeWithChoicesGetSize<Output>(
         continuation: @escaping (Any) throws -> ReflectiveGenerator<Output>,
         choices: inout ChoiceCursor,
-        context: inout Context,
+        context: inout Context
     ) throws -> Output? {
         guard choices.isEmpty == false,
               let choice = choices.removeFirst(),
@@ -1015,7 +1015,7 @@ extension Interpreters {
         subGenerator: ReflectiveGenerator<Any>,
         continuation: @escaping (Any) throws -> ReflectiveGenerator<Output>,
         choices: inout ChoiceCursor,
-        context: inout Context,
+        context: inout Context
     ) throws -> Output? {
         guard choices.isEmpty == false,
               let choice = choices.removeFirst(),
@@ -1037,7 +1037,7 @@ extension Interpreters {
         gen: ReflectiveGenerator<Any>,
         predicate: (Any) -> Bool,
         choices: inout ChoiceCursor,
-        context: inout Context,
+        context: inout Context
     ) throws -> Output? {
         guard let subResult = try materializeWithChoicesHelper(gen, with: &choices, context: &context),
               let result = subResult as? Output,
@@ -1054,7 +1054,7 @@ extension Interpreters {
         inner: ReflectiveGenerator<Any>,
         continuation: @escaping (Any) throws -> ReflectiveGenerator<Output>,
         choices: inout ChoiceCursor,
-        context: inout Context,
+        context: inout Context
     ) throws -> Output? {
         guard let innerValue = try materializeWithChoicesHelper(inner, with: &choices, context: &context) else { return nil }
         let result: Any
@@ -1074,7 +1074,7 @@ extension Interpreters {
     private static func materializeWithChoicesClassify<Output>(
         gen: ReflectiveGenerator<Any>,
         choices: inout ChoiceCursor,
-        context: inout Context,
+        context: inout Context
     ) throws -> Output? {
         guard let subResult = try materializeWithChoicesHelper(gen, with: &choices, context: &context),
               let result = subResult as? Output
@@ -1088,7 +1088,7 @@ extension Interpreters {
         _ branch: ChoiceTree,
         generators: [ReflectiveGenerator<Any>],
         continuation: (Any) throws -> ReflectiveGenerator<Output>,
-        context: inout Context,
+        context: inout Context
     ) throws -> ReflectiveGenerator<Output>? {
         guard let unpacked = PickBranchResolution.unpack(branch) else {
             throw MaterializeError.wrongInputChoice
@@ -1113,7 +1113,7 @@ extension Interpreters {
                     event: "pick_branch_fast_path",
                     metadata: [
                         "branch_id": "\(unpacked.id)",
-                    ],
+                    ]
                 )
             }
             return result
@@ -1131,7 +1131,7 @@ extension Interpreters {
                 event: "pick_branch_fallback_start",
                 metadata: [
                     "excluded_branch_id": "\(unpacked.id)",
-                ],
+                ]
             )
         }
         var generators = generators
@@ -1145,7 +1145,7 @@ extension Interpreters {
                         event: "pick_branch_fallback_succeeded",
                         metadata: [
                             "branch_id": "\(unpacked.id)",
-                        ],
+                        ]
                     )
                 }
                 context = attemptContext
@@ -1161,7 +1161,7 @@ extension Interpreters {
                 event: "pick_branch_fallback_failed",
                 metadata: [
                     "branch_id": "\(unpacked.id)",
-                ],
+                ]
             )
         }
         context.skipToMatchingGroupClose()

@@ -19,13 +19,13 @@ public extension Interpreters {
             static let fast = Self(
                 deleteAlignedSiblingWindows: 400,
                 redistributeNumericPairs: 600,
-                reduceValuesInTandem: 400,
+                reduceValuesInTandem: 400
             )
 
             static let slow = Self(
                 deleteAlignedSiblingWindows: 2000,
                 redistributeNumericPairs: 3000,
-                reduceValuesInTandem: 2000,
+                reduceValuesInTandem: 2000
             )
         }
 
@@ -42,7 +42,7 @@ public extension Interpreters {
                 beamWidthScale: 2,
                 maxBeamWidth: 48,
                 minEvaluationsPerLayer: 6,
-                evaluationsPerLayerScale: 1,
+                evaluationsPerLayerScale: 1
             )
 
             static let slow = Self(
@@ -50,7 +50,7 @@ public extension Interpreters {
                 beamWidthScale: 3,
                 maxBeamWidth: 96,
                 minEvaluationsPerLayer: 10,
-                evaluationsPerLayerScale: 2,
+                evaluationsPerLayerScale: 2
             )
 
             func beamWidth(for slotCount: Int) -> Int {
@@ -216,7 +216,7 @@ public extension Interpreters {
         gen: ReflectiveGenerator<Output>,
         tree: ChoiceTree,
         config: TCRConfiguration,
-        property: (Output) -> Bool,
+        property: (Output) -> Bool
     ) throws -> (ChoiceSequence, Output)? {
         // Mutable variables
         let isInstrumented = ExhaustLog.isEnabled(.debug, for: .reducer)
@@ -236,7 +236,7 @@ public extension Interpreters {
             ExhaustLog.notice(
                 category: .reducer,
                 event: "probe_budget_exhausted",
-                message,
+                message
             )
         } : nil
         let hasBind = tree.containsBind
@@ -267,7 +267,7 @@ public extension Interpreters {
                         "stall_budget": "\(stallBudget)",
                         "sequence": currentSequence.shortString,
                         "current_bind_depth": currentBindDepth.description,
-                    ],
+                    ]
                 )
             }
             for pass in passes {
@@ -303,7 +303,7 @@ public extension Interpreters {
                         property: property,
                         sequence: currentSequence,
                         rejectCache: &rejectCache,
-                        bindIndex: bindSpanIndex,
+                        bindIndex: bindSpanIndex
                     ) {
                         currentTree = newTree
                         currentSequence = newSequence
@@ -318,7 +318,7 @@ public extension Interpreters {
                         property: property,
                         sequence: currentSequence,
                         rejectCache: &rejectCache,
-                        bindIndex: bindSpanIndex,
+                        bindIndex: bindSpanIndex
                     ) {
                         currentTree = newTree
                         currentSequence = newSequence
@@ -381,7 +381,7 @@ public extension Interpreters {
                            probeBudget: probeBudgets.deleteAlignedSiblingWindows,
                            subsetBeamSearchTuning: alignedDeletionBeamTuning,
                            onBudgetExhausted: budgetLogger,
-                           bindIndex: bindSpanIndex,
+                           bindIndex: bindSpanIndex
                        )
                     {
                         currentSequence = newSequence
@@ -433,7 +433,7 @@ public extension Interpreters {
                            rejectCache: &rejectCache,
                            probeBudget: probeBudgets.redistributeNumericPairs,
                            onBudgetExhausted: budgetLogger,
-                           bindIndex: bindSpanIndex,
+                           bindIndex: bindSpanIndex
                        )
                     {
                         currentSequence = newSequence
@@ -466,7 +466,7 @@ public extension Interpreters {
                            rejectCache: &rejectCache,
                            probeBudget: probeBudgets.reduceValuesInTandem,
                            onBudgetExhausted: budgetLogger,
-                           bindIndex: bindSpanIndex,
+                           bindIndex: bindSpanIndex
                        )
                     {
                         currentSequence = newSequence
@@ -495,7 +495,7 @@ public extension Interpreters {
                                 "pass": pass.rawValue,
                                 "property_invocations": "\(propertyInvocations[pass, default: 0])",
                                 "output": "\(currentOutput)",
-                            ],
+                            ]
                         )
                     }
                     didImprove = true
@@ -509,7 +509,7 @@ public extension Interpreters {
                             metadata: [
                                 "pass": pass.rawValue,
                                 "property_invocations": "\(propertyInvocations[pass, default: 0])",
-                            ],
+                            ]
                         )
                     }
                     nextPasses.append(pass)
@@ -526,7 +526,7 @@ public extension Interpreters {
                             event: "cycle_detected",
                             metadata: [
                                 "window": "\(config.recentCycleWindow)",
-                            ],
+                            ]
                         )
                     }
                     break
@@ -608,7 +608,7 @@ public extension Interpreters {
                 metadata: [
                     "loops": "\(loops)",
                     "improvements": "\(numberOfImprovements)",
-                ],
+                ]
             )
             propertyInvocations
                 .map { ($0.key, $0.value) }
@@ -620,7 +620,7 @@ public extension Interpreters {
                         metadata: [
                             "pass": key.rawValue,
                             "calls": "\(value)",
-                        ],
+                        ]
                     )
                 }
             ExhaustLog.notice(
@@ -628,7 +628,7 @@ public extension Interpreters {
                 event: "property_invocation_count_total",
                 metadata: [
                     "total": "\(propertyInvocations.values.reduce(0, +))",
-                ],
+                ]
             )
         }
 

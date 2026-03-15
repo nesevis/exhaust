@@ -17,7 +17,7 @@ struct MaterializeTests {
     /// Reflects a value into a choice tree, flattens it, and materializes back.
     private func materializeViaReflection<Output>(
         _ gen: ReflectiveGenerator<Output>,
-        _ value: Output,
+        _ value: Output
     ) -> Output? {
         guard let tree = try? Interpreters.reflect(gen, with: value) else { return nil }
         let sequence = ChoiceSequence.flatten(tree)
@@ -64,7 +64,7 @@ struct MaterializeTests {
         let simpleGen = #gen(.oneOf(
             .just("alpha"),
             .just("beta"),
-            .just("gamma"),
+            .just("gamma")
         ))
         #exhaust(simpleGen) { value in
             materializeViaReflection(simpleGen, value) == value
@@ -72,7 +72,7 @@ struct MaterializeTests {
 
         let withSubGen = #gen(.oneOf(
             .uint64(in: 0 ... 10),
-            .uint64(in: 100 ... 200),
+            .uint64(in: 100 ... 200)
         ))
         #exhaust(withSubGen) { value in
             materializeViaReflection(withSubGen, value) == value
@@ -119,7 +119,7 @@ struct MaterializeTests {
 
         let zipArrayGen = #gen(
             .uint64(in: 0 ... 100).array(length: 1 ... 5),
-            .uint64(in: 0 ... 100).array(length: 1 ... 5),
+            .uint64(in: 0 ... 100).array(length: 1 ... 5)
         )
         #exhaust(zipArrayGen) { value in
             guard let mat = materializeViaReflection(zipArrayGen, value) else { return false }
@@ -133,7 +133,7 @@ struct MaterializeTests {
 
         let classifyGen = #gen(.uint64(in: 0 ... 100)).classify(
             ("small", { $0 < 50 }),
-            ("large", { $0 >= 50 }),
+            ("large", { $0 >= 50 })
         )
         #exhaust(classifyGen) { value in
             materializeViaReflection(classifyGen, value) == value
@@ -146,7 +146,7 @@ struct MaterializeTests {
 
         let pickArrayGen = #gen(.oneOf(
             .uint64(in: 0 ... 10).array(length: 3 ... 3),
-            .uint64(in: 100 ... 200).array(length: 2 ... 2),
+            .uint64(in: 100 ... 200).array(length: 2 ... 2)
         ))
         #exhaust(pickArrayGen) { value in
             materializeViaReflection(pickArrayGen, value) == value
@@ -160,7 +160,7 @@ struct MaterializeTests {
 
         let pickPart = #gen(.oneOf(
             .uint64(in: 0 ... 10),
-            .uint64(in: 11 ... 20),
+            .uint64(in: 11 ... 20)
         ))
         let zipPickGen = #gen(pickPart, .uint64().array(length: 3 ... 3))
         #exhaust(zipPickGen) { value in
@@ -173,7 +173,7 @@ struct MaterializeTests {
     func mappedRoundtrip() {
         let mappedGen = #gen(.uint64(in: 0 ... 10000)).mapped(
             forward: { Int($0) },
-            backward: { UInt64($0) },
+            backward: { UInt64($0) }
         )
         #exhaust(mappedGen) { value in
             materializeViaReflection(mappedGen, value) == value
@@ -186,7 +186,7 @@ struct MaterializeTests {
         let pointGen = #gen(.uint64(in: 0 ... 100), .uint64(in: 0 ... 100))
             .mapped(
                 forward: { Point(x: $0.0, y: $0.1) },
-                backward: { ($0.x, $0.y) },
+                backward: { ($0.x, $0.y) }
             )
         #exhaust(pointGen) { value in
             materializeViaReflection(pointGen, value) == value
@@ -198,12 +198,12 @@ struct MaterializeTests {
         }
         let ageGen = #gen(.oneOf(
             .uint64(in: 0 ... 10),
-            .uint64(in: 11 ... 84),
+            .uint64(in: 11 ... 84)
         ))
         let personGen = #gen(ageGen, .string())
             .mapped(
                 forward: { Person(age: $0.0, name: $0.1) },
-                backward: { ($0.age, $0.name) },
+                backward: { ($0.age, $0.name) }
             )
         #exhaust(personGen) { value in
             materializeViaReflection(personGen, value) == value
@@ -244,7 +244,7 @@ struct MaterializeTests {
 
         let ageGen = #gen(.oneOf(
             .uint64(in: 0 ... 10),
-            .uint64(in: 11 ... 84),
+            .uint64(in: 11 ... 84)
         ))
         let personGen = #gen(ageGen, .string()) {
             Person(age: $0, name: $1)
@@ -286,7 +286,7 @@ struct MaterializeTests {
         // _macroMap(backward:forward:): single-generator enum case with failable backward in a pick context
         let shapeGen = #gen(.oneOf(
             #gen(.double(in: 0.1 ... 10)) { Shape.circle($0) },
-            #gen(.double(in: 0.1 ... 10)) { Shape.square($0) },
+            #gen(.double(in: 0.1 ... 10)) { Shape.square($0) }
         ))
         #exhaust(shapeGen) { value in
             materializeViaReflection(shapeGen, value) == value
