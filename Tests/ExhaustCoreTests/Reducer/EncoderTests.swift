@@ -435,8 +435,9 @@ struct PromoteBranchesEncoderTests {
         ])
         let seq = ChoiceSequence(tree)
 
-        let encoder = PromoteBranchesEncoder()
-        let candidates = Array(encoder.encode(sequence: seq, tree: tree))
+        var encoder = PromoteBranchesEncoder()
+        encoder.currentTree = tree
+        let candidates = Array(encoder.encode(sequence: seq, targets: .wholeSequence))
         #expect(candidates.isEmpty)
     }
 
@@ -466,8 +467,9 @@ struct PromoteBranchesEncoderTests {
         ])
         let seq = ChoiceSequence(tree)
 
-        let encoder = PromoteBranchesEncoder()
-        let candidates = Array(encoder.encode(sequence: seq, tree: tree))
+        var encoder = PromoteBranchesEncoder()
+        encoder.currentTree = tree
+        let candidates = Array(encoder.encode(sequence: seq, targets: .wholeSequence))
         // Only one branch group (one .group node whose children are all branches),
         // but promoteBranches needs >= 2 branch groups to cross-promote.
         // With exactly 1 group containing 2 branches, it should produce candidates
@@ -477,7 +479,7 @@ struct PromoteBranchesEncoderTests {
         // so with 2 branches of different complexity, it should produce 1 candidate.
         if candidates.isEmpty == false {
             for candidate in candidates {
-                #expect(candidate.0.shortLexPrecedes(seq))
+                #expect(candidate.shortLexPrecedes(seq))
             }
         }
     }
@@ -493,8 +495,9 @@ struct PromoteBranchesEncoderTests {
                 }
                 // Need a tree with 2+ branch groups
                 let seq = ChoiceSequence(tree)
-                let encoder = PromoteBranchesEncoder()
-                let candidates = Array(encoder.encode(sequence: seq, tree: tree))
+                var encoder = PromoteBranchesEncoder()
+                encoder.currentTree = tree
+                let candidates = Array(encoder.encode(sequence: seq, targets: .wholeSequence))
                 if candidates.isEmpty == false {
                     #expect(candidates.count >= 1)
                     return
@@ -512,9 +515,10 @@ struct PromoteBranchesEncoderTests {
                     continue
                 }
                 let seq = ChoiceSequence(tree)
-                let encoder = PromoteBranchesEncoder()
-                for candidate in encoder.encode(sequence: seq, tree: tree) {
-                    #expect(candidate.0.shortLexPrecedes(seq))
+                var encoder = PromoteBranchesEncoder()
+                encoder.currentTree = tree
+                for candidate in encoder.encode(sequence: seq, targets: .wholeSequence) {
+                    #expect(candidate.shortLexPrecedes(seq))
                 }
             }
         }
@@ -530,13 +534,14 @@ struct PromoteBranchesEncoderTests {
                     continue
                 }
                 let seq = ChoiceSequence(tree)
-                let encoder = PromoteBranchesEncoder()
-                let candidates = Array(encoder.encode(sequence: seq, tree: tree))
+                var encoder = PromoteBranchesEncoder()
+                encoder.currentTree = tree
+                let candidates = Array(encoder.encode(sequence: seq, targets: .wholeSequence))
                 if candidates.isEmpty == false {
                     // Each candidate must be different from the original.
                     for candidate in candidates {
-                        #expect(candidate.0 != seq)
-                        #expect(candidate.0.shortLexPrecedes(seq))
+                        #expect(candidate != seq)
+                        #expect(candidate.shortLexPrecedes(seq))
                     }
                     found = true
                 }

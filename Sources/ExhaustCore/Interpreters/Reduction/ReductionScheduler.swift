@@ -126,7 +126,8 @@ enum ReductionScheduler {
         let cycleBudget = CycleBudget(total: defaultCycleBudgetTotal, legWeights: CycleBudget.defaultWeights())
 
         // Build encoders.
-        let branchEncoders: [any BranchEncoder] = [PromoteBranchesEncoder(), PivotBranchesEncoder()]
+        var promoteBranchesEncoder = PromoteBranchesEncoder()
+        var pivotBranchesEncoder = PivotBranchesEncoder()
         var deleteContainerSpans = DeleteContainerSpansEncoder()
         var deleteSequenceElements = DeleteSequenceElementsEncoder()
         var deleteSequenceBoundaries = DeleteSequenceBoundariesEncoder()
@@ -374,131 +375,24 @@ enum ReductionScheduler {
             }
 
             // ── Pre-cycle: Branch tactics ──
-            // Branch encoders produce finite candidate sequences and run to
-            // exhaustion — no stall patience. The hard cap (remaining cycle
-            // budget) is the only limit. This matches the plan's design:
-            // branch tactics "run unconditionally" (Section 1.6) with
-            // termination via encoder exhaustion, not heuristic patience.
+            // Branch encoders use the standard runBatch flow. The
+            // ReductionMaterializer produces fresh trees with all branch
+            // alternatives, so no post-branch re-derivation is needed.
             do {
-                var branchUsed = 0
-                for branchEncoder in branchEncoders {
-                    guard branchUsed < remaining else { break }
-                    var probes = 0
-                    var materializationFailures = 0
-                    var propertyPasses = 0
-                    var accepted = false
-                    for (candidateSequence, candidateTree) in branchEncoder.encode(sequence: sequence, tree: tree) {
-                        guard branchUsed < remaining else { break }
-                        probes += 1
+                let branchDecoder = makeDeletionDecoder(at: 0)
+                var branchBudget = LegBudget(hardCap: remaining, stallPatience: remaining)
 
-                        let branchOutput: Output
-                        let branchResult: ShrinkResult<Output>
-
-                        if config.useReductionMaterializer {
-                            // Fresh path: ReductionMaterializer produces a fresh tree
-                            // with current validRange and all branch alternatives.
-                            switch ReductionMaterializer.materialize(
-                                gen, prefix: candidateSequence, mode: .exact,
-                                fallbackTree: tree
-                            ) {
-                            case let .success(value, freshTree):
-                                guard property(value) == false else {
-                                    branchUsed += 1
-                                    propertyPasses += 1
-                                    continue
-                                }
-                                branchOutput = value
-                                let freshSequence = ChoiceSequence(freshTree)
-                                branchResult = ShrinkResult(
-                                    sequence: freshSequence, tree: freshTree,
-                                    output: value, evaluations: 1
-                                )
-                            case .rejected, .failed:
-                                branchUsed += 1
-                                materializationFailures += 1
-                                continue
-                            }
-                        } else {
-                            // Legacy path: materialize using the encoder's modified tree.
-                            guard let legacyOutput = try? Interpreters.materialize(
-                                gen, with: candidateTree, using: candidateSequence,
-                                strictness: .relaxed
-                            ) else {
-                                branchUsed += 1
-                                materializationFailures += 1
-                                continue
-                            }
-                            guard property(legacyOutput) == false else {
-                                branchUsed += 1
-                                propertyPasses += 1
-                                continue
-                            }
-                            branchOutput = legacyOutput
-                            branchResult = ShrinkResult(
-                                sequence: candidateSequence, tree: candidateTree,
-                                output: legacyOutput, evaluations: 1
-                            )
-                        }
-
-                        branchUsed += 1
-                        // Accept branch result directly — no GuidedMaterializer
-                        // re-derivation. For legacy: the encoder's candidateTree
-                        // preserves branch alternatives; re-derivation through
-                        // GuidedMaterializer would strip them. For fresh: the tree
-                        // already has current metadata and all alternatives.
-                        sequence = branchResult.sequence
-                        tree = branchResult.tree
-                        output = branchResult.output
-                        fallbackTree = branchResult.tree
-                        if hasBind {
-                            bindIndex = BindSpanIndex(from: sequence)
-                            bestSequence = sequence
-                            bestOutput = output
-                        } else if sequence.shortLexPrecedes(bestSequence) {
-                            bestSequence = sequence
-                            bestOutput = output
-                        }
-                        cycleImproved = true
-                        accepted = true
-                        if isInstrumented {
-                            ExhaustLog.debug(category: .reducer, event: "branch_accepted", metadata: [
-                                "encoder": branchEncoder.name,
-                                "probes": "\(probes)",
-                                "output": "\(output)",
-                            ])
-                        }
-                        break
-                    }
-                    if isInstrumented, accepted == false, probes > 0 {
-                        ExhaustLog.debug(category: .reducer, event: "branch_exhausted", metadata: [
-                            "encoder": branchEncoder.name,
-                            "probes": "\(probes)",
-                            "materialization_failures": "\(materializationFailures)",
-                            "property_passes": "\(propertyPasses)",
-                        ])
-                    }
+                promoteBranchesEncoder.currentTree = tree
+                if try runBatch(promoteBranchesEncoder, decoder: branchDecoder, targets: .wholeSequence, structureChanged: true, cache: &rejectCache, budget: &branchBudget) {
+                    cycleImproved = true
                 }
-                remaining -= branchUsed
 
-                // After all branch encoders have run, re-derive the sequence to
-                // refresh validRange annotations. Not needed for ReductionMaterializer —
-                // the fresh tree already has current metadata and all branch alternatives.
-                if cycleImproved, config.useReductionMaterializer == false {
-                    let seed = sequence.zobristHash
-                    if case let .success(reDerivedOutput, reDerivedSequence, reDerivedTree) =
-                        GuidedMaterializer.materialize(gen, prefix: sequence, seed: seed, fallbackTree: tree),
-                       property(reDerivedOutput) == false,
-                       sequence.shortLexPrecedes(reDerivedSequence) == false
-                    {
-                        sequence = reDerivedSequence
-                        tree = reDerivedTree
-                        output = reDerivedOutput
-                        fallbackTree = reDerivedTree
-                    }
-                    if hasBind {
-                        bindIndex = BindSpanIndex(from: sequence)
-                    }
+                pivotBranchesEncoder.currentTree = tree
+                if try runBatch(pivotBranchesEncoder, decoder: branchDecoder, targets: .wholeSequence, structureChanged: true, cache: &rejectCache, budget: &branchBudget) {
+                    cycleImproved = true
                 }
+
+                remaining -= branchBudget.used
             }
 
             // ── Leg 1: Contravariant sweep (depths max → 1) ──
