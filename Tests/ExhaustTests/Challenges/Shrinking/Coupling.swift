@@ -50,4 +50,20 @@ struct CouplingShrinkingChallenge {
         #expect(value.count == 2)
         #expect(value == [1, 0])
     }
+    
+    @Test("Coupling Pathological 1")
+    func couplingPathlogical1() throws {
+        ExhaustLog.setConfiguration(.init(isEnabled: true, minimumLevel: .info, categoryMinimumLevels: [.reducer: .debug, .propertyTest: .debug], format: .human))
+        let value = try #require(
+            #exhaust(
+                Self.gen,
+                .suppressIssueReporting,
+                .useBonsaiReducer,
+                .replay(8306856919234487559),
+                property: Self.property
+            )
+        )
+        #expect(value.count == 2)
+        #expect(value == [1, 0])
+    }
 }

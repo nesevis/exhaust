@@ -50,22 +50,46 @@ struct HeapMergeTests {
 
 @Suite("Heap aliasing contract tests (self-merge)")
 struct HeapAliasingTests {
-    #warning("Pathological bonsai case; 4x slower")
     @Test("Sorted-splice merge violates heap property after repeated self-merges")
     func spliceMergeBug() throws {
-        ExhaustLog.setConfiguration(.init(isEnabled: true, minimumLevel: .info, categoryMinimumLevels: [.reducer: .debug, .propertyTest: .debug], format: .human))
-        // Legacy: 92 invocations, 31ms, CE 5 steps
-        // Bonsai: 105 invocations, 73ms, CE 5 steps
+//        ExhaustLog.setConfiguration(.init(isEnabled: true, minimumLevel: .info, categoryMinimumLevels: [.reducer: .debug, .propertyTest: .debug], format: .human))
+        // Legacy: 90 invocations, 31ms, CE 5 steps
+        // Bonsai: 151 invocations, 26ms, CE 5 steps
         let result = try #require(
             #exhaust(
                 HeapAliasingContract.self,
                 commandLimit: 20,
                 .suppressIssueReporting,
-                .useBonsaiReducer,
+//                .useBonsaiReducer,
 //                .argumentAwareCoverage
                 .replay(6_161_601_321_680_111_336)
             )
         )
+        
+        // TODO: Make expectation stronger:
+        
+        /*
+         Counterexample:
+           [
+             [0]: .newHeap,
+             [1]: .push(
+               heapIndex: 0,
+               value: 0
+             ),
+             [2]: .push(
+               heapIndex: 0,
+               value: 1
+             ),
+             [3]: .push(
+               heapIndex: 0,
+               value: 0
+             ),
+             [4]: .merge(
+               index1: 0,
+               index2: 0
+             )
+           ]
+         */
 
         #expect(result.trace.contains { step in
             switch step.outcome {

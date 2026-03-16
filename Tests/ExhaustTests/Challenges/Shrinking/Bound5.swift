@@ -38,7 +38,13 @@ struct Bound5ShrinkingChallenge {
     @Test("Bound5, Single")
     func bound5Single() {
         ExhaustLog.setConfiguration(.init(isEnabled: true, minimumLevel: .info, categoryMinimumLevels: [.reducer: .debug], format: .human))
-        let output = #exhaust(Self.gen, .suppressIssueReporting, .replay(1337), property: Self.property)
+        let output = #exhaust(
+            Self.gen.resize(50),
+            .suppressIssueReporting,
+            .useBonsaiReducer,
+//            .replay(1337),
+            property: Self.property
+        )
 
         #expect(output?.arr.count == 2)
         #expect(output?.arr == [-1, -32768])
@@ -111,8 +117,30 @@ struct Bound5ShrinkingChallenge {
         #expect(output?.arr.count == 2)
         #expect(output?.arr.sorted() == [-32768, -1])
     }
+    
+    @Test("Bound5, Pathological 4")
+    func bound5Pathological4() {
+        let value: Bound5 = .init(
+            a: [10607, 11752, -7272, -15733],
+            b: [],
+            c: [14063, -27312, 2705],
+            d: [-4862, 11017, 12831, 19004],
+            e: [-25748, 8284, -13626, 12773, 4040]
+        )
+        ExhaustLog.setConfiguration(.init(isEnabled: true, minimumLevel: .info, categoryMinimumLevels: [.reducer: .debug], format: .human))
+        let output = #exhaust(
+            Self.gen,
+            .suppressIssueReporting,
+            .reflecting(value),
+            .useBonsaiReducer,
+            property: Self.property
+        )
 
-    @Test("Bound5, 50")
+        #expect(output?.arr.count == 2)
+        #expect(output?.arr.sorted() == [-32768, -1])
+    }
+
+    @Test("Bound5, 38")
     func bound5Many() {
         let bound5s = #example(Self.gen, count: 100, seed: 1337)
             .filter { Self.property($0) == false }
@@ -123,9 +151,13 @@ struct Bound5ShrinkingChallenge {
                 Self.gen,
                 .suppressIssueReporting,
                 .reflecting(bound5),
-                .useBonsaiReducer,
+//                .useBonsaiReducer,
                 property: Self.property
             )
+            
+            if output?.arr.count ?? 0 > 2 {
+                print()
+            }
 
             #expect(output?.arr.count == 2)
             #expect(output?.arr.sorted() == [-32768, -1])
