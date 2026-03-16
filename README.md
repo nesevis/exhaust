@@ -1,6 +1,6 @@
 # Exhaust
 
-[![Swift 6.1+](https://img.shields.io/badge/Swift-6.1%2B-orange)](https://swift.org)
+[![Swift 6.2+](https://img.shields.io/badge/Swift-6.2%2B-orange)](https://swift.org)
 [![Platforms](https://img.shields.io/badge/Platforms-macOS%2015%20%7C%20iOS%2018%20%7C%20Mac%20Catalyst%2018%20%7C%20tvOS%2018%20%7C%20visionOS%202%20%7C%20watchOS%2011-blue)](https://developer.apple.com)
 [![SPM](https://img.shields.io/badge/Swift%20Package%20Manager-compatible-brightgreen)](https://swift.org/package-manager/)
 
@@ -176,6 +176,7 @@ Configure behavior with settings:
 | `.coverageBudget(n)` | 2000 | Maximum test cases for structured coverage |
 | `.randomOnly` | off | Skip structured coverage, use only random sampling |
 | `.replay(seed)` | — | Deterministic reproduction of a specific run |
+| `.reflecting(value)` | — | Skip generation; reflect the given value and reduce it (see [Reflecting and Reducing Known Values](#reflecting-and-reducing-known-values)) |
 
 ## Reflecting and Reducing Known Values
 
@@ -344,7 +345,7 @@ Some commands need to reference entities created by earlier commands — deletin
 struct DatabaseSpec {
     let userIDs = Bundle<UserID>()
 
-    @Command(weight: 3, Gen.string(), Gen.int(in: 18...65))
+    @Command(weight: 3, #gen(.string(length: 1...20)), #gen(.int(in: 18...65)))
     mutating func createUser(name: String, age: Int) {
         let id = db.createUser(name: name, age: age)
         userIDs.add(id)
@@ -375,7 +376,7 @@ struct AccountSpec {
         await account.balance == expected
     }
 
-    @Command(weight: 3, Gen.int(in: 1...1000))
+    @Command(weight: 3, #gen(.int(in: 1...1000)))
     mutating func deposit(amount: Int) async throws {
         expected += Decimal(amount)
         await account.deposit(amount)
@@ -402,9 +403,12 @@ Sync and async commands can be mixed freely in the same contract.
 
 ### Settings
 
+Contract tests accept the same settings as `#exhaust` (`.samplingBudget`, `.coverageBudget`, `.replay`, `.randomOnly`), plus:
+
 | Setting | Default | Effect |
 |---|---|---|
 | `commandLimit:` | (required) | Maximum number of commands per test iteration. |
+| `.argumentAwareCoverage` | off | Include command argument values in coverage domain construction. |
 
 ## How It Works
 
@@ -420,5 +424,5 @@ Reduction operates on the recorded sequences and trees of choices rather than th
 
 ## Requirements
 
-- Swift 6.1+
+- Swift 6.2+
 - macOS 15+, iOS 18+, Mac Catalyst 18+, tvOS 18+, visionOS 2+, watchOS 11+

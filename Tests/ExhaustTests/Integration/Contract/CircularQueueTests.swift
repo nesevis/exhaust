@@ -22,6 +22,16 @@ import Testing
 
 @Suite("Circular queue contract tests")
 struct CircularQueueTests {
+    // The model is a plain `[Int]` tracking FIFO order. Three commands exercise
+    // the ring buffer:
+    //
+    //   - `put(value)` — appends to both model and SUT. Skips if at capacity.
+    //   - `get()` — removes front element. Postcondition checks the returned
+    //     value matches the model's front. Skips if empty.
+    //   - `size()` — postcondition checks count agrees with model.
+    //
+    // An invariant ensures the SUT count stays within bounds.
+
     @Test("Position-dependent corruption detected via FIFO postcondition")
     func circularQueueCorruption() throws {
         let result = try #require(
@@ -31,7 +41,7 @@ struct CircularQueueTests {
                 .samplingBudget(500),
                 .suppressIssueReporting,
                 .replay(12_892_450_489_757_532_783),
-                .useBonsaiReducer
+//                .useBonsaiReducer
             )
         )
 
@@ -43,16 +53,6 @@ struct CircularQueueTests {
 }
 
 // MARK: - Contract
-
-// The model is a plain `[Int]` tracking FIFO order. Three commands exercise
-// the ring buffer:
-//
-//   - `put(value)` — appends to both model and SUT. Skips if at capacity.
-//   - `get()` — removes front element. Postcondition checks the returned
-//     value matches the model's front. Skips if empty.
-//   - `size()` — postcondition checks count agrees with model.
-//
-// An invariant ensures the SUT count stays within bounds.
 
 @Contract
 struct CircularQueueContract {

@@ -87,13 +87,6 @@ let package = Package(
             ]
         ),
         .testTarget(
-            name: "ExhaustCoreTests",
-            dependencies: ["ExhaustCore"],
-            plugins: [
-                .plugin(name: "SwiftLintBuildToolPlugin", package: "SwiftLintPlugins")
-            ]
-        ),
-        .testTarget(
             name: "ExhaustMacrosTests",
             dependencies: [
                 "Exhaust",
@@ -117,3 +110,15 @@ let package = Package(
         ),
     ]
 )
+
+if usePrecompiled == false {
+    package.targets.append(
+        .testTarget(
+            name: "ExhaustCoreTests",
+            dependencies: ["ExhaustCore"],
+            plugins: [
+                .plugin(name: "SwiftLintBuildToolPlugin", package: "SwiftLintPlugins")
+            ]
+        )
+    )
+}

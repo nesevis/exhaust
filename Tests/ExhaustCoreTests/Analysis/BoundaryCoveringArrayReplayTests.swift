@@ -3,7 +3,6 @@
 //  Exhaust
 //
 
-import ExhaustCore
 import Testing
 
 @Suite("BoundaryCoveringArrayReplay")
