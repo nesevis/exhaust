@@ -11,8 +11,8 @@ import Foundation
 
 // MARK: - Academic Provenance
 
-//
-// Combines the `generate` and `randomness` interpretations: G⟦·⟧ + R⟦·⟧ (Goldstein §3.3.3). Captures a hierarchical ChoiceTree (Exhaust extension) alongside the generated value. Relates to the factoring theorem (Theorem 1, §4.4): P⟦g⟧ <$> R⟦g⟧ ≡ G⟦g⟧.
+// Combines the `generate` and `randomness` interpretations: G⟦·⟧ + R⟦·⟧ (Goldstein §3.3.3).
+// Captures a hierarchical ChoiceTree (Exhaust extension) alongside the generated value. Relates to the factoring theorem (Theorem 1, §4.4): P⟦g⟧ <$> R⟦g⟧ ≡ G⟦g⟧.
 
 public struct ValueAndChoiceTreeInterpreter<FinalOutput>: ~Copyable, ExhaustIterator {
     public typealias Element = (value: FinalOutput, tree: ChoiceTree)
@@ -28,18 +28,13 @@ public struct ValueAndChoiceTreeInterpreter<FinalOutput>: ~Copyable, ExhaustIter
     ) {
         self.generator = generator
         let baseSeed: UInt64
-        if let seed {
-            baseSeed = seed
-        } else {
-            var rng = SystemRandomNumberGenerator()
-            baseSeed = rng.next()
-        }
+        let prng = seed.map { Xoshiro256(seed: $0) } ?? Xoshiro256()
         context = .init(
             maxRuns: maxRuns ?? 100,
-            baseSeed: baseSeed,
+            baseSeed: prng.seed,
             isFixed: false,
             size: 0,
-            prng: Xoshiro256(seed: baseSeed),
+            prng: prng,
             materializePicks: materializePicks
         )
     }
@@ -338,7 +333,9 @@ public struct ValueAndChoiceTreeInterpreter<FinalOutput>: ~Copyable, ExhaustIter
         inputValue: some Any,
         context: inout GenerationContext
     ) throws -> (Output, ChoiceTree)? {
-        guard let (result, tree) = try generateRecursive(nextGen, with: inputValue, context: &context) else { return nil }
+        guard let (result, tree) = try generateRecursive(nextGen, with: inputValue, context: &context) else {
+            return nil
+        }
         return try runContinuation(
             result: result,
             calleeChoiceTree: tree,

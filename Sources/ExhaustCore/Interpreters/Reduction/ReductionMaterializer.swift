@@ -728,12 +728,16 @@ private extension ReductionMaterializer {
         calleeFallback: ChoiceTree? = nil,
         continuationFallback: ChoiceTree? = nil
     ) throws -> (Output, ChoiceTree)? {
-        let fallbackChildren: [ChoiceTree]? = if let calleeFallback, case let .group(children, _) = calleeFallback,
-                                                 children.count == generators.count
+        
+        let fallbackChildren: [ChoiceTree]?
+        if
+            let calleeFallback,
+            case let .group(children, _) = calleeFallback,
+            children.count == generators.count
         {
-            children
+            fallbackChildren = children
         } else {
-            nil
+            fallbackChildren = nil
         }
 
         var results = [Any]()
@@ -939,7 +943,11 @@ private extension ReductionMaterializer {
 
         /// Stack of position limits for nested scopes (zip children).
         /// Max nesting depth ~3-4 in practice.
-        private var scopeLimits = InlineBuffer<Int>(repeating: 0)
+        private var scopeLimits: [Int] = {
+            var a = [Int]()
+            a.reserveCapacity(4)
+            return a
+        }()
 
         /// Cached end position — updated on scope push/pop.
         private var effectiveEnd: Int
