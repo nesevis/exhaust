@@ -19,7 +19,8 @@ public struct TandemReductionEncoder: AdaptiveEncoder {
     public func estimatedCost(sequence: ChoiceSequence, bindIndex _: BindSpanIndex?) -> Int? {
         let g = ChoiceSequence.extractSiblingGroups(from: sequence).count
         guard g > 0 else { return nil }
-        return g * 20
+        // g sibling groups × ~65: 1 direct shift probe + FindIntegerStepper search over the inter-value distance (~64 binary search steps) per group.
+        return g * 65
     }
 
     // MARK: - Internal types

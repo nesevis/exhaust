@@ -13,6 +13,7 @@ public struct PivotBranchesEncoder: BatchEncoder {
 
     public func estimatedCost(sequence: ChoiceSequence, bindIndex _: BindSpanIndex?) -> Int? {
         guard sequence.isEmpty == false else { return nil }
+        // Fixed estimate: enumerates pick sites and tries each non-selected alternative sorted by shortlex complexity, bounded by the number of pick sites in the tree.
         return 10
     }
 

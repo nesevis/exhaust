@@ -23,7 +23,8 @@ public struct BindAwareRedistributeEncoder: AdaptiveEncoder {
     public func estimatedCost(sequence _: ChoiceSequence, bindIndex: BindSpanIndex?) -> Int? {
         guard let bindIndex, bindIndex.regions.count >= 2 else { return nil }
         let r = bindIndex.regions.count
-        return min(r * r, 32) * 14
+        // O(r²) region pairs capped at 32 × ~20: same stepper + fallback structure as CrossStageRedistributeEncoder, but operating on bind-region inner values.
+        return min(r * r, 32) * 20
     }
 
     // MARK: - Types

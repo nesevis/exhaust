@@ -13,6 +13,7 @@ public struct PromoteBranchesEncoder: BatchEncoder {
 
     public func estimatedCost(sequence: ChoiceSequence, bindIndex _: BindSpanIndex?) -> Int? {
         guard sequence.isEmpty == false else { return nil }
+        // Fixed estimate: enumerates branch groups and tries cross-group substitution of complex branches with simpler alternatives, bounded by the number of branch sites in the tree.
         return 20
     }
 

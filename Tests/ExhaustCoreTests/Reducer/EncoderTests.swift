@@ -76,6 +76,29 @@ struct ZeroValueEncoderTests {
         let probe = encoder.nextProbe(lastAccepted: false)
         #expect(probe == nil)
     }
+
+    @Test("After all-at-once acceptance, no individual probes are emitted")
+    func allAtOnceAcceptedSkipsIndividualProbes() {
+        let seq = makeSequence([5, 7, 3])
+        let spans = allValueSpans(from: seq)
+        var encoder = ZeroValueEncoder()
+        encoder.start(sequence: seq, targets: .spans(spans))
+
+        // First probe: all-at-once (zeros all values).
+        let allAtOnce = encoder.nextProbe(lastAccepted: false)
+        #expect(allAtOnce != nil)
+        // Verify it zeros all values.
+        if let probe = allAtOnce {
+            #expect(probe[0].value?.choice == .unsigned(0, .uint64))
+            #expect(probe[1].value?.choice == .unsigned(0, .uint64))
+            #expect(probe[2].value?.choice == .unsigned(0, .uint64))
+        }
+
+        // Report all-at-once as accepted. Now individual probes should be skipped
+        // because the base sequence is updated with all targets.
+        let individualProbe = encoder.nextProbe(lastAccepted: true)
+        #expect(individualProbe == nil, "No individual probes should be emitted after all-at-once acceptance")
+    }
 }
 
 // MARK: - FindIntegerStepper
@@ -630,6 +653,89 @@ struct CrossStageRedistributeEncoderTests {
         encoder.start(sequence: seq, targets: .wholeSequence)
         let probe = encoder.nextProbe(lastAccepted: false)
         #expect(probe == nil)
+    }
+}
+
+// MARK: - AdaptiveDeletionEncoder
+
+@Suite("AdaptiveDeletionEncoder")
+struct AdaptiveDeletionEncoderTests {
+    @Test("Stale acceptance feedback is not forwarded across depth groups")
+    func staleFeedbackAcrossGroups() {
+        // Build a sequence with spans at two different depths.
+        // Group 1 (depth=0) has 3 spans; Group 2 (depth=1) has 2 spans.
+        var seq = ChoiceSequence()
+        // 6 entries: 3 at depth 0, 3 at depth 1 (simulating container spans)
+        for _ in 0 ..< 6 {
+            seq.append(.value(.init(choice: .unsigned(99, .uint64), validRange: 0 ... UInt64.max, isRangeExplicit: false)))
+        }
+
+        let depth0Spans = (0 ..< 3).map { i in
+            ChoiceSpan(kind: .value(.init(choice: .unsigned(0, .uint64), validRange: nil)), range: i ... i, depth: 0)
+        }
+        let depth1Spans = (3 ..< 5).map { i in
+            ChoiceSpan(kind: .value(.init(choice: .unsigned(0, .uint64), validRange: nil)), range: i ... i, depth: 1)
+        }
+
+        let sortedSpans = depth0Spans + depth1Spans
+        var encoder = AdaptiveDeletionEncoder()
+        encoder.start(sequence: seq, sortedSpans: sortedSpans)
+
+        // Drive the encoder: accept first probe (from group 1), then collect more probes.
+        var probes: [ChoiceSequence] = []
+        var lastAccepted = false
+        while let probe = encoder.nextProbe(lastAccepted: lastAccepted) {
+            probes.append(probe)
+            // Accept the first probe only (simulates group 1 success).
+            lastAccepted = probes.count == 1
+            if probes.count > 50 { break }
+        }
+
+        // The encoder should terminate and produce probes from both groups.
+        #expect(probes.isEmpty == false)
+        #expect(probes.count < 50, "Encoder should converge, not loop")
+    }
+}
+
+// MARK: - DominanceLattice
+
+@Suite("DominanceLattice")
+struct DominanceLatticeTests {
+    @Test("Success at one depth does not skip dominated encoder at a different depth after invalidation")
+    func crossDepthLeakage() {
+        var lattice = DominanceLattice()
+
+        // Simulate depth-2 iteration: zeroValue succeeds.
+        lattice.recordSuccess("zeroValue")
+        #expect(lattice.shouldSkip("binarySearchToZero", phase: .valueMinimization))
+
+        // Transitioning to depth 1 should invalidate, so binarySearchToZero is NOT skipped.
+        lattice.invalidate()
+        #expect(lattice.shouldSkip("binarySearchToZero", phase: .valueMinimization) == false)
+    }
+
+    @Test("Success in deletion lattice does not leak across depth boundaries after invalidation")
+    func crossDepthDeletionLeakage() {
+        var lattice = DominanceLattice()
+
+        // Simulate depth-0 iteration: deleteContainerSpans succeeds.
+        lattice.recordSuccess("deleteContainerSpans")
+        #expect(lattice.shouldSkip("speculativeDelete", phase: .structuralDeletion))
+
+        // Transitioning to depth 1 should invalidate.
+        lattice.invalidate()
+        #expect(lattice.shouldSkip("speculativeDelete", phase: .structuralDeletion) == false)
+    }
+
+    @Test("Without invalidation, success leaks across depths")
+    func withoutInvalidationLeaks() {
+        var lattice = DominanceLattice()
+
+        // Record success — dominated encoder should be skipped.
+        lattice.recordSuccess("zeroValue")
+        #expect(lattice.shouldSkip("binarySearchToZero", phase: .valueMinimization))
+        // Without invalidation, it stays skipped (this is the bug scenario).
+        #expect(lattice.shouldSkip("binarySearchToZero", phase: .valueMinimization))
     }
 }
 

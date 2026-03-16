@@ -23,7 +23,8 @@ struct DeleteAlignedWindowsEncoder: AdaptiveEncoder {
     func estimatedCost(sequence: ChoiceSequence, bindIndex _: BindSpanIndex?) -> Int? {
         let t = ChoiceSequence.extractContainerSpans(from: sequence).count
         guard t > 0 else { return nil }
-        return t * 50
+        // t container spans × ~100: contiguous window search via FindIntegerStepper per cohort per slot (~10 probes), plus beam search over non-contiguous subsets with bounded beam width.
+        return t * 100
     }
 
     // MARK: - Configuration

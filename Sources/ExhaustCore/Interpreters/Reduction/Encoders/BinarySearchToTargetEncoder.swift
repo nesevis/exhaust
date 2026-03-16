@@ -10,6 +10,7 @@ public struct BinarySearchToTargetEncoder: AdaptiveEncoder {
     public func estimatedCost(sequence: ChoiceSequence, bindIndex _: BindSpanIndex?) -> Int? {
         let t = ChoiceSequence.extractAllValueSpans(from: sequence).count
         guard t > 0 else { return nil }
+        // t targets × ~64: BinarySearchStepper over [reductionTarget, currentBP] converges in O(log(range)) steps, bounded by the reduction target rather than zero.
         return t * 64
     }
 

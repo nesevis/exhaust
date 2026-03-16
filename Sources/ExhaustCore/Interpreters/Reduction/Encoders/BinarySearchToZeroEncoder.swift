@@ -10,6 +10,7 @@ public struct BinarySearchToZeroEncoder: AdaptiveEncoder {
     public func estimatedCost(sequence: ChoiceSequence, bindIndex _: BindSpanIndex?) -> Int? {
         let t = ChoiceSequence.extractAllValueSpans(from: sequence).count
         guard t > 0 else { return nil }
+        // t targets × ~80: DirectionalStepper binary search over the bit-pattern range converges in O(log(range)) steps (~64 for UInt64), plus up to 16 cross-zero shortlex-key probes.
         return t * 80
     }
 
