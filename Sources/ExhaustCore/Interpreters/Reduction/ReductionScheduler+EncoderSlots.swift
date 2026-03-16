@@ -3,31 +3,24 @@ extension ReductionScheduler {
 
     /// Tracks materialization budget within a single V-cycle leg.
     ///
-    /// Two counters: `used` (total materializations, capped by `hardCap`) and `consecutiveFruitless` (consecutive failures, capped by `stallPatience`). A success resets the fruitless counter.
+    /// Each encoder naturally exhausts its probe space (returns `nil` from `nextProbe`),
+    /// so only the shared hard cap is needed to prevent any single encoder from monopolizing
+    /// the leg's budget.
     struct LegBudget {
         /// Maximum total materializations this leg may consume.
         let hardCap: Int
-        /// Maximum consecutive fruitless materializations before the leg gives up.
-        let stallPatience: Int
 
         /// Total materializations consumed so far.
         private(set) var used = 0
-        /// Consecutive materializations without an accepted candidate.
-        private(set) var consecutiveFruitless = 0
 
-        /// Returns `true` when either the hard cap or the stall patience has been reached.
+        /// Returns `true` when the hard cap has been reached.
         var isExhausted: Bool {
-            used >= hardCap || consecutiveFruitless >= stallPatience
+            used >= hardCap
         }
 
-        /// Records a materialization attempt, resetting the fruitless counter on acceptance.
-        mutating func recordMaterialization(accepted: Bool) {
+        /// Records a materialization attempt.
+        mutating func recordMaterialization() {
             used += 1
-            if accepted {
-                consecutiveFruitless = 0
-            } else {
-                consecutiveFruitless += 1
-            }
         }
     }
 

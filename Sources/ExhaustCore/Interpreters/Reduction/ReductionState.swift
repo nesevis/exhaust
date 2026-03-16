@@ -126,7 +126,7 @@ extension ReductionState {
             probes += 1
             let candidateHash = ZobristHash.hash(of: candidate)
             if rejectCache.contains(candidateHash) {
-                budget.recordMaterialization(accepted: false)
+                budget.recordMaterialization()
                 continue
             }
             if let result = try decoder.decode(
@@ -136,7 +136,7 @@ extension ReductionState {
                 originalSequence: sequence,
                 property: property
             ) {
-                budget.recordMaterialization(accepted: true)
+                budget.recordMaterialization()
                 accept(result, structureChanged: structureChanged)
                 if isInstrumented {
                     ExhaustLog.debug(category: .reducer, event: "encoder_accepted", metadata: [
@@ -147,7 +147,7 @@ extension ReductionState {
                 }
                 return true
             }
-            budget.recordMaterialization(accepted: false)
+            budget.recordMaterialization()
             rejectCache.insert(candidateHash)
         }
         if isInstrumented {
@@ -187,7 +187,7 @@ extension ReductionState {
             probes += 1
             let probeHash = ZobristHash.hash(of: probe)
             if rejectCache.contains(probeHash) {
-                budget.recordMaterialization(accepted: false)
+                budget.recordMaterialization()
                 lastAccepted = false
                 continue
             }
@@ -195,13 +195,13 @@ extension ReductionState {
                 candidate: probe, gen: gen, tree: tree,
                 originalSequence: sequence, property: property
             ) {
-                budget.recordMaterialization(accepted: true)
+                budget.recordMaterialization()
                 accept(result, structureChanged: structureChanged)
                 lastAccepted = true
                 anyAccepted = true
                 accepted += 1
             } else {
-                budget.recordMaterialization(accepted: false)
+                budget.recordMaterialization()
                 lastAccepted = false
                 rejectCache.insert(probeHash)
             }
@@ -286,7 +286,8 @@ extension ReductionState {
     func runBranchLeg(remaining: inout Int) throws -> Bool {
         let branchContext = DecoderContext(depth: .specific(0), bindIndex: bindIndex, fallbackTree: fallbackTree, strictness: .relaxed, useReductionMaterializer: config.useReductionMaterializer, materializePicks: true)
         let branchDecoder = SequenceDecoder.for(branchContext)
-        var branchBudget = ReductionScheduler.LegBudget(hardCap: remaining, stallPatience: remaining)
+        let target = cycleBudget.initialBudget(for: .branch)
+        var branchBudget = ReductionScheduler.LegBudget(hardCap: min(remaining, 2 * target))
         var improved = false
 
         // Re-materialize with picks so branch encoders see all non-selected alternatives.
@@ -315,7 +316,7 @@ extension ReductionState {
     /// Runs the contravariant sweep from max bind depth to 1. Returns the number of accepted probes.
     func runSnipLeg(remaining: inout Int, maxBindDepth: Int, dirtyDepths: Set<Int>) throws -> Int {
         let target = cycleBudget.initialBudget(for: .contravariant)
-        var legBudget = ReductionScheduler.LegBudget(hardCap: remaining, stallPatience: target)
+        var legBudget = ReductionScheduler.LegBudget(hardCap: min(remaining, 2 * target))
         spanCache.invalidate()
         lattice.invalidate()
         var accepted = 0
@@ -388,7 +389,7 @@ extension ReductionState {
     /// Runs the deletion sweep from depth 0 to max. Returns the number of accepted probes.
     func runPruneLeg(remaining: inout Int, maxBindDepth: Int) throws -> Int {
         let target = cycleBudget.initialBudget(for: .deletion)
-        var legBudget = ReductionScheduler.LegBudget(hardCap: remaining, stallPatience: target)
+        var legBudget = ReductionScheduler.LegBudget(hardCap: min(remaining, 2 * target))
         spanCache.invalidate()
         lattice.invalidate()
         var accepted = 0
@@ -427,7 +428,7 @@ extension ReductionState {
     /// Runs the covariant sweep at depth 0. Returns the number of accepted probes.
     func runTrainLeg(remaining: inout Int) throws -> Int {
         let target = cycleBudget.initialBudget(for: .covariant)
-        var legBudget = ReductionScheduler.LegBudget(hardCap: remaining, stallPatience: target)
+        var legBudget = ReductionScheduler.LegBudget(hardCap: min(remaining, 2 * target))
         spanCache.invalidate()
         lattice.invalidate()
         let structureChangedOnCovariant = hasBind
@@ -487,7 +488,7 @@ extension ReductionState {
     /// Runs redistribution encoders. Returns `true` if any redistribution was accepted.
     func runRedistributionLeg(remaining: inout Int) throws -> Bool {
         let target = cycleBudget.initialBudget(for: .redistribution)
-        var legBudget = ReductionScheduler.LegBudget(hardCap: remaining, stallPatience: target)
+        var legBudget = ReductionScheduler.LegBudget(hardCap: min(remaining, 2 * target))
         let redistContext = DecoderContext(depth: .global, bindIndex: bindIndex, fallbackTree: fallbackTree, strictness: .normal, useReductionMaterializer: config.useReductionMaterializer)
         let redistDecoder = SequenceDecoder.for(redistContext)
         var redistributionAccepted = false
@@ -514,13 +515,13 @@ extension ReductionState {
                         candidate: probe, gen: gen, tree: tree,
                         originalSequence: sequence, property: property
                     ) {
-                        legBudget.recordMaterialization(accepted: true)
+                        legBudget.recordMaterialization()
                         accept(result, structureChanged: true)
                         lastAccepted = true
                         redistributionAccepted = true
                         if isInstrumented { ExhaustLog.debug(category: .reducer, event: "redistribution_accepted", metadata: ["encoder": "bindAwareRedistribute"]) }
                     } else {
-                        legBudget.recordMaterialization(accepted: false)
+                        legBudget.recordMaterialization()
                         lastAccepted = false
                     }
                 }

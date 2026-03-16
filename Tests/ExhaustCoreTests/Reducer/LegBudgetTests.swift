@@ -5,66 +5,31 @@ import Testing
 struct LegBudgetTests {
     @Test("Fresh budget is not exhausted")
     func freshBudget() {
-        let budget = ReductionScheduler.LegBudget(hardCap: 10, stallPatience: 5)
+        let budget = ReductionScheduler.LegBudget(hardCap: 10)
         #expect(budget.isExhausted == false)
         #expect(budget.used == 0)
-        #expect(budget.consecutiveFruitless == 0)
     }
 
     @Test("Exhausts on hard cap")
     func hardCap() {
-        var budget = ReductionScheduler.LegBudget(hardCap: 3, stallPatience: 10)
-        budget.recordMaterialization(accepted: true)
-        budget.recordMaterialization(accepted: true)
+        var budget = ReductionScheduler.LegBudget(hardCap: 3)
+        budget.recordMaterialization()
+        budget.recordMaterialization()
         #expect(budget.isExhausted == false)
-        budget.recordMaterialization(accepted: true)
+        budget.recordMaterialization()
         #expect(budget.isExhausted)
         #expect(budget.used == 3)
     }
 
-    @Test("Exhausts on stall patience")
-    func stallPatience() {
-        var budget = ReductionScheduler.LegBudget(hardCap: 100, stallPatience: 3)
-        budget.recordMaterialization(accepted: false)
-        budget.recordMaterialization(accepted: false)
-        #expect(budget.isExhausted == false)
-        budget.recordMaterialization(accepted: false)
-        #expect(budget.isExhausted)
-        #expect(budget.consecutiveFruitless == 3)
-    }
-
-    @Test("Success resets consecutive fruitless counter")
-    func successResets() {
-        var budget = ReductionScheduler.LegBudget(hardCap: 100, stallPatience: 3)
-        budget.recordMaterialization(accepted: false)
-        budget.recordMaterialization(accepted: false)
-        #expect(budget.consecutiveFruitless == 2)
-        budget.recordMaterialization(accepted: true)
-        #expect(budget.consecutiveFruitless == 0)
-        #expect(budget.isExhausted == false)
-    }
-
-    @Test("Stall patience does not scale with hard cap")
-    func patienceIndependentOfCap() {
-        // Large hard cap, small patience — should stall after 2 fruitless, not after 100.
-        var budget = ReductionScheduler.LegBudget(hardCap: 100, stallPatience: 2)
-        budget.recordMaterialization(accepted: false)
-        budget.recordMaterialization(accepted: false)
-        #expect(budget.isExhausted)
-        #expect(budget.used == 2)
-    }
-
     @Test("Productive leg can spend up to hard cap")
     func productiveLegUsesFullCap() {
-        var budget = ReductionScheduler.LegBudget(hardCap: 5, stallPatience: 2)
-        // Alternate success/failure — never hits stall patience.
-        budget.recordMaterialization(accepted: true)
-        budget.recordMaterialization(accepted: false)
-        budget.recordMaterialization(accepted: true)
-        budget.recordMaterialization(accepted: false)
+        var budget = ReductionScheduler.LegBudget(hardCap: 5)
+        for _ in 0 ..< 4 {
+            budget.recordMaterialization()
+        }
         #expect(budget.isExhausted == false)
-        budget.recordMaterialization(accepted: true)
-        #expect(budget.isExhausted) // hard cap reached
+        budget.recordMaterialization()
+        #expect(budget.isExhausted)
         #expect(budget.used == 5)
     }
 }
