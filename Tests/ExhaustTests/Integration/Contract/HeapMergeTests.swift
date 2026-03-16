@@ -62,8 +62,8 @@ struct HeapAliasingTests {
                 commandLimit: 20,
                 .suppressIssueReporting,
                 .useBonsaiReducer,
-                .argumentAwareCoverage
-//                .replay(6_161_601_321_680_111_336)
+//                .argumentAwareCoverage
+                .replay(6_161_601_321_680_111_336)
             )
         )
 
