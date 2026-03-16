@@ -29,7 +29,7 @@ extension ReductionScheduler {
     /// Default per-cycle materialization budget.
     ///
     /// Sized to allow thorough reduction for typical generators. The per-leg weights distribute this across the V-cycle legs.
-    static let defaultCycleBudgetTotal = 300
+    static let defaultCycleBudgetTotal = 225
 
     // MARK: - Encoder Ordering
 
