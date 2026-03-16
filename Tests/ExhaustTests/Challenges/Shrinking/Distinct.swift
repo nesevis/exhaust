@@ -30,11 +30,12 @@ struct DistinctShrinkingChallenge {
             gen,
             .suppressIssueReporting,
             .useBonsaiReducer,
+            .humanOrderPostProcess,
             .replay(5_023_515_172_476_973_421)
         ) {
             Set($0).count < 3
         }
-        #expect(counterExample == [0, -1, 1])
+        #expect(counterExample == [-1, 0, 1])
     }
 
     @Test("Distinct, reflected counterexample")
@@ -45,10 +46,11 @@ struct DistinctShrinkingChallenge {
             gen,
             .suppressIssueReporting,
             .useBonsaiReducer,
+            .humanOrderPostProcess,
             .reflecting(value)
         ) {
             Set($0).count < 3
         }
-        #expect(counterExample == [0, -1, 1])
+        #expect(counterExample == [-1, 0, 1])
     }
 }

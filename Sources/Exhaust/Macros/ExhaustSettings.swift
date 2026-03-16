@@ -54,4 +54,10 @@ public enum ExhaustSettings<Output> {
     ///
     /// Produces better counterexamples than the legacy reducer for bind-dependent generators by exploiting the tree structure of the choice sequence.
     case useBonsaiReducer
+
+    /// Reorders elements within type-homogeneous sibling groups into natural numeric order
+    /// after test case reduction completes.
+    ///
+    /// Requires ``useBonsaiReducer``. Has no effect with the legacy reducer.
+    case humanOrderPostProcess
 }

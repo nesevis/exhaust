@@ -15,6 +15,10 @@ public extension Interpreters {
         /// fresh trees with current `validRange` and all branch alternatives.
         let useReductionMaterializer: Bool
 
+        /// When `true`, run a one-shot post-processing pass after V-cycle stalls that reorders
+        /// elements within type-homogeneous sibling groups into natural numeric order.
+        public var humanOrderPostProcess: Bool = false
+
         private init(
             maxStalls: Int,
             probeBudgets: TCRConfiguration.ProbeBudgets,

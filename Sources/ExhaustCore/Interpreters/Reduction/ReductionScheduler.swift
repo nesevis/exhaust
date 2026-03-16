@@ -157,6 +157,25 @@ enum ReductionScheduler {
             ExhaustLog.notice(category: .reducer, event: "vcycle_complete", metadata: ["cycles": "\(cycles)"])
         }
 
-        return (state.bestSequence, state.bestOutput)
+        var bestSequence = state.bestSequence
+        var bestOutput = state.bestOutput
+
+        if config.humanOrderPostProcess {
+            if let humanResult = Self.humanOrderPostProcess(
+                gen: gen,
+                sequence: bestSequence,
+                tree: state.tree,
+                useReductionMaterializer: config.useReductionMaterializer,
+                property: property
+            ) {
+                bestSequence = humanResult.sequence
+                bestOutput = humanResult.output
+                if isInstrumented {
+                    ExhaustLog.notice(category: .reducer, event: "human_order_accepted")
+                }
+            }
+        }
+
+        return (bestSequence, bestOutput)
     }
 }

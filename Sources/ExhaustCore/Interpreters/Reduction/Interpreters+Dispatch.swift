@@ -12,17 +12,20 @@ public extension Interpreters {
         tree: ChoiceTree,
         config: TCRConfiguration,
         useBonsai: Bool,
+        humanOrderPostProcess: Bool = false,
         property: (Output) -> Bool
     ) throws -> (ChoiceSequence, Output)? {
         if useBonsai {
-            try bonsaiReduce(
+            var bonsaiConfig = BonsaiReducerConfiguration(from: config)
+            bonsaiConfig.humanOrderPostProcess = humanOrderPostProcess
+            return try bonsaiReduce(
                 gen: gen,
                 tree: tree,
-                config: .init(from: config),
+                config: bonsaiConfig,
                 property: property
             )
         } else {
-            try reduce(gen: gen, tree: tree, config: config, property: property)
+            return try reduce(gen: gen, tree: tree, config: config, property: property)
         }
     }
 }

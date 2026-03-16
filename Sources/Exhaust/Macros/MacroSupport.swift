@@ -38,6 +38,7 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
         var reflectingValue: Output?
         var useRandomOnly = false
         var useBonsaiReducer = false
+        var humanOrderPostProcess = false
 
         for setting in settings {
             switch setting {
@@ -57,6 +58,8 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
                 useRandomOnly = true
             case .useBonsaiReducer:
                 useBonsaiReducer = true
+            case .humanOrderPostProcess:
+                humanOrderPostProcess = true
             }
         }
 
@@ -67,6 +70,7 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
                     value: reflectingValue,
                     reductionConfig: reductionConfig,
                     useBonsaiReducer: useBonsaiReducer,
+                    humanOrderPostProcess: humanOrderPostProcess,
                     suppressIssueReporting: suppressIssueReporting,
                     sourceCode: sourceCode,
                     fileID: fileID,
@@ -132,6 +136,7 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
                         tree: shrinkTree,
                         config: reductionConfig,
                         useBonsai: useBonsaiReducer,
+                        humanOrderPostProcess: humanOrderPostProcess,
                         property: countingProperty
                     ) {
                         var failure = PropertyTestFailure(
@@ -274,6 +279,7 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
                         tree: tree,
                         config: reductionConfig,
                         useBonsai: useBonsaiReducer,
+                        humanOrderPostProcess: humanOrderPostProcess,
                         property: countingProperty
                     ) {
                         let failure = PropertyTestFailure(
@@ -568,6 +574,7 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
         value: Output,
         reductionConfig: TCRBudget,
         useBonsaiReducer: Bool,
+        humanOrderPostProcess: Bool,
         suppressIssueReporting: Bool,
         sourceCode: String?,
         fileID: StaticString,
@@ -624,6 +631,7 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
             tree: tree,
             config: reductionConfig,
             useBonsai: useBonsaiReducer,
+            humanOrderPostProcess: humanOrderPostProcess,
             property: countingProperty
         ) {
             let failure = PropertyTestFailure(
