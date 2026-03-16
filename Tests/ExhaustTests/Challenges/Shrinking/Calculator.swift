@@ -31,8 +31,8 @@ struct CalculatorShrinkingChallenge {
         let result = #exhaust(
             gen,
             .suppressIssueReporting,
-            .useBonsaiReducer
-//            .replay(1_117_838_118_804_311_299)
+            .useBonsaiReducer,
+            .replay(1_117_838_118_804_311_299)
         ) { expr in
             guard Self.containsLiteralDivisionByZero(expr) == false else {
                 return true
