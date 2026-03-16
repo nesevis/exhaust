@@ -4,19 +4,19 @@ import Testing
 @testable import ExhaustMacros
 
 private let testMacros: [String: any Macro.Type] = [
-    "extract": ExtractMacro.self,
+    "example": ExampleMacro.self,
 ]
 
-@Suite("#extract macro expansion tests")
-struct ExtractMacroTests {
-    @Test("Basic single extract expands to __extract with nil seed")
+@Suite("#example macro expansion tests")
+struct ExampleMacroTests {
+    @Test("Basic single example expands to __example with nil seed")
     func basicSingle() {
         assertMacroExpansion(
             """
-            #extract(personGen)
+            #example(personGen)
             """,
             expandedSource: """
-            __ExhaustRuntime.__extract(
+            __ExhaustRuntime.__example(
                 personGen,
                 seed: nil
             )
@@ -25,14 +25,14 @@ struct ExtractMacroTests {
         )
     }
 
-    @Test("Single extract with seed passes seed through")
+    @Test("Single example with seed passes seed through")
     func singleWithSeed() {
         assertMacroExpansion(
             """
-            #extract(personGen, seed: 42)
+            #example(personGen, seed: 42)
             """,
             expandedSource: """
-            __ExhaustRuntime.__extract(
+            __ExhaustRuntime.__example(
                 personGen,
                 seed: 42
             )
@@ -41,14 +41,14 @@ struct ExtractMacroTests {
         )
     }
 
-    @Test("Array extract expands to __extractArray")
-    func arrayExtract() {
+    @Test("Array example expands to __exampleArray")
+    func arrayExample() {
         assertMacroExpansion(
             """
-            #extract(personGen, count: 10)
+            #example(personGen, count: 10)
             """,
             expandedSource: """
-            __ExhaustRuntime.__extractArray(
+            __ExhaustRuntime.__exampleArray(
                 personGen,
                 count: 10,
                 seed: nil
@@ -58,14 +58,14 @@ struct ExtractMacroTests {
         )
     }
 
-    @Test("Array extract with seed passes both count and seed")
-    func arrayExtractWithSeed() {
+    @Test("Array example with seed passes both count and seed")
+    func arrayExampleWithSeed() {
         assertMacroExpansion(
             """
-            #extract(personGen, count: 10, seed: 42)
+            #example(personGen, count: 10, seed: 42)
             """,
             expandedSource: """
-            __ExhaustRuntime.__extractArray(
+            __ExhaustRuntime.__exampleArray(
                 personGen,
                 count: 10,
                 seed: 42
@@ -79,14 +79,14 @@ struct ExtractMacroTests {
     func missingGenerator() {
         assertMacroExpansion(
             """
-            #extract()
+            #example()
             """,
             expandedSource: """
-            fatalError("#extract requires a generator argument")
+            fatalError("#example requires a generator argument")
             """,
             diagnostics: [
                 DiagnosticSpec(
-                    message: ExhaustMacroDiagnostic.extractMissingGenerator.rawValue,
+                    message: ExhaustMacroDiagnostic.exampleMissingGenerator.rawValue,
                     line: 1,
                     column: 1,
                     severity: .error
@@ -100,10 +100,10 @@ struct ExtractMacroTests {
     func generatorChainPreservation() {
         assertMacroExpansion(
             """
-            #extract(Gen.choose(in: 1...100).array(length: 3...5))
+            #example(Gen.choose(in: 1...100).array(length: 3...5))
             """,
             expandedSource: """
-            __ExhaustRuntime.__extract(
+            __ExhaustRuntime.__example(
                 Gen.choose(in: 1...100).array(length: 3...5),
                 seed: nil
             )

@@ -90,14 +90,14 @@ struct HypothesisFloatRangeAndSubnormalParityTests {
     @Test("Generated doubles stay in very large finite ranges")
     func doublesAreInRangeForLargeBounds() throws {
         // Adjustment relative to `test_floats_are_in_range`:
-        // uses sampled draws via `#extract` instead of Hypothesis `@given`.
+        // uses sampled draws via `#example` instead of Hypothesis `@given`.
         let ranges: [ClosedRange<Double>] = [
             9.9792015476736e291 ... Double.greatestFiniteMagnitude,
             -Double.greatestFiniteMagnitude ... Double.greatestFiniteMagnitude,
         ]
 
         for range in ranges {
-            let values = #extract(#gen(.double(in: range)), count: 256, seed: 42)
+            let values = #example(#gen(.double(in: range)), count: 256, seed: 42)
             #expect(values.allSatisfy { range.contains($0) })
         }
     }
@@ -107,7 +107,7 @@ struct HypothesisFloatRangeAndSubnormalParityTests {
         // Adjustment relative to `test_can_generate_both_zeros_when_in_interval`:
         // covers one canonical interval because Exhaust has no unconstrained float strategy
         // that includes NaN/Inf and Hypothesis-style assumptions.
-        let values = #extract(#gen(.double(in: -0.0 ... 0.0)), count: 128, seed: 42)
+        let values = #example(#gen(.double(in: -0.0 ... 0.0)), count: 128, seed: 42)
         #expect(values.contains(where: { $0 == 0.0 && $0.sign == .plus }))
         #expect(values.contains(where: { $0 == 0.0 && $0.sign == .minus }))
     }
@@ -115,14 +115,14 @@ struct HypothesisFloatRangeAndSubnormalParityTests {
     @Test("Does not generate negative values when lower bound is +0.0")
     func nonNegativeRangeDoesNotGenerateNegativeSigns() throws {
         // Direct parity with `test_does_not_generate_negative_if_right_boundary_is_positive`.
-        let values = #extract(#gen(.double(in: 0.0 ... 1.0)), count: 256, seed: 42)
+        let values = #example(#gen(.double(in: 0.0 ... 1.0)), count: 256, seed: 42)
         #expect(values.allSatisfy { $0.sign == .plus })
     }
 
     @Test("Does not generate positive values when upper bound is -0.0")
     func nonPositiveRangeDoesNotGeneratePositiveSigns() throws {
         // Direct parity with `test_does_not_generate_positive_if_right_boundary_is_negative`.
-        let values = #extract(#gen(.double(in: -1.0 ... -0.0)), count: 256, seed: 42)
+        let values = #example(#gen(.double(in: -1.0 ... -0.0)), count: 256, seed: 42)
         #expect(values.allSatisfy { $0.sign == .minus })
     }
 
@@ -136,7 +136,7 @@ struct HypothesisFloatRangeAndSubnormalParityTests {
         }
         #expect(lowerBound < upperBound)
 
-        let values = #extract(#gen(.double(in: lowerBound ... upperBound)), count: 256, seed: 42)
+        let values = #example(#gen(.double(in: lowerBound ... upperBound)), count: 256, seed: 42)
         #expect(values.allSatisfy { lowerBound <= $0 && $0 <= upperBound })
     }
 
@@ -148,10 +148,10 @@ struct HypothesisFloatRangeAndSubnormalParityTests {
         let largestSubnormal = smallestNormal.nextDown
         let smallestSubnormal = Double.leastNonzeroMagnitude
 
-        let positives = #extract(#gen(.double(in: smallestSubnormal ... largestSubnormal)), count: 256, seed: 42)
+        let positives = #example(#gen(.double(in: smallestSubnormal ... largestSubnormal)), count: 256, seed: 42)
         #expect(positives.allSatisfy { $0 > 0 && $0 < smallestNormal })
 
-        let negatives = #extract(#gen(.double(in: -largestSubnormal ... -smallestSubnormal)), count: 256, seed: 42)
+        let negatives = #example(#gen(.double(in: -largestSubnormal ... -smallestSubnormal)), count: 256, seed: 42)
         #expect(negatives.allSatisfy { $0 < 0 && $0 > -smallestNormal })
     }
 
@@ -163,10 +163,10 @@ struct HypothesisFloatRangeAndSubnormalParityTests {
         let largestSubnormal = smallestNormal.nextDown
         let smallestSubnormal = Float.leastNonzeroMagnitude
 
-        let positives = #extract(#gen(.float(in: smallestSubnormal ... largestSubnormal)), count: 256, seed: 42)
+        let positives = #example(#gen(.float(in: smallestSubnormal ... largestSubnormal)), count: 256, seed: 42)
         #expect(positives.allSatisfy { $0 > 0 && $0 < smallestNormal })
 
-        let negatives = #extract(#gen(.float(in: -largestSubnormal ... -smallestSubnormal)), count: 256, seed: 42)
+        let negatives = #example(#gen(.float(in: -largestSubnormal ... -smallestSubnormal)), count: 256, seed: 42)
         #expect(negatives.allSatisfy { $0 < 0 && $0 > -smallestNormal })
     }
 }

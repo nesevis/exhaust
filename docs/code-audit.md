@@ -23,7 +23,7 @@ Exhaust is a well-architected property-based testing framework built on a genuin
 ### What's good
 - Clean two-module split: `ExhaustCore` (engine) -> `Exhaust` (consumer-facing wrapper + macros)
 - `Reexports.swift` curates the public surface via typealiases
-- Macros (`#gen`, `#exhaust`, `#explore`, `#extract`) provide the primary entry points
+- Macros (`#gen`, `#exhaust`, `#explore`, `#example`) provide the primary entry points
 - `Gen` namespace is correctly positioned as internal plumbing (called by `Exhaust` module, not by consumers)
 - `ReflectiveGenerator` static methods + instance combinators provide a fluent, chainable API
 

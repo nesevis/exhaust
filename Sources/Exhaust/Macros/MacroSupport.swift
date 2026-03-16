@@ -509,22 +509,22 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
         }
     }
 
-    // MARK: - Extraction
+    // MARK: - Example
 
-    /// Generates a single value from a generator. Runtime target of `#extract` expansion.
-    public static func __extract<Output>(
+    /// Generates a single value from a generator. Runtime target of `#example` expansion.
+    public static func __example<Output>(
         _ gen: ReflectiveGenerator<Output>,
         seed: UInt64?
     ) -> Output {
         var interpreter = ValueInterpreter(gen, seed: seed, maxRuns: 1, sizeOverride: 50)
         guard let value = try? interpreter.next() else {
-            fatalError("#extract: generator produced no values")
+            fatalError("#example: generator produced no values")
         }
         return value
     }
 
-    /// Generates an array of values from a generator. Runtime target of `#extract` expansion.
-    public static func __extractArray<Output>(
+    /// Generates an array of values from a generator. Runtime target of `#example` expansion.
+    public static func __exampleArray<Output>(
         _ gen: ReflectiveGenerator<Output>,
         count: UInt64,
         seed: UInt64?

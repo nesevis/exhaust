@@ -96,7 +96,7 @@ struct LargeUnionListShrinkingChallenge {
 
     @Test("Large Union List, 50")
     func largeUnionListBatch() {
-        let lists = #extract(Self.gen, count: 100, seed: 1337)
+        let lists = #example(Self.gen, count: 100, seed: 1337)
             .filter { Self.property($0) == false }
 
         #expect(lists.count == 58)

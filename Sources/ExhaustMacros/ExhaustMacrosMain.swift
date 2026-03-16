@@ -6,7 +6,7 @@ struct ExhaustMacrosPlugin: CompilerPlugin {
     let providingMacros: [Macro.Type] = [
         GenerateMacro.self,
         ExhaustTestMacro.self,
-        ExtractMacro.self,
+        ExampleMacro.self,
         ExamineMacro.self,
         ExploreMacro.self,
         ExhaustContractMacro.self,

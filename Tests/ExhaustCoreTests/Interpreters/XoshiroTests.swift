@@ -18,7 +18,7 @@ func xoshiroAgainstReference() {
 
 @Test("Test seed stability", .disabled("Size scaling changed from logarithmic to linear"))
 func xoshiroSeedStability() throws {
-    // This test required #extract which is Exhaust-only. Using ValueInterpreter instead.
+    // This test required #example which is Exhaust-only. Using ValueInterpreter instead.
     let gen = Gen.choose(in: Int64.min ... Int64.max, scaling: Int64.defaultScaling)
     var iter = ValueInterpreter(gen, seed: 0, maxRuns: 10)
     var digits: [Int64] = []

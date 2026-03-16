@@ -53,7 +53,7 @@ struct AdvancedFeatureTests {
             }
 
             let gen = treeGen(depth: 3)
-            let trees = #extract(gen, count: 10, seed: 42)
+            let trees = #example(gen, count: 10, seed: 42)
 
             /// Validate tree structure
             func validateDepth(_ tree: TestTree<Int>, maxDepth: Int) -> Bool {

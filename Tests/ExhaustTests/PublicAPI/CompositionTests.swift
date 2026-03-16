@@ -40,7 +40,7 @@ struct CompositionTests {
         @Test("Array generator creates arrays of specified size")
         func arrayOfFixedLength() throws {
             let arrayGen = #gen(.int(in: 1 ... 100)).array(length: 5)
-            let arrays = #extract(arrayGen, count: 20, seed: 42)
+            let arrays = #example(arrayGen, count: 20, seed: 42)
 
             for array in arrays {
                 #expect(array.count == 5)
@@ -53,7 +53,7 @@ struct CompositionTests {
         @Test("Arbitrary .array(length:) creates arrays")
         func arbitraryArray() throws {
             let gen = #gen(.int()).array(length: 3 ... 7)
-            let arrays = #extract(gen, count: 20, seed: 42)
+            let arrays = #example(gen, count: 20, seed: 42)
 
             for array in arrays {
                 #expect(3 ... 7 ~= array.count)
@@ -66,7 +66,7 @@ struct CompositionTests {
                 .array(length: 2 ... 4) // Inner arrays of 2-4 strings
                 .array(length: 2 ... 3) // Outer array of 2-3 inner arrays
 
-            let nestedArrays = #extract(gen, count: 10, seed: 42)
+            let nestedArrays = #example(gen, count: 10, seed: 42)
 
             for nestedArray in nestedArrays {
                 #expect(2 ... 3 ~= nestedArray.count)
@@ -102,7 +102,7 @@ struct CompositionTests {
             let intAsStringGen = #gen(.int(in: 1 ... 10)).map { "\($0)" }
 
             let choiceGen = #gen(.oneOf(weighted: (1, intAsStringGen), (1, .string())))
-            let results = #extract(choiceGen, count: 100, seed: 42)
+            let results = #example(choiceGen, count: 100, seed: 42)
 
             let sawNumeric = results.contains { Int($0) != nil }
             let sawNonNumeric = results.contains { Int($0) == nil }
@@ -113,7 +113,7 @@ struct CompositionTests {
         @Test("oneOf with weighted choices")
         func oneOfWeighted() throws {
             let gen = #gen(.oneOf(weighted: (9, .just("common")), (1, .just("rare"))))
-            let results = #extract(gen, count: 1000, seed: 42)
+            let results = #example(gen, count: 1000, seed: 42)
 
             let commonCount = results.count(where: { $0 == "common" })
             let rareCount = results.count(where: { $0 == "rare" })
@@ -161,7 +161,7 @@ struct CompositionTests {
                     backward: { (arr: [Int]) in arr.count }
                 )
 
-            let values = #extract(gen, count: 20, seed: 42)
+            let values = #example(gen, count: 20, seed: 42)
             for value in values {
                 #expect((1 ... 5).contains(value.count))
                 #expect(value.allSatisfy { $0 == 0 })
@@ -188,7 +188,7 @@ struct CompositionTests {
             )
 
             // Forward generation should work
-            let values = #extract(gen, count: 20, seed: 42)
+            let values = #example(gen, count: 20, seed: 42)
             for value in values {
                 #expect(value >= 0)
             }

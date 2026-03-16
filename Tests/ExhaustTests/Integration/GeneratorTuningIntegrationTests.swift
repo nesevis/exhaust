@@ -20,7 +20,7 @@ struct GeneratorTuningIntegrationTests {
             (1, .int(in: 1 ... 100)),
             (1, .int(in: 901 ... 1000)))).filter(.probeSampling) { $0 <= 100 }
 
-        let values = #extract(gen, count: 200, seed: 123)
+        let values = #example(gen, count: 200, seed: 123)
 
         #expect(values.allSatisfy { $0 <= 100 })
         #expect(values.count == 200, "All runs should succeed with tuning")
@@ -34,11 +34,11 @@ struct GeneratorTuningIntegrationTests {
         let predicate: @Sendable (Int) -> Bool = { $0 <= 250 }
 
         // Raw generator: only ~25% of output satisfies the predicate
-        let rawValues = #extract(gen, count: 200, seed: 99)
+        let rawValues = #example(gen, count: 200, seed: 99)
         let rawValidCount = rawValues.count(where: predicate)
 
         // Tuned filter: all output satisfies the predicate
-        let tunedValues = #extract(gen.filter(.probeSampling, predicate), count: 200, seed: 99)
+        let tunedValues = #example(gen.filter(.probeSampling, predicate), count: 200, seed: 99)
 
         #expect(tunedValues.allSatisfy(predicate))
         #expect(tunedValues.count > rawValidCount,
@@ -52,7 +52,7 @@ struct GeneratorTuningIntegrationTests {
         let gen = #gen(.uint64(in: 1 ... 1000))
             .filter(.probeSampling) { $0 < 100 }
 
-        let values = #extract(gen, count: 200, seed: 123)
+        let values = #example(gen, count: 200, seed: 123)
 
         #expect(values.allSatisfy { $0 < 100 })
         #expect(values.count == 200, "All runs should succeed with tuning")
@@ -73,7 +73,7 @@ struct GeneratorTuningIntegrationTests {
         let filtered = gen.filter(.probeSampling) { $0 <= 5 }
 
         // This should complete in reasonable time without blowup
-        let values = #extract(filtered, count: 20, seed: 123)
+        let values = #example(filtered, count: 20, seed: 123)
         #expect(values.isEmpty == false, "Deeply nested tuned generator should still produce values")
         #expect(values.allSatisfy { $0 <= 5 })
     }
@@ -89,12 +89,12 @@ struct GeneratorTuningIntegrationTests {
         let sampleCount: UInt64 = 500
 
         // Raw generation: only a fraction of output satisfies the predicate
-        let rawValues = #extract(BST.arbitrary(), count: sampleCount, seed: 42)
+        let rawValues = #example(BST.arbitrary(), count: sampleCount, seed: 42)
         let rawValidCount = rawValues.count(where: isValidNonLeafBST)
 
         // Tuned filter: all output satisfies the predicate
         let tunedGen = BST.arbitrary().filter(.probeSampling, isValidNonLeafBST)
-        let tunedValues = #extract(tunedGen, count: sampleCount, seed: 42)
+        let tunedValues = #example(tunedGen, count: sampleCount, seed: 42)
 
         #expect(tunedValues.allSatisfy(isValidNonLeafBST))
         #expect(tunedValues.count > rawValidCount,
@@ -108,14 +108,14 @@ struct GeneratorTuningIntegrationTests {
 
         // --- .rejectionSampling strategy ---
         let rejectGen = BST.arbitrary().filter(.rejectionSampling, isValidBST)
-        let rejectValues = #extract(rejectGen, count: 10000, seed: 42)
+        let rejectValues = #example(rejectGen, count: 10000, seed: 42)
         let rejectUnique = Set(rejectValues)
         print("=== \(duration)-second BST benchmark ===")
         print(".rejectionSampling: \(rejectValues.count) valid (\(rejectUnique.count) unique)")
 
         // --- .probeSampling strategy ---
         let tuneGen = BST.arbitrary().filter(.probeSampling, isValidBST)
-        let tuneValues = #extract(tuneGen, count: 10000, seed: 42)
+        let tuneValues = #example(tuneGen, count: 10000, seed: 42)
         let tuneUnique = Set(tuneValues)
         print(".probeSampling: \(tuneValues.count) valid (\(tuneUnique.count) unique)")
     }
@@ -127,7 +127,7 @@ struct GeneratorTuningIntegrationTests {
         }
 
         let tunedGen = BST.arbitrary().filter(.probeSampling, isValidNonLeafBST)
-        let values = #extract(tunedGen, count: 500, seed: 99)
+        let values = #example(tunedGen, count: 500, seed: 99)
 
         #expect(values.allSatisfy(isValidNonLeafBST))
         #expect(values.isEmpty == false, "Should produce valid non-leaf BSTs")

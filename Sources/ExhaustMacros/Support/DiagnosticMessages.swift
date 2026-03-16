@@ -13,7 +13,7 @@ enum ExhaustMacroDiagnostic: String, DiagnosticMessage {
     case exploreMissingProperty = "#explore requires a property (trailing closure or 'property:' argument)"
     case exploreMissingGenerator = "#explore requires a generator as its first argument"
     case exploreMissingScorer = "#explore requires a 'scorer:' argument"
-    case extractMissingGenerator = "#extract requires a generator as its first argument"
+    case exampleMissingGenerator = "#example requires a generator as its first argument"
     case examineMissingGenerator = "#examine requires a generator as its first argument"
     case exploreUnderDevelopment = "#explore is under active development and its API may change without notice"
     case exhaustContractMissingSpec = "#exhaust requires a spec type argument"
@@ -42,7 +42,7 @@ enum ExhaustMacroDiagnostic: String, DiagnosticMessage {
              .exploreMissingProperty,
              .exploreMissingGenerator,
              .exploreMissingScorer,
-             .extractMissingGenerator,
+             .exampleMissingGenerator,
              .examineMissingGenerator,
              .exhaustContractMissingSpec:
             .error

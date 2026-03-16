@@ -27,12 +27,12 @@ struct CalculatorShrinkingChallenge {
     @Test("Calculator, Full")
     func calculatorFull() throws {
         let gen = #gen(Self.expression(depth: 4))
-        ExhaustLog.setConfiguration(.init(isEnabled: true, minimumLevel: .info, categoryMinimumLevels: [.reducer: .debug], format: .human))
+//        ExhaustLog.setConfiguration(.init(isEnabled: true, minimumLevel: .info, categoryMinimumLevels: [.reducer: .debug], format: .human))
         let result = #exhaust(
             gen,
             .suppressIssueReporting,
-            .useBonsaiReducer,
-            .replay(1_117_838_118_804_311_299)
+            .useBonsaiReducer
+//            .replay(1_117_838_118_804_311_299)
         ) { expr in
             guard Self.containsLiteralDivisionByZero(expr) == false else {
                 return true

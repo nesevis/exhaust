@@ -16,7 +16,7 @@ struct DecimalGeneratorTests {
             let lower = Decimal(string: "10.00")!
             let upper = Decimal(string: "99.99")!
             let gen = #gen(.decimal(in: lower ... upper, precision: 2))
-            let values = #extract(gen, count: 50, seed: 42)
+            let values = #example(gen, count: 50, seed: 42)
 
             for value in values {
                 #expect(value >= lower)
@@ -27,7 +27,7 @@ struct DecimalGeneratorTests {
         @Test("Generated values have correct precision")
         func correctPrecision() throws {
             let gen = #gen(.decimal(in: Decimal(0) ... Decimal(100), precision: 3))
-            let values = #extract(gen, count: 50, seed: 42)
+            let values = #example(gen, count: 50, seed: 42)
 
             for value in values {
                 // Multiplying by 10^3 should yield an integer
@@ -40,7 +40,7 @@ struct DecimalGeneratorTests {
         @Test("Precision 0 produces integer Decimals")
         func integerDecimals() throws {
             let gen = #gen(.decimal(in: Decimal(-50) ... Decimal(50), precision: 0))
-            let values = #extract(gen, count: 50, seed: 42)
+            let values = #example(gen, count: 50, seed: 42)
 
             for value in values {
                 let asInt = Int64(truncating: value as NSDecimalNumber)
@@ -52,8 +52,8 @@ struct DecimalGeneratorTests {
         func deterministic() throws {
             let gen = #gen(.decimal(in: Decimal(0) ... Decimal(1000), precision: 2))
 
-            let values1 = #extract(gen, count: 20, seed: 99)
-            let values2 = #extract(gen, count: 20, seed: 99)
+            let values1 = #example(gen, count: 20, seed: 99)
+            let values2 = #example(gen, count: 20, seed: 99)
             #expect(values1 == values2)
         }
     }
@@ -65,7 +65,7 @@ struct DecimalGeneratorTests {
             let lower = Decimal(string: "-100.50")!
             let upper = Decimal(string: "-0.25")!
             let gen = #gen(.decimal(in: lower ... upper, precision: 2))
-            let values = #extract(gen, count: 30, seed: 42)
+            let values = #example(gen, count: 30, seed: 42)
 
             for value in values {
                 #expect(value >= lower)
@@ -77,7 +77,7 @@ struct DecimalGeneratorTests {
         func singleValueRange() throws {
             let value = Decimal(string: "3.14")!
             let gen = #gen(.decimal(in: value ... value, precision: 2))
-            let values = #extract(gen, count: 5, seed: 42)
+            let values = #example(gen, count: 5, seed: 42)
 
             for generated in values {
                 #expect(generated == value)
@@ -89,7 +89,7 @@ struct DecimalGeneratorTests {
             let lower = Decimal(string: "-10.5")!
             let upper = Decimal(string: "10.5")!
             let gen = #gen(.decimal(in: lower ... upper, precision: 1))
-            let values = #extract(gen, count: 50, seed: 42)
+            let values = #example(gen, count: 50, seed: 42)
 
             for value in values {
                 #expect(value >= lower)

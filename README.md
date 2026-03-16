@@ -55,27 +55,18 @@ Exhaust found a five-element counterexample and reduced it to two elements — t
 ## Table of Contents
 
 - [Installation](#installation)
+- [Macros at a Glance](#macros-at-a-glance)
 - [Building Generators](#building-generators)
 - [Composing Generators](#composing-generators)
 - [Recursive Generators](#recursive-generators)
 - [Running Properties](#running-properties)
 - [Reflecting and Reducing Known Values](#reflecting-and-reducing-known-values)
-- [Quick Extraction](#quick-extraction)
+- [Quick Examples](#quick-examples)
 - [Filters and Classification](#filters-and-classification)
 - [Validating Generators](#validating-generators)
 - [Contract Testing](#contract-testing)
 - [How It Works](#how-it-works)
 - [Requirements](#requirements)
-
-### Macros at a Glance
-
-| Macro | Purpose |
-|---|---|
-| `#gen(...)` | Build a generator from primitives, with automatic bidirectional mapping |
-| `#exhaust(gen) { ... }` | Test a property and report a minimal counterexample on failure |
-| `#exhaust(Spec.self, ...)` | Run a contract test against a stateful system |
-| `#extract(gen)` | Generate values outside of tests — for prototyping and snapshots |
-| `#examine(gen)` | Validate that a generator round-trips correctly through reflection and replay |
 
 ## Installation
 
@@ -95,6 +86,16 @@ Then add it as a dependency of your test target:
     dependencies: ["Exhaust"]
 )
 ```
+
+### Macros at a Glance
+
+| Macro | Purpose |
+|---|---|
+| `#gen(...)` | Build a generator from primitives, with automatic bidirectional mapping |
+| `#exhaust(gen) { ... }` | Test a property and report a minimal counterexample on failure |
+| `#exhaust(Spec.self, ...)` | Run a contract test against a stateful system |
+| `#example(gen)` | Generate values outside of tests — for prototyping and snapshots |
+| `#examine(gen)` | Validate that a generator round-trips correctly through reflection and replay |
 
 ## Building Generators
 
@@ -218,19 +219,19 @@ The `#gen` macro uses `mapped` automatically when it can synthesize a backward m
 |---|---|---|
 | `#exhaust` (generation + reduction) | Yes | Yes |
 | `#exhaust(..., .reflecting(value))` | Yes | No |
-| `#extract` | Yes | Yes |
+| `#example` | Yes | Yes |
 | `#examine` (round-trip validation) | Yes | No |
 | Structured coverage | Yes | Yes |
 
 Generators built entirely from `#gen` primitives and `mapped`/`bound` are fully reflectable. Adding a `.map` or `.bind` makes the generator forward-only at that point — generation and reduction still work, but reflection from a concrete value cannot pass backward through the forward-only closure.
 
-## Quick Extraction
+## Quick Examples
 
-Use `#extract` to generate values outside of property tests — useful for prototyping and snapshot tests:
+Use `#example` to generate values outside of property tests — useful for prototyping and snapshot tests:
 
 ```swift
-let person = #extract(personGen)
-let people = #extract(personGen, count: 100, seed: 42)
+let person = #example(personGen)
+let people = #example(personGen, count: 100, seed: 42)
 ```
 
 ## Filters and Classification

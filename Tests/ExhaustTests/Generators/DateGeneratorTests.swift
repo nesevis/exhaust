@@ -23,7 +23,7 @@ struct DateGeneratorTests {
             let lower = DateGeneratorTests.epoch
             let upper = lower.addingTimeInterval(86400 * 30) // 30 days
             let gen = #gen(.date(between: lower ... upper, interval: .days(1)))
-            let dates = #extract(gen, count: 20, seed: 42)
+            let dates = #example(gen, count: 20, seed: 42)
 
             for date in dates {
                 #expect(date >= lower)
@@ -36,7 +36,7 @@ struct DateGeneratorTests {
             let lower = DateGeneratorTests.epoch
             let upper = lower.addingTimeInterval(86400 * 7) // 7 days
             let gen = #gen(.date(between: lower ... upper, interval: .hours(1)))
-            let dates = #extract(gen, count: 20, seed: 42)
+            let dates = #example(gen, count: 20, seed: 42)
 
             for date in dates {
                 let offset = date.timeIntervalSinceReferenceDate - lower.timeIntervalSinceReferenceDate
@@ -49,7 +49,7 @@ struct DateGeneratorTests {
             let lower = DateGeneratorTests.epoch
             let upper = lower.addingTimeInterval(3600) // 1 hour
             let gen = #gen(.date(between: lower ... upper, interval: .seconds(1)))
-            let date = #extract(gen, seed: 42)
+            let date = #example(gen, seed: 42)
 
             let ti = date.timeIntervalSinceReferenceDate
             #expect(ti == ti.rounded(.down))
@@ -61,8 +61,8 @@ struct DateGeneratorTests {
             let upper = lower.addingTimeInterval(86400 * 365)
             let gen = #gen(.date(between: lower ... upper, interval: .days(1)))
 
-            let dates1 = #extract(gen, count: 10, seed: 99)
-            let dates2 = #extract(gen, count: 10, seed: 99)
+            let dates1 = #example(gen, count: 10, seed: 99)
+            let dates2 = #example(gen, count: 10, seed: 99)
             #expect(dates1 == dates2)
         }
 
@@ -71,7 +71,7 @@ struct DateGeneratorTests {
             let lower = DateGeneratorTests.jan1_2025
             let upper = lower.addingTimeInterval(86400 * 365) // ~1 year
             let gen = #gen(.date(between: lower ... upper, interval: .weeks(1)))
-            let date = #extract(gen, seed: 7)
+            let date = #example(gen, seed: 7)
 
             let offset = date.timeIntervalSince(lower)
             #expect(offset.truncatingRemainder(dividingBy: 604_800) == 0)
@@ -86,7 +86,7 @@ struct DateGeneratorTests {
         func fixedSpan() throws {
             let anchor = DateGeneratorTests.jan1_2025
             let gen = #gen(.date(within: .days(30), of: anchor, interval: .hours(1)))
-            let dates = #extract(gen, count: 20, seed: 42)
+            let dates = #example(gen, count: 20, seed: 42)
 
             let expectedLower = anchor.addingTimeInterval(-86400 * 30)
             let expectedUpper = anchor.addingTimeInterval(86400 * 30)
@@ -101,7 +101,7 @@ struct DateGeneratorTests {
         func monthSpan() throws {
             let anchor = DateGeneratorTests.jan1_2025
             let gen = #gen(.date(within: .months(6), of: anchor, interval: .days(1)))
-            let dates = #extract(gen, count: 20, seed: 42)
+            let dates = #example(gen, count: 20, seed: 42)
 
             let offsetSeconds: TimeInterval = 6 * 2_592_000 // 6 * 30 days
             let expectedLower = anchor.addingTimeInterval(-offsetSeconds)
@@ -117,7 +117,7 @@ struct DateGeneratorTests {
         func yearSpan() throws {
             let anchor = DateGeneratorTests.jan1_2025
             let gen = #gen(.date(within: .years(1), of: anchor, interval: .days(1)))
-            let dates = #extract(gen, count: 20, seed: 42)
+            let dates = #example(gen, count: 20, seed: 42)
 
             let offsetSeconds: TimeInterval = 31_536_000 // 365 days
             let expectedLower = anchor.addingTimeInterval(-offsetSeconds)
@@ -138,7 +138,7 @@ struct DateGeneratorTests {
         func asymmetricSpan() throws {
             let anchor = DateGeneratorTests.jan1_2025
             let gen = #gen(.date(within: .days(-7) ... .days(30), of: anchor, interval: .hours(1)))
-            let dates = #extract(gen, count: 20, seed: 42)
+            let dates = #example(gen, count: 20, seed: 42)
 
             let expectedLower = anchor.addingTimeInterval(-86400 * 7)
             let expectedUpper = anchor.addingTimeInterval(86400 * 30)
@@ -153,7 +153,7 @@ struct DateGeneratorTests {
         func pastOnlyRange() throws {
             let anchor = DateGeneratorTests.jan1_2025
             let gen = #gen(.date(within: .days(-30) ... .days(-1), of: anchor, interval: .hours(1)))
-            let dates = #extract(gen, count: 20, seed: 42)
+            let dates = #example(gen, count: 20, seed: 42)
 
             let expectedLower = anchor.addingTimeInterval(-86400 * 30)
             let expectedUpper = anchor.addingTimeInterval(-86400)
@@ -168,7 +168,7 @@ struct DateGeneratorTests {
         func mixedUnits() throws {
             let anchor = DateGeneratorTests.jan1_2025
             let gen = #gen(.date(within: .hours(-12) ... .weeks(2), of: anchor, interval: .minutes(30)))
-            let dates = #extract(gen, count: 20, seed: 42)
+            let dates = #example(gen, count: 20, seed: 42)
 
             let expectedLower = anchor.addingTimeInterval(-12 * 3600)
             let expectedUpper = anchor.addingTimeInterval(2 * 604_800)
@@ -183,7 +183,7 @@ struct DateGeneratorTests {
         func quantized() throws {
             let anchor = DateGeneratorTests.epoch
             let gen = #gen(.date(within: .days(-10) ... .days(10), of: anchor, interval: .hours(6)))
-            let dates = #extract(gen, count: 20, seed: 42)
+            let dates = #example(gen, count: 20, seed: 42)
 
             let lowerSeconds = anchor.addingTimeInterval(-86400 * 10).timeIntervalSinceReferenceDate
 
