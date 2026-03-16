@@ -82,8 +82,8 @@ extension ReductionState {
         tree = result.tree
         output = result.output
         fallbackTree = result.tree
-        spanCache.invalidate()
         if structureChanged {
+            spanCache.invalidate()
             bindIndex = hasBind ? BindSpanIndex(from: sequence) : nil
             if config.useReductionMaterializer == false {
                 let seed = ZobristHash.hash(of: sequence)
@@ -299,6 +299,7 @@ extension ReductionState {
         if maxBindDepth >= 1 {
             for depth in stride(from: maxBindDepth, through: 1, by: -1) where dirtyDepths.contains(depth) {
                 guard legBudget.isExhausted == false else { break }
+                lattice.invalidate()
                 var depthProgress = true
                 while depthProgress, legBudget.isExhausted == false {
                     depthProgress = false
@@ -370,6 +371,7 @@ extension ReductionState {
 
         for depth in 0 ... maxBindDepth {
             guard legBudget.isExhausted == false else { break }
+            lattice.invalidate()
             let depthDecoder = makeDeletionDecoder(at: depth)
 
             for slot in pruneOrder {
