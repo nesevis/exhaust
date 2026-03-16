@@ -48,7 +48,8 @@ public enum ReductionMaterializer {
         _ gen: ReflectiveGenerator<Output>,
         prefix: consuming ChoiceSequence,
         mode: Mode,
-        fallbackTree: ChoiceTree? = nil
+        fallbackTree: ChoiceTree? = nil,
+        materializePicks: Bool = true
     ) -> Result<Output> {
         let seed: UInt64
         let resolvedFallbackTree: ChoiceTree?
@@ -75,7 +76,8 @@ public enum ReductionMaterializer {
             // Size 1 (scaledSize(forRun: 0)) would produce tiny ranges that reject
             // or clamp valid values from larger-size generations.
             size: 100,
-            maximizeBoundRegionIndices: maximizeBoundRegionIndices
+            maximizeBoundRegionIndices: maximizeBoundRegionIndices,
+            materializePicks: materializePicks
         )
 
         do {
@@ -125,38 +127,16 @@ private extension ReductionMaterializer.Mode {
 // MARK: - Recursive Engine
 
 private extension ReductionMaterializer {
-    /// Describes the callee tree shape produced by an operation, used by ``decomposeFallback`` to distinguish a data group (for example zip's children) from a continuation-wrapped tree.
-    enum CalleeTreeKind {
-        /// Operations whose callee tree is never a `.group`.
-        case nonGroup
-        /// Zip: callee tree is `.group(children)` with a known child count.
-        case group(childCount: Int)
-        /// Contramap / map: tree-transparent — no callee tree node of their own.
-        case transparent
-    }
-
-    /// Split a fallback tree into the callee portion and continuation portion.
-    static func decomposeFallback(
-        _ tree: ChoiceTree?,
-        calleeKind: CalleeTreeKind
+    /// Split a fallback tree into callee and continuation portions for non-group operations.
+    @inline(__always)
+    static func decomposeNonGroupFallback(
+        _ tree: ChoiceTree?
     ) -> (callee: ChoiceTree?, continuation: ChoiceTree?) {
         guard let tree else { return (nil, nil) }
-        switch calleeKind {
-        case .transparent:
-            return (tree, nil)
-        case .nonGroup:
-            if case let .group(children, _) = tree, children.count == 2 {
-                return (children[0], children[1])
-            }
-            return (tree, nil)
-        case let .group(childCount):
-            if case let .group(children, _) = tree, children.count == 2,
-               case let .group(inner, _) = children[0], inner.count == childCount
-            {
-                return (children[0], children[1])
-            }
-            return (tree, nil)
+        if case let .group(children, _) = tree, children.count == 2 {
+            return (children[0], children[1])
         }
+        return (tree, nil)
     }
 
     static func generateRecursive<Output>(
@@ -170,30 +150,17 @@ private extension ReductionMaterializer {
             return (value, .emptyJust)
 
         case let .impure(operation, continuation):
-            let calleeKind: CalleeTreeKind = switch operation {
-            case .contramap:
-                .transparent
-            case let .transform(kind, _):
-                switch kind {
-                case .map: .transparent
-                case .bind: .nonGroup
-                }
-            case let .zip(generators, _):
-                .group(childCount: generators.count)
-            default:
-                .nonGroup
-            }
-            let (calleeFallback, continuationFallback) = decomposeFallback(fallbackTree, calleeKind: calleeKind)
-
             switch operation {
             case let .contramap(_, nextGen):
+                // Transparent: no callee tree node — fallback passes through.
                 return try handleContramap(
                     nextGen, continuation: continuation, inputValue: inputValue,
-                    context: &context, calleeFallback: calleeFallback,
-                    continuationFallback: continuationFallback
+                    context: &context, calleeFallback: fallbackTree,
+                    continuationFallback: nil
                 )
 
             case let .prune(nextGen):
+                let (calleeFallback, continuationFallback) = decomposeNonGroupFallback(fallbackTree)
                 return try handlePrune(
                     nextGen, continuation: continuation, inputValue: inputValue,
                     context: &context, calleeFallback: calleeFallback,
@@ -201,6 +168,7 @@ private extension ReductionMaterializer {
                 )
 
             case let .pick(choices):
+                let (calleeFallback, continuationFallback) = decomposeNonGroupFallback(fallbackTree)
                 return try handlePick(
                     choices, continuation: continuation, inputValue: inputValue,
                     context: &context, calleeFallback: calleeFallback,
@@ -208,6 +176,7 @@ private extension ReductionMaterializer {
                 )
 
             case let .chooseBits(min, max, tag, isRangeExplicit):
+                let (calleeFallback, continuationFallback) = decomposeNonGroupFallback(fallbackTree)
                 return try handleChooseBits(
                     min: min, max: max, tag: tag, isRangeExplicit: isRangeExplicit,
                     continuation: continuation, inputValue: inputValue,
@@ -216,6 +185,7 @@ private extension ReductionMaterializer {
                 )
 
             case let .sequence(lengthGen, elementGen):
+                let (calleeFallback, continuationFallback) = decomposeNonGroupFallback(fallbackTree)
                 return try handleSequence(
                     lengthGen: lengthGen, elementGen: elementGen,
                     continuation: continuation, inputValue: inputValue,
@@ -224,6 +194,16 @@ private extension ReductionMaterializer {
                 )
 
             case let .zip(generators, _):
+                // Zip: callee is a group with known child count.
+                let (calleeFallback, continuationFallback): (ChoiceTree?, ChoiceTree?)
+                if let fallbackTree,
+                   case let .group(children, _) = fallbackTree, children.count == 2,
+                   case let .group(inner, _) = children[0], inner.count == generators.count
+                {
+                    (calleeFallback, continuationFallback) = (children[0], children[1])
+                } else {
+                    (calleeFallback, continuationFallback) = (fallbackTree, nil)
+                }
                 return try handleZip(
                     generators, continuation: continuation, inputValue: inputValue,
                     context: &context, calleeFallback: calleeFallback,
@@ -231,6 +211,7 @@ private extension ReductionMaterializer {
                 )
 
             case let .just(value):
+                let (_, continuationFallback) = decomposeNonGroupFallback(fallbackTree)
                 return try runContinuation(
                     result: value, calleeChoiceTree: .just("\(value)"),
                     continuation: continuation, inputValue: inputValue,
@@ -244,6 +225,7 @@ private extension ReductionMaterializer {
                 // fallback tree's `.getSize` is unreliable — reflected trees may
                 // store a small size that produces tiny ranges, destroying values
                 // via clamping.
+                let (_, continuationFallback) = decomposeNonGroupFallback(fallbackTree)
                 let size = context.sizeOverride ?? context.size
                 context.sizeOverride = nil
                 return try runContinuation(
@@ -253,6 +235,7 @@ private extension ReductionMaterializer {
                 )
 
             case let .resize(newSize, gen):
+                let (calleeFallback, continuationFallback) = decomposeNonGroupFallback(fallbackTree)
                 return try handleResize(
                     newSize: newSize, gen: gen,
                     continuation: continuation, inputValue: inputValue,
@@ -261,6 +244,7 @@ private extension ReductionMaterializer {
                 )
 
             case let .filter(gen, _, _, predicate):
+                let (calleeFallback, continuationFallback) = decomposeNonGroupFallback(fallbackTree)
                 guard let (result, tree) = try generateRecursive(
                     gen, with: inputValue, context: &context, fallbackTree: calleeFallback
                 ) else { return nil }
@@ -272,6 +256,7 @@ private extension ReductionMaterializer {
                 )
 
             case let .classify(gen, _, _):
+                let (calleeFallback, continuationFallback) = decomposeNonGroupFallback(fallbackTree)
                 guard let (result, tree) = try generateRecursive(
                     gen, with: inputValue, context: &context, fallbackTree: calleeFallback
                 ) else { return nil }
@@ -282,6 +267,7 @@ private extension ReductionMaterializer {
                 )
 
             case let .unique(gen, _, _):
+                let (calleeFallback, continuationFallback) = decomposeNonGroupFallback(fallbackTree)
                 guard let (result, tree) = try generateRecursive(
                     gen, with: inputValue, context: &context, fallbackTree: calleeFallback
                 ) else { return nil }
@@ -292,12 +278,24 @@ private extension ReductionMaterializer {
                 )
 
             case let .transform(kind, inner):
-                return try handleTransform(
-                    kind: kind, inner: inner,
-                    continuation: continuation, inputValue: inputValue,
-                    context: &context, calleeFallback: calleeFallback,
-                    continuationFallback: continuationFallback
-                )
+                switch kind {
+                case .map:
+                    // Transparent: no callee tree node — fallback passes through.
+                    return try handleTransform(
+                        kind: kind, inner: inner,
+                        continuation: continuation, inputValue: inputValue,
+                        context: &context, calleeFallback: fallbackTree,
+                        continuationFallback: nil
+                    )
+                case .bind:
+                    let (calleeFallback, continuationFallback) = decomposeNonGroupFallback(fallbackTree)
+                    return try handleTransform(
+                        kind: kind, inner: inner,
+                        continuation: continuation, inputValue: inputValue,
+                        context: &context, calleeFallback: calleeFallback,
+                        continuationFallback: continuationFallback
+                    )
+                }
             }
         }
     }
@@ -391,6 +389,7 @@ private extension ReductionMaterializer {
         continuationFallback: ChoiceTree? = nil
     ) throws -> (Output, ChoiceTree)? {
         let randomBits: UInt64
+        var reusedChoice: ChoiceValue?
 
         switch context.mode {
         case .exact:
@@ -412,11 +411,19 @@ private extension ReductionMaterializer {
                 }
                 randomBits = bp
             }
+            // Reuse original ChoiceValue when bits unchanged, avoiding
+            // tag.makeConvertible(bitPattern64:) reconstruction.
+            if randomBits == bp {
+                reusedChoice = prefixValue.choice
+            }
 
         case .guided:
             if let prefixValue = context.cursor.tryConsumeValue() {
                 let bp = prefixValue.choice.bitPattern64
                 randomBits = Swift.min(Swift.max(bp, min), max)
+                if randomBits == bp {
+                    reusedChoice = prefixValue.choice
+                }
             } else if let indices = context.maximizeBoundRegionIndices,
                       context.cursor.isSuspended,
                       indices.contains(context.cursor.bindEncounterCount - 1)
@@ -432,8 +439,9 @@ private extension ReductionMaterializer {
             randomBits = context.prng.next(in: min ... max)
         }
 
+        let choice = reusedChoice ?? ChoiceValue(randomBits, tag: tag)
         let choiceTree = ChoiceTree.choice(
-            ChoiceValue(randomBits, tag: tag),
+            choice,
             .init(validRange: min ... max, isRangeExplicit: isRangeExplicit)
         )
         return try runContinuation(
@@ -505,69 +513,90 @@ private extension ReductionMaterializer {
         guard let selectedChoice else { return nil }
 
         // Decompose branch choice tree for selected branch fallback.
-        let (branchBodyFallback, branchContFallback) = decomposeFallback(
-            branchChoiceTree, calleeKind: .nonGroup
+        let (branchBodyFallback, branchContFallback) = decomposeNonGroupFallback(
+            branchChoiceTree
         )
 
-        // Execute ALL branches — selected with main context, others with jumped PRNG.
+        // Execute selected branch; optionally materialize non-selected branches.
         var branches = [ChoiceTree]()
-        branches.reserveCapacity(choices.count)
+        branches.reserveCapacity(context.materializePicks ? choices.count : 1)
         var finalValue: Output?
 
-        // Pre-compute selected index to avoid per-iteration ID comparison.
-        var selectedIndex = 0
-        while selectedIndex < choices.count {
-            if choices[selectedIndex].id == selectedChoice.id { break }
-            selectedIndex += 1
-        }
+        if context.materializePicks {
+            // Pre-compute selected index to avoid per-iteration ID comparison.
+            var selectedIndex = 0
+            while selectedIndex < choices.count {
+                if choices[selectedIndex].id == selectedChoice.id { break }
+                selectedIndex += 1
+            }
 
-        var choiceIdx = 0
-        while choiceIdx < choices.count {
-            let choice = choices[choiceIdx]
+            var choiceIdx = 0
+            while choiceIdx < choices.count {
+                let choice = choices[choiceIdx]
 
-            if choiceIdx == selectedIndex {
-                guard let (result, branchTree) = try generateRecursive(
-                    choice.generator, with: inputValue, context: &context,
-                    fallbackTree: branchBodyFallback
-                ) else { return nil }
+                if choiceIdx == selectedIndex {
+                    guard let (result, branchTree) = try generateRecursive(
+                        choice.generator, with: inputValue, context: &context,
+                        fallbackTree: branchBodyFallback
+                    ) else { return nil }
 
-                guard let (contValue, contTree) = try runContinuation(
-                    result: result, calleeChoiceTree: branchTree,
-                    continuation: continuation, inputValue: inputValue,
-                    context: &context,
-                    continuationFallback: branchContFallback ?? continuationFallback
-                ) else { return nil }
-
-                finalValue = contValue
-                branches.append(.selected(.branch(
-                    siteID: choice.siteID, weight: choice.weight,
-                    id: choice.id, branchIDs: branchIDs, choice: contTree
-                )))
-            } else {
-                // Non-selected branch: generate fresh via jumped PRNG.
-                var branchContext = Context(
-                    cursor: Cursor.empty,
-                    prng: Xoshiro256(seed: jumpSeed),
-                    mode: .generate,
-                    size: context.size
-                )
-                if let (result, branchTree) = try generateRecursive(
-                    choice.generator, with: inputValue, context: &branchContext,
-                    fallbackTree: nil
-                ),
-                    let (_, contTree) = try runContinuation(
+                    guard let (contValue, contTree) = try runContinuation(
                         result: result, calleeChoiceTree: branchTree,
                         continuation: continuation, inputValue: inputValue,
-                        context: &branchContext, continuationFallback: nil
-                    )
-                {
-                    branches.append(.branch(
+                        context: &context,
+                        continuationFallback: branchContFallback ?? continuationFallback
+                    ) else { return nil }
+
+                    finalValue = contValue
+                    branches.append(.selected(.branch(
                         siteID: choice.siteID, weight: choice.weight,
                         id: choice.id, branchIDs: branchIDs, choice: contTree
-                    ))
+                    )))
+                } else {
+                    // Non-selected branch: generate fresh via jumped PRNG.
+                    var branchContext = Context(
+                        cursor: Cursor.empty,
+                        prng: Xoshiro256(seed: jumpSeed),
+                        mode: .generate,
+                        size: context.size
+                    )
+                    if let (result, branchTree) = try generateRecursive(
+                        choice.generator, with: inputValue, context: &branchContext,
+                        fallbackTree: nil
+                    ),
+                        let (_, contTree) = try runContinuation(
+                            result: result, calleeChoiceTree: branchTree,
+                            continuation: continuation, inputValue: inputValue,
+                            context: &branchContext, continuationFallback: nil
+                        )
+                    {
+                        branches.append(.branch(
+                            siteID: choice.siteID, weight: choice.weight,
+                            id: choice.id, branchIDs: branchIDs, choice: contTree
+                        ))
+                    }
                 }
+                choiceIdx += 1
             }
-            choiceIdx += 1
+        } else {
+            // Skip non-selected branches — only materialize the selected one.
+            guard let (result, branchTree) = try generateRecursive(
+                selectedChoice.generator, with: inputValue, context: &context,
+                fallbackTree: branchBodyFallback
+            ) else { return nil }
+
+            guard let (contValue, contTree) = try runContinuation(
+                result: result, calleeChoiceTree: branchTree,
+                continuation: continuation, inputValue: inputValue,
+                context: &context,
+                continuationFallback: branchContFallback ?? continuationFallback
+            ) else { return nil }
+
+            finalValue = contValue
+            branches.append(.selected(.branch(
+                siteID: selectedChoice.siteID, weight: selectedChoice.weight,
+                id: selectedChoice.id, branchIDs: branchIDs, choice: contTree
+            )))
         }
 
         guard let value = finalValue else { return nil }
@@ -599,19 +628,24 @@ private extension ReductionMaterializer {
                 // Exact mode + explicit-length: the prefix is authoritative.
                 // The length value is not stored in the flattened sequence, so we
                 // can't consume it from the cursor. Use the prefix element count.
-                // Generate metadata from the length generator via PRNG to capture
-                // the validRange for the fresh tree.
                 length = UInt64(seqInfo.elementCount)
-                let savedMode = context.mode
-                context.mode = .generate
-                if let (_, lengthTree) = try generateRecursive(
-                    lengthGen, with: inputValue, context: &context
-                ) {
-                    lengthMeta = lengthTree.metadata
+                // Fast path: extract metadata directly from chooseBits length generators
+                // (the common case, e.g. `array(length: 0...10)`), avoiding a full
+                // generateRecursive + runContinuation round-trip.
+                if case let .impure(.chooseBits(min, max, _, isRangeExplicit), _) = lengthGen {
+                    lengthMeta = ChoiceMetadata(validRange: min ... max, isRangeExplicit: isRangeExplicit)
                 } else {
-                    lengthMeta = ChoiceMetadata(validRange: nil, isRangeExplicit: true)
+                    let savedMode = context.mode
+                    context.mode = .generate
+                    if let (_, lengthTree) = try generateRecursive(
+                        lengthGen, with: inputValue, context: &context
+                    ) {
+                        lengthMeta = lengthTree.metadata
+                    } else {
+                        lengthMeta = ChoiceMetadata(validRange: nil, isRangeExplicit: true)
+                    }
+                    context.mode = savedMode
                 }
-                context.mode = savedMode
             } else if seqInfo.isLengthExplicit {
                 // Guided/generate mode + explicit-length: the generator determines
                 // the count. Deletion may remove elements from the prefix, but the
@@ -881,6 +915,9 @@ private extension ReductionMaterializer {
         /// Used in exact mode: `boundDepth > 0` → clamp; `boundDepth == 0` → reject.
         var boundDepth: Int = 0
         var maximizeBoundRegionIndices: Set<Int>?
+        /// When `false`, pick sites skip non-selected branch materialization.
+        /// Only `PromoteBranchesEncoder` needs full branch alternatives.
+        var materializePicks: Bool = true
     }
 }
 

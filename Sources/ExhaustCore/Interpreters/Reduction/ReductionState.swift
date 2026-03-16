@@ -270,9 +270,19 @@ extension ReductionState {
 extension ReductionState {
     /// Runs branch promotion and pivoting. Returns `true` if any branch was accepted.
     func runBranchLeg(remaining: inout Int) throws -> Bool {
-        let branchDecoder = makeDeletionDecoder(at: 0)
+        let branchContext = DecoderContext(depth: .specific(0), bindIndex: bindIndex, fallbackTree: fallbackTree, strictness: .relaxed, useReductionMaterializer: config.useReductionMaterializer, materializePicks: true)
+        let branchDecoder = SequenceDecoder.for(branchContext)
         var branchBudget = ReductionScheduler.LegBudget(hardCap: remaining, stallPatience: remaining)
         var improved = false
+
+        // Re-materialize with picks so branch encoders see all non-selected alternatives.
+        // This is needed because prior legs may have accepted probes with materializePicks=false.
+        if case let .success(_, freshTree) = ReductionMaterializer.materialize(
+            gen, prefix: sequence, mode: .exact, fallbackTree: fallbackTree,
+            materializePicks: true
+        ) {
+            tree = freshTree
+        }
 
         promoteBranchesEncoder.currentTree = tree
         if try runBatch(promoteBranchesEncoder, decoder: branchDecoder, targets: .wholeSequence, structureChanged: true, budget: &branchBudget) {
