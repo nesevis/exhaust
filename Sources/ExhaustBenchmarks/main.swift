@@ -168,6 +168,174 @@ benchmark("Bound5, 100 iterations, bonsai") {
     }
 }
 
+indirect enum Expr: Equatable, CustomDebugStringConvertible, CustomStringConvertible {
+    case value(Int)
+    case add(Expr, Expr)
+    case div(Expr, Expr)
+
+    var value: Int? {
+        guard case let .value(value) = self else {
+            return nil
+        }
+        return value
+    }
+
+    var debugDescription: String {
+        switch self {
+        case let .value(value):
+            "value(\(value))"
+        case let .add(lhs, rhs):
+            "add(\(lhs.debugDescription), \(rhs.debugDescription))"
+        case let .div(lhs, rhs):
+            "div(\(lhs.debugDescription), \(rhs.debugDescription))"
+        }
+    }
+
+    var description: String {
+        debugDescription
+    }
+}
+
+enum EvalError: Error {
+    case divisionByZero
+}
+
+func eval(_ expr: Expr) throws -> Int {
+    switch expr {
+    case let .value(value):
+        return value
+    case let .add(lhs, rhs):
+        return try eval(lhs) + eval(rhs)
+    case let .div(lhs, rhs):
+        let denominator = try eval(rhs)
+        guard denominator != 0 else {
+            throw EvalError.divisionByZero
+        }
+        return try eval(lhs) / denominator
+    }
+}
+
+func containsLiteralDivisionByZero(_ expr: Expr) -> Bool {
+    switch expr {
+    case .value:
+        false
+    case let .add(lhs, rhs):
+        containsLiteralDivisionByZero(lhs) || containsLiteralDivisionByZero(rhs)
+    case .div(_, .value(0)):
+        true
+    case let .div(lhs, rhs):
+        containsLiteralDivisionByZero(lhs) || containsLiteralDivisionByZero(rhs)
+    }
+}
+
+func expression(depth: UInt64) -> ReflectiveGenerator<Expr> {
+    let leaf = #gen(.int(in: -10 ... 10))
+        .mapped(forward: { Expr.value($0) }, backward: { $0.value ?? 0 })
+
+    guard depth > 0 else {
+        return leaf
+    }
+
+    let child = expression(depth: depth - 1)
+
+    let add = #gen(child, leaf)
+        .mapped(
+            forward: { lhs, rhs in Expr.add(lhs, rhs) },
+            backward: { value in
+                switch value {
+                case let .add(lhs, rhs): (lhs, rhs)
+                case let .div(lhs, rhs): (lhs, rhs)
+                case .value:
+                    (value, value)
+                }
+            }
+        )
+    let div = #gen(leaf, child)
+        .mapped(
+            forward: { lhs, rhs in Expr.div(lhs, rhs) },
+            backward: { value in
+                switch value {
+                case let .add(lhs, rhs): (lhs, rhs)
+                case let .div(lhs, rhs): (lhs, rhs)
+                case .value:
+                    (value, value)
+                }
+            }
+        )
+
+    return #gen(.oneOf(weighted:
+        (3, leaf),
+        (3, add),
+        (3, div)))
+}
+
+let calculatorGen = #gen(expression(depth: 4))
+
+benchmark("Calculator, 100 iterations, legacy") {
+    let property: (Expr) -> Bool = { expr in
+        guard containsLiteralDivisionByZero(expr) == false else {
+            return true
+        }
+        do {
+            _ = try eval(expr)
+            return true
+        } catch EvalError.divisionByZero {
+            return false
+        } catch {
+            return false
+        }
+    }
+
+    do {
+        var iterator = ValueAndChoiceTreeInterpreter(calculatorGen, seed: 1337, maxRuns: 1000)
+        var count = 0
+        while let (value, tree) = try iterator.next() {
+            guard property(value) == false else { continue }
+            count += 1
+            _ = try Interpreters.reduce(gen: calculatorGen, tree: tree, config: .fast, property: property)
+            if count >= 100 {
+                break
+            }
+        }
+    } catch {
+        print(error)
+    }
+}
+
+benchmark("Calculator, 100 iterations, bonsai") {
+    let property: (Expr) -> Bool = { expr in
+        guard containsLiteralDivisionByZero(expr) == false else {
+            return true
+        }
+        do {
+            _ = try eval(expr)
+            return true
+        } catch EvalError.divisionByZero {
+            return false
+        } catch {
+            return false
+        }
+    }
+
+    do {
+        var iterator = ValueAndChoiceTreeInterpreter(calculatorGen, seed: 1337, maxRuns: 1000)
+        var count = 0
+        while let (value, tree) = try iterator.next() {
+            guard property(value) == false else { continue }
+            count += 1
+            _ = try Interpreters.bonsaiReduce(gen: calculatorGen, tree: tree, config: .fast, property: property)
+            if count >= 100 {
+                break
+            }
+        }
+    } catch {
+        print(error)
+    }
+}
+
+
+    
+
 //benchmark("ScalarRangeSet.scalar(at:)") {
 //    let chars = CharacterSet.illegalCharacters.inverted.subtracting(.controlCharacters)
 //    let srs = chars.scalarRangeSet()
