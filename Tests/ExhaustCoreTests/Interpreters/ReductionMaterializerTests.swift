@@ -263,7 +263,7 @@ struct ReductionMaterializerTests {
 
         // ReductionMaterializer should produce all branches.
         guard case let .success(value, tree) = ReductionMaterializer.materialize(
-            gen, prefix: prefix, mode: .exact
+            gen, prefix: prefix, mode: .exact, materializePicks: true
         ) else {
             Issue.record("Expected .success for pick materialization")
             return
@@ -294,13 +294,13 @@ struct ReductionMaterializerTests {
 
         // Run twice with same prefix — should produce deterministic results.
         guard case let .success(value1, tree1) = ReductionMaterializer.materialize(
-            gen, prefix: prefix, mode: .exact
+            gen, prefix: prefix, mode: .exact, materializePicks: true
         ) else {
             Issue.record("First materialization failed")
             return
         }
         guard case let .success(value2, tree2) = ReductionMaterializer.materialize(
-            gen, prefix: prefix, mode: .exact
+            gen, prefix: prefix, mode: .exact, materializePicks: true
         ) else {
             Issue.record("Second materialization failed")
             return

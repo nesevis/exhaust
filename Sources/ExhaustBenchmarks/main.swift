@@ -5,127 +5,93 @@ import Foundation
 
 // swiftlint:disable force_try
 
-benchmark("Int Generation") {
-    let generator = Gen.choose(in: 0 ... 1000)
-    var iterator = ValueInterpreter(generator, seed: 1, maxRuns: 100)
-    while let next = try iterator.next() {
-        _ = next
-    }
-}
-
-benchmark("String generation") {
-    let generator = #gen(.string())
-    var iterator = ValueInterpreter(generator, seed: 1, maxRuns: 100)
-    while let next = try iterator.next() {
-        _ = next
-    }
-}
-
-benchmark("String generation with reflection") {
-    let generator = #gen(.string())
-    var iterator = ValueInterpreter(generator, seed: 1, maxRuns: 100)
-    while let next = try iterator.next() {
-        _ = try Interpreters.reflect(generator, with: next)
-    }
-}
-
-benchmark("String generation with choiceTree") {
-    let generator = #gen(.string())
-    var iterator = ValueAndChoiceTreeInterpreter(generator, seed: 1, maxRuns: 100)
-    while let (value, tree) = try iterator.next() {
-        _ = value
-        _ = tree
-    }
-}
-
-// There's no functional difference here between calling next() repeatedly and creating an array from the prefix
-
-benchmark("Double generation with choiceTree materialised") {
-    let generator = #gen(.oneOf(weighted: (1, .double()), (2, .double()), (4, .double())))
-    var iterator = ValueAndChoiceTreeInterpreter(generator, materializePicks: true, seed: 1, maxRuns: 100)
-    while let (value, tree) = try iterator.next() {
-        _ = value
-        _ = tree
-    }
-}
-
-benchmark("String generation with choiceTree materialised") {
-    let generator = #gen(.string())
-    var iterator = ValueAndChoiceTreeInterpreter(generator, materializePicks: true, seed: 1, maxRuns: 100)
-    while let _ = try iterator.next() {}
-}
-
-private struct Person {
-    let name: String
-    let age: UInt8
-    let height: Double
-}
-
-benchmark("Zipped person") {
-    let generator = #gen(.asciiString(), .uint8(), .double())
-        .mapped(forward: { Person(name: $0.0, age: $0.1, height: $0.2) }, backward: { ($0.name, $0.age, $0.height) })
-    var iterator = ValueInterpreter(generator, seed: 1, maxRuns: 100)
-    while let next = try iterator.next() {
-        _ = next
-    }
-}
-
-benchmark("Zipped person with reflection") {
-    let generator = #gen(.asciiString(), .uint8(), .double())
-        .mapped(forward: { Person(name: $0.0, age: $0.1, height: $0.2) }, backward: { ($0.name, $0.age, $0.height) })
-    var iterator = ValueInterpreter(generator, seed: 1, maxRuns: 100)
-    while let next = try iterator.next() {
-        _ = try Interpreters.reflect(generator, with: next)
-    }
-}
-
-benchmark("Zipped person with ChoiceTree") {
-    let generator = #gen(
-        .asciiString(),
-        .uint8(),
-        .double()
-    )
-    .mapped(forward: { Person(name: $0.0, age: $0.1, height: $0.2) }, backward: { ($0.name, $0.age, $0.height) })
-    var iterator = ValueAndChoiceTreeInterpreter(generator, materializePicks: true, seed: 1, maxRuns: 100)
-    while let (value, tree) = try iterator.next() {
-        _ = value
-        _ = tree
-    }
-}
-
-benchmark("Bound5, pathological 2") {
-    struct Bound5: Equatable {
-        let a: [Int16]
-        let b: [Int16]
-        let c: [Int16]
-        let d: [Int16]
-        let e: [Int16]
-    }
-    let arr = #gen(.int16().array(length: 0 ... 10))
-        .filter(.auto) { $0.isEmpty || $0.dropFirst().reduce($0[0], &+) < 256 }
-    let gen = #gen(arr, arr, arr, arr, arr) {
-        Bound5(a: $0, b: $1, c: $2, d: $3, e: $4)
-    }
-    let property: (Bound5) -> Bool = { b5 in
-        let arr = b5.a + b5.b + b5.c + b5.d + b5.e
-        if arr.isEmpty {
-            return true
-        }
-        return arr.dropFirst().reduce(arr[0], &+) < 5 * 256
-    }
-    let value = Bound5(
-        a: [-10709],
-        b: [29251, 31661],
-        c: [-18678],
-        d: [-2824, 15387, -15932, -23458, -6124, 3327, -21001, 16059, -21211, -27710],
-        e: [16775, -32275, 813, 11044]
-    )
-
-    // Takes about 3.7ms, 20ms in a Swift Testing test. So shrinking is 5 times faster
-    if let tree = try? Interpreters.reflect(gen, with: value) {
-        _ = try? Interpreters.reduce(gen: gen, tree: tree, config: .fast, property: property)
-    }
-}
+//benchmark("Int Generation") {
+//    let generator = Gen.choose(in: 0 ... 1000)
+//    var iterator = ValueInterpreter(generator, seed: 1, maxRuns: 100)
+//    while let next = try iterator.next() {
+//        _ = next
+//    }
+//}
+//
+//benchmark("String generation") {
+//    let generator = #gen(.string())
+//    var iterator = ValueInterpreter(generator, seed: 1, maxRuns: 100)
+//    while let next = try iterator.next() {
+//        _ = next
+//    }
+//}
+//
+//benchmark("String generation with reflection") {
+//    let generator = #gen(.string())
+//    var iterator = ValueInterpreter(generator, seed: 1, maxRuns: 100)
+//    while let next = try iterator.next() {
+//        _ = try Interpreters.reflect(generator, with: next)
+//    }
+//}
+//
+//benchmark("String generation with choiceTree") {
+//    let generator = #gen(.string())
+//    var iterator = ValueAndChoiceTreeInterpreter(generator, seed: 1, maxRuns: 100)
+//    while let (value, tree) = try iterator.next() {
+//        _ = value
+//        _ = tree
+//    }
+//}
+//
+//// There's no functional difference here between calling next() repeatedly and creating an array from the prefix
+//
+//benchmark("Double generation with choiceTree materialised") {
+//    let generator = #gen(.oneOf(weighted: (1, .double()), (2, .double()), (4, .double())))
+//    var iterator = ValueAndChoiceTreeInterpreter(generator, materializePicks: true, seed: 1, maxRuns: 100)
+//    while let (value, tree) = try iterator.next() {
+//        _ = value
+//        _ = tree
+//    }
+//}
+//
+//benchmark("String generation with choiceTree materialised") {
+//    let generator = #gen(.string())
+//    var iterator = ValueAndChoiceTreeInterpreter(generator, materializePicks: true, seed: 1, maxRuns: 100)
+//    while let _ = try iterator.next() {}
+//}
+//
+//private struct Person {
+//    let name: String
+//    let age: UInt8
+//    let height: Double
+//}
+//
+//benchmark("Zipped person") {
+//    let generator = #gen(.asciiString(), .uint8(), .double())
+//        .mapped(forward: { Person(name: $0.0, age: $0.1, height: $0.2) }, backward: { ($0.name, $0.age, $0.height) })
+//    var iterator = ValueInterpreter(generator, seed: 1, maxRuns: 100)
+//    while let next = try iterator.next() {
+//        _ = next
+//    }
+//}
+//
+//benchmark("Zipped person with reflection") {
+//    let generator = #gen(.asciiString(), .uint8(), .double())
+//        .mapped(forward: { Person(name: $0.0, age: $0.1, height: $0.2) }, backward: { ($0.name, $0.age, $0.height) })
+//    var iterator = ValueInterpreter(generator, seed: 1, maxRuns: 100)
+//    while let next = try iterator.next() {
+//        _ = try Interpreters.reflect(generator, with: next)
+//    }
+//}
+//
+//benchmark("Zipped person with ChoiceTree") {
+//    let generator = #gen(
+//        .asciiString(),
+//        .uint8(),
+//        .double()
+//    )
+//    .mapped(forward: { Person(name: $0.0, age: $0.1, height: $0.2) }, backward: { ($0.name, $0.age, $0.height) })
+//    var iterator = ValueAndChoiceTreeInterpreter(generator, materializePicks: true, seed: 1, maxRuns: 100)
+//    while let (value, tree) = try iterator.next() {
+//        _ = value
+//        _ = tree
+//    }
+//}
 
 struct Bound5: Equatable {
     let a: [Int16]
@@ -146,13 +112,15 @@ struct Bound5: Equatable {
     }
 }
 
-benchmark("Bound5, 50 iterations, reflective") {
-    let arrGen = #gen(.int16(scaling: .linear).array(length: 0 ... 10))
-        .filter(.rejectionSampling) { $0.isEmpty || $0.dropFirst().reduce($0[0], &+) < 256 }
-    let gen = #gen(arrGen, arrGen, arrGen, arrGen, arrGen) { a, b, c, d, e in
-        Bound5(a: a, b: b, c: c, d: d, e: e)
-    }
+// MARK: - Bound5
 
+let b5ArrGen = #gen(.int16(scaling: .linear).array(length: 0 ... 10))
+    .filter(.rejectionSampling) { $0.isEmpty || $0.dropFirst().reduce($0[0], &+) < 256 }
+let b5Gen = #gen(b5ArrGen, b5ArrGen, b5ArrGen, b5ArrGen, b5ArrGen) { a, b, c, d, e in
+    Bound5(a: a, b: b, c: c, d: d, e: e)
+}
+
+benchmark("Bound5, 100 iterations, legacy") {
     let property: (Bound5) -> Bool = { b5 in
         if b5.arr.isEmpty {
             return true
@@ -161,13 +129,13 @@ benchmark("Bound5, 50 iterations, reflective") {
     }
 
     do {
-        var iterator = ValueAndChoiceTreeInterpreter(gen, seed: 1337, maxRuns: 1000)
+        var iterator = ValueAndChoiceTreeInterpreter(b5Gen, seed: 1337, maxRuns: 1000)
         var count = 0
         while let (value, tree) = try iterator.next() {
             guard property(value) == false else { continue }
             count += 1
-            _ = try Interpreters.reduce(gen: gen, tree: tree, config: .fast, property: property)
-            if count >= 50 {
+            _ = try Interpreters.reduce(gen: b5Gen, tree: tree, config: .fast, property: property)
+            if count >= 100 {
                 break
             }
         }
@@ -176,51 +144,22 @@ benchmark("Bound5, 50 iterations, reflective") {
     }
 }
 
-benchmark("Bound 5 single, random") {
-    let arrGen = #gen(.int16(scaling: .linear)).array(length: 0 ... 10)
-        .filter { $0.isEmpty || $0.dropFirst().reduce($0[0], &+) < 256 }
-
-    let gen = #gen(arrGen, arrGen, arrGen, arrGen, arrGen) {
-        Bound5(a: $0, b: $1, c: $2, d: $3, e: $4)
-    }
-
-    _ = #exhaust(gen, .suppressIssueReporting, .replay(0xF0_CACC_1AC0_FFEE)) {
-        $0.arr.isEmpty || $0.arr.dropFirst().reduce($0.arr[0], &+) < 5 * 256
-    }
-}
-
-benchmark("Bound5, 50 iterations") {
-    typealias Bound5 = ([Int16], [Int16], [Int16], [Int16], [Int16])
-    // #gen syntax is 4x faster
-//    running Bound5, 50 iterations, reflective... done! (627.41 ms)
-//    running Bound5, 50 iterations... done! (2361.57 ms)
-
-//    let arrGen = #gen(.int16().array(length: 0 ... 10))
-//        .filter { $0.isEmpty || $0.dropFirst().reduce($0[0], &+) < 256 }
-//    let gen = #gen(arrGen, arrGen, arrGen, arrGen, arrGen)
-
-    let arrGen = #gen(.int16(scaling: .linear)).array(length: 0 ... 10)
-        .filter(.choiceGradientSampling) { $0.isEmpty || $0.dropFirst().reduce($0[0], &+) < 256 }
-    let gen = Gen.zip(arrGen, arrGen, arrGen, arrGen, arrGen)
-
-    let property: (Bound5) -> Bool = { arg in
-        let (a, b, c, d, e) = arg
-        let arr = a + b + c + d + e
-        if arr.isEmpty {
+benchmark("Bound5, 100 iterations, bonsai") {
+    let property: (Bound5) -> Bool = { b5 in
+        if b5.arr.isEmpty {
             return true
         }
-        return arr.dropFirst().reduce(arr[0], &+) < 5 * 256
+        return b5.arr.dropFirst().reduce(b5.arr[0], &+) < 5 * 256
     }
 
-    var iterator = ValueAndChoiceTreeInterpreter(gen, seed: 1337, maxRuns: 1000)
-
     do {
+        var iterator = ValueAndChoiceTreeInterpreter(b5Gen, seed: 1337, maxRuns: 1000)
         var count = 0
         while let (value, tree) = try iterator.next() {
             guard property(value) == false else { continue }
             count += 1
-            _ = try Interpreters.reduce(gen: gen, tree: tree, config: .fast, property: property)
-            if count >= 50 {
+            _ = try Interpreters.bonsaiReduce(gen: b5Gen, tree: tree, config: .fast, property: property)
+            if count >= 100 {
                 break
             }
         }
@@ -229,27 +168,27 @@ benchmark("Bound5, 50 iterations") {
     }
 }
 
-benchmark("ScalarRangeSet.scalar(at:)") {
-    let chars = CharacterSet.illegalCharacters.inverted.subtracting(.controlCharacters)
-    let srs = chars.scalarRangeSet()
-    var f: Unicode.Scalar?
-    for n in 1 ... 10000 {
-        f = srs.scalar(at: n)
-    }
-    precondition(f != nil)
-}
-
-benchmark("ScalarRangeSet.index(of:)") {
-    let chars = CharacterSet.illegalCharacters.inverted.subtracting(.controlCharacters)
-    let srs = chars.scalarRangeSet()
-    let count = min(srs.scalarCount, 10000)
-    let scalars = (0 ..< count).map { srs.scalar(at: $0) }
-    var result = 0
-    for scalar in scalars {
-        result = srs.index(of: scalar)
-    }
-    precondition(result >= 0)
-}
+//benchmark("ScalarRangeSet.scalar(at:)") {
+//    let chars = CharacterSet.illegalCharacters.inverted.subtracting(.controlCharacters)
+//    let srs = chars.scalarRangeSet()
+//    var f: Unicode.Scalar?
+//    for n in 1 ... 10000 {
+//        f = srs.scalar(at: n)
+//    }
+//    precondition(f != nil)
+//}
+//
+//benchmark("ScalarRangeSet.index(of:)") {
+//    let chars = CharacterSet.illegalCharacters.inverted.subtracting(.controlCharacters)
+//    let srs = chars.scalarRangeSet()
+//    let count = min(srs.scalarCount, 10000)
+//    let scalars = (0 ..< count).map { srs.scalar(at: $0) }
+//    var result = 0
+//    for scalar in scalars {
+//        result = srs.index(of: scalar)
+//    }
+//    precondition(result >= 0)
+//}
 
 Benchmark.main()
 

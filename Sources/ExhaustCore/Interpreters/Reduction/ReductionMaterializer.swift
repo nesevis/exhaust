@@ -49,7 +49,7 @@ public enum ReductionMaterializer {
         prefix: consuming ChoiceSequence,
         mode: Mode,
         fallbackTree: ChoiceTree? = nil,
-        materializePicks: Bool = true
+        materializePicks: Bool = false
     ) -> Result<Output> {
         let seed: UInt64
         let resolvedFallbackTree: ChoiceTree?
@@ -921,7 +921,7 @@ private extension ReductionMaterializer {
         var maximizeBoundRegionIndices: Set<Int>?
         /// When `false`, pick sites skip non-selected branch materialization.
         /// Only `PromoteBranchesEncoder` needs full branch alternatives.
-        var materializePicks: Bool = true
+        var materializePicks: Bool = false
     }
 }
 

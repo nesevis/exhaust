@@ -7,8 +7,6 @@ public extension Interpreters {
     struct BonsaiReducerConfiguration: Sendable {
         /// Maximum number of outer cycles with no improvement before terminating.
         let maxStalls: Int
-        /// Window size for cycle detection.
-        let recentCycleWindow: Int
         /// Per-strategy probe budgets.
         let probeBudgets: TCRConfiguration.ProbeBudgets
         /// Beam search tuning for aligned deletion.
@@ -19,13 +17,11 @@ public extension Interpreters {
 
         private init(
             maxStalls: Int,
-            recentCycleWindow: Int,
             probeBudgets: TCRConfiguration.ProbeBudgets,
             alignedDeletionBeamSearchTuning: TCRConfiguration.AlignedDeletionBeamSearchTuning,
             useReductionMaterializer: Bool = true
         ) {
             self.maxStalls = maxStalls
-            self.recentCycleWindow = recentCycleWindow
             self.probeBudgets = probeBudgets
             self.alignedDeletionBeamSearchTuning = alignedDeletionBeamSearchTuning
             self.useReductionMaterializer = useReductionMaterializer
@@ -41,14 +37,12 @@ public extension Interpreters {
 
         public static let fast = Self(
             maxStalls: 1,
-            recentCycleWindow: 6,
             probeBudgets: .fast,
             alignedDeletionBeamSearchTuning: .fast
         )
 
         public static let slow = Self(
             maxStalls: 8,
-            recentCycleWindow: 12,
             probeBudgets: .slow,
             alignedDeletionBeamSearchTuning: .slow
         )
