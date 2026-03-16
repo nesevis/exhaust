@@ -20,6 +20,7 @@ final class ReductionState<Output> {
     var bestOutput: Output
     var spanCache: SpanCache
     var lattice: DominanceLattice
+    var rejectCache = Set<UInt64>(minimumCapacity: 512)
 
     // Encoders
     var promoteBranchesEncoder = PromoteBranchesEncoder()
@@ -123,6 +124,11 @@ extension ReductionState {
         for candidate in encoder.encode(sequence: sequence, targets: targets) {
             guard budget.isExhausted == false else { break }
             probes += 1
+            let candidateHash = ZobristHash.hash(of: candidate)
+            if rejectCache.contains(candidateHash) {
+                budget.recordMaterialization(accepted: false)
+                continue
+            }
             if let result = try decoder.decode(
                 candidate: candidate,
                 gen: gen,
@@ -142,6 +148,7 @@ extension ReductionState {
                 return true
             }
             budget.recordMaterialization(accepted: false)
+            rejectCache.insert(candidateHash)
         }
         if isInstrumented {
             if probes > 0 {
@@ -178,6 +185,12 @@ extension ReductionState {
         while let probe = encoder.nextProbe(lastAccepted: lastAccepted) {
             guard budget.isExhausted == false else { break }
             probes += 1
+            let probeHash = ZobristHash.hash(of: probe)
+            if rejectCache.contains(probeHash) {
+                budget.recordMaterialization(accepted: false)
+                lastAccepted = false
+                continue
+            }
             if let result = try decoder.decode(
                 candidate: probe, gen: gen, tree: tree,
                 originalSequence: sequence, property: property
@@ -190,6 +203,7 @@ extension ReductionState {
             } else {
                 budget.recordMaterialization(accepted: false)
                 lastAccepted = false
+                rejectCache.insert(probeHash)
             }
         }
         if anyAccepted {
