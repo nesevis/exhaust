@@ -619,8 +619,11 @@ private extension ReductionMaterializer {
         let lengthMeta: ChoiceMetadata
         var elementFallbacks: [ChoiceTree]?
 
-        if let calleeFallback, case let .sequence(_, fbElements, _) = calleeFallback {
+        var fallbackLength: UInt64?
+
+        if let calleeFallback, case let .sequence(fbLength, fbElements, _) = calleeFallback {
             elementFallbacks = fbElements
+            fallbackLength = fbLength
         }
 
         if let seqInfo = context.cursor.tryConsumeSequenceOpen() {
@@ -671,6 +674,23 @@ private extension ReductionMaterializer {
         } else if context.mode == .exact {
             // Exact mode: prefix exhausted or structural mismatch at sequence site.
             throw RejectionError()
+        } else if let fbLen = fallbackLength {
+            // Cursor suspended (inside bind's bound content in guided mode). Use the fallback sequence's stored length, clamped to the fresh generator's range, instead of falling through to PRNG. The length generator may be wrapped in getSize/_bind layers that strip any synthesized fallback tree before it reaches the inner chooseBits.
+            let savedMode = context.mode
+            context.mode = .generate
+            guard let (_, lengthTree) = try generateRecursive(
+                lengthGen, with: inputValue, context: &context
+            ) else {
+                context.mode = savedMode
+                return nil
+            }
+            context.mode = savedMode
+            if let freshRange = lengthTree.metadata.validRange {
+                length = Swift.min(Swift.max(fbLen, freshRange.lowerBound), freshRange.upperBound)
+            } else {
+                length = fbLen
+            }
+            lengthMeta = lengthTree.metadata
         } else {
             guard let (freshLength, lengthTree) = try generateRecursive(
                 lengthGen, with: inputValue, context: &context
