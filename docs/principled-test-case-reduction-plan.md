@@ -64,7 +64,7 @@ We therefore use a qualitative `ApproximationClass` enum (`exact`, `bounded`, `s
 2. **Morphism + morphism → pipeline grade.** Sequential morphisms compose via the same lattice join. The scheduler tracks the aggregate pipeline class across a cycle.
 
 This means:
-- **Exact morphisms** (`.exact`, w) — encoder exact, decoder `.direct`. Contravariant sweep value minimization/reordering.
+- **Exact morphisms** (`.exact`, w) — encoder exact, decoder `.direct`. Contravariant sweep value minimization.
 - **Bounded morphisms** (`.bounded`, w) — shortlex-guarded. Two sources: (1) encoder `.exact` + decoder `.guided` — all deletion morphisms, all depth-0 bind morphisms; (2) encoder `.bounded` — redistribution (Phase 4), where the encoder itself introduces approximation.
 - **Speculative morphisms** (`.speculative`, w) — Phase 5. May temporarily regress.
 - Resource budgets decompose additively: `w₁ + w₂`.
@@ -79,7 +79,7 @@ The paper defines covariant and contravariant functors on the reduction category
 The bonsai vocabulary ([bonsai-naming-analysis.md](bonsai-naming-analysis.md)) names each category by its horticultural analogue: **snip** (contravariant), **prune** (deletion), **train** (covariant), **shape** (redistribution). The bonsai term leads in doc comments; the technical definition follows.
 
 **Contravariant passes / snip** (against the chain: depth max → depth 1):
-- **Value minimization and reordering only.** Reduce bound values *within fixed ranges* — moving backward through the bind chain without disturbing the inner generators that determined those ranges.
+- **Value minimization only.** Reduce bound values *within fixed ranges* — moving backward through the bind chain without disturbing the inner generators that determined those ranges.
 - **Structure-preserving**: span boundaries, container groupings, sibling relationships are unchanged. The dominance lattice computed at sweep start remains valid throughout.
 - **Exact**: no re-derivation needed. Grade: `(.exact, w)`. The `dec` is `Interpreters.materialize()` with a fixed tree.
 - **Can get stuck**: limited to the current feasible region. If the property failure requires a specific structural shape, contravariant passes can only minimize values within that shape, never escape it.
@@ -94,7 +94,7 @@ The bonsai vocabulary ([bonsai-naming-analysis.md](bonsai-naming-analysis.md)) n
 - Categorically distinct from both contravariant (not structure-preserving, not exact) and covariant (not depth-0-specific, not about shifting bound ranges via inner-value changes). Deletion shares the covariant property of using GuidedMaterializer, but its operational characteristics — all-depth scope, shortening purpose, per-success lattice rebuild — justify a separate leg.
 
 **Covariant passes / train** (with the chain: depth 0):
-- **Value minimization and reordering at the inner level.** Reduce inner values, causing bound content to be *re-derived forward* through the Kleisli chain via GuidedMaterializer (prolongation).
+- **Value minimization at the inner level.** Reduce inner values, causing bound content to be *re-derived forward* through the Kleisli chain via GuidedMaterializer (prolongation).
 - **Bounded**: re-derivation is nondeterministic, but the shortlex guard rejects regressions. Grade: `(.bounded, w)`. Can explore entirely new regions of the candidate space.
 - **Can escape local minima**: by changing inner values (depth 0), the covariant sweep changes the bound ranges themselves — opening new territory for the next contravariant sweep. Re-derivation via PRNG/fallback may find shorter bound content than the current state.
 - In the paper's terms: these operate on the `Cand` functor (paper §4.1) — encoding maps candidates forward.
@@ -114,7 +114,7 @@ The optimal cycle structure interleaves the three pass categories. The structure
          │
          ▼
   Snip — contravariant sweep (depth max → 1):
-    Value minimization + reordering ONLY.
+    Value minimization ONLY.
     Exact, structure-preserving, lattice-stable.
     Converges to local minimum within fixed bound ranges.
          │
@@ -129,7 +129,7 @@ The optimal cycle structure interleaves the three pass categories. The structure
          │
          ▼
   Train — covariant sweep (depth 0):
-    Value minimization + reordering at the inner level.
+    Value minimization at the inner level.
     With binds: bounded (.bounded), lattice-invalidating. Changes bound
     ranges via inner value reduction. Fallback tree (containing
     pre-snip improvements) minimizes re-derivation regression.
@@ -154,6 +154,14 @@ The optimal cycle structure interleaves the three pass categories. The structure
          │
          ▼
   (repeat until settled — dirty depths only, see Section 4.2)
+         │
+         ▼
+  Human-order post-processing (optional, one-shot):
+    After V-cycle stalls, reorders elements within type-homogeneous
+    sibling groups into natural numeric order (e.g. [-1, 0, 1] instead
+    of [0, -1, 1]). Intentionally may NOT be shortlex-smaller — the
+    goal is human readability, not shortlex optimality. Opt-in via
+    `humanOrderPostProcess` config flag.
 ```
 
 **Why this ordering minimizes re-derivation regression (snip before prune before train):**
@@ -607,7 +615,7 @@ Three cases:
 enum ReductionPhase: Int, Comparable {
     case structuralDeletion = 1     // Encoder .exact; morphism .bounded via decoder
     case valueMinimization = 2      // Encoder .exact; morphism .exact or .bounded via decoder
-    case reordering = 3             // Encoder .exact; morphism .exact or .bounded via decoder
+    case reordering = 3             // Unused — retained for raw-value stability
     case redistribution = 4         // Encoder .bounded
     case exploration = 5            // Encoder .speculative
 }
@@ -654,13 +662,9 @@ enum ReductionPhase: Int, Comparable {
 
 **Note:** Binary search and float reduction conform to `AdaptiveEncoder` (see Section 2.3). Each probe depends on the outcome of the previous one — binary search maintains `[lo, hi]` per target and narrows based on acceptance/rejection. The scheduler calls `start()` once, then `nextProbe(lastAccepted:)` in a loop, modeling binary search as iterated Kleisli composition. The encoder never sees the decoded output — only whether each probe was accepted. `ZeroValueEncoder` conforms to `BatchEncoder` — it returns all zero-candidates upfront via `encode()`.
 
-### Phase 3: Reordering (Encoder-Exact)
+### Phase 3: Reordering — Removed
 
-**Goal:** Sort siblings into ascending order (lexicographic improvement, same multiset).
-
-**Encoder:** `ReorderSiblingsEncoder`. Grade: `(.exact, n)`.
-
-Single encoder, no 2-cell structure needed.
+Previously housed `ReorderSiblingsEncoder`, which sorted siblings into ascending shortlex order. Removed because sibling reordering did not meaningfully assist test case reduction in practice — the shortlex improvement from reordering was cosmetic, and the reducer's budget was better spent on value minimization and deletion. The `ReductionPhase.reordering` enum case (raw value 3) is retained for raw-value stability but is no longer used by any encoder. Human-readable sibling ordering is now handled by `HumanOrderPostProcess` — a one-shot pass that runs after the V-cycle stalls, reordering type-homogeneous sibling groups into natural numeric order (opt-in via `humanOrderPostProcess` config flag).
 
 ### Phase 4: Redistribution (Approximate)
 
@@ -799,34 +803,25 @@ for each cycle:
     var dirtyDepths: Set<Int> = maxBindDepth > 0 ? Set(1 ... maxBindDepth) : []
 
     // ── Leg 1: Snip — contravariant sweep (fine → coarse) ──
-    // Value minimization + reordering ONLY. Structure-preserving, exact.
-    // Depth-major: all phases at depth d before moving to d−1.
+    // Value minimization ONLY. Structure-preserving, exact.
+    // Depth-major: all encoders at depth d before moving to d−1.
     var rejectCache = ReducerCache()  // fresh per leg
     // Note: same 1...0 guard as dirtyDepths — skip when maxBindDepth == 0.
     for depth in stride(from: maxBindDepth, through: 1, by: -1) where dirtyDepths.contains(depth):
-        // Within-depth fixpoint: value-min and reordering interact.
-        // Reordering permutes values to new positions where they may
-        // have different local minima; value-min can break ascending
-        // order, creating new reordering opportunities. Loop until
-        // neither makes progress; the leg budget is the natural cap.
+        // Within-depth fixpoint: loop value-min encoders until none
+        // makes progress; the leg budget is the natural cap.
         //
         // DecoderContext is reconstructed per fixpoint iteration —
         // accept() updates fallbackTree, and the next iteration picks
         // up the fresh tree. (DirectMaterializer doesn't use it, but
         // the context stays current for consistency.)
-        //
-        // Targets are extracted per phase: value-min needs .spans,
-        // reordering needs .siblingGroups. Both filter to the same
-        // depth but return different TargetSet cases.
         var depthProgress = true
         while depthProgress {
             depthProgress = false
             let valueTargets = extractTargets(sequence, depth, bindIndex)  // .spans
-            let siblingTargets = extractSiblingTargets(sequence, depth, bindIndex)  // .siblingGroups
             let context = DecoderContext(.specific(depth), bindIndex, fallbackTree, .normal)
             let decoder = SequenceDecoder.for( context)  // depth > 0, .normal → Direct
             depthProgress = runValueMinimization(lattice, valueTargets, decoder, ...) || depthProgress
-            depthProgress = runReordering(lattice, siblingTargets, decoder, ...) || depthProgress
         }
 
     // ── Leg 2: Prune — deletion sweep (all depths, coarse → fine) ──
@@ -844,7 +839,7 @@ for each cycle:
             // ... encode, decode, accept(result, structureChanged: true)
 
     // ── Leg 3: Train — covariant sweep (depth 0) ──
-    // Value minimization + reordering at the inner level.
+    // Value minimization at the inner level.
     // Bounded (for bind generators), can escape local minima.
     rejectCache = ReducerCache()  // fresh: different decoder than Legs 1–2
     // Snapshots for post-processing merge.
@@ -854,8 +849,7 @@ for each cycle:
     let preCovariantBindIndex = bindIndex
     let preCovariantTree = tree
 
-    for phase in [.valueMinimization, .reordering]:
-        for encoder in encoders(for: phase):
+    for encoder in encoders(for: .valueMinimization):
             // Targets, context, and decoder reconstructed per encoder.
             // For bind generators, accept(structureChanged: true) rebuilds
             // bindIndex, so targets must be re-extracted from current state.
@@ -974,10 +968,10 @@ The `DecoderContext` is reconstructed per encoder invocation (not per leg or per
 
 **Target extraction.** The pseudocode uses `extractTargets` and `extractDeletionTargets` — both filter spans from the current sequence by bind depth, but return different span categories.
 
-`extractTargets(sequence, depth, bindIndex)` — used by value-minimization and reordering phases:
+`extractTargets(sequence, depth, bindIndex)` — used by value-minimization encoders:
 - Walks the sequence, collecting all `.value`/`.reduced` entries as `ChoiceSpan` objects.
 - Filters by `bindIndex.bindDepth(at: span.range.lowerBound) == depth`. When `bindIndex` is nil (no binds), returns all value spans unfiltered.
-- Returns `TargetSet.spans(filteredValueSpans)` for value-minimization encoders. The reordering encoder receives `TargetSet.siblingGroups(filteredSiblingGroups)` instead — sibling groups are extracted from the same depth-filtered span set.
+- Returns `TargetSet.spans(filteredValueSpans)`.
 - "Targets at depth d" means: all value-bearing spans whose start position lies inside a bound subtree at nesting level d. Depth 0 = not inside any bound range (inner generator values). Depth 1 = inside the bound range of a top-level bind. Depth 2 = inside a bound range nested within another bound range.
 
 `extractDeletionTargets(sequence, depth, bindIndex)` — used by the deletion sweep:
@@ -990,15 +984,15 @@ Both functions are O(n) scans over the sequence with a bind-depth lookup per spa
 
 ### 4.2 Snip (Contravariant Sweep) Details
 
-The snip sweep handles value minimization and reordering at bound depths with exact guarantees:
+The snip sweep handles value minimization at bound depths with exact guarantees:
 
-- **Value minimization and reordering only.** Pruning is excluded — it invalidates span structure even at depth > 0 (see Section 1.4). This is what makes the lattice stable.
+- **Value minimization only.** Pruning is excluded — it invalidates span structure even at depth > 0 (see Section 1.4). This is what makes the lattice stable.
 
 - **Lattice computed once** at sweep start and reused across all depths. Snip passes modify values within existing spans without changing span boundaries, so the lattice edges remain valid. 2-cell pruning is effective here: if `ZeroValueEncoder` succeeds at depth 2, `BinarySearchToZeroEncoder` can be skipped at depth 2 (dominated). This pruning carries across the entire sweep.
 
 - **Decoder: `.direct`** — uses `Interpreters.materialize()` with the fixed tree. No GuidedMaterializer, no re-derivation. Grade: `(.exact, w)`.
 
-- **Depth-major ordering, max→1.** Both phases (value minimization, reordering) run at each depth before moving to the next depth. The max→1 direction processes dependent values (deeper depths) before the values that determine their ranges (shallower depths). This avoids wasting work: reducing dependent values first means their current ranges are respected, and subsequent shallower reductions can tighten those ranges for the next cycle.
+- **Depth-major ordering, max→1.** All value-minimization encoders run at each depth before moving to the next depth. The max→1 direction processes dependent values (deeper depths) before the values that determine their ranges (shallower depths). This avoids wasting work: reducing dependent values first means their current ranges are respected, and subsequent shallower reductions can tighten those ranges for the next cycle.
 
   **Alternative: 1→max.** The reverse direction would reduce shallower depths first, immediately tightening ranges for deeper depths within the same sweep — cascade convergence in a single pass rather than the D−1 cycles that max→1 requires (see convergence bound below). The tradeoff: in max→1, deeper depths are processed first against un-tightened ranges. Their reductions are valid (within the ranges that exist at the time) but may become suboptimal when shallower values are later reduced in the same sweep, tightening the deeper ranges. In 1→max, deeper depths always see the tightest available ranges — no such staleness. The actual max→1 advantage is stability: each depth is processed against ranges that don't change during its processing (deeper ranges don't constrain shallower ones), so encoders never generate candidates against ranges that shift mid-sweep. For the common case (D = 1, no nested binds), both directions are equivalent. For D ≥ 2, max→1 trades slower cross-depth convergence (D−1 cycles) for per-depth range stability. This choice should be validated empirically — 1→max's single-pass convergence may outweigh the range-stability benefit for generators with deep nesting.
 
@@ -1013,7 +1007,7 @@ The snip sweep handles value minimization and reordering at bound depths with ex
 
   The D − 1 bound is therefore a *per-baseline* bound, not a global one. The total number of contravariant convergence restarts is bounded by the number of non-contravariant successes across all cycles, which is in turn bounded by the global materialization budget. In practice, the covariant sweep makes progressively smaller changes as it converges, and each restart of the contravariant propagation starts from a better baseline than the last. For the common case (D = 1), the bound is 0 restarts — single-bind contravariant convergence completes in one sweep regardless of other legs. For D = 2, each restart adds one extra cycle. D ≥ 3 is rare in practice — deeply nested bind chains are uncommon in real generators.
 
-- **Within-depth fixpoint.** Value minimization and reordering interact bidirectionally at each depth. Reordering permutes values to new positions where they may have different local minima (position-dependent property behavior). Value minimization can break ascending order by reducing some values more than others, creating new reordering opportunities. The scheduler loops value-min → reorder → value-min → ... at each depth until neither makes progress. The leg's stall patience and hard cap (Section 4.5) are the backstop — the fixpoint runs until natural convergence or budget exhaustion, whichever comes first. Each success within the fixpoint resets the consecutive-fruitless counter, so a depth with rich interactions can consume a large share of the leg's budget. This fixpoint is necessary because dirty-depth tracking won't mark depth `d` for re-visit (reordering and value-min at depth `d` don't change inner values, only bound values), so opportunities missed here are lost until some other leg's success happens to dirty `d`.
+- **Within-depth fixpoint.** The scheduler loops value-minimization encoders at each depth until none makes progress. The leg's hard cap (Section 4.5) is the backstop — the fixpoint runs until natural convergence or budget exhaustion, whichever comes first.
 
   **When does this interaction fire?** The interaction requires two conditions: (a) the generator produces sibling groups (arrays, tuples, multi-element containers), and (b) the property's behavior is position-dependent (the property treats the i-th element differently from the j-th). The canonical case is sorted-array properties: the property checks `array.isSorted`, so element position matters — reordering can move a large value from a constrained position to an unconstrained one. Other cases: tuple properties where the first element has a tighter valid range than the second, or multi-argument functions where argument order matters for the counterexample's minimality. For generators without sibling groups (single-value generators, deeply nested structures with no peer elements), reordering has no targets and the fixpoint trivially converges in one iteration. For generators with siblings but position-independent properties (e.g., `array.contains(x)`), reordering succeeds once (sorts ascending) and the fixpoint converges in two iterations (value-min → reorder → value-min finds nothing new). The multi-iteration fixpoint fires in practice for the current reducer's `ReorderSiblingsTactic` on sorted/ordered properties — typically 2–3 iterations before convergence. The cost is low: reordering is O(n) per pass, and the fixpoint adds at most one extra value-min pass per depth.
 
@@ -1051,7 +1045,7 @@ The prune sweep runs after snipping, at all depths (0 → max):
 
 The train sweep runs at depth 0 only, after pruning:
 
-- **Value minimization and reordering only** (deletion at depth 0 is handled by the prune sweep).
+- **Value minimization only** (deletion at depth 0 is handled by the prune sweep).
 
 - **Decoder:** With binds present: `.guided` with fallback tree containing the snip-improved bound values. Re-derivation uses tier-1 prefix values and tier-2 clamping to preserve those improvements where the new bound ranges permit. Grade: `(.bounded, w)`. Without binds: `.direct` — no re-derivation needed, no bound ranges to shift. Grade: `(.exact, w)`. `SequenceDecoder.for(_:)` handles the routing based on `DecoderContext(.specific(0), bindIndex, fallbackTree, .normal)`.
 
@@ -1092,9 +1086,7 @@ Default leg weights:
 - Train (covariant sweep): 25%
 - Shape (redistribution): 10%
 
-**No within-leg phase splits.** The contravariant and covariant legs both run a fixpoint loop that alternates value minimization and reordering. Value-min and reordering draw from a single undivided leg budget — no per-phase allocation. Reordering is inherently cheap (one pass over sibling groups, O(n) candidates) and self-limits by exhaustion long before it could starve value-min. The fixpoint loop's natural termination (neither phase makes progress) is the scheduling mechanism; per-phase weights would conflict with the alternating structure and create the allocation problem described below.
-
-> *Why not per-phase splits within the fixpoint?* A one-shot 85/15 split assumes value-min runs once, then reordering runs once. The fixpoint loop interleaves them: value-min → reorder → value-min → .... If value-min exhausts its 85% allocation on iteration 1, iteration 2's value-min gets zero budget — even though reordering just created new opportunities. Re-allocating the remaining leg budget at each iteration would work but adds complexity for no benefit: the leg budget already caps total spending, and reordering's cheapness means it can't starve value-min in practice.
+**No within-leg phase splits.** The contravariant and covariant legs run value-minimization encoders from a single undivided leg budget. The fixpoint loop's natural termination (no encoder makes progress) is the scheduling mechanism.
 
 The train sweep gets its own 25%, independent of how many depths the snip sweep processes. A 4-depth snip sweep consumes its 30% across four depths; the train sweep's 25% is reserved for the single depth-0 pass that escapes fixed points. Without per-leg budgets, the train sweep would starve whenever `maxBindDepth` is large.
 
@@ -1317,7 +1309,7 @@ The enc/dec separation makes the most complex logic (structural mutation) the ea
 - `updatePosterior(prior:accepted:) -> BetaParameters` — binary Bayesian update. Pure arithmetic.
 - `decayPosteriors(priors:gamma:) -> [BetaParameters]` — cycle-boundary decay toward Beta(1,1). Pure arithmetic.
 - `resetDirtyPriors(priors:dirtyDepths:) -> [DepthPriors]` — resets affected depths to Beta(1,1), preserves unaffected. Pure function.
-- `depthFixpointContinues(valueMinProgress:reorderingProgress:) -> Bool` — within-depth fixpoint loop condition. Continues while either phase made progress. Trivially testable.
+- `depthFixpointContinues(valueMinProgress:) -> Bool` — within-depth fixpoint loop condition. Continues while any encoder made progress. Trivially testable.
 - `cycleTerminated(acceptedThisCycle:) -> Bool` — zero acceptances across all legs → done.
 
 The scheduler loop itself is thin glue: iterate legs, call these functions, dispatch to encoders/decoders. The logic lives in the functions, not in the loop.

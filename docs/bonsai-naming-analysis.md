@@ -487,10 +487,9 @@ the minimum number of nodes. No structural wood is removed, no new growth is
 triggered. The tree's shape doesn't change — just the length of its extremities.
 
 *Reducer: value minimization within fixed ranges.* Each encoder (ZeroValue,
-BinarySearchToZero, BinarySearchToTarget, ReduceFloat, ReorderSiblings)
-operates on individual entries in the `ChoiceSequence`, reducing their values
-toward zero or reordering siblings for shortlex improvement. The ranges are
-fixed by ancestor nodes — snipping doesn't change them. Bottom-up traversal
+BinarySearchToZero, BinarySearchToTarget, ReduceFloat) operates on individual
+entries in the `ChoiceSequence`, reducing their values toward zero. The ranges
+are fixed by ancestor nodes — snipping doesn't change them. Bottom-up traversal
 (depths max → 0) because leaf values are independent within their inherited
 ranges.
 
@@ -845,8 +844,7 @@ For example, a doc comment on the contravariant sweep might read:
 /// Minimizes values at bound depths within fixed ranges, working
 /// bottom-up from depth max to depth 0. Uses `.direct` decoder
 /// (exact materialization against the existing tree). Encoders:
-/// ZeroValue, BinarySearchToZero, BinarySearchToTarget, ReduceFloat,
-/// ReorderSiblings.
+/// ZeroValue, BinarySearchToZero, BinarySearchToTarget, ReduceFloat.
 ///
 /// Structure-preserving: the tree's shape doesn't change, only
 /// the values at leaf positions. Approximation class: `.exact`.

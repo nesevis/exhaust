@@ -293,7 +293,7 @@ This paper deserves individual treatment, not just a mention under "Hypothesis."
 
 #### Where Exhaust diverges
 
-The paper operates on flat, unstructured choice sequences. All 15 passes treat every position uniformly — there is no notion of bind dependencies or depth-ordered sweeps. Exhaust's bind-aware architecture (the V-cycle, `BindSpanIndex`, depth-filtered target extraction) has no analogue in Hypothesis. The degenerate no-binds case of the V-cycle collapses back to the Hypothesis regime: a flat sweep of delete -> minimise -> reorder -> redistribute.
+The paper operates on flat, unstructured choice sequences. All 15 passes treat every position uniformly — there is no notion of bind dependencies or depth-ordered sweeps. Exhaust's bind-aware architecture (the V-cycle, `BindSpanIndex`, depth-filtered target extraction) has no analogue in Hypothesis. The degenerate no-binds case of the V-cycle collapses back to the Hypothesis regime: a flat sweep of delete -> minimise -> redistribute.
 
 #### Cross-references
 

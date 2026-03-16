@@ -206,7 +206,6 @@ SCA covers command-type *ordering*, not argument *interactions* or bundle-draw c
 | Delete free-standing values | Remove individual commands |
 | Promote branches | Try simpler command types (earlier pick indices) |
 | Simplify/reduce values | Minimize arguments and bundle indices |
-| Reorder siblings | Reorder commands |
 | Delete aligned sibling windows | Remove batches of similar commands |
 
 ### Precondition and Bundle Validity

@@ -34,10 +34,7 @@ Case: Re-running reducer with same `gen/tree/property/config` should produce ide
 Target: pass ordering stability and dictionary/set iteration sensitivity.
 Gap signal: no direct reduction determinism tests; `redistributeNumericPairs` iterates dictionary buckets.
 
-6. Reorder pass must never violate global shortlex objective.
-Case: Candidates that only reorder siblings must still satisfy global shortlex improvement or be rejected.
-Target: `normaliseSiblingOrder` soundness.
-Gap signal: shortlex gate is explicitly disabled in `ReducerStrategies+ReorderSiblings.swift`.
+6. (Removed — `ReorderSiblingsEncoder` has been removed from the reducer.)
 
 7. Relaxed materialization branch-fallback must not corrupt parser state.
 Case: Branch ID mismatch should recover or reject safely without consuming unrelated context.
