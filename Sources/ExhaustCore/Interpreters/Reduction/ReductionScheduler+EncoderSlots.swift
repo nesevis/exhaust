@@ -39,7 +39,6 @@ extension ReductionScheduler {
         case binarySearchToZero
         case binarySearchToTarget
         case reduceFloat
-        case reorderSiblings
     }
 
     /// Deletion encoder slots, used by the prune leg.

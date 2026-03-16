@@ -33,7 +33,6 @@ final class ReductionState<Output> {
     var zeroValueEncoder = ZeroValueEncoder()
     var binarySearchToZeroEncoder = BinarySearchToZeroEncoder()
     var binarySearchToTargetEncoder = BinarySearchToTargetEncoder()
-    let reorderEncoder = ReorderSiblingsEncoder()
     var reduceFloatEncoder = ReduceFloatEncoder()
     var deleteAlignedWindowsEncoder: DeleteAlignedWindowsEncoder
     var tandemEncoder = TandemReductionEncoder()
@@ -248,7 +247,6 @@ extension ReductionState {
             case .binarySearchToZero: binarySearchToZeroEncoder.estimatedCost(sequence: sequence, bindIndex: bindIndex)
             case .binarySearchToTarget: binarySearchToTargetEncoder.estimatedCost(sequence: sequence, bindIndex: bindIndex)
             case .reduceFloat: reduceFloatEncoder.estimatedCost(sequence: sequence, bindIndex: bindIndex)
-            case .reorderSiblings: reorderEncoder.estimatedCost(sequence: sequence, bindIndex: bindIndex)
             }
             if let cost { valueCosts[slot] = cost }
         }
@@ -332,7 +330,6 @@ extension ReductionState {
                     let decoder = SequenceDecoder.for(context)
                     let vSpans = spanCache.valueSpans(at: depth, from: sequence, bindIndex: bindIndex)
                     let fSpans = spanCache.floatSpans(at: depth, from: sequence, bindIndex: bindIndex)
-                    let sGroups = spanCache.siblingGroups(at: depth, from: sequence, bindIndex: bindIndex)
 
                     for slot in snipOrder {
                         guard legBudget.isExhausted == false else { break }
@@ -367,14 +364,6 @@ extension ReductionState {
                                     depthProgress = true
                                     accepted += 1
                                     ReductionScheduler.moveToFront(.reduceFloat, in: &snipOrder)
-                                }
-                            }
-                        case .reorderSiblings:
-                            if sGroups.isEmpty == false {
-                                if try runBatch(reorderEncoder, decoder: decoder, targets: .siblingGroups(sGroups), structureChanged: false, budget: &legBudget) {
-                                    depthProgress = true
-                                    accepted += 1
-                                    ReductionScheduler.moveToFront(.reorderSiblings, in: &snipOrder)
                                 }
                             }
                         }
@@ -468,14 +457,6 @@ extension ReductionState {
                     if try runAdaptive(reduceFloatEncoder, decoder: trainDecoder, targets: .spans(fSpans), structureChanged: structureChangedOnCovariant, budget: &legBudget) {
                         accepted += 1
                         ReductionScheduler.moveToFront(.reduceFloat, in: &trainOrder)
-                    }
-                }
-            case .reorderSiblings:
-                let sGroups = spanCache.siblingGroups(at: 0, from: sequence, bindIndex: bindIndex)
-                if sGroups.isEmpty == false {
-                    if try runBatch(reorderEncoder, decoder: trainDecoder, targets: .siblingGroups(sGroups), structureChanged: structureChangedOnCovariant, budget: &legBudget) {
-                        accepted += 1
-                        ReductionScheduler.moveToFront(.reorderSiblings, in: &trainOrder)
                     }
                 }
             }
