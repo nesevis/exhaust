@@ -89,10 +89,35 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
 
         // --- Structured coverage phase ---
         var coverageIterations = 0
+        if useRandomOnly {
+            ExhaustLog.notice(
+                category: .propertyTest,
+                event: "coverage_skipped",
+                "Coverage phase skipped (randomOnly mode)"
+            )
+        } else if seed != nil {
+            ExhaustLog.notice(
+                category: .propertyTest,
+                event: "coverage_skipped",
+                "Coverage phase skipped (deterministic replay)"
+            )
+        }
         if !useRandomOnly, seed == nil {
             let coverageResult = CoverageRunner.run(gen, coverageBudget: coverageBudget, property: property)
             switch coverageResult {
-            case let .failure(value, tree, iteration):
+            case let .failure(value, tree, iteration, strength, rows, parameters, totalSpace, kind):
+                ExhaustLog.notice(
+                    category: .propertyTest,
+                    event: "coverage_failure",
+                    metadata: [
+                        "iteration": "\(iteration)",
+                        "strength": "\(strength)",
+                        "covering_rows": "\(rows)",
+                        "parameters": "\(parameters)",
+                        "total_space": "\(totalSpace)",
+                        "kind": kind == .boundaryValue ? "boundary" : "finite",
+                    ]
+                )
                 // Reflect to get a structurally correct tree with materialized picks,
                 // since coverage-built trees lack unselected branches needed by reducer strategies.
                 let shrinkTree = (try? Interpreters.reflect(gen, with: value)) ?? tree
@@ -217,7 +242,11 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
                 )
 
             case .notApplicable:
-                break
+                ExhaustLog.notice(
+                    category: .propertyTest,
+                    event: "coverage_not_applicable",
+                    "Generator not analyzable for structured coverage"
+                )
             }
         }
         // --- Random sampling phase (full maxIterations budget) ---

@@ -260,6 +260,7 @@ struct DateDSTPropertyTests {
 
     @Test("DateFormatter returns nil for valid calendar dates where midnight doesn't exist")
     func dateFormatterMidnightBug() {
+        ExhaustLog.setConfiguration(.init(isEnabled: true, minimumLevel: .info, categoryMinimumLevels: [.reducer: .debug, .propertyTest: .debug], format: .human))
         let havana = TimeZone(identifier: "America/Havana")!
         let gen = #gen(.date(between: Self.yearRange2024, interval: .hours(1), timeZone: havana))
 
@@ -268,7 +269,7 @@ struct DateDSTPropertyTests {
         buggyFormatter.timeZone = TimeZone(identifier: "America/Havana")!
         buggyFormatter.isLenient = false
 
-        let counterExample = #exhaust(gen, .suppressIssueReporting) { date in
+        let counterExample = #exhaust(gen, .suppressIssueReporting, .useBonsaiReducer) { date in
             // Format as date-only string, then parse back — the round-trip
             let dateString = buggyFormatter.string(from: date)
             let parsed = buggyFormatter.date(from: dateString)
