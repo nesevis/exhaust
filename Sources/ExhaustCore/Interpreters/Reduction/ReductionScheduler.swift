@@ -38,6 +38,34 @@ enum ReductionScheduler {
         var cycles = 0
 
         // MARK: - V-Cycle
+        //
+        // Each leg internally uses nondeterministic encoders (Kleisli arrows
+        // X → P(X) producing candidate sets), but resolves to a single best
+        // candidate before the next leg starts. The cycle is therefore
+        // deterministic composition in Set:
+        //
+        //   resolve ∘ leg_n ∘ ... ∘ resolve ∘ leg_1
+        //
+        // not Kleisli composition in Kl(P):
+        //
+        //   leg_n ⊙ ... ⊙ leg_1
+        //
+        // Full Kleisli composition would explore all paths through the
+        // candidate sets of every leg (exponential in the number of legs and
+        // accepted candidates per leg) and pick the globally optimal endpoint.
+        // Greedy resolution is sound (each step is exact, so the composite
+        // is exact) but incomplete — it can miss better endpoints reachable
+        // through intermediate candidates that are suboptimal for one leg but
+        // unlock improvements in a later leg.
+        //
+        // With 5 legs and 5–20 accepted candidates per leg, full Kleisli
+        // composition would require 5^5 to 20^5 property evaluations per
+        // cycle. The reducer typically completes in 30–800 total evaluations.
+        // Greedy resolution (k=1) is the only viable operating point.
+        //
+        // See: Sepúlveda-Jiménez, "Categories of Optimization Reductions"
+        // (Jan 2026), Section 7.3 (Def 7.7, Prop 7.8) for the Kleisli
+        // composition framework and its cost guarantees.
 
         while stallBudget > 0 {
             cycles += 1

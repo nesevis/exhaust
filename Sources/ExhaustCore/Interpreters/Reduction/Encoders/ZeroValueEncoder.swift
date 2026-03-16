@@ -9,6 +9,7 @@ public struct ZeroValueEncoder: AdaptiveEncoder {
     public func estimatedCost(sequence: ChoiceSequence, bindIndex _: BindSpanIndex?) -> Int? {
         let t = ChoiceSequence.extractAllValueSpans(from: sequence).count
         guard t > 0 else { return nil }
+        // 1 all-at-once probe + t individual probes, one per non-zero target.
         return 1 + t
     }
 
@@ -64,7 +65,17 @@ public struct ZeroValueEncoder: AdaptiveEncoder {
             return allSimplest
 
         case .individual:
-            if lastAccepted, spanIndex > 0 {
+            if lastAccepted, spanIndex == 0 {
+                // All-at-once probe was accepted — update base sequence with all targets
+                // so individual probes build on the zeroed state.
+                for entry in filteredSpans {
+                    sequence[entry.seqIdx] = .value(.init(
+                        choice: entry.target,
+                        validRange: entry.validRange,
+                        isRangeExplicit: entry.isRangeExplicit
+                    ))
+                }
+            } else if lastAccepted, spanIndex > 0 {
                 // Update base sequence with the previously accepted value.
                 let prev = filteredSpans[spanIndex - 1]
                 sequence[prev.seqIdx] = .value(.init(

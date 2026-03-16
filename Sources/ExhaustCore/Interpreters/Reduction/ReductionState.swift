@@ -18,7 +18,6 @@ final class ReductionState<Output> {
     var bindIndex: BindSpanIndex?
     var bestSequence: ChoiceSequence
     var bestOutput: Output
-    var rejectCache: ReducerCache
     var spanCache: SpanCache
     var lattice: DominanceLattice
 
@@ -67,7 +66,6 @@ final class ReductionState<Output> {
         self.fallbackTree = hasBind ? tree : nil
         self.bestSequence = sequence
         self.bestOutput = output
-        self.rejectCache = ReducerCache()
         self.spanCache = SpanCache()
         self.lattice = DominanceLattice()
         self.deleteAlignedWindowsEncoder = DeleteAlignedWindowsEncoder(
@@ -84,8 +82,8 @@ extension ReductionState {
         tree = result.tree
         output = result.output
         fallbackTree = result.tree
-        spanCache.invalidate()
         if structureChanged {
+            spanCache.invalidate()
             bindIndex = hasBind ? BindSpanIndex(from: sequence) : nil
             if config.useReductionMaterializer == false {
                 let seed = ZobristHash.hash(of: sequence)
@@ -116,7 +114,6 @@ extension ReductionState {
         decoder: SequenceDecoder,
         targets: TargetSet,
         structureChanged: Bool,
-        cache: inout ReducerCache,
         budget: inout ReductionScheduler.LegBudget
     ) throws -> Bool {
         guard budget.isExhausted == false else { return false }
@@ -125,7 +122,6 @@ extension ReductionState {
         var probes = 0
         for candidate in encoder.encode(sequence: sequence, targets: targets) {
             guard budget.isExhausted == false else { break }
-            guard cache.contains(candidate) == false else { continue }
             probes += 1
             if let result = try decoder.decode(
                 candidate: candidate,
@@ -146,7 +142,6 @@ extension ReductionState {
                 return true
             }
             budget.recordMaterialization(accepted: false)
-            cache.insert(candidate)
         }
         if isInstrumented {
             if probes > 0 {
@@ -275,17 +270,27 @@ extension ReductionState {
 extension ReductionState {
     /// Runs branch promotion and pivoting. Returns `true` if any branch was accepted.
     func runBranchLeg(remaining: inout Int) throws -> Bool {
-        let branchDecoder = makeDeletionDecoder(at: 0)
+        let branchContext = DecoderContext(depth: .specific(0), bindIndex: bindIndex, fallbackTree: fallbackTree, strictness: .relaxed, useReductionMaterializer: config.useReductionMaterializer, materializePicks: true)
+        let branchDecoder = SequenceDecoder.for(branchContext)
         var branchBudget = ReductionScheduler.LegBudget(hardCap: remaining, stallPatience: remaining)
         var improved = false
 
+        // Re-materialize with picks so branch encoders see all non-selected alternatives.
+        // This is needed because prior legs may have accepted probes with materializePicks=false.
+        if case let .success(_, freshTree) = ReductionMaterializer.materialize(
+            gen, prefix: sequence, mode: .exact, fallbackTree: fallbackTree,
+            materializePicks: true
+        ) {
+            tree = freshTree
+        }
+
         promoteBranchesEncoder.currentTree = tree
-        if try runBatch(promoteBranchesEncoder, decoder: branchDecoder, targets: .wholeSequence, structureChanged: true, cache: &rejectCache, budget: &branchBudget) {
+        if try runBatch(promoteBranchesEncoder, decoder: branchDecoder, targets: .wholeSequence, structureChanged: true, budget: &branchBudget) {
             improved = true
         }
 
         pivotBranchesEncoder.currentTree = tree
-        if try runBatch(pivotBranchesEncoder, decoder: branchDecoder, targets: .wholeSequence, structureChanged: true, cache: &rejectCache, budget: &branchBudget) {
+        if try runBatch(pivotBranchesEncoder, decoder: branchDecoder, targets: .wholeSequence, structureChanged: true, budget: &branchBudget) {
             improved = true
         }
 
@@ -297,7 +302,6 @@ extension ReductionState {
     func runSnipLeg(remaining: inout Int, maxBindDepth: Int, dirtyDepths: Set<Int>) throws -> Int {
         let target = cycleBudget.initialBudget(for: .contravariant)
         var legBudget = ReductionScheduler.LegBudget(hardCap: remaining, stallPatience: target)
-        rejectCache = ReducerCache()
         spanCache.invalidate()
         lattice.invalidate()
         var accepted = 0
@@ -305,6 +309,7 @@ extension ReductionState {
         if maxBindDepth >= 1 {
             for depth in stride(from: maxBindDepth, through: 1, by: -1) where dirtyDepths.contains(depth) {
                 guard legBudget.isExhausted == false else { break }
+                lattice.invalidate()
                 var depthProgress = true
                 while depthProgress, legBudget.isExhausted == false {
                     depthProgress = false
@@ -351,7 +356,7 @@ extension ReductionState {
                             }
                         case .reorderSiblings:
                             if sGroups.isEmpty == false {
-                                if try runBatch(reorderEncoder, decoder: decoder, targets: .siblingGroups(sGroups), structureChanged: false, cache: &rejectCache, budget: &legBudget) {
+                                if try runBatch(reorderEncoder, decoder: decoder, targets: .siblingGroups(sGroups), structureChanged: false, budget: &legBudget) {
                                     depthProgress = true
                                     accepted += 1
                                     ReductionScheduler.moveToFront(.reorderSiblings, in: &snipOrder)
@@ -370,13 +375,13 @@ extension ReductionState {
     func runPruneLeg(remaining: inout Int, maxBindDepth: Int) throws -> Int {
         let target = cycleBudget.initialBudget(for: .deletion)
         var legBudget = ReductionScheduler.LegBudget(hardCap: remaining, stallPatience: target)
-        rejectCache = ReducerCache()
         spanCache.invalidate()
         lattice.invalidate()
         var accepted = 0
 
         for depth in 0 ... maxBindDepth {
             guard legBudget.isExhausted == false else { break }
+            lattice.invalidate()
             let depthDecoder = makeDeletionDecoder(at: depth)
 
             for slot in pruneOrder {
@@ -409,7 +414,6 @@ extension ReductionState {
     func runTrainLeg(remaining: inout Int) throws -> Int {
         let target = cycleBudget.initialBudget(for: .covariant)
         var legBudget = ReductionScheduler.LegBudget(hardCap: remaining, stallPatience: target)
-        rejectCache = ReducerCache()
         spanCache.invalidate()
         lattice.invalidate()
         let structureChangedOnCovariant = hasBind
@@ -454,7 +458,7 @@ extension ReductionState {
             case .reorderSiblings:
                 let sGroups = spanCache.siblingGroups(at: 0, from: sequence, bindIndex: bindIndex)
                 if sGroups.isEmpty == false {
-                    if try runBatch(reorderEncoder, decoder: trainDecoder, targets: .siblingGroups(sGroups), structureChanged: structureChangedOnCovariant, cache: &rejectCache, budget: &legBudget) {
+                    if try runBatch(reorderEncoder, decoder: trainDecoder, targets: .siblingGroups(sGroups), structureChanged: structureChangedOnCovariant, budget: &legBudget) {
                         accepted += 1
                         ReductionScheduler.moveToFront(.reorderSiblings, in: &trainOrder)
                     }

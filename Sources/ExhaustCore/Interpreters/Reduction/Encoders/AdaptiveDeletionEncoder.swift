@@ -10,6 +10,7 @@ struct AdaptiveDeletionEncoder {
     private var maxBatch = 0
     private var stepper = FindIntegerStepper()
     private var needsNewGroup = true
+    private var didEmitCandidate = false
 
     // MARK: - API
 
@@ -19,6 +20,7 @@ struct AdaptiveDeletionEncoder {
         self.sortedSpans = sortedSpans
         spanIndex = 0
         needsNewGroup = true
+        didEmitCandidate = false
     }
 
     /// Produces the next deletion candidate, or `nil` when all groups are exhausted.
@@ -34,13 +36,21 @@ struct AdaptiveDeletionEncoder {
                 }
                 let firstProbe = stepper.start()
                 needsNewGroup = false
+                didEmitCandidate = false
                 if let candidate = buildCandidate(batchSize: firstProbe) {
+                    didEmitCandidate = true
                     return candidate
                 }
             }
 
-            if let nextSize = stepper.advance(lastAccepted: lastAccepted) {
+            // Use actual lastAccepted only if we emitted a candidate last time.
+            // When buildCandidate returned nil, no probe was emitted,
+            // so lastAccepted is stale — treat as rejection.
+            let feedback = didEmitCandidate ? lastAccepted : false
+            didEmitCandidate = false
+            if let nextSize = stepper.advance(lastAccepted: feedback) {
                 if let candidate = buildCandidate(batchSize: nextSize) {
+                    didEmitCandidate = true
                     return candidate
                 }
                 continue

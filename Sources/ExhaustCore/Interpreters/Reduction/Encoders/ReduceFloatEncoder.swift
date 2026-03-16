@@ -28,6 +28,7 @@ struct ReduceFloatEncoder: AdaptiveEncoder {
             return v.choice.tag == .double || v.choice.tag == .float
         })
         guard t > 0 else { return nil }
+        // t float targets × ~94: four stages per target (special values, precision truncation, integral binary search, ratio binary search) with ~20 batch candidates + ~64 binary search steps + overhead.
         return t * 94
     }
 

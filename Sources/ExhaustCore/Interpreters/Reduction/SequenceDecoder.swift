@@ -4,12 +4,13 @@
 public enum SequenceDecoder {
     /// ``ReductionMaterializer`` exact mode. Produces a fresh tree with current `validRange` and
     /// all branch alternatives. Inner values are rejected if out-of-range; bound values are clamped.
-    case exact
+    case exact(materializePicks: Bool = false)
 
     /// ``ReductionMaterializer`` guided mode. Produces a fresh tree with current `validRange` and
     /// all branch alternatives. Tiered resolution: prefix → fallback → PRNG. Cursor suspension
     /// at bind sites.
-    case guided(fallbackTree: ChoiceTree?, maximizeBoundRegionIndices: Set<Int>? = nil)
+    case guided(fallbackTree: ChoiceTree?, maximizeBoundRegionIndices: Set<Int>? = nil,
+                materializePicks: Bool = false)
 
     // MARK: - Decode
 
@@ -24,19 +25,21 @@ public enum SequenceDecoder {
         property: (Output) -> Bool
     ) throws -> ShrinkResult<Output>? {
         switch self {
-        case .exact:
+        case let .exact(materializePicks):
             decodeExact(
                 candidate: consume candidate, gen: gen,
                 fallbackTree: tree,
-                originalSequence: originalSequence, property: property
+                originalSequence: originalSequence, property: property,
+                materializePicks: materializePicks
             )
 
-        case let .guided(fallbackTree, maximizeBoundRegionIndices):
+        case let .guided(fallbackTree, maximizeBoundRegionIndices, materializePicks):
             decodeGuided(
                 candidate: consume candidate, gen: gen,
                 fallbackTree: fallbackTree ?? tree,
                 maximizeBoundRegionIndices: maximizeBoundRegionIndices,
-                originalSequence: originalSequence, property: property
+                originalSequence: originalSequence, property: property,
+                materializePicks: materializePicks
             )
         }
     }
@@ -71,11 +74,13 @@ public enum SequenceDecoder {
         gen: ReflectiveGenerator<Output>,
         fallbackTree: ChoiceTree,
         originalSequence _: ChoiceSequence,
-        property: (Output) -> Bool
+        property: (Output) -> Bool,
+        materializePicks: Bool
     ) -> ShrinkResult<Output>? {
         switch ReductionMaterializer.materialize(
             gen, prefix: consume candidate,
-            mode: .exact, fallbackTree: fallbackTree
+            mode: .exact, fallbackTree: fallbackTree,
+            materializePicks: materializePicks
         ) {
         case let .success(output, freshTree):
             guard property(output) == false else { return nil }
@@ -97,7 +102,8 @@ public enum SequenceDecoder {
         fallbackTree: ChoiceTree,
         maximizeBoundRegionIndices: Set<Int>? = nil,
         originalSequence: ChoiceSequence,
-        property: (Output) -> Bool
+        property: (Output) -> Bool,
+        materializePicks: Bool
     ) -> ShrinkResult<Output>? {
         let seed = ZobristHash.hash(of: candidate)
         switch ReductionMaterializer.materialize(
@@ -107,12 +113,13 @@ public enum SequenceDecoder {
                 seed: seed,
                 fallbackTree: fallbackTree,
                 maximizeBoundRegionIndices: maximizeBoundRegionIndices
-            )
+            ),
+            materializePicks: materializePicks
         ) {
         case let .success(output, freshTree):
+            guard property(output) == false else { return nil }
             let freshSequence = ChoiceSequence(freshTree)
             guard freshSequence.shortLexPrecedes(originalSequence) else { return nil }
-            guard property(output) == false else { return nil }
             return ShrinkResult(
                 sequence: freshSequence,
                 tree: freshTree,
@@ -134,24 +141,25 @@ public enum SequenceDecoder {
     public static func `for`(_ context: DecoderContext) -> SequenceDecoder {
         let hasBinds = context.bindIndex != nil
             && context.bindIndex?.isEmpty == false
+        let picks = context.materializePicks
 
         switch context.depth {
         case .global:
             // Cross-stage redistribution: guided re-derivation handles both
             // inner and bound value changes uniformly.
-            return .guided(fallbackTree: context.fallbackTree)
+            return .guided(fallbackTree: context.fallbackTree, materializePicks: picks)
 
         case .specific(0):
             if hasBinds || context.strictness == .relaxed {
-                return .guided(fallbackTree: context.fallbackTree)
+                return .guided(fallbackTree: context.fallbackTree, materializePicks: picks)
             }
-            return .exact
+            return .exact(materializePicks: picks)
 
         case .specific:
             if context.strictness == .relaxed {
-                return .guided(fallbackTree: context.fallbackTree)
+                return .guided(fallbackTree: context.fallbackTree, materializePicks: picks)
             }
-            return .exact
+            return .exact(materializePicks: picks)
         }
     }
 }

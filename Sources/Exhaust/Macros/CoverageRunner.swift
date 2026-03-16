@@ -1,12 +1,13 @@
 // Encapsulates the structured coverage phase of a property test.
 //
-// Implements the analysis hierarchy: exhaustive → t-way → boundary.
+// Implements the analysis hierarchy via CoverageStrategy protocol dispatch:
+// exhaustive → t-way → single-parameter (finite) and boundary (boundary).
 import ExhaustCore
 
 enum CoverageRunner {
     enum Result<Output> {
         /// Coverage found a counterexample.
-        case failure(value: Output, tree: ChoiceTree, iteration: Int)
+        case failure(value: Output, tree: ChoiceTree, iteration: Int, strength: Int, rows: Int, parameters: Int, totalSpace: UInt64, kind: CoverageKind)
         /// Exhaustive coverage passed — entire space tested, skip random phase.
         case exhaustive(iterations: Int)
         /// Partial coverage completed — proceed to random phase.
@@ -44,18 +45,24 @@ enum CoverageRunner {
         coverageBudget: UInt64,
         property: (Output) -> Bool
     ) -> Result<Output> {
-        // When the original tree contains bind nodes, coverage only exhausts the inner
-        // parameter space — the bound subtree varies per inner value and isn't covered.
-        // Never treat such generators as exhaustive so the random phase always runs.
         let hasBinds = profile.originalTree?.containsBind ?? false
-        let isExhaustive = profile.totalSpace <= coverageBudget && hasBinds == false
 
-        let covering: CoveringArray? = if isExhaustive {
-            CoveringArray.generate(profile: profile, strength: profile.parameters.count)
-        } else {
-            CoveringArray.bestFitting(budget: coverageBudget, profile: profile)
-                // bestFitting requires ≥2 parameters; fall back to strength-1 for single-parameter profiles
-                ?? CoveringArray.generate(profile: profile, strength: 1)
+        // Build strategy chain ordered by phase (strongest first).
+        // The first strategy that returns a non-nil covering array wins.
+        let strategies: [any CoverageStrategy] = [
+            ExhaustiveCoverageStrategy(hasBinds: hasBinds),
+            TWayCoverageStrategy(),
+            SingleParameterCoverageStrategy(),
+        ]
+
+        var covering: CoveringArray?
+        var isExhaustive = false
+        for strategy in strategies {
+            if let result = strategy.generate(profile: profile, budget: coverageBudget) {
+                covering = result
+                isExhaustive = strategy.phase == .exhaustive
+                break
+            }
         }
 
         guard let covering, covering.strength >= 1 else {
@@ -92,7 +99,12 @@ enum CoverageRunner {
             guard let value else { continue }
             iterations += 1
             if property(value) == false {
-                return .failure(value: value, tree: tree, iteration: iterations)
+                return .failure(
+                    value: value, tree: tree, iteration: iterations,
+                    strength: covering.strength, rows: covering.rows.count,
+                    parameters: profile.parameters.count, totalSpace: profile.totalSpace,
+                    kind: .finiteDomain
+                )
             }
         }
 
@@ -116,7 +128,8 @@ enum CoverageRunner {
         coverageBudget: UInt64,
         property: (Output) -> Bool
     ) -> Result<Output> {
-        guard let covering = CoveringArray.bestFitting(budget: coverageBudget, boundaryProfile: profile) else {
+        let strategy = BoundaryValueCoverageStrategy()
+        guard let covering = strategy.generate(profile: profile, budget: coverageBudget) else {
             return .notApplicable
         }
         // Strength 1 is valid for boundary coverage (test all boundary values for
@@ -153,7 +166,12 @@ enum CoverageRunner {
             guard let value else { continue }
             iterations += 1
             if property(value) == false {
-                return .failure(value: value, tree: tree, iteration: iterations)
+                return .failure(
+                    value: value, tree: tree, iteration: iterations,
+                    strength: covering.strength, rows: covering.rows.count,
+                    parameters: profile.parameters.count, totalSpace: covering.profile.totalSpace,
+                    kind: .boundaryValue
+                )
             }
         }
 

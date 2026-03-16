@@ -4,6 +4,7 @@
 //
 
 import Testing
+import ExhaustCore
 
 @Suite("BoundaryCoveringArrayReplay")
 struct BoundaryCoveringArrayReplayUnitTests {

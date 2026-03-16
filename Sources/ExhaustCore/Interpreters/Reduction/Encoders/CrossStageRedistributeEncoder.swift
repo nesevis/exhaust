@@ -19,7 +19,8 @@ public struct CrossStageRedistributeEncoder: AdaptiveEncoder {
     public func estimatedCost(sequence: ChoiceSequence, bindIndex _: BindSpanIndex?) -> Int? {
         let t = ChoiceSequence.extractAllValueSpans(from: sequence).count
         guard t >= 2 else { return nil }
-        return min(t * (t - 1), 240) * 10
+        // O(t²) pair orientations capped at 240 × ~20: FindIntegerStepper monotone search (~log(distance)) + non-monotonic fallback phase with ~5 targeted deltas per pair.
+        return min(t * (t - 1), 240) * 20
     }
 
     // MARK: - Internal types

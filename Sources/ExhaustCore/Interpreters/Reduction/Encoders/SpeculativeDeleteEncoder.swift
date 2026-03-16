@@ -10,6 +10,7 @@ public struct SpeculativeDeleteEncoder: AdaptiveEncoder {
     public func estimatedCost(sequence: ChoiceSequence, bindIndex _: BindSpanIndex?) -> Int? {
         let t = ChoiceSequence.extractContainerSpans(from: sequence).count
         guard t > 0 else { return nil }
+        // t container spans; single-span speculative deletion with FindIntegerStepper batch sizing, converging in ~10 probes per depth group.
         return t * 10
     }
 

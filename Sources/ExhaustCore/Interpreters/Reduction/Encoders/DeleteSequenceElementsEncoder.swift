@@ -10,6 +10,7 @@ public struct DeleteSequenceElementsEncoder: AdaptiveEncoder {
     public func estimatedCost(sequence: ChoiceSequence, bindIndex _: BindSpanIndex?) -> Int? {
         let t = ChoiceSequence.extractSequenceElementSpans(from: sequence).count
         guard t > 0 else { return nil }
+        // t element spans grouped by depth; FindIntegerStepper binary-searches the batch size within each group, converging in ~10 probes per group.
         return t * 10
     }
 

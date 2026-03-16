@@ -86,6 +86,19 @@ public func __runContract<Spec: ContractSpec>(
     //
     // If the command generator is a simple pick with parameter-free branches, build a covering array where each sequence position is a parameter and each command type is a domain value. This guarantees every t-way ordered permutation of command types is tested.
     var scaResult: SCAResult<Spec.Command>?
+    if useRandomOnly {
+        ExhaustLog.notice(
+            category: .propertyTest,
+            event: "sca_coverage_skipped",
+            "SCA coverage skipped (randomOnly mode)"
+        )
+    } else if seed != nil {
+        ExhaustLog.notice(
+            category: .propertyTest,
+            event: "sca_coverage_skipped",
+            "SCA coverage skipped (deterministic replay)"
+        )
+    }
     if !useRandomOnly, seed == nil {
         scaResult = runSCACoverage(
             seqGen: seqGen,
@@ -301,14 +314,28 @@ func runSCACoverage<Command>(
     argumentAware: Bool,
     property: @escaping @Sendable ([Command]) -> Bool
 ) -> SCAResult<Command>? {
-    guard let pickChoices = extractPickChoices(from: commandGen) else { return nil }
+    guard let pickChoices = extractPickChoices(from: commandGen) else {
+        ExhaustLog.notice(
+            category: .propertyTest,
+            event: "sca_coverage_skipped",
+            "Command generator is not a top-level pick — SCA not applicable"
+        )
+        return nil
+    }
 
     let seqLen = commandLimit
-    guard seqLen >= 2, pickChoices.count >= 2 else { return nil }
-
-    let profile: FiniteDomainProfile
-    let mapping: SCADomainMapping?
-    let maxStrength: Int
+    guard seqLen >= 2, pickChoices.count >= 2 else {
+        ExhaustLog.notice(
+            category: .propertyTest,
+            event: "sca_coverage_skipped",
+            metadata: [
+                "sequence_length": "\(commandLimit)",
+                "command_types": "\(pickChoices.count)",
+                "reason": "too few positions or command types for SCA (need >= 2 of each)",
+            ]
+        )
+        return nil
+    }
 
     // Cap interaction strength so IPOG stays under ~100ms for any sequence length.
     // IPOG's vertical growth enumerates C(seqLen, t) parameter combinations, which
@@ -326,58 +353,54 @@ func runSCACoverage<Command>(
     default: 2
     }
 
-    if argumentAware {
-        let threshold = SequenceCoveringArray.computeThreshold(
-            budget: coverageBudget, sequenceLength: seqLen, branchCount: pickChoices.count
+    let builder: any SCADomainBuilder = argumentAware
+        ? ArgumentAwareSCABuilder()
+        : CommandTypeSCABuilder()
+
+    guard let domain = builder.buildDomain(
+        sequenceLength: seqLen,
+        pickChoices: pickChoices,
+        coverageBudget: coverageBudget,
+        strengthCap: strengthCap
+    ) else {
+        ExhaustLog.notice(
+            category: .propertyTest,
+            event: "sca_coverage_skipped",
+            "Domain construction failed — branches may have parameterized sub-generators without argumentAwareCoverage"
         )
-        let branchProfiles = SequenceCoveringArray.analyzeBranches(pickChoices, threshold: threshold)
-        let (p, m) = SequenceCoveringArray.buildProfile(
-            sequenceLength: seqLen,
-            pickChoices: pickChoices,
-            branchProfiles: branchProfiles
-        )
-        profile = p
-        mapping = m
-        // Cap at t=2 for argument-aware domains to avoid combinatorially expensive IPOG runs.
-        let hasArgumentDomains = branchProfiles.contains { if case .analyzed = $0 { return true }; return false }
-        maxStrength = hasArgumentDomains ? 2 : strengthCap
-    } else {
-        // Command-type-only SCA produces .just("") sub-trees that can't replay parameterized branches.
-        guard SequenceCoveringArray.allBranchesParameterFree(pickChoices) else { return nil }
-        profile = SequenceCoveringArray.buildProfile(
-            sequenceLength: seqLen, pickChoices: pickChoices
-        )
-        mapping = nil
-        maxStrength = strengthCap
+        return nil
     }
 
-    guard let covering = CoveringArray.bestFitting(budget: coverageBudget, profile: profile, maxStrength: maxStrength) else {
+    guard let covering = CoveringArray.bestFitting(
+        budget: coverageBudget,
+        profile: domain.profile,
+        maxStrength: domain.maxStrength
+    ) else {
+        ExhaustLog.notice(
+            category: .propertyTest,
+            event: "sca_coverage_skipped",
+            metadata: [
+                "reason": "covering array exceeds budget",
+                "budget": "\(coverageBudget)",
+                "command_types": "\(pickChoices.count)",
+                "sequence_length": "\(seqLen)",
+            ]
+        )
         return nil
     }
 
     let lengthRange = UInt64(0) ... UInt64(commandLimit)
 
+    var iterations = 0
     for row in covering.rows {
-        let tree: ChoiceTree? = if let mapping {
-            SequenceCoveringArray.buildTree(
-                row: row,
-                profile: profile,
-                mapping: mapping,
-                sequenceLengthRange: lengthRange
-            )
-        } else {
-            SequenceCoveringArray.buildTree(
-                row: row,
-                profile: profile,
-                sequenceLengthRange: lengthRange
-            )
-        }
+        let tree: ChoiceTree? = domain.buildTree(row: row, sequenceLengthRange: lengthRange)
         guard let tree else { continue }
 
         guard let value: [Command] = try? Interpreters.replay(seqGen, using: tree) else {
             continue
         }
 
+        iterations += 1
         if property(value) == false {
             // Reflect to get a structurally correct tree with materialized picks,
             // since coverage-built trees lack unselected branches needed by reducer strategies.
@@ -402,6 +425,7 @@ func runSCACoverage<Command>(
         metadata: [
             "strength": "\(covering.strength)",
             "rows": "\(covering.rows.count)",
+            "iterations": "\(iterations)",
             "sequence_length": "\(seqLen)",
             "command_types": "\(pickChoices.count)",
         ]
