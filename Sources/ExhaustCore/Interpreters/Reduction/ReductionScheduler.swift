@@ -143,10 +143,11 @@ enum ReductionScheduler {
                         "cycle": "\(cycles)",
                         "probes": "\(cycleProbes)",
                         "improved": "\(cycleImproved)",
-                        "seq_len": "\(state.sequence.count)",
+                        "seq_len": state.sequence.count.description,
                         "deletion": "\(deletionAccepted)",
                         "contravariant": "\(contravariantAccepted)",
                         "covariant": "\(covariantAccepted)",
+                        "cached_total": state.rejectCache.count.description
                     ]
                 )
             }
