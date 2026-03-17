@@ -186,7 +186,6 @@ extension ReductionState {
             probes += 1
             let probeHash = ZobristHash.hash(of: probe)
             if rejectCache.contains(probeHash) {
-                budget.recordMaterialization()
                 lastAccepted = false
                 continue
             }
