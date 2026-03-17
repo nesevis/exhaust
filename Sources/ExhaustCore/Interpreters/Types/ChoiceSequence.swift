@@ -108,10 +108,19 @@ public extension ChoiceSequence {
                 output.append(.group(false))
             }
         case let .bind(inner, bound):
-            output.append(.bind(true))
-            flatten(inner, includingAllBranches: includingAllBranches, into: &output)
-            flatten(bound, includingAllBranches: includingAllBranches, into: &output)
-            output.append(.bind(false))
+            if inner.isGetSize {
+                // getSize-bound: structurally stable (size is fixed during reduction),
+                // so emit .group markers to let deletion encoders work through them.
+                output.append(.group(true))
+                flatten(inner, includingAllBranches: includingAllBranches, into: &output)
+                flatten(bound, includingAllBranches: includingAllBranches, into: &output)
+                output.append(.group(false))
+            } else {
+                output.append(.bind(true))
+                flatten(inner, includingAllBranches: includingAllBranches, into: &output)
+                flatten(bound, includingAllBranches: includingAllBranches, into: &output)
+                output.append(.bind(false))
+            }
         case let .resize(_, choices):
             output.append(.group(true))
             // while-loop: avoiding IteratorProtocol overhead in debug builds.
@@ -261,7 +270,16 @@ public extension ChoiceSequence {
                     continue
                 }
 
-            case .value, .reduced, .branch, .just:
+            case .value, .reduced, .just:
+                if let parent = stack.last, case .sequence(true, isLengthExplicit: _) = parent.kind {
+                    spans.append(ChoiceSpan(
+                        kind: entry,
+                        range: i ... i,
+                        depth: stack.count
+                    ))
+                }
+
+            case .branch:
                 break
             }
             i += 1

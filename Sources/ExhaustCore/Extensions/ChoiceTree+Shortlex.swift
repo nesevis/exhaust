@@ -14,7 +14,9 @@ public extension ChoiceTree {
             if let meta = array.first(where: { $0.metadata.validRange != nil })?.metadata {
                 return meta
             }
-            fallthrough
+            return ChoiceMetadata(validRange: nil)
+        case let .bind(_, bound):
+            return bound.metadata
         default:
             return ChoiceMetadata(validRange: nil)
         }

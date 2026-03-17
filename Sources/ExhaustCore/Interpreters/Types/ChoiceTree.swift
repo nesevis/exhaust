@@ -118,24 +118,37 @@ public extension ChoiceTree {
         return false
     }
 
-    /// Whether this tree contains any `.bind` nodes.
+    /// Whether this tree contains any data-dependent `.bind` nodes.
+    ///
+    /// Binds whose inner tree is `.getSize` are structurally stable (the size parameter is fixed during reduction) and are excluded.
     var containsBind: Bool {
         switch self {
-        case .bind:
-            true
+        case let .bind(inner, bound):
+            if inner.isGetSize {
+                return bound.containsBind
+            }
+            return true
         case .choice, .just, .getSize:
-            false
+            return false
         case let .branch(_, _, _, _, choice):
-            choice.containsBind
+            return choice.containsBind
         case let .selected(inner):
-            inner.containsBind
+            return inner.containsBind
         case let .sequence(_, elements, _):
-            elements.contains(where: \.containsBind)
+            return elements.contains(where: \.containsBind)
         case let .group(array, _):
-            array.contains(where: \.containsBind)
+            return array.contains(where: \.containsBind)
         case let .resize(_, choices):
-            choices.contains(where: \.containsBind)
+            return choices.contains(where: \.containsBind)
         }
+    }
+
+    /// Whether this node is a `.getSize` leaf.
+    var isGetSize: Bool {
+        if case .getSize = self {
+            return true
+        }
+        return false
     }
 
     /// Whether this tree contains any pick sites (`.branch` nodes).

@@ -145,10 +145,11 @@ public extension Gen {
         case .constant:
             Gen.choose(in: range)
         case .linear, .linearFrom, .exponential, .exponentialFrom:
-            Gen.getSize()._bind { size in
-                let effectiveRange = scaledRange(range, scaling: scaling, size: size)
-                return Gen.chooseDerived(in: effectiveRange)
-            }
+            Gen.getSize()._bound(
+                forward: { Gen.chooseDerived(in: scaledRange(range, scaling: scaling, size: $0)) },
+                backward: { _ in 100 } // Reflection always uses getSize(max)
+            )
+
         }
     }
 
@@ -191,16 +192,21 @@ public extension Gen {
     }
 
     /// Scales a distance from origin to bound by the given fraction (0–1).
+    ///
+    /// Follows Hedgehog's scaling approach: linear uses integer arithmetic with a `+1` adjustment to ensure non-trivial ranges at small sizes, and exponential uses `rounded()` instead of truncation.
     static func scaledDistance(_ distance: UInt64, fraction: Double, isExponential: Bool) -> UInt64 {
         guard distance > 0, fraction > 0 else { return 0 }
 
         if isExponential {
-            // pow(distance + 1, fraction) - 1, clamped to avoid overflow on UInt64 conversion
+            // Hedgehog: round(pow(|n-z|+1, size/99) - 1), using size/100 since our size range is [0,100]
             let result = pow(Double(distance) + 1.0, fraction) - 1.0
-            return min(UInt64(result), distance)
+            return min(UInt64(result.rounded()), distance)
         } else {
-            let result = Double(distance) * fraction
-            return min(UInt64(result), distance)
+            // Hedgehog: (distance + signum) * size / 100 using integer arithmetic.
+            // The +1 (signum for positive distances) ensures non-trivial ranges at small sizes.
+            let rng = distance + 1
+            let size = UInt64((fraction * 100).rounded())
+            return min((rng &* size) / 100, distance)
         }
     }
 

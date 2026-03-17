@@ -897,16 +897,25 @@ private extension ReductionMaterializer {
                 )
 
             case .guided:
-                // Cursor suspension — bound content re-derived from fallback/PRNG.
-                context.cursor.skipBindBound()
-                context.cursor.suspendForBind()
+                // getSize-binds are structurally stable: getSize produces zero
+                // ChoiceSequence entries and returns a fixed value during reduction.
+                // Their markers are `.group` (not `.bind`), so skip cursor
+                // suspension — skipBindBound() would scan for `.bind` markers
+                // and corrupt the cursor.
+                let isGetSizeBind = innerTree.isGetSize
+                if isGetSizeBind == false {
+                    context.cursor.skipBindBound()
+                    context.cursor.suspendForBind()
+                }
                 context.boundDepth += 1
                 let boundResult = try generateRecursive(
                     boundGen, with: inputValue, context: &context,
                     fallbackTree: boundFallback
                 )
                 context.boundDepth -= 1
-                context.cursor.resumeAfterBind()
+                if isGetSizeBind == false {
+                    context.cursor.resumeAfterBind()
+                }
                 guard let (boundValue, boundTree) = boundResult else { return nil }
                 return try runContinuation(
                     result: boundValue,
