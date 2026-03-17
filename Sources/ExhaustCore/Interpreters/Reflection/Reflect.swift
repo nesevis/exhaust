@@ -319,7 +319,7 @@ public enum Interpreters {
         if let lengthRange = lengthGen.associatedRange {
             validRange = lengthRange
         } else {
-            let lengthReflection = try reflectRecursive(lengthGen, onFinalOutput: finalOutput)
+            let lengthReflection = try reflectRecursive(lengthGen, onFinalOutput: UInt64(targetArray.underestimatedCount))
             validRange = lengthReflection.firstNonNil { $0.path.firstNonNil { $0.metadata.validRange } }
                 ?? UInt64.bitPatternRanges[0]
         }
