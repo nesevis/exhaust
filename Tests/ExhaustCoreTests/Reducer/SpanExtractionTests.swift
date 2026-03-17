@@ -30,6 +30,8 @@ private let seqOpen = ChoiceSequenceValue.sequence(true)
 private let seqClose = ChoiceSequenceValue.sequence(false)
 private let grpOpen = ChoiceSequenceValue.group(true)
 private let grpClose = ChoiceSequenceValue.group(false)
+private let bindOpen = ChoiceSequenceValue.bind(true)
+private let bindClose = ChoiceSequenceValue.bind(false)
 
 private typealias Span = ChoiceSpan
 
@@ -642,5 +644,124 @@ struct ExtractSiblingGroupsTests {
         // Depth 1: 2 group siblings in each inner sequence = 2 groups
         let depth1 = groups.filter { $0.depth == 1 }
         #expect(depth1.count == 2)
+    }
+}
+
+// MARK: - extractSequenceElementSpans
+
+@Suite("Sequence element span extraction tests")
+struct ExtractSequenceElementSpansTests {
+    @Test("Group-wrapped elements inside bind-nested sequence are detected")
+    func groupWrappedElementsInBindNestedSequence() {
+        // Coupling pattern with group-wrapped elements: { V [ (V) (V) (V) ] }
+        let seq: ChoiceSequence = [
+            bindOpen,                                   // 0
+            val(2),                                     // 1  — bound index (inner choice)
+            seqOpen,                                    // 2
+            grpOpen, val(10), grpClose,                 // 3, 4, 5
+            grpOpen, val(20), grpClose,                 // 6, 7, 8
+            grpOpen, val(30), grpClose,                 // 9, 10, 11
+            seqClose,                                   // 12
+            bindClose,                                  // 13
+        ]
+        let spans = ChoiceSequence.extractSequenceElementSpans(from: seq)
+
+        // Three group-wrapped elements, each detected as a sequence element span
+        #expect(spans.count == 3)
+        #expect(spans[0].range == 3 ... 5)
+        #expect(spans[1].range == 6 ... 8)
+        #expect(spans[2].range == 9 ... 11)
+    }
+
+    @Test("Bare-value elements inside bind-nested sequence are detected")
+    func bareValueElementsInBindNestedSequence() {
+        // Coupling pattern with bare values: { V [ V V V ] }
+        // This is what arrays of simple types (Int, UInt, etc.) produce.
+        let seq: ChoiceSequence = [
+            bindOpen,                                   // 0
+            val(2),                                     // 1  — bound index (inner choice)
+            seqOpen,                                    // 2
+            val(10),                                    // 3
+            val(20),                                    // 4
+            val(30),                                    // 5
+            seqClose,                                   // 6
+            bindClose,                                  // 7
+        ]
+        let spans = ChoiceSequence.extractSequenceElementSpans(from: seq)
+
+        // Three bare-value elements — each should be a single-index span.
+        // BUG: currently returns empty because extractSequenceElementSpans
+        // only recognizes group(true)...group(false) pairs, not bare values.
+        #expect(spans.count == 3)
+        #expect(spans[0].range == 3 ... 3)
+        #expect(spans[1].range == 4 ... 4)
+        #expect(spans[2].range == 5 ... 5)
+    }
+
+    @Test("Bare-value elements in flat sequence are detected")
+    func bareValueElementsInFlatSequence() {
+        // Simpler case without bind wrapping: [ V V V ]
+        let seq: ChoiceSequence = [
+            seqOpen,                                    // 0
+            val(10),                                    // 1
+            val(20),                                    // 2
+            val(30),                                    // 3
+            seqClose,                                   // 4
+        ]
+        let spans = ChoiceSequence.extractSequenceElementSpans(from: seq)
+
+        // Three bare-value elements directly inside a sequence
+        #expect(spans.count == 3)
+        #expect(spans[0].range == 1 ... 1)
+        #expect(spans[1].range == 2 ... 2)
+        #expect(spans[2].range == 3 ... 3)
+    }
+
+    @Test("Group-wrapped elements in flat sequence are detected")
+    func groupWrappedElementsInFlatSequence() {
+        // Baseline: [ (V) (V) ]
+        let seq: ChoiceSequence = [
+            seqOpen,                                    // 0
+            grpOpen, val(10), grpClose,                 // 1, 2, 3
+            grpOpen, val(20), grpClose,                 // 4, 5, 6
+            seqClose,                                   // 7
+        ]
+        let spans = ChoiceSequence.extractSequenceElementSpans(from: seq)
+
+        #expect(spans.count == 2)
+        #expect(spans[0].range == 1 ... 3)
+        #expect(spans[1].range == 4 ... 6)
+    }
+
+    @Test("Empty sequence returns no element spans")
+    func emptySequence() {
+        let spans = ChoiceSequence.extractSequenceElementSpans(from: [])
+        #expect(spans.isEmpty)
+    }
+
+    @Test("Sequence with no elements returns no spans")
+    func emptyInnerSequence() {
+        // []
+        let seq: ChoiceSequence = [seqOpen, seqClose]
+        let spans = ChoiceSequence.extractSequenceElementSpans(from: seq)
+        #expect(spans.isEmpty)
+    }
+
+    @Test("Mixed bare and group-wrapped elements are all detected")
+    func mixedBareAndGroupWrapped() {
+        // [ V (V) V ]
+        let seq: ChoiceSequence = [
+            seqOpen,                                    // 0
+            val(10),                                    // 1
+            grpOpen, val(20), grpClose,                 // 2, 3, 4
+            val(30),                                    // 5
+            seqClose,                                   // 6
+        ]
+        let spans = ChoiceSequence.extractSequenceElementSpans(from: seq)
+
+        #expect(spans.count == 3)
+        #expect(spans[0].range == 1 ... 1)
+        #expect(spans[1].range == 2 ... 4)
+        #expect(spans[2].range == 5 ... 5)
     }
 }

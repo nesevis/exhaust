@@ -259,8 +259,8 @@ struct ChoiceTreeAnalysisTests {
             Issue.record("Expected .finite result for bind chain")
             return
         }
-        // Should find 3 parameters: the three chooseBits operations
-        #expect(profile.parameters.count == 3)
+        // Should find 1 parameters. It is two dependent values hanging off the outermost.
+        #expect(profile.parameters.count == 1)
     }
 
     @Test("Sequence with constant scaling is analyzed")

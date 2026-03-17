@@ -527,7 +527,7 @@ struct ReflectAndFlattenTests {
             .dropFirst()
 
         // Remove a sequence close and open to remove the barrier between two arrays, collapsing them
-        let candidate = sequenceStarts.last!
+        let candidate = try #require(sequenceStarts.last)
         sequence.removeSubrange((candidate - 1) ... candidate)
         try #require(ChoiceSequence.validate(sequence))
         let materialized = try #require(try Interpreters.materialize(gen, with: tree, using: sequence, strictness: .relaxed))

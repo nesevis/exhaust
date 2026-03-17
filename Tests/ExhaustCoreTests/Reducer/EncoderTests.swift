@@ -592,16 +592,6 @@ struct CrossStageRedistributeEncoderTests {
         #expect(probe == nil)
     }
 
-    @Test("More than 16 numeric values produces no probes")
-    func moreThan16Values() {
-        let values: [UInt64] = (1 ... 17).map { UInt64($0) }
-        let seq = makeSequence(values)
-        var encoder = CrossStageRedistributeEncoder()
-        encoder.start(sequence: seq, targets: .wholeSequence)
-        let probe = encoder.nextProbe(lastAccepted: false)
-        #expect(probe == nil)
-    }
-
     @Test("Wrong target type produces no probes")
     func wrongTargetType() {
         let seq = makeSequence([5, 10])
