@@ -29,7 +29,12 @@ extension ReductionScheduler {
     /// Default per-cycle materialization budget.
     ///
     /// Sized to allow thorough reduction for typical generators. The per-leg weights distribute this across the V-cycle legs.
-    static let defaultCycleBudgetTotal = 225
+    static let defaultCycleBudgetTotal = 325
+
+    /// Dedicated per-cycle budget for the redistribution leg, separate from the main cycle budget.
+    ///
+    /// Sized to allow thorough O(v²) pair search with binary-search convergence per orientation.
+    static let defaultRedistributionBudget = 300
 
     // MARK: - Encoder Ordering
 

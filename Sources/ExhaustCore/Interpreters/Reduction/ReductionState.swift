@@ -229,6 +229,12 @@ extension ReductionState {
         return SequenceDecoder.for(context)
     }
 
+    /// Decoder for speculative deletion: PRNG fallback for deleted entries,
+    /// enabling repair with fresh (possibly shorter) values that satisfy filters.
+    func makeSpeculativeDecoder() -> SequenceDecoder {
+        .guided(fallbackTree: nil, materializePicks: config.useReductionMaterializer, usePRNGFallback: true)
+    }
+
     func makeDepthZeroDecoder() -> SequenceDecoder {
         let context = DecoderContext(depth: .specific(0), bindIndex: bindIndex, fallbackTree: fallbackTree, strictness: .normal, useReductionMaterializer: config.useReductionMaterializer)
         return SequenceDecoder.for(context)
@@ -402,7 +408,7 @@ extension ReductionState {
                 case .alignedWindows:
                     try runAdaptive(deleteAlignedWindowsEncoder, decoder: depthDecoder, targets: .spans(spanCache.deletionTargets(category: slot.spanCategory, depth: depth, from: sequence, bindIndex: bindIndex)), structureChanged: true, budget: &legBudget)
                 case .speculativeDelete:
-                    try runAdaptive(speculativeDelete, decoder: depthDecoder, targets: .spans(spanCache.deletionTargets(category: slot.spanCategory, depth: depth, from: sequence, bindIndex: bindIndex)), structureChanged: true, budget: &legBudget)
+                    try runAdaptive(speculativeDelete, decoder: makeSpeculativeDecoder(), targets: .spans(spanCache.deletionTargets(category: slot.spanCategory, depth: depth, from: sequence, bindIndex: bindIndex)), structureChanged: true, budget: &legBudget)
                 }
                 if slotAccepted {
                     accepted += 1
@@ -466,10 +472,110 @@ extension ReductionState {
         return accepted
     }
 
+    /// Runs a speculative exploration round: redistribute with regression allowed, then prune and train to exploit.
+    ///
+    /// Pipeline acceptance: final state must shortlex-precede the pre-exploration checkpoint. ``bestSequence`` and ``bestOutput`` only update if the full pipeline passes — intermediate results are discarded on rollback.
+    func runExplorationLeg(remaining: inout Int) throws -> Bool {
+        // Checkpoint all mutable state, including bestSequence/bestOutput.
+        let checkpointSequence = sequence
+        let checkpointTree = tree
+        let checkpointOutput = output
+        let checkpointFallbackTree = fallbackTree
+        let checkpointBindIndex = bindIndex
+        let checkpointBestSequence = bestSequence
+        let checkpointBestOutput = bestOutput
+
+        // Run RelaxRoundEncoder with exact decoder — no fallback, no shortlex check.
+        // Exact mode validates values against their explicit ranges, avoiding
+        // fallback-induced structural changes that break materialization.
+        let speculativeDecoder: SequenceDecoder = .exact()
+        var explorationBudget = ReductionScheduler.LegBudget(hardCap: remaining)
+        var relaxEncoder = RelaxRoundEncoder()
+        relaxEncoder.start(sequence: sequence, targets: .wholeSequence)
+        var lastAccepted = false
+        var redistributionAccepted = false
+        var explorationProbes = 0
+        var explorationAccepted = 0
+        while let probe = relaxEncoder.nextProbe(lastAccepted: lastAccepted) {
+            guard explorationBudget.isExhausted == false else { break }
+            explorationProbes += 1
+            // Do not consult the shared reject cache — it contains probes rejected
+            // by the normal decoder (with shortlex check). The speculative decoder
+            // (without shortlex check) may accept those same probes.
+            if let result = try speculativeDecoder.decode(
+                candidate: probe, gen: gen, tree: tree,
+                originalSequence: sequence, property: property
+            ) {
+                explorationBudget.recordMaterialization()
+                // Reject results that grow the sequence — the redistribution should
+                // only change values, not add structure. Growth happens when the
+                // redistributed values violate a filter, causing PRNG fallback.
+                if result.sequence.count > sequence.count {
+                    lastAccepted = false
+                    continue
+                }
+                accept(result, structureChanged: hasBind)
+                lastAccepted = true
+                redistributionAccepted = true
+                explorationAccepted += 1
+            } else {
+                explorationBudget.recordMaterialization()
+                lastAccepted = false
+            }
+        }
+
+        if isInstrumented {
+            ExhaustLog.debug(category: .reducer, event: "exploration_redistribute", metadata: [
+                "probes": "\(explorationProbes)",
+                "accepted": "\(explorationAccepted)",
+                "budget_used": "\(explorationBudget.used)",
+            ])
+        }
+
+        guard redistributionAccepted else {
+            // No speculative move found. Restore bestSequence/bestOutput
+            // (accept() may have transiently updated them).
+            bestSequence = checkpointBestSequence
+            bestOutput = checkpointBestOutput
+            remaining -= explorationBudget.used
+            return false
+        }
+
+        // Exploitation: run prune and train on the relaxed state.
+        var exploitRemaining = remaining - explorationBudget.used
+        let pruneAccepted = try runPruneLeg(remaining: &exploitRemaining, maxBindDepth: bindIndex?.maxBindDepth ?? 0)
+        let trainAccepted = try runTrainLeg(remaining: &exploitRemaining)
+
+        // Pipeline acceptance: final state must shortlex-precede checkpoint.
+        if sequence.shortLexPrecedes(checkpointSequence) {
+            bestSequence = sequence
+            bestOutput = output
+            remaining = exploitRemaining
+            if isInstrumented {
+                ExhaustLog.debug(category: .reducer, event: "exploration_accepted", metadata: [
+                    "seq_len": "\(checkpointSequence.count)→\(sequence.count)",
+                    "prune": "\(pruneAccepted)",
+                    "train": "\(trainAccepted)",
+                ])
+            }
+            return true
+        }
+
+        // Rollback all state including bestSequence/bestOutput.
+        sequence = checkpointSequence
+        tree = checkpointTree
+        output = checkpointOutput
+        fallbackTree = checkpointFallbackTree
+        bindIndex = checkpointBindIndex
+        bestSequence = checkpointBestSequence
+        bestOutput = checkpointBestOutput
+        remaining -= explorationBudget.used
+        return false
+    }
+
     /// Runs redistribution encoders. Returns `true` if any redistribution was accepted.
     func runRedistributionLeg(remaining: inout Int) throws -> Bool {
-        let target = cycleBudget.initialBudget(for: .redistribution)
-        var legBudget = ReductionScheduler.LegBudget(hardCap: min(remaining, 2 * target))
+        var legBudget = ReductionScheduler.LegBudget(hardCap: remaining)
         let redistContext = DecoderContext(depth: .global, bindIndex: bindIndex, fallbackTree: fallbackTree, strictness: .normal, useReductionMaterializer: config.useReductionMaterializer)
         let redistDecoder = SequenceDecoder.for(redistContext)
         var redistributionAccepted = false

@@ -33,8 +33,6 @@ enum ReductionScheduler {
 
         let isInstrumented = state.isInstrumented
         var stallBudget = config.maxStalls
-        var cyclesSinceRedistribution = 0
-        let redistributionDeferralCap = 3
         var cycles = 0
 
         // MARK: - V-Cycle
@@ -114,18 +112,21 @@ enum ReductionScheduler {
                 dirtyDepths = Set(0 ... (state.bindIndex?.maxBindDepth ?? 0))
             }
 
-            // ── Cross-cutting: Redistribution ──
-            let mainLegsStalled = contravariantAccepted == 0 && deletionAccepted == 0
-            let redistributionOverdue = cyclesSinceRedistribution >= redistributionDeferralCap
-            let redistributionTriggered = mainLegsStalled || redistributionOverdue
+            // ── Cross-cutting: Redistribution (separate budget) ──
+            var redistBudget = ReductionScheduler.defaultRedistributionBudget
+            if try state.runRedistributionLeg(remaining: &redistBudget) {
+                cycleImproved = true
+            }
 
-            if redistributionTriggered {
-                cyclesSinceRedistribution = 0
-                if try state.runRedistributionLeg(remaining: &remaining) {
+            // ── Leg 5: Exploration — speculative redistribution + exploit ──
+            if cycleImproved == false {
+                // Only explore when the main legs have stalled — exact/bounded
+                // morphisms should be exhausted before spending budget on speculative ones.
+                var exploreBudget = remaining
+                if try state.runExplorationLeg(remaining: &exploreBudget) {
                     cycleImproved = true
+                    remaining = exploreBudget
                 }
-            } else {
-                cyclesSinceRedistribution += 1
             }
 
             // ── Cycle termination ──

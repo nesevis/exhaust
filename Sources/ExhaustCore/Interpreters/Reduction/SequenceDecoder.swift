@@ -10,7 +10,8 @@ public enum SequenceDecoder {
     /// all branch alternatives. Tiered resolution: prefix → fallback → PRNG. Cursor suspension
     /// at bind sites.
     case guided(fallbackTree: ChoiceTree?, maximizeBoundRegionIndices: Set<Int>? = nil,
-                materializePicks: Bool = false)
+                materializePicks: Bool = false, usePRNGFallback: Bool = false,
+                skipShortlexCheck: Bool = false)
 
     // MARK: - Decode
 
@@ -33,13 +34,14 @@ public enum SequenceDecoder {
                 materializePicks: materializePicks
             )
 
-        case let .guided(fallbackTree, maximizeBoundRegionIndices, materializePicks):
+        case let .guided(fallbackTree, maximizeBoundRegionIndices, materializePicks, usePRNGFallback, skipShortlexCheck):
             decodeGuided(
                 candidate: consume candidate, gen: gen,
-                fallbackTree: fallbackTree ?? tree,
+                fallbackTree: usePRNGFallback ? nil : (fallbackTree ?? tree),
                 maximizeBoundRegionIndices: maximizeBoundRegionIndices,
                 originalSequence: originalSequence, property: property,
-                materializePicks: materializePicks
+                materializePicks: materializePicks,
+                skipShortlexCheck: skipShortlexCheck
             )
         }
     }
@@ -99,11 +101,12 @@ public enum SequenceDecoder {
     private func decodeGuided<Output>(
         candidate: consuming ChoiceSequence,
         gen: ReflectiveGenerator<Output>,
-        fallbackTree: ChoiceTree,
+        fallbackTree: ChoiceTree?,
         maximizeBoundRegionIndices: Set<Int>? = nil,
         originalSequence: ChoiceSequence,
         property: (Output) -> Bool,
-        materializePicks: Bool
+        materializePicks: Bool,
+        skipShortlexCheck: Bool = false
     ) -> ShrinkResult<Output>? {
         let seed = ZobristHash.hash(of: candidate)
         switch ReductionMaterializer.materialize(
@@ -119,7 +122,9 @@ public enum SequenceDecoder {
         case let .success(output, freshTree):
             guard property(output) == false else { return nil }
             let freshSequence = ChoiceSequence(freshTree)
-            guard freshSequence.shortLexPrecedes(originalSequence) else { return nil }
+            if skipShortlexCheck == false {
+                guard freshSequence.shortLexPrecedes(originalSequence) else { return nil }
+            }
             return ShrinkResult(
                 sequence: freshSequence,
                 tree: freshTree,

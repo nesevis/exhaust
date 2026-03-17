@@ -650,21 +650,27 @@ private extension ReductionMaterializer {
                     context.mode = savedMode
                 }
             } else if seqInfo.isLengthExplicit {
-                // Guided/generate mode + explicit-length: the generator determines
-                // the count. Deletion may remove elements from the prefix, but the
-                // generator's fixed length is authoritative (e.g. `exactly: 2` must
-                // produce 2). Elements beyond the prefix are filled from fallback/PRNG.
-                // Run in `.generate` mode so it doesn't consume cursor entries.
+                // Guided/generate mode + explicit-length: use the prefix element
+                // count, clamped to the generator's valid range. For fixed-length
+                // generators (e.g. `exactly: 2`, range 2...2) this produces 2
+                // regardless of prefix. For variable-length generators (e.g.
+                // `length: 0...10`) this preserves the prefix count. Analogous to
+                // the fallback-length clamping at the cursor-suspended path below.
+                let prefixCount = UInt64(seqInfo.elementCount)
                 let savedMode = context.mode
                 context.mode = .generate
-                guard let (genLength, lengthTree) = try generateRecursive(
+                guard let (_, lengthTree) = try generateRecursive(
                     lengthGen, with: inputValue, context: &context
                 ) else {
                     context.mode = savedMode
                     return nil
                 }
                 context.mode = savedMode
-                length = genLength
+                if let freshRange = lengthTree.metadata.validRange {
+                    length = Swift.min(Swift.max(prefixCount, freshRange.lowerBound), freshRange.upperBound)
+                } else {
+                    length = prefixCount
+                }
                 lengthMeta = lengthTree.metadata
             } else {
                 // Variable-length (non-explicit): derive from prefix element count.

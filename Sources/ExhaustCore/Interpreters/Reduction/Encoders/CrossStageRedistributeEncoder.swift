@@ -77,6 +77,7 @@ public struct CrossStageRedistributeEncoder: AdaptiveEncoder {
     private var bestMonotoneEntry1: ChoiceSequenceValue?
     private var bestMonotoneEntry2: ChoiceSequenceValue?
     private var bestMonotoneNonSemanticCount = Int.max
+    private var bestResultIsFromFallback = false
 
     // Fallback state: probes tried after monotone search converges without a result.
     private var fallbackDeltas: [UInt64] = []
@@ -120,8 +121,8 @@ public struct CrossStageRedistributeEncoder: AdaptiveEncoder {
             i += 1
         }
 
-        // Guard against quadratic blowup on large sequences.
-        guard candidates.count <= 16 else { return }
+        // Cost is O(v² × probes_per_pair). The estimatedCost cap at 240 pairs × 20
+        // probes already limits total work; no need to gate on candidate count.
 
         // Build all pair orientations.
         var ci = 0
@@ -143,6 +144,10 @@ public struct CrossStageRedistributeEncoder: AdaptiveEncoder {
             }
             ci += 1
         }
+
+        // Largest-distance orientations first: high-impact consolidation pairs
+        // get probed before trivial distance=1 pairs.
+        orientations.sort { $0.distance > $1.distance }
     }
 
     public mutating func nextProbe(lastAccepted: Bool) -> ChoiceSequence? {
@@ -397,7 +402,6 @@ public struct CrossStageRedistributeEncoder: AdaptiveEncoder {
         else { return nil }
 
         let beforePair = sortedPairKeys(fresh1.choice, fresh2.choice)
-        let currentNonSemanticCount = semanticStats.nonSemanticCount
 
         // while-loop: avoiding IteratorProtocol overhead in debug builds
         while fallbackIndex < fallbackDeltas.count {
@@ -409,8 +413,7 @@ public struct CrossStageRedistributeEncoder: AdaptiveEncoder {
                 fresh1: fresh1,
                 fresh2: fresh2,
                 delta: k,
-                beforePair: beforePair,
-                currentNonSemanticCount: currentNonSemanticCount
+                beforePair: beforePair
             ) else {
                 continue
             }
@@ -423,6 +426,7 @@ public struct CrossStageRedistributeEncoder: AdaptiveEncoder {
             bestMonotoneEntry1 = bestFallbackEntry1
             bestMonotoneEntry2 = bestFallbackEntry2
             bestMonotoneNonSemanticCount = bestFallbackNonSemanticCount
+            bestResultIsFromFallback = true
         }
         return nil
     }
@@ -547,8 +551,7 @@ public struct CrossStageRedistributeEncoder: AdaptiveEncoder {
         fresh1: ChoiceSequenceValue.Value,
         fresh2: ChoiceSequenceValue.Value,
         delta: UInt64,
-        beforePair: [UInt64],
-        currentNonSemanticCount: Int
+        beforePair: [UInt64]
     ) -> ChoiceSequence? {
         guard let (newChoice1, newChoice2) = computeNewChoices(
             orient: orient,
@@ -566,6 +569,10 @@ public struct CrossStageRedistributeEncoder: AdaptiveEncoder {
             }
         }
 
+        // Reject pure swaps — the pair multiset must actually change.
+        let afterPair = sortedPairKeys(newChoice1, newChoice2)
+        guard afterPair != beforePair else { return nil }
+
         let probeEntry1 = ChoiceSequenceValue.reduced(.init(
             choice: newChoice1,
             validRange: fresh1.validRange,
@@ -577,21 +584,9 @@ public struct CrossStageRedistributeEncoder: AdaptiveEncoder {
             isRangeExplicit: fresh2.isRangeExplicit
         ))
 
-        let probeNonSemanticCount = semanticStats.nonSemanticCount(
-            afterReplacing: (orient.lhsIndex, probeEntry1),
-            and: (orient.rhsIndex, probeEntry2)
-        )
-
-        let afterPair = sortedPairKeys(newChoice1, newChoice2)
         var probe = sequence
         probe[orient.lhsIndex] = probeEntry1
         probe[orient.rhsIndex] = probeEntry2
-
-        let improvesStructure = probe.shortLexPrecedes(sequence)
-            || probeNonSemanticCount < currentNonSemanticCount
-            || afterPair.lexicographicallyPrecedes(beforePair)
-        guard improvesStructure else { return nil }
-        guard afterPair != beforePair else { return nil }
 
         return probe
     }
@@ -618,11 +613,15 @@ public struct CrossStageRedistributeEncoder: AdaptiveEncoder {
 
         let currentNonSemanticCount = semanticStats.nonSemanticCount
 
-        // Final improvement check before committing.
-        guard probe.shortLexPrecedes(sequence)
-            || bestMonotoneNonSemanticCount < currentNonSemanticCount
-            || afterPair.lexicographicallyPrecedes(beforePair)
-        else { return }
+        // Final improvement check before committing. Fallback results are
+        // scheduler-accepted (materialized + property-checked), so they bypass
+        // the structural improvement gate to allow wrapping redistributions.
+        if bestResultIsFromFallback == false {
+            guard probe.shortLexPrecedes(sequence)
+                || bestMonotoneNonSemanticCount < currentNonSemanticCount
+                || afterPair.lexicographicallyPrecedes(beforePair)
+            else { return }
+        }
 
         sequence = probe
         semanticStats.applyReplacements(
@@ -638,6 +637,7 @@ public struct CrossStageRedistributeEncoder: AdaptiveEncoder {
         bestMonotoneEntry1 = nil
         bestMonotoneEntry2 = nil
         bestMonotoneNonSemanticCount = Int.max
+        bestResultIsFromFallback = false
     }
 
     private mutating func resetFallbackState() {
