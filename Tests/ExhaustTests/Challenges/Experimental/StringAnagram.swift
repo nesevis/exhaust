@@ -58,6 +58,7 @@ struct StringAnagramChallenge {
             .suppressIssueReporting,
             .useBonsaiReducer,
             .reflecting(value),
+            .humanOrderPostProcess,
             property: property
         )
         let output = try #require(result)

@@ -54,11 +54,12 @@ struct LargeUnionListShrinkingChallenge {
             .suppressIssueReporting,
             .reflecting(value),
             .useBonsaiReducer,
+            .humanOrderPostProcess,
             property: Self.property
         )
 
         // 738 invocations with legacy, 966 with bonsai
-        #expect(output?.flatMap(\.self) == [0, -1, 1, -2, 2])
+        #expect(output?.flatMap(\.self) == [-2, -1, 0, 1, 2])
     }
 
     @Test("Large Union List, Pathological single 2")
@@ -87,11 +88,12 @@ struct LargeUnionListShrinkingChallenge {
             .suppressIssueReporting,
             .reflecting(value),
             .useBonsaiReducer,
+            .humanOrderPostProcess,
             property: Self.property
         )
 
         // 507 invocation with legacy (17ms), 460 with bonsai (11ms)
-        #expect(output?.flatMap(\.self) == [0, -1, 1, -2, 2])
+        #expect(output?.flatMap(\.self) == [-2, -1, 0, 1, 2])
     }
 
     @Test("Large Union List, 50")
