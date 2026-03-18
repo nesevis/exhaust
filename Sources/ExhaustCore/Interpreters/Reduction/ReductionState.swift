@@ -119,7 +119,7 @@ extension ReductionState {
 
     /// Runs a batch encoder against a decoder, tracking materializations. Returns true if a candidate was accepted.
     func runBatch(
-        _ encoder: any BatchEncoder,
+        _ encoder: some BatchEncoder,
         decoder: SequenceDecoder,
         targets: TargetSet,
         structureChanged: Bool,
