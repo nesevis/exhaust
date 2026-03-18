@@ -138,7 +138,7 @@ struct CompositionTests {
             #examine(companyGen, samples: 20, seed: 42)
         }
 
-        @Test("Complex generator composition stability", .disabled("This is weird. Check why this fails"))
+        @Test("Complex generator composition stability")
         func complexGeneratorStability() {
             // Build a very complex generator with multiple composition patterns
             let nestedGen = #gen(.int(in: 1 ... 100)).array(length: 1 ... 10).array(length: 1 ... 5)

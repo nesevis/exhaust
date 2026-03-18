@@ -243,6 +243,11 @@ public enum Interpreters {
             }
         }
 
+        // Only mark the first matching branch as `.selected` — a pick site
+        // should have exactly one selected branch, matching VACTI's output.
+        // When multiple branches can produce the same value (non-injective
+        // generators), reflection picks the first match deterministically.
+        var hasSelected = false
         let mappedBranches = results.map {
             let branch = ChoiceTree.branch(
                 siteID: $0.siteID,
@@ -251,7 +256,11 @@ public enum Interpreters {
                 branchIDs: branchIDs,
                 choice: $0.path
             )
-            return $0.isPicked ? ChoiceTree.selected(branch) : branch
+            if hasSelected == false {
+                hasSelected = true
+                return ChoiceTree.selected(branch)
+            }
+            return branch
         }
         return [(finalOutput, [ChoiceTree.group(mappedBranches)])]
     }
