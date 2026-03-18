@@ -4,11 +4,11 @@
 /// defines when a less-aggressive encoder can be skipped because a more-aggressive one
 /// has already succeeded. The 2-cell relationships are:
 ///
-/// - **Deletion**: `deleteContainerSpans` ⇒ `speculativeDelete`
-/// - **Value minimization**: `zeroValue` ⇒ `binarySearchToZero` ⇒ `binarySearchToTarget`
+/// - **Deletion**: `deleteContainerSpans` or `deleteAlignedSiblingWindows` ⇒ `deleteContainerSpansWithRandomRepair`
+/// - **Value minimization**: `zeroValue` ⇒ `binarySearchToSemanticSimplest` ⇒ `binarySearchToRangeMinimum`
 ///
-/// The lattice is scoped per hom-set: success in one hom-set (e.g., deletion) does not
-/// affect dominance in another (e.g., value minimization). The scheduler resets the
+/// The lattice is scoped per hom-set: success in one hom-set (for example, deletion) does not
+/// affect dominance in another (for example, value minimization). The scheduler resets the
 /// lattice at leg boundaries where the decoder changes.
 ///
 /// During the contravariant sweep (structure-preserving), the lattice is stable — no
@@ -19,10 +19,10 @@
 /// Reference: Sepulveda-Jimenez, Def 15.3 (2-cell dominance).
 struct DominanceLattice {
     /// Encoders that have accepted at least one candidate since the last invalidation.
-    private var succeeded: Set<String> = []
+    private var succeeded: Set<EncoderName> = []
 
     /// Records that an encoder accepted a candidate.
-    mutating func recordSuccess(_ name: String) {
+    mutating func recordSuccess(_ name: EncoderName) {
         succeeded.insert(name)
     }
 
@@ -37,17 +37,19 @@ struct DominanceLattice {
     ///
     /// Only checks dominators within the same ``ReductionPhase`` — cross-phase
     /// dominance is not defined (the leg ordering handles inter-phase sequencing).
-    func shouldSkip(_ name: String, phase: ReductionPhase) -> Bool {
+    func shouldSkip(_ name: EncoderName, phase: ReductionPhase) -> Bool {
         switch (phase, name) {
-        // Container deletion is strictly more aggressive than speculative single-span deletion.
-        case (.structuralDeletion, "speculativeDelete"):
-            succeeded.contains("deleteContainerSpans")
-        // Zero is the best binary-search-to-zero can achieve.
-        case (.valueMinimization, "binarySearchToZero"):
-            succeeded.contains("zeroValue")
-        // Binary-search-to-zero finds values ≤ any nonzero target.
-        case (.valueMinimization, "binarySearchToTarget"):
-            succeeded.contains("zeroValue") || succeeded.contains("binarySearchToZero")
+        // Either guided deletion encoder dominates speculative single-span deletion:
+        // both share the same span pool and use a stricter guided decoder.
+        case (.structuralDeletion, .deleteContainerSpansWithRandomRepair):
+            succeeded.contains(.deleteContainerSpans)
+                || succeeded.contains(.deleteAlignedSiblingWindows)
+        // Zero is the best binary-search-to-semantic-simplest can achieve.
+        case (.valueMinimization, .binarySearchToSemanticSimplest):
+            succeeded.contains(.zeroValue)
+        // Binary-search-to-semantic-simplest finds values ≤ any nonzero target.
+        case (.valueMinimization, .binarySearchToRangeMinimum):
+            succeeded.contains(.zeroValue) || succeeded.contains(.binarySearchToSemanticSimplest)
         default:
             false
         }

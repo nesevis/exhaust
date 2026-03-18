@@ -21,7 +21,7 @@ struct Bound5ShrinkingChallenge {
      */
 
     private static let gen: ReflectiveGenerator<Bound5> = {
-        let arr = #gen(.int16(scaling: .linear).array(length: 0 ... 10))
+        let arr = #gen(.int16(scaling: .constant).array(length: 0 ... 10, scaling: .constant))
             .filter { $0.isEmpty || $0.dropFirst().reduce($0[0], &+) < 256 }
         return #gen(arr, arr, arr, arr, arr) { a, b, c, d, e in
             Bound5(a: a, b: b, c: c, d: d, e: e)
@@ -39,10 +39,11 @@ struct Bound5ShrinkingChallenge {
     func bound5Single() {
         ExhaustLog.setConfiguration(.init(isEnabled: true, minimumLevel: .info, categoryMinimumLevels: [.reducer: .debug], format: .human))
         let output = #exhaust(
-            Self.gen.resize(50),
+            Self.gen,
+            .randomOnly,
             .suppressIssueReporting,
-            .useBonsaiReducer,
-//            .replay(1337),
+//            .useBonsaiReducer,
+            .replay(16799307796119368455),
             property: Self.property
         )
 
@@ -140,24 +141,21 @@ struct Bound5ShrinkingChallenge {
         #expect(output?.arr.sorted() == [-32768, -1])
     }
 
-    @Test("Bound5, 38")
+    @Test("Bound5, 52")
     func bound5Many() {
         let bound5s = #example(Self.gen, count: 100, seed: 1337)
             .filter { Self.property($0) == false }
 //        ExhaustLog.setConfiguration(.init(isEnabled: true, minimumLevel: .info, categoryMinimumLevels: [.reducer: .debug], format: .human))
+        print()
 
         for bound5 in bound5s {
             let output = #exhaust(
                 Self.gen,
                 .suppressIssueReporting,
                 .reflecting(bound5),
-//                .useBonsaiReducer,
+                .useBonsaiReducer,
                 property: Self.property
             )
-            
-            if output?.arr.count ?? 0 > 2 {
-                print()
-            }
 
             #expect(output?.arr.count == 2)
             #expect(output?.arr.sorted() == [-32768, -1])

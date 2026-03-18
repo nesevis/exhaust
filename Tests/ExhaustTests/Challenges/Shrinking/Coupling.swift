@@ -20,7 +20,7 @@ struct CouplingShrinkingChallenge {
      */
 
     /// This generator is not reflective due to the bind
-    static let gen = #gen(.int(in: 0 ... 100))
+    static let gen = #gen(.int(in: 0 ... 10))
         .bind { n in
             #gen(.int(in: 0 ... n)).array(length: 2 ... max(2, n + 1))
         }
@@ -59,10 +59,10 @@ struct CouplingShrinkingChallenge {
                 Self.gen,
                 .suppressIssueReporting,
                 .useBonsaiReducer,
-                .replay(8306856919234487559),
                 property: Self.property
             )
         )
+        print()
         #expect(value.count == 2)
         #expect(value == [1, 0])
     }

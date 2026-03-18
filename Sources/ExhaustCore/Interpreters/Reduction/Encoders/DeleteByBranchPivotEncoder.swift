@@ -4,8 +4,8 @@
 /// sequences with the `.selected` marker moved to the alternative.
 ///
 /// Set ``currentTree`` before calling ``encode(sequence:targets:)``.
-public struct PivotBranchesEncoder: BatchEncoder {
-    public let name = "pivotBranches"
+public struct DeleteByBranchPivotEncoder: BatchEncoder {
+    public let name: EncoderName = .deleteByPivotingToAlternativeBranch
 
     public var phase: ReductionPhase {
         .structuralDeletion

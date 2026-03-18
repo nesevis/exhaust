@@ -4,8 +4,8 @@
 /// replacement (simplest first). Produces candidate sequences with the branch subtree replaced.
 ///
 /// Set ``currentTree`` before calling ``encode(sequence:targets:)``.
-public struct PromoteBranchesEncoder: BatchEncoder {
-    public let name = "promoteBranches"
+public struct DeleteByBranchPromotionEncoder: BatchEncoder {
+    public let name: EncoderName = .deleteByPromotingSimplestBranch
 
     public var phase: ReductionPhase {
         .structuralDeletion

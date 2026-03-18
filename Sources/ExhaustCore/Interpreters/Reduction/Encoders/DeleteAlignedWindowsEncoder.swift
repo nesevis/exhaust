@@ -17,7 +17,7 @@ struct DeleteAlignedWindowsEncoder: AdaptiveEncoder {
         self.beamTuning = beamTuning
     }
 
-    let name = "deleteAlignedWindows"
+    let name: EncoderName = .deleteAlignedSiblingWindows
     let phase = ReductionPhase.structuralDeletion
 
     func estimatedCost(sequence: ChoiceSequence, bindIndex _: BindSpanIndex?) -> Int? {

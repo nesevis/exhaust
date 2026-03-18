@@ -20,9 +20,10 @@ public extension Gen {
     ) -> ReflectiveGenerator<[Output]> {
         // Use `bind` to get the result of the length generator.
         let sequenceOperation = ReflectiveOperation.sequence(
-            length: length ?? Gen.getSize()._bind {
-                Gen.chooseDerived(in: ($0 / 10) ... $0)
-            },
+            length: length ?? Gen.getSize()._bound(
+                forward: { Gen.chooseDerived(in: 0 ... $0) },
+                backward: { _ in 100 }
+            ),
             gen: elementGenerator.erase()
         )
         // Lift the operation. The continuation will decode the `[Any]` result.

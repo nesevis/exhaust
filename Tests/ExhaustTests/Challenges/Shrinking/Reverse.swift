@@ -23,6 +23,7 @@ struct ReverseShrinkingChallenge {
             gen,
             .useBonsaiReducer,
             .suppressIssueReporting,
+            .humanOrderPostProcess,
             .replay(33_556_013_978_236_435)
         ) { arr in
             arr.elementsEqual(arr.reversed())

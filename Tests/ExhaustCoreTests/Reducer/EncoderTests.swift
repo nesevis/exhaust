@@ -215,15 +215,15 @@ struct BinarySearchStepperTests {
     }
 }
 
-// MARK: - BinarySearchToZeroEncoder
+// MARK: - BinarySearchToSemanticSimplestEncoder
 
-@Suite("BinarySearchToZeroEncoder")
-struct BinarySearchToZeroEncoderTests {
+@Suite("BinarySearchToSemanticSimplestEncoder")
+struct BinarySearchToSemanticSimplestEncoderTests {
     @Test("Converges a single target to zero with all-accepted feedback")
     func singleTargetAllAccepted() {
         let seq = makeSequence([8])
         let spans = allValueSpans(from: seq)
-        var encoder = BinarySearchToZeroEncoder()
+        var encoder = BinarySearchToSemanticSimplestEncoder()
         encoder.start(sequence: seq, targets: TargetSet.spans(spans))
 
         var probes: [ChoiceSequence] = []
@@ -242,7 +242,7 @@ struct BinarySearchToZeroEncoderTests {
     func skipsAlreadyZero() {
         let seq = makeSequence([0, 5])
         let spans = allValueSpans(from: seq)
-        var encoder = BinarySearchToZeroEncoder()
+        var encoder = BinarySearchToSemanticSimplestEncoder()
         encoder.start(sequence: seq, targets: TargetSet.spans(spans))
 
         // Only index 1 should be probed.
@@ -258,20 +258,20 @@ struct BinarySearchToZeroEncoderTests {
 
     @Test("Empty targets produce no probes")
     func emptyTargets() {
-        var encoder = BinarySearchToZeroEncoder()
+        var encoder = BinarySearchToSemanticSimplestEncoder()
         encoder.start(sequence: makeSequence([5]), targets: TargetSet.spans([]))
         let probe = encoder.nextProbe(lastAccepted: false)
         #expect(probe == nil)
     }
 }
 
-// MARK: - TandemReductionEncoder
+// MARK: - RedistributeByTandemReductionEncoder
 
-@Suite("TandemReductionEncoder")
-struct TandemReductionEncoderTests {
+@Suite("RedistributeByTandemReductionEncoder")
+struct RedistributeByTandemReductionEncoderTests {
     @Test("Empty sibling groups produce no probes")
     func emptySiblingGroups() {
-        var encoder = TandemReductionEncoder()
+        var encoder = RedistributeByTandemReductionEncoder()
         encoder.start(sequence: makeSequence([5, 10]), targets: .siblingGroups([]))
         let probe = encoder.nextProbe(lastAccepted: false)
         #expect(probe == nil)
@@ -279,7 +279,7 @@ struct TandemReductionEncoderTests {
 
     @Test("Wrong target type produces no probes")
     func wrongTargetType() {
-        var encoder = TandemReductionEncoder()
+        var encoder = RedistributeByTandemReductionEncoder()
         encoder.start(sequence: makeSequence([5, 10]), targets: .wholeSequence)
         let probe = encoder.nextProbe(lastAccepted: false)
         #expect(probe == nil)
@@ -297,7 +297,7 @@ struct TandemReductionEncoderTests {
         let seq = ChoiceSequence(tree)
         let groups = ChoiceSequence.extractSiblingGroups(from: seq)
 
-        var encoder = TandemReductionEncoder()
+        var encoder = RedistributeByTandemReductionEncoder()
         encoder.start(sequence: seq, targets: .siblingGroups(groups))
         let probe = encoder.nextProbe(lastAccepted: false)
         #expect(probe == nil)
@@ -317,7 +317,7 @@ struct TandemReductionEncoderTests {
         let groups = ChoiceSequence.extractSiblingGroups(from: seq)
         #expect(groups.isEmpty == false)
 
-        var encoder = TandemReductionEncoder()
+        var encoder = RedistributeByTandemReductionEncoder()
         encoder.start(sequence: seq, targets: .siblingGroups(groups))
 
         var probes: [ChoiceSequence] = []
@@ -343,7 +343,7 @@ struct TandemReductionEncoderTests {
         let seq = ChoiceSequence(tree)
         let groups = ChoiceSequence.extractSiblingGroups(from: seq)
 
-        var encoder = TandemReductionEncoder()
+        var encoder = RedistributeByTandemReductionEncoder()
         encoder.start(sequence: seq, targets: .siblingGroups(groups))
 
         var lastProbe: ChoiceSequence?
@@ -376,7 +376,7 @@ struct TandemReductionEncoderTests {
         let seq = ChoiceSequence(tree)
         let groups = ChoiceSequence.extractSiblingGroups(from: seq)
 
-        var encoder = TandemReductionEncoder()
+        var encoder = RedistributeByTandemReductionEncoder()
         encoder.start(sequence: seq, targets: .siblingGroups(groups))
 
         var probeCount = 0
@@ -403,7 +403,7 @@ struct TandemReductionEncoderTests {
         let seq = ChoiceSequence(tree)
         let groups = ChoiceSequence.extractSiblingGroups(from: seq)
 
-        var encoder = TandemReductionEncoder()
+        var encoder = RedistributeByTandemReductionEncoder()
         encoder.start(sequence: seq, targets: .siblingGroups(groups))
         let probe = encoder.nextProbe(lastAccepted: false)
         #expect(probe == nil)
@@ -425,7 +425,7 @@ struct TandemReductionEncoderTests {
         let seq = ChoiceSequence(tree)
         let groups = ChoiceSequence.extractSiblingGroups(from: seq)
 
-        var encoder = TandemReductionEncoder()
+        var encoder = RedistributeByTandemReductionEncoder()
         encoder.start(sequence: seq, targets: .siblingGroups(groups))
 
         // With mixed tags (one uint64, one uint32), each tag has only 1 entry,
@@ -443,10 +443,10 @@ struct TandemReductionEncoderTests {
     }
 }
 
-// MARK: - PromoteBranchesEncoder
+// MARK: - DeleteByBranchPromotionEncoder
 
-@Suite("PromoteBranchesEncoder")
-struct PromoteBranchesEncoderTests {
+@Suite("DeleteByBranchPromotionEncoder")
+struct DeleteByBranchPromotionEncoderTests {
     @Test("Empty tree with no branches produces no candidates")
     func noBranches() {
         let tree = ChoiceTree.group([
@@ -454,7 +454,7 @@ struct PromoteBranchesEncoderTests {
         ])
         let seq = ChoiceSequence(tree)
 
-        var encoder = PromoteBranchesEncoder()
+        var encoder = DeleteByBranchPromotionEncoder()
         encoder.currentTree = tree
         let candidates = Array(encoder.encode(sequence: seq, targets: .wholeSequence))
         #expect(candidates.isEmpty)
@@ -486,7 +486,7 @@ struct PromoteBranchesEncoderTests {
         ])
         let seq = ChoiceSequence(tree)
 
-        var encoder = PromoteBranchesEncoder()
+        var encoder = DeleteByBranchPromotionEncoder()
         encoder.currentTree = tree
         let candidates = Array(encoder.encode(sequence: seq, targets: .wholeSequence))
         // Only one branch group (one .group node whose children are all branches),
@@ -514,7 +514,7 @@ struct PromoteBranchesEncoderTests {
                 }
                 // Need a tree with 2+ branch groups
                 let seq = ChoiceSequence(tree)
-                var encoder = PromoteBranchesEncoder()
+                var encoder = DeleteByBranchPromotionEncoder()
                 encoder.currentTree = tree
                 let candidates = Array(encoder.encode(sequence: seq, targets: .wholeSequence))
                 if candidates.isEmpty == false {
@@ -534,7 +534,7 @@ struct PromoteBranchesEncoderTests {
                     continue
                 }
                 let seq = ChoiceSequence(tree)
-                var encoder = PromoteBranchesEncoder()
+                var encoder = DeleteByBranchPromotionEncoder()
                 encoder.currentTree = tree
                 for candidate in encoder.encode(sequence: seq, targets: .wholeSequence) {
                     #expect(candidate.shortLexPrecedes(seq))
@@ -553,7 +553,7 @@ struct PromoteBranchesEncoderTests {
                     continue
                 }
                 let seq = ChoiceSequence(tree)
-                var encoder = PromoteBranchesEncoder()
+                var encoder = DeleteByBranchPromotionEncoder()
                 encoder.currentTree = tree
                 let candidates = Array(encoder.encode(sequence: seq, targets: .wholeSequence))
                 if candidates.isEmpty == false {
@@ -570,14 +570,14 @@ struct PromoteBranchesEncoderTests {
     }
 }
 
-// MARK: - CrossStageRedistributeEncoder
+// MARK: - RedistributeAcrossValueContainersEncoder
 
-@Suite("CrossStageRedistributeEncoder")
-struct CrossStageRedistributeEncoderTests {
+@Suite("RedistributeAcrossValueContainersEncoder")
+struct RedistributeAcrossValueContainersEncoderTests {
     @Test("Empty sequence produces no probes")
     func emptySequence() {
         let seq = ChoiceSequence()
-        var encoder = CrossStageRedistributeEncoder()
+        var encoder = RedistributeAcrossValueContainersEncoder()
         encoder.start(sequence: seq, targets: .wholeSequence)
         let probe = encoder.nextProbe(lastAccepted: false)
         #expect(probe == nil)
@@ -586,17 +586,7 @@ struct CrossStageRedistributeEncoderTests {
     @Test("Single numeric value produces no probes")
     func singleValue() {
         let seq = makeSequence([42])
-        var encoder = CrossStageRedistributeEncoder()
-        encoder.start(sequence: seq, targets: .wholeSequence)
-        let probe = encoder.nextProbe(lastAccepted: false)
-        #expect(probe == nil)
-    }
-
-    @Test("More than 16 numeric values produces no probes")
-    func moreThan16Values() {
-        let values: [UInt64] = (1 ... 17).map { UInt64($0) }
-        let seq = makeSequence(values)
-        var encoder = CrossStageRedistributeEncoder()
+        var encoder = RedistributeAcrossValueContainersEncoder()
         encoder.start(sequence: seq, targets: .wholeSequence)
         let probe = encoder.nextProbe(lastAccepted: false)
         #expect(probe == nil)
@@ -605,7 +595,7 @@ struct CrossStageRedistributeEncoderTests {
     @Test("Wrong target type produces no probes")
     func wrongTargetType() {
         let seq = makeSequence([5, 10])
-        var encoder = CrossStageRedistributeEncoder()
+        var encoder = RedistributeAcrossValueContainersEncoder()
         encoder.start(sequence: seq, targets: .spans([]))
         let probe = encoder.nextProbe(lastAccepted: false)
         #expect(probe == nil)
@@ -616,7 +606,7 @@ struct CrossStageRedistributeEncoderTests {
         // Value 50 wants to go toward 0 (reduction target for unsigned).
         // Value 30 can compensate by increasing.
         let seq = makeSequence([50, 30])
-        var encoder = CrossStageRedistributeEncoder()
+        var encoder = RedistributeAcrossValueContainersEncoder()
         encoder.start(sequence: seq, targets: .wholeSequence)
 
         var probes: [ChoiceSequence] = []
@@ -632,7 +622,7 @@ struct CrossStageRedistributeEncoderTests {
     @Test("All-accepted feedback converges")
     func allAcceptedConverges() {
         let seq = makeSequence([50, 30])
-        var encoder = CrossStageRedistributeEncoder()
+        var encoder = RedistributeAcrossValueContainersEncoder()
         encoder.start(sequence: seq, targets: .wholeSequence)
 
         var probeCount = 0
@@ -649,7 +639,7 @@ struct CrossStageRedistributeEncoderTests {
     func valuesAtTargets() {
         // Both values are 0 (the reduction target for unsigned integers).
         let seq = makeSequence([0, 0])
-        var encoder = CrossStageRedistributeEncoder()
+        var encoder = RedistributeAcrossValueContainersEncoder()
         encoder.start(sequence: seq, targets: .wholeSequence)
         let probe = encoder.nextProbe(lastAccepted: false)
         #expect(probe == nil)
@@ -706,12 +696,12 @@ struct DominanceLatticeTests {
         var lattice = DominanceLattice()
 
         // Simulate depth-2 iteration: zeroValue succeeds.
-        lattice.recordSuccess("zeroValue")
-        #expect(lattice.shouldSkip("binarySearchToZero", phase: .valueMinimization))
+        lattice.recordSuccess(.zeroValue)
+        #expect(lattice.shouldSkip(.binarySearchToSemanticSimplest, phase: .valueMinimization))
 
-        // Transitioning to depth 1 should invalidate, so binarySearchToZero is NOT skipped.
+        // Transitioning to depth 1 should invalidate, so binarySearchToSemanticSimplest is NOT skipped.
         lattice.invalidate()
-        #expect(lattice.shouldSkip("binarySearchToZero", phase: .valueMinimization) == false)
+        #expect(lattice.shouldSkip(.binarySearchToSemanticSimplest, phase: .valueMinimization) == false)
     }
 
     @Test("Success in deletion lattice does not leak across depth boundaries after invalidation")
@@ -719,12 +709,12 @@ struct DominanceLatticeTests {
         var lattice = DominanceLattice()
 
         // Simulate depth-0 iteration: deleteContainerSpans succeeds.
-        lattice.recordSuccess("deleteContainerSpans")
-        #expect(lattice.shouldSkip("speculativeDelete", phase: .structuralDeletion))
+        lattice.recordSuccess(.deleteContainerSpans)
+        #expect(lattice.shouldSkip(.deleteContainerSpansWithRandomRepair, phase: .structuralDeletion))
 
         // Transitioning to depth 1 should invalidate.
         lattice.invalidate()
-        #expect(lattice.shouldSkip("speculativeDelete", phase: .structuralDeletion) == false)
+        #expect(lattice.shouldSkip(.deleteContainerSpansWithRandomRepair, phase: .structuralDeletion) == false)
     }
 
     @Test("Without invalidation, success leaks across depths")
@@ -732,10 +722,24 @@ struct DominanceLatticeTests {
         var lattice = DominanceLattice()
 
         // Record success — dominated encoder should be skipped.
-        lattice.recordSuccess("zeroValue")
-        #expect(lattice.shouldSkip("binarySearchToZero", phase: .valueMinimization))
+        lattice.recordSuccess(.zeroValue)
+        #expect(lattice.shouldSkip(.binarySearchToSemanticSimplest, phase: .valueMinimization))
         // Without invalidation, it stays skipped (this is the bug scenario).
-        #expect(lattice.shouldSkip("binarySearchToZero", phase: .valueMinimization))
+        #expect(lattice.shouldSkip(.binarySearchToSemanticSimplest, phase: .valueMinimization))
+    }
+
+    @Test("deleteAlignedSiblingWindows success causes deleteContainerSpansWithRandomRepair to be skipped")
+    func alignedWindowsDominatesRandomRepair() {
+        var lattice = DominanceLattice()
+        lattice.recordSuccess(.deleteAlignedSiblingWindows)
+        #expect(lattice.shouldSkip(.deleteContainerSpansWithRandomRepair, phase: .structuralDeletion))
+    }
+
+    @Test("Unrelated encoder success does not cause deleteContainerSpansWithRandomRepair to be skipped")
+    func unrelatedSuccessDoesNotDominateRandomRepair() {
+        var lattice = DominanceLattice()
+        lattice.recordSuccess(.deleteSequenceElements)
+        #expect(lattice.shouldSkip(.deleteContainerSpansWithRandomRepair, phase: .structuralDeletion) == false)
     }
 }
 

@@ -10,7 +10,19 @@ public enum SequenceDecoder {
     /// all branch alternatives. Tiered resolution: prefix → fallback → PRNG. Cursor suspension
     /// at bind sites.
     case guided(fallbackTree: ChoiceTree?, maximizeBoundRegionIndices: Set<Int>? = nil,
-                materializePicks: Bool = false)
+                materializePicks: Bool = false, usePRNGFallback: Bool = false,
+                skipShortlexCheck: Bool = false, prngSalt: UInt64 = 0)
+
+    /// Salt mixed into the reject cache key so the same candidate with a different PRNG salt
+    /// gets an independent cache entry.
+    var rejectCacheSalt: UInt64 {
+        switch self {
+        case .exact:
+            0
+        case let .guided(_, _, _, _, _, prngSalt):
+            prngSalt
+        }
+    }
 
     // MARK: - Decode
 
@@ -33,13 +45,15 @@ public enum SequenceDecoder {
                 materializePicks: materializePicks
             )
 
-        case let .guided(fallbackTree, maximizeBoundRegionIndices, materializePicks):
+        case let .guided(fallbackTree, maximizeBoundRegionIndices, materializePicks, usePRNGFallback, skipShortlexCheck, prngSalt):
             decodeGuided(
                 candidate: consume candidate, gen: gen,
-                fallbackTree: fallbackTree ?? tree,
+                fallbackTree: usePRNGFallback ? nil : (fallbackTree ?? tree),
                 maximizeBoundRegionIndices: maximizeBoundRegionIndices,
                 originalSequence: originalSequence, property: property,
-                materializePicks: materializePicks
+                materializePicks: materializePicks,
+                skipShortlexCheck: skipShortlexCheck,
+                prngSalt: prngSalt
             )
         }
     }
@@ -99,13 +113,15 @@ public enum SequenceDecoder {
     private func decodeGuided<Output>(
         candidate: consuming ChoiceSequence,
         gen: ReflectiveGenerator<Output>,
-        fallbackTree: ChoiceTree,
+        fallbackTree: ChoiceTree?,
         maximizeBoundRegionIndices: Set<Int>? = nil,
         originalSequence: ChoiceSequence,
         property: (Output) -> Bool,
-        materializePicks: Bool
+        materializePicks: Bool,
+        skipShortlexCheck: Bool = false,
+        prngSalt: UInt64 = 0
     ) -> ShrinkResult<Output>? {
-        let seed = ZobristHash.hash(of: candidate)
+        let seed = ZobristHash.hash(of: candidate) &+ prngSalt
         switch ReductionMaterializer.materialize(
             gen,
             prefix: consume candidate,
@@ -119,7 +135,9 @@ public enum SequenceDecoder {
         case let .success(output, freshTree):
             guard property(output) == false else { return nil }
             let freshSequence = ChoiceSequence(freshTree)
-            guard freshSequence.shortLexPrecedes(originalSequence) else { return nil }
+            if skipShortlexCheck == false {
+                guard freshSequence.shortLexPrecedes(originalSequence) else { return nil }
+            }
             return ShrinkResult(
                 sequence: freshSequence,
                 tree: freshTree,

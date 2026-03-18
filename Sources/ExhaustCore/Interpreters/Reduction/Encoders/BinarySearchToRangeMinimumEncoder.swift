@@ -1,10 +1,10 @@
 /// Binary-searches each target value toward a specific reduction target.
 ///
 /// The reduction target for each value is determined by its recorded valid range (see ``ChoiceValue/reductionTarget(in:)``). Processes targets sequentially, converging each via ``BinarySearchStepper`` before moving to the next.
-public struct BinarySearchToTargetEncoder: AdaptiveEncoder {
+public struct BinarySearchToRangeMinimumEncoder: AdaptiveEncoder {
     public init() {}
 
-    public let name = "binarySearchToTarget"
+    public let name: EncoderName = .binarySearchToRangeMinimum
     public let phase = ReductionPhase.valueMinimization
 
     public func estimatedCost(sequence: ChoiceSequence, bindIndex _: BindSpanIndex?) -> Int? {

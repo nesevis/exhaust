@@ -138,7 +138,7 @@ struct CompositionTests {
             #examine(companyGen, samples: 20, seed: 42)
         }
 
-        @Test("Complex generator composition stability", .disabled("This is weird. Check why this fails"))
+        @Test("Complex generator composition stability")
         func complexGeneratorStability() {
             // Build a very complex generator with multiple composition patterns
             let nestedGen = #gen(.int(in: 1 ... 100)).array(length: 1 ... 10).array(length: 1 ... 5)
@@ -148,6 +148,27 @@ struct CompositionTests {
 
             #examine(pickedGen, samples: 100, seed: 42)
         }
+    }
+    
+    @Test("Enum case generator is reflected")
+    func enumCaseReflection() throws {
+        enum Pet: Equatable {
+            case cat(Int)
+            case dog(Int, String)
+        }
+        let dog = #gen(.int(), .string()) { i, s in
+            Pet.dog(i, s)
+        }
+        let cat = #gen(.int()) {
+            Pet.cat($0)
+        }
+        let petGen = #gen(.oneOf(dog, cat))
+        
+        let target = Pet.dog(13, "Buddy")
+
+        let tree = try #require(try Interpreters.reflect(petGen, with: target))
+        let replay = try #require(try Interpreters.replay(petGen, using: tree))
+        #expect(replay == target)
     }
 
     @Suite("Bound tests")

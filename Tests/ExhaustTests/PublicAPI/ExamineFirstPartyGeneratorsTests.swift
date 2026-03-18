@@ -267,22 +267,18 @@ struct ExamineFirstPartyGeneratorsTests {
     }
 
     @Test func setWithFixedCount() {
-        withKnownIssue("Set element ordering is non-deterministic — replay fails") {
-            let report = #examine(.int(in: 0 ... 100).set(count: 3), samples: 10)
-            #expect(report.passed)
-        }
+        let report = #examine(.int(in: 0 ... 100).set(count: 3), samples: 10)
+        #expect(report.passed)
     }
 
     // MARK: - Collections: dictionary
 
     @Test func dictionary() {
-        withKnownIssue("Dictionary key ordering is non-deterministic — replay fails") {
-            let report = #examine(
-                ReflectiveGenerator.dictionary(.int(in: 0 ... 100), .int(in: 0 ... 100)),
-                samples: 5
-            )
-            #expect(report.passed)
-        }
+        let report = #examine(
+            ReflectiveGenerator.dictionary(.int(in: 0 ... 100), .int(in: 0 ... 100)),
+            samples: 5
+        )
+        #expect(report.passed)
     }
 
     // MARK: - Collections: element

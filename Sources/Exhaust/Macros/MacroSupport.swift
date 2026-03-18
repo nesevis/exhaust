@@ -546,6 +546,31 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
     // MARK: - Examination
 
     /// Validates a generator's reflection, replay, and health. Runtime target of `#examine` expansion.
+    ///
+    /// Uses value comparison via `Equatable` for round-trip checks, providing richer failure output and correct handling of non-injective generators (for example `oneOf` where multiple branches can produce the same value).
+    @discardableResult
+    public static func __examine<Output: Equatable>(
+        _ gen: ReflectiveGenerator<Output>,
+        samples: Int,
+        seed: UInt64?,
+        fileID: StaticString,
+        filePath: StaticString,
+        line: UInt,
+        column: UInt
+    ) -> ValidationReport {
+        gen.validate(
+            samples: samples,
+            seed: seed,
+            fileID: fileID,
+            filePath: filePath,
+            line: line,
+            column: column
+        )
+    }
+
+    /// Validates a generator's reflection, replay, and health. Runtime target of `#examine` expansion.
+    ///
+    /// Falls back to choice-sequence comparison for non-`Equatable` types.
     @discardableResult
     public static func __examine(
         _ gen: ReflectiveGenerator<some Any>,

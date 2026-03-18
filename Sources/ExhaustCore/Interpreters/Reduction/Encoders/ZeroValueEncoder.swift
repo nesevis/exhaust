@@ -3,7 +3,7 @@
 ///
 /// Two phases: first tries setting ALL values to simplest simultaneously (handles filter-coupled generators), then iterates individually. The 2-cell chain ZeroValue => BinarySearchToZero means that targets where ZeroValue succeeds can skip binary search entirely.
 public struct ZeroValueEncoder: AdaptiveEncoder {
-    public let name = "zeroValue"
+    public let name: EncoderName = .zeroValue
     public let phase = ReductionPhase.valueMinimization
 
     public func estimatedCost(sequence: ChoiceSequence, bindIndex _: BindSpanIndex?) -> Int? {

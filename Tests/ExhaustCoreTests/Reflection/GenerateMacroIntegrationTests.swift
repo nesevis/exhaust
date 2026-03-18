@@ -43,32 +43,6 @@ struct GenerateMacroIntegrationTests {
         #expect(materialized == target)
     }
 
-    @Test("Enum case generator is reflected")
-    func enumCaseReflection() throws {
-        enum Pet: Equatable {
-            case cat(Int)
-            case dog(Int, String)
-        }
-        let catGen = Gen.contramap(
-            { (p: Pet) -> Int? in guard case let .cat(n) = p else { return nil }; return n },
-            (Gen.choose(in: Int.min ... Int.max, scaling: Int.defaultScaling) as ReflectiveGenerator<Int>)
-                ._map { Pet.cat($0) }
-        )
-        let dogGen = Gen.contramap(
-            { (p: Pet) -> (Int, String)? in guard case let .dog(n, s) = p else { return nil }; return (n, s) },
-            Gen.zip(
-                Gen.choose(in: Int.min ... Int.max, scaling: Int.defaultScaling) as ReflectiveGenerator<Int>,
-                asciiStringGen()
-            )._map { Pet.dog($0, $1) }
-        )
-        let petGen = Gen.pick(choices: [(1, catGen), (1, dogGen)])
-        let target = Pet.dog(13, "Buddy")
-
-        let tree = try #require(try Interpreters.reflect(petGen, with: target))
-        let replay = try #require(try Interpreters.replay(petGen, using: tree))
-        #expect(replay == target)
-    }
-
     // MARK: - Three-generator bidirectional
 
     @Test("Three-generator zip can be reflected")

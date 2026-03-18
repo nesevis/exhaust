@@ -309,8 +309,12 @@ extension Interpreters {
         with tree: ChoiceTree,
         context: inout Context
     ) throws -> Output? {
-        // Handle bind scripts by distributing choices to the generator
-        if case let .bind(inner, bound) = tree {
+        // Handle getSize-originating `.bind` trees by decomposing into [inner, bound]
+        // choices, mirroring how `.group` trees are split. These binds are
+        // structure-preserving (size affects magnitude, not tree shape) and emit
+        // `.group` markers in the ChoiceSequence. Data-dependent binds fall through
+        // to `materializeRecursiveTransform` which splits inner/bound subtrees.
+        if case let .bind(inner, bound) = tree, inner.isGetSize {
             try context.consumeGroup(true)
             let result = try materializeWithChoices(gen, with: [inner, bound], context: &context)
             try context.consumeGroup(false)
@@ -551,14 +555,43 @@ extension Interpreters {
         tree: ChoiceTree,
         context: inout Context
     ) throws -> Output? {
-        guard let innerValue = try materializeRecursive(inner, with: tree, context: &context) else { return nil }
         let result: Any
         switch kind {
         case let .map(forward, _, _):
+            guard let innerValue = try materializeRecursive(inner, with: tree, context: &context) else {
+                return nil
+            }
             result = try forward(innerValue)
+
         case let .bind(forward, _, _, _):
+            let innerValue: Any
+            let boundTree: ChoiceTree
+
+            if case let .bind(innerSubtree, boundSubtree) = tree {
+                // Tree matches the bind operation — consume markers, split subtrees
+                try context.consumeGroup(true)
+                guard let innerResult = try materializeRecursive(inner, with: innerSubtree, context: &context) else {
+                    return nil
+                }
+                innerValue = innerResult
+                boundTree = boundSubtree
+            } else {
+                guard let innerResult = try materializeRecursive(inner, with: tree, context: &context) else {
+                    return nil
+                }
+                innerValue = innerResult
+                boundTree = tree
+            }
+
             let boundGen = try forward(innerValue)
-            guard let boundValue = try materializeRecursive(boundGen, with: tree, context: &context) else { return nil }
+            guard let boundValue = try materializeRecursive(boundGen, with: boundTree, context: &context) else {
+                return nil
+            }
+
+            if case .bind = tree {
+                try context.consumeGroup(false)
+            }
+
             result = boundValue
         }
         let nextGen = try continuation(result)
@@ -1056,15 +1089,49 @@ extension Interpreters {
         choices: inout ChoiceCursor,
         context: inout Context
     ) throws -> Output? {
-        guard let innerValue = try materializeWithChoicesHelper(inner, with: &choices, context: &context) else { return nil }
         let result: Any
         switch kind {
         case let .map(forward, _, _):
+            guard let innerValue = try materializeWithChoicesHelper(inner, with: &choices, context: &context) else {
+                return nil
+            }
             result = try forward(innerValue)
+
         case let .bind(forward, _, _, _):
-            let boundGen = try forward(innerValue)
-            guard let boundValue = try materializeWithChoicesHelper(boundGen, with: &choices, context: &context) else { return nil }
-            result = boundValue
+            if let nextChoice = choices.element(atOffset: 0),
+               case let .bind(innerSubtree, boundSubtree) = nextChoice
+            {
+                // Choice is a .bind tree — decompose into inner and bound subtrees.
+                // Consume markers and process each subtree with its matching generator.
+                _ = choices.removeFirst()
+                try context.consumeGroup(true)
+                guard let innerValue = try materializeRecursive(
+                    inner, with: innerSubtree, context: &context
+                ) else {
+                    return nil
+                }
+                let boundGen = try forward(innerValue)
+                guard let boundValue = try materializeRecursive(
+                    boundGen, with: boundSubtree, context: &context
+                ) else {
+                    return nil
+                }
+                try context.consumeGroup(false)
+                result = boundValue
+            } else {
+                guard let innerValue = try materializeWithChoicesHelper(
+                    inner, with: &choices, context: &context
+                ) else {
+                    return nil
+                }
+                let boundGen = try forward(innerValue)
+                guard let boundValue = try materializeWithChoicesHelper(
+                    boundGen, with: &choices, context: &context
+                ) else {
+                    return nil
+                }
+                result = boundValue
+            }
         }
         let nextGen = try continuation(result)
         return try materializeWithChoicesHelper(nextGen, with: &choices, context: &context)

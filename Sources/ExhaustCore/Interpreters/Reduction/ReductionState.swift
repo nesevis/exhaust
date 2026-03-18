@@ -22,22 +22,48 @@ final class ReductionState<Output> {
     var lattice: DominanceLattice
     var rejectCache = Set<UInt64>(minimumCapacity: 512)
 
+    /// Whether the tree needs re-materialization with picks before branch encoders can run.
+    ///
+    /// Set on every acceptance. Cleared after ``runBranchSimplification(budget:)`` performs the materialization. Avoids redundant O(n) materializations when 1a is re-entered after 1b or 1c successes on an unchanged sequence.
+    var branchTreeDirty = true
+
+    // MARK: - Snapshot
+
+    /// A point-in-time copy of all mutable reduction state for rollback on fingerprint boundary crossing.
+    ///
+    /// Captures every field that ``accept(_:structureChanged:)`` can modify. Restoring a snapshot returns the reducer to exactly the state it was in before the snapshotted acceptance.
+    struct Snapshot {
+        let sequence: ChoiceSequence
+        let tree: ChoiceTree
+        let output: Output
+        let fallbackTree: ChoiceTree?
+        let bindIndex: BindSpanIndex?
+        let bestSequence: ChoiceSequence
+        let bestOutput: Output
+        let branchTreeDirty: Bool
+        let spanCache: SpanCache
+        let lattice: DominanceLattice
+    }
+
     // Encoders
-    var promoteBranchesEncoder = PromoteBranchesEncoder()
-    var pivotBranchesEncoder = PivotBranchesEncoder()
+    var promoteBranchesEncoder = DeleteByBranchPromotionEncoder()
+    var pivotBranchesEncoder = DeleteByBranchPivotEncoder()
     var deleteContainerSpans = DeleteContainerSpansEncoder()
     var deleteSequenceElements = DeleteSequenceElementsEncoder()
     var deleteSequenceBoundaries = DeleteSequenceBoundariesEncoder()
     var deleteFreeStandingValues = DeleteFreeStandingValuesEncoder()
-    var speculativeDelete = SpeculativeDeleteEncoder()
+    var randomRepairDelete = DeleteContainerSpansWithRandomRepairEncoder()
     var zeroValueEncoder = ZeroValueEncoder()
-    var binarySearchToZeroEncoder = BinarySearchToZeroEncoder()
-    var binarySearchToTargetEncoder = BinarySearchToTargetEncoder()
+    var binarySearchToZeroEncoder = BinarySearchToSemanticSimplestEncoder()
+    var binarySearchToTargetEncoder = BinarySearchToRangeMinimumEncoder()
     var reduceFloatEncoder = ReduceFloatEncoder()
     var deleteAlignedWindowsEncoder: DeleteAlignedWindowsEncoder
-    var tandemEncoder = TandemReductionEncoder()
-    var redistributeEncoder = CrossStageRedistributeEncoder()
-    var bindAwareRedistributeEncoder = BindAwareRedistributeEncoder()
+    var tandemEncoder = RedistributeByTandemReductionEncoder()
+    var redistributeEncoder = RedistributeAcrossValueContainersEncoder()
+    var bindAwareRedistributeEncoder = RedistributeAcrossBindRegionsEncoder()
+    var bindRootSearchEncoder = BindRootSearchEncoder()
+    var productSpaceBatchEncoder = ProductSpaceBatchEncoder()
+    var productSpaceAdaptiveEncoder = ProductSpaceAdaptiveEncoder()
 
     // Encoder ordering: move-to-front per leg, persists across cycles.
     var snipOrder: [ReductionScheduler.ValueEncoderSlot] = ReductionScheduler.ValueEncoderSlot.allCases
@@ -82,6 +108,7 @@ extension ReductionState {
         tree = result.tree
         output = result.output
         fallbackTree = result.tree
+        branchTreeDirty = true
         if structureChanged {
             spanCache.invalidate()
             bindIndex = hasBind ? BindSpanIndex(from: sequence) : nil
@@ -110,7 +137,7 @@ extension ReductionState {
 
     /// Runs a batch encoder against a decoder, tracking materializations. Returns true if a candidate was accepted.
     func runBatch(
-        _ encoder: any BatchEncoder,
+        _ encoder: some BatchEncoder,
         decoder: SequenceDecoder,
         targets: TargetSet,
         structureChanged: Bool,
@@ -119,12 +146,13 @@ extension ReductionState {
         guard budget.isExhausted == false else { return false }
         if lattice.shouldSkip(encoder.name, phase: encoder.phase) { return false }
         let startSeqLen = sequence.count
+        let cacheSalt = decoder.rejectCacheSalt
         var probes = 0
         for candidate in encoder.encode(sequence: sequence, targets: targets) {
             guard budget.isExhausted == false else { break }
             probes += 1
-            let candidateHash = ZobristHash.hash(of: candidate)
-            if rejectCache.contains(candidateHash) {
+            let cacheKey = ZobristHash.hash(of: candidate) &+ cacheSalt
+            if rejectCache.contains(cacheKey) {
                 budget.recordMaterialization()
                 continue
             }
@@ -137,9 +165,10 @@ extension ReductionState {
             ) {
                 budget.recordMaterialization()
                 accept(result, structureChanged: structureChanged)
+                lattice.recordSuccess(encoder.name)
                 if isInstrumented {
                     ExhaustLog.debug(category: .reducer, event: "encoder_accepted", metadata: [
-                        "encoder": encoder.name, "probes": "\(probes)",
+                        "encoder": encoder.name.rawValue, "probes": "\(probes)",
                         "seq_len": "\(startSeqLen)→\(sequence.count)",
                         "output": "\(output)",
                     ])
@@ -147,17 +176,17 @@ extension ReductionState {
                 return true
             }
             budget.recordMaterialization()
-            rejectCache.insert(candidateHash)
+            rejectCache.insert(cacheKey)
         }
         if isInstrumented {
             if probes > 0 {
                 ExhaustLog.debug(category: .reducer, event: "encoder_exhausted", metadata: [
-                    "encoder": encoder.name, "probes": "\(probes)",
+                    "encoder": encoder.name.rawValue, "probes": "\(probes)",
                     "seq_len": "\(startSeqLen)",
                 ])
             } else {
                 ExhaustLog.debug(category: .reducer, event: "encoder_no_probes", metadata: [
-                    "encoder": encoder.name,
+                    "encoder": encoder.name.rawValue,
                 ])
             }
         }
@@ -165,18 +194,23 @@ extension ReductionState {
     }
 
     /// Runs an adaptive encoder against a decoder, tracking materializations. Returns true if any probe was accepted.
+    ///
+    /// - Parameters:
+    ///   - fingerprintGuard: When non-nil, enforces a per-acceptance Phase 1/Phase 2 boundary. Before committing each accepted probe, the method takes a snapshot, calls `accept`, then recomputes the ``StructuralFingerprint``. If the fingerprint differs from the guard value, the acceptance is rolled back via the snapshot and the encoder loop terminates immediately. Any clean acceptances committed before the crossing are preserved. This prevents Phase 2 value encoders from accidentally committing structural changes — for example, reducing a nested bind-inner value that changes bound-array length — that belong in Phase 1. The guard requires `structureChanged: hasBind` so that `accept` rebuilds ``BindSpanIndex`` before the fingerprint is recomputed.
     func runAdaptive(
         _ encoder: some AdaptiveEncoder,
         decoder: SequenceDecoder,
         targets: TargetSet,
         structureChanged: Bool,
-        budget: inout ReductionScheduler.LegBudget
+        budget: inout ReductionScheduler.LegBudget,
+        fingerprintGuard: StructuralFingerprint? = nil
     ) throws -> Bool {
         guard budget.isExhausted == false else { return false }
         if lattice.shouldSkip(encoder.name, phase: encoder.phase) { return false }
         let startSeqLen = sequence.count
         var encoder = encoder
         encoder.start(sequence: sequence, targets: targets)
+        let cacheSalt = decoder.rejectCacheSalt
         var lastAccepted = false
         var anyAccepted = false
         var probes = 0
@@ -184,9 +218,8 @@ extension ReductionState {
         while let probe = encoder.nextProbe(lastAccepted: lastAccepted) {
             guard budget.isExhausted == false else { break }
             probes += 1
-            let probeHash = ZobristHash.hash(of: probe)
-            if rejectCache.contains(probeHash) {
-                budget.recordMaterialization()
+            let cacheKey = ZobristHash.hash(of: probe) &+ cacheSalt
+            if rejectCache.contains(cacheKey) {
                 lastAccepted = false
                 continue
             }
@@ -195,14 +228,31 @@ extension ReductionState {
                 originalSequence: sequence, property: property
             ) {
                 budget.recordMaterialization()
-                accept(result, structureChanged: structureChanged)
+                if let guardPrint = fingerprintGuard {
+                    // Snapshot before accepting so a structural crossing can be fully rolled back.
+                    let snap = makeSnapshot()
+                    accept(result, structureChanged: structureChanged)
+                    // bindIndex is now fresh (structureChanged: hasBind rebuilt it above).
+                    // Compare the post-accept fingerprint against the pre-Phase-2 baseline.
+                    if let currentBindIndex = bindIndex,
+                       StructuralFingerprint.from(tree, bindIndex: currentBindIndex) != guardPrint
+                    {
+                        // Structural boundary crossed: undo this acceptance and stop the encoder.
+                        // Any clean acceptances already committed remain intact.
+                        restoreSnapshot(snap)
+                        lastAccepted = false
+                        break
+                    }
+                } else {
+                    accept(result, structureChanged: structureChanged)
+                }
                 lastAccepted = true
                 anyAccepted = true
                 accepted += 1
             } else {
                 budget.recordMaterialization()
                 lastAccepted = false
-                rejectCache.insert(probeHash)
+                rejectCache.insert(cacheKey)
             }
         }
         if anyAccepted {
@@ -211,13 +261,13 @@ extension ReductionState {
         if isInstrumented {
             if probes > 0 {
                 ExhaustLog.debug(category: .reducer, event: anyAccepted ? "encoder_accepted" : "encoder_exhausted", metadata: [
-                    "encoder": encoder.name, "probes": "\(probes)", "accepted": "\(accepted)",
+                    "encoder": encoder.name.rawValue, "probes": "\(probes)", "accepted": "\(accepted)",
                     "seq_len": "\(startSeqLen)→\(sequence.count)",
                     "output": anyAccepted ? "\(output)" : "",
                 ])
             } else {
                 ExhaustLog.debug(category: .reducer, event: "encoder_no_probes", metadata: [
-                    "encoder": encoder.name,
+                    "encoder": encoder.name.rawValue,
                 ])
             }
         }
@@ -229,9 +279,62 @@ extension ReductionState {
         return SequenceDecoder.for(context)
     }
 
+    /// Decoder for speculative deletion: PRNG fallback for deleted entries,
+    /// enabling repair with fresh (possibly shorter) values that satisfy filters.
+    func makeSpeculativeDecoder() -> SequenceDecoder {
+        .guided(fallbackTree: nil, materializePicks: config.useReductionMaterializer, usePRNGFallback: true)
+    }
+
     func makeDepthZeroDecoder() -> SequenceDecoder {
         let context = DecoderContext(depth: .specific(0), bindIndex: bindIndex, fallbackTree: fallbackTree, strictness: .normal, useReductionMaterializer: config.useReductionMaterializer)
         return SequenceDecoder.for(context)
+    }
+
+    /// Returns a snapshot of all mutable reduction state.
+    func makeSnapshot() -> Snapshot {
+        Snapshot(
+            sequence: sequence,
+            tree: tree,
+            output: output,
+            fallbackTree: fallbackTree,
+            bindIndex: bindIndex,
+            bestSequence: bestSequence,
+            bestOutput: bestOutput,
+            branchTreeDirty: branchTreeDirty,
+            spanCache: spanCache,
+            lattice: lattice
+        )
+    }
+
+    /// Restores all mutable reduction state from a snapshot, undoing any acceptances made after it was taken.
+    func restoreSnapshot(_ snapshot: Snapshot) {
+        sequence = snapshot.sequence
+        tree = snapshot.tree
+        output = snapshot.output
+        fallbackTree = snapshot.fallbackTree
+        bindIndex = snapshot.bindIndex
+        bestSequence = snapshot.bestSequence
+        bestOutput = snapshot.bestOutput
+        branchTreeDirty = snapshot.branchTreeDirty
+        spanCache = snapshot.spanCache
+        lattice = snapshot.lattice
+    }
+
+    /// Computes an adaptive redistribution budget from the estimated costs of all redistribution encoders, capped at ``ReductionScheduler/defaultRedistributionBudget``.
+    ///
+    /// For small generators with few values, the budget scales down to avoid wasting materializations on search space that doesn't exist. For large generators, the cap prevents runaway spending.
+    var adaptiveRedistributionBudget: Int {
+        var total = 0
+        if let cost = bindAwareRedistributeEncoder.estimatedCost(sequence: sequence, bindIndex: bindIndex) {
+            total += cost
+        }
+        if let cost = tandemEncoder.estimatedCost(sequence: sequence, bindIndex: bindIndex) {
+            total += cost
+        }
+        if let cost = redistributeEncoder.estimatedCost(sequence: sequence, bindIndex: bindIndex) {
+            total += cost
+        }
+        return min(total, ReductionScheduler.defaultRedistributionBudget)
     }
 }
 
@@ -259,7 +362,7 @@ extension ReductionState {
             case .sequenceBoundaries: deleteSequenceBoundaries.estimatedCost(sequence: sequence, bindIndex: bindIndex)
             case .freeStandingValues: deleteFreeStandingValues.estimatedCost(sequence: sequence, bindIndex: bindIndex)
             case .alignedWindows: deleteAlignedWindowsEncoder.estimatedCost(sequence: sequence, bindIndex: bindIndex)
-            case .speculativeDelete: speculativeDelete.estimatedCost(sequence: sequence, bindIndex: bindIndex)
+            case .randomRepairDelete: randomRepairDelete.estimatedCost(sequence: sequence, bindIndex: bindIndex)
             }
             if let cost { deletionCosts[slot] = cost }
         }
@@ -401,8 +504,8 @@ extension ReductionState {
                     try runAdaptive(deleteFreeStandingValues, decoder: depthDecoder, targets: .spans(spanCache.deletionTargets(category: slot.spanCategory, depth: depth, from: sequence, bindIndex: bindIndex)), structureChanged: true, budget: &legBudget)
                 case .alignedWindows:
                     try runAdaptive(deleteAlignedWindowsEncoder, decoder: depthDecoder, targets: .spans(spanCache.deletionTargets(category: slot.spanCategory, depth: depth, from: sequence, bindIndex: bindIndex)), structureChanged: true, budget: &legBudget)
-                case .speculativeDelete:
-                    try runAdaptive(speculativeDelete, decoder: depthDecoder, targets: .spans(spanCache.deletionTargets(category: slot.spanCategory, depth: depth, from: sequence, bindIndex: bindIndex)), structureChanged: true, budget: &legBudget)
+                case .randomRepairDelete:
+                    try runAdaptive(randomRepairDelete, decoder: makeSpeculativeDecoder(), targets: .spans(spanCache.deletionTargets(category: slot.spanCategory, depth: depth, from: sequence, bindIndex: bindIndex)), structureChanged: true, budget: &legBudget)
                 }
                 if slotAccepted {
                     accepted += 1
@@ -423,6 +526,70 @@ extension ReductionState {
         let structureChangedOnCovariant = hasBind
         let trainDecoder = makeDepthZeroDecoder()
         var accepted = 0
+
+        // Product-space search: reduce bind-controlling values jointly, then fall back to sequential.
+        if hasBind, let bindSpanIndex = bindIndex {
+            let prngDecoder: SequenceDecoder = .guided(fallbackTree: nil, usePRNGFallback: true)
+            let bindInnerCount = bindSpanIndex.regions.count
+
+            if bindInnerCount <= 3 {
+                // Batch: enumerate product space of bind-inner values.
+                productSpaceBatchEncoder.bindIndex = bindSpanIndex
+                productSpaceBatchEncoder.dag = ChoiceDependencyGraph.build(
+                    from: sequence, tree: tree, bindIndex: bindSpanIndex
+                )
+
+                // Tier 1: guided replay (clamp bound entries to current tree).
+                let guidedDecoder: SequenceDecoder = .guided(
+                    fallbackTree: fallbackTree ?? tree
+                )
+                if try runBatch(
+                    productSpaceBatchEncoder, decoder: guidedDecoder,
+                    targets: .wholeSequence, structureChanged: true,
+                    budget: &legBudget
+                ) {
+                    accepted += 1
+                } else if try runBatch(
+                    // Tier 2: PRNG fallback (fresh bound content).
+                    productSpaceBatchEncoder, decoder: prngDecoder,
+                    targets: .wholeSequence, structureChanged: true,
+                    budget: &legBudget
+                ) {
+                    accepted += 1
+                }
+            } else {
+                // Adaptive: delta-debug coordinate halving for k > 3.
+                productSpaceAdaptiveEncoder.bindIndex = bindSpanIndex
+                while legBudget.isExhausted == false {
+                    if try runAdaptive(
+                        productSpaceAdaptiveEncoder, decoder: prngDecoder,
+                        targets: .wholeSequence, structureChanged: true,
+                        budget: &legBudget
+                    ) {
+                        accepted += 1
+                    } else {
+                        break
+                    }
+                }
+            }
+
+            // Fallback: run BindRootSearchEncoder for anything the product
+            // space encoder didn't cover (non-converged axes, single-axis refinement).
+            bindRootSearchEncoder.bindIndex = bindSpanIndex
+            while legBudget.isExhausted == false {
+                if try runAdaptive(
+                    bindRootSearchEncoder,
+                    decoder: prngDecoder,
+                    targets: .wholeSequence,
+                    structureChanged: true,
+                    budget: &legBudget
+                ) {
+                    accepted += 1
+                } else {
+                    break
+                }
+            }
+        }
 
         for slot in trainOrder {
             guard legBudget.isExhausted == false else { break }
@@ -466,17 +633,117 @@ extension ReductionState {
         return accepted
     }
 
+    /// Runs a speculative exploration round: redistribute with regression allowed, then prune and train to exploit.
+    ///
+    /// Pipeline acceptance: final state must shortlex-precede the pre-exploration checkpoint. ``bestSequence`` and ``bestOutput`` only update if the full pipeline passes — intermediate results are discarded on rollback.
+    func runExplorationLeg(remaining: inout Int) throws -> Bool {
+        // Checkpoint all mutable state, including bestSequence/bestOutput.
+        let checkpointSequence = sequence
+        let checkpointTree = tree
+        let checkpointOutput = output
+        let checkpointFallbackTree = fallbackTree
+        let checkpointBindIndex = bindIndex
+        let checkpointBestSequence = bestSequence
+        let checkpointBestOutput = bestOutput
+
+        // Run RelaxRoundEncoder with exact decoder — no fallback, no shortlex check.
+        // Exact mode validates values against their explicit ranges, avoiding
+        // fallback-induced structural changes that break materialization.
+        let speculativeDecoder: SequenceDecoder = .exact()
+        var explorationBudget = ReductionScheduler.LegBudget(hardCap: remaining)
+        var relaxEncoder = RelaxRoundEncoder()
+        relaxEncoder.start(sequence: sequence, targets: .wholeSequence)
+        var lastAccepted = false
+        var redistributionAccepted = false
+        var explorationProbes = 0
+        var explorationAccepted = 0
+        while let probe = relaxEncoder.nextProbe(lastAccepted: lastAccepted) {
+            guard explorationBudget.isExhausted == false else { break }
+            explorationProbes += 1
+            // Do not consult the shared reject cache — it contains probes rejected
+            // by the normal decoder (with shortlex check). The speculative decoder
+            // (without shortlex check) may accept those same probes.
+            if let result = try speculativeDecoder.decode(
+                candidate: probe, gen: gen, tree: tree,
+                originalSequence: sequence, property: property
+            ) {
+                explorationBudget.recordMaterialization()
+                // Reject results that grow the sequence — the redistribution should
+                // only change values, not add structure. Growth happens when the
+                // redistributed values violate a filter, causing PRNG fallback.
+                if result.sequence.count > sequence.count {
+                    lastAccepted = false
+                    continue
+                }
+                accept(result, structureChanged: hasBind)
+                lastAccepted = true
+                redistributionAccepted = true
+                explorationAccepted += 1
+            } else {
+                explorationBudget.recordMaterialization()
+                lastAccepted = false
+            }
+        }
+
+        if isInstrumented {
+            ExhaustLog.debug(category: .reducer, event: "exploration_redistribute", metadata: [
+                "probes": "\(explorationProbes)",
+                "accepted": "\(explorationAccepted)",
+                "budget_used": "\(explorationBudget.used)",
+            ])
+        }
+
+        guard redistributionAccepted else {
+            // No speculative move found. Restore bestSequence/bestOutput
+            // (accept() may have transiently updated them).
+            bestSequence = checkpointBestSequence
+            bestOutput = checkpointBestOutput
+            remaining -= explorationBudget.used
+            return false
+        }
+
+        // Exploitation: run prune and train on the relaxed state.
+        var exploitRemaining = remaining - explorationBudget.used
+        let pruneAccepted = try runPruneLeg(remaining: &exploitRemaining, maxBindDepth: bindIndex?.maxBindDepth ?? 0)
+        let trainAccepted = try runTrainLeg(remaining: &exploitRemaining)
+
+        // Pipeline acceptance: final state must shortlex-precede checkpoint.
+        if sequence.shortLexPrecedes(checkpointSequence) {
+            bestSequence = sequence
+            bestOutput = output
+            remaining = exploitRemaining
+            if isInstrumented {
+                ExhaustLog.debug(category: .reducer, event: "exploration_accepted", metadata: [
+                    "seq_len": "\(checkpointSequence.count)→\(sequence.count)",
+                    "prune": "\(pruneAccepted)",
+                    "train": "\(trainAccepted)",
+                ])
+            }
+            return true
+        }
+
+        // Rollback all state including bestSequence/bestOutput.
+        sequence = checkpointSequence
+        tree = checkpointTree
+        output = checkpointOutput
+        fallbackTree = checkpointFallbackTree
+        bindIndex = checkpointBindIndex
+        bestSequence = checkpointBestSequence
+        bestOutput = checkpointBestOutput
+        remaining -= explorationBudget.used
+        return false
+    }
+
     /// Runs redistribution encoders. Returns `true` if any redistribution was accepted.
     func runRedistributionLeg(remaining: inout Int) throws -> Bool {
-        let target = cycleBudget.initialBudget(for: .redistribution)
-        var legBudget = ReductionScheduler.LegBudget(hardCap: min(remaining, 2 * target))
+        var legBudget = ReductionScheduler.LegBudget(hardCap: remaining)
         let redistContext = DecoderContext(depth: .global, bindIndex: bindIndex, fallbackTree: fallbackTree, strictness: .normal, useReductionMaterializer: config.useReductionMaterializer)
         let redistDecoder = SequenceDecoder.for(redistContext)
         var redistributionAccepted = false
 
         // Bind-aware redistribution: coordinate inner+bound across bind regions.
         if hasBind, let bi = bindIndex, bi.regions.count >= 2 {
-            let regionPairs = BindAwareRedistributeEncoder.buildPlans(
+            let regionPairs = RedistributeAcrossBindRegionsEncoder.buildPlans(
                 from: sequence, bindIndex: bi
             )
             for plan in regionPairs {
@@ -521,7 +788,7 @@ extension ReductionState {
         // Cross-stage redistribution: move mass between coordinates.
         if try runAdaptive(redistributeEncoder, decoder: redistDecoder, targets: .wholeSequence, structureChanged: hasBind, budget: &legBudget) {
             redistributionAccepted = true
-            if isInstrumented { ExhaustLog.debug(category: .reducer, event: "redistribution_accepted", metadata: ["encoder": "crossStageRedistribute"]) }
+            if isInstrumented { ExhaustLog.debug(category: .reducer, event: "redistribution_accepted", metadata: ["encoder": redistributeEncoder.name.rawValue]) }
         }
 
         remaining -= legBudget.used

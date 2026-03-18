@@ -100,7 +100,31 @@ struct SpanCache {
         category: DeletionSpanCategory, depth: Int,
         from sequence: ChoiceSequence, bindIndex: BindSpanIndex?
     ) -> [ChoiceSpan] {
-        let spans: [ChoiceSpan] = switch category {
+        let spans = rawDeletionSpans(category: category, from: sequence)
+        if let bi = bindIndex {
+            return spans.filter { bi.bindDepth(at: $0.range.lowerBound) == depth }
+        }
+        return spans
+    }
+
+    /// Returns deletion targets whose start position falls within the given range.
+    ///
+    /// Used by DAG-driven structural deletion to scope targets to a specific node's position range.
+    mutating func deletionTargets(
+        category: DeletionSpanCategory,
+        inRange positionRange: ClosedRange<Int>,
+        from sequence: ChoiceSequence
+    ) -> [ChoiceSpan] {
+        let spans = rawDeletionSpans(category: category, from: sequence)
+        return spans.filter { positionRange.contains($0.range.lowerBound) }
+    }
+
+    /// Extracts raw (unfiltered) spans for a deletion category.
+    private mutating func rawDeletionSpans(
+        category: DeletionSpanCategory,
+        from sequence: ChoiceSequence
+    ) -> [ChoiceSpan] {
+        switch category {
         case .containerSpans:
             allContainerSpans(from: sequence)
         case .sequenceElements:
@@ -112,9 +136,5 @@ struct SpanCache {
         case .siblingGroups, .mixed:
             allContainerSpans(from: sequence)
         }
-        if let bi = bindIndex {
-            return spans.filter { bi.bindDepth(at: $0.range.lowerBound) == depth }
-        }
-        return spans
     }
 }

@@ -1,6 +1,6 @@
-/// Bonsai cultivation cycle scheduler for principled test case reduction.
+/// V-cycle reduction scheduler for test case reduction.
 ///
-/// Orchestrates encoders and decoders in the cultivation cycle: snip (contravariant sweep, depths max→1, exact), prune (deletion sweep, depths 0→max, guided), train (covariant sweep, depth 0, guided for binds), and shape (redistribution).
+/// Orchestrates encoders and decoders in the cultivation cycle: train (covariant sweep, depth 0, guided for binds), snip (contravariant sweep, depths max→1, exact), prune (deletion sweep, depths 0→max, guided), and shape (redistribution).
 ///
 /// Resource tracking uses per-leg budgets with unused-budget forwarding. Each leg has a hard cap (maximum materializations) and a stall patience (maximum consecutive fruitless materializations). Forwarded budget extends productive legs but does not increase patience for unproductive ones.
 ///
@@ -31,10 +31,29 @@ enum ReductionScheduler {
             initialTree: initialTree
         )
 
+        // Phase 0: Structural Independence Isolation
+        // Zero all leaf positions that no structural node can influence.
+        if let result = StructuralIsolator.isolate(
+            gen: gen,
+            sequence: state.sequence,
+            tree: state.tree,
+            bindIndex: state.bindIndex,
+            property: property,
+            isInstrumented: state.isInstrumented
+        ) {
+            state.accept(
+                ShrinkResult(
+                    sequence: result.sequence,
+                    tree: result.tree,
+                    output: result.output,
+                    evaluations: 1
+                ),
+                structureChanged: false
+            )
+        }
+
         let isInstrumented = state.isInstrumented
         var stallBudget = config.maxStalls
-        var cyclesSinceRedistribution = 0
-        let redistributionDeferralCap = 3
         var cycles = 0
 
         // MARK: - V-Cycle
@@ -90,14 +109,25 @@ enum ReductionScheduler {
                 cycleImproved = true
             }
 
-            // ── Leg 1: Snip — contravariant sweep (depths max → 1) ──
+            // ── Leg 1: Train — covariant sweep (depth 0) ──
+            // Runs first so that bind-root values are reduced while downstream
+            // bound entries still carry their original values. The guided
+            // materializer clamps these originals to the new range, preserving
+            // coupling structure that zeroValue would otherwise destroy.
+            let covariantAccepted = try state.runTrainLeg(remaining: &remaining)
+            if covariantAccepted > 0 {
+                cycleImproved = true
+                dirtyDepths = Set(0 ... (state.bindIndex?.maxBindDepth ?? 0))
+            }
+
+            // ── Leg 2: Snip — contravariant sweep (depths max → 1) ──
             let contravariantAccepted = try state.runSnipLeg(
                 remaining: &remaining,
                 maxBindDepth: maxBindDepth,
                 dirtyDepths: dirtyDepths
             )
 
-            // ── Leg 2: Prune — deletion sweep (depths 0 → max) ──
+            // ── Leg 3: Prune — deletion sweep (depths 0 → max) ──
             let deletionAccepted = try state.runPruneLeg(
                 remaining: &remaining,
                 maxBindDepth: maxBindDepth
@@ -107,25 +137,21 @@ enum ReductionScheduler {
                 dirtyDepths = Set(0 ... (state.bindIndex?.maxBindDepth ?? 0))
             }
 
-            // ── Leg 3: Train — covariant sweep (depth 0) ──
-            let covariantAccepted = try state.runTrainLeg(remaining: &remaining)
-            if covariantAccepted > 0 {
+            // ── Cross-cutting: Redistribution (separate budget) ──
+            var redistBudget = state.adaptiveRedistributionBudget
+            if try state.runRedistributionLeg(remaining: &redistBudget) {
                 cycleImproved = true
-                dirtyDepths = Set(0 ... (state.bindIndex?.maxBindDepth ?? 0))
             }
 
-            // ── Cross-cutting: Redistribution ──
-            let mainLegsStalled = contravariantAccepted == 0 && deletionAccepted == 0
-            let redistributionOverdue = cyclesSinceRedistribution >= redistributionDeferralCap
-            let redistributionTriggered = mainLegsStalled || redistributionOverdue
-
-            if redistributionTriggered {
-                cyclesSinceRedistribution = 0
-                if try state.runRedistributionLeg(remaining: &remaining) {
+            // ── Leg 5: Exploration — speculative redistribution + exploit ──
+            if cycleImproved == false {
+                // Only explore when the main legs have stalled — exact/bounded
+                // morphisms should be exhausted before spending budget on speculative ones.
+                var exploreBudget = remaining
+                if try state.runExplorationLeg(remaining: &exploreBudget) {
                     cycleImproved = true
+                    remaining = exploreBudget
                 }
-            } else {
-                cyclesSinceRedistribution += 1
             }
 
             // ── Cycle termination ──

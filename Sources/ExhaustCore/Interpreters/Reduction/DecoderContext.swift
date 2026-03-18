@@ -10,7 +10,7 @@ public struct DecoderContext {
     /// that produce fresh trees with current `validRange` and all branch alternatives.
     public let useReductionMaterializer: Bool
     /// When `true`, pick sites materialize all non-selected branch alternatives.
-    /// Only needed for ``PromoteBranchesEncoder`` / ``PivotBranchesEncoder``.
+    /// Only needed for ``DeleteByBranchPromotionEncoder`` / ``DeleteByBranchPivotEncoder``.
     public let materializePicks: Bool
 
     public init(

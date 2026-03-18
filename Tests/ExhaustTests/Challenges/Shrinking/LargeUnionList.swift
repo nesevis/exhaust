@@ -54,11 +54,13 @@ struct LargeUnionListShrinkingChallenge {
             .suppressIssueReporting,
             .reflecting(value),
             .useBonsaiReducer,
+            .humanOrderPostProcess,
             property: Self.property
         )
 
         // 738 invocations with legacy, 966 with bonsai
-        #expect(output?.flatMap(\.self) == [0, -1, 1, -2, 2])
+        // 658 invocations with Bonsai 2, 22ms
+        #expect(output?.flatMap(\.self) == [-2, -1, 0, 1, 2])
     }
 
     @Test("Large Union List, Pathological single 2")
@@ -70,12 +72,14 @@ struct LargeUnionListShrinkingChallenge {
             Self.gen,
             .suppressIssueReporting,
             .reflecting(value),
-//            .useBonsaiReducer,
+            .useBonsaiReducer,
+            .humanOrderPostProcess,
             property: Self.property
         )
 
         // 619 invocations with legacy (20ms), 443 with bonsai (29ms)
-        #expect(output?.flatMap(\.self) == [0, -1, 1, -2, 2])
+        // 599 with bonsai 2 (21ms)
+        #expect(output?.flatMap(\.self) == [-2, -1, 0, 1, 2])
     }
 
     @Test("Large Union List, Pathological single 3")
@@ -87,11 +91,13 @@ struct LargeUnionListShrinkingChallenge {
             .suppressIssueReporting,
             .reflecting(value),
             .useBonsaiReducer,
+            .humanOrderPostProcess,
             property: Self.property
         )
 
         // 507 invocation with legacy (17ms), 460 with bonsai (11ms)
-        #expect(output?.flatMap(\.self) == [0, -1, 1, -2, 2])
+        // 299 invocations with Bonsai 2 (12ms)
+        #expect(output?.flatMap(\.self) == [-2, -1, 0, 1, 2])
     }
 
     @Test("Large Union List, 50")
@@ -99,19 +105,21 @@ struct LargeUnionListShrinkingChallenge {
         let lists = #example(Self.gen, count: 100, seed: 1337)
             .filter { Self.property($0) == false }
 
-        #expect(lists.count == 58)
+        #expect(lists.count == 64)
 
         for list in lists {
             let output = #exhaust(
                 Self.gen,
                 .suppressIssueReporting,
                 .reflecting(list),
-//                .useBonsaiReducer,
+                .useBonsaiReducer,
+                .humanOrderPostProcess,
                 property: Self.property
             )
 
             // ~650–750 invocations with legacy in 962ms. 845ms with bonsai
-            #expect(output?.flatMap(\.self) == [0, -1, 1, -2, 2])
+            // 846ms with Bonsai 2
+            #expect(output?.flatMap(\.self) == [-2, -1, 0, 1, 2])
         }
     }
 }
