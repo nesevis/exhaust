@@ -4,7 +4,7 @@
 /// defines when a less-aggressive encoder can be skipped because a more-aggressive one
 /// has already succeeded. The 2-cell relationships are:
 ///
-/// - **Deletion**: `deleteContainerSpans` ⇒ `deleteContainerSpansWithRandomRepair`
+/// - **Deletion**: `deleteContainerSpans` or `deleteAlignedSiblingWindows` ⇒ `deleteContainerSpansWithRandomRepair`
 /// - **Value minimization**: `zeroValue` ⇒ `binarySearchToSemanticSimplest` ⇒ `binarySearchToRangeMinimum`
 ///
 /// The lattice is scoped per hom-set: success in one hom-set (for example, deletion) does not
@@ -39,9 +39,11 @@ struct DominanceLattice {
     /// dominance is not defined (the leg ordering handles inter-phase sequencing).
     func shouldSkip(_ name: EncoderName, phase: ReductionPhase) -> Bool {
         switch (phase, name) {
-        // Container deletion is strictly more aggressive than speculative single-span deletion.
+        // Either guided deletion encoder dominates speculative single-span deletion:
+        // both share the same span pool and use a stricter guided decoder.
         case (.structuralDeletion, .deleteContainerSpansWithRandomRepair):
             succeeded.contains(.deleteContainerSpans)
+                || succeeded.contains(.deleteAlignedSiblingWindows)
         // Zero is the best binary-search-to-semantic-simplest can achieve.
         case (.valueMinimization, .binarySearchToSemanticSimplest):
             succeeded.contains(.zeroValue)

@@ -727,6 +727,20 @@ struct DominanceLatticeTests {
         // Without invalidation, it stays skipped (this is the bug scenario).
         #expect(lattice.shouldSkip(.binarySearchToSemanticSimplest, phase: .valueMinimization))
     }
+
+    @Test("deleteAlignedSiblingWindows success causes deleteContainerSpansWithRandomRepair to be skipped")
+    func alignedWindowsDominatesRandomRepair() {
+        var lattice = DominanceLattice()
+        lattice.recordSuccess(.deleteAlignedSiblingWindows)
+        #expect(lattice.shouldSkip(.deleteContainerSpansWithRandomRepair, phase: .structuralDeletion))
+    }
+
+    @Test("Unrelated encoder success does not cause deleteContainerSpansWithRandomRepair to be skipped")
+    func unrelatedSuccessDoesNotDominateRandomRepair() {
+        var lattice = DominanceLattice()
+        lattice.recordSuccess(.deleteSequenceElements)
+        #expect(lattice.shouldSkip(.deleteContainerSpansWithRandomRepair, phase: .structuralDeletion) == false)
+    }
 }
 
 // MARK: - Encoder Test Helpers

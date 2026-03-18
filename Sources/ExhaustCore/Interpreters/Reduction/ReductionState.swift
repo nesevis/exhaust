@@ -165,6 +165,7 @@ extension ReductionState {
             ) {
                 budget.recordMaterialization()
                 accept(result, structureChanged: structureChanged)
+                lattice.recordSuccess(encoder.name)
                 if isInstrumented {
                     ExhaustLog.debug(category: .reducer, event: "encoder_accepted", metadata: [
                         "encoder": encoder.name.rawValue, "probes": "\(probes)",
