@@ -45,13 +45,14 @@ extension ReductionScheduler {
             return lhs.ranges[0].lowerBound > rhs.ranges[0].lowerBound
         }
 
-        var candidate = sequence
-        var changed = false
+        var bestSequence = sequence
+        var bestTree = tree
+        var bestOutput: Output?
 
         for group in sortedGroups {
             let ranges = group.ranges
-            // Re-extract keys from the current (possibly already reordered) candidate.
-            let keys = ranges.map { ChoiceSequence.siblingComparisonKey(from: candidate, range: $0) }
+            // Re-extract keys from the current (possibly already reordered) best sequence.
+            let keys = ranges.map { ChoiceSequence.siblingComparisonKey(from: bestSequence, range: $0) }
 
             let sortedIndices = keys.indices.sorted { lhs, rhs in
                 naturalOrderPrecedes(keys[lhs], keys[rhs])
@@ -59,58 +60,62 @@ extension ReductionScheduler {
             guard sortedIndices != Array(keys.indices) else { continue }
 
             // Slice-reconstruction pattern from ReorderSiblingsEncoder.
-            let slices = ranges.map { Array(candidate[$0]) }
+            let slices = ranges.map { Array(bestSequence[$0]) }
             let spanStart = ranges[0].lowerBound
             let spanEnd = ranges[ranges.count - 1].upperBound
 
-            var rebuilt = ContiguousArray(candidate[..<spanStart])
+            var rebuilt = ContiguousArray(bestSequence[..<spanStart])
             var index = 0
             while index < ranges.count {
                 if index > 0 {
                     let gapStart = ranges[index - 1].upperBound + 1
                     let gapEnd = ranges[index].lowerBound
                     if gapStart < gapEnd {
-                        rebuilt.append(contentsOf: candidate[gapStart ..< gapEnd])
+                        rebuilt.append(contentsOf: bestSequence[gapStart ..< gapEnd])
                     }
                 }
                 rebuilt.append(contentsOf: slices[sortedIndices[index]])
                 index += 1
             }
-            if spanEnd + 1 < candidate.count {
-                rebuilt.append(contentsOf: candidate[(spanEnd + 1)...])
+            if spanEnd + 1 < bestSequence.count {
+                rebuilt.append(contentsOf: bestSequence[(spanEnd + 1)...])
             }
 
-            candidate = ChoiceSequence(rebuilt)
-            changed = true
+            let candidate = ChoiceSequence(rebuilt)
+
+            // Validate each group's reordering independently. A reordering that breaks the
+            // property (for example, sorting characters within a string to make two anagram
+            // strings identical) is rejected without poisoning other groups.
+            let seed = ZobristHash.hash(of: candidate)
+            if useReductionMaterializer {
+                switch ReductionMaterializer.materialize(
+                    gen,
+                    prefix: candidate,
+                    mode: .guided(seed: seed, fallbackTree: bestTree)
+                ) {
+                case let .success(output, freshTree):
+                    guard property(output) == false else { continue }
+                    bestSequence = ChoiceSequence(freshTree)
+                    bestTree = freshTree
+                    bestOutput = output
+                case .rejected, .failed:
+                    continue
+                }
+            } else {
+                switch GuidedMaterializer.materialize(gen, prefix: candidate, seed: seed, fallbackTree: bestTree) {
+                case let .success(output, materializedSequence, materializedTree):
+                    guard property(output) == false else { continue }
+                    bestSequence = materializedSequence
+                    bestTree = materializedTree
+                    bestOutput = output
+                case .filterEncountered, .failed:
+                    continue
+                }
+            }
         }
 
-        guard changed else { return nil }
-
-        // Materialize and validate. No shortLexPrecedes guard — human order intentionally may not
-        // be shortlex-smaller.
-        let seed = ZobristHash.hash(of: candidate)
-        if useReductionMaterializer {
-            switch ReductionMaterializer.materialize(
-                gen,
-                prefix: candidate,
-                mode: .guided(seed: seed, fallbackTree: tree)
-            ) {
-            case let .success(output, freshTree):
-                guard property(output) == false else { return nil }
-                let freshSequence = ChoiceSequence(freshTree)
-                return (sequence: freshSequence, tree: freshTree, output: output)
-            case .rejected, .failed:
-                return nil
-            }
-        } else {
-            switch GuidedMaterializer.materialize(gen, prefix: candidate, seed: seed, fallbackTree: tree) {
-            case let .success(output, materializedSequence, materializedTree):
-                guard property(output) == false else { return nil }
-                return (sequence: materializedSequence, tree: materializedTree, output: output)
-            case .filterEncountered, .failed:
-                return nil
-            }
-        }
+        guard let output = bestOutput else { return nil }
+        return (sequence: bestSequence, tree: bestTree, output: output)
     }
 }
 
