@@ -10,6 +10,21 @@
 // zeros them to domain minimum, and verifies the property still fails.
 // This reduces noise for subsequent reduction passes without touching
 // structurally coupled positions.
+//
+// Categorical framing (Bakirtzis, Savvas & Topcu, JMLR 26, 2025, Defs. 6, 32):
+// The choice positions of a trace form a partial order under structural
+// inclusion — a *subobject lattice*. A *subobject* here is a subset of
+// positions closed under the dependency relations imposed by bind and branch
+// entries: no position in the subobject can be reached from outside it by
+// following a bind-inner or branch-selector edge. Any two subobjects that
+// both witness the property failure can be intersected via the *pullback*
+// construction — the categorical fiber product — to yield a strictly smaller
+// subobject that also witnesses it. StructuralIsolator takes one step in this
+// direction: it identifies the subobject of structurally independent positions
+// (those not reachable from any bind-inner or branch-selector) and projects
+// them to their domain minimum. If the property still fails, the witness is
+// carried entirely by the complementary structural subobject, making Phase 0
+// a single pullback step toward the minimal subobject in the lattice.
 
 /// One-shot pre-pass that zeros structurally independent positions before the V-cycle begins.
 enum StructuralIsolator {
