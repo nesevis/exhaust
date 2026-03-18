@@ -63,12 +63,18 @@ extension ReductionState {
 
     /// Rebuilds the ``ChoiceDependencyGraph`` from the current sequence, tree, and bind index.
     ///
-    /// Returns `nil` for bind-free generators.
+    /// Returns a DAG for bind generators and for bind-free generators that contain picks. Returns `nil` only when neither binds nor picks are present.
     private func rebuildDAGIfNeeded() -> ChoiceDependencyGraph? {
-        guard hasBind, let bindSpanIndex = bindIndex else {
-            return nil
+        if hasBind, let bindSpanIndex = bindIndex {
+            return ChoiceDependencyGraph.build(from: sequence, tree: tree, bindIndex: bindSpanIndex)
         }
-        return ChoiceDependencyGraph.build(from: sequence, tree: tree, bindIndex: bindSpanIndex)
+        guard tree.containsPicks else { return nil }
+        // Bind-free but has picks: build DAG with an empty bind index so branch nodes are still captured.
+        return ChoiceDependencyGraph.build(
+            from: sequence,
+            tree: tree,
+            bindIndex: BindSpanIndex(from: sequence)
+        )
     }
 
     // MARK: - Sub-phase 1a: Branch Simplification
@@ -341,8 +347,14 @@ extension ReductionState {
             }
         }
 
+        // Re-read bindIndex — product-space acceptances may have changed the sequence structure.
+        guard let currentBindSpanIndex = bindIndex else {
+            budget -= legBudget.used
+            return accepted > 0
+        }
+
         // Value encoders on bind-inner spans only (not all depth-0 spans).
-        let bindInnerSpans = buildBindInnerValueSpans(bindSpanIndex: bindSpanIndex)
+        let bindInnerSpans = buildBindInnerValueSpans(bindSpanIndex: currentBindSpanIndex)
         if bindInnerSpans.isEmpty == false {
             let trainDecoder = makeDepthZeroDecoder()
             for slot in trainOrder {
@@ -818,31 +830,34 @@ extension ReductionState {
 
     /// Builds ordered deletion scopes for Phase 1b.
     ///
-    /// For bind generators with a DAG, iterates structural nodes in topological order (roots first), scoping targets to each node's bound range. A final depth-0 scope handles content outside any bind. For bind-free generators, returns a single depth-0 scope.
+    /// Iterates structural nodes in topological order (roots first). Bind-inner nodes scope deletion to their bound range; branch-selector nodes scope deletion to the selected subtree. A final depth-0 scope handles content outside all structural nodes. Returns a single depth-0 scope when no DAG is available.
     private func buildDeletionScopes(dag: ChoiceDependencyGraph?) -> [DeletionScope] {
-        guard let dag, let bindSpanIndex = bindIndex else {
-            // Bind-free: single depth-0 scope using depth filter.
+        guard let dag else {
             return [DeletionScope(positionRange: nil, depth: 0)]
         }
 
         var scopes = [DeletionScope]()
 
-        // Structural nodes in topological order: scope deletion to each node's bound range.
         for nodeIndex in dag.topologicalOrder {
             let node = dag.nodes[nodeIndex]
-            guard case let .structural(.bindInner(regionIndex: regionIndex)) = node.kind else {
+            switch node.kind {
+            case let .structural(.bindInner(regionIndex: regionIndex)):
+                guard let bindSpanIndex = bindIndex,
+                      regionIndex < bindSpanIndex.regions.count else { continue }
+                let region = bindSpanIndex.regions[regionIndex]
+                let boundRange = region.boundRange
+                let boundDepth = bindSpanIndex.bindDepth(at: boundRange.lowerBound)
+                scopes.append(DeletionScope(positionRange: boundRange, depth: boundDepth))
+            case .structural(.branchSelector):
+                guard let subtreeRange = node.scopeRange else { continue }
+                let depth = bindIndex?.bindDepth(at: subtreeRange.lowerBound) ?? 0
+                scopes.append(DeletionScope(positionRange: subtreeRange, depth: depth))
+            default:
                 continue
             }
-            guard regionIndex < bindSpanIndex.regions.count else {
-                continue
-            }
-            let region = bindSpanIndex.regions[regionIndex]
-            let boundRange = region.boundRange
-            let boundDepth = bindSpanIndex.bindDepth(at: boundRange.lowerBound)
-            scopes.append(DeletionScope(positionRange: boundRange, depth: boundDepth))
         }
 
-        // Depth-0 content outside any bind (leaf positions at the top level).
+        // Depth-0 content outside all structural nodes.
         scopes.append(DeletionScope(positionRange: nil, depth: 0))
 
         return scopes

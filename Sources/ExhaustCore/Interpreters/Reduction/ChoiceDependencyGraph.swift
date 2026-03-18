@@ -40,6 +40,11 @@ public struct DependencyNode: Equatable, Sendable {
     /// Always `false` for branch selectors. For bind-inner nodes, `true` when the bound subtree contains no nested data-dependent binds.
     public let isStructurallyConstant: Bool
 
+    /// The range of ``ChoiceSequence`` indices this node controls.
+    ///
+    /// For bind-inner nodes, this is the bound range. For branch-selector nodes, this is the selected subtree range. `nil` for branch selectors with an empty selected subtree.
+    public let scopeRange: ClosedRange<Int>?
+
     /// Indices into ``ChoiceDependencyGraph/nodes`` of nodes that depend on this node's value.
     public var dependents: [Int]
 }
@@ -74,8 +79,6 @@ public struct ChoiceDependencyGraph: Sendable {
         let bindTreeByOffset = Dictionary(uniqueKeysWithValues: bindTreeNodes.map { ($0.offset, $0) })
 
         var nodes: [DependencyNode] = []
-        // Scope ranges track where each node's dependents must fall.
-        var scopeRanges: [ClosedRange<Int>] = []
 
         // Bind-inner nodes.
         for (regionIndex, region) in bindIndex.regions.enumerated() {
@@ -86,9 +89,9 @@ public struct ChoiceDependencyGraph: Sendable {
                 positionRange: region.innerRange,
                 kind: .structural(.bindInner(regionIndex: regionIndex)),
                 isStructurallyConstant: isConstant,
+                scopeRange: region.boundRange,
                 dependents: []
             ))
-            scopeRanges.append(region.boundRange)
         }
 
         // Branch selector nodes.
@@ -104,21 +107,18 @@ public struct ChoiceDependencyGraph: Sendable {
                 )
 
                 if let groupRange = enclosingGroup {
+                    let subtreeStart = branchIndex + 1
+                    let subtreeEnd = groupRange.upperBound - 1
+                    let subtreeRange: ClosedRange<Int>? =
+                        subtreeStart <= subtreeEnd ? subtreeStart ... subtreeEnd : nil
+
                     nodes.append(DependencyNode(
                         positionRange: branchIndex ... branchIndex,
                         kind: .structural(.branchSelector),
                         isStructurallyConstant: false,
+                        scopeRange: subtreeRange,
                         dependents: []
                     ))
-
-                    let subtreeStart = branchIndex + 1
-                    let subtreeEnd = groupRange.upperBound - 1
-                    if subtreeStart <= subtreeEnd {
-                        scopeRanges.append(subtreeStart ... subtreeEnd)
-                    } else {
-                        // Empty selected subtree — no dependents possible.
-                        scopeRanges.append(branchIndex ... branchIndex)
-                    }
                 }
             }
             index += 1
@@ -131,7 +131,7 @@ public struct ChoiceDependencyGraph: Sendable {
             nodes[$0].positionRange.lowerBound < nodes[$1].positionRange.lowerBound
         }
         for i in 0..<nodes.count {
-            let scope = scopeRanges[i]
+            guard let scope = nodes[i].scopeRange else { continue }
             switch nodes[i].kind {
             case .structural(.bindInner):
                 // Overlap: j.lowerBound ≤ scope.upperBound ∧ j.upperBound ≥ scope.lowerBound.
