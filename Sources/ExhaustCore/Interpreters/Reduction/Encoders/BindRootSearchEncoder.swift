@@ -6,7 +6,7 @@
 ///
 /// Only targets value entries inside a ``BindSpanIndex/BindRegion/innerRange``, the controlling values whose reduction changes bound content structure. On acceptance, returns `nil` immediately to force re-invocation with the updated sequence, since structural changes invalidate indices.
 struct BindRootSearchEncoder: AdaptiveEncoder {
-    let name = "bindRootSearch"
+    let name: EncoderName = .bindRootSearch
     let phase = ReductionPhase.valueMinimization
 
     /// Set by the caller before ``ReductionState/runAdaptive(_:decoder:targets:structureChanged:budget:)`` invocation.

@@ -7,23 +7,23 @@
 
 /// Bind-aware cross-region value redistribution encoder.
 ///
-/// For generators with bind-dependent ranges (for example `bind(0...50, { n in 0...max(1,n) })`), the standard ``CrossStageRedistributeEncoder`` fails because it operates on positions independently — changing an inner value changes the valid range for its bound values, but the encoder doesn't account for this causal link.
+/// For generators with bind-dependent ranges (for example `bind(0...50, { n in 0...max(1,n) })`), the standard ``RedistributeAcrossValueContainersEncoder`` fails because it operates on positions independently — changing an inner value changes the valid range for its bound values, but the encoder doesn't account for this causal link.
 ///
 /// This encoder identifies bind regions via ``BindSpanIndex``, pairs them by depth, and redistributes mass between their inner values. Bound values are handled by ``GuidedMaterializer`` with per-region maximization: the sink region's bound values are maximized to absorb freed mass, while the source region's bounds clamp naturally.
 ///
 /// All numeric types (integers and floats) are handled uniformly via rational arithmetic: integer values have denominator 1, floats are decomposed via ``FloatShrink.integerRatio``. Mixed pairs (float + integer) use a step size equal to the common denominator to preserve integrality on the integer side.
 ///
 /// Uses ``FindIntegerStepper`` for feedback-driven delta search, with a non-monotonic fallback phase when the monotone search converges without finding an improvement.
-public struct BindAwareRedistributeEncoder: AdaptiveEncoder {
+public struct RedistributeAcrossBindRegionsEncoder: AdaptiveEncoder {
     public init() {}
 
-    public let name = "bindAwareRedistribute"
+    public let name: EncoderName = .redistributeInnerValuesBetweenBindRegions
     public let phase = ReductionPhase.redistribution
 
     public func estimatedCost(sequence _: ChoiceSequence, bindIndex: BindSpanIndex?) -> Int? {
         guard let bindIndex, bindIndex.regions.count >= 2 else { return nil }
         let r = bindIndex.regions.count
-        // O(r²) region pairs capped at 32 × ~20: same stepper + fallback structure as CrossStageRedistributeEncoder, but operating on bind-region inner values.
+        // O(r²) region pairs capped at 32 × ~20: same stepper + fallback structure as RedistributeAcrossValueContainersEncoder, but operating on bind-region inner values.
         return min(r * r, 32) * 20
     }
 

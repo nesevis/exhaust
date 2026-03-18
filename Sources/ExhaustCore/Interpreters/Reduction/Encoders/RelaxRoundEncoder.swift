@@ -8,7 +8,7 @@
 public struct RelaxRoundEncoder: AdaptiveEncoder {
     public init() {}
 
-    public let name = "relaxRound"
+    public let name: EncoderName = .relaxRound
     public let phase = ReductionPhase.exploration
 
     public func estimatedCost(sequence: ChoiceSequence, bindIndex _: BindSpanIndex?) -> Int? {

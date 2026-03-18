@@ -53,7 +53,7 @@ extension ReductionScheduler {
         case sequenceBoundaries
         case freeStandingValues
         case alignedWindows
-        case speculativeDelete
+        case randomRepairDelete
 
         var spanCategory: DeletionSpanCategory {
             switch self {
@@ -62,7 +62,7 @@ extension ReductionScheduler {
             case .sequenceBoundaries: .sequenceBoundaries
             case .freeStandingValues: .freeStandingValues
             case .alignedWindows: .containerSpans
-            case .speculativeDelete: .mixed
+            case .randomRepairDelete: .mixed
             }
         }
     }

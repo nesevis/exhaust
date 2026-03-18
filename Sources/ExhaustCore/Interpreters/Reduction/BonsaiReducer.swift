@@ -95,12 +95,7 @@ public extension Interpreters {
         property: (Output) -> Bool
     ) throws -> (ChoiceSequence, Output)? {
         try withoutActuallyEscaping(property) { escapingProperty in
-            switch config.scheduler {
-            case .vCycle:
-                try ReductionScheduler.run(gen: gen, initialTree: tree, config: config, property: escapingProperty)
-            case .bonsai:
-                try BonsaiScheduler.run(gen: gen, initialTree: tree, config: config, property: escapingProperty)
-            }
+            try BonsaiScheduler.run(gen: gen, initialTree: tree, config: config, property: escapingProperty)
         }
     }
 }

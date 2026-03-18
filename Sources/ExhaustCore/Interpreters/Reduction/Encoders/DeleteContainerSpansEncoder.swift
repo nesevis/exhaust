@@ -4,7 +4,7 @@
 public struct DeleteContainerSpansEncoder: AdaptiveEncoder {
     public init() {}
 
-    public let name = "deleteContainerSpans"
+    public let name: EncoderName = .deleteContainerSpans
     public let phase = ReductionPhase.structuralDeletion
 
     public func estimatedCost(sequence: ChoiceSequence, bindIndex _: BindSpanIndex?) -> Int? {

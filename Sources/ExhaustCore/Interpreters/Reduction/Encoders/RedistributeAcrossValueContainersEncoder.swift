@@ -10,10 +10,10 @@
 /// For each pair of numeric values in the sequence, tries to decrease one value (toward its reduction target) while increasing the other by the same amount. Supports same-tag integer pairs, same-tag float pairs (via rational arithmetic), and cross-type float+integer pairs (mixed redistribution).
 ///
 /// Uses ``FindIntegerStepper`` for feedback-driven delta search, with a non-monotonic fallback phase when the monotone search converges without finding an improvement.
-public struct CrossStageRedistributeEncoder: AdaptiveEncoder {
+public struct RedistributeAcrossValueContainersEncoder: AdaptiveEncoder {
     public init() {}
 
-    public let name = "crossStageRedistribute"
+    public let name: EncoderName = .redistributeArbitraryValuePairsAcrossContainers
     public let phase = ReductionPhase.redistribution
 
     public func estimatedCost(sequence: ChoiceSequence, bindIndex _: BindSpanIndex?) -> Int? {

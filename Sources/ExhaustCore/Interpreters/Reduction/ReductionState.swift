@@ -46,21 +46,21 @@ final class ReductionState<Output> {
     }
 
     // Encoders
-    var promoteBranchesEncoder = PromoteBranchesEncoder()
-    var pivotBranchesEncoder = PivotBranchesEncoder()
+    var promoteBranchesEncoder = DeleteByBranchPromotionEncoder()
+    var pivotBranchesEncoder = DeleteByBranchPivotEncoder()
     var deleteContainerSpans = DeleteContainerSpansEncoder()
     var deleteSequenceElements = DeleteSequenceElementsEncoder()
     var deleteSequenceBoundaries = DeleteSequenceBoundariesEncoder()
     var deleteFreeStandingValues = DeleteFreeStandingValuesEncoder()
-    var speculativeDelete = SpeculativeDeleteEncoder()
+    var randomRepairDelete = DeleteContainerSpansWithRandomRepairEncoder()
     var zeroValueEncoder = ZeroValueEncoder()
-    var binarySearchToZeroEncoder = BinarySearchToZeroEncoder()
-    var binarySearchToTargetEncoder = BinarySearchToTargetEncoder()
+    var binarySearchToZeroEncoder = BinarySearchToSemanticSimplestEncoder()
+    var binarySearchToTargetEncoder = BinarySearchToRangeMinimumEncoder()
     var reduceFloatEncoder = ReduceFloatEncoder()
     var deleteAlignedWindowsEncoder: DeleteAlignedWindowsEncoder
-    var tandemEncoder = TandemReductionEncoder()
-    var redistributeEncoder = CrossStageRedistributeEncoder()
-    var bindAwareRedistributeEncoder = BindAwareRedistributeEncoder()
+    var tandemEncoder = RedistributeByTandemReductionEncoder()
+    var redistributeEncoder = RedistributeAcrossValueContainersEncoder()
+    var bindAwareRedistributeEncoder = RedistributeAcrossBindRegionsEncoder()
     var bindRootSearchEncoder = BindRootSearchEncoder()
     var productSpaceBatchEncoder = ProductSpaceBatchEncoder()
     var productSpaceAdaptiveEncoder = ProductSpaceAdaptiveEncoder()
@@ -167,7 +167,7 @@ extension ReductionState {
                 accept(result, structureChanged: structureChanged)
                 if isInstrumented {
                     ExhaustLog.debug(category: .reducer, event: "encoder_accepted", metadata: [
-                        "encoder": encoder.name, "probes": "\(probes)",
+                        "encoder": encoder.name.rawValue, "probes": "\(probes)",
                         "seq_len": "\(startSeqLen)→\(sequence.count)",
                         "output": "\(output)",
                     ])
@@ -180,12 +180,12 @@ extension ReductionState {
         if isInstrumented {
             if probes > 0 {
                 ExhaustLog.debug(category: .reducer, event: "encoder_exhausted", metadata: [
-                    "encoder": encoder.name, "probes": "\(probes)",
+                    "encoder": encoder.name.rawValue, "probes": "\(probes)",
                     "seq_len": "\(startSeqLen)",
                 ])
             } else {
                 ExhaustLog.debug(category: .reducer, event: "encoder_no_probes", metadata: [
-                    "encoder": encoder.name,
+                    "encoder": encoder.name.rawValue,
                 ])
             }
         }
@@ -260,13 +260,13 @@ extension ReductionState {
         if isInstrumented {
             if probes > 0 {
                 ExhaustLog.debug(category: .reducer, event: anyAccepted ? "encoder_accepted" : "encoder_exhausted", metadata: [
-                    "encoder": encoder.name, "probes": "\(probes)", "accepted": "\(accepted)",
+                    "encoder": encoder.name.rawValue, "probes": "\(probes)", "accepted": "\(accepted)",
                     "seq_len": "\(startSeqLen)→\(sequence.count)",
                     "output": anyAccepted ? "\(output)" : "",
                 ])
             } else {
                 ExhaustLog.debug(category: .reducer, event: "encoder_no_probes", metadata: [
-                    "encoder": encoder.name,
+                    "encoder": encoder.name.rawValue,
                 ])
             }
         }
@@ -361,7 +361,7 @@ extension ReductionState {
             case .sequenceBoundaries: deleteSequenceBoundaries.estimatedCost(sequence: sequence, bindIndex: bindIndex)
             case .freeStandingValues: deleteFreeStandingValues.estimatedCost(sequence: sequence, bindIndex: bindIndex)
             case .alignedWindows: deleteAlignedWindowsEncoder.estimatedCost(sequence: sequence, bindIndex: bindIndex)
-            case .speculativeDelete: speculativeDelete.estimatedCost(sequence: sequence, bindIndex: bindIndex)
+            case .randomRepairDelete: randomRepairDelete.estimatedCost(sequence: sequence, bindIndex: bindIndex)
             }
             if let cost { deletionCosts[slot] = cost }
         }
@@ -503,8 +503,8 @@ extension ReductionState {
                     try runAdaptive(deleteFreeStandingValues, decoder: depthDecoder, targets: .spans(spanCache.deletionTargets(category: slot.spanCategory, depth: depth, from: sequence, bindIndex: bindIndex)), structureChanged: true, budget: &legBudget)
                 case .alignedWindows:
                     try runAdaptive(deleteAlignedWindowsEncoder, decoder: depthDecoder, targets: .spans(spanCache.deletionTargets(category: slot.spanCategory, depth: depth, from: sequence, bindIndex: bindIndex)), structureChanged: true, budget: &legBudget)
-                case .speculativeDelete:
-                    try runAdaptive(speculativeDelete, decoder: makeSpeculativeDecoder(), targets: .spans(spanCache.deletionTargets(category: slot.spanCategory, depth: depth, from: sequence, bindIndex: bindIndex)), structureChanged: true, budget: &legBudget)
+                case .randomRepairDelete:
+                    try runAdaptive(randomRepairDelete, decoder: makeSpeculativeDecoder(), targets: .spans(spanCache.deletionTargets(category: slot.spanCategory, depth: depth, from: sequence, bindIndex: bindIndex)), structureChanged: true, budget: &legBudget)
                 }
                 if slotAccepted {
                     accepted += 1
@@ -742,7 +742,7 @@ extension ReductionState {
 
         // Bind-aware redistribution: coordinate inner+bound across bind regions.
         if hasBind, let bi = bindIndex, bi.regions.count >= 2 {
-            let regionPairs = BindAwareRedistributeEncoder.buildPlans(
+            let regionPairs = RedistributeAcrossBindRegionsEncoder.buildPlans(
                 from: sequence, bindIndex: bi
             )
             for plan in regionPairs {
@@ -787,7 +787,7 @@ extension ReductionState {
         // Cross-stage redistribution: move mass between coordinates.
         if try runAdaptive(redistributeEncoder, decoder: redistDecoder, targets: .wholeSequence, structureChanged: hasBind, budget: &legBudget) {
             redistributionAccepted = true
-            if isInstrumented { ExhaustLog.debug(category: .reducer, event: "redistribution_accepted", metadata: ["encoder": "crossStageRedistribute"]) }
+            if isInstrumented { ExhaustLog.debug(category: .reducer, event: "redistribution_accepted", metadata: ["encoder": redistributeEncoder.name.rawValue]) }
         }
 
         remaining -= legBudget.used

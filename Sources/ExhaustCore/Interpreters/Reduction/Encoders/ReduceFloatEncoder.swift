@@ -17,7 +17,7 @@
 struct ReduceFloatEncoder: AdaptiveEncoder {
     init() {}
 
-    let name = "reduceFloat"
+    let name: EncoderName = .reduceFloat
     let phase = ReductionPhase.valueMinimization
 
     func estimatedCost(sequence: ChoiceSequence, bindIndex _: BindSpanIndex?) -> Int? {

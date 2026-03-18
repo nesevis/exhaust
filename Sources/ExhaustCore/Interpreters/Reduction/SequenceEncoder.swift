@@ -1,7 +1,34 @@
+/// Typed identifier for a sequence encoder, used in dominance pruning and logging.
+public enum EncoderName: String {
+    // Structural deletion
+    case deleteByPromotingSimplestBranch
+    case deleteByPivotingToAlternativeBranch
+    case deleteContainerSpans
+    case deleteSequenceElements
+    case deleteSequenceBoundaries
+    case deleteFreeStandingValues
+    case deleteContainerSpansWithRandomRepair
+    case deleteAlignedSiblingWindows
+    // Value minimization
+    case zeroValue
+    case binarySearchToSemanticSimplest
+    case binarySearchToRangeMinimum
+    case reduceFloat
+    case bindRootSearch
+    case productSpaceBatch
+    case productSpaceAdaptive
+    // Redistribution
+    case redistributeSiblingValuesInLockstep
+    case redistributeArbitraryValuePairsAcrossContainers
+    case redistributeInnerValuesBetweenBindRegions
+    // Exploration
+    case relaxRound
+}
+
 /// Shared metadata for all reduction encoders.
 public protocol SequenceEncoderBase {
-    /// Human-readable name for logging.
-    var name: String { get }
+    /// Typed identifier used for dominance pruning and logging.
+    var name: EncoderName { get }
 
     /// Which phase this encoder belongs to.
     var phase: ReductionPhase { get }

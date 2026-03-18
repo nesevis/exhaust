@@ -184,9 +184,9 @@ extension ReductionState {
                 }
                 let slotAccepted: Bool
                 switch slot {
-                case .speculativeDelete:
+                case .randomRepairDelete:
                     slotAccepted = try runAdaptive(
-                        speculativeDelete,
+                        randomRepairDelete,
                         decoder: makeSpeculativeDecoder(),
                         targets: .spans(targets),
                         structureChanged: true,
@@ -305,7 +305,7 @@ extension ReductionState {
                     allCandidates, bindIndex: bindSpanIndex
                 )
                 let tier2Encoder = PrecomputedBatchEncoder(
-                    name: "productSpaceBatch_tier2",
+                    name: .productSpaceBatch,
                     phase: .valueMinimization,
                     candidates: tier2Candidates
                 )

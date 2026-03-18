@@ -10,8 +10,10 @@
 ///
 /// Unlike the legacy ``Interpreters.materialize()`` + ``GuidedMaterializer`` path, this materializer:
 /// - Rebuilds the tree from the generator on every invocation (no stale metadata).
-/// - Materializes all branch alternatives at pick sites (``PromoteBranchesEncoder`` sees candidates).
+/// - Materializes all branch alternatives at pick sites (``DeleteByBranchPromotionEncoder`` sees candidates).
 /// - Supports exact and guided modes with inner-reject/bound-clamp semantics.
+///
+/// Guided mode computes the canonical cartesian lift in the simple fibration over trace space. The trace space is fibred: the base is the set of trace structures (which choice points exist and what controls them), and above each structure sits a fibre — the set of value assignments compatible with that structure. A structural reduction is a morphism in the base; guided mode lifts it canonically by replaying the current value assignment into the new fibre, carrying forward each value where it fits in the new domain and falling back to the fallback tree or PRNG otherwise. The three-tier resolution (prefix → fallback tree → PRNG) approximates this lift for the common case where the new domain is a strict subset of the old domain and the carried-forward value would be out of range. The canonical lift itself — carrying the value unchanged — is the unique cartesian morphism in the simple fibration (Dagnino & Gavazzo, LMCS 20:2, 2024, Example 3.5).
 ///
 /// The result intentionally omits ``ChoiceSequence`` — the caller flattens `result.tree` to get a sequence with fresh metadata. The tree is the single source of truth.
 public enum ReductionMaterializer {
@@ -955,7 +957,7 @@ private extension ReductionMaterializer {
         var boundDepth: Int = 0
         var maximizeBoundRegionIndices: Set<Int>?
         /// When `false`, pick sites skip non-selected branch materialization.
-        /// Only `PromoteBranchesEncoder` needs full branch alternatives.
+        /// Only `DeleteByBranchPromotionEncoder` needs full branch alternatives.
         var materializePicks: Bool = false
     }
 }

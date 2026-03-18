@@ -45,7 +45,7 @@ struct BinarySearchLadder {
 ///
 /// Computes per-axis ``BinarySearchLadder`` midpoints and builds their Cartesian product (or dependent product for nested binds), sorted shortlex. The scheduler's ``ReductionState/runBatch(_:decoder:targets:structureChanged:budget:)`` evaluates candidates in order and accepts the first one that preserves property failure.
 struct ProductSpaceBatchEncoder: BatchEncoder {
-    let name = "productSpaceBatch"
+    let name: EncoderName = .productSpaceBatch
     let phase = ReductionPhase.valueMinimization
 
     /// Set by the caller before invocation.
@@ -220,7 +220,7 @@ struct ProductSpaceBatchEncoder: BatchEncoder {
 ///
 /// Halves all active coordinates simultaneously, then uses delta-debugging to find the maximal accepted subset on rejection.
 struct ProductSpaceAdaptiveEncoder: AdaptiveEncoder {
-    let name = "productSpaceAdaptive"
+    let name: EncoderName = .productSpaceAdaptive
     let phase = ReductionPhase.valueMinimization
 
     /// Set by the caller before invocation.
@@ -472,7 +472,7 @@ func extractAxes(
 ///
 /// Used by Tier 2 salted retries to iterate candidates in largest-fibre-first order instead of the encoder's default shortlex ordering.
 struct PrecomputedBatchEncoder: BatchEncoder {
-    let name: String
+    let name: EncoderName
     let phase: ReductionPhase
     let candidates: [ChoiceSequence]
 

@@ -1,10 +1,10 @@
 /// Speculatively deletes spans and relies on ``GuidedMaterializer`` fallback for repair.
 ///
 /// Operates on a mixed target set using adaptive batch sizing.
-public struct SpeculativeDeleteEncoder: AdaptiveEncoder {
+public struct DeleteContainerSpansWithRandomRepairEncoder: AdaptiveEncoder {
     public init() {}
 
-    public let name = "speculativeDelete"
+    public let name: EncoderName = .deleteContainerSpansWithRandomRepair
     public let phase = ReductionPhase.structuralDeletion
 
     public func estimatedCost(sequence: ChoiceSequence, bindIndex _: BindSpanIndex?) -> Int? {

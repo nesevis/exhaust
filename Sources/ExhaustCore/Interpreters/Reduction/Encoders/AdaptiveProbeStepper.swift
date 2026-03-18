@@ -100,7 +100,7 @@ struct FindIntegerStepper {
 /// Produces probes in the same order as ``binarySearchWithGuess`` — starts at the guess, then uses ``findInteger``-style expansion/contraction based on whether the guess was on the "good" or "bad" side.
 /// Searches for the **smallest** accepted value via binary search.
 ///
-/// On acceptance, narrows the upper bound (`hi = probe`). On rejection, narrows the lower bound (`lo = probe + 1`). Converges to the smallest value that is accepted. Used by ``BinarySearchToZeroEncoder`` and ``BinarySearchToTargetEncoder`` where the goal is to find the simplest (smallest bit pattern) value that still fails the property.
+/// On acceptance, narrows the upper bound (`hi = probe`). On rejection, narrows the lower bound (`lo = probe + 1`). Converges to the smallest value that is accepted. Used by ``BinarySearchToSemanticSimplestEncoder`` and ``BinarySearchToRangeMinimumEncoder`` where the goal is to find the simplest (smallest bit pattern) value that still fails the property.
 struct BinarySearchStepper {
     // MARK: - State
 
@@ -158,7 +158,7 @@ struct BinarySearchStepper {
 
 /// Searches for the **largest** accepted value via binary search.
 ///
-/// On acceptance, narrows the lower bound (`lo = probe + 1`). On rejection, narrows the upper bound (`hi = probe`). Converges to the largest value that is accepted. Used by ``TandemReductionEncoder`` where the goal is to find the largest shared delta that still fails the property — maximizing the reduction.
+/// On acceptance, narrows the lower bound (`lo = probe + 1`). On rejection, narrows the upper bound (`hi = probe`). Converges to the largest value that is accepted. Used by ``RedistributeByTandemReductionEncoder`` where the goal is to find the largest shared delta that still fails the property — maximizing the reduction.
 struct MaxBinarySearchStepper {
     // MARK: - State
 
