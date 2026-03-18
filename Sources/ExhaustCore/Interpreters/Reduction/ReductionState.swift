@@ -27,6 +27,24 @@ final class ReductionState<Output> {
     /// Set on every acceptance. Cleared after ``runBranchSimplification(budget:)`` performs the materialization. Avoids redundant O(n) materializations when 1a is re-entered after 1b or 1c successes on an unchanged sequence.
     var branchTreeDirty = true
 
+    // MARK: - Snapshot
+
+    /// A point-in-time copy of all mutable reduction state for rollback on fingerprint boundary crossing.
+    ///
+    /// Captures every field that ``accept(_:structureChanged:)`` can modify. Restoring a snapshot returns the reducer to exactly the state it was in before the snapshotted acceptance.
+    struct Snapshot {
+        let sequence: ChoiceSequence
+        let tree: ChoiceTree
+        let output: Output
+        let fallbackTree: ChoiceTree?
+        let bindIndex: BindSpanIndex?
+        let bestSequence: ChoiceSequence
+        let bestOutput: Output
+        let branchTreeDirty: Bool
+        let spanCache: SpanCache
+        let lattice: DominanceLattice
+    }
+
     // Encoders
     var promoteBranchesEncoder = PromoteBranchesEncoder()
     var pivotBranchesEncoder = PivotBranchesEncoder()
@@ -175,12 +193,16 @@ extension ReductionState {
     }
 
     /// Runs an adaptive encoder against a decoder, tracking materializations. Returns true if any probe was accepted.
+    ///
+    /// - Parameters:
+    ///   - fingerprintGuard: When non-nil, enforces a per-acceptance Phase 1/Phase 2 boundary. Before committing each accepted probe, the method takes a snapshot, calls `accept`, then recomputes the ``StructuralFingerprint``. If the fingerprint differs from the guard value, the acceptance is rolled back via the snapshot and the encoder loop terminates immediately. Any clean acceptances committed before the crossing are preserved. This prevents Phase 2 value encoders from accidentally committing structural changes — for example, reducing a nested bind-inner value that changes bound-array length — that belong in Phase 1. The guard requires `structureChanged: hasBind` so that `accept` rebuilds ``BindSpanIndex`` before the fingerprint is recomputed.
     func runAdaptive(
         _ encoder: some AdaptiveEncoder,
         decoder: SequenceDecoder,
         targets: TargetSet,
         structureChanged: Bool,
-        budget: inout ReductionScheduler.LegBudget
+        budget: inout ReductionScheduler.LegBudget,
+        fingerprintGuard: StructuralFingerprint? = nil
     ) throws -> Bool {
         guard budget.isExhausted == false else { return false }
         if lattice.shouldSkip(encoder.name, phase: encoder.phase) { return false }
@@ -205,7 +227,24 @@ extension ReductionState {
                 originalSequence: sequence, property: property
             ) {
                 budget.recordMaterialization()
-                accept(result, structureChanged: structureChanged)
+                if let guardPrint = fingerprintGuard {
+                    // Snapshot before accepting so a structural crossing can be fully rolled back.
+                    let snap = makeSnapshot()
+                    accept(result, structureChanged: structureChanged)
+                    // bindIndex is now fresh (structureChanged: hasBind rebuilt it above).
+                    // Compare the post-accept fingerprint against the pre-Phase-2 baseline.
+                    if let currentBindIndex = bindIndex,
+                       StructuralFingerprint.from(tree, bindIndex: currentBindIndex) != guardPrint
+                    {
+                        // Structural boundary crossed: undo this acceptance and stop the encoder.
+                        // Any clean acceptances already committed remain intact.
+                        restoreSnapshot(snap)
+                        lastAccepted = false
+                        break
+                    }
+                } else {
+                    accept(result, structureChanged: structureChanged)
+                }
                 lastAccepted = true
                 anyAccepted = true
                 accepted += 1
@@ -248,6 +287,36 @@ extension ReductionState {
     func makeDepthZeroDecoder() -> SequenceDecoder {
         let context = DecoderContext(depth: .specific(0), bindIndex: bindIndex, fallbackTree: fallbackTree, strictness: .normal, useReductionMaterializer: config.useReductionMaterializer)
         return SequenceDecoder.for(context)
+    }
+
+    /// Returns a snapshot of all mutable reduction state.
+    func makeSnapshot() -> Snapshot {
+        Snapshot(
+            sequence: sequence,
+            tree: tree,
+            output: output,
+            fallbackTree: fallbackTree,
+            bindIndex: bindIndex,
+            bestSequence: bestSequence,
+            bestOutput: bestOutput,
+            branchTreeDirty: branchTreeDirty,
+            spanCache: spanCache,
+            lattice: lattice
+        )
+    }
+
+    /// Restores all mutable reduction state from a snapshot, undoing any acceptances made after it was taken.
+    func restoreSnapshot(_ snapshot: Snapshot) {
+        sequence = snapshot.sequence
+        tree = snapshot.tree
+        output = snapshot.output
+        fallbackTree = snapshot.fallbackTree
+        bindIndex = snapshot.bindIndex
+        bestSequence = snapshot.bestSequence
+        bestOutput = snapshot.bestOutput
+        branchTreeDirty = snapshot.branchTreeDirty
+        spanCache = snapshot.spanCache
+        lattice = snapshot.lattice
     }
 
     /// Computes an adaptive redistribution budget from the estimated costs of all redistribution encoders, capped at ``ReductionScheduler/defaultRedistributionBudget``.

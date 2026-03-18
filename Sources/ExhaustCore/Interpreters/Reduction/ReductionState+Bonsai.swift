@@ -431,9 +431,9 @@ extension ReductionState {
 // MARK: - Phase 2: Foliage (Value Minimization)
 
 extension ReductionState {
-    /// Runs value minimization on DAG leaf positions, with fingerprint boundary guard.
+    /// Runs value minimization on DAG leaf positions, with per-acceptance fingerprint boundary guard.
     ///
-    /// Returns `true` if any progress was made. If a structural change is detected by the fingerprint guard, returns `true` to signal the outer loop to re-enter Phase 1.
+    /// Returns `true` if any value reduction was committed. Structural boundary crossings are rolled back per-acceptance inside ``runAdaptive(_:decoder:targets:structureChanged:budget:fingerprintGuard:)`` before the encoder sees the next probe; any clean value reductions made before the crossing are preserved.
     func runValueMinimization(
         budget: inout Int,
         dag: ChoiceDependencyGraph?
@@ -461,180 +461,147 @@ extension ReductionState {
         for leafRange in leafRanges {
             guard legBudget.isExhausted == false else { break }
 
-            let leafSpans = extractValueSpans(in: leafRange)
-            guard leafSpans.isEmpty == false else { continue }
-
-            let floatSpans = leafSpans.filter { span in
-                guard let value = sequence[span.range.lowerBound].value else { return false }
-                return value.choice.tag == .double || value.choice.tag == .float
-            }
-
-            // Select decoder based on whether leaf is in a bind-bound subtree.
+            // Determine whether this leaf range needs the fingerprint guard. Bound leaves inside
+            // non-constant bind regions can cause structural changes; guard fires on first acceptance.
             let isInBound = bindIndex?.isInBoundSubtree(leafRange.lowerBound) ?? false
-            let decoder: SequenceDecoder
-            if isInBound {
-                decoder = .guided(fallbackTree: fallbackTree ?? tree)
+            let structureChanged = isInBound && hasBind
+            let needsFingerprintGuard: Bool
+            if structureChanged, let currentBindIndex = bindIndex {
+                let isConstant = dag?.nodes.contains { node in
+                    guard case let .structural(.bindInner(regionIndex: regionIndex)) = node.kind,
+                          regionIndex < currentBindIndex.regions.count else { return false }
+                    return currentBindIndex.regions[regionIndex].boundRange.contains(leafRange.lowerBound)
+                        && node.isStructurallyConstant
+                } ?? false
+                needsFingerprintGuard = isConstant == false
             } else {
-                decoder = .exact()
+                needsFingerprintGuard = false
             }
 
-            // Structure change flag: bound leaves may cause structural changes.
-            let structureChanged = isInBound && hasBind
+            var restartLeafRange = false
+            repeat {
+                restartLeafRange = false
 
-            for slot in trainOrder {
-                guard legBudget.isExhausted == false else { break }
-                switch slot {
-                case .zeroValue:
-                    if leafSpans.isEmpty == false {
-                        if try runAdaptive(
+                let leafSpans = extractValueSpans(in: leafRange)
+                guard leafSpans.isEmpty == false else { break }
+
+                let floatSpans = leafSpans.filter { span in
+                    guard let value = sequence[span.range.lowerBound].value else { return false }
+                    return value.choice.tag == .double || value.choice.tag == .float
+                }
+                let decoder: SequenceDecoder = isInBound
+                    ? .guided(fallbackTree: fallbackTree ?? tree)
+                    : .exact()
+
+                for slot in trainOrder {
+                    guard legBudget.isExhausted == false else { break }
+                    var slotAccepted = false
+                    // Pass the guard into runAdaptive so the boundary fires per-acceptance, not after the full encoder run. Adaptive encoders capture seqIdx at start() time; a structural change mid-loop makes those indices stale before the encoder produces its next probe.
+                    let guard_ = needsFingerprintGuard ? prePhaseFingerprint : nil
+                    switch slot {
+                    case .zeroValue where leafSpans.isEmpty == false:
+                        slotAccepted = try runAdaptive(
                             zeroValueEncoder, decoder: decoder,
                             targets: .spans(leafSpans), structureChanged: structureChanged,
-                            budget: &legBudget
-                        ) {
-                            anyAccepted = true
-                            ReductionScheduler.moveToFront(.zeroValue, in: &trainOrder)
-                        }
-                    }
-                case .binarySearchToZero:
-                    if leafSpans.isEmpty == false {
-                        if try runAdaptive(
+                            budget: &legBudget,
+                            fingerprintGuard: guard_
+                        )
+                    case .binarySearchToZero where leafSpans.isEmpty == false:
+                        slotAccepted = try runAdaptive(
                             binarySearchToZeroEncoder, decoder: decoder,
                             targets: .spans(leafSpans), structureChanged: structureChanged,
-                            budget: &legBudget
-                        ) {
-                            anyAccepted = true
-                            ReductionScheduler.moveToFront(.binarySearchToZero, in: &trainOrder)
-                        }
-                    }
-                case .binarySearchToTarget:
-                    if leafSpans.isEmpty == false {
-                        if try runAdaptive(
+                            budget: &legBudget,
+                            fingerprintGuard: guard_
+                        )
+                    case .binarySearchToTarget where leafSpans.isEmpty == false:
+                        slotAccepted = try runAdaptive(
                             binarySearchToTargetEncoder, decoder: decoder,
                             targets: .spans(leafSpans), structureChanged: structureChanged,
-                            budget: &legBudget
-                        ) {
-                            anyAccepted = true
-                            ReductionScheduler.moveToFront(.binarySearchToTarget, in: &trainOrder)
-                        }
-                    }
-                case .reduceFloat:
-                    if floatSpans.isEmpty == false {
-                        if try runAdaptive(
+                            budget: &legBudget,
+                            fingerprintGuard: guard_
+                        )
+                    case .reduceFloat where floatSpans.isEmpty == false:
+                        slotAccepted = try runAdaptive(
                             reduceFloatEncoder, decoder: decoder,
                             targets: .spans(floatSpans), structureChanged: structureChanged,
-                            budget: &legBudget
-                        ) {
-                            anyAccepted = true
-                            ReductionScheduler.moveToFront(.reduceFloat, in: &trainOrder)
-                        }
+                            budget: &legBudget,
+                            fingerprintGuard: guard_
+                        )
+                    default:
+                        break
+                    }
+                    guard slotAccepted else { continue }
+
+                    anyAccepted = true
+                    ReductionScheduler.moveToFront(slot, in: &trainOrder)
+                    if needsFingerprintGuard {
+                        // A clean acceptance in a non-constant bind region means leafSpans and the decoder are stale (sequence changed). Restart the repeat loop to recompute both before the remaining slots run.
+                        restartLeafRange = true
+                        break
                     }
                 }
-            }
-
-            // Fingerprint boundary guard: check if a structural change occurred.
-            if isInBound, let preFingerprint = prePhaseFingerprint, hasBind,
-               let currentBindIndex = bindIndex
-            {
-                // Skip check for structurally constant binds.
-                let isConstant = dag?.nodes.contains { node in
-                    if case let .structural(.bindInner(regionIndex: regionIndex)) = node.kind,
-                       regionIndex < currentBindIndex.regions.count,
-                       currentBindIndex.regions[regionIndex].boundRange.contains(leafRange.lowerBound)
-                    {
-                        return node.isStructurallyConstant
-                    }
-                    return false
-                } ?? false
-
-                if isConstant == false {
-                    let currentFingerprint = StructuralFingerprint.from(tree, bindIndex: currentBindIndex)
-                    if currentFingerprint != preFingerprint {
-                        if isInstrumented {
-                            ExhaustLog.debug(
-                                category: .reducer,
-                                event: "bonsai_fingerprint_changed",
-                                metadata: [
-                                    "leaf_range": "\(leafRange)",
-                                    "width_delta": "\(currentFingerprint.width - preFingerprint.width)",
-                                ]
-                            )
-                        }
-                        // Structural change detected. Keep accepted probes, signal Phase 1 re-entry.
-                        budget -= legBudget.used
-                        return true
-                    }
-                }
-            }
+            } while restartLeafRange && legBudget.isExhausted == false
         }
 
         // Contravariant value sweep: reduce bound-content values at intermediate bind depths.
-        // DAG leaf positions miss values inside nested bind regions (for example, parent node values
-        // in a recursive bind generator like a binary heap). This mirrors the V-cycle's Snip leg.
+        // DAG leaf positions miss values inside nested bind regions (for example, parent node values in a recursive bind generator like a binary heap). This mirrors the V-cycle's Snip leg.
+        // vSpans at depth D can include nested bind-inner positions whose reduction changes the inner bound structure, which belongs in Phase 1. The fingerprintGuard in each runAdaptive call catches this per-acceptance and rolls back the structural probe while preserving any earlier clean value reductions.
         let maxBindDepth = bindIndex?.maxBindDepth ?? 0
         if maxBindDepth >= 1, legBudget.isExhausted == false {
             for depth in stride(from: maxBindDepth, through: 1, by: -1) {
                 guard legBudget.isExhausted == false else { break }
                 lattice.invalidate()
-                let depthContext = DecoderContext(
-                    depth: .specific(depth),
-                    bindIndex: bindIndex,
-                    fallbackTree: fallbackTree,
-                    strictness: .normal,
-                    useReductionMaterializer: config.useReductionMaterializer
-                )
-                let depthDecoder = SequenceDecoder.for(depthContext)
-                let vSpans = spanCache.valueSpans(at: depth, from: sequence, bindIndex: bindIndex)
-                let fSpans = spanCache.floatSpans(at: depth, from: sequence, bindIndex: bindIndex)
+                    let depthContext = DecoderContext(
+                        depth: .specific(depth),
+                        bindIndex: bindIndex,
+                        fallbackTree: fallbackTree,
+                        strictness: .normal,
+                        useReductionMaterializer: config.useReductionMaterializer
+                    )
+                    let depthDecoder = SequenceDecoder.for(depthContext)
+                    let vSpans = spanCache.valueSpans(at: depth, from: sequence, bindIndex: bindIndex)
+                    let fSpans = spanCache.floatSpans(at: depth, from: sequence, bindIndex: bindIndex)
 
-                for slot in trainOrder {
-                    guard legBudget.isExhausted == false else { break }
-                    switch slot {
-                    case .zeroValue:
-                        if vSpans.isEmpty == false {
-                            if try runAdaptive(
+                    for slot in trainOrder {
+                        guard legBudget.isExhausted == false else { break }
+                        var slotAccepted = false
+                        // structureChanged: hasBind ensures accept() rebuilds bindIndex before the per-acceptance fingerprint guard recomputes the fingerprint. Without a fresh bindIndex, StructuralFingerprint.from uses stale depth information and may miss structural changes.
+                        switch slot {
+                        case .zeroValue where vSpans.isEmpty == false:
+                            slotAccepted = try runAdaptive(
                                 zeroValueEncoder, decoder: depthDecoder,
-                                targets: .spans(vSpans), structureChanged: false,
-                                budget: &legBudget
-                            ) {
-                                anyAccepted = true
-                                ReductionScheduler.moveToFront(.zeroValue, in: &trainOrder)
-                            }
-                        }
-                    case .binarySearchToZero:
-                        if vSpans.isEmpty == false {
-                            if try runAdaptive(
+                                targets: .spans(vSpans), structureChanged: hasBind,
+                                budget: &legBudget,
+                                fingerprintGuard: prePhaseFingerprint
+                            )
+                        case .binarySearchToZero where vSpans.isEmpty == false:
+                            slotAccepted = try runAdaptive(
                                 binarySearchToZeroEncoder, decoder: depthDecoder,
-                                targets: .spans(vSpans), structureChanged: false,
-                                budget: &legBudget
-                            ) {
-                                anyAccepted = true
-                                ReductionScheduler.moveToFront(.binarySearchToZero, in: &trainOrder)
-                            }
-                        }
-                    case .binarySearchToTarget:
-                        if vSpans.isEmpty == false {
-                            if try runAdaptive(
+                                targets: .spans(vSpans), structureChanged: hasBind,
+                                budget: &legBudget,
+                                fingerprintGuard: prePhaseFingerprint
+                            )
+                        case .binarySearchToTarget where vSpans.isEmpty == false:
+                            slotAccepted = try runAdaptive(
                                 binarySearchToTargetEncoder, decoder: depthDecoder,
-                                targets: .spans(vSpans), structureChanged: false,
-                                budget: &legBudget
-                            ) {
-                                anyAccepted = true
-                                ReductionScheduler.moveToFront(.binarySearchToTarget, in: &trainOrder)
-                            }
-                        }
-                    case .reduceFloat:
-                        if fSpans.isEmpty == false {
-                            if try runAdaptive(
+                                targets: .spans(vSpans), structureChanged: hasBind,
+                                budget: &legBudget,
+                                fingerprintGuard: prePhaseFingerprint
+                            )
+                        case .reduceFloat where fSpans.isEmpty == false:
+                            slotAccepted = try runAdaptive(
                                 reduceFloatEncoder, decoder: depthDecoder,
-                                targets: .spans(fSpans), structureChanged: false,
-                                budget: &legBudget
-                            ) {
-                                anyAccepted = true
-                                ReductionScheduler.moveToFront(.reduceFloat, in: &trainOrder)
-                            }
+                                targets: .spans(fSpans), structureChanged: hasBind,
+                                budget: &legBudget,
+                                fingerprintGuard: prePhaseFingerprint
+                            )
+                        default:
+                            break
                         }
+                        guard slotAccepted else { continue }
+                        anyAccepted = true
+                        ReductionScheduler.moveToFront(slot, in: &trainOrder)
                     }
-                }
             }
         }
 
@@ -728,7 +695,7 @@ extension ReductionState {
     ///
     /// For each dependency edge (upstream → downstream) in the DAG, replays the generator with each upstream ladder value to discover the downstream axis's valid range at that upstream value. Returns a mapping from downstream region index to per-upstream-value domain ranges.
     ///
-    /// - Note: For multi-hop chains (A → B → C), C's domains are discovered at the current A value. When the product space tests a candidate A value, C's domains may be stale because B's domain shifted under the new A. This means valid (a, b, c) tuples can be missed, but invalid tuples are still rejected at evaluation time. Full multi-hop discovery would require replaying for each (a, b) pair, adding O(s^d) materializations for d-deep chains — not currently worth the cost given that k ≤ 3 fully-nested chains are rare.
+    /// - Note: For multi-hop chains (A → B → C), C's domains are discovered at the current A value. When the product space tests a candidate A value, C's domains may be stale because B's domain shifted under the new A. This means valid (a, b, c) tuples can be missed, but invalid tuples are still rejected at evaluation time. The fix would be, for each candidate `a'` in A's ladder, to replay once to get B's domain at `a'`, then for each `b'` in that domain replay again to get C's domain — O(s_A × s_B) replays instead of the current O(s_A + s_B). With typical ladder sizes of 6–15 values that is roughly 48–225 replays versus 12–30. The scenario requires three nested data-dependent (non-`getSize`) binds where each inner value determines the valid range of the next, which is uncommon in practice. Additionally, tier 2's salted PRNG retries do not use `dependentDomains` at all and provide probabilistic coverage of tuples tier 1 misses. The approximation is only load-bearing when the minimal tuple sits inside a narrow C domain that only opens at a specific `(a', b')` pair and tier 2 fails to land on it within budget — a combination unlikely enough that the extra replay cost is not currently justified.
     private func computeDependentDomains(
         bindSpanIndex: BindSpanIndex,
         dag: ChoiceDependencyGraph
