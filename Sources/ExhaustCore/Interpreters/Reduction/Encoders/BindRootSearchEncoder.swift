@@ -54,7 +54,7 @@ struct BindRootSearchEncoder: AdaptiveEncoder {
 
         guard let bindIndex else { return }
         for region in bindIndex.regions {
-            for index in region.innerRange {
+            for index in region.innerRange where index < sequence.count {
                 guard let value = sequence[index].value else { continue }
                 let currentBitPattern = value.choice.bitPattern64
                 let isWithinRecordedRange = value.isRangeExplicit && value.choice.fits(in: value.validRange)

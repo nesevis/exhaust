@@ -31,6 +31,27 @@ enum ReductionScheduler {
             initialTree: initialTree
         )
 
+        // Phase 0: Structural Independence Isolation
+        // Zero all leaf positions that no structural node can influence.
+        if let result = StructuralIsolation.isolate(
+            gen: gen,
+            sequence: state.sequence,
+            tree: state.tree,
+            bindIndex: state.bindIndex,
+            property: property,
+            isInstrumented: state.isInstrumented
+        ) {
+            state.accept(
+                ShrinkResult(
+                    sequence: result.sequence,
+                    tree: result.tree,
+                    output: result.output,
+                    evaluations: 1
+                ),
+                structureChanged: false
+            )
+        }
+
         let isInstrumented = state.isInstrumented
         var stallBudget = config.maxStalls
         var cycles = 0
