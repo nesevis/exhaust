@@ -22,6 +22,11 @@ final class ReductionState<Output> {
     var lattice: DominanceLattice
     var rejectCache = Set<UInt64>(minimumCapacity: 512)
 
+    /// Whether the tree needs re-materialization with picks before branch encoders can run.
+    ///
+    /// Set on every acceptance. Cleared after ``runBranchSimplification(budget:)`` performs the materialization. Avoids redundant O(n) materializations when 1a is re-entered after 1b or 1c successes on an unchanged sequence.
+    var branchTreeDirty = true
+
     // Encoders
     var promoteBranchesEncoder = PromoteBranchesEncoder()
     var pivotBranchesEncoder = PivotBranchesEncoder()
@@ -85,6 +90,7 @@ extension ReductionState {
         tree = result.tree
         output = result.output
         fallbackTree = result.tree
+        branchTreeDirty = true
         if structureChanged {
             spanCache.invalidate()
             bindIndex = hasBind ? BindSpanIndex(from: sequence) : nil

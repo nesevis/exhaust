@@ -91,11 +91,15 @@ extension ReductionState {
         var improved = false
 
         // Re-materialize with picks so branch encoders see all non-selected alternatives.
-        if case let .success(_, freshTree) = ReductionMaterializer.materialize(
-            gen, prefix: sequence, mode: .exact, fallbackTree: fallbackTree,
-            materializePicks: true
-        ) {
-            tree = freshTree
+        // Skip if the tree is already up to date (no acceptance since last materialization).
+        if branchTreeDirty {
+            if case let .success(_, freshTree) = ReductionMaterializer.materialize(
+                gen, prefix: sequence, mode: .exact, fallbackTree: fallbackTree,
+                materializePicks: true
+            ) {
+                tree = freshTree
+            }
+            branchTreeDirty = false
         }
 
         promoteBranchesEncoder.currentTree = tree

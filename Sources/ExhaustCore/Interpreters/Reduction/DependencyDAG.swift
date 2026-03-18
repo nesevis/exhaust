@@ -78,7 +78,7 @@ public struct DependencyDAG: Sendable {
         // Bind-inner nodes.
         for (regionIndex, region) in bindIndex.regions.enumerated() {
             let treeNode = bindTreeNodes.first { $0.offset == region.bindSpanRange.lowerBound }
-            let isConstant = treeNode.map { $0.bound.containsBind == false } ?? false
+            let isConstant = treeNode.map { $0.bound.containsBind == false && $0.bound.containsPicks == false } ?? false
 
             nodes.append(DependencyNode(
                 positionRange: region.innerRange,

@@ -100,8 +100,7 @@ enum PrincipledScheduler {
             }
 
             // Stall detection.
-            if state.bestSequence.count < cycleStartBest.count
-                || state.bestSequence.shortLexPrecedes(cycleStartBest)
+            if state.bestSequence.shortLexPrecedes(cycleStartBest)
             {
                 stallBudget = config.maxStalls
             } else {
