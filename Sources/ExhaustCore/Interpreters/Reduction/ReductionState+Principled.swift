@@ -7,7 +7,8 @@ extension ReductionState {
     ///
     /// All sub-phases restart from branch simplification on success (branch re-check is cheap after any structural change). Returns the final DAG and whether any progress was made.
     func runStructuralMinimization(
-        budget: inout Int
+        budget: inout Int,
+        cycle: Int = 0
     ) throws -> (dag: DependencyDAG?, progress: Bool) {
         var anyProgress = false
 
@@ -30,7 +31,7 @@ extension ReductionState {
             }
 
             // 1c: Joint bind-inner reduction.
-            if try runJointBindInnerReduction(budget: &budget) {
+            if try runJointBindInnerReduction(budget: &budget, cycle: cycle) {
                 roundProgress = true
                 anyProgress = true
                 continue // Restart from 1a.
@@ -224,8 +225,8 @@ extension ReductionState {
 
     // MARK: - Sub-phase 1c: Joint Bind-Inner Reduction
 
-    /// Runs product-space and bind-root-search encoders on bind-inner values.
-    private func runJointBindInnerReduction(budget: inout Int) throws -> Bool {
+    /// Runs product-space encoders and value encoders on bind-inner values.
+    private func runJointBindInnerReduction(budget: inout Int, cycle: Int = 0) throws -> Bool {
         guard hasBind, let bindSpanIndex = bindIndex else { return false }
         let subBudget = min(budget, 600)
         guard subBudget > 0 else { return false }
@@ -235,7 +236,6 @@ extension ReductionState {
         lattice.invalidate()
         var accepted = 0
 
-        let prngDecoder: SequenceDecoder = .guided(fallbackTree: nil, usePRNGFallback: true)
         let bindInnerCount = bindSpanIndex.regions.count
 
         if bindInnerCount <= 3 {
@@ -255,20 +255,38 @@ extension ReductionState {
                 budget: &legBudget
             ) {
                 accepted += 1
-            } else if try runBatch(
-                // Tier 2: PRNG fallback (fresh bound content).
-                productSpaceBatchEncoder, decoder: prngDecoder,
-                targets: .wholeSequence, structureChanged: true,
-                budget: &legBudget
-            ) {
-                accepted += 1
+            } else {
+                // Tier 2: PRNG fallback with salted retries.
+                // Each attempt uses a different prngSalt, producing a distinct Zobrist-derived
+                // PRNG seed. This gives the materializer independent chances at generating
+                // bound content that satisfies filters and violates the property.
+                let maxRetries = 4
+                for attempt in 0 ..< maxRetries {
+                    guard legBudget.isExhausted == false else { break }
+                    let saltedDecoder: SequenceDecoder = .guided(
+                        fallbackTree: nil, usePRNGFallback: true,
+                        prngSalt: UInt64(cycle * maxRetries + attempt)
+                    )
+                    if try runBatch(
+                        productSpaceBatchEncoder, decoder: saltedDecoder,
+                        targets: .wholeSequence, structureChanged: true,
+                        budget: &legBudget
+                    ) {
+                        accepted += 1
+                        break
+                    }
+                }
             }
         } else {
             // Adaptive: delta-debug coordinate halving for k > 3.
+            let adaptivePRNGDecoder: SequenceDecoder = .guided(
+                fallbackTree: nil, usePRNGFallback: true,
+                prngSalt: UInt64(cycle)
+            )
             productSpaceAdaptiveEncoder.bindIndex = bindSpanIndex
             while legBudget.isExhausted == false {
                 if try runAdaptive(
-                    productSpaceAdaptiveEncoder, decoder: prngDecoder,
+                    productSpaceAdaptiveEncoder, decoder: adaptivePRNGDecoder,
                     targets: .wholeSequence, structureChanged: true,
                     budget: &legBudget
                 ) {
@@ -276,22 +294,6 @@ extension ReductionState {
                 } else {
                     break
                 }
-            }
-        }
-
-        // Fallback: BindRootSearchEncoder for non-converged axes.
-        bindRootSearchEncoder.bindIndex = bindSpanIndex
-        while legBudget.isExhausted == false {
-            if try runAdaptive(
-                bindRootSearchEncoder,
-                decoder: prngDecoder,
-                targets: .wholeSequence,
-                structureChanged: true,
-                budget: &legBudget
-            ) {
-                accepted += 1
-            } else {
-                break
             }
         }
 
@@ -608,38 +610,6 @@ extension ReductionState {
                 structureChanged: hasBind, budget: &legBudget
             ) {
                 anyAccepted = true
-            }
-
-            // Bind-aware redistribution.
-            if hasBind, let bindSpanIndex = bindIndex, bindSpanIndex.regions.count >= 2 {
-                let regionPairs = BindAwareRedistributeEncoder.buildPlans(
-                    from: sequence, bindIndex: bindSpanIndex
-                )
-                for plan in regionPairs {
-                    guard legBudget.isExhausted == false else { break }
-                    let sinkRegionIndex = plan.sink.regionIndex
-                    let bindRedistDecoder: SequenceDecoder = .guided(
-                        fallbackTree: fallbackTree ?? tree,
-                        maximizeBoundRegionIndices: Set([sinkRegionIndex])
-                    )
-                    bindAwareRedistributeEncoder.startPlan(sequence: sequence, plan: plan)
-                    var lastAccepted = false
-                    while let probe = bindAwareRedistributeEncoder.nextProbe(lastAccepted: lastAccepted) {
-                        guard legBudget.isExhausted == false else { break }
-                        if let result = try bindRedistDecoder.decode(
-                            candidate: probe, gen: gen, tree: tree,
-                            originalSequence: sequence, property: property
-                        ) {
-                            legBudget.recordMaterialization()
-                            accept(result, structureChanged: true)
-                            lastAccepted = true
-                            anyAccepted = true
-                        } else {
-                            legBudget.recordMaterialization()
-                            lastAccepted = false
-                        }
-                    }
-                }
             }
         }
 

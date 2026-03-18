@@ -84,7 +84,7 @@ enum PrincipledScheduler {
 
             // Phase 1: Structural minimization with restart-on-success.
             var phase1Remaining = Self.phase1Budget
-            let (dag, phase1Progress) = try state.runStructuralMinimization(budget: &phase1Remaining)
+            let (dag, phase1Progress) = try state.runStructuralMinimization(budget: &phase1Remaining, cycle: cycles)
 
             // Phase 2: Value minimization on DAG leaves.
             var phase2Remaining = Self.phase2Budget

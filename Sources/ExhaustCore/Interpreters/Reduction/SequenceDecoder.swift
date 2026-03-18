@@ -11,7 +11,18 @@ public enum SequenceDecoder {
     /// at bind sites.
     case guided(fallbackTree: ChoiceTree?, maximizeBoundRegionIndices: Set<Int>? = nil,
                 materializePicks: Bool = false, usePRNGFallback: Bool = false,
-                skipShortlexCheck: Bool = false)
+                skipShortlexCheck: Bool = false, prngSalt: UInt64 = 0)
+
+    /// Salt mixed into the reject cache key so the same candidate with a different PRNG salt
+    /// gets an independent cache entry.
+    var rejectCacheSalt: UInt64 {
+        switch self {
+        case .exact:
+            0
+        case let .guided(_, _, _, _, _, prngSalt):
+            prngSalt
+        }
+    }
 
     // MARK: - Decode
 
@@ -34,14 +45,15 @@ public enum SequenceDecoder {
                 materializePicks: materializePicks
             )
 
-        case let .guided(fallbackTree, maximizeBoundRegionIndices, materializePicks, usePRNGFallback, skipShortlexCheck):
+        case let .guided(fallbackTree, maximizeBoundRegionIndices, materializePicks, usePRNGFallback, skipShortlexCheck, prngSalt):
             decodeGuided(
                 candidate: consume candidate, gen: gen,
                 fallbackTree: usePRNGFallback ? nil : (fallbackTree ?? tree),
                 maximizeBoundRegionIndices: maximizeBoundRegionIndices,
                 originalSequence: originalSequence, property: property,
                 materializePicks: materializePicks,
-                skipShortlexCheck: skipShortlexCheck
+                skipShortlexCheck: skipShortlexCheck,
+                prngSalt: prngSalt
             )
         }
     }
@@ -106,9 +118,10 @@ public enum SequenceDecoder {
         originalSequence: ChoiceSequence,
         property: (Output) -> Bool,
         materializePicks: Bool,
-        skipShortlexCheck: Bool = false
+        skipShortlexCheck: Bool = false,
+        prngSalt: UInt64 = 0
     ) -> ShrinkResult<Output>? {
-        let seed = ZobristHash.hash(of: candidate)
+        let seed = ZobristHash.hash(of: candidate) &+ prngSalt
         switch ReductionMaterializer.materialize(
             gen,
             prefix: consume candidate,

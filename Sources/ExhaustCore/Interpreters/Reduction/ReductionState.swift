@@ -122,12 +122,13 @@ extension ReductionState {
         guard budget.isExhausted == false else { return false }
         if lattice.shouldSkip(encoder.name, phase: encoder.phase) { return false }
         let startSeqLen = sequence.count
+        let cacheSalt = decoder.rejectCacheSalt
         var probes = 0
         for candidate in encoder.encode(sequence: sequence, targets: targets) {
             guard budget.isExhausted == false else { break }
             probes += 1
-            let candidateHash = ZobristHash.hash(of: candidate)
-            if rejectCache.contains(candidateHash) {
+            let cacheKey = ZobristHash.hash(of: candidate) &+ cacheSalt
+            if rejectCache.contains(cacheKey) {
                 budget.recordMaterialization()
                 continue
             }
@@ -150,7 +151,7 @@ extension ReductionState {
                 return true
             }
             budget.recordMaterialization()
-            rejectCache.insert(candidateHash)
+            rejectCache.insert(cacheKey)
         }
         if isInstrumented {
             if probes > 0 {
@@ -180,6 +181,7 @@ extension ReductionState {
         let startSeqLen = sequence.count
         var encoder = encoder
         encoder.start(sequence: sequence, targets: targets)
+        let cacheSalt = decoder.rejectCacheSalt
         var lastAccepted = false
         var anyAccepted = false
         var probes = 0
@@ -187,8 +189,8 @@ extension ReductionState {
         while let probe = encoder.nextProbe(lastAccepted: lastAccepted) {
             guard budget.isExhausted == false else { break }
             probes += 1
-            let probeHash = ZobristHash.hash(of: probe)
-            if rejectCache.contains(probeHash) {
+            let cacheKey = ZobristHash.hash(of: probe) &+ cacheSalt
+            if rejectCache.contains(cacheKey) {
                 lastAccepted = false
                 continue
             }
@@ -204,7 +206,7 @@ extension ReductionState {
             } else {
                 budget.recordMaterialization()
                 lastAccepted = false
-                rejectCache.insert(probeHash)
+                rejectCache.insert(cacheKey)
             }
         }
         if anyAccepted {

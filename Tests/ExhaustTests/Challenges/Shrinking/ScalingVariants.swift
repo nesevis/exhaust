@@ -53,7 +53,7 @@ struct Bound5ScalingVariant {
 
 // MARK: - Binary Heap
 
-@Suite("Binary Heap Scaling Variants", .disabled("pending refactor"))
+@Suite("Binary Heap Scaling Variants")
 struct BinaryHeapScalingVariant {
     typealias Heap = BinaryHeapShrinkingChallenge.Heap<Int>
 
@@ -197,7 +197,7 @@ struct CalculatorScalingVariant {
 
 // MARK: - Coupling
 
-@Suite("Coupling Scaling Variants", .disabled("Pending refactor"))
+@Suite("Coupling Scaling Variants")
 struct CouplingScalingVariant {
     @Test("Scaling variant", arguments: [ScalingVariant.constant])
     func coupling(variant: ScalingVariant) throws {
