@@ -70,6 +70,8 @@ public struct DependencyDAG: Sendable {
         // Collect bind tree nodes with their flattened offsets for constancy classification.
         var bindTreeNodes: [(bound: ChoiceTree, offset: Int)] = []
         _ = collectBindTreeNodes(from: tree, offset: 0, into: &bindTreeNodes)
+        // Index by offset for O(1) lookup per region instead of a linear scan.
+        let bindTreeByOffset = Dictionary(uniqueKeysWithValues: bindTreeNodes.map { ($0.offset, $0) })
 
         var nodes: [DependencyNode] = []
         // Scope ranges track where each node's dependents must fall.
@@ -77,7 +79,7 @@ public struct DependencyDAG: Sendable {
 
         // Bind-inner nodes.
         for (regionIndex, region) in bindIndex.regions.enumerated() {
-            let treeNode = bindTreeNodes.first { $0.offset == region.bindSpanRange.lowerBound }
+            let treeNode = bindTreeByOffset[region.bindSpanRange.lowerBound]
             let isConstant = treeNode.map { $0.bound.containsBind == false && $0.bound.containsPicks == false } ?? false
 
             nodes.append(DependencyNode(
@@ -123,25 +125,56 @@ public struct DependencyDAG: Sendable {
         }
 
         // Build edges between structural nodes.
+        // Sort by lowerBound once. Non-overlapping node ranges guarantee upperBound is also
+        // non-decreasing in this order, enabling binary-search start points for both queries.
+        let sortedByLower = (0..<nodes.count).sorted {
+            nodes[$0].positionRange.lowerBound < nodes[$1].positionRange.lowerBound
+        }
         for i in 0..<nodes.count {
             let scope = scopeRanges[i]
-            for j in 0..<nodes.count where i != j {
-                let targetRange = nodes[j].positionRange
-                let isDependent: Bool
-                switch nodes[i].kind {
-                case .structural(.bindInner):
-                    // Dependent if target's position range overlaps the bind's bound range.
-                    isDependent = targetRange.overlaps(scope)
-                case .structural(.branchSelector):
-                    // Dependent if target's position range is fully inside the selected subtree.
-                    isDependent = scope.lowerBound <= targetRange.lowerBound
-                        && targetRange.upperBound <= scope.upperBound
-                default:
-                    isDependent = false
+            switch nodes[i].kind {
+            case .structural(.bindInner):
+                // Overlap: j.lowerBound ≤ scope.upperBound ∧ j.upperBound ≥ scope.lowerBound.
+                // Binary-search for first j where j.upperBound ≥ scope.lowerBound.
+                var lo = 0, hi = sortedByLower.count
+                while lo < hi {
+                    let mid = lo + (hi - lo) / 2
+                    if nodes[sortedByLower[mid]].positionRange.upperBound < scope.lowerBound {
+                        lo = mid + 1
+                    } else {
+                        hi = mid
+                    }
                 }
-                if isDependent {
-                    nodes[i].dependents.append(j)
+                while lo < sortedByLower.count {
+                    let j = sortedByLower[lo]
+                    let targetRange = nodes[j].positionRange
+                    guard targetRange.lowerBound <= scope.upperBound else { break }
+                    if j != i { nodes[i].dependents.append(j) }
+                    lo += 1
                 }
+            case .structural(.branchSelector):
+                // Containment: scope.lowerBound ≤ j.lowerBound ∧ j.upperBound ≤ scope.upperBound.
+                // Binary-search for first j where j.lowerBound ≥ scope.lowerBound.
+                var lo = 0, hi = sortedByLower.count
+                while lo < hi {
+                    let mid = lo + (hi - lo) / 2
+                    if nodes[sortedByLower[mid]].positionRange.lowerBound < scope.lowerBound {
+                        lo = mid + 1
+                    } else {
+                        hi = mid
+                    }
+                }
+                while lo < sortedByLower.count {
+                    let j = sortedByLower[lo]
+                    let targetRange = nodes[j].positionRange
+                    guard targetRange.lowerBound <= scope.upperBound else { break }
+                    if j != i && targetRange.upperBound <= scope.upperBound {
+                        nodes[i].dependents.append(j)
+                    }
+                    lo += 1
+                }
+            default:
+                break
             }
         }
 
@@ -248,7 +281,12 @@ private extension DependencyDAG {
         from sequence: ChoiceSequence,
         nodes: [DependencyNode]
     ) -> [ClosedRange<Int>] {
-        let structuralPositions = Set(nodes.flatMap { Array($0.positionRange) })
+        var inStructural = [Bool](repeating: false, count: sequence.count)
+        for node in nodes {
+            for i in node.positionRange {
+                inStructural[i] = true
+            }
+        }
         var leafPositions = [ClosedRange<Int>]()
         var currentLeafStart: Int?
 
@@ -256,7 +294,7 @@ private extension DependencyDAG {
             let isLeaf: Bool
             switch sequence[i] {
             case .value, .reduced:
-                isLeaf = structuralPositions.contains(i) == false
+                isLeaf = inStructural[i] == false
             default:
                 isLeaf = false
             }

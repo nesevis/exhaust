@@ -53,13 +53,18 @@ enum StructuralIsolation {
         }
 
         // Find independent .value positions not inside any connected range.
+        var inConnected = [Bool](repeating: false, count: sequence.count)
+        for range in connectedRanges {
+            for i in range {
+                inConnected[i] = true
+            }
+        }
         var independentPositions: [Int] = []
         for index in 0..<sequence.count {
             guard case .value = sequence[index] else {
                 continue
             }
-            let isConnected = connectedRanges.contains { $0.contains(index) }
-            if isConnected == false {
+            if inConnected[index] == false {
                 independentPositions.append(index)
             }
         }

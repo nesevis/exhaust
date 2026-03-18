@@ -228,6 +228,30 @@ struct DependencyDAGTests {
         #expect(outerNode!.isStructurallyConstant == false)
     }
 
+    @Test("Bind with picks but no nested bind in bound subtree is structurally dependent")
+    func structurallyDependentDueToPicks() {
+        let inner = ChoiceTree.choice(.unsigned(5, .uint64), .init(validRange: 0 ... 10, isRangeExplicit: true))
+        // Bound subtree contains a pick site but no nested bind.
+        let branch = ChoiceTree.branch(
+            siteID: 0,
+            weight: 1,
+            id: 0,
+            branchIDs: [0, 1],
+            choice: .choice(.unsigned(10, .uint64), .init(validRange: 0 ... 100, isRangeExplicit: true))
+        )
+        let bound = ChoiceTree.group([branch, .selected(branch)])
+        let tree = ChoiceTree.bind(inner: inner, bound: bound)
+
+        let sequence = ChoiceSequence(tree)
+        let bindIndex = BindSpanIndex(from: sequence)
+        let dag = DependencyDAG.build(from: sequence, tree: tree, bindIndex: bindIndex)
+
+        #expect(dag.nodes.count == 2) // bind-inner + branch selector
+        let bindNode = dag.nodes.first { $0.positionRange == 1 ... 1 }
+        #expect(bindNode != nil)
+        #expect(bindNode!.isStructurallyConstant == false)
+    }
+
     // MARK: - 0c: SkeletonFingerprint
 
     @Test("Trees with same width and bind depth produce equal fingerprints")

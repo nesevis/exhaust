@@ -141,11 +141,12 @@ struct Bound5ShrinkingChallenge {
         #expect(output?.arr.sorted() == [-32768, -1])
     }
 
-    @Test("Bound5, 38")
+    @Test("Bound5, 52")
     func bound5Many() {
         let bound5s = #example(Self.gen, count: 100, seed: 1337)
             .filter { Self.property($0) == false }
 //        ExhaustLog.setConfiguration(.init(isEnabled: true, minimumLevel: .info, categoryMinimumLevels: [.reducer: .debug], format: .human))
+        print()
 
         for bound5 in bound5s {
             let output = #exhaust(

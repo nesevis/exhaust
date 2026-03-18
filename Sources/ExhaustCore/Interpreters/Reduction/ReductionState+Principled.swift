@@ -271,12 +271,22 @@ extension ReductionState {
                 bindSpanIndex: bindSpanIndex, dag: bindDag
             )
 
+            // Pre-materialize once; both tiers reuse the same [ChoiceSequence] array.
+            let allCandidates = Array(productSpaceBatchEncoder.encode(
+                sequence: sequence, targets: .wholeSequence
+            ))
+            let tier1Encoder = PrecomputedBatchEncoder(
+                name: productSpaceBatchEncoder.name,
+                phase: productSpaceBatchEncoder.phase,
+                candidates: allCandidates
+            )
+
             // Tier 1: guided replay (clamp bound entries to current tree).
             let guidedDecoder: SequenceDecoder = .guided(
                 fallbackTree: fallbackTree ?? tree
             )
             if try runBatch(
-                productSpaceBatchEncoder, decoder: guidedDecoder,
+                tier1Encoder, decoder: guidedDecoder,
                 targets: .wholeSequence, structureChanged: true,
                 budget: &legBudget
             ) {
@@ -285,9 +295,6 @@ extension ReductionState {
                 // Tier 2: PRNG fallback with salted retries, largest-fibre-first ordering.
                 // Sort candidates by bind-inner value sum descending so that candidates with larger inner values (wider downstream domains) are tried first, giving PRNG more room to find a failure.
                 // Capped at 5 candidates per the spec.
-                let allCandidates = Array(productSpaceBatchEncoder.encode(
-                    sequence: sequence, targets: .wholeSequence
-                ))
                 let tier2Candidates = sortByLargestFibreFirst(
                     allCandidates, bindIndex: bindSpanIndex
                 )
@@ -399,11 +406,13 @@ extension ReductionState {
     /// Extracts value spans that fall inside bind-inner ranges.
     private func buildBindInnerValueSpans(bindSpanIndex: BindSpanIndex) -> [ChoiceSpan] {
         let allValueSpans = spanCache.valueSpans(at: 0, from: sequence, bindIndex: bindIndex)
-        return allValueSpans.filter { span in
-            bindSpanIndex.regions.contains { region in
-                region.innerRange.contains(span.range.lowerBound)
+        var inBindInner = [Bool](repeating: false, count: sequence.count)
+        for region in bindSpanIndex.regions {
+            for i in region.innerRange {
+                inBindInner[i] = true
             }
         }
+        return allValueSpans.filter { inBindInner[$0.range.lowerBound] }
     }
 }
 
@@ -688,8 +697,12 @@ extension ReductionState {
         // Bind-free: all value spans at depth 0 as a single contiguous range.
         let valueSpans = spanCache.valueSpans(at: 0, from: sequence, bindIndex: bindIndex)
         guard valueSpans.isEmpty == false else { return [] }
-        let minPosition = valueSpans.map(\.range.lowerBound).min()!
-        let maxPosition = valueSpans.map(\.range.upperBound).max()!
+        var minPosition = valueSpans[0].range.lowerBound
+        var maxPosition = valueSpans[0].range.upperBound
+        for span in valueSpans.dropFirst() {
+            if span.range.lowerBound < minPosition { minPosition = span.range.lowerBound }
+            if span.range.upperBound > maxPosition { maxPosition = span.range.upperBound }
+        }
         return [minPosition ... maxPosition]
     }
 
