@@ -39,6 +39,8 @@ final class ReductionState<Output> {
     var redistributeEncoder = CrossStageRedistributeEncoder()
     var bindAwareRedistributeEncoder = BindAwareRedistributeEncoder()
     var bindRootSearchEncoder = BindRootSearchEncoder()
+    var productSpaceBatchEncoder = ProductSpaceBatchEncoder()
+    var productSpaceAdaptiveEncoder = ProductSpaceAdaptiveEncoder()
 
     // Encoder ordering: move-to-front per leg, persists across cycles.
     var snipOrder: [ReductionScheduler.ValueEncoderSlot] = ReductionScheduler.ValueEncoderSlot.allCases
@@ -447,9 +449,54 @@ extension ReductionState {
         let trainDecoder = makeDepthZeroDecoder()
         var accepted = 0
 
-        // Bind-root search: reduce bind-controlling values with PRNG-generated bound content.
+        // Product-space search: reduce bind-controlling values jointly, then fall back to sequential.
         if hasBind, let bindSpanIndex = bindIndex {
             let prngDecoder: SequenceDecoder = .guided(fallbackTree: nil, usePRNGFallback: true)
+            let bindInnerCount = bindSpanIndex.regions.count
+
+            if bindInnerCount <= 3 {
+                // Batch: enumerate product space of bind-inner values.
+                productSpaceBatchEncoder.bindIndex = bindSpanIndex
+                productSpaceBatchEncoder.dag = DependencyDAG.build(
+                    from: sequence, tree: tree, bindIndex: bindSpanIndex
+                )
+
+                // Tier 1: guided replay (clamp bound entries to current tree).
+                let guidedDecoder: SequenceDecoder = .guided(
+                    fallbackTree: fallbackTree ?? tree
+                )
+                if try runBatch(
+                    productSpaceBatchEncoder, decoder: guidedDecoder,
+                    targets: .wholeSequence, structureChanged: true,
+                    budget: &legBudget
+                ) {
+                    accepted += 1
+                } else if try runBatch(
+                    // Tier 2: PRNG fallback (fresh bound content).
+                    productSpaceBatchEncoder, decoder: prngDecoder,
+                    targets: .wholeSequence, structureChanged: true,
+                    budget: &legBudget
+                ) {
+                    accepted += 1
+                }
+            } else {
+                // Adaptive: delta-debug coordinate halving for k > 3.
+                productSpaceAdaptiveEncoder.bindIndex = bindSpanIndex
+                while legBudget.isExhausted == false {
+                    if try runAdaptive(
+                        productSpaceAdaptiveEncoder, decoder: prngDecoder,
+                        targets: .wholeSequence, structureChanged: true,
+                        budget: &legBudget
+                    ) {
+                        accepted += 1
+                    } else {
+                        break
+                    }
+                }
+            }
+
+            // Fallback: run BindRootSearchEncoder for anything the product
+            // space encoder didn't cover (non-converged axes, single-axis refinement).
             bindRootSearchEncoder.bindIndex = bindSpanIndex
             while legBudget.isExhausted == false {
                 if try runAdaptive(

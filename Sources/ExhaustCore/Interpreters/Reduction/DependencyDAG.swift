@@ -159,6 +159,32 @@ public struct DependencyDAG: Sendable {
 // MARK: - Internal Helpers
 
 extension DependencyDAG {
+    /// Returns bind-inner node indices in topological order with their dependency edges to other bind-inner nodes.
+    ///
+    /// Used by ``ProductSpaceBatchEncoder`` to determine which axes are independent (Cartesian product) versus dependent (topological enumeration).
+    func bindInnerTopology() -> [(nodeIndex: Int, regionIndex: Int, dependsOn: [Int])] {
+        // Collect bind-inner node indices.
+        var bindInnerNodeIndices = Set<Int>()
+        for (index, node) in nodes.enumerated() {
+            if case .structural(.bindInner) = node.kind {
+                bindInnerNodeIndices.insert(index)
+            }
+        }
+
+        // Filter topological order to bind-inner nodes, with dependency edges restricted to other bind-inner nodes.
+        var result: [(nodeIndex: Int, regionIndex: Int, dependsOn: [Int])] = []
+        for nodeIndex in topologicalOrder {
+            guard bindInnerNodeIndices.contains(nodeIndex) else { continue }
+            let node = nodes[nodeIndex]
+            guard case let .structural(.bindInner(regionIndex: regionIndex)) = node.kind else {
+                continue
+            }
+            let bindInnerDependsOn = node.dependents.filter { bindInnerNodeIndices.contains($0) }
+            result.append((nodeIndex: nodeIndex, regionIndex: regionIndex, dependsOn: bindInnerDependsOn))
+        }
+        return result
+    }
+
     /// Finds the smallest group container span containing the given index.
     static func smallestContainingGroupSpan(
         at index: Int,
