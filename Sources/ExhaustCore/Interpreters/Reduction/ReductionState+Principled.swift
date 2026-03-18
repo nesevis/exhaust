@@ -134,9 +134,9 @@ extension ReductionState {
 
     // MARK: - Sub-phase 1b: Structural Deletion
 
-    /// Runs deletion encoders in DAG topological order. Returns `true` on first acceptance (caller loops internally to chain further deletions).
+    /// Runs deletion encoders in DAG topological order.
     ///
-    /// For bind generators, iterates structural nodes in topological order (roots first), then depth-0 content outside any bind. For bind-free generators, falls back to depth-0 only.
+    /// Returns `true` on first acceptance (caller loops internally to chain further deletions). For bind generators, iterates structural nodes in topological order (roots first), then depth-0 content outside any bind. For bind-free generators, falls back to depth-0 only.
     private func runStructuralDeletion(
         budget: inout Int,
         dag: DependencyDAG?
@@ -279,9 +279,8 @@ extension ReductionState {
                 accepted += 1
             } else {
                 // Tier 2: PRNG fallback with salted retries, largest-fibre-first ordering.
-                // Sort candidates by bind-inner value sum descending so that candidates with
-                // larger inner values (wider downstream domains) are tried first, giving PRNG
-                // more room to find a failure. Capped at 5 candidates per the spec.
+                // Sort candidates by bind-inner value sum descending so that candidates with larger inner values (wider downstream domains) are tried first, giving PRNG more room to find a failure.
+                // Capped at 5 candidates per the spec.
                 let allCandidates = Array(productSpaceBatchEncoder.encode(
                     sequence: sequence, targets: .wholeSequence
                 ))
@@ -699,6 +698,8 @@ extension ReductionState {
     /// Discovers downstream axis domains for dependent bind-inner axes via lightweight replay.
     ///
     /// For each dependency edge (upstream → downstream) in the DAG, replays the generator with each upstream ladder value to discover the downstream axis's valid range at that upstream value. Returns a mapping from downstream region index to per-upstream-value domain ranges.
+    ///
+    /// - Note: For multi-hop chains (A → B → C), C's domains are discovered at the current A value. When the product space tests a candidate A value, C's domains may be stale because B's domain shifted under the new A. This means valid (a, b, c) tuples can be missed, but invalid tuples are still rejected at evaluation time. Full multi-hop discovery would require replaying for each (a, b) pair, adding O(s^d) materializations for d-deep chains — not currently worth the cost given that k ≤ 3 fully-nested chains are rare.
     private func computeDependentDomains(
         bindSpanIndex: BindSpanIndex,
         dag: DependencyDAG
@@ -769,6 +770,10 @@ extension ReductionState {
                         let freshBindIndex = BindSpanIndex(from: freshSequence)
 
                         // Find the downstream axis in the fresh sequence by region index.
+                        // This assumes region indices are positionally stable across upstream value changes.
+                        // If the upstream's continuation conditionally constructs generators with different bind topologies (for example, 2 nested binds for n=10 vs 0 for n=3), region indices can shift and we may read the wrong domain.
+                        // This is not a soundness issue — the materializer validates all candidates at evaluation time — but it can produce suboptimal ladders.
+                        // A structural-path-based matching scheme would fix this but is not worth the complexity for this rare generator shape.
                         if downstreamRegion < freshBindIndex.regions.count {
                             let freshRegion = freshBindIndex.regions[downstreamRegion]
                             for index in freshRegion.innerRange where index < freshSequence.count {

@@ -54,7 +54,7 @@ struct ProductSpaceBatchEncoder: BatchEncoder {
     /// Set by the caller before invocation. Used to determine enumeration order for dependent axes.
     var dag: DependencyDAG?
 
-    /// Pre-computed downstream domains for dependent axes.
+    /// Holds pre-computed downstream domains for dependent axes.
     ///
     /// Outer key: downstream axis region index. Inner key: upstream bit pattern value. Value: downstream valid range for that upstream value. When set, dependent axes use per-upstream-value ladders instead of fixed Cartesian product.
     var dependentDomains: [Int: [UInt64: ClosedRange<UInt64>]]?
@@ -151,8 +151,7 @@ struct ProductSpaceBatchEncoder: BatchEncoder {
                             ladder = BinarySearchLadder(values: [effectiveTarget])
                         }
                     } else {
-                        // Upstream value has no discovered domain (downstream axis may not exist
-                        // for this upstream value). Skip this combination.
+                        // Upstream value has no discovered domain (downstream axis may not exist for this upstream value). Skip this combination.
                         continue
                     }
                     for value in ladder.values {
