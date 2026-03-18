@@ -34,7 +34,7 @@ public extension Interpreters {
             probeBudgets: TCRConfiguration.ProbeBudgets,
             alignedDeletionBeamSearchTuning: TCRConfiguration.AlignedDeletionBeamSearchTuning,
             useReductionMaterializer: Bool = true,
-            scheduler: ReducerSchedulerChoice = .vCycle
+            scheduler: ReducerSchedulerChoice = .principled
         ) {
             self.maxStalls = maxStalls
             self.probeBudgets = probeBudgets
@@ -43,9 +43,9 @@ public extension Interpreters {
             self.scheduler = scheduler
         }
 
-        /// Maps a ``TCRConfiguration`` preset to the corresponding configuration using the V-cycle scheduler.
+        /// Maps a ``TCRConfiguration`` preset to the corresponding configuration using the principled scheduler.
         init(from config: TCRConfiguration) {
-            self.init(from: config, scheduler: .vCycle)
+            self.init(from: config, scheduler: .principled)
         }
 
         /// Maps a ``TCRConfiguration`` preset to the corresponding configuration with a specific scheduler.
@@ -70,14 +70,14 @@ public extension Interpreters {
             maxStalls: 1,
             probeBudgets: .fast,
             alignedDeletionBeamSearchTuning: .fast,
-            scheduler: .vCycle
+            scheduler: .principled
         )
 
         public static let slow = Self(
             maxStalls: 8,
             probeBudgets: .slow,
             alignedDeletionBeamSearchTuning: .slow,
-            scheduler: .vCycle
+            scheduler: .principled
         )
     }
 }

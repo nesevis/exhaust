@@ -41,6 +41,17 @@ extension ReductionState {
             }
         }
 
+        if isInstrumented {
+            ExhaustLog.debug(
+                category: .reducer,
+                event: "principled_phase1_complete",
+                metadata: [
+                    "progress": "\(anyProgress)",
+                    "budget_remaining": "\(budget)",
+                ]
+            )
+        }
+
         let finalDAG = rebuildDAGIfNeeded()
         return (finalDAG, anyProgress)
     }
@@ -91,6 +102,10 @@ extension ReductionState {
             budget: &legBudget
         ) {
             improved = true
+            if isInstrumented {
+                ExhaustLog.debug(category: .reducer, event: "principled_phase1_accepted",
+                                 metadata: ["subphase": "branch_promote"])
+            }
         }
 
         pivotBranchesEncoder.currentTree = tree
@@ -102,6 +117,10 @@ extension ReductionState {
             budget: &legBudget
         ) {
             improved = true
+            if isInstrumented {
+                ExhaustLog.debug(category: .reducer, event: "principled_phase1_accepted",
+                                 metadata: ["subphase": "branch_pivot"])
+            }
         }
 
         budget -= legBudget.used
@@ -189,6 +208,10 @@ extension ReductionState {
                 }
                 if slotAccepted {
                     ReductionScheduler.moveToFront(slot, in: &pruneOrder)
+                    if isInstrumented {
+                        ExhaustLog.debug(category: .reducer, event: "principled_phase1_accepted",
+                                         metadata: ["subphase": "deletion", "slot": "\(slot)"])
+                    }
                     budget -= legBudget.used
                     return true // Restart from 1a.
                 }
@@ -323,6 +346,11 @@ extension ReductionState {
                     }
                 }
             }
+        }
+
+        if accepted > 0, isInstrumented {
+            ExhaustLog.debug(category: .reducer, event: "principled_phase1_accepted",
+                             metadata: ["subphase": "bind_inner", "accepted": "\(accepted)"])
         }
 
         budget -= legBudget.used
@@ -461,9 +489,90 @@ extension ReductionState {
                 if isConstant == false {
                     let currentFingerprint = SkeletonFingerprint.from(tree, bindIndex: currentBindIndex)
                     if currentFingerprint != preFingerprint {
+                        if isInstrumented {
+                            ExhaustLog.debug(
+                                category: .reducer,
+                                event: "principled_fingerprint_changed",
+                                metadata: [
+                                    "leaf_range": "\(leafRange)",
+                                    "width_delta": "\(currentFingerprint.width - preFingerprint.width)",
+                                ]
+                            )
+                        }
                         // Structural change detected. Keep accepted probes, signal Phase 1 re-entry.
                         budget -= legBudget.used
                         return true
+                    }
+                }
+            }
+        }
+
+        // Contravariant value sweep: reduce bound-content values at intermediate bind depths.
+        // DAG leaf positions miss values inside nested bind regions (for example, parent node values
+        // in a recursive bind generator like a binary heap). This mirrors the V-cycle's Snip leg.
+        let maxBindDepth = bindIndex?.maxBindDepth ?? 0
+        if maxBindDepth >= 1, legBudget.isExhausted == false {
+            for depth in stride(from: maxBindDepth, through: 1, by: -1) {
+                guard legBudget.isExhausted == false else { break }
+                lattice.invalidate()
+                let depthContext = DecoderContext(
+                    depth: .specific(depth),
+                    bindIndex: bindIndex,
+                    fallbackTree: fallbackTree,
+                    strictness: .normal,
+                    useReductionMaterializer: config.useReductionMaterializer
+                )
+                let depthDecoder = SequenceDecoder.for(depthContext)
+                let vSpans = spanCache.valueSpans(at: depth, from: sequence, bindIndex: bindIndex)
+                let fSpans = spanCache.floatSpans(at: depth, from: sequence, bindIndex: bindIndex)
+
+                for slot in trainOrder {
+                    guard legBudget.isExhausted == false else { break }
+                    switch slot {
+                    case .zeroValue:
+                        if vSpans.isEmpty == false {
+                            if try runAdaptive(
+                                zeroValueEncoder, decoder: depthDecoder,
+                                targets: .spans(vSpans), structureChanged: false,
+                                budget: &legBudget
+                            ) {
+                                anyAccepted = true
+                                ReductionScheduler.moveToFront(.zeroValue, in: &trainOrder)
+                            }
+                        }
+                    case .binarySearchToZero:
+                        if vSpans.isEmpty == false {
+                            if try runAdaptive(
+                                binarySearchToZeroEncoder, decoder: depthDecoder,
+                                targets: .spans(vSpans), structureChanged: false,
+                                budget: &legBudget
+                            ) {
+                                anyAccepted = true
+                                ReductionScheduler.moveToFront(.binarySearchToZero, in: &trainOrder)
+                            }
+                        }
+                    case .binarySearchToTarget:
+                        if vSpans.isEmpty == false {
+                            if try runAdaptive(
+                                binarySearchToTargetEncoder, decoder: depthDecoder,
+                                targets: .spans(vSpans), structureChanged: false,
+                                budget: &legBudget
+                            ) {
+                                anyAccepted = true
+                                ReductionScheduler.moveToFront(.binarySearchToTarget, in: &trainOrder)
+                            }
+                        }
+                    case .reduceFloat:
+                        if fSpans.isEmpty == false {
+                            if try runAdaptive(
+                                reduceFloatEncoder, decoder: depthDecoder,
+                                targets: .spans(fSpans), structureChanged: false,
+                                budget: &legBudget
+                            ) {
+                                anyAccepted = true
+                                ReductionScheduler.moveToFront(.reduceFloat, in: &trainOrder)
+                            }
+                        }
                     }
                 }
             }
@@ -532,6 +641,17 @@ extension ReductionState {
                     }
                 }
             }
+        }
+
+        if isInstrumented {
+            ExhaustLog.debug(
+                category: .reducer,
+                event: "principled_phase2_complete",
+                metadata: [
+                    "progress": "\(anyAccepted)",
+                    "budget_remaining": "\(budget)",
+                ]
+            )
         }
 
         budget -= legBudget.used
