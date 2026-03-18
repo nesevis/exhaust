@@ -54,6 +54,11 @@ struct ProductSpaceBatchEncoder: BatchEncoder {
     /// Set by the caller before invocation. Used to determine enumeration order for dependent axes.
     var dag: DependencyDAG?
 
+    /// Pre-computed downstream domains for dependent axes.
+    ///
+    /// Outer key: downstream axis region index. Inner key: upstream bit pattern value. Value: downstream valid range for that upstream value. When set, dependent axes use per-upstream-value ladders instead of fixed Cartesian product.
+    var dependentDomains: [Int: [UInt64: ClosedRange<UInt64>]]?
+
     func estimatedCost(sequence: ChoiceSequence, bindIndex: BindSpanIndex?) -> Int? {
         guard let bindIndex, bindIndex.regions.isEmpty == false else { return nil }
         let axisCount = bindIndex.regions.count
@@ -80,16 +85,16 @@ struct ProductSpaceBatchEncoder: BatchEncoder {
         let axes = extractAxes(from: sequence, bindIndex: bindIndex)
         guard axes.isEmpty == false else { return [] as [ChoiceSequence] }
 
-        // Compute per-axis ladders.
+        // Compute per-axis ladders (used for independent axes and as fallback).
         let ladders = axes.map { axis in
             BinarySearchLadder.compute(current: axis.currentBitPattern, target: axis.targetBitPattern)
         }
 
-        // Determine enumeration order from DAG topology.
+        // Determine enumeration order and dependency mapping from DAG topology.
         let enumerationOrder: [Int]
+        var downstreamToUpstreamTuplePosition = [Int: Int]()
         if let dag {
             let topology = dag.bindInnerTopology()
-            // Map topology node indices to axis indices by region index.
             var regionToAxis = [Int: Int]()
             for (axisIndex, axis) in axes.enumerated() {
                 regionToAxis[axis.regionIndex] = axisIndex
@@ -97,37 +102,86 @@ struct ProductSpaceBatchEncoder: BatchEncoder {
             enumerationOrder = topology.compactMap { entry in
                 regionToAxis[entry.regionIndex]
             }
-            // Append any axes not in the topology (should not happen, but defensive).
-            let ordered = Set(enumerationOrder)
-            for index in axes.indices where ordered.contains(index) == false {
-                // This path is unreachable in practice.
+
+            // Build downstream → upstream tuple position mapping for dependent axes.
+            var regionToTuplePosition = [Int: Int]()
+            for (tuplePosition, axisIndex) in enumerationOrder.enumerated() {
+                regionToTuplePosition[axes[axisIndex].regionIndex] = tuplePosition
+            }
+            for entry in topology where entry.dependsOn.isEmpty == false {
+                guard let upstreamTuplePosition = regionToTuplePosition[entry.regionIndex] else {
+                    continue
+                }
+                for dependentNodeIndex in entry.dependsOn {
+                    if case let .structural(.bindInner(regionIndex: downstreamRegion)) = dag.nodes[dependentNodeIndex].kind {
+                        downstreamToUpstreamTuplePosition[downstreamRegion] = upstreamTuplePosition
+                    }
+                }
             }
         } else {
             enumerationOrder = Array(axes.indices)
         }
 
-        // Build Cartesian product of all ladders.
+        // Build product: Cartesian for independent axes, dependent for axes with upstream dependencies.
         var tuples = [[UInt64]]()
         tuples.append([])
         for axisIndex in enumerationOrder {
-            let ladder = ladders[axisIndex]
-            var expanded = [[UInt64]]()
-            expanded.reserveCapacity(tuples.count * ladder.values.count)
-            for existing in tuples {
-                for value in ladder.values {
-                    var extended = existing
-                    extended.append(value)
-                    expanded.append(extended)
+            let axis = axes[axisIndex]
+            let hasDependentDomain = dependentDomains?[axis.regionIndex] != nil
+            let upstreamTuplePosition = downstreamToUpstreamTuplePosition[axis.regionIndex]
+
+            if hasDependentDomain, let upstreamPosition = upstreamTuplePosition,
+               let domains = dependentDomains?[axis.regionIndex]
+            {
+                // Dependent axis: per-upstream-value ladder.
+                var expanded = [[UInt64]]()
+                for existing in tuples {
+                    let upstreamValue = existing[upstreamPosition]
+                    let ladder: BinarySearchLadder
+                    if let domain = domains[upstreamValue] {
+                        // Compute ladder within the discovered domain.
+                        let effectiveCurrent = min(domain.upperBound, axis.currentBitPattern)
+                        let effectiveTarget = max(domain.lowerBound, axis.targetBitPattern)
+                        if effectiveCurrent >= effectiveTarget {
+                            ladder = BinarySearchLadder.compute(
+                                current: effectiveCurrent, target: effectiveTarget
+                            )
+                        } else {
+                            // Domain collapsed (target above current in new range). Use target only.
+                            ladder = BinarySearchLadder(values: [effectiveTarget])
+                        }
+                    } else {
+                        // Upstream value has no discovered domain (downstream axis may not exist
+                        // for this upstream value). Skip this combination.
+                        continue
+                    }
+                    for value in ladder.values {
+                        var extended = existing
+                        extended.append(value)
+                        expanded.append(extended)
+                    }
                 }
+                tuples = expanded
+            } else {
+                // Independent axis: fixed ladder (Cartesian product).
+                let ladder = ladders[axisIndex]
+                var expanded = [[UInt64]]()
+                expanded.reserveCapacity(tuples.count * ladder.values.count)
+                for existing in tuples {
+                    for value in ladder.values {
+                        var extended = existing
+                        extended.append(value)
+                        expanded.append(extended)
+                    }
+                }
+                tuples = expanded
             }
-            tuples = expanded
         }
 
         // Build candidate sequences and sort shortlex.
         var candidates = [ChoiceSequence]()
         candidates.reserveCapacity(tuples.count)
 
-        // Map from tuple position (in enumeration order) to axis index.
         let tuplePositionToAxis = enumerationOrder
 
         for tuple in tuples {
@@ -368,7 +422,7 @@ struct ProductSpaceAdaptiveEncoder: AdaptiveEncoder {
 // MARK: - Shared Axis Extraction
 
 /// State for a single bind-inner axis eligible for product-space search.
-private struct AxisState {
+struct AxisState {
     let regionIndex: Int
     let seqIdx: Int
     let validRange: ClosedRange<UInt64>?
@@ -380,8 +434,8 @@ private struct AxisState {
 
 /// Extracts bind-inner axes that are not yet at their reduction target.
 ///
-/// Shared between ``ProductSpaceBatchEncoder`` and ``ProductSpaceAdaptiveEncoder``. Uses the same filtering logic as ``BindRootSearchEncoder/start(sequence:targets:)``.
-private func extractAxes(
+/// Shared between ``ProductSpaceBatchEncoder``, ``ProductSpaceAdaptiveEncoder``, and the dependent domain computation in ``ReductionState``.
+func extractAxes(
     from sequence: ChoiceSequence,
     bindIndex: BindSpanIndex
 ) -> [AxisState] {
@@ -411,4 +465,58 @@ private func extractAxes(
         }
     }
     return axes
+}
+
+// MARK: - PrecomputedBatchEncoder
+
+/// Wraps a pre-built array of candidate sequences as a ``BatchEncoder``.
+///
+/// Used by Tier 2 salted retries to iterate candidates in largest-fibre-first order instead of the encoder's default shortlex ordering.
+struct PrecomputedBatchEncoder: BatchEncoder {
+    let name: String
+    let phase: ReductionPhase
+    let candidates: [ChoiceSequence]
+
+    func estimatedCost(sequence: ChoiceSequence, bindIndex: BindSpanIndex?) -> Int? {
+        candidates.isEmpty ? nil : candidates.count
+    }
+
+    func encode(
+        sequence: ChoiceSequence,
+        targets _: TargetSet
+    ) -> any Sequence<ChoiceSequence> {
+        candidates
+    }
+}
+
+// MARK: - Largest-Fibre Sorting
+
+/// Sorts candidates by the sum of bind-inner bit patterns descending (largest fibre first).
+///
+/// Larger inner values have wider downstream domains, giving PRNG more room to find a failure during salted materialization.
+func sortByLargestFibreFirst(
+    _ candidates: [ChoiceSequence],
+    bindIndex: BindSpanIndex,
+    cap: Int = 5
+) -> [ChoiceSequence] {
+    let sorted = candidates.sorted { lhs, rhs in
+        bindInnerSum(of: lhs, bindIndex: bindIndex) > bindInnerSum(of: rhs, bindIndex: bindIndex)
+    }
+    return Array(sorted.prefix(cap))
+}
+
+/// Computes the sum of bind-inner bit patterns in a candidate sequence.
+private func bindInnerSum(
+    of candidate: ChoiceSequence,
+    bindIndex: BindSpanIndex
+) -> UInt64 {
+    var total: UInt64 = 0
+    for region in bindIndex.regions {
+        for index in region.innerRange where index < candidate.count {
+            if let value = candidate[index].value {
+                total = total &+ value.choice.bitPattern64
+            }
+        }
+    }
+    return total
 }

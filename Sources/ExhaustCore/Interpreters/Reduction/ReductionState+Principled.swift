@@ -5,7 +5,7 @@
 extension ReductionState {
     /// Runs structural minimization with restart-on-success policy.
     ///
-    /// All sub-phases restart from branch simplification on success (branch re-check is cheap after any structural change). Returns the final DAG and whether any progress was made.
+    /// Sub-phase 1a (branch simplification) and 1c (joint bind-inner) restart from 1a on success. Sub-phase 1b (structural deletion) loops internally until exhausted, then falls through to 1c. Returns the final DAG and whether any progress was made.
     func runStructuralMinimization(
         budget: inout Int,
         cycle: Int = 0
@@ -13,33 +13,37 @@ extension ReductionState {
         var anyProgress = false
 
         while budget > 0 {
-            var roundProgress = false
-
             // 1a: Branch simplification.
             if try runBranchSimplification(budget: &budget) {
-                roundProgress = true
                 anyProgress = true
                 continue // Restart from 1a.
             }
 
-            // 1b: Structural deletion.
-            let dag = rebuildDAGIfNeeded()
-            if try runStructuralDeletion(budget: &budget, dag: dag) {
-                roundProgress = true
-                anyProgress = true
-                continue // Restart from 1a.
+            // 1b: Structural deletion (inner loop: restart from 1b on success).
+            var deletionMadeProgress = false
+            while budget > 0 {
+                let dag = rebuildDAGIfNeeded()
+                if try runStructuralDeletion(budget: &budget, dag: dag) {
+                    deletionMadeProgress = true
+                    anyProgress = true
+                } else {
+                    break
+                }
             }
 
             // 1c: Joint bind-inner reduction.
             if try runJointBindInnerReduction(budget: &budget, cycle: cycle) {
-                roundProgress = true
                 anyProgress = true
                 continue // Restart from 1a.
             }
 
-            if roundProgress == false {
-                break
+            // If 1b made progress, restart from 1a (structural changes may enable branch simplification).
+            if deletionMadeProgress {
+                continue
             }
+
+            // No sub-phase made progress; fixed point reached.
+            break
         }
 
         if isInstrumented {
@@ -130,7 +134,9 @@ extension ReductionState {
 
     // MARK: - Sub-phase 1b: Structural Deletion
 
-    /// Runs deletion encoders across all bind depths. Returns `true` on first acceptance (caller rebuilds DAG and restarts).
+    /// Runs deletion encoders in DAG topological order. Returns `true` on first acceptance (caller loops internally to chain further deletions).
+    ///
+    /// For bind generators, iterates structural nodes in topological order (roots first), then depth-0 content outside any bind. For bind-free generators, falls back to depth-0 only.
     private func runStructuralDeletion(
         budget: inout Int,
         dag: DependencyDAG?
@@ -138,24 +144,34 @@ extension ReductionState {
         let subBudget = min(budget, 1200)
         guard subBudget > 0 else { return false }
 
-        let maxBindDepth = bindIndex?.maxBindDepth ?? 0
         var legBudget = ReductionScheduler.LegBudget(hardCap: subBudget)
         spanCache.invalidate()
         lattice.invalidate()
 
-        for depth in 0 ... maxBindDepth {
+        let scopes = buildDeletionScopes(dag: dag)
+
+        for scope in scopes {
             guard legBudget.isExhausted == false else { break }
             lattice.invalidate()
-            let depthDecoder = makeDeletionDecoder(at: depth)
+            let scopeDecoder = makeDeletionDecoder(at: scope.depth)
 
             for slot in pruneOrder {
                 guard legBudget.isExhausted == false else { break }
-                let targets = spanCache.deletionTargets(
-                    category: slot.spanCategory,
-                    depth: depth,
-                    from: sequence,
-                    bindIndex: bindIndex
-                )
+                let targets: [ChoiceSpan]
+                if let positionRange = scope.positionRange {
+                    targets = spanCache.deletionTargets(
+                        category: slot.spanCategory,
+                        inRange: positionRange,
+                        from: sequence
+                    )
+                } else {
+                    targets = spanCache.deletionTargets(
+                        category: slot.spanCategory,
+                        depth: scope.depth,
+                        from: sequence,
+                        bindIndex: bindIndex
+                    )
+                }
                 let slotAccepted: Bool
                 switch slot {
                 case .speculativeDelete:
@@ -169,7 +185,7 @@ extension ReductionState {
                 case .containerSpans:
                     slotAccepted = try runAdaptive(
                         deleteContainerSpans,
-                        decoder: depthDecoder,
+                        decoder: scopeDecoder,
                         targets: .spans(targets),
                         structureChanged: true,
                         budget: &legBudget
@@ -177,7 +193,7 @@ extension ReductionState {
                 case .sequenceElements:
                     slotAccepted = try runAdaptive(
                         deleteSequenceElements,
-                        decoder: depthDecoder,
+                        decoder: scopeDecoder,
                         targets: .spans(targets),
                         structureChanged: true,
                         budget: &legBudget
@@ -185,7 +201,7 @@ extension ReductionState {
                 case .sequenceBoundaries:
                     slotAccepted = try runAdaptive(
                         deleteSequenceBoundaries,
-                        decoder: depthDecoder,
+                        decoder: scopeDecoder,
                         targets: .spans(targets),
                         structureChanged: true,
                         budget: &legBudget
@@ -193,7 +209,7 @@ extension ReductionState {
                 case .freeStandingValues:
                     slotAccepted = try runAdaptive(
                         deleteFreeStandingValues,
-                        decoder: depthDecoder,
+                        decoder: scopeDecoder,
                         targets: .spans(targets),
                         structureChanged: true,
                         budget: &legBudget
@@ -201,7 +217,7 @@ extension ReductionState {
                 case .alignedWindows:
                     slotAccepted = try runAdaptive(
                         deleteAlignedWindowsEncoder,
-                        decoder: depthDecoder,
+                        decoder: scopeDecoder,
                         targets: .spans(targets),
                         structureChanged: true,
                         budget: &legBudget
@@ -214,7 +230,7 @@ extension ReductionState {
                                          metadata: ["subphase": "deletion", "slot": "\(slot)"])
                     }
                     budget -= legBudget.used
-                    return true // Restart from 1a.
+                    return true
                 }
             }
         }
@@ -240,9 +256,15 @@ extension ReductionState {
 
         if bindInnerCount <= 3 {
             // Batch: enumerate product space of bind-inner values.
-            productSpaceBatchEncoder.bindIndex = bindSpanIndex
-            productSpaceBatchEncoder.dag = DependencyDAG.build(
+            let bindDag = DependencyDAG.build(
                 from: sequence, tree: tree, bindIndex: bindSpanIndex
+            )
+            productSpaceBatchEncoder.bindIndex = bindSpanIndex
+            productSpaceBatchEncoder.dag = bindDag
+
+            // Compute dependent domains for nested binds via lightweight replay.
+            productSpaceBatchEncoder.dependentDomains = computeDependentDomains(
+                bindSpanIndex: bindSpanIndex, dag: bindDag
             )
 
             // Tier 1: guided replay (clamp bound entries to current tree).
@@ -256,10 +278,22 @@ extension ReductionState {
             ) {
                 accepted += 1
             } else {
-                // Tier 2: PRNG fallback with salted retries.
-                // Each attempt uses a different prngSalt, producing a distinct Zobrist-derived
-                // PRNG seed. This gives the materializer independent chances at generating
-                // bound content that satisfies filters and violates the property.
+                // Tier 2: PRNG fallback with salted retries, largest-fibre-first ordering.
+                // Sort candidates by bind-inner value sum descending so that candidates with
+                // larger inner values (wider downstream domains) are tried first, giving PRNG
+                // more room to find a failure. Capped at 5 candidates per the spec.
+                let allCandidates = Array(productSpaceBatchEncoder.encode(
+                    sequence: sequence, targets: .wholeSequence
+                ))
+                let tier2Candidates = sortByLargestFibreFirst(
+                    allCandidates, bindIndex: bindSpanIndex
+                )
+                let tier2Encoder = PrecomputedBatchEncoder(
+                    name: "productSpaceBatch_tier2",
+                    phase: .valueMinimization,
+                    candidates: tier2Candidates
+                )
+
                 let maxRetries = 4
                 for attempt in 0 ..< maxRetries {
                     guard legBudget.isExhausted == false else { break }
@@ -268,7 +302,7 @@ extension ReductionState {
                         prngSalt: UInt64(cycle * maxRetries + attempt)
                     )
                     if try runBatch(
-                        productSpaceBatchEncoder, decoder: saltedDecoder,
+                        tier2Encoder, decoder: saltedDecoder,
                         targets: .wholeSequence, structureChanged: true,
                         budget: &legBudget
                     ) {
@@ -661,4 +695,147 @@ extension ReductionState {
         let allSpans = spanCache.valueSpans(at: 0, from: sequence, bindIndex: bindIndex)
         return allSpans.filter { range.contains($0.range.lowerBound) }
     }
+
+    /// Discovers downstream axis domains for dependent bind-inner axes via lightweight replay.
+    ///
+    /// For each dependency edge (upstream → downstream) in the DAG, replays the generator with each upstream ladder value to discover the downstream axis's valid range at that upstream value. Returns a mapping from downstream region index to per-upstream-value domain ranges.
+    private func computeDependentDomains(
+        bindSpanIndex: BindSpanIndex,
+        dag: DependencyDAG
+    ) -> [Int: [UInt64: ClosedRange<UInt64>]]? {
+        let topology = dag.bindInnerTopology()
+
+        // Quick check: any dependencies at all?
+        guard topology.contains(where: { $0.dependsOn.isEmpty == false }) else {
+            return nil
+        }
+
+        let axes = extractAxes(from: sequence, bindIndex: bindSpanIndex)
+        guard axes.isEmpty == false else { return nil }
+
+        var regionToAxis = [Int: Int]()
+        for (axisIndex, axis) in axes.enumerated() {
+            regionToAxis[axis.regionIndex] = axisIndex
+        }
+
+        var result = [Int: [UInt64: ClosedRange<UInt64>]]()
+
+        for entry in topology where entry.dependsOn.isEmpty == false {
+            guard let upstreamAxisIndex = regionToAxis[entry.regionIndex] else {
+                continue
+            }
+            let upstreamAxis = axes[upstreamAxisIndex]
+            let upstreamLadder = BinarySearchLadder.compute(
+                current: upstreamAxis.currentBitPattern,
+                target: upstreamAxis.targetBitPattern
+            )
+
+            for dependentNodeIndex in entry.dependsOn {
+                guard case let .structural(.bindInner(regionIndex: downstreamRegion)) = dag.nodes[dependentNodeIndex].kind else {
+                    continue
+                }
+
+                var domainMap = [UInt64: ClosedRange<UInt64>]()
+
+                // Include the current value's domain (known from the existing sequence).
+                if let downstreamAxisIndex = regionToAxis[downstreamRegion] {
+                    let downstreamAxis = axes[downstreamAxisIndex]
+                    if let validRange = downstreamAxis.validRange {
+                        domainMap[upstreamAxis.currentBitPattern] = validRange
+                    }
+                }
+
+                for value in upstreamLadder.values {
+                    if value == upstreamAxis.currentBitPattern { continue }
+
+                    // Create modified sequence with upstream set to candidate value.
+                    var modified = sequence
+                    modified[upstreamAxis.seqIdx] = .value(.init(
+                        choice: ChoiceValue(
+                            upstreamAxis.choiceTag.makeConvertible(bitPattern64: value),
+                            tag: upstreamAxis.choiceTag
+                        ),
+                        validRange: upstreamAxis.validRange,
+                        isRangeExplicit: upstreamAxis.isRangeExplicit
+                    ))
+
+                    // Lightweight replay to discover downstream domain.
+                    let replayResult = ReductionMaterializer.materialize(
+                        gen, prefix: modified, mode: .exact, fallbackTree: tree
+                    )
+
+                    if case let .success(_, freshTree) = replayResult {
+                        let freshSequence = ChoiceSequence(freshTree)
+                        let freshBindIndex = BindSpanIndex(from: freshSequence)
+
+                        // Find the downstream axis in the fresh sequence by region index.
+                        if downstreamRegion < freshBindIndex.regions.count {
+                            let freshRegion = freshBindIndex.regions[downstreamRegion]
+                            for index in freshRegion.innerRange where index < freshSequence.count {
+                                if let freshValue = freshSequence[index].value {
+                                    if let range = freshValue.validRange {
+                                        domainMap[value] = range
+                                    }
+                                    break
+                                }
+                            }
+                        }
+                        // If region doesn't exist for this upstream value, no entry is added.
+                        // The encoder will skip this (upstream, downstream) combination.
+                    }
+                }
+
+                if domainMap.isEmpty == false {
+                    result[downstreamRegion] = domainMap
+                }
+            }
+        }
+
+        return result.isEmpty ? nil : result
+    }
+
+    /// Builds ordered deletion scopes for Phase 1b.
+    ///
+    /// For bind generators with a DAG, iterates structural nodes in topological order (roots first), scoping targets to each node's bound range. A final depth-0 scope handles content outside any bind. For bind-free generators, returns a single depth-0 scope.
+    private func buildDeletionScopes(dag: DependencyDAG?) -> [DeletionScope] {
+        guard let dag, let bindSpanIndex = bindIndex else {
+            // Bind-free: single depth-0 scope using depth filter.
+            return [DeletionScope(positionRange: nil, depth: 0)]
+        }
+
+        var scopes = [DeletionScope]()
+
+        // Structural nodes in topological order: scope deletion to each node's bound range.
+        for nodeIndex in dag.topologicalOrder {
+            let node = dag.nodes[nodeIndex]
+            guard case let .structural(.bindInner(regionIndex: regionIndex)) = node.kind else {
+                continue
+            }
+            guard regionIndex < bindSpanIndex.regions.count else {
+                continue
+            }
+            let region = bindSpanIndex.regions[regionIndex]
+            let boundRange = region.boundRange
+            let boundDepth = bindSpanIndex.bindDepth(at: boundRange.lowerBound)
+            scopes.append(DeletionScope(positionRange: boundRange, depth: boundDepth))
+        }
+
+        // Depth-0 content outside any bind (leaf positions at the top level).
+        scopes.append(DeletionScope(positionRange: nil, depth: 0))
+
+        return scopes
+    }
+}
+
+// MARK: - Deletion Scope
+
+/// A scoped region for structural deletion in Phase 1b.
+///
+/// When ``positionRange`` is set, deletion targets are filtered by position range (DAG-driven). When `nil`, targets are filtered by bind depth (bind-free fallback).
+private struct DeletionScope {
+    /// The position range to scope deletion targets to, or `nil` for depth-based filtering.
+    let positionRange: ClosedRange<Int>?
+
+    /// The bind depth for decoder selection.
+    let depth: Int
 }
