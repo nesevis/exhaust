@@ -54,7 +54,7 @@ struct ProductSpaceEncoderTests {
 
         var encoder = ProductSpaceBatchEncoder()
         encoder.bindIndex = bindIndex
-        encoder.dag = DependencyDAG.build(from: sequence, tree: tree, bindIndex: bindIndex)
+        encoder.dag = ChoiceDependencyGraph.build(from: sequence, tree: tree, bindIndex: bindIndex)
 
         let candidates = Array(encoder.encode(sequence: sequence, targets: .wholeSequence))
         // Should produce candidates for the inner value (100 -> 0).
@@ -94,7 +94,7 @@ struct ProductSpaceEncoderTests {
 
         var encoder = ProductSpaceBatchEncoder()
         encoder.bindIndex = bindIndex
-        encoder.dag = DependencyDAG.build(from: sequence, tree: tree, bindIndex: bindIndex)
+        encoder.dag = ChoiceDependencyGraph.build(from: sequence, tree: tree, bindIndex: bindIndex)
 
         let candidates = Array(encoder.encode(sequence: sequence, targets: .wholeSequence))
 
@@ -122,7 +122,7 @@ struct ProductSpaceEncoderTests {
 
         let sequence = ChoiceSequence(outerBind)
         let bindIndex = BindSpanIndex(from: sequence)
-        let dag = DependencyDAG.build(from: sequence, tree: outerBind, bindIndex: bindIndex)
+        let dag = ChoiceDependencyGraph.build(from: sequence, tree: outerBind, bindIndex: bindIndex)
 
         // Verify DAG has an edge from outer to inner.
         let topology = dag.bindInnerTopology()
@@ -163,7 +163,7 @@ struct ProductSpaceEncoderTests {
 
         var encoder = ProductSpaceBatchEncoder()
         encoder.bindIndex = bindIndex
-        encoder.dag = DependencyDAG.build(from: sequence, tree: tree, bindIndex: bindIndex)
+        encoder.dag = ChoiceDependencyGraph.build(from: sequence, tree: tree, bindIndex: bindIndex)
 
         let candidates = Array(encoder.encode(sequence: sequence, targets: .wholeSequence))
 
@@ -277,7 +277,7 @@ struct ProductSpaceEncoderTests {
         #expect(cost! <= 512)
     }
 
-    // MARK: - DependencyDAG.bindInnerTopology
+    // MARK: - ChoiceDependencyGraph.bindInnerTopology
 
     @Test("bindInnerTopology: independent binds have no dependencies")
     func topologyIndependent() {
@@ -292,7 +292,7 @@ struct ProductSpaceEncoderTests {
         let tree = ChoiceTree.group([bind1, bind2])
         let sequence = ChoiceSequence(tree)
         let bindIndex = BindSpanIndex(from: sequence)
-        let dag = DependencyDAG.build(from: sequence, tree: tree, bindIndex: bindIndex)
+        let dag = ChoiceDependencyGraph.build(from: sequence, tree: tree, bindIndex: bindIndex)
 
         let topology = dag.bindInnerTopology()
         #expect(topology.count == 2)
@@ -311,7 +311,7 @@ struct ProductSpaceEncoderTests {
 
         let sequence = ChoiceSequence(outerBind)
         let bindIndex = BindSpanIndex(from: sequence)
-        let dag = DependencyDAG.build(from: sequence, tree: outerBind, bindIndex: bindIndex)
+        let dag = ChoiceDependencyGraph.build(from: sequence, tree: outerBind, bindIndex: bindIndex)
 
         let topology = dag.bindInnerTopology()
         #expect(topology.count == 2)

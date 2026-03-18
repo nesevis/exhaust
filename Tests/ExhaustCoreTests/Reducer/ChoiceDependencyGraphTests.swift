@@ -1,15 +1,15 @@
 //
-//  DependencyDAGTests.swift
+//  ChoiceDependencyGraphTests.swift
 //  Exhaust
 //
 
 import ExhaustCore
 import Testing
 
-// MARK: - DependencyDAG Structure Tests
+// MARK: - ChoiceDependencyGraph Structure Tests
 
-@Suite("DependencyDAG")
-struct DependencyDAGTests {
+@Suite("ChoiceDependencyGraph")
+struct ChoiceDependencyGraphTests {
 
     // MARK: - 0a: DAG Structure
 
@@ -21,7 +21,7 @@ struct DependencyDAGTests {
         ])
         let sequence = ChoiceSequence(tree)
         let bindIndex = BindSpanIndex(from: sequence)
-        let dag = DependencyDAG.build(from: sequence, tree: tree, bindIndex: bindIndex)
+        let dag = ChoiceDependencyGraph.build(from: sequence, tree: tree, bindIndex: bindIndex)
 
         #expect(dag.nodes.isEmpty)
         #expect(dag.topologicalOrder.isEmpty)
@@ -37,7 +37,7 @@ struct DependencyDAGTests {
 
         let sequence = ChoiceSequence(tree)
         let bindIndex = BindSpanIndex(from: sequence)
-        let dag = DependencyDAG.build(from: sequence, tree: tree, bindIndex: bindIndex)
+        let dag = ChoiceDependencyGraph.build(from: sequence, tree: tree, bindIndex: bindIndex)
 
         #expect(dag.nodes.count == 1)
         #expect(dag.nodes[0].kind == .structural(.bindInner(regionIndex: 0)))
@@ -59,7 +59,7 @@ struct DependencyDAGTests {
         // Flattened: .bind(true)[0], .value(10)[1], .bind(true)[2], .value(20)[3], .value(30)[4], .bind(false)[5], .bind(false)[6]
         let sequence = ChoiceSequence(outerBind)
         let bindIndex = BindSpanIndex(from: sequence)
-        let dag = DependencyDAG.build(from: sequence, tree: outerBind, bindIndex: bindIndex)
+        let dag = ChoiceDependencyGraph.build(from: sequence, tree: outerBind, bindIndex: bindIndex)
 
         #expect(dag.nodes.count == 2)
 
@@ -98,7 +98,7 @@ struct DependencyDAGTests {
 
         let sequence = ChoiceSequence(tree)
         let bindIndex = BindSpanIndex(from: sequence)
-        let dag = DependencyDAG.build(from: sequence, tree: tree, bindIndex: bindIndex)
+        let dag = ChoiceDependencyGraph.build(from: sequence, tree: tree, bindIndex: bindIndex)
 
         #expect(dag.nodes.count == 2)
         #expect(dag.nodes[0].dependents.isEmpty)
@@ -126,7 +126,7 @@ struct DependencyDAGTests {
         // Flattened: .bind(true)[0], .value(5)[1], .group(true)[2], .branch(...)[3], .value(200)[4], .group(false)[5], .bind(false)[6]
         let sequence = ChoiceSequence(tree)
         let bindIndex = BindSpanIndex(from: sequence)
-        let dag = DependencyDAG.build(from: sequence, tree: tree, bindIndex: bindIndex)
+        let dag = ChoiceDependencyGraph.build(from: sequence, tree: tree, bindIndex: bindIndex)
 
         #expect(dag.nodes.count == 2)
 
@@ -164,7 +164,7 @@ struct DependencyDAGTests {
         // Flattened: .group(true)[0], .branch(...)[1], .value(20)[2], .group(false)[3]
         let sequence = ChoiceSequence(tree)
         let bindIndex = BindSpanIndex(from: sequence)
-        let dag = DependencyDAG.build(from: sequence, tree: tree, bindIndex: bindIndex)
+        let dag = ChoiceDependencyGraph.build(from: sequence, tree: tree, bindIndex: bindIndex)
 
         #expect(dag.nodes.count == 1)
         #expect(dag.nodes[0].kind == .structural(.branchSelector))
@@ -183,7 +183,7 @@ struct DependencyDAGTests {
         // getSize-bind flattens as group, not bind: .group(true)[0], .value(42)[1], .group(false)[2]
         let sequence = ChoiceSequence(tree)
         let bindIndex = BindSpanIndex(from: sequence)
-        let dag = DependencyDAG.build(from: sequence, tree: tree, bindIndex: bindIndex)
+        let dag = ChoiceDependencyGraph.build(from: sequence, tree: tree, bindIndex: bindIndex)
 
         #expect(dag.nodes.isEmpty)
         #expect(dag.topologicalOrder.isEmpty)
@@ -203,7 +203,7 @@ struct DependencyDAGTests {
 
         let sequence = ChoiceSequence(tree)
         let bindIndex = BindSpanIndex(from: sequence)
-        let dag = DependencyDAG.build(from: sequence, tree: tree, bindIndex: bindIndex)
+        let dag = ChoiceDependencyGraph.build(from: sequence, tree: tree, bindIndex: bindIndex)
 
         #expect(dag.nodes.count == 1)
         #expect(dag.nodes[0].isStructurallyConstant)
@@ -220,7 +220,7 @@ struct DependencyDAGTests {
 
         let sequence = ChoiceSequence(tree)
         let bindIndex = BindSpanIndex(from: sequence)
-        let dag = DependencyDAG.build(from: sequence, tree: tree, bindIndex: bindIndex)
+        let dag = ChoiceDependencyGraph.build(from: sequence, tree: tree, bindIndex: bindIndex)
 
         // Outer bind-inner node should NOT be structurally constant.
         let outerNode = dag.nodes.first { $0.positionRange == 1 ... 1 }
@@ -244,7 +244,7 @@ struct DependencyDAGTests {
 
         let sequence = ChoiceSequence(tree)
         let bindIndex = BindSpanIndex(from: sequence)
-        let dag = DependencyDAG.build(from: sequence, tree: tree, bindIndex: bindIndex)
+        let dag = ChoiceDependencyGraph.build(from: sequence, tree: tree, bindIndex: bindIndex)
 
         #expect(dag.nodes.count == 2) // bind-inner + branch selector
         let bindNode = dag.nodes.first { $0.positionRange == 1 ... 1 }
@@ -252,7 +252,7 @@ struct DependencyDAGTests {
         #expect(bindNode!.isStructurallyConstant == false)
     }
 
-    // MARK: - 0c: SkeletonFingerprint
+    // MARK: - 0c: StructuralFingerprint
 
     @Test("Trees with same width and bind depth produce equal fingerprints")
     func equalFingerprints() {
@@ -265,8 +265,8 @@ struct DependencyDAGTests {
             .choice(.unsigned(6, .uint64), .init(validRange: 0 ... 20, isRangeExplicit: true)),
         ])
 
-        let fingerprint1 = SkeletonFingerprint.from(tree1, bindIndex: BindSpanIndex(from: ChoiceSequence(tree1)))
-        let fingerprint2 = SkeletonFingerprint.from(tree2, bindIndex: BindSpanIndex(from: ChoiceSequence(tree2)))
+        let fingerprint1 = StructuralFingerprint.from(tree1, bindIndex: BindSpanIndex(from: ChoiceSequence(tree1)))
+        let fingerprint2 = StructuralFingerprint.from(tree2, bindIndex: BindSpanIndex(from: ChoiceSequence(tree2)))
 
         #expect(fingerprint1 == fingerprint2)
     }
@@ -281,8 +281,8 @@ struct DependencyDAGTests {
             .choice(.unsigned(2, .uint64), .init(validRange: 0 ... 10, isRangeExplicit: true)),
         ])
 
-        let fingerprint1 = SkeletonFingerprint.from(tree1, bindIndex: BindSpanIndex(from: ChoiceSequence(tree1)))
-        let fingerprint2 = SkeletonFingerprint.from(tree2, bindIndex: BindSpanIndex(from: ChoiceSequence(tree2)))
+        let fingerprint1 = StructuralFingerprint.from(tree1, bindIndex: BindSpanIndex(from: ChoiceSequence(tree1)))
+        let fingerprint2 = StructuralFingerprint.from(tree2, bindIndex: BindSpanIndex(from: ChoiceSequence(tree2)))
 
         #expect(fingerprint1 != fingerprint2)
         #expect(fingerprint1.width < fingerprint2.width)
@@ -302,8 +302,8 @@ struct DependencyDAGTests {
             bound: .choice(.unsigned(2, .uint64), .init(validRange: 0 ... 10, isRangeExplicit: true))
         )
 
-        let fingerprint1 = SkeletonFingerprint.from(tree1, bindIndex: BindSpanIndex(from: ChoiceSequence(tree1)))
-        let fingerprint2 = SkeletonFingerprint.from(tree2, bindIndex: BindSpanIndex(from: ChoiceSequence(tree2)))
+        let fingerprint1 = StructuralFingerprint.from(tree1, bindIndex: BindSpanIndex(from: ChoiceSequence(tree1)))
+        let fingerprint2 = StructuralFingerprint.from(tree2, bindIndex: BindSpanIndex(from: ChoiceSequence(tree2)))
 
         #expect(fingerprint1.width == fingerprint2.width)
         #expect(fingerprint1 != fingerprint2)

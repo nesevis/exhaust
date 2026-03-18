@@ -1,5 +1,5 @@
 //
-//  DependencyDAG.swift
+//  ChoiceDependencyGraph.swift
 //  Exhaust
 //
 
@@ -27,7 +27,7 @@ public enum PositionClassification: Equatable, Sendable {
 
 // MARK: - Dependency Node
 
-/// A node in the ``DependencyDAG`` representing a structural position or range of positions.
+/// A node in the ``ChoiceDependencyGraph`` representing a structural position or range of positions.
 public struct DependencyNode: Equatable, Sendable {
     /// The range of ``ChoiceSequence`` indices this node covers.
     public let positionRange: ClosedRange<Int>
@@ -40,16 +40,16 @@ public struct DependencyNode: Equatable, Sendable {
     /// Always `false` for branch selectors. For bind-inner nodes, `true` when the bound subtree contains no nested data-dependent binds.
     public let isStructurallyConstant: Bool
 
-    /// Indices into ``DependencyDAG/nodes`` of nodes that depend on this node's value.
+    /// Indices into ``ChoiceDependencyGraph/nodes`` of nodes that depend on this node's value.
     public var dependents: [Int]
 }
 
-// MARK: - Dependency DAG
+// MARK: - Choice Dependency Graph
 
 /// Directed acyclic graph capturing structural dependencies between positions in a ``ChoiceSequence``.
 ///
 /// Nodes represent structural positions (bind inners and branch selectors). Edges point from a structural position to the structural positions it controls. Leaf positions (independent values) are collected separately.
-public struct DependencyDAG: Sendable {
+public struct ChoiceDependencyGraph: Sendable {
     /// All structural nodes in the DAG.
     public let nodes: [DependencyNode]
 
@@ -66,7 +66,7 @@ public struct DependencyDAG: Sendable {
         from sequence: ChoiceSequence,
         tree: ChoiceTree,
         bindIndex: BindSpanIndex
-    ) -> DependencyDAG {
+    ) -> ChoiceDependencyGraph {
         // Collect bind tree nodes with their flattened offsets for constancy classification.
         var bindTreeNodes: [(bound: ChoiceTree, offset: Int)] = []
         _ = collectBindTreeNodes(from: tree, offset: 0, into: &bindTreeNodes)
@@ -181,7 +181,7 @@ public struct DependencyDAG: Sendable {
         let topologicalOrder = kahnSort(nodes: nodes)
         let leafPositions = collectLeafPositions(from: sequence, nodes: nodes)
 
-        return DependencyDAG(
+        return ChoiceDependencyGraph(
             nodes: nodes,
             topologicalOrder: topologicalOrder,
             leafPositions: leafPositions
@@ -191,7 +191,7 @@ public struct DependencyDAG: Sendable {
 
 // MARK: - Internal Helpers
 
-extension DependencyDAG {
+extension ChoiceDependencyGraph {
     /// Returns bind-inner node indices in topological order with their dependency edges to other bind-inner nodes.
     ///
     /// Used by ``ProductSpaceBatchEncoder`` to determine which axes are independent (Cartesian product) versus dependent (topological enumeration).
@@ -241,7 +241,7 @@ extension DependencyDAG {
 
 // MARK: - Private Helpers
 
-private extension DependencyDAG {
+private extension ChoiceDependencyGraph {
     /// Topological sort using Kahn's algorithm. Returns node indices in dependency order (roots first).
     static func kahnSort(nodes: [DependencyNode]) -> [Int] {
         let count = nodes.count
@@ -391,12 +391,12 @@ private extension DependencyDAG {
     }
 }
 
-// MARK: - Skeleton Fingerprint
+// MARK: - Structural Fingerprint
 
 /// A lightweight summary of a choice tree's structural shape.
 ///
 /// Two trees with the same fingerprint have the same flattened width and the same total bind nesting depth across all value positions. A change in fingerprint indicates a structural change (positions added, removed, or moved across bind boundaries).
-public struct SkeletonFingerprint: Equatable, Sendable {
+public struct StructuralFingerprint: Equatable, Sendable {
     /// The total number of entries in the flattened ``ChoiceSequence``.
     public let width: Int
 
@@ -407,7 +407,7 @@ public struct SkeletonFingerprint: Equatable, Sendable {
     public static func from(
         _ tree: ChoiceTree,
         bindIndex: BindSpanIndex
-    ) -> SkeletonFingerprint {
+    ) -> StructuralFingerprint {
         let width = tree.flattenedEntryCount
         let sequence = ChoiceSequence(tree)
         var depthSum = 0
@@ -419,6 +419,6 @@ public struct SkeletonFingerprint: Equatable, Sendable {
                 break
             }
         }
-        return SkeletonFingerprint(width: width, bindDepthSum: depthSum)
+        return StructuralFingerprint(width: width, bindDepthSum: depthSum)
     }
 }

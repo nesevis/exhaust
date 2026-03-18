@@ -3,16 +3,16 @@ import Testing
 @testable import Exhaust
 @testable import ExhaustCore
 
-// MARK: - PrincipledScheduler Parity Tests
+// MARK: - BonsaiScheduler Parity Tests
 
-/// Validates that the ``PrincipledScheduler`` produces reduction quality equal to or better than the V-cycle ``ReductionScheduler`` on every shrinking challenge generator.
-@Suite("PrincipledScheduler Parity")
-struct PrincipledSchedulerParityTests {
+/// Validates that ``BonsaiScheduler`` produces reduction quality equal to or better than the V-cycle ``ReductionScheduler`` on every shrinking challenge generator.
+@Suite("BonsaiScheduler Parity")
+struct BonsaiSchedulerParityTests {
     private static let vCycleConfig = Interpreters.BonsaiReducerConfiguration(
         from: .fast, scheduler: .vCycle
     )
-    private static let principledConfig = Interpreters.BonsaiReducerConfiguration(
-        from: .fast, scheduler: .principled
+    private static let bonsaiConfig = Interpreters.BonsaiReducerConfiguration(
+        from: .fast, scheduler: .bonsai
     )
 
     // MARK: - Length List
@@ -35,8 +35,8 @@ struct PrincipledSchedulerParityTests {
             )
         )
         let pResult = try #require(
-            try PrincipledScheduler.run(
-                gen: gen, initialTree: tree, config: Self.principledConfig, property: property
+            try BonsaiScheduler.run(
+                gen: gen, initialTree: tree, config: Self.bonsaiConfig, property: property
             )
         )
 
@@ -44,12 +44,12 @@ struct PrincipledSchedulerParityTests {
         #expect(vResult.1 == [900])
         #expect(pResult.1 == [900])
 
-        // Principled shortlex must be <= V-cycle shortlex.
+        // Bonsai shortlex must be <= V-cycle shortlex.
         #expect(
             pResult.0.count <= vResult.0.count
                 || pResult.0.shortLexPrecedes(vResult.0)
                 || pResult.0 == vResult.0,
-            "Principled sequence should be shortlex ≤ V-cycle"
+            "Bonsai sequence should be shortlex ≤ V-cycle"
         )
     }
 
@@ -83,8 +83,8 @@ struct PrincipledSchedulerParityTests {
             )
         )
         let pResult = try #require(
-            try PrincipledScheduler.run(
-                gen: gen, initialTree: tree, config: Self.principledConfig, property: property
+            try BonsaiScheduler.run(
+                gen: gen, initialTree: tree, config: Self.bonsaiConfig, property: property
             )
         )
 
@@ -109,7 +109,7 @@ struct PrincipledSchedulerParityTests {
 
         var vConfig = Self.vCycleConfig
         vConfig.humanOrderPostProcess = true
-        var pConfig = Self.principledConfig
+        var pConfig = Self.bonsaiConfig
         pConfig.humanOrderPostProcess = true
 
         let vResult = try #require(
@@ -118,7 +118,7 @@ struct PrincipledSchedulerParityTests {
             )
         )
         let pResult = try #require(
-            try PrincipledScheduler.run(
+            try BonsaiScheduler.run(
                 gen: gen, initialTree: tree, config: pConfig, property: property
             )
         )
@@ -150,8 +150,8 @@ struct PrincipledSchedulerParityTests {
             )
         )
         let pResult = try #require(
-            try PrincipledScheduler.run(
-                gen: gen, initialTree: tree, config: Self.principledConfig, property: property
+            try BonsaiScheduler.run(
+                gen: gen, initialTree: tree, config: Self.bonsaiConfig, property: property
             )
         )
 
@@ -179,8 +179,8 @@ struct PrincipledSchedulerParityTests {
             )
         )
         let pResult = try #require(
-            try PrincipledScheduler.run(
-                gen: gen, initialTree: tree, config: Self.principledConfig, property: property
+            try BonsaiScheduler.run(
+                gen: gen, initialTree: tree, config: Self.bonsaiConfig, property: property
             )
         )
 
@@ -235,8 +235,8 @@ struct PrincipledSchedulerParityTests {
             )
         )
         let pResult = try #require(
-            try PrincipledScheduler.run(
-                gen: gen, initialTree: tree, config: Self.principledConfig, property: property
+            try BonsaiScheduler.run(
+                gen: gen, initialTree: tree, config: Self.bonsaiConfig, property: property
             )
         )
 
@@ -275,8 +275,8 @@ struct PrincipledSchedulerParityTests {
             )
         )
         let pResult = try #require(
-            try PrincipledScheduler.run(
-                gen: gen, initialTree: tree, config: Self.principledConfig, property: property
+            try BonsaiScheduler.run(
+                gen: gen, initialTree: tree, config: Self.bonsaiConfig, property: property
             )
         )
 
@@ -290,7 +290,7 @@ struct PrincipledSchedulerParityTests {
 
 // MARK: - Bound5 Generator
 
-extension PrincipledSchedulerParityTests {
+extension BonsaiSchedulerParityTests {
     fileprivate static let bound5Gen: ReflectiveGenerator<Bound5> = {
         let arr = #gen(.int16(scaling: .constant).array(length: 0 ... 10, scaling: .constant))
             .filter { $0.isEmpty || $0.dropFirst().reduce($0[0], &+) < 256 }
@@ -302,7 +302,7 @@ extension PrincipledSchedulerParityTests {
 
 // MARK: - Types
 
-extension PrincipledSchedulerParityTests {
+extension BonsaiSchedulerParityTests {
     struct Bound5: Equatable, Sendable, CustomTestStringConvertible {
         let a: [Int16]
         let b: [Int16]

@@ -1,4 +1,4 @@
-/// Bonsai cultivation cycle scheduler for principled test case reduction.
+/// V-cycle reduction scheduler for test case reduction.
 ///
 /// Orchestrates encoders and decoders in the cultivation cycle: train (covariant sweep, depth 0, guided for binds), snip (contravariant sweep, depths max→1, exact), prune (deletion sweep, depths 0→max, guided), and shape (redistribution).
 ///
@@ -33,7 +33,7 @@ enum ReductionScheduler {
 
         // Phase 0: Structural Independence Isolation
         // Zero all leaf positions that no structural node can influence.
-        if let result = StructuralIsolation.isolate(
+        if let result = StructuralIsolator.isolate(
             gen: gen,
             sequence: state.sequence,
             tree: state.tree,

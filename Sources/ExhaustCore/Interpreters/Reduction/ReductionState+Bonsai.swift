@@ -1,6 +1,6 @@
-// MARK: - Phase 1: Structural Minimization
+// MARK: - Phase 1: Ramification (Structural Minimization)
 //
-// Phase methods for the PrincipledScheduler. Extends ReductionState with structural minimization (Phase 1) and DAG-guided value minimization (Phase 2). All sub-phases call the same runBatch/runAdaptive/accept infrastructure as the V-cycle legs.
+// Phase methods for the BonsaiScheduler. Extends ReductionState with ramification (Phase 1: developing fine branch structure via branch, deletion, and bind-inner encoders) and foliage (Phase 2: refining leaf values via DAG-guided value minimization). All sub-phases call the same runBatch/runAdaptive/accept infrastructure as the V-cycle legs.
 
 extension ReductionState {
     /// Runs structural minimization with restart-on-success policy.
@@ -9,7 +9,7 @@ extension ReductionState {
     func runStructuralMinimization(
         budget: inout Int,
         cycle: Int = 0
-    ) throws -> (dag: DependencyDAG?, progress: Bool) {
+    ) throws -> (dag: ChoiceDependencyGraph?, progress: Bool) {
         var anyProgress = false
 
         while budget > 0 {
@@ -49,7 +49,7 @@ extension ReductionState {
         if isInstrumented {
             ExhaustLog.debug(
                 category: .reducer,
-                event: "principled_phase1_complete",
+                event: "bonsai_phase1_complete",
                 metadata: [
                     "progress": "\(anyProgress)",
                     "budget_remaining": "\(budget)",
@@ -61,14 +61,14 @@ extension ReductionState {
         return (finalDAG, anyProgress)
     }
 
-    /// Rebuilds the ``DependencyDAG`` from the current sequence, tree, and bind index.
+    /// Rebuilds the ``ChoiceDependencyGraph`` from the current sequence, tree, and bind index.
     ///
     /// Returns `nil` for bind-free generators.
-    private func rebuildDAGIfNeeded() -> DependencyDAG? {
+    private func rebuildDAGIfNeeded() -> ChoiceDependencyGraph? {
         guard hasBind, let bindSpanIndex = bindIndex else {
             return nil
         }
-        return DependencyDAG.build(from: sequence, tree: tree, bindIndex: bindSpanIndex)
+        return ChoiceDependencyGraph.build(from: sequence, tree: tree, bindIndex: bindSpanIndex)
     }
 
     // MARK: - Sub-phase 1a: Branch Simplification
@@ -112,7 +112,7 @@ extension ReductionState {
         ) {
             improved = true
             if isInstrumented {
-                ExhaustLog.debug(category: .reducer, event: "principled_phase1_accepted",
+                ExhaustLog.debug(category: .reducer, event: "bonsai_phase1_accepted",
                                  metadata: ["subphase": "branch_promote"])
             }
         }
@@ -127,7 +127,7 @@ extension ReductionState {
         ) {
             improved = true
             if isInstrumented {
-                ExhaustLog.debug(category: .reducer, event: "principled_phase1_accepted",
+                ExhaustLog.debug(category: .reducer, event: "bonsai_phase1_accepted",
                                  metadata: ["subphase": "branch_pivot"])
             }
         }
@@ -143,7 +143,7 @@ extension ReductionState {
     /// Returns `true` on first acceptance (caller loops internally to chain further deletions). For bind generators, iterates structural nodes in topological order (roots first), then depth-0 content outside any bind. For bind-free generators, falls back to depth-0 only.
     private func runStructuralDeletion(
         budget: inout Int,
-        dag: DependencyDAG?
+        dag: ChoiceDependencyGraph?
     ) throws -> Bool {
         let subBudget = min(budget, 1200)
         guard subBudget > 0 else { return false }
@@ -230,7 +230,7 @@ extension ReductionState {
                 if slotAccepted {
                     ReductionScheduler.moveToFront(slot, in: &pruneOrder)
                     if isInstrumented {
-                        ExhaustLog.debug(category: .reducer, event: "principled_phase1_accepted",
+                        ExhaustLog.debug(category: .reducer, event: "bonsai_phase1_accepted",
                                          metadata: ["subphase": "deletion", "slot": "\(slot)"])
                     }
                     budget -= legBudget.used
@@ -260,7 +260,7 @@ extension ReductionState {
 
         if bindInnerCount <= 3 {
             // Batch: enumerate product space of bind-inner values.
-            let bindDag = DependencyDAG.build(
+            let bindDag = ChoiceDependencyGraph.build(
                 from: sequence, tree: tree, bindIndex: bindSpanIndex
             )
             productSpaceBatchEncoder.bindIndex = bindSpanIndex
@@ -395,7 +395,7 @@ extension ReductionState {
         }
 
         if accepted > 0, isInstrumented {
-            ExhaustLog.debug(category: .reducer, event: "principled_phase1_accepted",
+            ExhaustLog.debug(category: .reducer, event: "bonsai_phase1_accepted",
                              metadata: ["subphase": "bind_inner", "accepted": "\(accepted)"])
         }
 
@@ -416,7 +416,7 @@ extension ReductionState {
     }
 }
 
-// MARK: - Phase 2: Value Minimization
+// MARK: - Phase 2: Foliage (Value Minimization)
 
 extension ReductionState {
     /// Runs value minimization on DAG leaf positions, with fingerprint boundary guard.
@@ -424,9 +424,9 @@ extension ReductionState {
     /// Returns `true` if any progress was made. If a structural change is detected by the fingerprint guard, returns `true` to signal the outer loop to re-enter Phase 1.
     func runValueMinimization(
         budget: inout Int,
-        dag: DependencyDAG?
+        dag: ChoiceDependencyGraph?
     ) throws -> Bool {
-        let subBudget = min(budget, PrincipledScheduler.phase2Budget)
+        let subBudget = min(budget, BonsaiScheduler.phase2Budget)
         guard subBudget > 0 else { return false }
 
         var legBudget = ReductionScheduler.LegBudget(hardCap: subBudget)
@@ -438,9 +438,9 @@ extension ReductionState {
         let leafRanges = computeLeafRanges(dag: dag)
 
         // Capture skeleton fingerprint before Phase 2 starts.
-        let prePhaseFingerprint: SkeletonFingerprint?
+        let prePhaseFingerprint: StructuralFingerprint?
         if hasBind, let bindSpanIndex = bindIndex {
-            prePhaseFingerprint = SkeletonFingerprint.from(tree, bindIndex: bindSpanIndex)
+            prePhaseFingerprint = StructuralFingerprint.from(tree, bindIndex: bindSpanIndex)
         } else {
             prePhaseFingerprint = nil
         }
@@ -535,12 +535,12 @@ extension ReductionState {
                 } ?? false
 
                 if isConstant == false {
-                    let currentFingerprint = SkeletonFingerprint.from(tree, bindIndex: currentBindIndex)
+                    let currentFingerprint = StructuralFingerprint.from(tree, bindIndex: currentBindIndex)
                     if currentFingerprint != preFingerprint {
                         if isInstrumented {
                             ExhaustLog.debug(
                                 category: .reducer,
-                                event: "principled_fingerprint_changed",
+                                event: "bonsai_fingerprint_changed",
                                 metadata: [
                                     "leaf_range": "\(leafRange)",
                                     "width_delta": "\(currentFingerprint.width - preFingerprint.width)",
@@ -662,7 +662,7 @@ extension ReductionState {
         if isInstrumented {
             ExhaustLog.debug(
                 category: .reducer,
-                event: "principled_phase2_complete",
+                event: "bonsai_phase2_complete",
                 metadata: [
                     "progress": "\(anyAccepted)",
                     "budget_remaining": "\(budget)",
@@ -681,7 +681,7 @@ extension ReductionState {
     /// Computes ordered leaf ranges for Phase 2.
     ///
     /// Uses DAG leaf positions when available. For bind-free generators, uses all value spans at depth 0. Leaves inside bind-bound subtrees are ordered first (structural proximity ordering).
-    func computeLeafRanges(dag: DependencyDAG?) -> [ClosedRange<Int>] {
+    func computeLeafRanges(dag: ChoiceDependencyGraph?) -> [ClosedRange<Int>] {
         if let dag {
             // Sort: leaves inside bind-bound subtrees first, then by position ascending.
             return dag.leafPositions.sorted { lhs, rhs in
@@ -719,7 +719,7 @@ extension ReductionState {
     /// - Note: For multi-hop chains (A → B → C), C's domains are discovered at the current A value. When the product space tests a candidate A value, C's domains may be stale because B's domain shifted under the new A. This means valid (a, b, c) tuples can be missed, but invalid tuples are still rejected at evaluation time. Full multi-hop discovery would require replaying for each (a, b) pair, adding O(s^d) materializations for d-deep chains — not currently worth the cost given that k ≤ 3 fully-nested chains are rare.
     private func computeDependentDomains(
         bindSpanIndex: BindSpanIndex,
-        dag: DependencyDAG
+        dag: ChoiceDependencyGraph
     ) -> [Int: [UInt64: ClosedRange<UInt64>]]? {
         let topology = dag.bindInnerTopology()
 
@@ -819,7 +819,7 @@ extension ReductionState {
     /// Builds ordered deletion scopes for Phase 1b.
     ///
     /// For bind generators with a DAG, iterates structural nodes in topological order (roots first), scoping targets to each node's bound range. A final depth-0 scope handles content outside any bind. For bind-free generators, returns a single depth-0 scope.
-    private func buildDeletionScopes(dag: DependencyDAG?) -> [DeletionScope] {
+    private func buildDeletionScopes(dag: ChoiceDependencyGraph?) -> [DeletionScope] {
         guard let dag, let bindSpanIndex = bindIndex else {
             // Bind-free: single depth-0 scope using depth filter.
             return [DeletionScope(positionRange: nil, depth: 0)]

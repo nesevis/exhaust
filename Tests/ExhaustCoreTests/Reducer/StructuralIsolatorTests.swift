@@ -1,13 +1,13 @@
 //
-//  StructuralIsolationTests.swift
+//  StructuralIsolatorTests.swift
 //  Exhaust
 //
 
 @testable import ExhaustCore
 import Testing
 
-@Suite("StructuralIsolation")
-struct StructuralIsolationTests {
+@Suite("StructuralIsolator")
+struct StructuralIsolatorTests {
 
     @Test("Independent positions are zeroed when property still fails")
     func independentPositionsZeroed() throws {
@@ -19,7 +19,7 @@ struct StructuralIsolationTests {
         let sequence = ChoiceSequence(tree)
         let bindIndex = BindSpanIndex(from: sequence)
 
-        let result = StructuralIsolation.isolate(
+        let result = StructuralIsolator.isolate(
             gen: gen,
             sequence: sequence,
             tree: tree,
@@ -47,7 +47,7 @@ struct StructuralIsolationTests {
         let bindIndex = BindSpanIndex(from: sequence)
 
         // Dummy generator — isolate returns nil before materialization.
-        let result = StructuralIsolation.isolate(
+        let result = StructuralIsolator.isolate(
             gen: Gen.just(0 as UInt64),
             sequence: sequence,
             tree: tree,
@@ -71,7 +71,7 @@ struct StructuralIsolationTests {
 
         // Property passes when the independent value is 0.
         // Zeroing it makes the property pass → isolation returns nil.
-        let result = StructuralIsolation.isolate(
+        let result = StructuralIsolator.isolate(
             gen: gen,
             sequence: sequence,
             tree: tree,
@@ -95,7 +95,7 @@ struct StructuralIsolationTests {
         let sequence = ChoiceSequence(tree)
         let bindIndex = BindSpanIndex(from: sequence)
 
-        let result = StructuralIsolation.isolate(
+        let result = StructuralIsolator.isolate(
             gen: gen,
             sequence: sequence,
             tree: tree,
@@ -127,7 +127,7 @@ struct StructuralIsolationTests {
 
         // All positions are inside the branch group — no independent positions.
         // Dummy generator — isolate returns nil before materialization.
-        let result = StructuralIsolation.isolate(
+        let result = StructuralIsolator.isolate(
             gen: Gen.just(0 as UInt64),
             sequence: sequence,
             tree: tree,

@@ -1,13 +1,13 @@
 import Testing
 @testable import ExhaustCore
 
-// MARK: - PrincipledScheduler Tests
+// MARK: - BonsaiScheduler Tests
 
-@Suite("PrincipledScheduler")
-struct PrincipledSchedulerTests {
+@Suite("BonsaiScheduler")
+struct BonsaiSchedulerTests {
     /// Configuration that uses the principled scheduler.
-    private static let principledConfig = Interpreters.BonsaiReducerConfiguration(
-        from: .fast, scheduler: .principled
+    private static let bonsaiConfig = Interpreters.BonsaiReducerConfiguration(
+        from: .fast, scheduler: .bonsai
     )
 
     // MARK: - 1. Non-bind generator parity
@@ -21,8 +21,8 @@ struct PrincipledSchedulerTests {
         }
 
         let (_, output) = try #require(
-            try PrincipledScheduler.run(
-                gen: gen, initialTree: tree, config: Self.principledConfig
+            try BonsaiScheduler.run(
+                gen: gen, initialTree: tree, config: Self.bonsaiConfig
             ) { $0 < 50 }
         )
 
@@ -41,8 +41,8 @@ struct PrincipledSchedulerTests {
         }
 
         let (_, output) = try #require(
-            try PrincipledScheduler.run(
-                gen: gen, initialTree: tree, config: Self.principledConfig
+            try BonsaiScheduler.run(
+                gen: gen, initialTree: tree, config: Self.bonsaiConfig
             ) { output in
                 let arr = output as! [UInt64]
                 return arr.count <= 3
@@ -81,8 +81,8 @@ struct PrincipledSchedulerTests {
         }
 
         let (_, output) = try #require(
-            try PrincipledScheduler.run(
-                gen: gen, initialTree: tree, config: Self.principledConfig
+            try BonsaiScheduler.run(
+                gen: gen, initialTree: tree, config: Self.bonsaiConfig
             ) { pair in
                 pair.0 + pair.1 < 20
             }
@@ -114,7 +114,7 @@ struct PrincipledSchedulerTests {
                 let arr = output as! [UInt64]
                 return arr.count <= 3
             },
-            config: Self.principledConfig,
+            config: Self.bonsaiConfig,
             sequence: sequence,
             tree: tree,
             output: output,
@@ -123,7 +123,7 @@ struct PrincipledSchedulerTests {
 
         state.computeEncoderOrdering()
         let initialLength = state.sequence.count
-        var budget = PrincipledScheduler.phase1Budget
+        var budget = BonsaiScheduler.phase1Budget
         let (_, progress) = try state.runStructuralMinimization(budget: &budget)
 
         #expect(progress, "Phase 1 should make progress on a deletable bind tree")
@@ -153,7 +153,7 @@ struct PrincipledSchedulerTests {
                 let arr = output as! [UInt64]
                 return arr.count <= 2
             },
-            config: Self.principledConfig,
+            config: Self.bonsaiConfig,
             sequence: sequence,
             tree: tree,
             output: output,
@@ -161,7 +161,7 @@ struct PrincipledSchedulerTests {
         )
 
         let bindSpanIndex = BindSpanIndex(from: sequence)
-        let dag = DependencyDAG.build(from: sequence, tree: tree, bindIndex: bindSpanIndex)
+        let dag = ChoiceDependencyGraph.build(from: sequence, tree: tree, bindIndex: bindSpanIndex)
         let leafRanges = state.computeLeafRanges(dag: dag)
 
         // Bound leaves should come first in the ordering.
@@ -210,8 +210,8 @@ struct PrincipledSchedulerTests {
 
         // The key assertion is that the scheduler terminates correctly even when
         // structural changes occur during Phase 2.
-        let result = try PrincipledScheduler.run(
-            gen: gen, initialTree: tree, config: Self.principledConfig
+        let result = try BonsaiScheduler.run(
+            gen: gen, initialTree: tree, config: Self.bonsaiConfig
         ) { output in
             let arr = output as! [UInt64]
             return arr.count <= 3
@@ -231,8 +231,8 @@ struct PrincipledSchedulerTests {
         var iterator = ValueAndChoiceTreeInterpreter(gen, materializePicks: true, seed: 42)
         let (_, tree) = try #require(try iterator.next())
 
-        let result = try PrincipledScheduler.run(
-            gen: gen, initialTree: tree, config: Self.principledConfig
+        let result = try BonsaiScheduler.run(
+            gen: gen, initialTree: tree, config: Self.bonsaiConfig
         ) { _ in false }
 
         #expect(result != nil)
@@ -258,20 +258,20 @@ struct PrincipledSchedulerTests {
             gen: gen, initialTree: tree, config: vCycleConfig, property: property
         )
 
-        let principledResult = try PrincipledScheduler.run(
-            gen: gen, initialTree: tree, config: Self.principledConfig, property: property
+        let bonsaiResult = try BonsaiScheduler.run(
+            gen: gen, initialTree: tree, config: Self.bonsaiConfig, property: property
         )
 
         let vCycleOutput = try #require(vCycleResult).1
-        let principledOutput = try #require(principledResult).1
+        let bonsaiOutput = try #require(bonsaiResult).1
 
         let vArr = vCycleOutput as! [UInt64]
-        let pArr = principledOutput as! [UInt64]
+        let pArr = bonsaiOutput as! [UInt64]
 
         #expect(vArr.count >= 4)
         #expect(pArr.count >= 4)
         #expect(pArr.count <= vArr.count + 2,
-                "Principled produced \(pArr.count) elements vs V-cycle's \(vArr.count)")
+                "Bonsai produced \(pArr.count) elements vs V-cycle's \(vArr.count)")
     }
 
     @Test("Parity with V-cycle on simple integer generator", arguments: [
@@ -288,12 +288,12 @@ struct PrincipledSchedulerTests {
             gen: gen, initialTree: tree, config: vCycleConfig, property: property
         )
 
-        let principledResult = try PrincipledScheduler.run(
-            gen: gen, initialTree: tree, config: Self.principledConfig, property: property
+        let bonsaiResult = try BonsaiScheduler.run(
+            gen: gen, initialTree: tree, config: Self.bonsaiConfig, property: property
         )
 
         let vOutput = try #require(vCycleResult).1
-        let pOutput = try #require(principledResult).1
+        let pOutput = try #require(bonsaiResult).1
 
         #expect(vOutput >= 100)
         #expect(pOutput >= 100)

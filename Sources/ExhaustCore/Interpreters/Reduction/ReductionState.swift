@@ -465,7 +465,7 @@ extension ReductionState {
             if bindInnerCount <= 3 {
                 // Batch: enumerate product space of bind-inner values.
                 productSpaceBatchEncoder.bindIndex = bindSpanIndex
-                productSpaceBatchEncoder.dag = DependencyDAG.build(
+                productSpaceBatchEncoder.dag = ChoiceDependencyGraph.build(
                     from: sequence, tree: tree, bindIndex: bindSpanIndex
                 )
 

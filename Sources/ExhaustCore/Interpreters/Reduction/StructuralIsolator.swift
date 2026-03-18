@@ -1,5 +1,5 @@
 //
-//  StructuralIsolation.swift
+//  StructuralIsolator.swift
 //  Exhaust
 //
 
@@ -12,7 +12,7 @@
 // structurally coupled positions.
 
 /// One-shot pre-pass that zeros structurally independent positions before the V-cycle begins.
-enum StructuralIsolation {
+enum StructuralIsolator {
     /// Result of a successful isolation pass.
     struct IsolationResult<Output> {
         let sequence: ChoiceSequence
@@ -43,7 +43,7 @@ enum StructuralIsolation {
         let containerSpans = ChoiceSequence.extractContainerSpans(from: sequence)
         for index in 0..<sequence.count {
             if case .branch = sequence[index] {
-                if let groupRange = DependencyDAG.smallestContainingGroupSpan(
+                if let groupRange = ChoiceDependencyGraph.smallestContainingGroupSpan(
                     at: index,
                     among: containerSpans
                 ) {
@@ -153,7 +153,7 @@ enum StructuralIsolation {
 
 // MARK: - Private Helpers
 
-private extension StructuralIsolation {
+private extension StructuralIsolator {
     /// Returns the simplest valid target for a value.
     ///
     /// Replicates the logic from ``ZeroValueEncoder/simplestTarget(for:)`` — when the value is within its recorded range, targets the range minimum if zero doesn't fit. When the value is outside its recorded range, targets zero.

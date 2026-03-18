@@ -7,7 +7,7 @@ public enum ReducerSchedulerChoice: Sendable {
     /// V-cycle with five interleaved legs iterated by bind depth.
     case vCycle
     /// Two-phase pipeline: structural minimization with restart-on-success, then DAG-guided value minimization.
-    case principled
+    case bonsai
 }
 
 public extension Interpreters {
@@ -34,7 +34,7 @@ public extension Interpreters {
             probeBudgets: TCRConfiguration.ProbeBudgets,
             alignedDeletionBeamSearchTuning: TCRConfiguration.AlignedDeletionBeamSearchTuning,
             useReductionMaterializer: Bool = true,
-            scheduler: ReducerSchedulerChoice = .principled
+            scheduler: ReducerSchedulerChoice = .bonsai
         ) {
             self.maxStalls = maxStalls
             self.probeBudgets = probeBudgets
@@ -43,9 +43,9 @@ public extension Interpreters {
             self.scheduler = scheduler
         }
 
-        /// Maps a ``TCRConfiguration`` preset to the corresponding configuration using the principled scheduler.
+        /// Maps a ``TCRConfiguration`` preset to the corresponding configuration using the Bonsai scheduler.
         init(from config: TCRConfiguration) {
-            self.init(from: config, scheduler: .principled)
+            self.init(from: config, scheduler: .bonsai)
         }
 
         /// Maps a ``TCRConfiguration`` preset to the corresponding configuration with a specific scheduler.
@@ -70,14 +70,14 @@ public extension Interpreters {
             maxStalls: 1,
             probeBudgets: .fast,
             alignedDeletionBeamSearchTuning: .fast,
-            scheduler: .principled
+            scheduler: .bonsai
         )
 
         public static let slow = Self(
             maxStalls: 8,
             probeBudgets: .slow,
             alignedDeletionBeamSearchTuning: .slow,
-            scheduler: .principled
+            scheduler: .bonsai
         )
     }
 }
@@ -87,7 +87,7 @@ public extension Interpreters {
 public extension Interpreters {
     /// Bonsai reducer: iterative tree miniaturization via structured pass pipeline.
     ///
-    /// Delegates to ``ReductionScheduler`` or ``PrincipledScheduler`` depending on the configuration's ``BonsaiReducerConfiguration/scheduler`` choice.
+    /// Delegates to ``ReductionScheduler`` or ``BonsaiScheduler`` depending on the configuration's ``BonsaiReducerConfiguration/scheduler`` choice.
     static func bonsaiReduce<Output>(
         gen: ReflectiveGenerator<Output>,
         tree: ChoiceTree,
@@ -98,8 +98,8 @@ public extension Interpreters {
             switch config.scheduler {
             case .vCycle:
                 try ReductionScheduler.run(gen: gen, initialTree: tree, config: config, property: escapingProperty)
-            case .principled:
-                try PrincipledScheduler.run(gen: gen, initialTree: tree, config: config, property: escapingProperty)
+            case .bonsai:
+                try BonsaiScheduler.run(gen: gen, initialTree: tree, config: config, property: escapingProperty)
             }
         }
     }

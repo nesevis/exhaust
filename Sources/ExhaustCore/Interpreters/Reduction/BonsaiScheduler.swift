@@ -1,7 +1,10 @@
 /// Two-phase reduction scheduler: structural minimization with restart-on-success, then DAG-guided value minimization.
 ///
-/// Replaces the V-cycle's interleaved legs with a clean two-phase pipeline. Phase 1 (structural minimization) runs branch, deletion, and joint bind-inner encoders with a restart-on-success policy. Phase 2 (value minimization) processes only DAG leaf positions, guarded by a ``SkeletonFingerprint`` check to detect accidental structural changes. The two phases alternate until neither makes progress.
-enum PrincipledScheduler {
+/// Replaces the V-cycle's interleaved legs with a clean two-phase pipeline.
+/// Phase 1 — *ramification* (developing fine branch structure) — runs branch, deletion, and joint bind-inner encoders with a restart-on-success policy.
+/// Phase 2 — *foliage* (refining the leaves) — processes only DAG leaf positions, guarded by a ``StructuralFingerprint`` check to detect accidental structural changes.
+/// The two phases alternate until neither makes progress.
+enum BonsaiScheduler {
     // MARK: - Budget Constants
 
     /// Per-round budget for structural minimization (Phase 1).
@@ -39,7 +42,7 @@ enum PrincipledScheduler {
         )
 
         // Phase 0: Structural Independence Isolation
-        if let result = StructuralIsolation.isolate(
+        if let result = StructuralIsolator.isolate(
             gen: gen,
             sequence: state.sequence,
             tree: state.tree,
@@ -73,7 +76,7 @@ enum PrincipledScheduler {
             if isInstrumented {
                 ExhaustLog.debug(
                     category: .reducer,
-                    event: "principled_cycle_start",
+                    event: "bonsai_cycle_start",
                     metadata: [
                         "cycle": "\(cycles)",
                         "stall_budget": "\(stallBudget)",
@@ -86,7 +89,7 @@ enum PrincipledScheduler {
             var phase1Remaining = Self.phase1Budget
             let (dag, phase1Progress) = try state.runStructuralMinimization(budget: &phase1Remaining, cycle: cycles)
 
-            // Phase 2: Value minimization on DAG leaves.
+            // Phase 2: Value minimization on ChoiceDependencyGraph leaves.
             var phase2Remaining = Self.phase2Budget
             let phase2Progress = try state.runValueMinimization(budget: &phase2Remaining, dag: dag)
 
@@ -110,7 +113,7 @@ enum PrincipledScheduler {
             if isInstrumented {
                 ExhaustLog.debug(
                     category: .reducer,
-                    event: "principled_cycle_end",
+                    event: "bonsai_cycle_end",
                     metadata: [
                         "cycle": "\(cycles)",
                         "improved": "\(cycleImproved)",
@@ -123,7 +126,7 @@ enum PrincipledScheduler {
         }
 
         if isInstrumented {
-            ExhaustLog.notice(category: .reducer, event: "principled_complete", metadata: ["cycles": "\(cycles)"])
+            ExhaustLog.notice(category: .reducer, event: "bonsai_complete", metadata: ["cycles": "\(cycles)"])
         }
 
         var bestSequence = state.bestSequence

@@ -52,7 +52,7 @@ struct ProductSpaceBatchEncoder: BatchEncoder {
     var bindIndex: BindSpanIndex?
 
     /// Set by the caller before invocation. Used to determine enumeration order for dependent axes.
-    var dag: DependencyDAG?
+    var dag: ChoiceDependencyGraph?
 
     /// Holds pre-computed downstream domains for dependent axes.
     ///
