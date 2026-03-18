@@ -38,6 +38,7 @@ final class ReductionState<Output> {
     var tandemEncoder = TandemReductionEncoder()
     var redistributeEncoder = CrossStageRedistributeEncoder()
     var bindAwareRedistributeEncoder = BindAwareRedistributeEncoder()
+    var bindRootSearchEncoder = BindRootSearchEncoder()
 
     // Encoder ordering: move-to-front per leg, persists across cycles.
     var snipOrder: [ReductionScheduler.ValueEncoderSlot] = ReductionScheduler.ValueEncoderSlot.allCases
@@ -238,6 +239,23 @@ extension ReductionState {
         let context = DecoderContext(depth: .specific(0), bindIndex: bindIndex, fallbackTree: fallbackTree, strictness: .normal, useReductionMaterializer: config.useReductionMaterializer)
         return SequenceDecoder.for(context)
     }
+
+    /// Computes an adaptive redistribution budget from the estimated costs of all redistribution encoders, capped at ``ReductionScheduler/defaultRedistributionBudget``.
+    ///
+    /// For small generators with few values, the budget scales down to avoid wasting materializations on search space that doesn't exist. For large generators, the cap prevents runaway spending.
+    var adaptiveRedistributionBudget: Int {
+        var total = 0
+        if let cost = bindAwareRedistributeEncoder.estimatedCost(sequence: sequence, bindIndex: bindIndex) {
+            total += cost
+        }
+        if let cost = tandemEncoder.estimatedCost(sequence: sequence, bindIndex: bindIndex) {
+            total += cost
+        }
+        if let cost = redistributeEncoder.estimatedCost(sequence: sequence, bindIndex: bindIndex) {
+            total += cost
+        }
+        return min(total, ReductionScheduler.defaultRedistributionBudget)
+    }
 }
 
 // MARK: - Encoder Ordering
@@ -428,6 +446,25 @@ extension ReductionState {
         let structureChangedOnCovariant = hasBind
         let trainDecoder = makeDepthZeroDecoder()
         var accepted = 0
+
+        // Bind-root search: reduce bind-controlling values with PRNG-generated bound content.
+        if hasBind, let bindSpanIndex = bindIndex {
+            let prngDecoder: SequenceDecoder = .guided(fallbackTree: nil, usePRNGFallback: true)
+            bindRootSearchEncoder.bindIndex = bindSpanIndex
+            while legBudget.isExhausted == false {
+                if try runAdaptive(
+                    bindRootSearchEncoder,
+                    decoder: prngDecoder,
+                    targets: .wholeSequence,
+                    structureChanged: true,
+                    budget: &legBudget
+                ) {
+                    accepted += 1
+                } else {
+                    break
+                }
+            }
+        }
 
         for slot in trainOrder {
             guard legBudget.isExhausted == false else { break }

@@ -1,6 +1,6 @@
 /// Bonsai cultivation cycle scheduler for principled test case reduction.
 ///
-/// Orchestrates encoders and decoders in the cultivation cycle: snip (contravariant sweep, depths max→1, exact), prune (deletion sweep, depths 0→max, guided), train (covariant sweep, depth 0, guided for binds), and shape (redistribution).
+/// Orchestrates encoders and decoders in the cultivation cycle: train (covariant sweep, depth 0, guided for binds), snip (contravariant sweep, depths max→1, exact), prune (deletion sweep, depths 0→max, guided), and shape (redistribution).
 ///
 /// Resource tracking uses per-leg budgets with unused-budget forwarding. Each leg has a hard cap (maximum materializations) and a stall patience (maximum consecutive fruitless materializations). Forwarded budget extends productive legs but does not increase patience for unproductive ones.
 ///
@@ -88,14 +88,25 @@ enum ReductionScheduler {
                 cycleImproved = true
             }
 
-            // ── Leg 1: Snip — contravariant sweep (depths max → 1) ──
+            // ── Leg 1: Train — covariant sweep (depth 0) ──
+            // Runs first so that bind-root values are reduced while downstream
+            // bound entries still carry their original values. The guided
+            // materializer clamps these originals to the new range, preserving
+            // coupling structure that zeroValue would otherwise destroy.
+            let covariantAccepted = try state.runTrainLeg(remaining: &remaining)
+            if covariantAccepted > 0 {
+                cycleImproved = true
+                dirtyDepths = Set(0 ... (state.bindIndex?.maxBindDepth ?? 0))
+            }
+
+            // ── Leg 2: Snip — contravariant sweep (depths max → 1) ──
             let contravariantAccepted = try state.runSnipLeg(
                 remaining: &remaining,
                 maxBindDepth: maxBindDepth,
                 dirtyDepths: dirtyDepths
             )
 
-            // ── Leg 2: Prune — deletion sweep (depths 0 → max) ──
+            // ── Leg 3: Prune — deletion sweep (depths 0 → max) ──
             let deletionAccepted = try state.runPruneLeg(
                 remaining: &remaining,
                 maxBindDepth: maxBindDepth
@@ -105,15 +116,8 @@ enum ReductionScheduler {
                 dirtyDepths = Set(0 ... (state.bindIndex?.maxBindDepth ?? 0))
             }
 
-            // ── Leg 3: Train — covariant sweep (depth 0) ──
-            let covariantAccepted = try state.runTrainLeg(remaining: &remaining)
-            if covariantAccepted > 0 {
-                cycleImproved = true
-                dirtyDepths = Set(0 ... (state.bindIndex?.maxBindDepth ?? 0))
-            }
-
             // ── Cross-cutting: Redistribution (separate budget) ──
-            var redistBudget = ReductionScheduler.defaultRedistributionBudget
+            var redistBudget = state.adaptiveRedistributionBudget
             if try state.runRedistributionLeg(remaining: &redistBudget) {
                 cycleImproved = true
             }
