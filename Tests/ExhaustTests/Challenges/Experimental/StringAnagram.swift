@@ -36,7 +36,7 @@ struct StringAnagramChallenge {
      Two arrays of the two smallest values in the range, in swapped order.
      */
 
-    @Test("String anagram", .disabled("Inconsistent"))
+    @Test("String anagram")
     func stringAnagram() throws {
         let charGen = #gen(.asciiString())
             .filter { $0.count >= 2 }

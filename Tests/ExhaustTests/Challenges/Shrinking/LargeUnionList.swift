@@ -59,6 +59,7 @@ struct LargeUnionListShrinkingChallenge {
         )
 
         // 738 invocations with legacy, 966 with bonsai
+        // 658 invocations with Bonsai 2, 22ms
         #expect(output?.flatMap(\.self) == [-2, -1, 0, 1, 2])
     }
 
@@ -71,12 +72,14 @@ struct LargeUnionListShrinkingChallenge {
             Self.gen,
             .suppressIssueReporting,
             .reflecting(value),
-//            .useBonsaiReducer,
+            .useBonsaiReducer,
+            .humanOrderPostProcess,
             property: Self.property
         )
 
         // 619 invocations with legacy (20ms), 443 with bonsai (29ms)
-        #expect(output?.flatMap(\.self) == [0, -1, 1, -2, 2])
+        // 599 with bonsai 2 (21ms)
+        #expect(output?.flatMap(\.self) == [-2, -1, 0, 1, 2])
     }
 
     @Test("Large Union List, Pathological single 3")
@@ -93,6 +96,7 @@ struct LargeUnionListShrinkingChallenge {
         )
 
         // 507 invocation with legacy (17ms), 460 with bonsai (11ms)
+        // 299 invocations with Bonsai 2 (12ms)
         #expect(output?.flatMap(\.self) == [-2, -1, 0, 1, 2])
     }
 
@@ -108,12 +112,14 @@ struct LargeUnionListShrinkingChallenge {
                 Self.gen,
                 .suppressIssueReporting,
                 .reflecting(list),
-//                .useBonsaiReducer,
+                .useBonsaiReducer,
+                .humanOrderPostProcess,
                 property: Self.property
             )
 
             // ~650–750 invocations with legacy in 962ms. 845ms with bonsai
-            #expect(output?.flatMap(\.self) == [0, -1, 1, -2, 2])
+            // 846ms with Bonsai 2
+            #expect(output?.flatMap(\.self) == [-2, -1, 0, 1, 2])
         }
     }
 }
