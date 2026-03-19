@@ -673,6 +673,7 @@ private extension GuidedMaterializer {
                 return nil
             }
             if canScope, fb != nil { context.cursor.popScope() }
+            if canScope { context.cursor.skipGroupCloses() }
             childStartPosition = context.cursor.position
             results.append(result)
             choiceTrees.append(tree)
@@ -764,6 +765,24 @@ private extension GuidedMaterializer {
             while position < effectiveEnd {
                 switch entries[position] {
                 case .group, .bind, .just:
+                    position += 1
+                default:
+                    return
+                }
+            }
+        }
+
+        /// Advances past any trailing `.group(false)` and `.bind(false)` markers at the current
+        /// position.
+        ///
+        /// Called after each zip child's scope is popped, so that `childStartPosition` reflects
+        /// the start of the next child's entries rather than the closing markers of the completed
+        /// child. See the corresponding method in ``ReductionMaterializer/Cursor`` for the full
+        /// rationale.
+        mutating func skipGroupCloses() {
+            while position < effectiveEnd {
+                switch entries[position] {
+                case .group(false), .bind(false):
                     position += 1
                 default:
                     return
