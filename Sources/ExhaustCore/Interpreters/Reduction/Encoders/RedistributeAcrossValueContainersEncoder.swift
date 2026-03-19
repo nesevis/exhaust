@@ -9,7 +9,7 @@
 ///
 /// For each pair of numeric values in the sequence, tries to decrease one value (toward its reduction target) while increasing the other by the same amount. Supports same-tag integer pairs, same-tag float pairs (via rational arithmetic), and cross-type float+integer pairs (mixed redistribution).
 ///
-/// Uses ``FindIntegerStepper`` for feedback-driven delta search, with a non-monotonic fallback phase when the monotone search converges without finding an improvement.
+/// Uses ``FindIntegerStepper`` for feedback-driven delta search.
 public struct RedistributeAcrossValueContainersEncoder: AdaptiveEncoder {
     public init() {}
 
@@ -70,23 +70,12 @@ public struct RedistributeAcrossValueContainersEncoder: AdaptiveEncoder {
     // Per-orientation state
     private var stepper = FindIntegerStepper()
     private var needsFirstProbe = true
-    private var stepperConverged = false
 
     // Best result from the monotone search phase for the current orientation.
     private var bestMonotoneCandidate: ChoiceSequence?
     private var bestMonotoneEntry1: ChoiceSequenceValue?
     private var bestMonotoneEntry2: ChoiceSequenceValue?
     private var bestMonotoneNonSemanticCount = Int.max
-    private var bestResultIsFromFallback = false
-
-    // Fallback state: probes tried after monotone search converges without a result.
-    private var fallbackDeltas: [UInt64] = []
-    private var fallbackIndex = 0
-    private var inFallbackPhase = false
-    private var bestFallbackCandidate: ChoiceSequence?
-    private var bestFallbackEntry1: ChoiceSequenceValue?
-    private var bestFallbackEntry2: ChoiceSequenceValue?
-    private var bestFallbackNonSemanticCount = Int.max
 
     // MARK: - AdaptiveEncoder
 
@@ -96,10 +85,7 @@ public struct RedistributeAcrossValueContainersEncoder: AdaptiveEncoder {
         orientations = []
         orientationIndex = 0
         needsFirstProbe = true
-        stepperConverged = false
-        inFallbackPhase = false
         resetMonotoneState()
-        resetFallbackState()
 
         guard case .wholeSequence = targets else { return }
 
@@ -156,16 +142,11 @@ public struct RedistributeAcrossValueContainersEncoder: AdaptiveEncoder {
             if let candidate = advanceCurrentOrientation(lastAccepted: lastAccepted) {
                 return candidate
             }
-            // Current orientation is fully exhausted (monotone + fallback).
-            // Commit best result if any.
+            // Current orientation exhausted. Commit best result if any.
             commitBestResult()
-            // Move to next orientation.
             orientationIndex += 1
             needsFirstProbe = true
-            stepperConverged = false
-            inFallbackPhase = false
             resetMonotoneState()
-            resetFallbackState()
         }
         return nil
     }
@@ -234,23 +215,7 @@ public struct RedistributeAcrossValueContainersEncoder: AdaptiveEncoder {
     // MARK: - Per-orientation advancement
 
     private mutating func advanceCurrentOrientation(lastAccepted: Bool) -> ChoiceSequence? {
-        if inFallbackPhase {
-            return advanceFallback(lastAccepted: lastAccepted)
-        }
-
-        if stepperConverged {
-            // Monotone phase done. Check whether we got a result.
-            if bestMonotoneCandidate != nil {
-                // We have a monotone result — skip fallback, commit on return.
-                return nil
-            }
-            // No monotone result — enter fallback phase.
-            inFallbackPhase = true
-            buildFallbackDeltas()
-            return advanceFallback(lastAccepted: false)
-        }
-
-        return advanceMonotone(lastAccepted: lastAccepted)
+        advanceMonotone(lastAccepted: lastAccepted)
     }
 
     // MARK: - Monotone phase (FindIntegerStepper)
@@ -262,7 +227,6 @@ public struct RedistributeAcrossValueContainersEncoder: AdaptiveEncoder {
         guard let fresh1 = sequence[orient.lhsIndex].value,
               let fresh2 = sequence[orient.rhsIndex].value
         else {
-            stepperConverged = true
             return nil
         }
 
@@ -276,7 +240,6 @@ public struct RedistributeAcrossValueContainersEncoder: AdaptiveEncoder {
                 recordMonotoneAcceptance()
             }
             guard let next = stepper.advance(lastAccepted: lastAccepted) else {
-                stepperConverged = true
                 return nil
             }
             k = next
@@ -349,145 +312,6 @@ public struct RedistributeAcrossValueContainersEncoder: AdaptiveEncoder {
         bestMonotoneNonSemanticCount = probeNonSemantic
     }
 
-    // MARK: - Fallback phase
-
-    // FIXME: Not current called by test code
-    private mutating func buildFallbackDeltas() {
-        let orient = orientations[orientationIndex]
-        let distance = orient.distance
-
-        var deltas = [distance]
-        if distance > 1 { deltas.append(distance - 1) }
-        deltas.append(max(1, distance / 2))
-        deltas.append(max(1, distance / 4))
-
-        // Wrapping boundary delta for integer types.
-        if orient.floatContext == nil, orient.mixedContext == nil {
-            guard let fresh2 = sequence[orient.rhsIndex].value else {
-                fallbackDeltas = []
-                fallbackIndex = 0
-                return
-            }
-            if let wrapK = wrappingBoundaryDelta(
-                for: fresh2.choice.tag,
-                bitPattern: fresh2.choice.bitPattern64
-            ), wrapK > 0, wrapK <= distance {
-                deltas.append(wrapK)
-                if wrapK > 1 { deltas.append(wrapK - 1) }
-            }
-        }
-
-        // Deduplicate and sort descending.
-        let unique = Array(Set(deltas))
-            .filter { $0 > 0 && $0 <= distance }
-            .sorted(by: >)
-
-        fallbackDeltas = unique
-        fallbackIndex = 0
-        bestFallbackCandidate = nil
-        bestFallbackEntry1 = nil
-        bestFallbackEntry2 = nil
-        bestFallbackNonSemanticCount = Int.max
-    }
-
-    private mutating func advanceFallback(lastAccepted: Bool) -> ChoiceSequence? {
-        let orient = orientations[orientationIndex]
-
-        // Process acceptance of previous fallback probe.
-        if lastAccepted, fallbackIndex > 0 {
-            recordFallbackAcceptance(orient: orient)
-        }
-
-        guard let fresh1 = sequence[orient.lhsIndex].value,
-              let fresh2 = sequence[orient.rhsIndex].value
-        else { return nil }
-
-        let beforePair = sortedPairKeys(fresh1.choice, fresh2.choice)
-
-        // while-loop: avoiding IteratorProtocol overhead in debug builds
-        while fallbackIndex < fallbackDeltas.count {
-            let k = fallbackDeltas[fallbackIndex]
-            fallbackIndex += 1
-
-            guard let candidate = buildFallbackCandidate(
-                orient: orient,
-                fresh1: fresh1,
-                fresh2: fresh2,
-                delta: k,
-                beforePair: beforePair
-            ) else {
-                continue
-            }
-            return candidate
-        }
-
-        // Fallback exhausted. If we found a best fallback, promote it.
-        if let bestFallbackCandidate {
-            bestMonotoneCandidate = bestFallbackCandidate
-            bestMonotoneEntry1 = bestFallbackEntry1
-            bestMonotoneEntry2 = bestFallbackEntry2
-            bestMonotoneNonSemanticCount = bestFallbackNonSemanticCount
-            bestResultIsFromFallback = true
-        }
-        return nil
-    }
-
-    private mutating func recordFallbackAcceptance(orient: PairOrientation) {
-        // The fallbackIndex has already been incremented, so the accepted probe
-        // used the delta at fallbackIndex - 1.
-        let deltaIdx = fallbackIndex - 1
-        guard deltaIdx >= 0, deltaIdx < fallbackDeltas.count else { return }
-        let k = fallbackDeltas[deltaIdx]
-
-        guard let fresh1 = sequence[orient.lhsIndex].value,
-              let fresh2 = sequence[orient.rhsIndex].value
-        else { return }
-
-        guard let (newChoice1, newChoice2) = computeNewChoices(
-            orient: orient,
-            fresh1: fresh1,
-            fresh2: fresh2,
-            delta: k
-        ) else { return }
-
-        let beforePair = sortedPairKeys(fresh1.choice, fresh2.choice)
-        let afterPair = sortedPairKeys(newChoice1, newChoice2)
-        guard afterPair != beforePair else { return }
-
-        let probeEntry1 = ChoiceSequenceValue.reduced(.init(
-            choice: newChoice1,
-            validRange: fresh1.validRange,
-            isRangeExplicit: fresh1.isRangeExplicit
-        ))
-        let probeEntry2 = ChoiceSequenceValue.value(.init(
-            choice: newChoice2,
-            validRange: fresh2.validRange,
-            isRangeExplicit: fresh2.isRangeExplicit
-        ))
-        let probeNonSemantic = semanticStats.nonSemanticCount(
-            afterReplacing: (orient.lhsIndex, probeEntry1),
-            and: (orient.rhsIndex, probeEntry2)
-        )
-
-        if bestFallbackCandidate == nil
-            || probeNonSemantic < bestFallbackNonSemanticCount
-            || (probeNonSemantic == bestFallbackNonSemanticCount && {
-                var probe = sequence
-                probe[orient.lhsIndex] = probeEntry1
-                probe[orient.rhsIndex] = probeEntry2
-                return probe.shortLexPrecedes(bestFallbackCandidate!)
-            }())
-        {
-            var probe = sequence
-            probe[orient.lhsIndex] = probeEntry1
-            probe[orient.rhsIndex] = probeEntry2
-            bestFallbackCandidate = probe
-            bestFallbackEntry1 = probeEntry1
-            bestFallbackEntry2 = probeEntry2
-            bestFallbackNonSemanticCount = probeNonSemantic
-        }
-    }
-
     // MARK: - Candidate construction
 
     private func buildCandidate(
@@ -547,51 +371,6 @@ public struct RedistributeAcrossValueContainersEncoder: AdaptiveEncoder {
         return probe
     }
 
-    private func buildFallbackCandidate(
-        orient: PairOrientation,
-        fresh1: ChoiceSequenceValue.Value,
-        fresh2: ChoiceSequenceValue.Value,
-        delta: UInt64,
-        beforePair: [UInt64]
-    ) -> ChoiceSequence? {
-        guard let (newChoice1, newChoice2) = computeNewChoices(
-            orient: orient,
-            fresh1: fresh1,
-            fresh2: fresh2,
-            delta: delta
-        ) else { return nil }
-
-        if orient.floatContext != nil || orient.mixedContext != nil {
-            if fresh1.isRangeExplicit, newChoice1.fits(in: fresh1.validRange) == false {
-                return nil
-            }
-            if fresh2.isRangeExplicit, newChoice2.fits(in: fresh2.validRange) == false {
-                return nil
-            }
-        }
-
-        // Reject pure swaps — the pair multiset must actually change.
-        let afterPair = sortedPairKeys(newChoice1, newChoice2)
-        guard afterPair != beforePair else { return nil }
-
-        let probeEntry1 = ChoiceSequenceValue.reduced(.init(
-            choice: newChoice1,
-            validRange: fresh1.validRange,
-            isRangeExplicit: fresh1.isRangeExplicit
-        ))
-        let probeEntry2 = ChoiceSequenceValue.value(.init(
-            choice: newChoice2,
-            validRange: fresh2.validRange,
-            isRangeExplicit: fresh2.isRangeExplicit
-        ))
-
-        var probe = sequence
-        probe[orient.lhsIndex] = probeEntry1
-        probe[orient.rhsIndex] = probeEntry2
-
-        return probe
-    }
-
     // MARK: - Commit best result
 
     private mutating func commitBestResult() {
@@ -614,15 +393,10 @@ public struct RedistributeAcrossValueContainersEncoder: AdaptiveEncoder {
 
         let currentNonSemanticCount = semanticStats.nonSemanticCount
 
-        // Final improvement check before committing. Fallback results are
-        // scheduler-accepted (materialized + property-checked), so they bypass
-        // the structural improvement gate to allow wrapping redistributions.
-        if bestResultIsFromFallback == false {
-            guard probe.shortLexPrecedes(sequence)
-                || bestMonotoneNonSemanticCount < currentNonSemanticCount
-                || afterPair.lexicographicallyPrecedes(beforePair)
-            else { return }
-        }
+        guard probe.shortLexPrecedes(sequence)
+            || bestMonotoneNonSemanticCount < currentNonSemanticCount
+            || afterPair.lexicographicallyPrecedes(beforePair)
+        else { return }
 
         sequence = probe
         semanticStats.applyReplacements(
@@ -638,16 +412,6 @@ public struct RedistributeAcrossValueContainersEncoder: AdaptiveEncoder {
         bestMonotoneEntry1 = nil
         bestMonotoneEntry2 = nil
         bestMonotoneNonSemanticCount = Int.max
-        bestResultIsFromFallback = false
-    }
-
-    private mutating func resetFallbackState() {
-        fallbackDeltas = []
-        fallbackIndex = 0
-        bestFallbackCandidate = nil
-        bestFallbackEntry1 = nil
-        bestFallbackEntry2 = nil
-        bestFallbackNonSemanticCount = Int.max
     }
 
     // MARK: - Redistribution arithmetic
@@ -1079,20 +843,4 @@ public struct RedistributeAcrossValueContainersEncoder: AdaptiveEncoder {
         return UInt64(rhs &- lhs)
     }
 
-    private func wrappingBoundaryDelta(for tag: TypeTag, bitPattern: UInt64) -> UInt64? {
-        let modulus: UInt64? = switch tag {
-        case .int8, .uint8:
-            1 << 8
-        case .int16, .uint16:
-            1 << 16
-        case .int32, .uint32:
-            1 << 32
-        default:
-            nil
-        }
-        guard let modulus, modulus > 0 else { return nil }
-        let remainder = bitPattern % modulus
-        if remainder == 0 { return nil }
-        return modulus - remainder
-    }
 }
