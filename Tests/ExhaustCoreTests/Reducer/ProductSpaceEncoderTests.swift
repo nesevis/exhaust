@@ -143,6 +143,85 @@ struct ProductSpaceEncoderTests {
         }
     }
 
+    // MARK: - Dependent Domains
+
+    @Test("Nested binds with dependent domains use per-upstream-value ladders")
+    func dependentDomainLadders() {
+        // Outer bind: A = 10, range 0...20.
+        // Inner bind: B = 15, range 0...100.
+        // Dependency: A (region 0) controls B (region 1).
+        let valA = ChoiceTree.choice(
+            .unsigned(10, .uint64),
+            .init(validRange: 0 ... 20, isRangeExplicit: true)
+        )
+        let valB = ChoiceTree.choice(
+            .unsigned(15, .uint64),
+            .init(validRange: 0 ... 100, isRangeExplicit: true)
+        )
+        let valBound = ChoiceTree.choice(
+            .unsigned(1, .uint64),
+            .init(validRange: 0 ... 100, isRangeExplicit: true)
+        )
+        let innerBind = ChoiceTree.bind(inner: valB, bound: valBound)
+        let outerBind = ChoiceTree.bind(inner: valA, bound: innerBind)
+
+        let sequence = ChoiceSequence(outerBind)
+        let bindIndex = BindSpanIndex(from: sequence)
+        let dag = ChoiceDependencyGraph.build(
+            from: sequence, tree: outerBind, bindIndex: bindIndex
+        )
+
+        // Region 1 is the downstream (inner bind-inner B).
+        // Provide per-upstream-value domains: when A=10, B's range is 0...15;
+        // when A=5, B's range is 0...7. Ladder values for B should differ
+        // depending on which A value the tuple pairs with.
+        let dependentDomains: [Int: [UInt64: ClosedRange<UInt64>]] = [
+            1: [
+                10: 0 ... 15,
+                5:  0 ... 7,
+                2:  0 ... 3,
+                1:  0 ... 1,
+                0:  0 ... 0,
+            ]
+        ]
+
+        var encoder = ProductSpaceBatchEncoder()
+        encoder.bindIndex = bindIndex
+        encoder.dag = dag
+        encoder.dependentDomains = dependentDomains
+
+        let candidates = Array(encoder.encode(
+            sequence: sequence, targets: .wholeSequence
+        ))
+        #expect(candidates.isEmpty == false)
+
+        // Verify that different A values produce different B ladder values.
+        // Group candidates by their A value and collect the B values seen.
+        let axisA = bindIndex.regions[0].innerRange.lowerBound
+        let axisB = bindIndex.regions[1].innerRange.lowerBound
+        var bValuesByA = [UInt64: Set<UInt64>]()
+        for candidate in candidates {
+            let aVal = candidate[axisA].value!.choice.bitPattern64
+            let bVal = candidate[axisB].value!.choice.bitPattern64
+            bValuesByA[aVal, default: []].insert(bVal)
+        }
+
+        // At A=10 the domain is 0...15, so B's ladder includes 15 (clamped current).
+        // At A=5 the domain is 0...7, so B's max should be at most 7.
+        if let bsAtA5 = bValuesByA[5] {
+            for bVal in bsAtA5 {
+                #expect(bVal <= 7, "B should be within domain 0...7 when A=5, got \(bVal)")
+            }
+        }
+
+        // At A=0 the domain is 0...0, so B must be 0.
+        if let bsAtA0 = bValuesByA[0] {
+            for bVal in bsAtA0 {
+                #expect(bVal == 0, "B should be 0 when A=0, got \(bVal)")
+            }
+        }
+    }
+
     // MARK: - Joint Reduction
 
     @Test("Joint reduction required: batch finds it")
