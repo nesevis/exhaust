@@ -1,3 +1,10 @@
+//
+//  AdaptiveProbeStepper.swift
+//  Exhaust
+//
+//  Created by Chris Kolbu on 14/3/2026.
+//
+
 /// Step-by-step driver for ``AdaptiveProbe.findInteger``, for use in ``AdaptiveEncoder`` conformances.
 ///
 /// Produces probes in the same order as ``findInteger`` (linear 1...4, exponential doubling, binary search), but yields one probe at a time so the scheduler can provide acceptance feedback between probes.

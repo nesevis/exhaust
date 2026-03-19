@@ -1,3 +1,10 @@
+//
+//  AdaptiveDeletionEncoder.swift
+//  Exhaust
+//
+//  Created by Chris Kolbu on 14/3/2026.
+//
+
 /// Shared adaptive batch-deletion logic for all deletion encoders.
 ///
 /// Uses ``FindIntegerStepper`` to binary-search for the largest contiguous batch of same-depth spans that can be deleted. Each concrete deletion encoder provides target filtering; this struct drives the probe loop.

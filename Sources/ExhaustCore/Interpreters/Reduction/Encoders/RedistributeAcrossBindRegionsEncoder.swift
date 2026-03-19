@@ -1,5 +1,5 @@
 //
-//  BindAwareRedistributeEncoder.swift
+//  RedistributeAcrossBindRegionsEncoder.swift
 //  Exhaust
 //
 //  Created by Chris Kolbu on 14/3/2026.

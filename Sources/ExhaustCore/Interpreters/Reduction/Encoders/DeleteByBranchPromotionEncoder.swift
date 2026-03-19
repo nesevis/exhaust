@@ -1,3 +1,10 @@
+//
+//  DeleteByBranchPromotionEncoder.swift
+//  Exhaust
+//
+//  Created by Chris Kolbu on 14/3/2026.
+//
+
 /// Promotes each branch to a simpler (lower-index) alternative.
 ///
 /// Iterates branch targets from most complex to least complex, trying each simpler branch as a

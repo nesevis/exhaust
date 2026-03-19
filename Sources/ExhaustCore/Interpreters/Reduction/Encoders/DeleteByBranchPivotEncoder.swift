@@ -1,3 +1,10 @@
+//
+//  DeleteByBranchPivotEncoder.swift
+//  Exhaust
+//
+//  Created by Chris Kolbu on 14/3/2026.
+//
+
 /// Pivots each branch by trying alternative (non-selected) branches at each pick site.
 ///
 /// Tries alternatives sorted by shortlex complexity (simplest first). Produces candidate

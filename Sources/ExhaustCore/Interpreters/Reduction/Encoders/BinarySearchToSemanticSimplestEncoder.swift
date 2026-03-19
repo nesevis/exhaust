@@ -1,3 +1,10 @@
+//
+//  BinarySearchToSemanticSimplestEncoder.swift
+//  Exhaust
+//
+//  Created by Chris Kolbu on 14/3/2026.
+//
+
 /// Binary-searches each target value toward its semantic simplest form (zero for numerics).
 ///
 /// Processes targets sequentially, converging each via ``BinarySearchStepper`` before moving to the next. After bit-pattern binary search converges, a **cross-zero probe** phase walks down in shortlex key space to find simpler values that the bit-pattern search cannot reach. This is essential for signed integers: bit-pattern search from positive values toward zero stays on the positive side, missing negative values like -1 (shortlex key 1) which are simpler than 1 (shortlex key 2) in zigzag encoding.

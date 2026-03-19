@@ -1,3 +1,10 @@
+//
+//  DeleteContainerSpansEncoder.swift
+//  Exhaust
+//
+//  Created by Chris Kolbu on 14/3/2026.
+//
+
 /// Removes whole container subtrees (groups, sequences, binds) using adaptive batch sizing.
 ///
 /// Uses ``FindIntegerStepper`` to binary-search for the largest contiguous batch of same-depth spans that can be deleted. Only full spans starting with an opener marker are eligible.

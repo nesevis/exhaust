@@ -1,3 +1,10 @@
+//
+//  DeleteFreeStandingValuesEncoder.swift
+//  Exhaust
+//
+//  Created by Chris Kolbu on 14/3/2026.
+//
+
 /// Removes individual loose values not inside container groups, using adaptive batch sizing.
 ///
 /// Target spans are pre-filtered by the scheduler to free-standing value spans at the appropriate depth.

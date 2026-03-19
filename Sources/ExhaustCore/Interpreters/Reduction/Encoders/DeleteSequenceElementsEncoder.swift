@@ -1,3 +1,10 @@
+//
+//  DeleteSequenceElementsEncoder.swift
+//  Exhaust
+//
+//  Created by Chris Kolbu on 14/3/2026.
+//
+
 /// Removes element groups within arrays using adaptive batch sizing.
 ///
 /// Target spans are pre-filtered by the scheduler to sequence element spans at the appropriate depth.

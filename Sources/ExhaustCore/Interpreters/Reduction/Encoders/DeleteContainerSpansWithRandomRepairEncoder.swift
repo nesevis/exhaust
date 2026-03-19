@@ -1,3 +1,10 @@
+//
+//  DeleteContainerSpansWithRandomRepairEncoder.swift
+//  Exhaust
+//
+//  Created by Chris Kolbu on 14/3/2026.
+//
+
 /// Speculatively deletes spans and relies on ``GuidedMaterializer`` fallback for repair.
 ///
 /// Operates on a mixed target set using adaptive batch sizing.

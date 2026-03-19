@@ -1,3 +1,10 @@
+//
+//  BindRootSearchEncoder.swift
+//  Exhaust
+//
+//  Created by Chris Kolbu on 14/3/2026.
+//
+
 /// Halves bind-root values toward their simplest form using PRNG fallback for bound entries.
 ///
 /// Standard value encoders use a guided decoder with `fallbackTree`, which clamps bound entries to originals. When a bind-root value (for example, array length `n`) shrinks, the clamped bound entries may preserve incidental structure at larger sizes but break at smaller ones. This encoder avoids that by using `.guided(fallbackTree: nil)`, which lets the materializer generate fresh bound content compatible with each candidate inner value.

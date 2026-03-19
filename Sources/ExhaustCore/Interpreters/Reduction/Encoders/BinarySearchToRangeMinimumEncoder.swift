@@ -1,3 +1,10 @@
+//
+//  BinarySearchToRangeMinimumEncoder.swift
+//  Exhaust
+//
+//  Created by Chris Kolbu on 14/3/2026.
+//
+
 /// Binary-searches each target value toward a specific reduction target.
 ///
 /// The reduction target for each value is determined by its recorded valid range (see ``ChoiceValue/reductionTarget(in:)``). Processes targets sequentially, converging each via ``BinarySearchStepper`` before moving to the next.
