@@ -59,7 +59,6 @@ final class ReductionState<Output> {
     var deleteAlignedWindowsEncoder: DeleteAlignedWindowsEncoder
     var tandemEncoder = RedistributeByTandemReductionEncoder()
     var redistributeEncoder = RedistributeAcrossValueContainersEncoder()
-    var bindAwareRedistributeEncoder = RedistributeAcrossBindRegionsEncoder()
     var productSpaceBatchEncoder = ProductSpaceBatchEncoder()
     var productSpaceAdaptiveEncoder = ProductSpaceAdaptiveEncoder()
 
@@ -317,22 +316,6 @@ extension ReductionState {
         lattice = snapshot.lattice
     }
 
-    /// Computes an adaptive redistribution budget from the estimated costs of all redistribution encoders, capped at ``ReductionScheduler/defaultRedistributionBudget``.
-    ///
-    /// For small generators with few values, the budget scales down to avoid wasting materializations on search space that doesn't exist. For large generators, the cap prevents runaway spending.
-    var adaptiveRedistributionBudget: Int {
-        var total = 0
-        if let cost = bindAwareRedistributeEncoder.estimatedCost(sequence: sequence, bindIndex: bindIndex) {
-            total += cost
-        }
-        if let cost = tandemEncoder.estimatedCost(sequence: sequence, bindIndex: bindIndex) {
-            total += cost
-        }
-        if let cost = redistributeEncoder.estimatedCost(sequence: sequence, bindIndex: bindIndex) {
-            total += cost
-        }
-        return min(total, ReductionScheduler.defaultRedistributionBudget)
-    }
 }
 
 // MARK: - Encoder Ordering
@@ -482,66 +465,5 @@ extension ReductionState {
         bestOutput = checkpointBestOutput
         remaining -= explorationBudget.used
         return false
-    }
-
-    /// Runs redistribution encoders. Returns `true` if any redistribution was accepted.
-    func runRedistributionLeg(remaining: inout Int) throws -> Bool {
-        var legBudget = ReductionScheduler.LegBudget(hardCap: remaining)
-        let redistContext = DecoderContext(depth: .global, bindIndex: bindIndex, fallbackTree: fallbackTree, strictness: .normal, useReductionMaterializer: config.useReductionMaterializer)
-        let redistDecoder = SequenceDecoder.for(redistContext)
-        var redistributionAccepted = false
-
-        // Bind-aware redistribution: coordinate inner+bound across bind regions.
-        if hasBind, let bi = bindIndex, bi.regions.count >= 2 {
-            let regionPairs = RedistributeAcrossBindRegionsEncoder.buildPlans(
-                from: sequence, bindIndex: bi
-            )
-            for plan in regionPairs {
-                guard legBudget.isExhausted == false else { break }
-                let sinkRegionIndex = plan.sink.regionIndex
-                let bindRedistDecoder: SequenceDecoder = .guided(
-                    fallbackTree: fallbackTree ?? tree,
-                    maximizeBoundRegionIndices: Set([sinkRegionIndex])
-                )
-                bindAwareRedistributeEncoder.startPlan(
-                    sequence: sequence, plan: plan
-                )
-                var lastAccepted = false
-                while let probe = bindAwareRedistributeEncoder.nextProbe(lastAccepted: lastAccepted) {
-                    guard legBudget.isExhausted == false else { break }
-                    if let result = try bindRedistDecoder.decode(
-                        candidate: probe, gen: gen, tree: tree,
-                        originalSequence: sequence, property: property
-                    ) {
-                        legBudget.recordMaterialization()
-                        accept(result, structureChanged: true)
-                        lastAccepted = true
-                        redistributionAccepted = true
-                        if isInstrumented { ExhaustLog.debug(category: .reducer, event: "redistribution_accepted", metadata: ["encoder": "bindAwareRedistribute"]) }
-                    } else {
-                        legBudget.recordMaterialization()
-                        lastAccepted = false
-                    }
-                }
-            }
-        }
-
-        // Tandem reduction: reduce sibling value pairs together.
-        let allSiblings = ChoiceSequence.extractSiblingGroups(from: sequence)
-        if allSiblings.isEmpty == false {
-            if try runAdaptive(tandemEncoder, decoder: redistDecoder, targets: .siblingGroups(allSiblings), structureChanged: hasBind, budget: &legBudget) {
-                redistributionAccepted = true
-                if isInstrumented { ExhaustLog.debug(category: .reducer, event: "redistribution_accepted", metadata: ["encoder": "tandemReduction"]) }
-            }
-        }
-
-        // Cross-stage redistribution: move mass between coordinates.
-        if try runAdaptive(redistributeEncoder, decoder: redistDecoder, targets: .wholeSequence, structureChanged: hasBind, budget: &legBudget) {
-            redistributionAccepted = true
-            if isInstrumented { ExhaustLog.debug(category: .reducer, event: "redistribution_accepted", metadata: ["encoder": redistributeEncoder.name.rawValue]) }
-        }
-
-        remaining -= legBudget.used
-        return redistributionAccepted
     }
 }

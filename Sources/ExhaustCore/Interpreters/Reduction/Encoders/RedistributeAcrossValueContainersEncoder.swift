@@ -351,6 +351,7 @@ public struct RedistributeAcrossValueContainersEncoder: AdaptiveEncoder {
 
     // MARK: - Fallback phase
 
+    // FIXME: Not current called by test code
     private mutating func buildFallbackDeltas() {
         let orient = orientations[orientationIndex]
         let distance = orient.distance
