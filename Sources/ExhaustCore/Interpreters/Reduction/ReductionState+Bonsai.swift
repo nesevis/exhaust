@@ -1,25 +1,31 @@
-// MARK: - Phase 1: Ramification (Structural Minimization)
+// MARK: - Base Descent and Fibre Descent
 //
-// Phase methods for the BonsaiScheduler. Extends ReductionState with ramification (Phase 1: developing fine branch structure via branch, deletion, and bind-inner encoders) and foliage (Phase 2: refining leaf values via DAG-guided value minimization). All sub-phases call the same runBatch/runAdaptive/accept infrastructure as the V-cycle legs.
+// Extends ReductionState with the two phases of BonsaiScheduler's alternating minimisation.
+// Base descent (ramification) minimises the trace structure — the base of the fibration —
+// via branch simplification, structural deletion, and bind-inner reduction.
+// Fibre descent (foliage) minimises the value assignment within a fixed trace structure —
+// the fibre above the current base point — via DAG-guided coordinate descent.
 
 extension ReductionState {
-    /// Runs structural minimization with restart-on-success policy.
+    /// Base descent: minimises the trace structure (the base of the fibration) with restart-on-success.
     ///
-    /// Sub-phase 1a (branch simplification) and 1c (joint bind-inner) restart from 1a on success. Sub-phase 1b (structural deletion) loops internally until exhausted, then falls through to 1c. Returns the final DAG and whether any progress was made.
-    func runStructuralMinimization(
+    /// Categorically, this is the cartesian factor of the cartesian-vertical factorisation — every accepted candidate changes the base point. In Bonsai terms, it develops the tree's fine branch structure: simplifying branches, removing unnecessary spans, and reducing the controlling values that shape downstream growth. In plain language, it makes the failing test case structurally simpler — fewer choices, simpler branching, shorter sequences — restarting from the top whenever it finds an improvement.
+    ///
+    /// Branch simplification and bind-inner reduction restart from the top on success. Structural deletion loops internally until exhausted. Returns the final dependency graph and whether any progress was made.
+    func runBaseDescent(
         budget: inout Int,
         cycle: Int = 0
     ) throws -> (dag: ChoiceDependencyGraph?, progress: Bool) {
         var anyProgress = false
 
         while budget > 0 {
-            // 1a: Branch simplification.
+            // Branch simplification.
             if try runBranchSimplification(budget: &budget) {
                 anyProgress = true
                 continue // Restart from 1a.
             }
 
-            // 1b: Structural deletion (inner loop: restart from 1b on success).
+            // Structural deletion (inner loop: restart on success).
             var deletionMadeProgress = false
             while budget > 0 {
                 let dag = rebuildDAGIfNeeded()
@@ -31,7 +37,7 @@ extension ReductionState {
                 }
             }
 
-            // 1c: Joint bind-inner reduction.
+            // Joint bind-inner reduction.
             if try runJointBindInnerReduction(budget: &budget, cycle: cycle) {
                 anyProgress = true
                 continue // Restart from 1a.
@@ -42,7 +48,7 @@ extension ReductionState {
                 continue
             }
 
-            // No sub-phase made progress; fixed point reached.
+            // No step made progress; base descent fixed point reached.
             break
         }
 
@@ -77,7 +83,7 @@ extension ReductionState {
         )
     }
 
-    // MARK: - Sub-phase 1a: Branch Simplification
+    // MARK: - Branch Simplification
 
     /// Runs branch promotion and pivoting encoders.
     private func runBranchSimplification(budget: inout Int) throws -> Bool {
@@ -142,7 +148,7 @@ extension ReductionState {
         return improved
     }
 
-    // MARK: - Sub-phase 1b: Structural Deletion
+    // MARK: - Structural Deletion (covariant — roots first)
 
     /// Runs deletion encoders in DAG topological order.
     ///
@@ -245,11 +251,69 @@ extension ReductionState {
             }
         }
 
+        // MARK: - Mutation pool fallback (Opportunity 1: fibration pushout law)
+        //
+        // The sequential adaptive loop above finds the largest individually-accepted batch per scope
+        // and slot. Two non-overlapping batches that are each rejected individually may be jointly
+        // accepted (property still fails when both are deleted). Collect span sets from the already-
+        // populated spanCache, compose disjoint pairs, and test each candidate.
+        //
+        // Capped at sequence.count <= 500 to bound collection cost.
+        if sequence.count <= 500 {
+            let individuals = MutationPool.collect(
+                sequence: sequence,
+                spanCache: &spanCache,
+                scopes: scopes,
+                slots: pruneOrder,
+                bindIndex: bindIndex
+            )
+            if individuals.isEmpty == false {
+                let pairs = MutationPool.composePairs(from: individuals, sequence: sequence)
+                var combined = individuals + pairs
+                combined.sort { $0.deletedLength > $1.deletedLength }
+                let speculativeDecoder = makeSpeculativeDecoder()
+                let cacheSalt = speculativeDecoder.rejectCacheSalt
+                for entry in combined {
+                    guard legBudget.isExhausted == false else { break }
+                    let candidate = entry.candidate
+                    let cacheKey = ZobristHash.hash(of: candidate) &+ cacheSalt
+                    if rejectCache.contains(cacheKey) {
+                        legBudget.recordMaterialization()
+                        continue
+                    }
+                    if let result = try speculativeDecoder.decode(
+                        candidate: candidate,
+                        gen: gen,
+                        tree: tree,
+                        originalSequence: sequence,
+                        property: property
+                    ) {
+                        legBudget.recordMaterialization()
+                        accept(result, structureChanged: true)
+                        if isInstrumented {
+                            ExhaustLog.debug(
+                                category: .reducer,
+                                event: "bonsai_phase1_accepted",
+                                metadata: [
+                                    "subphase": "deletion_pool",
+                                    "deleted_length": "\(entry.deletedLength)",
+                                ]
+                            )
+                        }
+                        budget -= legBudget.used
+                        return true
+                    }
+                    legBudget.recordMaterialization()
+                    rejectCache.insert(cacheKey)
+                }
+            }
+        }
+
         budget -= legBudget.used
         return false
     }
 
-    // MARK: - Sub-phase 1c: Joint Bind-Inner Reduction
+    // MARK: - Joint Bind-Inner Reduction
 
     /// Runs product-space encoders and value encoders on bind-inner values.
     private func runJointBindInnerReduction(budget: inout Int, cycle: Int = 0) throws -> Bool {
@@ -310,20 +374,122 @@ extension ReductionState {
                     candidates: tier2Candidates
                 )
 
-                let maxRetries = 4
-                for attempt in 0 ..< maxRetries {
-                    guard legBudget.isExhausted == false else { break }
-                    let saltedDecoder: SequenceDecoder = .guided(
-                        fallbackTree: nil, usePRNGFallback: true,
-                        prngSalt: UInt64(cycle * maxRetries + attempt)
+                // MARK: - Regime probe (Opportunity 2: fibration uniqueness of cartesian lifts)
+                //
+                // The uniqueness law says the canonical projection is the unique best projection — the
+                // PRNG retries below are not searching for a better one, they're asking whether any
+                // point in the new fibre witnesses the failure. When the failure is structural (elimination
+                // regime), all four retries are guaranteed waste. Build the simplest-values probe to
+                // detect the regime before committing to the retry budget.
+                var simplestProbe = sequence
+                var probeNeedsRun = false
+                var probeIdx = 0
+                while probeIdx < simplestProbe.count {
+                    if let v = simplestProbe[probeIdx].value {
+                        let target = ZeroValueEncoder.simplestTarget(for: v)
+                        if target != v.choice {
+                            probeNeedsRun = true
+                            simplestProbe[probeIdx] = .value(.init(
+                                choice: target,
+                                validRange: v.validRange,
+                                isRangeExplicit: v.isRangeExplicit
+                            ))
+                        }
+                    }
+                    probeIdx += 1
+                }
+
+                var skipRetries = false
+                if probeNeedsRun {
+                    legBudget.recordMaterialization()
+                    let probeResult = ReductionMaterializer.materialize(
+                        gen, prefix: simplestProbe, mode: .exact, fallbackTree: fallbackTree
                     )
-                    if try runBatch(
-                        tier2Encoder, decoder: saltedDecoder,
-                        targets: .wholeSequence, structureChanged: true,
-                        budget: &legBudget
-                    ) {
-                        accepted += 1
-                        break
+                    let regime: String
+                    let probeResultLabel: String
+                    switch probeResult {
+                    case let .success(value: probeValue, tree: freshTree):
+                        let freshSequence = ChoiceSequence(freshTree)
+                        if property(probeValue) == false, freshSequence.shortLexPrecedes(sequence) {
+                            // Elimination regime: failure is structural, not value-sensitive.
+                            // Accept the simplest-values witness and skip the PRNG retries — no
+                            // value assignment can improve on this. The shortlex guard ensures we
+                            // never corrupt bestSequence by accepting a non-improving result (which
+                            // can happen when zeroing bind-inner values expands the bound subtree).
+                            regime = "elimination"
+                            probeResultLabel = "success"
+                            accept(
+                                ShrinkResult(
+                                    sequence: freshSequence,
+                                    tree: freshTree,
+                                    output: probeValue,
+                                    evaluations: 1
+                                ),
+                                structureChanged: true
+                            )
+                            accepted += 1
+                            skipRetries = true
+                        } else {
+                            // Value-sensitive regime: specific values are required to reproduce the
+                            // failure. Proceed with PRNG retries.
+                            regime = "value_sensitive"
+                            probeResultLabel = "success"
+                        }
+                    case .rejected:
+                        // Regime unknown: a value was out of range in exact mode. Fall back to retries.
+                        regime = "unknown"
+                        probeResultLabel = "rejected"
+                        // OPPORTUNITY 3 (commented out — enable after measuring `rejected` frequency)
+                        // Compute g!(semanticSimplest): materialize the candidate in guided mode
+                        // with minimal values, then compute shortlex distance between the result
+                        // and the current best sequence. Large distance → lossy reduction →
+                        // treat as elimination regime and skip retries.
+                        //
+                        // let cocartesianResult = ReductionMaterializer.materialize(
+                        //     gen,
+                        //     prefix: sequence,
+                        //     mode: .guided(
+                        //         seed: ZobristHash.hash(of: sequence),
+                        //         fallbackTree: fallbackTree ?? tree
+                        //     ),
+                        //     fallbackTree: fallbackTree
+                        // )
+                        // if case let .success(_, embeddedTree) = cocartesianResult {
+                        //     let embeddedSeq = ChoiceSequence(embeddedTree)
+                        //     let distance = ChoiceSequence.shortlexDistance(embeddedSeq, sequence)
+                        //     if distance > /* threshold TBD */ 0 {
+                        //         skipRetries = true
+                        //     }
+                        // }
+                    case .failed:
+                        regime = "unknown"
+                        probeResultLabel = "failed"
+                    }
+                    if isInstrumented {
+                        ExhaustLog.debug(
+                            category: .reducer,
+                            event: "bonsai_regime_probe",
+                            metadata: ["regime": regime, "result": probeResultLabel]
+                        )
+                    }
+                }
+
+                let maxRetries = 4
+                if skipRetries == false {
+                    for attempt in 0 ..< maxRetries {
+                        guard legBudget.isExhausted == false else { break }
+                        let saltedDecoder: SequenceDecoder = .guided(
+                            fallbackTree: nil, usePRNGFallback: true,
+                            prngSalt: UInt64(cycle * maxRetries + attempt)
+                        )
+                        if try runBatch(
+                            tier2Encoder, decoder: saltedDecoder,
+                            targets: .wholeSequence, structureChanged: true,
+                            budget: &legBudget
+                        ) {
+                            accepted += 1
+                            break
+                        }
                     }
                 }
             }
@@ -428,17 +594,19 @@ extension ReductionState {
     }
 }
 
-// MARK: - Phase 2: Foliage (Value Minimization)
+// MARK: - Fibre Descent (Value Minimization)
 
 extension ReductionState {
-    /// Runs value minimization on DAG leaf positions, with per-acceptance fingerprint boundary guard.
+    /// Fibre descent: minimises the value assignment within the fibre above the current base point.
     ///
-    /// Returns `true` if any value reduction was committed. Structural boundary crossings are rolled back per-acceptance inside ``runAdaptive(_:decoder:targets:structureChanged:budget:fingerprintGuard:)`` before the encoder sees the next probe; any clean value reductions made before the crossing are preserved.
-    func runValueMinimization(
+    /// Categorically, this is the vertical factor of the cartesian-vertical factorisation — every accepted candidate stays in the same fibre (same trace structure). A ``StructuralFingerprint`` guard detects accidental base changes and rolls them back, enforcing the factorisation boundary. In Bonsai terms, it refines the leaves of the tree: with the branch structure fixed, each leaf value is reduced toward its simplest form. In plain language, it makes the values in the failing test case smaller and simpler without changing how many values there are or how they relate to each other.
+    ///
+    /// Processes DAG leaf positions first, then sweeps bound-content values at intermediate bind depths from maximum downward (contravariant). Returns `true` if any value reduction was committed.
+    func runFibreDescent(
         budget: inout Int,
         dag: ChoiceDependencyGraph?
     ) throws -> Bool {
-        let subBudget = min(budget, BonsaiScheduler.phase2Budget)
+        let subBudget = min(budget, BonsaiScheduler.fibreDescentBudget)
         guard subBudget > 0 else { return false }
 
         var legBudget = ReductionScheduler.LegBudget(hardCap: subBudget)
@@ -449,7 +617,7 @@ extension ReductionState {
         // Compute target leaf ranges.
         let leafRanges = computeLeafRanges(dag: dag)
 
-        // Capture skeleton fingerprint before Phase 2 starts.
+        // Capture skeleton fingerprint before fibre descent starts.
         let prePhaseFingerprint: StructuralFingerprint?
         if hasBind, let bindSpanIndex = bindIndex {
             prePhaseFingerprint = StructuralFingerprint.from(tree, bindIndex: bindSpanIndex)
@@ -545,7 +713,7 @@ extension ReductionState {
 
         // Contravariant value sweep: reduce bound-content values at intermediate bind depths.
         // DAG leaf positions miss values inside nested bind regions (for example, parent node values in a recursive bind generator like a binary heap). This mirrors the V-cycle's Snip leg.
-        // vSpans at depth D can include nested bind-inner positions whose reduction changes the inner bound structure, which belongs in Phase 1. The fingerprintGuard in each runAdaptive call catches this per-acceptance and rolls back the structural probe while preserving any earlier clean value reductions.
+        // vSpans at depth D can include nested bind-inner positions whose reduction changes the inner bound structure, which belongs in base descent. The fingerprintGuard in each runAdaptive call catches this per-acceptance and rolls back the structural probe while preserving any earlier clean value reductions.
         let maxBindDepth = bindIndex?.maxBindDepth ?? 0
         if maxBindDepth >= 1, legBudget.isExhausted == false {
             for depth in stride(from: maxBindDepth, through: 1, by: -1) {
@@ -605,7 +773,7 @@ extension ReductionState {
             }
         }
 
-        // Redistribution (once at end of Phase 2).
+        // Redistribution (once at end of fibre descent).
         if legBudget.isExhausted == false {
             let redistContext = DecoderContext(
                 depth: .global,
@@ -657,7 +825,7 @@ extension ReductionState {
 // MARK: - Helpers
 
 extension ReductionState {
-    /// Computes ordered leaf ranges for Phase 2.
+    /// Computes ordered leaf ranges for fibre descent.
     ///
     /// Uses DAG leaf positions when available. For bind-free generators, uses all value spans at depth 0. Leaves inside bind-bound subtrees are ordered first (structural proximity ordering).
     func computeLeafRanges(dag: ChoiceDependencyGraph?) -> [ClosedRange<Int>] {
@@ -795,7 +963,7 @@ extension ReductionState {
         return result.isEmpty ? nil : result
     }
 
-    /// Builds ordered deletion scopes for Phase 1b.
+    /// Builds ordered deletion scopes for structural deletion within base descent.
     ///
     /// Iterates structural nodes in topological order (roots first). Bind-inner nodes scope deletion to their bound range; branch-selector nodes scope deletion to the selected subtree. A final depth-0 scope handles content outside all structural nodes. Returns a single depth-0 scope when no DAG is available.
     private func buildDeletionScopes(dag: ChoiceDependencyGraph?) -> [DeletionScope] {
@@ -833,10 +1001,10 @@ extension ReductionState {
 
 // MARK: - Deletion Scope
 
-/// A scoped region for structural deletion in Phase 1b.
+/// A scoped region for structural deletion within base descent.
 ///
 /// When ``positionRange`` is set, deletion targets are filtered by position range (DAG-driven). When `nil`, targets are filtered by bind depth (bind-free fallback).
-private struct DeletionScope {
+struct DeletionScope {
     /// The position range to scope deletion targets to, or `nil` for depth-based filtering.
     let positionRange: ClosedRange<Int>?
 

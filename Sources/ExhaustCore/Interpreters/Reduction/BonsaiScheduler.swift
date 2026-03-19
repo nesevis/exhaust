@@ -1,24 +1,36 @@
-/// Two-phase reduction scheduler: structural minimization with restart-on-success, then DAG-guided value minimization.
+/// Alternating minimisation over a fibred trace space: projection, base descent, fibre descent, relax-round.
 ///
-/// Replaces the V-cycle's interleaved legs with a clean two-phase pipeline.
-/// Phase 1 — *ramification* (developing fine branch structure) — runs branch, deletion, and joint bind-inner encoders with a restart-on-success policy.
-/// Phase 2 — *foliage* (refining the leaves) — processes only DAG leaf positions, guarded by a ``StructuralFingerprint`` check to detect accidental structural changes.
-/// The two phases alternate until neither makes progress.
+/// **The base is the trace / the fibre is the space**:
+///
+/// - The **base** describes all possible ``ChoiceTree`` shapes (structure omitting concrete values).
+/// A base point is a particular shape: how many choice points exist, which depend on which, and what domain each draws from.
+/// - The **fibre** over a base point is the combinatorial space of values possible at that shape — the product of all possible ``ChoiceValue``s for each choice point in the tree.
+/// - The **total space** is the union of all fibres across all base points: every possible (shape, values) pair that can arise from the generator.
+///
+/// Changing a value that no structural decision depends on stays within the same fibre. Changing a controlling value (a bind-inner position) moves to a different fibre because it changes the downstream shape.
+///
+/// First, a one-shot fibre projection zeros structurally independent values before the main loop begins. Then the main loop starts to reduce a failing trace by alternating between base descent (minimising the trace structure) and fibre descent (minimising the value assignment within a fixed structure) until neither makes progress. When both stall, a relax-round redistributes value magnitude speculatively and exploits the relaxed state. Then the main loop starts over.
+///
+/// The pipeline reads: projection → base descent → fibre descent → relax-round.
+/// - **Projection** strips noise by zeroing values that no structural decision depends on.
+/// - **Base descent** simplifies the structure: fewer choices, simpler branching, shorter sequences.
+/// - **Fibre descent** simplifies values within the fixed structure: smaller numbers, simpler floats.
+/// - **Relax-round** escapes local minima by temporarily worsening the sequence, then recovering via base and fibre descent.
 enum BonsaiScheduler {
     // MARK: - Budget Constants
 
-    /// Per-round budget for structural minimization (Phase 1).
-    static let phase1Budget = 1950
+    /// Per-round budget for base descent (structural minimisation).
+    static let baseDescentBudget = 1950
 
-    /// Per-round budget for value minimization (Phase 2).
-    static let phase2Budget = 975
+    /// Per-round budget for fibre descent (value minimisation).
+    static let fibreDescentBudget = 975
 
-    /// Per-round budget for speculation when neither phase makes progress.
-    static let speculationBudget = 325
+    /// Per-round budget for the relax-round when neither descent phase makes progress.
+    static let relaxRoundBudget = 325
 
     // MARK: - Entry Point
 
-    /// Runs the two-phase reduction to a fixed point or budget exhaustion.
+    /// Runs the reduction pipeline to a fixed point or budget exhaustion.
     static func run<Output>(
         gen: ReflectiveGenerator<Output>,
         initialTree: ChoiceTree,
@@ -41,8 +53,8 @@ enum BonsaiScheduler {
             initialTree: initialTree
         )
 
-        // Phase 0: Structural Independence Isolation
-        if let result = StructuralIsolator.isolate(
+        // Projection: zero structurally independent values.
+        if let result = StructuralIsolator.project(
             gen: gen,
             sequence: state.sequence,
             tree: state.tree,
@@ -65,7 +77,7 @@ enum BonsaiScheduler {
         var stallBudget = config.maxStalls
         var cycles = 0
 
-        // MARK: - Two-Phase Outer Loop
+        // MARK: - Alternating Minimisation Loop
 
         while stallBudget > 0 {
             cycles += 1
@@ -85,19 +97,19 @@ enum BonsaiScheduler {
                 )
             }
 
-            // Phase 1: Structural minimization with restart-on-success.
-            var phase1Remaining = Self.phase1Budget
-            let (dag, phase1Progress) = try state.runStructuralMinimization(budget: &phase1Remaining, cycle: cycles)
+            // Base descent: simplify the trace structure.
+            var baseRemaining = Self.baseDescentBudget
+            let (dag, baseProgress) = try state.runBaseDescent(budget: &baseRemaining, cycle: cycles)
 
-            // Phase 2: Value minimization on ChoiceDependencyGraph leaves.
-            var phase2Remaining = Self.phase2Budget
-            let phase2Progress = try state.runValueMinimization(budget: &phase2Remaining, dag: dag)
+            // Fibre descent: simplify values within the fixed structure.
+            var fibreRemaining = Self.fibreDescentBudget
+            let fibreProgress = try state.runFibreDescent(budget: &fibreRemaining, dag: dag)
 
-            // Speculation: if neither phase made progress, try speculative exploration.
-            var cycleImproved = phase1Progress || phase2Progress
+            // Relax-round: if neither descent made progress, redistribute and exploit.
+            var cycleImproved = baseProgress || fibreProgress
             if cycleImproved == false {
-                var specRemaining = Self.speculationBudget
-                if try state.runExplorationLeg(remaining: &specRemaining) {
+                var relaxRemaining = Self.relaxRoundBudget
+                if try state.runRelaxRound(remaining: &relaxRemaining) {
                     cycleImproved = true
                 }
             }
@@ -117,8 +129,8 @@ enum BonsaiScheduler {
                     metadata: [
                         "cycle": "\(cycles)",
                         "improved": "\(cycleImproved)",
-                        "phase1": "\(phase1Progress)",
-                        "phase2": "\(phase2Progress)",
+                        "base_descent": "\(baseProgress)",
+                        "fibre_descent": "\(fibreProgress)",
                         "seq_len": "\(state.sequence.count)",
                     ]
                 )

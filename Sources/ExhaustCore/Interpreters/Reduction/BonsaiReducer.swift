@@ -2,14 +2,6 @@ import Foundation
 
 // MARK: - Configuration
 
-/// Selects which scheduler orchestrates the reduction pipeline.
-public enum ReducerSchedulerChoice: Sendable {
-    /// V-cycle with five interleaved legs iterated by bind depth.
-    case vCycle
-    /// Two-phase pipeline: structural minimization with restart-on-success, then DAG-guided value minimization.
-    case bonsai
-}
-
 public extension Interpreters {
     /// Configuration for the Bonsai reducer's pass pipeline.
     struct BonsaiReducerConfiguration: Sendable {
@@ -22,10 +14,8 @@ public extension Interpreters {
         /// When `true`, use ``ReductionMaterializer``-backed decoders that produce
         /// fresh trees with current `validRange` and all branch alternatives.
         let useReductionMaterializer: Bool
-        /// Which scheduler to use for the reduction pipeline.
-        let scheduler: ReducerSchedulerChoice
 
-        /// When `true`, run a one-shot post-processing pass after V-cycle stalls that reorders
+        /// When `true`, run a one-shot post-processing pass after reduction stalls that reorders
         /// elements within type-homogeneous sibling groups into natural numeric order.
         public var humanOrderPostProcess: Bool = false
 
@@ -33,35 +23,26 @@ public extension Interpreters {
             maxStalls: Int,
             probeBudgets: TCRConfiguration.ProbeBudgets,
             alignedDeletionBeamSearchTuning: TCRConfiguration.AlignedDeletionBeamSearchTuning,
-            useReductionMaterializer: Bool = true,
-            scheduler: ReducerSchedulerChoice = .bonsai
+            useReductionMaterializer: Bool = true
         ) {
             self.maxStalls = maxStalls
             self.probeBudgets = probeBudgets
             self.alignedDeletionBeamSearchTuning = alignedDeletionBeamSearchTuning
             self.useReductionMaterializer = useReductionMaterializer
-            self.scheduler = scheduler
         }
 
-        /// Maps a ``TCRConfiguration`` preset to the corresponding configuration using the Bonsai scheduler.
+        /// Maps a ``TCRConfiguration`` preset to the corresponding configuration.
         init(from config: TCRConfiguration) {
-            self.init(from: config, scheduler: .bonsai)
-        }
-
-        /// Maps a ``TCRConfiguration`` preset to the corresponding configuration with a specific scheduler.
-        init(from config: TCRConfiguration, scheduler: ReducerSchedulerChoice) {
             switch config {
             case .fast: self = Self(
                 maxStalls: 1,
                 probeBudgets: .fast,
-                alignedDeletionBeamSearchTuning: .fast,
-                scheduler: scheduler
+                alignedDeletionBeamSearchTuning: .fast
             )
             case .slow: self = Self(
                 maxStalls: 8,
                 probeBudgets: .slow,
-                alignedDeletionBeamSearchTuning: .slow,
-                scheduler: scheduler
+                alignedDeletionBeamSearchTuning: .slow
             )
             }
         }
@@ -69,15 +50,13 @@ public extension Interpreters {
         public static let fast = Self(
             maxStalls: 1,
             probeBudgets: .fast,
-            alignedDeletionBeamSearchTuning: .fast,
-            scheduler: .bonsai
+            alignedDeletionBeamSearchTuning: .fast
         )
 
         public static let slow = Self(
             maxStalls: 8,
             probeBudgets: .slow,
-            alignedDeletionBeamSearchTuning: .slow,
-            scheduler: .bonsai
+            alignedDeletionBeamSearchTuning: .slow
         )
     }
 }
@@ -86,8 +65,6 @@ public extension Interpreters {
 
 public extension Interpreters {
     /// Bonsai reducer: iterative tree miniaturization via structured pass pipeline.
-    ///
-    /// Delegates to ``ReductionScheduler`` or ``BonsaiScheduler`` depending on the configuration's ``BonsaiReducerConfiguration/scheduler`` choice.
     static func bonsaiReduce<Output>(
         gen: ReflectiveGenerator<Output>,
         tree: ChoiceTree,

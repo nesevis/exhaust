@@ -89,7 +89,7 @@ Exhaust's `bound(forward:backward:)` fuses the paper's `comap` and `>>=` into a 
 
 This creates `.transform(.bind(forward:, backward:, ...))` — the comap annotation travels *inside* the bind operation rather than being a standalone effect. The backward function is stored as data, available to the reflector at the exact point where it needs to decompose through the bind.
 
-Crucially, even a forward-only `.bind(forward:)` (without a `backward` function) still reifies as `.transform(.bind(forward:, backward: nil, ...))`. The dependency structure is visible to every interpreter — VACTI records it in the `ChoiceTree`, flattening produces `.bind` markers in the `ChoiceSequence`, and the V-cycle exploits the depth ordering. The `backward` function adds bidirectional *reflection* through the bind, but the structural visibility that powers the reducer does not require it.
+Crucially, even a forward-only `.bind(forward:)` (without a `backward` function) still reifies as `.transform(.bind(forward:, backward: nil, ...))`. The dependency structure is visible to every interpreter — VACTI records it in the `ChoiceTree`, flattening produces `.bind` markers in the `ChoiceSequence`, and BonsaiScheduler exploits the depth ordering. The `backward` function adds bidirectional *reflection* through the bind, but the structural visibility that powers the reducer does not require it.
 
 The asymmetry is the whole point:
 
@@ -121,7 +121,7 @@ Exhaust's `.transform(.bind(forward:, backward:, ...))` reifies the bind as a fi
 1. VACTI records `.bind(inner:, bound:)` in the `ChoiceTree`
 2. Flattening produces paired `.bind(true/false)` markers in the `ChoiceSequence`
 3. `BindSpanIndex` builds a structural index of every bind region
-4. The BonsaiReducer's V-cycle exploits the dependency structure for depth-ordered reduction
+4. BonsaiScheduler's two-phase pipeline exploits the dependency structure for depth-ordered reduction
 
 This is the bridge between Goldstein (the representation) and Sepulveda-Jimenez (the reduction algebra). Without inspectable binds, the categorical reducer degenerates to the flat Hypothesis regime.
 
@@ -147,28 +147,28 @@ This is the bridge between Goldstein (the representation) and Sepulveda-Jimenez 
 
 - **Reduction morphisms as `(enc, dec)` pairs** (Def 3.1, 7.7) — the core architectural separation between pure structural mutation (encoders) and materialization/feasibility checking (decoders). Exhaust implements this literally: `BatchEncoder`/`AdaptiveEncoder` protocols for `enc`, `SequenceDecoder` enum for `dec`.
 - **Grade composition** via the affine-approximation monoid `Aff_≥0` (Section 8). Exhaust does not reify grades as a standalone type — instead, the approximation quality is implicit in the `ReductionPhase` ordering (5 cases: `.structuralDeletion`, `.valueMinimization`, `.reordering`, `.redistribution`, `.exploration`), where phases progress from exact encoders through bounded to speculative. Decoder selection via `SequenceDecoder.for(_:)` further encodes the approximation: `.direct`/`.exactFresh` decoders are exact, while `.guided`/`.guidedFresh`/`.crossStage` decoders introduce bounded slack from re-derivation. The shortlex guard is the actual runtime mechanism — a binary accept/reject filter. Budget allocation uses `CycleBudget` (per-leg weighted allocation from a total budget) and `LegBudget` (per-leg tracking with hard cap + stall patience) rather than composable grade objects.
-- **2-cell dominance** (Def 15.3) for pruning provably inferior encoders within a hom-set. Exhaust uses this within each V-cycle leg: all encoders sharing a decoder form a uniform hom-set where dominance comparison is well-defined.
-- **Covariant/contravariant functors** on OptRed (`Cand`, `Sol`, Section 4). Exhaust borrows the directionality for its V-cycle legs: contravariant passes (snip) reduce against fixed ranges backward through the bind chain; covariant passes (train) propagate changes forward.
-- **Natural transformations as post-processing** (Section 5.3) — inspiration for the shortlex merge step that recovers snip-optimized bound values after covariant re-derivation.
-- **Relax-round pattern** (Section 11.2) — theoretical basis for future speculative encoders (Phase 5).
-- **Kleisli generalisation** (Section 7) — lifting deterministic reductions to nondeterministic/randomised settings via Kleisli categories. The V-cycle's covariant sweep, where re-derivation via GuidedMaterializer is nondeterministic, operates in this regime.
-- **Multigrid V-cycles** (Section 14.4) — the loose structural analogy for Exhaust's depth-cycling between bind levels.
+- **2-cell dominance** (Def 15.3) for pruning provably inferior encoders within a hom-set. Exhaust uses this within each BonsaiScheduler sub-phase: all encoders sharing a decoder form a uniform hom-set where dominance comparison is well-defined.
+- **Covariant/contravariant functors** on OptRed (`Cand`, `Sol`, Section 4). Sepúlveda-Jiménez provides the directional vocabulary: covariant passes propagate changes forward through the dependency chain, contravariant passes reduce backward. The fibration theory (Section 8) provides the justification for the ordering: the contravariant depth sweep within Phase 2 reduces bound-content values from maximum bind depth downward because of the Kleisli tower's dependency direction.
+- **Natural transformations as post-processing** (Section 5.3) — inspiration for the shortlex merge step that recovers optimised bound values after re-derivation.
+- **Relax-round pattern** (Section 11.2) — implemented in BonsaiScheduler's speculation leg (`runRelaxRound`) via `RelaxRoundEncoder`: when the two-phase pipeline stalls, value redistribution relaxes the objective, then prune + train passes exploit the relaxed state, with pipeline-level checkpoint acceptance.
+- **Kleisli generalisation** (Section 7) — lifting deterministic reductions to nondeterministic/randomised settings via Kleisli categories. Phase 1c's PRNG retries, where re-derivation via the guided materializer is nondeterministic, operates in this regime.
 
 ### Where the instantiation is domain-specific
 
 The paper defines the algebra; Exhaust supplies:
-- The 16 concrete encoders across 5 phases
+- The concrete encoders across BonsaiScheduler's two-phase pipeline (structural and value encoders)
 - The shortlex well-order on variable-length choice sequences (the paper assumes fixed-structure candidate spaces)
-- The V-cycle depth ordering for bind-dependent generators
+- The bind-depth ordering for dependent generators (BonsaiScheduler's contravariant sweep within Phase 2)
 - The tiered decoder resolution (prefix -> fallback tree -> PRNG)
 - Deletion as a category of pass (the paper models fixed-structure reductions; deletion changes sequence length)
 - **Adaptive resource estimation** in place of the paper's static resource annotations (§9). The paper models resource costs as fixed monoidal annotations `w_a` on morphisms, composed via `w_{b∘a} = w_a ⊗ w_b`. Exhaust instead computes `estimatedCost` dynamically from the current `ChoiceTree` structure (span counts, depth, sequence lengths) and each encoder's Big-O model. This re-estimates after every structural change, so the budget reflects the *current* tree shape rather than a static worst-case bound. `CycleBudget` allocates across legs using these estimates, and `LegBudget` enforces per-leg hard caps with stall patience.
 
 ### Key files
 
+- `Sources/ExhaustCore/Interpreters/Reduction/BonsaiScheduler.swift`
+- `Sources/ExhaustCore/Interpreters/Reduction/ReductionState+Bonsai.swift`
 - `Sources/ExhaustCore/Interpreters/Reduction/SequenceEncoder.swift`
 - `Sources/ExhaustCore/Interpreters/Reduction/SequenceDecoder.swift`
-- `Sources/ExhaustCore/Interpreters/Reduction/ReductionScheduler.swift`
 - `Sources/ExhaustCore/Interpreters/Reduction/BindSpanIndex.swift`
 
 ### Cross-references
@@ -275,7 +275,7 @@ This paper deserves individual treatment, not just a mention under "Hypothesis."
 
 - **Internal reduction** — the key idea that test-case reduction should be applied *internally*, to the sequence of random choices made during generation, not *externally* to the generated value. This eliminates the test-case validity problem: because internal reduction works by re-generating, any reduced test case is one that the generator *could* have produced. Exhaust's BonsaiReducer operates on `ChoiceSequence` and `ChoiceTree`, never on the generated value directly. Encoders operate on one or the other depending on the pass — some mutate the flattened sequence, others work on the tree structure. The `ReductionMaterializer` then re-runs the generator against each candidate to produce a fresh tree with current metadata.
 
-- **Shortlex optimisation** as the reduction order (Section 2.2). Among choice sequences of the same length, prefer the lexicographically smaller one; among sequences of different lengths, prefer the shorter one. Exhaust adopts this directly — the shortlex well-order on `ChoiceSequence` is the termination guarantee for the V-cycle (every accepted candidate is strictly shortlex-smaller, and any strictly decreasing chain in a well-order is finite).
+- **Shortlex optimisation** as the reduction order (Section 2.2). Among choice sequences of the same length, prefer the lexicographically smaller one; among sequences of different lengths, prefer the shorter one. Exhaust adopts this directly — the shortlex well-order on `ChoiceSequence` is the termination guarantee for BonsaiScheduler's two-phase pipeline (every accepted candidate is strictly shortlex-smaller, and any strictly decreasing chain in a well-order is finite).
 
 - **Generator-directed reduction** (Section 3.2). The paper's key engineering insight: although we don't have a grammar for the choice sequence format, we do have a *parser* — the generator itself. By instrumenting the generator API (recording `draw` call boundaries), the reducer discovers structural information about which regions of the choice sequence correspond to which parts of the generated value. This is the precursor to Exhaust's `ChoiceTree` — where MacIver & Donaldson record `(start, end)` positions of `draw` calls, Exhaust builds a full hierarchical tree with typed nodes (`.choice`, `.sequence`, `.bind`, etc.).
 
@@ -293,7 +293,7 @@ This paper deserves individual treatment, not just a mention under "Hypothesis."
 
 #### Where Exhaust diverges
 
-The paper operates on flat, unstructured choice sequences. All 15 passes treat every position uniformly — there is no notion of bind dependencies or depth-ordered sweeps. Exhaust's bind-aware architecture (the V-cycle, `BindSpanIndex`, depth-filtered target extraction) has no analogue in Hypothesis. The degenerate no-binds case of the V-cycle collapses back to the Hypothesis regime: a flat sweep of delete -> minimise -> redistribute.
+The paper operates on flat, unstructured choice sequences. All 15 passes treat every position uniformly — there is no notion of bind dependencies or depth-ordered sweeps. Exhaust's bind-aware architecture (BonsaiScheduler's two-phase pipeline, `BindSpanIndex`, depth-filtered target extraction) has no analogue in Hypothesis. The degenerate no-binds case collapses back to the Hypothesis regime: a flat sweep of delete → minimise → redistribute.
 
 #### Cross-references
 
@@ -336,27 +336,66 @@ Coverage-guided fuzzing over choice sequences. Goldstein's reflective mutation (
 
 ---
 
-## 7. Numerical Methods Analogies
+## 7. Numerical Methods and Convergence Theory
 
-These are not direct implementations of the cited methods but structural analogies that motivate the V-cycle's ordering and termination properties.
-
-### Gauss-Seidel ordering (block coordinate descent)
-
-The snip-before-train ordering is Gauss-Seidel applied to block coordinate descent with one-directional dependencies (inner -> bound). Process unconstrained blocks (bound depths, via snip) before constraining blocks (inner depth, via train). This ensures both tiered resolution inputs (prefix and fallback tree) carry optimised values when re-derivation occurs.
-
-### Multigrid methods
-
-The V-cycle's depth sweep — contravariant from max depth to 1, then covariant at depth 0 — mirrors the multigrid pattern of smoothing at fine levels, correcting at the coarse level, then re-smoothing. Bind depths play the role of grid levels.
-
-### Basin hopping
-
-The cultivation cycle is structurally equivalent to monotonic basin hopping: snipping finds the basin bottom (local minimum within fixed bound ranges), training hops to a new basin (changes inner values, shifting the landscape), and the shortlex guard enforces strict monotonic acceptance.
+The V-cycle (the historical name for the depth-cycling reduction strategy) has been superseded by BonsaiScheduler's two-phase pipeline — alternating minimisation over a fibred trace space with a categorical justification via the cartesian-vertical factorisation (Jacobs 1999, §1.4). The multigrid, Gauss-Seidel, and basin-hopping analogies that motivated the original V-cycle design are no longer load-bearing; the fibration theory (Section 8) provides the formal structure directly. See [bonsai-fibred-minimisation.md](bonsai-fibred-minimisation.md) for the full analysis.
 
 ---
 
-## 8. Convergence of Threads
+## 8. Fibration Theory
 
-The architecture has three intellectual threads that must converge for the system to work:
+BonsaiScheduler's two-phase pipeline has a categorical structure that goes beyond the reduction algebra of Sepúlveda-Jiménez. The trace space is a Grothendieck fibration — trace structures form the base, value assignments form the fibres — and several laws from fibration theory are directly exploited in the implementation. The full analysis is in [bonsai-fibred-minimisation.md](bonsai-fibred-minimisation.md); this section records the academic influences.
+
+**Jacobs, *Categorical Logic and Type Theory* (1999)**
+
+The standard reference for fibration theory. Exhaust uses:
+
+- **Cartesian-vertical factorisation** (§1.4) — any morphism in the total category of a fibration factors uniquely as a cartesian morphism (base change) followed by a vertical morphism (fibrewise adjustment), given a cleavage. This is the categorical justification for the Phase 1 → Phase 2 ordering: Phase 1 is the cartesian factor, Phase 2 is the vertical factor. This is a step-level invariant of the two-phase core; the speculation leg breaks the factorisation at the step level and recovers it at the pipeline level via checkpoint acceptance.
+- **Uniqueness of cartesian lifts** (§1.1, Proposition 1.1.4) — motivates doing exactly one guided materialisation attempt before falling back to PRNG, since the canonical projection is essentially unique. Implemented as the regime probe in Phase 1c.
+- **Composition of cartesian morphisms** (§1.1, Exercise 1.1.4(ii); §1.5, Lemma 1.5.5) — motivates the `MutationPool` in Phase 1b, which composes non-overlapping structural deletions.
+- **Bifibrations and the `g! ⊣ g*` adjunction** (§9.1, Lemma 9.1.2; §1.9, Proposition 1.9.8) — the cocartesian direction `g!` provides the theoretical basis for the scaffolded counit test in the regime probe's unknown branch.
+
+**Hermida, "Some Properties of Fib as a Fibred 2-Category" (JPAA, 1999)**
+
+Proves that adjunctions in the 2-category **Fib** factor canonically into cartesian and vertical components (Theorem 4.3). Also constructs Kleisli objects in **Fib** (Theorem 5.4), which connects to the bind-depth chain as a Kleisli tower. If the scheduling process were formalised as an adjunction, Hermida's theorem would give a factorisation at the adjunction level rather than just the morphism level. Currently referenced for context; the implemented factorisation uses the simpler morphism-level result from Jacobs.
+
+**Dagnino & Gavazzo, "A Fibrational Tale of Operational Logical Relations" (LMCS, 2024)**
+
+Referenced for two distinct contributions:
+
+- **Three-tier resolution** — the guided materializer's prefix carry-forward / fallback tree / PRNG resolution pattern was arrived at independently; the Dagnino & Gavazzo citation provides post-hoc theoretical grounding (the pattern is consistent with their operational logical relations framework) rather than design inspiration.
+- **Differential Barr extension** (Corollary 4.18) — the theoretical framework for formalising "shortlex distance between traces" as a proper categorical distance. Not currently implemented; the regime detector uses shortlex gap as a heuristic proxy.
+
+**Tseng, "Convergence of a Block Coordinate Descent Method for Nondifferentiable Minimization" (JOTA, 2001)**
+
+Provides convergence guarantees for block coordinate methods with different block structures (Theorem 4.1). BonsaiScheduler's setting satisfies the conditions trivially due to the one-directional dependency between blocks.
+
+**Ghani, Johann & Fumex, "Generic Fibrational Induction" (LMCS, 2012)**
+
+Derives generic induction rules from fibrations over initial algebras. The shortlex well-order and the fibred decomposition could in principle be unified into a single fibred induction principle via this framework. Not currently instantiated; noted as future work.
+
+### Key files
+
+- `Sources/ExhaustCore/Interpreters/Reduction/BonsaiScheduler.swift`
+- `Sources/ExhaustCore/Interpreters/Reduction/ReductionState+Bonsai.swift`
+- `Sources/ExhaustCore/Interpreters/Reduction/MutationPool.swift`
+- `Sources/ExhaustCore/Interpreters/Reduction/ReductionMaterializer.swift`
+- `Sources/ExhaustCore/Interpreters/Reduction/StructuralIsolator.swift`
+
+### Cross-references
+
+- [bonsai-fibred-minimisation.md](bonsai-fibred-minimisation.md) — full analysis of the fibred structure and its implementation
+- [categorical_logic_and_type_theory.pdf](categorical_logic_and_type_theory.pdf) — Jacobs
+- [hermida_some_properties_of_fib_as_fibred_2category.pdf](hermida_some_properties_of_fib_as_fibred_2category.pdf) — Hermida
+- [a_fibrational_tale.pdf](a_fibrational_tale.pdf) — Dagnino & Gavazzo
+- [tseng_block_coordinate_descent.pdf](tseng_block_coordinate_descent.pdf) — Tseng
+- [ghani_generic_fibrational_induction.pdf](ghani_generic_fibrational_induction.pdf) — Ghani et al.
+
+---
+
+## 9. Convergence of Threads
+
+The architecture has four intellectual threads that converge in BonsaiScheduler:
 
 ```
 Xia et al. (2019): monadic profunctors + comap
@@ -369,18 +408,25 @@ Goldstein (2024): freer monad + PMP operations (Lmap, Prune) as effects
 Exhaust:          faithful translation of Goldstein's architecture
                   + comap fused with >>= as reified data (.transform(.bind))
                   → bind dependencies visible to every interpreter
-                  → ChoiceTree.bind → BindSpanIndex → V-cycle depth ordering
+                  → ChoiceTree.bind → BindSpanIndex → Kleisli tower
     ↓
-Sepulveda-Jimenez (2026): categorical reduction algebra
-                  enc/dec separation, grade composition, 2-cell dominance
-                  → the formal algebra that organises the reducer
-                  The V-cycle's depth-aware structure is only meaningful
-                  because inspectable binds provide the depth information.
+    ├── Sepulveda-Jimenez (2026): categorical reduction algebra
+    │     enc/dec separation, grade composition, 2-cell dominance,
+    │     relax-round pattern → the formal algebra that organises
+    │     the encoder/decoder infrastructure
+    │
+    └── Jacobs (1999) + Hermida (1999): fibration theory
+          cartesian-vertical factorisation, uniqueness of lifts,
+          composition of cartesian morphisms, Kleisli objects in Fib
+          → the formal structure that justifies the two-phase pipeline
+          and the phase ordering
 ```
 
-**The reified comap-bind is the bridge.** Goldstein's PMP operations (`Lmap`/`Prune`) enable bidirectional annotation *around* binds, but the `Bind` constructor itself remains opaque. Exhaust's `.transform(.bind(forward:, backward:, ...))` fuses the `comap` annotation *into* the bind, making the dependency structure visible as inspectable data. Without this, the categorical reducer (from Sepulveda-Jimenez) would have no depth information to exploit — it would degenerate to the flat Hypothesis regime. The V-cycle's power comes entirely from the bind-depth structure that the reified comap-bind makes visible.
+**The reified comap-bind is the bridge.** Goldstein's PMP operations (`Lmap`/`Prune`) enable bidirectional annotation *around* binds, but the `Bind` constructor itself remains opaque. Exhaust's `.transform(.bind(forward:, backward:, ...))` fuses the `comap` annotation *into* the bind, making the dependency structure visible as inspectable data. Without this, neither the categorical reduction algebra (Sepúlveda-Jiménez) nor the fibration theory (Jacobs, Hermida) would have depth information to exploit — the reducer would degenerate to the flat Hypothesis regime.
+
+**The two categorical frameworks are complementary.** Sepúlveda-Jiménez's reduction algebra organises the *encoder/decoder infrastructure*: how morphisms compose, how grades track approximation quality, how 2-cell dominance prunes the encoder set. The fibration theory organises the *scheduling structure*: why the two-phase pipeline is the canonical decomposition, why the phase ordering is correct, and how the Kleisli tower of bind-depth chains manifests inside each phase. The reduction algebra operates *within* each phase; the fibration theory operates *between* phases.
 
 The remaining influences are additive rather than structural:
 - Tjoa et al. shapes the CGS tuning pipeline (Section 5) but does not affect the core representation or reduction architecture.
 - Lei & Kacker and Kuhn et al. provide the coverage analysis layer (Section 4), which is an independent capability built on the same ChoiceTree infrastructure.
-- The numerical methods analogies (Section 7) motivate design decisions but do not contribute formal machinery.
+- Tseng (Section 8) provides the convergence guarantee for the block coordinate descent; Ghani et al. (Section 8) suggests a possible unification of the termination and fibred decomposition arguments into a single fibred induction principle.

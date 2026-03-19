@@ -1,6 +1,6 @@
 /// Mutable state for the reduction cycle, including the current sequence, tree, encoder instances, and ordering.
 ///
-/// Allocated once per ``ReductionScheduler/run(gen:initialTree:config:property:)`` invocation and passed to each leg method by reference. Using a class avoids Swift exclusivity conflicts when leg methods pass encoder properties to helper methods like ``runAdaptive(_:decoder:targets:structureChanged:budget:)``.
+/// Allocated once per reduction invocation and passed to each leg method by reference. Using a class avoids Swift exclusivity conflicts when leg methods pass encoder properties to helper methods like ``runAdaptive(_:decoder:targets:structureChanged:budget:)``.
 final class ReductionState<Output> {
     // Immutable context
     let gen: ReflectiveGenerator<Output>
@@ -383,101 +383,6 @@ extension ReductionState {
 // MARK: - Leg Methods
 
 extension ReductionState {
-    /// Runs branch promotion and pivoting. Returns `true` if any branch was accepted.
-    func runBranchLeg(remaining: inout Int) throws -> Bool {
-        let branchContext = DecoderContext(depth: .specific(0), bindIndex: bindIndex, fallbackTree: fallbackTree, strictness: .relaxed, useReductionMaterializer: config.useReductionMaterializer, materializePicks: true)
-        let branchDecoder = SequenceDecoder.for(branchContext)
-        let target = cycleBudget.initialBudget(for: .branch)
-        var branchBudget = ReductionScheduler.LegBudget(hardCap: min(remaining, 2 * target))
-        var improved = false
-
-        // Re-materialize with picks so branch encoders see all non-selected alternatives.
-        // This is needed because prior legs may have accepted probes with materializePicks=false.
-        if case let .success(_, freshTree) = ReductionMaterializer.materialize(
-            gen, prefix: sequence, mode: .exact, fallbackTree: fallbackTree,
-            materializePicks: true
-        ) {
-            tree = freshTree
-        }
-
-        promoteBranchesEncoder.currentTree = tree
-        if try runBatch(promoteBranchesEncoder, decoder: branchDecoder, targets: .wholeSequence, structureChanged: true, budget: &branchBudget) {
-            improved = true
-        }
-
-        pivotBranchesEncoder.currentTree = tree
-        if try runBatch(pivotBranchesEncoder, decoder: branchDecoder, targets: .wholeSequence, structureChanged: true, budget: &branchBudget) {
-            improved = true
-        }
-
-        remaining -= branchBudget.used
-        return improved
-    }
-
-    /// Runs the contravariant sweep from max bind depth to 1. Returns the number of accepted probes.
-    func runSnipLeg(remaining: inout Int, maxBindDepth: Int, dirtyDepths: Set<Int>) throws -> Int {
-        let target = cycleBudget.initialBudget(for: .contravariant)
-        var legBudget = ReductionScheduler.LegBudget(hardCap: min(remaining, 2 * target))
-        spanCache.invalidate()
-        lattice.invalidate()
-        var accepted = 0
-
-        if maxBindDepth >= 1 {
-            for depth in stride(from: maxBindDepth, through: 1, by: -1) where dirtyDepths.contains(depth) {
-                guard legBudget.isExhausted == false else { break }
-                lattice.invalidate()
-                var depthProgress = true
-                while depthProgress, legBudget.isExhausted == false {
-                    depthProgress = false
-                    let context = DecoderContext(depth: .specific(depth), bindIndex: bindIndex, fallbackTree: fallbackTree, strictness: .normal, useReductionMaterializer: config.useReductionMaterializer)
-                    let decoder = SequenceDecoder.for(context)
-                    let vSpans = spanCache.valueSpans(at: depth, from: sequence, bindIndex: bindIndex)
-                    let fSpans = spanCache.floatSpans(at: depth, from: sequence, bindIndex: bindIndex)
-
-                    for slot in snipOrder {
-                        guard legBudget.isExhausted == false else { break }
-                        switch slot {
-                        case .zeroValue:
-                            if vSpans.isEmpty == false {
-                                if try runAdaptive(zeroValueEncoder, decoder: decoder, targets: .spans(vSpans), structureChanged: false, budget: &legBudget) {
-                                    depthProgress = true
-                                    accepted += 1
-                                    ReductionScheduler.moveToFront(.zeroValue, in: &snipOrder)
-                                }
-                            }
-                        case .binarySearchToZero:
-                            if vSpans.isEmpty == false {
-                                if try runAdaptive(binarySearchToZeroEncoder, decoder: decoder, targets: .spans(vSpans), structureChanged: false, budget: &legBudget) {
-                                    depthProgress = true
-                                    accepted += 1
-                                    ReductionScheduler.moveToFront(.binarySearchToZero, in: &snipOrder)
-                                }
-                            }
-                        case .binarySearchToTarget:
-                            if vSpans.isEmpty == false {
-                                if try runAdaptive(binarySearchToTargetEncoder, decoder: decoder, targets: .spans(vSpans), structureChanged: false, budget: &legBudget) {
-                                    depthProgress = true
-                                    accepted += 1
-                                    ReductionScheduler.moveToFront(.binarySearchToTarget, in: &snipOrder)
-                                }
-                            }
-                        case .reduceFloat:
-                            if fSpans.isEmpty == false {
-                                if try runAdaptive(reduceFloatEncoder, decoder: decoder, targets: .spans(fSpans), structureChanged: false, budget: &legBudget) {
-                                    depthProgress = true
-                                    accepted += 1
-                                    ReductionScheduler.moveToFront(.reduceFloat, in: &snipOrder)
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        }
-        remaining -= legBudget.used
-        return accepted
-    }
-
     /// Runs the deletion sweep from depth 0 to max. Returns the number of accepted probes.
     func runPruneLeg(remaining: inout Int, maxBindDepth: Int) throws -> Int {
         let target = cycleBudget.initialBudget(for: .deletion)
@@ -633,10 +538,12 @@ extension ReductionState {
         return accepted
     }
 
-    /// Runs a speculative exploration round: redistribute with regression allowed, then prune and train to exploit.
+    /// Relax-round: redistributes value magnitude speculatively, then exploits the relaxed state with base descent and fibre descent.
     ///
-    /// Pipeline acceptance: final state must shortlex-precede the pre-exploration checkpoint. ``bestSequence`` and ``bestOutput`` only update if the full pipeline passes — intermediate results are discarded on rollback.
-    func runExplorationLeg(remaining: inout Int) throws -> Bool {
+    /// Categorically, this is a non-monotone endomorphism of the total space — neither cartesian nor vertical, and not a descent step. It breaks the fibred factorisation at the step level and recovers it at the pipeline level: the ``RelaxRoundEncoder`` zeros one value by inflating another (potentially crossing fibres if bind-inner values are redistributed), then standard base descent and fibre descent passes exploit the relaxed state. In Bonsai terms, it sacrifices one leaf to nourish another, then re-prunes and re-shapes the tree, keeping the result only if the whole tree is simpler than before. In plain language, it moves magnitude from one value to another (making the sequence temporarily worse), runs the normal reduction passes on the result, and accepts the outcome only if the round-trip produces a net improvement.
+    ///
+    /// Pipeline acceptance: final state must shortlex-precede the pre-relaxation checkpoint. ``bestSequence`` and ``bestOutput`` only update if the full pipeline passes — intermediate results are discarded on rollback.
+    func runRelaxRound(remaining: inout Int) throws -> Bool {
         // Checkpoint all mutable state, including bestSequence/bestOutput.
         let checkpointSequence = sequence
         let checkpointTree = tree

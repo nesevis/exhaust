@@ -26,19 +26,21 @@
 // carried entirely by the complementary structural subobject, making Phase 0
 // a single pullback step toward the minimal subobject in the lattice.
 
-/// One-shot pre-pass that zeros structurally independent positions before the V-cycle begins.
+/// Fibre projection: zeros structurally independent values before the main reduction loop begins.
+///
+/// Categorically, this is a retraction within the fibre — it projects the value assignment onto the shortlex-minimal point that agrees with the original on all structurally coupled coordinates. No base change occurs. In Bonsai terms, it strips the leaves that no branch or bind can reach, reducing noise before the tree is pruned and shaped. In plain language, it finds every value that cannot affect any structural decision, sets each one to its simplest possible value, and checks whether the bug still reproduces.
 enum StructuralIsolator {
-    /// Result of a successful isolation pass.
+    /// Result of a successful projection pass.
     struct IsolationResult<Output> {
         let sequence: ChoiceSequence
         let tree: ChoiceTree
         let output: Output
     }
 
-    /// Zeros all structurally independent value positions and verifies the property still fails.
+    /// Projects structurally independent value positions to their domain minimum and verifies the property still fails.
     ///
-    /// Returns the zeroed result if the property still fails with independent positions at their domain minimum, or `nil` if there are no independent positions or zeroing causes the property to pass.
-    static func isolate<Output>(
+    /// Returns the projected result if the property still fails with independent positions at their domain minimum, or `nil` if there are no independent positions or projecting causes the property to pass.
+    static func project<Output>(
         gen: ReflectiveGenerator<Output>,
         sequence: ChoiceSequence,
         tree: ChoiceTree,

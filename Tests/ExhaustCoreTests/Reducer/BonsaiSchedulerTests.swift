@@ -5,10 +5,7 @@ import Testing
 
 @Suite("BonsaiScheduler")
 struct BonsaiSchedulerTests {
-    /// Configuration that uses the principled scheduler.
-    private static let bonsaiConfig = Interpreters.BonsaiReducerConfiguration(
-        from: .fast, scheduler: .bonsai
-    )
+    private static let bonsaiConfig = Interpreters.BonsaiReducerConfiguration(from: .fast)
 
     // MARK: - 1. Non-bind generator parity
 
@@ -91,10 +88,10 @@ struct BonsaiSchedulerTests {
         #expect(output.0 + output.1 >= 20)
     }
 
-    // MARK: - 4. Phase 1 restart on deletion
+    // MARK: - 4. Base descent reduces structure
 
-    @Test("Phase 1 structural deletion reduces sequence length")
-    func phase1DeletionProgress() throws {
+    @Test("Base descent structural deletion reduces sequence length")
+    func baseDescentDeletionProgress() throws {
         let gen = makeBoundArrayGen(innerRange: 1 ... 20, elementRange: 0 ... 100)
 
         let (tree, _) = try findFailingTree(gen: gen, seed: 12345) { output in
@@ -123,17 +120,17 @@ struct BonsaiSchedulerTests {
 
         state.computeEncoderOrdering()
         let initialLength = state.sequence.count
-        var budget = BonsaiScheduler.phase1Budget
-        let (_, progress) = try state.runStructuralMinimization(budget: &budget)
+        var budget = BonsaiScheduler.baseDescentBudget
+        let (_, progress) = try state.runBaseDescent(budget: &budget)
 
-        #expect(progress, "Phase 1 should make progress on a deletable bind tree")
-        #expect(state.sequence.count <= initialLength, "Sequence should not grow after structural minimization")
+        #expect(progress, "Base descent should make progress on a deletable bind tree")
+        #expect(state.sequence.count <= initialLength, "Sequence should not grow after base descent")
     }
 
-    // MARK: - 5. Phase 2 leaf ordering
+    // MARK: - 5. Fibre descent leaf ordering
 
-    @Test("Phase 2 processes bound leaves before independent leaves")
-    func phase2LeafOrdering() throws {
+    @Test("Fibre descent processes bound leaves before independent leaves")
+    func fibreDescentLeafOrdering() throws {
         let gen = makeBoundArrayGen(innerRange: 1 ... 10, elementRange: 0 ... 100)
 
         let (tree, _) = try findFailingTree(gen: gen, seed: 7777) { output in
@@ -209,7 +206,7 @@ struct BonsaiSchedulerTests {
         }
 
         // The key assertion is that the scheduler terminates correctly even when
-        // structural changes occur during Phase 2.
+        // structural changes occur during fibre descent.
         let result = try BonsaiScheduler.run(
             gen: gen, initialTree: tree, config: Self.bonsaiConfig
         ) { output in
@@ -238,66 +235,6 @@ struct BonsaiSchedulerTests {
         #expect(result != nil)
     }
 
-    // MARK: - 8. Full parity with V-cycle
-
-    @Test("Parity with V-cycle on bind-dependent array length", arguments: [
-        UInt64(42), UInt64(123), UInt64(999),
-    ])
-    func parityBoundArray(seed: UInt64) throws {
-        let gen = makeBoundArrayGen(innerRange: 1 ... 20, elementRange: 0 ... 100)
-
-        let property: (Any) -> Bool = { output in
-            let arr = output as! [UInt64]
-            return arr.count <= 3
-        }
-
-        let (tree, _) = try findFailingTree(gen: gen, seed: seed, property: property)
-
-        let vCycleConfig = Interpreters.BonsaiReducerConfiguration(from: .fast)
-        let vCycleResult = try ReductionScheduler.run(
-            gen: gen, initialTree: tree, config: vCycleConfig, property: property
-        )
-
-        let bonsaiResult = try BonsaiScheduler.run(
-            gen: gen, initialTree: tree, config: Self.bonsaiConfig, property: property
-        )
-
-        let vCycleOutput = try #require(vCycleResult).1
-        let bonsaiOutput = try #require(bonsaiResult).1
-
-        let vArr = vCycleOutput as! [UInt64]
-        let pArr = bonsaiOutput as! [UInt64]
-
-        #expect(vArr.count >= 4)
-        #expect(pArr.count >= 4)
-        #expect(pArr.count <= vArr.count + 2,
-                "Bonsai produced \(pArr.count) elements vs V-cycle's \(vArr.count)")
-    }
-
-    @Test("Parity with V-cycle on simple integer generator", arguments: [
-        UInt64(42), UInt64(123), UInt64(999),
-    ])
-    func paritySimpleInteger(seed: UInt64) throws {
-        let gen: ReflectiveGenerator<UInt64> = Gen.choose(in: 0 ... 1000)
-
-        let property: (UInt64) -> Bool = { $0 < 100 }
-        let (tree, _) = try findFailingTree(gen: gen, seed: seed, property: property)
-
-        let vCycleConfig = Interpreters.BonsaiReducerConfiguration(from: .fast)
-        let vCycleResult = try ReductionScheduler.run(
-            gen: gen, initialTree: tree, config: vCycleConfig, property: property
-        )
-
-        let bonsaiResult = try BonsaiScheduler.run(
-            gen: gen, initialTree: tree, config: Self.bonsaiConfig, property: property
-        )
-
-        let vOutput = try #require(vCycleResult).1
-        let pOutput = try #require(bonsaiResult).1
-
-        #expect(vOutput >= 100)
-        #expect(pOutput >= 100)
-    }
 }
 
 // MARK: - Helpers
