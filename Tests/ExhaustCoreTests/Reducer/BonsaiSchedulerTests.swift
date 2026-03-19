@@ -5,10 +5,7 @@ import Testing
 
 @Suite("BonsaiScheduler")
 struct BonsaiSchedulerTests {
-    /// Configuration that uses the principled scheduler.
-    private static let bonsaiConfig = Interpreters.BonsaiReducerConfiguration(
-        from: .fast, scheduler: .bonsai
-    )
+    private static let bonsaiConfig = Interpreters.BonsaiReducerConfiguration(from: .fast)
 
     // MARK: - 1. Non-bind generator parity
 
@@ -238,66 +235,6 @@ struct BonsaiSchedulerTests {
         #expect(result != nil)
     }
 
-    // MARK: - 8. Full parity with V-cycle
-
-    @Test("Parity with V-cycle on bind-dependent array length", arguments: [
-        UInt64(42), UInt64(123), UInt64(999),
-    ])
-    func parityBoundArray(seed: UInt64) throws {
-        let gen = makeBoundArrayGen(innerRange: 1 ... 20, elementRange: 0 ... 100)
-
-        let property: (Any) -> Bool = { output in
-            let arr = output as! [UInt64]
-            return arr.count <= 3
-        }
-
-        let (tree, _) = try findFailingTree(gen: gen, seed: seed, property: property)
-
-        let vCycleConfig = Interpreters.BonsaiReducerConfiguration(from: .fast)
-        let vCycleResult = try ReductionScheduler.run(
-            gen: gen, initialTree: tree, config: vCycleConfig, property: property
-        )
-
-        let bonsaiResult = try BonsaiScheduler.run(
-            gen: gen, initialTree: tree, config: Self.bonsaiConfig, property: property
-        )
-
-        let vCycleOutput = try #require(vCycleResult).1
-        let bonsaiOutput = try #require(bonsaiResult).1
-
-        let vArr = vCycleOutput as! [UInt64]
-        let pArr = bonsaiOutput as! [UInt64]
-
-        #expect(vArr.count >= 4)
-        #expect(pArr.count >= 4)
-        #expect(pArr.count <= vArr.count + 2,
-                "Bonsai produced \(pArr.count) elements vs V-cycle's \(vArr.count)")
-    }
-
-    @Test("Parity with V-cycle on simple integer generator", arguments: [
-        UInt64(42), UInt64(123), UInt64(999),
-    ])
-    func paritySimpleInteger(seed: UInt64) throws {
-        let gen: ReflectiveGenerator<UInt64> = Gen.choose(in: 0 ... 1000)
-
-        let property: (UInt64) -> Bool = { $0 < 100 }
-        let (tree, _) = try findFailingTree(gen: gen, seed: seed, property: property)
-
-        let vCycleConfig = Interpreters.BonsaiReducerConfiguration(from: .fast)
-        let vCycleResult = try ReductionScheduler.run(
-            gen: gen, initialTree: tree, config: vCycleConfig, property: property
-        )
-
-        let bonsaiResult = try BonsaiScheduler.run(
-            gen: gen, initialTree: tree, config: Self.bonsaiConfig, property: property
-        )
-
-        let vOutput = try #require(vCycleResult).1
-        let pOutput = try #require(bonsaiResult).1
-
-        #expect(vOutput >= 100)
-        #expect(pOutput >= 100)
-    }
 }
 
 // MARK: - Helpers

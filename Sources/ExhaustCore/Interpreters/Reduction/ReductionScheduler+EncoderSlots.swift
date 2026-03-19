@@ -1,3 +1,8 @@
+/// Utility namespace for encoder slots, leg budget tracking, and move-to-front ordering.
+///
+/// Contains shared infrastructure used by ``BonsaiScheduler`` across all reduction phases: per-leg budget tracking (``LegBudget``), encoder slot enumerations (``ValueEncoderSlot``, ``DeletionEncoderSlot``), and the ``moveToFront(_:in:)`` helper for adaptive ordering.
+enum ReductionScheduler {}
+
 extension ReductionScheduler {
     // MARK: - Leg Budget Tracker
 
