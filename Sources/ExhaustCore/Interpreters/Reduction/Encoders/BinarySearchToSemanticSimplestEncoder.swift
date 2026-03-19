@@ -93,6 +93,9 @@ public struct BinarySearchToSemanticSimplestEncoder: AdaptiveEncoder {
         while i < spans.count {
             let seqIdx = spans[i].range.lowerBound
             guard let v = sequence[seqIdx].value else { i += 1; continue }
+            // Skip float targets — bit-pattern binary search diverges from shortlex
+            // ordering near integral values. Float reduction is handled by ReduceFloatEncoder.
+            if v.choice.tag == .float || v.choice.tag == .double { i += 1; continue }
             let simplified = v.choice.semanticSimplest
             // Stale-range escape hatch (matches legacy reduceIntegralValues):
             // when the value is within its recorded range, target the range
@@ -102,11 +105,10 @@ public struct BinarySearchToSemanticSimplestEncoder: AdaptiveEncoder {
             // will validate against the generator's fresh range.
             let isWithinRecordedRange = v.isRangeExplicit && v.choice.fits(in: v.validRange)
             let target: ChoiceValue = if isWithinRecordedRange {
-                if simplified.fits(in: v.validRange) {
-                    simplified
-                } else {
-                    ChoiceValue(v.choice.tag.makeConvertible(bitPattern64: v.validRange!.lowerBound), tag: v.choice.tag)
-                }
+                ChoiceValue(
+                    v.choice.tag.makeConvertible(bitPattern64: v.choice.reductionTarget(in: v.validRange)),
+                    tag: v.choice.tag
+                )
             } else {
                 simplified
             }
@@ -137,20 +139,24 @@ public struct BinarySearchToSemanticSimplestEncoder: AdaptiveEncoder {
                 if let candidate = advanceBinarySearch(lastAccepted: lastAccepted) {
                     return candidate
                 }
-                // Binary search converged. Enter cross-zero phase.
+                // Binary search converged. Enter cross-zero phase for signed integers.
+                // Cross-zero walks shortlex key space (zigzag encoded), which only
+                // applies to signed types. Float shortlex keys use a different
+                // encoding that fromShortlexKey cannot reverse.
                 let state = targets[currentIndex]
-                let currentChoice = sequence[state.seqIdx].value?.choice ?? ChoiceValue(
-                    state.choiceTag.makeConvertible(bitPattern64: state.stepper.bestAccepted),
-                    tag: state.choiceTag
-                )
-                let currentKey = currentChoice.shortlexKey
-                if currentKey > 0 {
-                    let maxProbes: UInt64 = 16
-                    let lowerBound = currentKey > maxProbes ? currentKey - maxProbes : 0
-                    searchPhase = .crossZero(currentKey: currentKey, lowerBound: lowerBound)
-                    continue
+                if state.choiceTag.isSigned {
+                    let currentChoice = sequence[state.seqIdx].value?.choice ?? ChoiceValue(
+                        state.choiceTag.makeConvertible(bitPattern64: state.stepper.bestAccepted),
+                        tag: state.choiceTag
+                    )
+                    let currentKey = currentChoice.shortlexKey
+                    if currentKey > 0 {
+                        let maxProbes: UInt64 = 16
+                        let lowerBound = currentKey > maxProbes ? currentKey - maxProbes : 0
+                        searchPhase = .crossZero(currentKey: currentKey, lowerBound: lowerBound)
+                        continue
+                    }
                 }
-                // No cross-zero needed (already at key 0).
                 advanceToNextTarget()
 
             case let .crossZero(currentKey, lowerBound):

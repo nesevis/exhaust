@@ -46,6 +46,11 @@ public struct BinarySearchToRangeMinimumEncoder: AdaptiveEncoder {
         while i < spans.count {
             let seqIdx = spans[i].range.lowerBound
             guard let v = sequence[seqIdx].value else { i += 1; continue }
+            // Skip float targets — bit-pattern ordering diverges from shortlex ordering
+            // near integral values (for example 999.0000000000001 has a lower bit pattern than
+            // 1000.0 but a higher shortlex key). Float reduction is handled by
+            // ReduceFloatEncoder and BinarySearchToSemanticSimplestEncoder.
+            if v.choice.tag == .float || v.choice.tag == .double { i += 1; continue }
             let currentBP = v.choice.bitPattern64
             let isWithinRecordedRange = v.isRangeExplicit && v.choice.fits(in: v.validRange)
             let targetBP = isWithinRecordedRange
