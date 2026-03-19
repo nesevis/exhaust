@@ -336,9 +336,9 @@ public enum TransformKind {
     ///
     /// - Parameters:
     ///   - forward: The transform function (type-erased). Throws if the transformation fails.
-    ///   - inputType: String representation of the input type, captured at the call site.
-    ///   - outputType: String representation of the output type, captured at the call site.
-    case map(forward: (Any) throws -> Any, inputType: String, outputType: String)
+    ///   - inputType: The metatype of the input, captured at the call site.
+    ///   - outputType: The metatype of the output, captured at the call site.
+    case map(forward: (Any) throws -> Any, inputType: Any.Type, outputType: Any.Type)
 
     /// A dependent generator derived from the inner generator's output.
     ///
@@ -346,7 +346,7 @@ public enum TransformKind {
     ///   - forward: A function that takes the inner generator's output and returns a new generator.
     ///   - backward: Optional extraction function `(B) -> A` for reflection. When non-nil, enables
     ///     the reflector to decompose the output back through the bind. `nil` = forward-only.
-    ///   - inputType: String representation of the input type, captured at the call site.
-    ///   - outputType: String representation of the output type, captured at the call site.
-    case bind(forward: (Any) throws -> ReflectiveGenerator<Any>, backward: ((Any) throws -> Any)?, inputType: String, outputType: String)
+    ///   - inputType: The metatype of the input, captured at the call site.
+    ///   - outputType: The metatype of the output, captured at the call site.
+    case bind(forward: (Any) throws -> ReflectiveGenerator<Any>, backward: ((Any) throws -> Any)?, inputType: Any.Type, outputType: Any.Type)
 }

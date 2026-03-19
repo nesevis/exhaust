@@ -27,21 +27,14 @@ struct BonsaiReducerIntegrationTests {
 
     @Test("Bind-dependent array length shrinks correctly")
     func bindDependentShrink() throws {
-        let gen: ReflectiveGenerator<[Int]> = Gen.liftF(.transform(
-            kind: .bind(
-                forward: { innerValue -> ReflectiveGenerator<Any> in
-                    let n = innerValue as! Int
-                    return Gen.arrayOf(Gen.choose(in: 0 ... 100 as ClosedRange<Int>), exactly: UInt64(n)).erase()
-                },
-                backward: { finalOutput -> Any in
-                    let arr = finalOutput as! [Int]
-                    return arr.count as Any
-                },
-                inputType: "Int",
-                outputType: "[Int]"
-            ),
-            inner: (Gen.choose(in: 1 ... 10 as ClosedRange<Int>)).erase()
-        ))
+        let gen: ReflectiveGenerator<[Int]> = Gen.choose(in: 1 ... 10 as ClosedRange<Int>)._bound(
+            forward: { n in
+                Gen.arrayOf(Gen.choose(in: 0 ... 100 as ClosedRange<Int>), exactly: UInt64(n))
+            },
+            backward: { (arr: [Int]) in
+                arr.count
+            }
+        )
 
         ExhaustLog.setConfiguration(.init(isEnabled: true, minimumLevel: .info, categoryMinimumLevels: [.reducer: .debug], format: .human))
         var iterator = ValueAndChoiceTreeInterpreter(gen, materializePicks: true, seed: 42)
@@ -110,21 +103,14 @@ struct BonsaiReducerIntegrationTests {
     func bindShrinkOutputFailsProperty() throws {
         // A bind generator where bound content depends on the inner value:
         // inner picks a length, bound generates that many elements.
-        let gen: ReflectiveGenerator<[Int]> = Gen.liftF(.transform(
-            kind: .bind(
-                forward: { innerValue -> ReflectiveGenerator<Any> in
-                    let n = innerValue as! Int
-                    return Gen.arrayOf(Gen.choose(in: 0 ... 50 as ClosedRange<Int>), exactly: UInt64(n)).erase()
-                },
-                backward: { finalOutput -> Any in
-                    let arr = finalOutput as! [Int]
-                    return arr.count as Any
-                },
-                inputType: "Int",
-                outputType: "[Int]"
-            ),
-            inner: (Gen.choose(in: 1 ... 5 as ClosedRange<Int>)).erase()
-        ))
+        let gen: ReflectiveGenerator<[Int]> = Gen.choose(in: 1 ... 5 as ClosedRange<Int>)._bound(
+            forward: { n in
+                Gen.arrayOf(Gen.choose(in: 0 ... 50 as ClosedRange<Int>), exactly: UInt64(n))
+            },
+            backward: { (arr: [Int]) in
+                arr.count
+            }
+        )
 
         let property: ([Int]) -> Bool = { $0.count < 3 || $0.allSatisfy { $0 <= 10 } }
 

@@ -55,21 +55,14 @@ struct BonsaiSchedulerTests {
 
     @Test("Zip of two binds shrinks both bind-inner values")
     func zipOfTwoBinds() throws {
-        let singleBind: ReflectiveGenerator<Int> = Gen.liftF(.transform(
-            kind: .bind(
-                forward: { innerValue -> ReflectiveGenerator<Any> in
-                    let number = innerValue as! Int
-                    return (Gen.choose(in: 0 ... max(1, number) as ClosedRange<Int>) as ReflectiveGenerator<Int>).erase()
-                },
-                backward: { finalOutput -> Any in
-                    let bound = finalOutput as! Int
-                    return bound as Any
-                },
-                inputType: "Int",
-                outputType: "Int"
-            ),
-            inner: (Gen.choose(in: 0 ... 50 as ClosedRange<Int>)).erase()
-        ))
+        let singleBind: ReflectiveGenerator<Int> = Gen.choose(in: 0 ... 50 as ClosedRange<Int>)._bound(
+            forward: { number in
+                Gen.choose(in: 0 ... max(1, number) as ClosedRange<Int>)
+            },
+            backward: { (bound: Int) in
+                bound
+            }
+        )
 
         let gen = Gen.zip(singleBind, singleBind)
 
@@ -180,25 +173,18 @@ struct BonsaiSchedulerTests {
 
     @Test("Fingerprint guard handles structural change during value minimization")
     func fingerprintBoundaryGuard() throws {
-        let gen: ReflectiveGenerator<Any> = Gen.liftF(.transform(
-            kind: .bind(
-                forward: { innerValue -> ReflectiveGenerator<Any> in
-                    let number = innerValue as! UInt64
-                    let length = max(1, number)
-                    return Gen.arrayOf(
-                        Gen.choose(in: 0 ... 100 as ClosedRange<UInt64>),
-                        Gen.choose(in: length ... length)
-                    ).erase()
-                },
-                backward: { finalOutput -> Any in
-                    let arr = finalOutput as! [UInt64]
-                    return UInt64(arr.count) as Any
-                },
-                inputType: "UInt64",
-                outputType: "[UInt64]"
-            ),
-            inner: Gen.choose(in: 1 ... 50 as ClosedRange<UInt64>).erase()
-        ))
+        let gen: ReflectiveGenerator<Any> = Gen.choose(in: 1 ... 50 as ClosedRange<UInt64>)._bound(
+            forward: { (number: UInt64) -> ReflectiveGenerator<[UInt64]> in
+                let length = max(1, number)
+                return Gen.arrayOf(
+                    Gen.choose(in: 0 ... 100 as ClosedRange<UInt64>),
+                    Gen.choose(in: length ... length)
+                )
+            },
+            backward: { (output: [UInt64]) in
+                UInt64(output.count)
+            }
+        ).erase()
 
         let (tree, _) = try findFailingTree(gen: gen, seed: 31415) { output in
             let arr = output as! [UInt64]
@@ -263,21 +249,14 @@ private func makeBoundArrayGen(
     let innerGen: ReflectiveGenerator<UInt64> = Gen.choose(in: innerRange)
     let elementGen: ReflectiveGenerator<UInt64> = Gen.choose(in: elementRange)
 
-    return Gen.liftF(.transform(
-        kind: .bind(
-            forward: { innerValue in
-                let length = innerValue as! UInt64
-                return Gen.arrayOf(elementGen, Gen.choose(in: length ... length)).erase()
-            },
-            backward: { output in
-                let arr = output as! [UInt64]
-                return UInt64(arr.count) as Any
-            },
-            inputType: "UInt64",
-            outputType: "[UInt64]"
-        ),
-        inner: innerGen.erase()
-    ))
+    return innerGen._bound(
+        forward: { length in
+            Gen.arrayOf(elementGen, Gen.choose(in: length ... length))
+        },
+        backward: { (output: [UInt64]) in
+            UInt64(output.count)
+        }
+    ).erase()
 }
 
 private enum TestHelperError: Error {

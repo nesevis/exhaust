@@ -51,13 +51,13 @@ public extension ReflectiveGenerator where Operation == ReflectiveOperation {
             kind: .bind(
                 forward: { try transform($0 as! Value).erase() },
                 backward: nil,
-                inputType: String(describing: Value.self),
-                outputType: String(describing: NewValue.self)
+                inputType: Value.self,
+                outputType: NewValue.self
             ),
             inner: erase()
         ))
     }
-    
+
     /// Chains this generator with a dependent generator, with a backward extraction function for reflection.
     ///
     /// This is the bind-level analogue of ``mapped(forward:backward:)``. The `backward` function
@@ -87,8 +87,8 @@ public extension ReflectiveGenerator where Operation == ReflectiveOperation {
             kind: .bind(
                 forward: { try forward($0 as! Value).erase() },
                 backward: { try backward($0 as! NewValue) as Any },
-                inputType: String(describing: Value.self),
-                outputType: String(describing: NewValue.self)
+                inputType: Value.self,
+                outputType: NewValue.self
             ),
             inner: erase()
         ))

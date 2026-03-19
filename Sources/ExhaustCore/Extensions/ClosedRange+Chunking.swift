@@ -25,22 +25,4 @@ public extension ClosedRange where Bound == UInt64 {
 
         return result
     }
-
-    func equallySpaced(count: Int) -> [UInt64] {
-        guard count > 0 else { return [] }
-        guard count > 1 else { return [lowerBound] }
-
-        let totalSize = upperBound - lowerBound
-        guard totalSize > 0 else { return [] }
-
-        var result: [UInt64] = []
-        result.reserveCapacity(count)
-
-        for i in 0 ..< count {
-            let position = (totalSize * UInt64(i)) / UInt64(count - 1)
-            result.append(lowerBound + position)
-        }
-
-        return result
-    }
 }

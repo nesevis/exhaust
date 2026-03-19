@@ -238,10 +238,10 @@ private extension ReflectiveGenerator where Operation == ReflectiveOperation {
                 } catch let error as Interpreters.ReflectionError {
                     switch error {
                     case let .forwardOnlyMap(inputType, outputType):
-                        failures.append(.forwardOnlyTransform(inputType: inputType, outputType: outputType, kind: "map"))
+                        failures.append(.forwardOnlyTransform(inputType: "\(inputType)", outputType: "\(outputType)", kind: "map"))
                         forwardOnlyDetected = true
                     case let .forwardOnlyBind(inputType, outputType):
-                        failures.append(.forwardOnlyTransform(inputType: inputType, outputType: outputType, kind: "bind"))
+                        failures.append(.forwardOnlyTransform(inputType: "\(inputType)", outputType: "\(outputType)", kind: "bind"))
                         forwardOnlyDetected = true
                     default:
                         failures.append(.reflectionFailed(sampleIndex: sampleIndex, errorDescription: "\(error)"))

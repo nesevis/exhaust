@@ -396,6 +396,6 @@ Extracts the inner numeric value per bind region, builds redistribution plans us
 
 Escapes local minima by zeroing one value and absorbing its full magnitude into another, temporarily worsening the sequence, then exploiting the relaxed state with a prune pass and a train pass.
 
-Builds all ordered same-tag value pairs, sorted by lhs-distance descending. Per pair: sets lhs to its reduction target and adds the full delta to rhs. Uses an exact speculative decoder (no shortlex check) so temporarily larger sequences are accepted. Rejects candidates that grow the sequence (PRNG fallback artefact). After any redistribution is accepted, runs `runPruneLeg` then `runTrainLeg` on the relaxed state. Accepts the full round only if the final sequence shortlex-precedes the pre-relaxation checkpoint; otherwise rolls back all state.
+Builds all ordered same-tag value pairs, sorted by lhs-distance descending. Per pair: sets lhs to its reduction target and adds the full delta to rhs. Uses an exact speculative decoder (no shortlex check) so temporarily larger sequences are accepted. Rejects candidates that grow the sequence (PRNG fallback artefact). After any redistribution is accepted, runs `runBaseDescent` then `runFibreDescent` on the relaxed state. Accepts the full round only if the final sequence shortlex-precedes the pre-relaxation checkpoint; otherwise rolls back all state.
 
-**Probes:** t × (t − 1) redistribution probes, plus the prune and train budgets of the exploitation pass.
+**Probes:** t × (t − 1) redistribution probes, plus the base descent and fibre descent budgets of the exploitation pass.

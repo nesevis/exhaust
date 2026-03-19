@@ -142,25 +142,25 @@ public enum Interpreters {
         case let .transform(kind, inner):
             switch kind {
             case let .map(forward, inputType, outputType):
-                if let invert = HeuristicInverter.inverter(inputType: inputType, outputType: outputType) {
+                if let inputBPC = inputType as? any BitPatternConvertible.Type,
+                   let outputValue = finalOutput as? any BitPatternConvertible {
+                    let inverted = inputBPC.init(bitPattern64: outputValue.bitPattern64)
                     do {
-                        let inverted = try invert(finalOutput)
                         let roundTripped = try forward(inverted)
-                        if HeuristicInverter.areEquivalent(roundTripped, finalOutput) {
-                            // Reflect inner against the inverted value, but return the
-                            // forward-mapped value since that's what the continuation expects.
+                        if let roundTrippedBPC = roundTripped as? any BitPatternConvertible,
+                           roundTrippedBPC.bitPattern64 == outputValue.bitPattern64 {
                             return try reflectRecursive(inner, onFinalOutput: inverted).map { result in
                                 (value: roundTripped, path: result.path)
                             }
                         }
                     } catch {
-                        // Inversion failed (e.g. lossy cast) — fall through to error
+                        // Forward application failed — fall through to error
                     }
                 }
-                throw ReflectionError.forwardOnlyMap(inputType: inputType, outputType: outputType)
+                throw ReflectionError.forwardOnlyMap(inputType: "\(inputType)", outputType: "\(outputType)")
             case let .bind(forward, backward, inputType, outputType):
                 guard let backward else {
-                    throw ReflectionError.forwardOnlyBind(inputType: inputType, outputType: outputType)
+                    throw ReflectionError.forwardOnlyBind(inputType: "\(inputType)", outputType: "\(outputType)")
                 }
                 // Xia et al.'s comap at bind sites: extract the inner value from the final output.
                 let innerValue = try backward(finalOutput)

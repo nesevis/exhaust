@@ -105,8 +105,8 @@ public extension ReflectiveGenerator where Operation == ReflectiveOperation {
         Gen.liftF(.transform(
             kind: .map(
                 forward: { try path.extract(from: $0) as Any },
-                inputType: String(describing: Value.self),
-                outputType: String(describing: NewOutput.self)
+                inputType: Value.self,
+                outputType: NewOutput.self
             ),
             inner: erase()
         ))
@@ -372,8 +372,8 @@ public extension ReflectiveGenerator where Operation == ReflectiveOperation {
         Gen.liftF(.transform(
             kind: .map(
                 forward: { try transform($0 as! Value) },
-                inputType: String(describing: Value.self),
-                outputType: String(describing: NewValue.self)
+                inputType: Value.self,
+                outputType: NewValue.self
             ),
             inner: erase()
         ))
@@ -400,8 +400,8 @@ public extension ReflectiveGenerator where Operation == ReflectiveOperation {
             kind: .bind(
                 forward: { try transform($0 as! Value).erase() },
                 backward: nil,
-                inputType: String(describing: Value.self),
-                outputType: String(describing: NewValue.self)
+                inputType: Value.self,
+                outputType: NewValue.self
             ),
             inner: erase()
         ))

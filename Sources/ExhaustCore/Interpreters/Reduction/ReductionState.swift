@@ -8,7 +8,6 @@ final class ReductionState<Output> {
     let config: Interpreters.BonsaiReducerConfiguration
     let hasBind: Bool
     let isInstrumented: Bool
-    let cycleBudget: CycleBudget
 
     // Mutable reduction state
     var sequence: ChoiceSequence
@@ -61,7 +60,6 @@ final class ReductionState<Output> {
     var tandemEncoder = RedistributeByTandemReductionEncoder()
     var redistributeEncoder = RedistributeAcrossValueContainersEncoder()
     var bindAwareRedistributeEncoder = RedistributeAcrossBindRegionsEncoder()
-    var bindRootSearchEncoder = BindRootSearchEncoder()
     var productSpaceBatchEncoder = ProductSpaceBatchEncoder()
     var productSpaceAdaptiveEncoder = ProductSpaceAdaptiveEncoder()
 
@@ -87,7 +85,6 @@ final class ReductionState<Output> {
         self.output = output
         self.hasBind = initialTree.containsBind
         self.isInstrumented = ExhaustLog.isEnabled(.debug, for: .reducer)
-        self.cycleBudget = CycleBudget(total: ReductionScheduler.defaultCycleBudgetTotal, legWeights: CycleBudget.defaultWeights())
         self.bindIndex = hasBind ? BindSpanIndex(from: sequence) : nil
         self.fallbackTree = hasBind ? tree : nil
         self.bestSequence = sequence
@@ -380,164 +377,9 @@ extension ReductionState {
     }
 }
 
-// MARK: - Leg Methods
+// MARK: - Relax-Round
 
 extension ReductionState {
-    /// Runs the deletion sweep from depth 0 to max. Returns the number of accepted probes.
-    func runPruneLeg(remaining: inout Int, maxBindDepth: Int) throws -> Int {
-        let target = cycleBudget.initialBudget(for: .deletion)
-        var legBudget = ReductionScheduler.LegBudget(hardCap: min(remaining, 2 * target))
-        spanCache.invalidate()
-        lattice.invalidate()
-        var accepted = 0
-
-        for depth in 0 ... maxBindDepth {
-            guard legBudget.isExhausted == false else { break }
-            lattice.invalidate()
-            let depthDecoder = makeDeletionDecoder(at: depth)
-
-            for slot in pruneOrder {
-                guard legBudget.isExhausted == false else { break }
-                let slotAccepted: Bool = switch slot {
-                case .containerSpans:
-                    try runAdaptive(deleteContainerSpans, decoder: depthDecoder, targets: .spans(spanCache.deletionTargets(category: slot.spanCategory, depth: depth, from: sequence, bindIndex: bindIndex)), structureChanged: true, budget: &legBudget)
-                case .sequenceElements:
-                    try runAdaptive(deleteSequenceElements, decoder: depthDecoder, targets: .spans(spanCache.deletionTargets(category: slot.spanCategory, depth: depth, from: sequence, bindIndex: bindIndex)), structureChanged: true, budget: &legBudget)
-                case .sequenceBoundaries:
-                    try runAdaptive(deleteSequenceBoundaries, decoder: depthDecoder, targets: .spans(spanCache.deletionTargets(category: slot.spanCategory, depth: depth, from: sequence, bindIndex: bindIndex)), structureChanged: true, budget: &legBudget)
-                case .freeStandingValues:
-                    try runAdaptive(deleteFreeStandingValues, decoder: depthDecoder, targets: .spans(spanCache.deletionTargets(category: slot.spanCategory, depth: depth, from: sequence, bindIndex: bindIndex)), structureChanged: true, budget: &legBudget)
-                case .alignedWindows:
-                    try runAdaptive(deleteAlignedWindowsEncoder, decoder: depthDecoder, targets: .spans(spanCache.deletionTargets(category: slot.spanCategory, depth: depth, from: sequence, bindIndex: bindIndex)), structureChanged: true, budget: &legBudget)
-                case .randomRepairDelete:
-                    try runAdaptive(randomRepairDelete, decoder: makeSpeculativeDecoder(), targets: .spans(spanCache.deletionTargets(category: slot.spanCategory, depth: depth, from: sequence, bindIndex: bindIndex)), structureChanged: true, budget: &legBudget)
-                }
-                if slotAccepted {
-                    accepted += 1
-                    ReductionScheduler.moveToFront(slot, in: &pruneOrder)
-                }
-            }
-        }
-        remaining -= legBudget.used
-        return accepted
-    }
-
-    /// Runs the covariant sweep at depth 0. Returns the number of accepted probes.
-    func runTrainLeg(remaining: inout Int) throws -> Int {
-        let target = cycleBudget.initialBudget(for: .covariant)
-        var legBudget = ReductionScheduler.LegBudget(hardCap: min(remaining, 2 * target))
-        spanCache.invalidate()
-        lattice.invalidate()
-        let structureChangedOnCovariant = hasBind
-        let trainDecoder = makeDepthZeroDecoder()
-        var accepted = 0
-
-        // Product-space search: reduce bind-controlling values jointly, then fall back to sequential.
-        if hasBind, let bindSpanIndex = bindIndex {
-            let prngDecoder: SequenceDecoder = .guided(fallbackTree: nil, usePRNGFallback: true)
-            let bindInnerCount = bindSpanIndex.regions.count
-
-            if bindInnerCount <= 3 {
-                // Batch: enumerate product space of bind-inner values.
-                productSpaceBatchEncoder.bindIndex = bindSpanIndex
-                productSpaceBatchEncoder.dag = ChoiceDependencyGraph.build(
-                    from: sequence, tree: tree, bindIndex: bindSpanIndex
-                )
-
-                // Tier 1: guided replay (clamp bound entries to current tree).
-                let guidedDecoder: SequenceDecoder = .guided(
-                    fallbackTree: fallbackTree ?? tree
-                )
-                if try runBatch(
-                    productSpaceBatchEncoder, decoder: guidedDecoder,
-                    targets: .wholeSequence, structureChanged: true,
-                    budget: &legBudget
-                ) {
-                    accepted += 1
-                } else if try runBatch(
-                    // Tier 2: PRNG fallback (fresh bound content).
-                    productSpaceBatchEncoder, decoder: prngDecoder,
-                    targets: .wholeSequence, structureChanged: true,
-                    budget: &legBudget
-                ) {
-                    accepted += 1
-                }
-            } else {
-                // Adaptive: delta-debug coordinate halving for k > 3.
-                productSpaceAdaptiveEncoder.bindIndex = bindSpanIndex
-                while legBudget.isExhausted == false {
-                    if try runAdaptive(
-                        productSpaceAdaptiveEncoder, decoder: prngDecoder,
-                        targets: .wholeSequence, structureChanged: true,
-                        budget: &legBudget
-                    ) {
-                        accepted += 1
-                    } else {
-                        break
-                    }
-                }
-            }
-
-            // Fallback: run BindRootSearchEncoder for anything the product
-            // space encoder didn't cover (non-converged axes, single-axis refinement).
-            bindRootSearchEncoder.bindIndex = bindSpanIndex
-            while legBudget.isExhausted == false {
-                if try runAdaptive(
-                    bindRootSearchEncoder,
-                    decoder: prngDecoder,
-                    targets: .wholeSequence,
-                    structureChanged: true,
-                    budget: &legBudget
-                ) {
-                    accepted += 1
-                } else {
-                    break
-                }
-            }
-        }
-
-        for slot in trainOrder {
-            guard legBudget.isExhausted == false else { break }
-            switch slot {
-            case .zeroValue:
-                let vSpans = spanCache.valueSpans(at: 0, from: sequence, bindIndex: bindIndex)
-                if vSpans.isEmpty == false {
-                    if try runAdaptive(zeroValueEncoder, decoder: trainDecoder, targets: .spans(vSpans), structureChanged: structureChangedOnCovariant, budget: &legBudget) {
-                        accepted += 1
-                        ReductionScheduler.moveToFront(.zeroValue, in: &trainOrder)
-                    }
-                }
-            case .binarySearchToZero:
-                let vSpans = spanCache.valueSpans(at: 0, from: sequence, bindIndex: bindIndex)
-                if vSpans.isEmpty == false {
-                    if try runAdaptive(binarySearchToZeroEncoder, decoder: trainDecoder, targets: .spans(vSpans), structureChanged: structureChangedOnCovariant, budget: &legBudget) {
-                        accepted += 1
-                        ReductionScheduler.moveToFront(.binarySearchToZero, in: &trainOrder)
-                    }
-                }
-            case .binarySearchToTarget:
-                let vSpans = spanCache.valueSpans(at: 0, from: sequence, bindIndex: bindIndex)
-                if vSpans.isEmpty == false {
-                    if try runAdaptive(binarySearchToTargetEncoder, decoder: trainDecoder, targets: .spans(vSpans), structureChanged: structureChangedOnCovariant, budget: &legBudget) {
-                        accepted += 1
-                        ReductionScheduler.moveToFront(.binarySearchToTarget, in: &trainOrder)
-                    }
-                }
-            case .reduceFloat:
-                let fSpans = spanCache.floatSpans(at: 0, from: sequence, bindIndex: bindIndex)
-                if fSpans.isEmpty == false {
-                    if try runAdaptive(reduceFloatEncoder, decoder: trainDecoder, targets: .spans(fSpans), structureChanged: structureChangedOnCovariant, budget: &legBudget) {
-                        accepted += 1
-                        ReductionScheduler.moveToFront(.reduceFloat, in: &trainOrder)
-                    }
-                }
-            }
-        }
-
-        remaining -= legBudget.used
-        return accepted
-    }
-
     /// Relax-round: redistributes value magnitude speculatively, then exploits the relaxed state with base descent and fibre descent.
     ///
     /// Categorically, this is a non-monotone endomorphism of the total space — neither cartesian nor vertical, and not a descent step. It breaks the fibred factorisation at the step level and recovers it at the pipeline level: the ``RelaxRoundEncoder`` zeros one value by inflating another (potentially crossing fibres if bind-inner values are redistributed), then standard base descent and fibre descent passes exploit the relaxed state. In Bonsai terms, it sacrifices one leaf to nourish another, then re-prunes and re-shapes the tree, keeping the result only if the whole tree is simpler than before. In plain language, it moves magnitude from one value to another (making the sequence temporarily worse), runs the normal reduction passes on the result, and accepts the outcome only if the round-trip produces a net improvement.
@@ -609,10 +451,11 @@ extension ReductionState {
             return false
         }
 
-        // Exploitation: run prune and train on the relaxed state.
+        // Exploitation: run the standard two-phase pipeline on the relaxed state.
         var exploitRemaining = remaining - explorationBudget.used
-        let pruneAccepted = try runPruneLeg(remaining: &exploitRemaining, maxBindDepth: bindIndex?.maxBindDepth ?? 0)
-        let trainAccepted = try runTrainLeg(remaining: &exploitRemaining)
+        computeEncoderOrdering()
+        let (dag, baseProgress) = try runBaseDescent(budget: &exploitRemaining)
+        let fibreProgress = try runFibreDescent(budget: &exploitRemaining, dag: dag)
 
         // Pipeline acceptance: final state must shortlex-precede checkpoint.
         if sequence.shortLexPrecedes(checkpointSequence) {
@@ -622,8 +465,8 @@ extension ReductionState {
             if isInstrumented {
                 ExhaustLog.debug(category: .reducer, event: "exploration_accepted", metadata: [
                     "seq_len": "\(checkpointSequence.count)→\(sequence.count)",
-                    "prune": "\(pruneAccepted)",
-                    "train": "\(trainAccepted)",
+                    "base_descent": "\(baseProgress)",
+                    "fibre_descent": "\(fibreProgress)",
                 ])
             }
             return true

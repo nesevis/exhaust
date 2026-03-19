@@ -15,18 +15,9 @@ struct CoveringArrayIntegrationTests {
         // plus b and c — 3 finite parameters total.
         // GuidedMaterializer must replay b and c from the covering array,
         // not consume their prefix entries into the bind's bound subtree.
-        let bindGen: ReflectiveGenerator<[Int]> = Gen.liftF(.transform(
-            kind: .bind(
-                forward: { innerValue -> ReflectiveGenerator<Any> in
-                    let n = innerValue as! Int
-                    return Gen.just(Array(repeating: n, count: n)).erase()
-                },
-                backward: nil,
-                inputType: "Int",
-                outputType: "[Int]"
-            ),
-            inner: Gen.choose(in: 0 ... 2 as ClosedRange<Int>).erase()
-        ))
+        let bindGen: ReflectiveGenerator<[Int]> = Gen.choose(in: 0 ... 2 as ClosedRange<Int>)._bind { n in
+            Gen.just(Array(repeating: n, count: n))
+        }
         let gen = Gen.zip(bindGen, Gen.choose(in: 0 ... 3 as ClosedRange<Int>), Gen.choose(in: 0 ... 3 as ClosedRange<Int>))
 
         guard case let .finite(profile) = ChoiceTreeAnalysis.analyze(gen) else {
