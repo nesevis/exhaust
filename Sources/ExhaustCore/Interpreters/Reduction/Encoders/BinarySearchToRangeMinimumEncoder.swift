@@ -1,3 +1,10 @@
+//
+//  BinarySearchToRangeMinimumEncoder.swift
+//  Exhaust
+//
+//  Created by Chris Kolbu on 14/3/2026.
+//
+
 /// Binary-searches each target value toward a specific reduction target.
 ///
 /// The reduction target for each value is determined by its recorded valid range (see ``ChoiceValue/reductionTarget(in:)``). Processes targets sequentially, converging each via ``BinarySearchStepper`` before moving to the next.
@@ -46,6 +53,11 @@ public struct BinarySearchToRangeMinimumEncoder: AdaptiveEncoder {
         while i < spans.count {
             let seqIdx = spans[i].range.lowerBound
             guard let v = sequence[seqIdx].value else { i += 1; continue }
+            // Skip float targets — bit-pattern ordering diverges from shortlex ordering
+            // near integral values (for example 999.0000000000001 has a lower bit pattern than
+            // 1000.0 but a higher shortlex key). Float reduction is handled by
+            // ReduceFloatEncoder and BinarySearchToSemanticSimplestEncoder.
+            if v.choice.tag == .float || v.choice.tag == .double { i += 1; continue }
             let currentBP = v.choice.bitPattern64
             let isWithinRecordedRange = v.isRangeExplicit && v.choice.fits(in: v.validRange)
             let targetBP = isWithinRecordedRange

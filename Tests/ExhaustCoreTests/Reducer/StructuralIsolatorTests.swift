@@ -146,16 +146,13 @@ struct StructuralIsolatorTests {
 ///
 /// The bind maps a UInt64 inner (0...10) to a UInt64 bound (0...100), and the independent choice is in 0...100. Output is `(UInt64, UInt64)` where `.1` is the independent value.
 private func makeBindPlusIndependentGenerator() -> ReflectiveGenerator<(UInt64, UInt64)> {
-    let bindGen: ReflectiveGenerator<UInt64> = Gen.liftF(.transform(
-        kind: .bind(
-            forward: { _ -> ReflectiveGenerator<Any> in
-                Gen.choose(in: UInt64(0) ... 100).erase()
-            },
-            backward: { $0 },
-            inputType: "UInt64",
-            outputType: "UInt64"
-        ),
-        inner: Gen.choose(in: UInt64(0) ... 10).erase()
-    ))
+    let bindGen: ReflectiveGenerator<UInt64> = Gen.choose(in: UInt64(0) ... 10)._bound(
+        forward: { (_: UInt64) in
+            Gen.choose(in: UInt64(0) ... 100)
+        },
+        backward: { (output: UInt64) in
+            output
+        }
+    )
     return Gen.zip(bindGen, Gen.choose(in: UInt64(0) ... 100))
 }

@@ -683,7 +683,13 @@ private extension ReductionMaterializer {
             // Exact mode: prefix exhausted or structural mismatch at sequence site.
             throw RejectionError()
         } else if let fbLen = fallbackLength {
-            // Cursor suspended (inside bind's bound content in guided mode). Use the fallback sequence's stored length, clamped to the fresh generator's range, instead of falling through to PRNG. The length generator may be wrapped in getSize/_bind layers that strip any synthesized fallback tree before it reaches the inner chooseBits.
+            // Cursor suspended (inside bind's bound content in guided mode). Prefer the
+            // prefix-derived element count captured before skipBindBound() discarded the
+            // sequence markers over the fallback tree's stored length. This keeps content
+            // that earlier reduction phases deleted from being regenerated.
+            // See docs/Guided Decoder Redistribution Gap.md.
+            let resolvedLen = context.capturedBindBoundSequenceLength.map { UInt64($0) } ?? fbLen
+            context.capturedBindBoundSequenceLength = nil
             let savedMode = context.mode
             context.mode = .generate
             guard let (_, lengthTree) = try generateRecursive(
@@ -694,9 +700,9 @@ private extension ReductionMaterializer {
             }
             context.mode = savedMode
             if let freshRange = lengthTree.metadata.validRange {
-                length = Swift.min(Swift.max(fbLen, freshRange.lowerBound), freshRange.upperBound)
+                length = Swift.min(Swift.max(resolvedLen, freshRange.lowerBound), freshRange.upperBound)
             } else {
-                length = fbLen
+                length = resolvedLen
             }
             lengthMeta = lengthTree.metadata
         } else {
@@ -796,6 +802,7 @@ private extension ReductionMaterializer {
                 return nil
             }
             if canScope, fb != nil { context.cursor.popScope() }
+            if canScope { context.cursor.skipGroupCloses() }
             childStartPosition = context.cursor.position
             results.append(result)
             choiceTrees.append(tree)
@@ -906,6 +913,8 @@ private extension ReductionMaterializer {
                 // and corrupt the cursor.
                 let isGetSizeBind = innerTree.isGetSize
                 if isGetSizeBind == false {
+                    let peeked = context.cursor.peekSequenceLength()
+                    context.capturedBindBoundSequenceLength = peeked
                     context.cursor.skipBindBound()
                     context.cursor.suspendForBind()
                 }
@@ -956,6 +965,10 @@ private extension ReductionMaterializer {
         /// Used in exact mode: `boundDepth > 0` → clamp; `boundDepth == 0` → reject.
         var boundDepth: Int = 0
         var maximizeBoundRegionIndices: Set<Int>?
+        /// Sequence element count captured from the prefix before ``Cursor/skipBindBound()``
+        /// discards the sequence markers. Consumed once by ``handleSequence()`` Path B
+        /// to prefer the prefix-derived length over the fallback tree's stored length.
+        var capturedBindBoundSequenceLength: Int?
         /// When `false`, pick sites skip non-selected branch materialization.
         /// Only `DeleteByBranchPromotionEncoder` needs full branch alternatives.
         var materializePicks: Bool = false
@@ -1027,7 +1040,47 @@ private extension ReductionMaterializer {
             }
         }
 
+        /// Advances past any trailing `.group(false)` and `.bind(false)` markers at the current
+        /// position.
+        ///
+        /// Called in ``handleZip(_:continuation:inputValue:context:calleeFallback:continuationFallback:)``
+        /// after each child's scope is popped, so that `childStartPosition` reflects the start of the
+        /// next child's entries rather than the closing markers of the completed child. This prevents
+        /// the next child's scope from being computed too tightly: without this call, a getSize-bind
+        /// child (whose `.group(false)` close marker is left unconsumed) causes the following child
+        /// to receive a scope that excludes its own value entry.
+        mutating func skipGroupCloses() {
+            while position < effectiveEnd {
+                switch entries[position] {
+                case .group(false), .bind(false):
+                    position &+= 1
+                default:
+                    return
+                }
+            }
+        }
+
         // MARK: Bind support
+
+        /// Returns the top-level element count of the sequence starting at the current cursor
+        /// position, without advancing. Returns `nil` if the position does not hold a `.sequence(true)`
+        /// marker (after skipping transparent markers).
+        ///
+        /// Called before ``skipBindBound()`` to capture array lengths that bind-bound skipping would
+        /// otherwise discard from the prefix.
+        func peekSequenceLength() -> Int? {
+            var pos = position
+            while pos < effectiveEnd {
+                switch entries[pos] {
+                case .group, .bind, .just:
+                    pos &+= 1
+                default:
+                    guard case .sequence(true, _) = entries[pos] else { return nil }
+                    return countTopLevelElements(from: pos &+ 1)
+                }
+            }
+            return nil
+        }
 
         /// Advance past the bound content of a `.bind` node.
         mutating func skipBindBound() {

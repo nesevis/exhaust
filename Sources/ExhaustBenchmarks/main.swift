@@ -120,31 +120,7 @@ let b5Gen = #gen(b5ArrGen, b5ArrGen, b5ArrGen, b5ArrGen, b5ArrGen) { a, b, c, d,
     Bound5(a: a, b: b, c: c, d: d, e: e)
 }
 
-benchmark("Bound5, 100 iterations, legacy") {
-    let property: (Bound5) -> Bool = { b5 in
-        if b5.arr.isEmpty {
-            return true
-        }
-        return b5.arr.dropFirst().reduce(b5.arr[0], &+) < 5 * 256
-    }
-
-    do {
-        var iterator = ValueAndChoiceTreeInterpreter(b5Gen, seed: 1337, maxRuns: 1000)
-        var count = 0
-        while let (value, tree) = try iterator.next() {
-            guard property(value) == false else { continue }
-            count += 1
-            _ = try Interpreters.reduce(gen: b5Gen, tree: tree, config: .fast, property: property)
-            if count >= 100 {
-                break
-            }
-        }
-    } catch {
-        print(error)
-    }
-}
-
-benchmark("Bound5, 100 iterations, bonsai") {
+benchmark("Bound5, 100 iterations") {
     let property: (Bound5) -> Bool = { b5 in
         if b5.arr.isEmpty {
             return true
@@ -271,38 +247,7 @@ func expression(depth: UInt64) -> ReflectiveGenerator<Expr> {
 
 let calculatorGen = #gen(expression(depth: 4))
 
-benchmark("Calculator, 100 iterations, legacy") {
-    let property: (Expr) -> Bool = { expr in
-        guard containsLiteralDivisionByZero(expr) == false else {
-            return true
-        }
-        do {
-            _ = try eval(expr)
-            return true
-        } catch EvalError.divisionByZero {
-            return false
-        } catch {
-            return false
-        }
-    }
-
-    do {
-        var iterator = ValueAndChoiceTreeInterpreter(calculatorGen, seed: 1337, maxRuns: 1000)
-        var count = 0
-        while let (value, tree) = try iterator.next() {
-            guard property(value) == false else { continue }
-            count += 1
-            _ = try Interpreters.reduce(gen: calculatorGen, tree: tree, config: .fast, property: property)
-            if count >= 100 {
-                break
-            }
-        }
-    } catch {
-        print(error)
-    }
-}
-
-benchmark("Calculator, 100 iterations, bonsai") {
+benchmark("Calculator, 100 iterations") {
     let property: (Expr) -> Bool = { expr in
         guard containsLiteralDivisionByZero(expr) == false else {
             return true

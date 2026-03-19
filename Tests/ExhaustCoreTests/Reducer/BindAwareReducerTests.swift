@@ -181,21 +181,14 @@ struct BindAwareReductionTests {
     @Test("Bind-dependent array length shrinks correctly")
     func bindDependentShrink() throws {
         // Property: array.count <= 2 (fails when n >= 3). Minimal: n = 3.
-        let gen: ReflectiveGenerator<[Int]> = Gen.liftF(.transform(
-            kind: .bind(
-                forward: { innerValue -> ReflectiveGenerator<Any> in
-                    let n = innerValue as! Int
-                    return Gen.arrayOf(Gen.choose(in: 0 ... 100 as ClosedRange<Int>), exactly: UInt64(n)).erase()
-                },
-                backward: { finalOutput -> Any in
-                    let arr = finalOutput as! [Int]
-                    return arr.count as Any
-                },
-                inputType: "Int",
-                outputType: "[Int]"
-            ),
-            inner: (Gen.choose(in: 1 ... 10 as ClosedRange<Int>)).erase()
-        ))
+        let gen: ReflectiveGenerator<[Int]> = Gen.choose(in: 1 ... 10 as ClosedRange<Int>)._bound(
+            forward: { n in
+                Gen.arrayOf(Gen.choose(in: 0 ... 100 as ClosedRange<Int>), exactly: UInt64(n))
+            },
+            backward: { (arr: [Int]) in
+                arr.count
+            }
+        )
 
         // Find a failing value, then reduce
         var iterator = ValueAndChoiceTreeInterpreter(gen, materializePicks: true, seed: 42)
@@ -209,7 +202,7 @@ struct BindAwareReductionTests {
 
         let tree = try #require(failingTree)
         let (_, output) = try #require(
-            try Interpreters.reduce(gen: gen, tree: tree, config: .fast) { $0.count <= 2 }
+            try Interpreters.bonsaiReduce(gen: gen, tree: tree, config: .fast) { $0.count <= 2 }
         )
 
         #expect(output == [0, 0, 0])
@@ -219,21 +212,14 @@ struct BindAwareReductionTests {
     func bindDependentRangeShrink() throws {
         // .int(in: 0...100).bound { n in .int(in: 0...max(1, n)) }
         // Property: m < 5 (fails when m >= 5).
-        let gen: ReflectiveGenerator<Int> = Gen.liftF(.transform(
-            kind: .bind(
-                forward: { innerValue -> ReflectiveGenerator<Any> in
-                    let n = innerValue as! Int
-                    return (Gen.choose(in: 0 ... max(1, n) as ClosedRange<Int>) as ReflectiveGenerator<Int>).erase()
-                },
-                backward: { finalOutput -> Any in
-                    let m = finalOutput as! Int
-                    return m as Any
-                },
-                inputType: "Int",
-                outputType: "Int"
-            ),
-            inner: (Gen.choose(in: 0 ... 100 as ClosedRange<Int>)).erase()
-        ))
+        let gen: ReflectiveGenerator<Int> = Gen.choose(in: 0 ... 100 as ClosedRange<Int>)._bound(
+            forward: { n in
+                Gen.choose(in: 0 ... max(1, n) as ClosedRange<Int>)
+            },
+            backward: { (m: Int) in
+                m
+            }
+        )
 
         var iterator = ValueAndChoiceTreeInterpreter(gen, materializePicks: true, seed: 42)
         var failingTree: ChoiceTree?
@@ -248,7 +234,7 @@ struct BindAwareReductionTests {
         #expect(tree.containsBind)
 
         let (_, shrunk) = try #require(
-            try Interpreters.reduce(gen: gen, tree: tree, config: .fast) { $0 < 5 }
+            try Interpreters.bonsaiReduce(gen: gen, tree: tree, config: .fast) { $0 < 5 }
         )
 
         #expect(shrunk >= 5)
@@ -266,72 +252,9 @@ struct BindAwareReductionTests {
         #expect(tree.containsBind == false)
 
         let (_, shrunk) = try #require(
-            try Interpreters.reduce(gen: gen, tree: tree, config: .fast) { $0 < 5 }
+            try Interpreters.bonsaiReduce(gen: gen, tree: tree, config: .fast) { $0 < 5 }
         )
 
         #expect(shrunk == 5)
-    }
-}
-
-// MARK: - materializeCandidate Tests
-
-@Suite("materializeCandidate")
-struct MaterializeCandidateTests {
-    @Test("Falls through to standard materialize when bindIndex is nil")
-    func nilBindIndex() throws {
-        let gen = Gen.choose(in: UInt64(0) ... 100)
-        var iterator = ValueAndChoiceTreeInterpreter(gen, materializePicks: true, seed: 42)
-        let (_, tree) = try #require(try iterator.next())
-        let sequence = ChoiceSequence.flatten(tree)
-
-        let result = try ReducerStrategies.materializeCandidate(
-            gen, tree: tree, candidate: sequence, bindIndex: nil, mutatedIndex: 0
-        )
-        #expect(result != nil)
-    }
-
-    @Test("Falls through to standard materialize when no bind regions exist")
-    func emptyBindIndex() throws {
-        let gen = Gen.choose(in: UInt64(0) ... 100)
-        var iterator = ValueAndChoiceTreeInterpreter(gen, materializePicks: true, seed: 42)
-        let (_, tree) = try #require(try iterator.next())
-        let sequence = ChoiceSequence.flatten(tree)
-        let emptyIndex = BindSpanIndex(from: sequence)
-
-        let result = try ReducerStrategies.materializeCandidate(
-            gen, tree: tree, candidate: sequence, bindIndex: emptyIndex, mutatedIndex: 0
-        )
-        #expect(result != nil)
-    }
-
-    @Test("Routes through GuidedMaterializer for inner-range mutation")
-    func guidedMaterializerRouting() throws {
-        let gen: ReflectiveGenerator<Int> = Gen.liftF(.transform(
-            kind: .bind(
-                forward: { innerValue -> ReflectiveGenerator<Any> in
-                    let n = innerValue as! Int
-                    return (Gen.choose(in: 0 ... max(1, n) as ClosedRange<Int>) as ReflectiveGenerator<Int>).erase()
-                },
-                backward: { finalOutput -> Any in
-                    let m = finalOutput as! Int
-                    return m as Any
-                },
-                inputType: "Int",
-                outputType: "Int"
-            ),
-            inner: (Gen.choose(in: 0 ... 100 as ClosedRange<Int>)).erase()
-        ))
-
-        var iterator = ValueAndChoiceTreeInterpreter(gen, materializePicks: true, seed: 42)
-        let (_, genTree) = try #require(try iterator.next())
-        let genSequence = ChoiceSequence.flatten(genTree)
-        let genBindIndex = BindSpanIndex(from: genSequence)
-
-        #expect(genBindIndex.isEmpty == false)
-        let genInnerIdx = genBindIndex.regions[0].innerRange.lowerBound
-        let result = try ReducerStrategies.materializeCandidate(
-            gen, tree: genTree, candidate: genSequence, bindIndex: genBindIndex, mutatedIndex: genInnerIdx
-        )
-        #expect(result != nil)
     }
 }

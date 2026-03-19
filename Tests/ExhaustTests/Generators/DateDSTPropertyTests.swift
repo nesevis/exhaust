@@ -269,7 +269,7 @@ struct DateDSTPropertyTests {
         buggyFormatter.timeZone = TimeZone(identifier: "America/Havana")!
         buggyFormatter.isLenient = false
 
-        let counterExample = #exhaust(gen, .suppressIssueReporting, .useBonsaiReducer) { date in
+        let counterExample = #exhaust(gen, .suppressIssueReporting) { date in
             // Format as date-only string, then parse back — the round-trip
             let dateString = buggyFormatter.string(from: date)
             let parsed = buggyFormatter.date(from: dateString)

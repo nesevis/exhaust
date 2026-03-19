@@ -419,7 +419,7 @@ extension ReductionState {
                             regime = "elimination"
                             probeResultLabel = "success"
                             accept(
-                                ShrinkResult(
+                                ReductionResult(
                                     sequence: freshSequence,
                                     tree: freshTree,
                                     output: probeValue,

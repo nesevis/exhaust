@@ -98,18 +98,9 @@ struct ReductionMaterializerTests {
     @Test("Exact mode replays bound values from prefix without suspension")
     func exactBindReplayWithoutSuspension() throws {
         // bind { n in Gen.choose(in: 0 ... n) } where inner generates n
-        let gen: ReflectiveGenerator<Int> = Gen.liftF(.transform(
-            kind: .bind(
-                forward: { innerValue -> ReflectiveGenerator<Any> in
-                    let n = innerValue as! Int
-                    return Gen.choose(in: 0 ... max(0, n) as ClosedRange<Int>).erase()
-                },
-                backward: nil,
-                inputType: "Int",
-                outputType: "Int"
-            ),
-            inner: Gen.choose(in: 1 ... 10 as ClosedRange<Int>).erase()
-        ))
+        let gen: ReflectiveGenerator<Int> = Gen.choose(in: 1 ... 10 as ClosedRange<Int>)._bind { n in
+            Gen.choose(in: 0 ... max(0, n) as ClosedRange<Int>)
+        }
 
         // Generate a value via VACTI.
         var interpreter = ValueAndChoiceTreeInterpreter(gen, materializePicks: true, seed: 42)
@@ -134,18 +125,9 @@ struct ReductionMaterializerTests {
         // bind { n in Gen.choose(in: 0 ... n) } using UInt64 to avoid bit-pattern offset.
         // If inner was 10 (bound value was 8), then inner drops to 5,
         // the bound value 8 should clamp to 5.
-        let gen: ReflectiveGenerator<UInt64> = Gen.liftF(.transform(
-            kind: .bind(
-                forward: { innerValue -> ReflectiveGenerator<Any> in
-                    let n = innerValue as! UInt64
-                    return Gen.choose(in: 0 ... max(1, n) as ClosedRange<UInt64>).erase()
-                },
-                backward: nil,
-                inputType: "UInt64",
-                outputType: "UInt64"
-            ),
-            inner: Gen.choose(in: 0 ... 10 as ClosedRange<UInt64>).erase()
-        ))
+        let gen: ReflectiveGenerator<UInt64> = Gen.choose(in: 0 ... 10 as ClosedRange<UInt64>)._bind { n in
+            Gen.choose(in: 0 ... max(1, n) as ClosedRange<UInt64>)
+        }
 
         // Construct a prefix where inner = 5, bound = 8 (out of 0...5 but was valid for 0...10).
         let prefix: ChoiceSequence = [
@@ -215,18 +197,9 @@ struct ReductionMaterializerTests {
 
     @Test("Guided mode suspends cursor for bind bound region")
     func guidedCursorSuspension() throws {
-        let gen: ReflectiveGenerator<Int> = Gen.liftF(.transform(
-            kind: .bind(
-                forward: { innerValue -> ReflectiveGenerator<Any> in
-                    let n = innerValue as! Int
-                    return Gen.choose(in: 0 ... max(0, n) as ClosedRange<Int>).erase()
-                },
-                backward: nil,
-                inputType: "Int",
-                outputType: "Int"
-            ),
-            inner: Gen.choose(in: 1 ... 10 as ClosedRange<Int>).erase()
-        ))
+        let gen: ReflectiveGenerator<Int> = Gen.choose(in: 1 ... 10 as ClosedRange<Int>)._bind { n in
+            Gen.choose(in: 0 ... max(0, n) as ClosedRange<Int>)
+        }
 
         // Generate via VACTI to get a well-formed prefix.
         var interpreter = ValueAndChoiceTreeInterpreter(gen, materializePicks: true, seed: 42)
@@ -364,18 +337,9 @@ struct ReductionMaterializerTests {
     @Test("Bind-dependent generator produces fresh validRange after inner value change")
     func freshValidRangeForBindDependent() throws {
         // bind { n in Gen.choose(in: 0 ... n) } using UInt64.
-        let gen: ReflectiveGenerator<UInt64> = Gen.liftF(.transform(
-            kind: .bind(
-                forward: { innerValue -> ReflectiveGenerator<Any> in
-                    let n = innerValue as! UInt64
-                    return Gen.choose(in: 0 ... max(1, n) as ClosedRange<UInt64>).erase()
-                },
-                backward: nil,
-                inputType: "UInt64",
-                outputType: "UInt64"
-            ),
-            inner: Gen.choose(in: 1 ... 100 as ClosedRange<UInt64>).erase()
-        ))
+        let gen: ReflectiveGenerator<UInt64> = Gen.choose(in: 1 ... 100 as ClosedRange<UInt64>)._bind { n in
+            Gen.choose(in: 0 ... max(1, n) as ClosedRange<UInt64>)
+        }
 
         // Generate a value via VACTI.
         var interpreter = ValueAndChoiceTreeInterpreter(gen, materializePicks: true, seed: 42)

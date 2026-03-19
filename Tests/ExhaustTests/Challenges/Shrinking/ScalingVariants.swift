@@ -37,8 +37,7 @@ struct Bound5ScalingVariant {
         let output = #exhaust(
             gen,
             .suppressIssueReporting,
-            .reflecting(value),
-            .useBonsaiReducer
+            .reflecting(value)
         ) { b5 in
             if b5.arr.isEmpty {
                 return true
@@ -73,7 +72,6 @@ struct BinaryHeapScalingVariant {
             #exhaust(
                 gen,
                 .suppressIssueReporting,
-                .useBonsaiReducer,
                 property: property
             )
         )
@@ -128,8 +126,7 @@ struct CalculatorScalingVariant {
         let result = #exhaust(
             gen,
             .suppressIssueReporting,
-            .reflecting(Expr.div(.value(5), .add(.value(3), .value(-3)))),
-            .useBonsaiReducer
+            .reflecting(Expr.div(.value(5), .add(.value(3), .value(-3))))
         ) { expr in
             guard CalculatorShrinkingChallenge.containsLiteralDivisionByZero(expr) == false else {
                 return true
@@ -215,7 +212,6 @@ struct CouplingScalingVariant {
             #exhaust(
                 gen,
                 .suppressIssueReporting,
-                .useBonsaiReducer,
                 .replay(9293532994034525134)
             ) { arr in
                 arr.indices.allSatisfy { i in
@@ -259,7 +255,6 @@ struct DeletionScalingVariant {
             gen,
             .suppressIssueReporting,
             .reflecting(([5, 3, 5, 7], 5)),
-            .useBonsaiReducer,
             property: property
         )
 
@@ -280,8 +275,7 @@ struct DifferenceScalingVariant {
         let output = #exhaust(
             gen,
             .suppressIssueReporting,
-            .reflecting([700, 700]),
-            .useBonsaiReducer
+            .reflecting([700, 700])
         ) { arr in
             arr[0] < 10 || arr[0] != arr[1]
         }
@@ -304,7 +298,6 @@ struct DistinctScalingVariant {
         let counterExample = #exhaust(
             gen,
             .suppressIssueReporting,
-            .useBonsaiReducer,
             .humanOrderPostProcess,
             .reflecting([1337, 80085, 69, 67])
         ) {
@@ -332,7 +325,6 @@ struct LargeUnionListScalingVariant {
             gen,
             .suppressIssueReporting,
             .reflecting(value),
-            .useBonsaiReducer,
             .humanOrderPostProcess
         ) { arr in
             Set(arr.flatMap(\.self)).count <= 4
@@ -357,8 +349,7 @@ struct NestedListsScalingVariant {
         let output = #exhaust(
             gen,
             .suppressIssueReporting,
-            .reflecting(value),
-            .useBonsaiReducer
+            .reflecting(value)
         ) { arr in
             arr.map(\.count).reduce(0, +) <= 10
         }
@@ -384,7 +375,6 @@ struct ReverseScalingVariant {
             gen,
             .suppressIssueReporting,
             .reflecting(value),
-            .useBonsaiReducer,
             .humanOrderPostProcess
         ) { arr in
             arr.elementsEqual(arr.reversed())
@@ -410,8 +400,7 @@ struct LengthListScalingVariant {
         let output = #exhaust(
             gen,
             .suppressIssueReporting,
-            .reflecting(value),
-            .useBonsaiReducer
+            .reflecting(value)
         ) { arr in
             arr.max() ?? 0 < 900
         }

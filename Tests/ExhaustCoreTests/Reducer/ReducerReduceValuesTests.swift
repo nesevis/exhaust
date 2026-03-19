@@ -77,7 +77,7 @@ struct ReducerReduceValuesTests {
         let property: (UInt64) -> Bool = { $0 < 5 }
 
         let result = try #require(
-            try Interpreters.reduce(gen: gen, tree: tree, config: .fast, property: property)
+            try Interpreters.bonsaiReduce(gen: gen, tree: tree, config: .fast, property: property)
         )
 
         #expect(result.1 == 5)
@@ -94,7 +94,7 @@ struct ReducerReduceValuesTests {
         let property: (UInt64) -> Bool = { $0 < 50 }
 
         let result = try #require(
-            try Interpreters.reduce(gen: gen, tree: tree, config: .fast, property: property)
+            try Interpreters.bonsaiReduce(gen: gen, tree: tree, config: .fast, property: property)
         )
 
         #expect(result.1 == 50)
@@ -111,7 +111,7 @@ struct ReducerReduceValuesTests {
         let property: (Int64) -> Bool = { $0 > -5 }
 
         let result = try #require(
-            try Interpreters.reduce(gen: gen, tree: tree, config: .fast, property: property)
+            try Interpreters.bonsaiReduce(gen: gen, tree: tree, config: .fast, property: property)
         )
 
         #expect(result.1 == -5)
@@ -128,7 +128,7 @@ struct ReducerReduceValuesTests {
         let property: (UInt64) -> Bool = { _ in true }
 
         let result = try #require(
-            try Interpreters.reduce(gen: gen, tree: tree, config: .fast, property: property)
+            try Interpreters.bonsaiReduce(gen: gen, tree: tree, config: .fast, property: property)
         )
 
         #expect(result.0 == originalSequence)
@@ -145,7 +145,7 @@ struct ReducerReduceValuesTests {
         let property: (UInt64) -> Bool = { $0 < 10 }
 
         let result = try #require(
-            try Interpreters.reduce(gen: gen, tree: tree, config: .fast, property: property)
+            try Interpreters.bonsaiReduce(gen: gen, tree: tree, config: .fast, property: property)
         )
 
         #expect(property(result.1) == false)
@@ -171,7 +171,7 @@ struct ReducerReduceValuesTests {
         let property: (Character) -> Bool = { $0 <= "e" }
 
         let result = try #require(
-            try Interpreters.reduce(gen: gen, tree: tree, config: .fast, property: property)
+            try Interpreters.bonsaiReduce(gen: gen, tree: tree, config: .fast, property: property)
         )
 
         #expect(result.1 == "f")
@@ -199,7 +199,7 @@ struct ReducerReduceValuesTests {
         let property: (Double) -> Bool = { _ in false }
 
         let result = try #require(
-            try Interpreters.reduce(gen: gen, tree: tree, config: .fast, property: property)
+            try Interpreters.bonsaiReduce(gen: gen, tree: tree, config: .fast, property: property)
         )
 
         // Value should be reduced toward 0 (Pass 3 sets it to 0.0 directly since property always fails)
@@ -220,7 +220,7 @@ struct ReducerReduceValuesTests {
         }
 
         let result = try #require(
-            try Interpreters.reduce(gen: gen, tree: tree, config: .fast, property: property)
+            try Interpreters.bonsaiReduce(gen: gen, tree: tree, config: .fast, property: property)
         )
 
         #expect(result.1.count == 3)
@@ -257,7 +257,7 @@ struct ReducerReduceValuesTests {
         let (_, tree) = try #require(found)
 
         let result = try #require(
-            try Interpreters.reduce(gen: gen, tree: tree, config: .fast, property: property)
+            try Interpreters.bonsaiReduce(gen: gen, tree: tree, config: .fast, property: property)
         )
 
         // Minimal failing tuple under constraints:

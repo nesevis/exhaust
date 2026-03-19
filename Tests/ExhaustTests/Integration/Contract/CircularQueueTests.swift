@@ -40,8 +40,7 @@ struct CircularQueueTests {
                 commandLimit: 10,
                 .samplingBudget(500),
                 .suppressIssueReporting,
-                .replay(12_892_450_489_757_532_783),
-//                .useBonsaiReducer
+                .replay(12_892_450_489_757_532_783)
             )
         )
 

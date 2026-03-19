@@ -29,18 +29,6 @@ extension ReductionScheduler {
         }
     }
 
-    // MARK: - Default cycle budget
-
-    /// Default per-cycle materialization budget.
-    ///
-    /// Sized to allow thorough reduction for typical generators. The per-leg weights distribute this across the V-cycle legs.
-    static let defaultCycleBudgetTotal = 3250
-
-    /// Maximum per-cycle budget for the redistribution leg, separate from the main cycle budget.
-    ///
-    /// The actual budget is computed adaptively by ``ReductionState/adaptiveRedistributionBudget`` from the estimated costs of all redistribution encoders, capped at this value. For small generators with few values, the budget scales down to avoid wasting materializations; for large generators, this cap prevents runaway spending.
-    static let defaultRedistributionBudget = 300
-
     // MARK: - Encoder Ordering
 
     /// Value minimization and reordering encoder slots, used by the snip and train legs.

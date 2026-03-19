@@ -126,7 +126,7 @@ struct GenerateMacroIntegrationTests {
         #expect(property(failing) == false)
 
         let (_, shrunk) = try #require(
-            try Interpreters.reduce(gen: personGen, tree: tree, config: .fast, property: property)
+            try Interpreters.bonsaiReduce(gen: personGen, tree: tree, config: .fast, property: property)
         )
         #expect(property(shrunk) == false)
         #expect(shrunk.age <= failing.age)

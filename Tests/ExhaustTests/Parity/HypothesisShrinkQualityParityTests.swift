@@ -14,12 +14,12 @@ struct HypothesisShrinkQualityParityTests {
     private func reduce<Output>(
         _ gen: ReflectiveGenerator<Output>,
         startingAt value: Output,
-        config: Interpreters.TCRConfiguration = .fast,
+        config: Interpreters.BonsaiReducerConfiguration = .fast,
         property: (Output) -> Bool
     ) throws -> Output {
         let tree = try #require(try Interpreters.reflect(gen, with: value))
         let (_, output) = try #require(
-            try Interpreters.reduce(gen: gen, tree: tree, config: config, property: property)
+            try Interpreters.bonsaiReduce(gen: gen, tree: tree, config: config, property: property)
         )
         return output
     }
@@ -82,6 +82,7 @@ struct HypothesisShrinkQualityParityTests {
 
     @Test("Hypothesis::test_sum_of_pair_separated_int")
     func sumOfPairSeparatedInt() throws {
+        ExhaustLog.setConfiguration(.init(isEnabled: true, minimumLevel: .info, categoryMinimumLevels: [.reducer: .debug], format: .human))
         let separatedIntGen = #gen(
             .int(in: 0 ... 1000),
             .asciiString(),

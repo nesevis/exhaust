@@ -1,3 +1,10 @@
+//
+//  DeleteSequenceBoundariesEncoder.swift
+//  Exhaust
+//
+//  Created by Chris Kolbu on 14/3/2026.
+//
+
 /// Removes sequence boundary marker pairs using adaptive batch sizing, merging adjacent sequences.
 ///
 /// Target spans are pre-filtered by the scheduler to boundary spans at the appropriate depth.

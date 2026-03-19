@@ -21,7 +21,6 @@ struct ReverseShrinkingChallenge {
         ExhaustLog.setConfiguration(.init(isEnabled: true, minimumLevel: .info, categoryMinimumLevels: [.reducer: .debug], format: .human))
         let output = #exhaust(
             gen,
-            .useBonsaiReducer,
             .suppressIssueReporting,
             .humanOrderPostProcess,
             .replay(33_556_013_978_236_435)

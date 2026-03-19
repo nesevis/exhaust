@@ -31,7 +31,6 @@ struct LengthListShrinkingChallenge {
         let output = #exhaust(
             Self.gen,
             .suppressIssueReporting,
-            .useBonsaiReducer,
             property: Self.property
         )
 

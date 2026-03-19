@@ -14,7 +14,7 @@ public typealias BitPatternConvertible = ExhaustCore.BitPatternConvertible
 public typealias PartialPath = ExhaustCore.PartialPath
 public typealias ExhaustLog = ExhaustCore.ExhaustLog
 public typealias Interpreters = ExhaustCore.Interpreters
-public typealias TCRBudget = Interpreters.TCRConfiguration
+public typealias TCRBudget = Interpreters.ReductionBudget
 public typealias GeneratorError = ExhaustCore.GeneratorError
 
 // MARK: - Internal typealiases

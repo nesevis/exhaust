@@ -11,8 +11,7 @@ struct PostconditionTests {
             #exhaust(
                 SetUniquenessContract.self,
                 commandLimit: 5,
-                .suppressIssueReporting,
-                .useBonsaiReducer
+                .suppressIssueReporting
             )
         )
 
@@ -28,8 +27,7 @@ struct PostconditionTests {
             #exhaust(
                 StackLIFOContract.self,
                 commandLimit: 4,
-                .suppressIssueReporting,
-                .useBonsaiReducer
+                .suppressIssueReporting
             )
         )
 

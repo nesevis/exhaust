@@ -13,7 +13,7 @@
 /// 2. **Beam search subset deletion** — bitmask-encoded non-contiguous subsets, evaluated
 ///    layer-by-layer with bounded beam width.
 struct DeleteAlignedWindowsEncoder: AdaptiveEncoder {
-    init(beamTuning: Interpreters.TCRConfiguration.AlignedDeletionBeamSearchTuning) {
+    init(beamTuning: Interpreters.ReductionBudget.AlignedDeletionBeamSearchTuning) {
         self.beamTuning = beamTuning
     }
 
@@ -29,7 +29,7 @@ struct DeleteAlignedWindowsEncoder: AdaptiveEncoder {
 
     // MARK: - Configuration
 
-    private let beamTuning: Interpreters.TCRConfiguration.AlignedDeletionBeamSearchTuning
+    private let beamTuning: Interpreters.ReductionBudget.AlignedDeletionBeamSearchTuning
 
     // MARK: - Types
 
@@ -362,7 +362,7 @@ struct DeleteAlignedWindowsEncoder: AdaptiveEncoder {
         guard maxDist > 0 else { return nil }
 
         // Apply uniform repair with k=1 as a quick repair probe.
-        let repaired = ReducerStrategies.applyUniformRepair(shortened, values: values, k: 1)
+        let repaired = Self.applyUniformRepair(shortened, values: values, k: 1)
         guard repaired.shortLexPrecedes(sequence) else { return nil }
         return repaired
     }
@@ -442,5 +442,26 @@ struct DeleteAlignedWindowsEncoder: AdaptiveEncoder {
             return lhs.slotIndexSum < rhs.slotIndexSum
         }
         return lhs.mask < rhs.mask
+    }
+
+    // MARK: - Uniform Repair
+
+    private static func applyUniformRepair(
+        _ sequence: ChoiceSequence,
+        values: [(index: Int, bp: UInt64, target: UInt64, distance: UInt64, upward: Bool, value: ChoiceSequenceValue.Value)],
+        k: UInt64
+    ) -> ChoiceSequence {
+        var result = sequence
+        for v in values {
+            let delta = min(v.distance, k)
+            guard delta > 0 else { continue }
+            let newBP = v.upward ? v.bp + delta : v.bp - delta
+            let newChoice = ChoiceValue(
+                v.value.choice.tag.makeConvertible(bitPattern64: newBP),
+                tag: v.value.choice.tag
+            )
+            result[v.index] = .reduced(.init(choice: newChoice, validRange: v.value.validRange, isRangeExplicit: v.value.isRangeExplicit))
+        }
+        return result
     }
 }

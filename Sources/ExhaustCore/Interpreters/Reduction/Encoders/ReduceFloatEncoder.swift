@@ -133,6 +133,7 @@ struct ReduceFloatEncoder: AdaptiveEncoder {
     // MARK: - Stage Preparation
 
     private mutating func prepareStage() {
+        guard currentTargetIndex < targets.count else { return }
         let target = targets[currentTargetIndex]
         batchCandidates = []
         batchIndex = 0
@@ -285,6 +286,7 @@ struct ReduceFloatEncoder: AdaptiveEncoder {
     }
 
     private mutating func nextBatchCandidate() -> ChoiceSequence? {
+        guard currentTargetIndex < targets.count else { return nil }
         let target = targets[currentTargetIndex]
         while batchIndex < batchCandidates.count {
             let bp = batchCandidates[batchIndex]
@@ -532,8 +534,9 @@ struct ReduceFloatEncoder: AdaptiveEncoder {
             batchIndex = 0
             batchCandidates = []
             needsFirstProbe = true
+            guard currentTargetIndex < targets.count else { return false }
             prepareStage()
-            return currentTargetIndex < targets.count
+            return true
         }
 
         // All stages exhausted for this target — move to next.

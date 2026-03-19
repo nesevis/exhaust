@@ -36,7 +36,6 @@ struct BinaryHeapShrinkingChallenge {
             #exhaust(
                 Self.gen,
                 .suppressIssueReporting,
-                .useBonsaiReducer,
                 .replay(626_360_492_104_589_905),
                 property: property
             )

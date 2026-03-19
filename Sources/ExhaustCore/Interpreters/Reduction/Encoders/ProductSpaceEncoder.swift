@@ -1,4 +1,9 @@
-// MARK: - BinarySearchLadder
+//
+//  ProductSpaceEncoder.swift
+//  Exhaust
+//
+//  Created by Chris Kolbu on 14/3/2026.
+//
 
 /// Precomputes midpoint values between a current value and a target for product-space enumeration.
 ///
