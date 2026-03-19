@@ -43,7 +43,7 @@ struct DifferenceShrinkingChallenge {
             gen,
             .suppressIssueReporting,
             .reflecting([700, 700]),
-            .useBonsaiReducer,
+//            .useBonsaiReducer,
             property: property
         )
 
