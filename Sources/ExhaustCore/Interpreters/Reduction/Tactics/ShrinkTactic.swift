@@ -1,5 +1,5 @@
 /// The result of a successful reduction probe.
-public struct ShrinkResult<Output> {
+public struct ReductionResult<Output> {
     public let sequence: ChoiceSequence
     public let tree: ChoiceTree
     public let output: Output

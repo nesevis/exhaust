@@ -103,7 +103,7 @@ final class ReductionState<Output> {
 // MARK: - Helpers
 
 extension ReductionState {
-    func accept(_ result: ShrinkResult<Output>, structureChanged: Bool) {
+    func accept(_ result: ReductionResult<Output>, structureChanged: Bool) {
         sequence = result.sequence
         tree = result.tree
         output = result.output

@@ -35,7 +35,7 @@ public enum SequenceDecoder {
         tree: ChoiceTree,
         originalSequence: ChoiceSequence,
         property: (Output) -> Bool
-    ) throws -> ShrinkResult<Output>? {
+    ) throws -> ReductionResult<Output>? {
         switch self {
         case let .exact(materializePicks):
             decodeExact(
@@ -60,29 +60,6 @@ public enum SequenceDecoder {
 
     // MARK: - Decode Implementations
 
-    private func decodeDirect<Output>(
-        candidate: consuming ChoiceSequence,
-        gen: ReflectiveGenerator<Output>,
-        tree: ChoiceTree,
-        strictness: Interpreters.Strictness,
-        property: (Output) -> Bool
-    ) throws -> ShrinkResult<Output>? {
-        guard let output = try? Interpreters.materialize(
-            gen, with: tree, using: candidate, strictness: strictness
-        ) else {
-            return nil
-        }
-        guard property(output) == false else { return nil }
-        return ShrinkResult(
-            sequence: consume candidate,
-            tree: tree,
-            output: output,
-            evaluations: 1
-        )
-    }
-
-    // MARK: - Decode Implementations
-
     private func decodeExact<Output>(
         candidate: consuming ChoiceSequence,
         gen: ReflectiveGenerator<Output>,
@@ -90,7 +67,7 @@ public enum SequenceDecoder {
         originalSequence _: ChoiceSequence,
         property: (Output) -> Bool,
         materializePicks: Bool
-    ) -> ShrinkResult<Output>? {
+    ) -> ReductionResult<Output>? {
         switch ReductionMaterializer.materialize(
             gen, prefix: consume candidate,
             mode: .exact, fallbackTree: fallbackTree,
@@ -99,7 +76,7 @@ public enum SequenceDecoder {
         case let .success(output, freshTree):
             guard property(output) == false else { return nil }
             let freshSequence = ChoiceSequence(freshTree)
-            return ShrinkResult(
+            return ReductionResult(
                 sequence: freshSequence,
                 tree: freshTree,
                 output: output,
@@ -120,7 +97,7 @@ public enum SequenceDecoder {
         materializePicks: Bool,
         skipShortlexCheck: Bool = false,
         prngSalt: UInt64 = 0
-    ) -> ShrinkResult<Output>? {
+    ) -> ReductionResult<Output>? {
         let seed = ZobristHash.hash(of: candidate) &+ prngSalt
         switch ReductionMaterializer.materialize(
             gen,
@@ -138,7 +115,7 @@ public enum SequenceDecoder {
             if skipShortlexCheck == false {
                 guard freshSequence.shortLexPrecedes(originalSequence) else { return nil }
             }
-            return ShrinkResult(
+            return ReductionResult(
                 sequence: freshSequence,
                 tree: freshTree,
                 output: output,

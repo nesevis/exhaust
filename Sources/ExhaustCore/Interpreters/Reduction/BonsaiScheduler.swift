@@ -63,7 +63,7 @@ enum BonsaiScheduler {
             isInstrumented: state.isInstrumented
         ) {
             state.accept(
-                ShrinkResult(
+                ReductionResult(
                     sequence: result.sequence,
                     tree: result.tree,
                     output: result.output,
