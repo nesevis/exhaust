@@ -42,7 +42,6 @@ struct DeletionShrinkingChallenge {
         let output = #exhaust(
             gen,
             .suppressIssueReporting,
-            .useBonsaiReducer,
             property: property
         )
 

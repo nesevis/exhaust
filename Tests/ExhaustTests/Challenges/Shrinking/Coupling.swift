@@ -43,14 +43,13 @@ struct CouplingShrinkingChallenge {
             #exhaust(
                 Self.gen,
                 .suppressIssueReporting,
-                .useBonsaiReducer,
                 property: Self.property
             )
         )
         #expect(value.count == 2)
         #expect(value == [1, 0])
     }
-    
+
     @Test("Coupling Pathological 1")
     func couplingPathlogical1() throws {
         ExhaustLog.setConfiguration(.init(isEnabled: true, minimumLevel: .info, categoryMinimumLevels: [.reducer: .debug, .propertyTest: .debug], format: .human))
@@ -58,7 +57,6 @@ struct CouplingShrinkingChallenge {
             #exhaust(
                 Self.gen,
                 .suppressIssueReporting,
-                .useBonsaiReducer,
                 property: Self.property
             )
         )

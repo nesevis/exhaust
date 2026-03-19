@@ -26,8 +26,7 @@ struct NestedListsShrinkingChallenge {
         print()
         let output = #exhaust(
             gen,
-            .suppressIssueReporting,
-            .useBonsaiReducer,
+            .suppressIssueReporting
 //            .replay(13580297670505979531)
         ) { arr in
             arr.map(\.count).reduce(0, +) <= 10

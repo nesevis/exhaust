@@ -56,7 +56,6 @@ struct StringAnagramChallenge {
         let result = #exhaust(
             gen,
             .suppressIssueReporting,
-            .useBonsaiReducer,
             .reflecting(value),
             .humanOrderPostProcess,
             property: property

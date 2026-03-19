@@ -8,9 +8,9 @@ public extension Interpreters {
         /// Maximum number of outer cycles with no improvement before terminating.
         let maxStalls: Int
         /// Per-strategy probe budgets.
-        let probeBudgets: TCRConfiguration.ProbeBudgets
+        let probeBudgets: ReductionBudget.ProbeBudgets
         /// Beam search tuning for aligned deletion.
-        let alignedDeletionBeamSearchTuning: TCRConfiguration.AlignedDeletionBeamSearchTuning
+        let alignedDeletionBeamSearchTuning: ReductionBudget.AlignedDeletionBeamSearchTuning
         /// When `true`, use ``ReductionMaterializer``-backed decoders that produce
         /// fresh trees with current `validRange` and all branch alternatives.
         let useReductionMaterializer: Bool
@@ -21,8 +21,8 @@ public extension Interpreters {
 
         private init(
             maxStalls: Int,
-            probeBudgets: TCRConfiguration.ProbeBudgets,
-            alignedDeletionBeamSearchTuning: TCRConfiguration.AlignedDeletionBeamSearchTuning,
+            probeBudgets: ReductionBudget.ProbeBudgets,
+            alignedDeletionBeamSearchTuning: ReductionBudget.AlignedDeletionBeamSearchTuning,
             useReductionMaterializer: Bool = true
         ) {
             self.maxStalls = maxStalls
@@ -31,8 +31,8 @@ public extension Interpreters {
             self.useReductionMaterializer = useReductionMaterializer
         }
 
-        /// Maps a ``TCRConfiguration`` preset to the corresponding configuration.
-        init(from config: TCRConfiguration) {
+        /// Maps a ``ReductionBudget`` preset to the corresponding configuration.
+        init(from config: ReductionBudget) {
             switch config {
             case .fast: self = Self(
                 maxStalls: 1,

@@ -72,6 +72,16 @@ public enum TypeTag: Equatable, Hashable, Sendable {
 }
 
 public extension TypeTag {
+    /// Whether this tag represents a signed integer type.
+    var isSigned: Bool {
+        switch self {
+        case .int, .int8, .int16, .int32, .int64:
+            true
+        default:
+            false
+        }
+    }
+
     /// Creates a ``BitPatternConvertible`` value from a raw bit pattern using this tag's type.
     func makeConvertible(bitPattern64: UInt64) -> any BitPatternConvertible {
         switch self {

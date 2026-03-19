@@ -1,0 +1,99 @@
+public extension Interpreters {
+    /// Configuration presets for the reducer's test case reduction strategies.
+    enum ReductionBudget {
+        /// Per-strategy probe budgets controlling how many candidates each strategy evaluates.
+        struct ProbeBudgets {
+            let deleteAlignedSiblingWindows: Int
+            let redistributeNumericPairs: Int
+            let reduceValuesInTandem: Int
+
+            static let fast = Self(
+                deleteAlignedSiblingWindows: 400,
+                redistributeNumericPairs: 600,
+                reduceValuesInTandem: 400
+            )
+
+            static let slow = Self(
+                deleteAlignedSiblingWindows: 2000,
+                redistributeNumericPairs: 3000,
+                reduceValuesInTandem: 2000
+            )
+        }
+
+        /// Tuning parameters for the beam search used by aligned sibling deletion.
+        struct AlignedDeletionBeamSearchTuning {
+            let minBeamWidth: Int
+            let beamWidthScale: Int
+            let maxBeamWidth: Int
+            let minEvaluationsPerLayer: Int
+            let evaluationsPerLayerScale: Int
+
+            static let fast = Self(
+                minBeamWidth: 12,
+                beamWidthScale: 2,
+                maxBeamWidth: 48,
+                minEvaluationsPerLayer: 6,
+                evaluationsPerLayerScale: 1
+            )
+
+            static let slow = Self(
+                minBeamWidth: 18,
+                beamWidthScale: 3,
+                maxBeamWidth: 96,
+                minEvaluationsPerLayer: 10,
+                evaluationsPerLayerScale: 2
+            )
+
+            func beamWidth(for slotCount: Int) -> Int {
+                min(max(minBeamWidth, slotCount * beamWidthScale), maxBeamWidth)
+            }
+
+            func evaluationsPerLayer(for slotCount: Int, beamWidth: Int) -> Int {
+                min(max(minEvaluationsPerLayer, slotCount * evaluationsPerLayerScale), beamWidth)
+            }
+        }
+
+        case fast
+        case slow
+
+        var maxStalls: Int {
+            switch self {
+            case .fast:
+                3
+            case .slow:
+                8
+            }
+        }
+
+        var recentCycleWindow: Int {
+            switch self {
+            case .fast:
+                6
+            case .slow:
+                12
+            }
+        }
+
+        var probeBudgets: ProbeBudgets {
+            switch self {
+            case .fast:
+                .fast
+            case .slow:
+                .slow
+            }
+        }
+
+        var alignedDeletionBeamSearchTuning: AlignedDeletionBeamSearchTuning {
+            switch self {
+            case .fast:
+                .fast
+            case .slow:
+                .slow
+            }
+        }
+    }
+
+    /// Backward-compatibility alias for ``ReductionBudget``.
+    @available(*, deprecated, renamed: "ReductionBudget")
+    typealias TCRConfiguration = ReductionBudget
+}

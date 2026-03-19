@@ -15,8 +15,7 @@ struct ALUTests {
                 ALUSpec.self,
                 commandLimit: 8,
                 .argumentAwareCoverage,
-                .suppressIssueReporting,
-                .useBonsaiReducer
+                .suppressIssueReporting
             )
         )
 

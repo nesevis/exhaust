@@ -45,19 +45,7 @@ public enum ExhaustSettings<Output> {
     /// When `.randomOnly` is set, `#exhaust` skips this analysis and proceeds directly to random sampling. Useful for benchmarking, comparing coverage strategies, or when the analysis overhead is unwanted.
     case randomOnly
 
-    /// Bonsai reducer: iterative tree miniaturization via structured pass pipeline.
-    ///
-    /// Snip (maintenance pruning): minimize values bottom-up within fixed ranges.
-    /// Prune (structural pruning): remove subtrees top-down, re-derive via guided materialization.
-    /// Train (wiring/root work): modify inner values at depth 0, re-derive all bound content.
-    /// Shape (balance): redistribute mass between coordinates when local passes stall.
-    ///
-    /// Produces better counterexamples than the legacy reducer for bind-dependent generators by exploiting the tree structure of the choice sequence.
-    case useBonsaiReducer
-
     /// Reorders elements within type-homogeneous sibling groups into natural numeric order
     /// after test case reduction completes.
-    ///
-    /// Requires ``useBonsaiReducer``. Has no effect with the legacy reducer.
     case humanOrderPostProcess
 }

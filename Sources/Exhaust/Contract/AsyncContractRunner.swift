@@ -38,8 +38,6 @@ public func __runContractAsync<Spec: AsyncContractSpec>(
     var suppressIssueReporting = false
     var useRandomOnly = false
     var useArgumentAwareCoverage = false
-    var useBonsaiReducer = false
-
     for setting in settings {
         switch setting {
         case let .samplingBudget(n):
@@ -56,8 +54,6 @@ public func __runContractAsync<Spec: AsyncContractSpec>(
             useRandomOnly = true
         case .argumentAwareCoverage:
             useArgumentAwareCoverage = true
-        case .useBonsaiReducer:
-            useBonsaiReducer = true
         }
     }
 
@@ -103,7 +99,6 @@ public func __runContractAsync<Spec: AsyncContractSpec>(
     nonisolated(unsafe) let reduction = reductionConfig
     let randomOnly = useRandomOnly
     let argAwareCoverage = useArgumentAwareCoverage
-    let bonsai = useBonsaiReducer
 
     // Dispatch the entire sync core onto a GCD thread via withCheckedContinuation.
     let searchResult: ([Spec.Command], ContractFailureInfo<Spec.Command>)? = await withCheckedContinuation { continuation in
@@ -117,7 +112,6 @@ public func __runContractAsync<Spec: AsyncContractSpec>(
                     commandLimit: commandLimit,
                     coverageBudget: covBudget,
                     reductionConfig: reduction,
-                    useBonsaiReducer: bonsai,
                     argumentAware: argAwareCoverage,
                     property: property
                 )
@@ -135,7 +129,6 @@ public func __runContractAsync<Spec: AsyncContractSpec>(
                         coverageBudget: covBudget,
                         seed: replaySeed,
                         reductionConfig: reduction,
-                        useBonsaiReducer: bonsai,
                         suppressIssueReporting: true,
                         useRandomOnly: randomOnly || skipGenericCoverage
                     ),

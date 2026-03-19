@@ -42,7 +42,6 @@ struct Bound5ShrinkingChallenge {
             Self.gen,
             .randomOnly,
             .suppressIssueReporting,
-//            .useBonsaiReducer,
             .replay(16799307796119368455),
             property: Self.property
         )
@@ -66,7 +65,6 @@ struct Bound5ShrinkingChallenge {
             Self.gen,
             .suppressIssueReporting,
             .reflecting(value),
-            .useBonsaiReducer,
             property: Self.property
         )
 
@@ -89,7 +87,6 @@ struct Bound5ShrinkingChallenge {
             Self.gen,
             .suppressIssueReporting,
             .reflecting(value),
-//            .useBonsaiReducer,
             property: Self.property
         )
 
@@ -111,14 +108,13 @@ struct Bound5ShrinkingChallenge {
             Self.gen,
             .suppressIssueReporting,
             .reflecting(value),
-//            .useBonsaiReducer,
             property: Self.property
         )
 
         #expect(output?.arr.count == 2)
         #expect(output?.arr.sorted() == [-32768, -1])
     }
-    
+
     @Test("Bound5, Pathological 4")
     func bound5Pathological4() {
         let value: Bound5 = .init(
@@ -133,7 +129,6 @@ struct Bound5ShrinkingChallenge {
             Self.gen,
             .suppressIssueReporting,
             .reflecting(value),
-            .useBonsaiReducer,
             property: Self.property
         )
 
@@ -153,7 +148,6 @@ struct Bound5ShrinkingChallenge {
                 Self.gen,
                 .suppressIssueReporting,
                 .reflecting(bound5),
-                .useBonsaiReducer,
                 property: Self.property
             )
 

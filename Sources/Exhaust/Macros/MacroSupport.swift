@@ -37,7 +37,6 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
         var suppressIssueReporting = false
         var reflectingValue: Output?
         var useRandomOnly = false
-        var useBonsaiReducer = false
         var humanOrderPostProcess = false
 
         for setting in settings {
@@ -56,8 +55,6 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
                 reflectingValue = value
             case .randomOnly:
                 useRandomOnly = true
-            case .useBonsaiReducer:
-                useBonsaiReducer = true
             case .humanOrderPostProcess:
                 humanOrderPostProcess = true
             }
@@ -69,7 +66,6 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
                     gen,
                     value: reflectingValue,
                     reductionConfig: reductionConfig,
-                    useBonsaiReducer: useBonsaiReducer,
                     humanOrderPostProcess: humanOrderPostProcess,
                     suppressIssueReporting: suppressIssueReporting,
                     sourceCode: sourceCode,
@@ -135,7 +131,7 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
                         gen: gen,
                         tree: shrinkTree,
                         config: reductionConfig,
-                        useBonsai: useBonsaiReducer,
+
                         humanOrderPostProcess: humanOrderPostProcess,
                         property: countingProperty
                     ) {
@@ -278,7 +274,7 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
                         gen: gen,
                         tree: tree,
                         config: reductionConfig,
-                        useBonsai: useBonsaiReducer,
+
                         humanOrderPostProcess: humanOrderPostProcess,
                         property: countingProperty
                     ) {
@@ -405,8 +401,6 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
         var suppressIssueReporting = false
         var poolCapacity = 256
         var generateRatio = 0.2
-        var useBonsaiReducer = false
-
         for setting in settings {
             switch setting {
             case let .samplingBudget(n):
@@ -421,8 +415,6 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
                 poolCapacity = n
             case let .generateRatio(r):
                 generateRatio = r
-            case .useBonsaiReducer:
-                useBonsaiReducer = true
             }
         }
 
@@ -431,7 +423,6 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
             property: property,
             samplingBudget: samplingBudget,
             reductionConfig: reductionConfig,
-            useBonsaiReducer: useBonsaiReducer,
             poolCapacity: poolCapacity,
             generateRatio: generateRatio,
             seed: seed,
@@ -598,7 +589,6 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
         _ gen: ReflectiveGenerator<Output>,
         value: Output,
         reductionConfig: TCRBudget,
-        useBonsaiReducer: Bool,
         humanOrderPostProcess: Bool,
         suppressIssueReporting: Bool,
         sourceCode: String?,
@@ -655,7 +645,6 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
             gen: gen,
             tree: tree,
             config: reductionConfig,
-            useBonsai: useBonsaiReducer,
             humanOrderPostProcess: humanOrderPostProcess,
             property: countingProperty
         ) {

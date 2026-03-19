@@ -31,7 +31,6 @@ struct LargeUnionListShrinkingChallenge {
             Self.gen,
             .suppressIssueReporting,
             .replay(15_224_596_561_927_679_090),
-//            .useBonsaiReducer,
             property: Self.property
         )
 
@@ -53,7 +52,6 @@ struct LargeUnionListShrinkingChallenge {
             Self.gen,
             .suppressIssueReporting,
             .reflecting(value),
-            .useBonsaiReducer,
             .humanOrderPostProcess,
             property: Self.property
         )
@@ -72,7 +70,6 @@ struct LargeUnionListShrinkingChallenge {
             Self.gen,
             .suppressIssueReporting,
             .reflecting(value),
-            .useBonsaiReducer,
             .humanOrderPostProcess,
             property: Self.property
         )
@@ -90,7 +87,6 @@ struct LargeUnionListShrinkingChallenge {
             Self.gen,
             .suppressIssueReporting,
             .reflecting(value),
-            .useBonsaiReducer,
             .humanOrderPostProcess,
             property: Self.property
         )
@@ -112,7 +108,6 @@ struct LargeUnionListShrinkingChallenge {
                 Self.gen,
                 .suppressIssueReporting,
                 .reflecting(list),
-//                .useBonsaiReducer,
                 .humanOrderPostProcess,
                 property: Self.property
             )

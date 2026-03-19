@@ -11,8 +11,7 @@ struct InvariantOnlyTests {
             #exhaust(
                 CircularBufferContract.self,
                 commandLimit: 6,
-                .suppressIssueReporting,
-                .useBonsaiReducer
+                .suppressIssueReporting
             )
         )
 

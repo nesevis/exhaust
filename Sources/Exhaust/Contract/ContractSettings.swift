@@ -26,13 +26,4 @@ public enum ContractSettings {
     /// By default, SCA covers command-type orderings only, keeping the domain small enough for higher interaction strengths (t=3, t=4). With this setting, each position's domain is the flattened union of `(commandType × argumentCombinations)`, giving IPOG pairwise coverage of both command ordering and argument value interactions — at the cost of larger domains that typically cap at t=2.
     case argumentAwareCoverage
 
-    /// Bonsai reducer: iterative tree miniaturization via structured pass pipeline.
-    ///
-    /// Snip (maintenance pruning): minimize values bottom-up within fixed ranges.
-    /// Prune (structural pruning): remove subtrees top-down, re-derive via guided materialization.
-    /// Train (wiring/root work): modify inner values at depth 0, re-derive all bound content.
-    /// Shape (balance): redistribute mass between coordinates when local passes stall.
-    ///
-    /// Produces better counterexamples than the legacy reducer for bind-dependent generators by exploiting the tree structure of the choice sequence.
-    case useBonsaiReducer
 }

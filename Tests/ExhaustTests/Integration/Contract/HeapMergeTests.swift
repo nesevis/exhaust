@@ -33,7 +33,6 @@ struct HeapMergeTests {
                 commandLimit: 12,
                 .samplingBudget(2000),
 //                .argumentAwareCoverage,
-//                .useBonsaiReducer,
                 .suppressIssueReporting,
                 .replay(2244429497963284422)
             )
@@ -60,7 +59,6 @@ struct HeapAliasingTests {
                 HeapAliasingContract.self,
                 commandLimit: 20,
                 .suppressIssueReporting,
-//                .useBonsaiReducer,
 //                .argumentAwareCoverage
                 .replay(6_161_601_321_680_111_336)
             )
