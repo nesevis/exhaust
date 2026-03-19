@@ -19,7 +19,7 @@ struct StructuralIsolatorTests {
         let sequence = ChoiceSequence(tree)
         let bindIndex = BindSpanIndex(from: sequence)
 
-        let result = StructuralIsolator.isolate(
+        let result = StructuralIsolator.project(
             gen: gen,
             sequence: sequence,
             tree: tree,
@@ -47,7 +47,7 @@ struct StructuralIsolatorTests {
         let bindIndex = BindSpanIndex(from: sequence)
 
         // Dummy generator — isolate returns nil before materialization.
-        let result = StructuralIsolator.isolate(
+        let result = StructuralIsolator.project(
             gen: Gen.just(0 as UInt64),
             sequence: sequence,
             tree: tree,
@@ -71,7 +71,7 @@ struct StructuralIsolatorTests {
 
         // Property passes when the independent value is 0.
         // Zeroing it makes the property pass → isolation returns nil.
-        let result = StructuralIsolator.isolate(
+        let result = StructuralIsolator.project(
             gen: gen,
             sequence: sequence,
             tree: tree,
@@ -95,7 +95,7 @@ struct StructuralIsolatorTests {
         let sequence = ChoiceSequence(tree)
         let bindIndex = BindSpanIndex(from: sequence)
 
-        let result = StructuralIsolator.isolate(
+        let result = StructuralIsolator.project(
             gen: gen,
             sequence: sequence,
             tree: tree,
@@ -127,7 +127,7 @@ struct StructuralIsolatorTests {
 
         // All positions are inside the branch group — no independent positions.
         // Dummy generator — isolate returns nil before materialization.
-        let result = StructuralIsolator.isolate(
+        let result = StructuralIsolator.project(
             gen: Gen.just(0 as UInt64),
             sequence: sequence,
             tree: tree,

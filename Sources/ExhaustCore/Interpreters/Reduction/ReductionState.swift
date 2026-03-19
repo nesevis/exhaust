@@ -633,10 +633,12 @@ extension ReductionState {
         return accepted
     }
 
-    /// Runs a speculative exploration round: redistribute with regression allowed, then prune and train to exploit.
+    /// Relax-round: redistributes value magnitude speculatively, then exploits the relaxed state with base descent and fibre descent.
     ///
-    /// Pipeline acceptance: final state must shortlex-precede the pre-exploration checkpoint. ``bestSequence`` and ``bestOutput`` only update if the full pipeline passes — intermediate results are discarded on rollback.
-    func runExplorationLeg(remaining: inout Int) throws -> Bool {
+    /// Categorically, this is a non-monotone endomorphism of the total space — neither cartesian nor vertical, and not a descent step. It breaks the fibred factorisation at the step level and recovers it at the pipeline level: the ``RelaxRoundEncoder`` zeros one value by inflating another (potentially crossing fibres if bind-inner values are redistributed), then standard base descent and fibre descent passes exploit the relaxed state. In Bonsai terms, it sacrifices one leaf to nourish another, then re-prunes and re-shapes the tree, keeping the result only if the whole tree is simpler than before. In plain language, it moves magnitude from one value to another (making the sequence temporarily worse), runs the normal reduction passes on the result, and accepts the outcome only if the round-trip produces a net improvement.
+    ///
+    /// Pipeline acceptance: final state must shortlex-precede the pre-relaxation checkpoint. ``bestSequence`` and ``bestOutput`` only update if the full pipeline passes — intermediate results are discarded on rollback.
+    func runRelaxRound(remaining: inout Int) throws -> Bool {
         // Checkpoint all mutable state, including bestSequence/bestOutput.
         let checkpointSequence = sequence
         let checkpointTree = tree

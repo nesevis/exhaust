@@ -110,7 +110,7 @@ public struct ZeroValueEncoder: AdaptiveEncoder {
     /// Returns the simplest valid target for a value.
     ///
     /// Stale-range escape hatch (matches legacy reduceIntegralValues): when the value is within its recorded range, targets the range minimum if zero doesn't fit. When the value is OUTSIDE its recorded range (a prior pass pushed it past the stale boundary), targets zero — the range is stale and the materializer will validate against the generator's fresh range.
-    private static func simplestTarget(for v: ChoiceSequenceValue.Value) -> ChoiceValue {
+    static func simplestTarget(for v: ChoiceSequenceValue.Value) -> ChoiceValue {
         let simplified = v.choice.semanticSimplest
         let isWithinRecordedRange = v.isRangeExplicit && v.choice.fits(in: v.validRange)
         if isWithinRecordedRange, simplified.fits(in: v.validRange) == false {

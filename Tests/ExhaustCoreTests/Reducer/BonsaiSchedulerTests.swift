@@ -91,10 +91,10 @@ struct BonsaiSchedulerTests {
         #expect(output.0 + output.1 >= 20)
     }
 
-    // MARK: - 4. Phase 1 restart on deletion
+    // MARK: - 4. Base descent reduces structure
 
-    @Test("Phase 1 structural deletion reduces sequence length")
-    func phase1DeletionProgress() throws {
+    @Test("Base descent structural deletion reduces sequence length")
+    func baseDescentDeletionProgress() throws {
         let gen = makeBoundArrayGen(innerRange: 1 ... 20, elementRange: 0 ... 100)
 
         let (tree, _) = try findFailingTree(gen: gen, seed: 12345) { output in
@@ -123,17 +123,17 @@ struct BonsaiSchedulerTests {
 
         state.computeEncoderOrdering()
         let initialLength = state.sequence.count
-        var budget = BonsaiScheduler.phase1Budget
-        let (_, progress) = try state.runStructuralMinimization(budget: &budget)
+        var budget = BonsaiScheduler.baseDescentBudget
+        let (_, progress) = try state.runBaseDescent(budget: &budget)
 
-        #expect(progress, "Phase 1 should make progress on a deletable bind tree")
-        #expect(state.sequence.count <= initialLength, "Sequence should not grow after structural minimization")
+        #expect(progress, "Base descent should make progress on a deletable bind tree")
+        #expect(state.sequence.count <= initialLength, "Sequence should not grow after base descent")
     }
 
-    // MARK: - 5. Phase 2 leaf ordering
+    // MARK: - 5. Fibre descent leaf ordering
 
-    @Test("Phase 2 processes bound leaves before independent leaves")
-    func phase2LeafOrdering() throws {
+    @Test("Fibre descent processes bound leaves before independent leaves")
+    func fibreDescentLeafOrdering() throws {
         let gen = makeBoundArrayGen(innerRange: 1 ... 10, elementRange: 0 ... 100)
 
         let (tree, _) = try findFailingTree(gen: gen, seed: 7777) { output in
@@ -209,7 +209,7 @@ struct BonsaiSchedulerTests {
         }
 
         // The key assertion is that the scheduler terminates correctly even when
-        // structural changes occur during Phase 2.
+        // structural changes occur during fibre descent.
         let result = try BonsaiScheduler.run(
             gen: gen, initialTree: tree, config: Self.bonsaiConfig
         ) { output in

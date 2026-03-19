@@ -2,7 +2,7 @@
 ///
 /// For each pair of non-zero numeric values with matching tags, produces a single probe where the lhs is set to its reduction target (typically zero) and the rhs absorbs the full delta. The resulting sequence is likely shortlex-LARGER (the rhs moves away from zero), but the zeroed lhs enables deletion in a subsequent prune pass.
 ///
-/// Conforms to ``AdaptiveEncoder`` rather than ``BatchEncoder`` because ``ReductionState/runExplorationLeg(remaining:)`` drives it through a manual loop that needs per-probe decoder access. The `lastAccepted` feedback is ignored — each relaxation is independent, so acceptance of one pair does not inform which pair to try next.
+/// Conforms to ``AdaptiveEncoder`` rather than ``BatchEncoder`` because ``ReductionState/runRelaxRound(remaining:)`` drives it through a manual loop that needs per-probe decoder access. The `lastAccepted` feedback is ignored — each relaxation is independent, so acceptance of one pair does not inform which pair to try next.
 ///
 /// Grade: `(.speculative, w)`. Requires pipeline acceptance — the caller must verify that the final state (after exploit passes) improves over the pre-relaxation checkpoint.
 public struct RelaxRoundEncoder: AdaptiveEncoder {

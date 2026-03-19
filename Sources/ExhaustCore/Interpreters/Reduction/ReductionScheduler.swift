@@ -33,7 +33,7 @@ enum ReductionScheduler {
 
         // Phase 0: Structural Independence Isolation
         // Zero all leaf positions that no structural node can influence.
-        if let result = StructuralIsolator.isolate(
+        if let result = StructuralIsolator.project(
             gen: gen,
             sequence: state.sequence,
             tree: state.tree,
@@ -148,7 +148,7 @@ enum ReductionScheduler {
                 // Only explore when the main legs have stalled — exact/bounded
                 // morphisms should be exhausted before spending budget on speculative ones.
                 var exploreBudget = remaining
-                if try state.runExplorationLeg(remaining: &exploreBudget) {
+                if try state.runRelaxRound(remaining: &exploreBudget) {
                     cycleImproved = true
                     remaining = exploreBudget
                 }
