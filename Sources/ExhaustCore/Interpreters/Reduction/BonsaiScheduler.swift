@@ -1,8 +1,15 @@
 /// Alternating minimisation over a fibred trace space: projection, base descent, fibre descent, relax-round.
 ///
-/// The trace space has a two-level structure. The **base** is the trace structure: how many choice points exist, which depend on which, and what domain each draws from. The **fibre** over a given structure is every possible value assignment compatible with that structure — the concrete values chosen at each choice point. Changing a value that no structural decision depends on stays within the same fibre; changing a controlling value (a bind-inner position) moves to a different fibre because it changes the downstream structure.
+/// **The base is the trace / the fibre is the space**:
 ///
-/// Reduces a failing trace by alternating between base descent (minimising the trace structure) and fibre descent (minimising the value assignment within a fixed structure) until neither makes progress. When both stall, a relax-round redistributes value magnitude speculatively and exploits the relaxed state. A one-shot fibre projection zeros structurally independent values before the main loop begins.
+/// - The **base** describes all possible ``ChoiceTree`` shapes (structure omitting concrete values).
+/// A base point is a particular shape: how many choice points exist, which depend on which, and what domain each draws from.
+/// - The **fibre** over a base point is the combinatorial space of values possible at that shape — the product of all possible ``ChoiceValue``s for each choice point in the tree.
+/// - The **total space** is the union of all fibres across all base points: every possible (shape, values) pair that can arise from the generator.
+///
+/// Changing a value that no structural decision depends on stays within the same fibre. Changing a controlling value (a bind-inner position) moves to a different fibre because it changes the downstream shape.
+///
+/// First, a one-shot fibre projection zeros structurally independent values before the main loop begins. Then the main loop starts to reduce a failing trace by alternating between base descent (minimising the trace structure) and fibre descent (minimising the value assignment within a fixed structure) until neither makes progress. When both stall, a relax-round redistributes value magnitude speculatively and exploits the relaxed state. Then the main loop starts over.
 ///
 /// The pipeline reads: projection → base descent → fibre descent → relax-round.
 /// - **Projection** strips noise by zeroing values that no structural decision depends on.
