@@ -82,6 +82,71 @@ public struct CoveringArray: @unchecked Sendable {
         return CoveringArray(strength: strength, rows: rows, profile: profile)
     }
 
+    /// Returns a per-length partitioned covering array for a boundary profile with a single sequence group,
+    /// or nil if the profile has no sequences, has multiple sequences, or doesn't fit within budget.
+    ///
+    /// Each sub-array contains only the element parameters accessible at that length value. This avoids
+    /// the flat IPOG bug where element values are assigned to rows with `sequenceLength=0` (empty arrays).
+    public static func bestFittingPerLength(
+        budget: UInt64,
+        boundaryProfile: BoundaryDomainProfile
+    ) -> [(rows: [CoveringArrayRow], profile: BoundaryDomainProfile)]? {
+        guard boundaryProfile.hasMultipleSequenceLengths == false else { return nil }
+
+        // Find the sequence length parameter index.
+        guard let lengthIndex = boundaryProfile.parameters.indices.first(where: {
+            if case .sequenceLength = boundaryProfile.parameters[$0].kind {
+                return true
+            }
+            return false
+        }) else {
+            return nil
+        }
+
+        // Find the sequence node in the original tree to count element params per slot.
+        guard let originalTree = boundaryProfile.originalTree,
+              let sequenceElements = findSequenceElements(in: originalTree)
+        else {
+            return nil
+        }
+
+        let maxElementSlots = min(2, sequenceElements.count)
+        let count0 = maxElementSlots >= 1 ? countElementParams(in: sequenceElements[0]) : 0
+        let count1 = maxElementSlots >= 2 ? countElementParams(in: sequenceElements[1]) : 0
+
+        let elem0Range = (lengthIndex + 1) ..< (lengthIndex + 1 + count0)
+        let elem1Range = (lengthIndex + 1 + count0) ..< (lengthIndex + 1 + count0 + count1)
+
+        return buildPerLength(
+            profile: boundaryProfile,
+            sequenceLengthIndex: lengthIndex,
+            elem0Range: elem0Range,
+            elem1Range: elem1Range,
+            budget: budget
+        )
+    }
+
+    /// Finds the element subtrees of the first `.sequence` node in a choice tree.
+    private static func findSequenceElements(in tree: ChoiceTree) -> [ChoiceTree]? {
+        switch tree {
+        case let .sequence(_, elements, _):
+            return elements
+        case let .group(children, _):
+            for child in children {
+                if let found = findSequenceElements(in: child) {
+                    return found
+                }
+            }
+            return nil
+        case let .selected(inner):
+            return findSequenceElements(in: inner)
+        case let .bind(inner, _):
+            return findSequenceElements(in: inner)
+        default:
+            return nil
+        }
+    }
+
     /// Returns the strongest covering array that fits within `budget` rows for a boundary domain profile, or `nil` if even t=2 doesn't fit.
     public static func bestFitting(budget: UInt64, boundaryProfile: BoundaryDomainProfile) -> CoveringArray? {
         let syntheticParams = boundaryProfile.parameters.map { param in
@@ -112,6 +177,131 @@ public struct CoveringArray: @unchecked Sendable {
         }
 
         return bestFitting(budget: budget, profile: syntheticProfile)
+    }
+
+    // MARK: - Per-Length Partitioned Construction
+
+    /// Builds separate covering arrays for each sequence length value, each containing only the
+    /// element parameters accessible at that length. Returns nil if the total exceeds the budget.
+    ///
+    /// This fixes the soundness bug where flat IPOG assigns element values to rows with
+    /// `sequenceLength=0`, claiming coverage of pairs that are never exercised.
+    static func buildPerLength(
+        profile: BoundaryDomainProfile,
+        sequenceLengthIndex: Int,
+        elem0Range: Range<Int>,
+        elem1Range: Range<Int>,
+        budget: UInt64
+    ) -> [(rows: [CoveringArrayRow], profile: BoundaryDomainProfile)]? {
+        guard sequenceLengthIndex < profile.parameters.count else {
+            return nil
+        }
+        let lengthParam = profile.parameters[sequenceLengthIndex]
+
+        var subArrays: [(rows: [CoveringArrayRow], profile: BoundaryDomainProfile)] = []
+        var remaining = budget
+
+        for lengthValue in lengthParam.values {
+            // Build the sub-profile: same parameters, but length pinned to one value
+            // and inaccessible element parameters removed.
+            var subParams: [BoundaryParameter] = []
+            for (index, param) in profile.parameters.enumerated() {
+                if index == sequenceLengthIndex {
+                    // Pin the length parameter to a single value.
+                    subParams.append(BoundaryParameter(
+                        index: subParams.count,
+                        values: [lengthValue],
+                        domainSize: 1,
+                        kind: param.kind
+                    ))
+                } else if elem0Range.contains(index) {
+                    // Element 0 params: include only when length >= 1.
+                    guard lengthValue >= 1 else { continue }
+                    subParams.append(BoundaryParameter(
+                        index: subParams.count,
+                        values: param.values,
+                        domainSize: param.domainSize,
+                        kind: param.kind
+                    ))
+                } else if elem1Range.contains(index) {
+                    // Element 1 params: include only when length >= 2.
+                    guard lengthValue >= 2 else { continue }
+                    subParams.append(BoundaryParameter(
+                        index: subParams.count,
+                        values: param.values,
+                        domainSize: param.domainSize,
+                        kind: param.kind
+                    ))
+                } else {
+                    // Non-sequence parameter: always included.
+                    subParams.append(BoundaryParameter(
+                        index: subParams.count,
+                        values: param.values,
+                        domainSize: param.domainSize,
+                        kind: param.kind
+                    ))
+                }
+            }
+
+            let subProfile = BoundaryDomainProfile(
+                parameters: subParams,
+                originalTree: profile.originalTree
+            )
+
+            guard let covering = bestFitting(budget: remaining, boundaryProfile: subProfile) else {
+                return nil
+            }
+            guard UInt64(covering.rows.count) <= remaining else {
+                return nil
+            }
+            remaining -= UInt64(covering.rows.count)
+            subArrays.append((rows: covering.rows, profile: subProfile))
+        }
+
+        return subArrays
+    }
+
+    /// Counts how many parameters `walkElementTree` would extract from an element subtree.
+    ///
+    /// Must replicate ``ChoiceTreeAnalysis/walkElementTree(_:elementIndex:parameters:)`` dispatch
+    /// logic exactly. Any divergence misaligns element parameter ranges and breaks `paramIndex`
+    /// for non-sequence parameters that follow the sequence in tree-walk order.
+    /// - SeeAlso: `ChoiceTreeAnalysis.walkElementTree`
+    static func countElementParams(in tree: ChoiceTree) -> Int {
+        switch tree {
+        case .choice:
+            // walkElementChoice always appends one parameter.
+            return 1
+
+        case .just:
+            return 0
+
+        case .group(_, isOpaque: true):
+            return 0
+
+        case let .group(children, _):
+            if ChoiceTreeAnalysis.isPick(children) {
+                // walkPick appends one parameter (the pick itself).
+                return 1
+            }
+            var total = 0
+            for child in children {
+                total += countElementParams(in: child)
+            }
+            return total
+
+        case let .selected(inner):
+            return countElementParams(in: inner)
+
+        case .bind:
+            // walkElementTree treats bind inside element as opaque — zero params.
+            return 0
+
+        case .getSize, .resize, .sequence, .branch:
+            // walkElementTree rejects these, but if we reach here during counting,
+            // treat as zero. The analysis already validated the tree.
+            return 0
+        }
     }
 
     // MARK: - Exhaustive Enumeration

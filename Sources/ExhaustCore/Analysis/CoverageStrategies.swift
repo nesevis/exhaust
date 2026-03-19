@@ -81,7 +81,10 @@ public struct SingleParameterCoverageStrategy: CoverageStrategy {
 
 /// Boundary-value coverage for profiles with large-domain parameters.
 ///
-/// Wraps ``CoveringArray/bestFitting(budget:boundaryProfile:)`` which converts boundary parameters to a synthetic finite profile and delegates to IPOG. Strength 1 is valid for boundary coverage — it ensures every interesting boundary value is tested for each parameter.
+/// For profiles with a single sequence parameter group, partitions rows by sequence length
+/// so each sub-array only contains element parameters accessible at that length. This avoids
+/// the flat IPOG bug where element values are assigned to `sequenceLength=0` rows that produce
+/// empty arrays. Falls back to flat IPOG for profiles without sequences or with multiple sequences.
 public struct BoundaryValueCoverageStrategy: BoundaryCoverageStrategy {
     public let name: CoverageStrategyName = .boundary
     public let phase: CoveragePhase = .boundary
@@ -93,7 +96,16 @@ public struct BoundaryValueCoverageStrategy: BoundaryCoverageStrategy {
         0
     }
 
-    public func generate(profile: BoundaryDomainProfile, budget: UInt64) -> CoveringArray? {
-        CoveringArray.bestFitting(budget: budget, boundaryProfile: profile)
+    public func generate(profile: BoundaryDomainProfile, budget: UInt64) -> BoundaryCoverageResult? {
+        // Try per-length partitioned construction for single-sequence profiles.
+        if let subArrays = CoveringArray.bestFittingPerLength(budget: budget, boundaryProfile: profile) {
+            return .perLength(subArrays: subArrays)
+        }
+
+        // Fall back to flat IPOG for non-sequence or multi-sequence profiles.
+        guard let covering = CoveringArray.bestFitting(budget: budget, boundaryProfile: profile) else {
+            return nil
+        }
+        return .flat(covering)
     }
 }

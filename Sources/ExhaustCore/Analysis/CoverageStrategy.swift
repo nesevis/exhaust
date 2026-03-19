@@ -47,6 +47,38 @@ public protocol CoverageStrategy {
     func generate(profile: FiniteDomainProfile, budget: UInt64) -> CoveringArray?
 }
 
+/// Result of boundary coverage generation: either a single flat covering array or
+/// per-length sub-arrays for profiles with sequence parameters.
+public enum BoundaryCoverageResult {
+    /// Standard flat IPOG covering array (no sequence parameters, or multi-sequence fallback).
+    case flat(CoveringArray)
+    /// Per-length partitioned sub-arrays, each with its own profile containing only accessible parameters.
+    case perLength(subArrays: [(rows: [CoveringArrayRow], profile: BoundaryDomainProfile)])
+
+    /// The IPOG strength of the result. For per-length results, this is the maximum strength
+    /// across sub-arrays (typically 2 when a length=2 sub-array is present).
+    public var strength: Int {
+        switch self {
+        case let .flat(covering):
+            covering.strength
+        case let .perLength(subArrays):
+            // Sub-arrays with more params have higher strength from IPOG.
+            // Minimum meaningful strength is 1.
+            subArrays.isEmpty ? 0 : max(subArrays.map(\.profile.parameters.count).max() ?? 0, 1)
+        }
+    }
+
+    /// Total number of rows across all sub-arrays.
+    public var totalRows: Int {
+        switch self {
+        case let .flat(covering):
+            covering.rows.count
+        case let .perLength(subArrays):
+            subArrays.reduce(0) { $0 + $1.rows.count }
+        }
+    }
+}
+
 /// Shared interface for boundary-domain coverage strategies.
 ///
 /// Parallel to ``CoverageStrategy`` but operates on ``BoundaryDomainProfile`` instead of ``FiniteDomainProfile``.
@@ -60,6 +92,6 @@ public protocol BoundaryCoverageStrategy {
     /// Returns estimated row count for the given profile, or nil if this strategy is inapplicable.
     func estimatedRows(profile: BoundaryDomainProfile, budget: UInt64) -> Int?
 
-    /// Generates a covering array from a boundary profile, or nil if the strategy cannot produce one within budget.
-    func generate(profile: BoundaryDomainProfile, budget: UInt64) -> CoveringArray?
+    /// Generates boundary coverage, or nil if the strategy cannot produce anything within budget.
+    func generate(profile: BoundaryDomainProfile, budget: UInt64) -> BoundaryCoverageResult?
 }

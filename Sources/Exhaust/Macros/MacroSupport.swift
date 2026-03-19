@@ -119,7 +119,7 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
                         "covering_rows": "\(rows)",
                         "parameters": "\(parameters)",
                         "total_space": "\(totalSpace)",
-                        "kind": kind == .boundaryValue ? "boundary" : "finite",
+                        "kind": kind == .finiteDomain ? "finite" : "boundary",
                     ]
                 )
                 // Reflect to get a structurally correct tree with materialized picks,
@@ -242,7 +242,7 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
                         "total_space": "\(totalSpace)",
                         "parameters": "\(parameters)",
                         "exhaustive": "false",
-                        "kind": kind == .boundaryValue ? "boundary" : "finite",
+                        "kind": kind == .finiteDomain ? "finite" : "boundary",
                     ]
                 )
 

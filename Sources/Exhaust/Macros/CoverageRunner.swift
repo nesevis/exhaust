@@ -19,6 +19,9 @@ enum CoverageRunner {
     enum CoverageKind {
         case finiteDomain
         case boundaryValue
+        /// Per-length partitioned boundary coverage. Pairwise coverage is within each
+        /// length partition, not across all parameters including length.
+        case perLengthBoundaryValue
     }
 
     static func run<Output>(
@@ -129,59 +132,86 @@ enum CoverageRunner {
         property: (Output) -> Bool
     ) -> Result<Output> {
         let strategy = BoundaryValueCoverageStrategy()
-        guard let covering = strategy.generate(profile: profile, budget: coverageBudget) else {
+        guard let result = strategy.generate(profile: profile, budget: coverageBudget) else {
             return .notApplicable
         }
-        // Strength 1 is valid for boundary coverage (test all boundary values for
-        // each parameter). Unlike finite-domain coverage where t>=2 ensures pairwise
-        // interaction, boundary coverage aims to hit every interesting value.
-        guard covering.strength >= 1 else {
+        guard result.strength >= 1 else {
             return .notApplicable
         }
 
         let hasBinds = profile.originalTree?.containsBind ?? false
-        let skipFilterCheck = covering.rows.count >= 100
+        let totalRows = result.totalRows
+        let skipFilterCheck = totalRows >= 100
+
+        // Build the list of (rows, profile) segments to iterate.
+        // For flat results, there's one segment using the original profile.
+        // For per-length results, each sub-array has its own profile with only accessible element params.
+        let segments: [(rows: [CoveringArrayRow], profile: BoundaryDomainProfile)]
+        let strength: Int
+        let totalSpace: UInt64
+        let kind: CoverageKind
+
+        switch result {
+        case let .flat(covering):
+            segments = [(rows: covering.rows, profile: profile)]
+            strength = covering.strength
+            totalSpace = covering.profile.totalSpace
+            kind = .boundaryValue
+
+        case let .perLength(subArrays):
+            segments = subArrays
+            strength = result.strength
+            totalSpace = UInt64(totalRows)
+            kind = .perLengthBoundaryValue
+        }
 
         var iterations = 0
-        for (rowIndex, row) in covering.rows.enumerated() {
-            guard let tree = BoundaryCoveringArrayReplay.buildTree(row: row, profile: profile) else {
-                continue
-            }
-
-            let value: Output?
-            if hasBinds {
-                let prefix = ChoiceSequence(tree)
-                switch GuidedMaterializer.materialize(gen, prefix: prefix, seed: UInt64(rowIndex), abortOnFilter: skipFilterCheck) {
-                case let .success(v, _, _):
-                    value = v as? Output
-                case .filterEncountered:
-                    return .notApplicable
-                case .failed:
-                    value = nil
+        var globalRowIndex = 0
+        for segment in segments {
+            for row in segment.rows {
+                guard let tree = BoundaryCoveringArrayReplay.buildTree(
+                    row: row, profile: segment.profile
+                ) else {
+                    globalRowIndex += 1
+                    continue
                 }
-            } else {
-                value = try? Interpreters.replay(gen, using: tree)
-            }
 
-            guard let value else { continue }
-            iterations += 1
-            if property(value) == false {
-                return .failure(
-                    value: value, tree: tree, iteration: iterations,
-                    strength: covering.strength, rows: covering.rows.count,
-                    parameters: profile.parameters.count, totalSpace: covering.profile.totalSpace,
-                    kind: .boundaryValue
-                )
+                let value: Output?
+                if hasBinds {
+                    let prefix = ChoiceSequence(tree)
+                    switch GuidedMaterializer.materialize(gen, prefix: prefix, seed: UInt64(globalRowIndex), abortOnFilter: skipFilterCheck) {
+                    case let .success(v, _, _):
+                        value = v as? Output
+                    case .filterEncountered:
+                        return .notApplicable
+                    case .failed:
+                        value = nil
+                    }
+                } else {
+                    value = try? Interpreters.replay(gen, using: tree)
+                }
+
+                globalRowIndex += 1
+                guard let value else { continue }
+                iterations += 1
+                if property(value) == false {
+                    return .failure(
+                        value: value, tree: tree, iteration: iterations,
+                        strength: strength, rows: totalRows,
+                        parameters: profile.parameters.count, totalSpace: totalSpace,
+                        kind: kind
+                    )
+                }
             }
         }
 
         return .partial(
             iterations: iterations,
-            strength: covering.strength,
-            rows: covering.rows.count,
+            strength: strength,
+            rows: totalRows,
             parameters: profile.parameters.count,
-            totalSpace: covering.profile.totalSpace,
-            kind: .boundaryValue
+            totalSpace: totalSpace,
+            kind: kind
         )
     }
 }
