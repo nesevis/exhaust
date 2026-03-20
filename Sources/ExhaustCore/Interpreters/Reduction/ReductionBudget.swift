@@ -1,25 +1,6 @@
 public extension Interpreters {
     /// Configuration presets for the reducer's test case reduction strategies.
     enum ReductionBudget {
-        /// Per-strategy probe budgets controlling how many candidates each strategy evaluates.
-        struct ProbeBudgets {
-            let deleteAlignedSiblingWindows: Int
-            let redistributeNumericPairs: Int
-            let reduceValuesInTandem: Int
-
-            static let fast = Self(
-                deleteAlignedSiblingWindows: 400,
-                redistributeNumericPairs: 600,
-                reduceValuesInTandem: 400
-            )
-
-            static let slow = Self(
-                deleteAlignedSiblingWindows: 2000,
-                redistributeNumericPairs: 3000,
-                reduceValuesInTandem: 2000
-            )
-        }
-
         /// Tuning parameters for the beam search used by aligned sibling deletion.
         struct AlignedDeletionBeamSearchTuning {
             let minBeamWidth: Int
@@ -71,15 +52,6 @@ public extension Interpreters {
                 6
             case .slow:
                 12
-            }
-        }
-
-        var probeBudgets: ProbeBudgets {
-            switch self {
-            case .fast:
-                .fast
-            case .slow:
-                .slow
             }
         }
 

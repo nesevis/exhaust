@@ -7,8 +7,6 @@ public extension Interpreters {
     struct BonsaiReducerConfiguration: Sendable {
         /// Maximum number of outer cycles with no improvement before terminating.
         let maxStalls: Int
-        /// Per-strategy probe budgets.
-        let probeBudgets: ReductionBudget.ProbeBudgets
         /// Beam search tuning for aligned deletion.
         let alignedDeletionBeamSearchTuning: ReductionBudget.AlignedDeletionBeamSearchTuning
         /// When `true`, use ``ReductionMaterializer``-backed decoders that produce
@@ -21,12 +19,10 @@ public extension Interpreters {
 
         private init(
             maxStalls: Int,
-            probeBudgets: ReductionBudget.ProbeBudgets,
             alignedDeletionBeamSearchTuning: ReductionBudget.AlignedDeletionBeamSearchTuning,
             useReductionMaterializer: Bool = true
         ) {
             self.maxStalls = maxStalls
-            self.probeBudgets = probeBudgets
             self.alignedDeletionBeamSearchTuning = alignedDeletionBeamSearchTuning
             self.useReductionMaterializer = useReductionMaterializer
         }
@@ -36,12 +32,10 @@ public extension Interpreters {
             switch config {
             case .fast: self = Self(
                 maxStalls: 1,
-                probeBudgets: .fast,
                 alignedDeletionBeamSearchTuning: .fast
             )
             case .slow: self = Self(
                 maxStalls: 8,
-                probeBudgets: .slow,
                 alignedDeletionBeamSearchTuning: .slow
             )
             }
@@ -49,13 +43,11 @@ public extension Interpreters {
 
         public static let fast = Self(
             maxStalls: 1,
-            probeBudgets: .fast,
             alignedDeletionBeamSearchTuning: .fast
         )
 
         public static let slow = Self(
             maxStalls: 8,
-            probeBudgets: .slow,
             alignedDeletionBeamSearchTuning: .slow
         )
     }
