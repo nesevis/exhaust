@@ -14,10 +14,10 @@
 /// 3. `as_integer_ratio`-style integer-part minimization
 ///
 /// Each stage processes one float span at a time. On convergence or exhaustion, advances to the next stage or the next span.
-struct ReduceFloatEncoder: AdaptiveEncoder, StallRecordable {
+struct ReduceFloatEncoder: AdaptiveEncoder {
     init() {}
 
-    var stallRecords: [Int: (value: UInt64, target: UInt64, direction: StallInstrumentation.Direction)] = [:]
+    var stallRecords: [Int: WarmStart] = [:]
 
     let name: EncoderName = .reduceFloat
     let phase = ReductionPhase.valueMinimization
@@ -43,6 +43,8 @@ struct ReduceFloatEncoder: AdaptiveEncoder, StallRecordable {
         let isRangeExplicit: Bool
         var currentValue: Double
         var currentBitPattern: UInt64
+        /// When set, skips batch stages (special values and truncation) on warm start.
+        var initialStage: Stage?
     }
 
     private enum Stage: Int, Comparable {
@@ -82,7 +84,7 @@ struct ReduceFloatEncoder: AdaptiveEncoder, StallRecordable {
 
     // MARK: - AdaptiveEncoder
 
-    mutating func start(sequence: ChoiceSequence, targets: TargetSet) {
+    mutating func start(sequence: ChoiceSequence, targets: TargetSet, warmStarts: [Int: WarmStart]?) {
         self.sequence = sequence
         self.targets = []
         currentTargetIndex = 0
@@ -101,13 +103,24 @@ struct ReduceFloatEncoder: AdaptiveEncoder, StallRecordable {
             guard choiceTag == .double || choiceTag == .float else { continue }
             guard case let .floating(floatingValue, _, _) = v.choice else { continue }
 
+            // Stage-skip: if the warm start bound matches the current bit pattern,
+            // the value is unchanged since last convergence — skip batch stages.
+            let skipBatchStages: Stage? = if let warmStart = warmStarts?[seqIdx],
+               warmStart.bound == v.choice.bitPattern64
+            {
+                .integralBinarySearch
+            } else {
+                nil
+            }
+
             self.targets.append(FloatTarget(
                 seqIdx: seqIdx,
                 tag: choiceTag,
                 validRange: v.validRange,
                 isRangeExplicit: v.isRangeExplicit,
                 currentValue: floatingValue,
-                currentBitPattern: v.choice.bitPattern64
+                currentBitPattern: v.choice.bitPattern64,
+                initialStage: skipBatchStages
             ))
         }
     }
@@ -116,6 +129,10 @@ struct ReduceFloatEncoder: AdaptiveEncoder, StallRecordable {
         while currentTargetIndex < targets.count {
             if needsFirstProbe {
                 needsFirstProbe = false
+                // Apply stage-skip from warm start before preparing the first stage.
+                if let skip = targets[currentTargetIndex].initialStage, skip > stage {
+                    stage = skip
+                }
                 prepareStage()
             } else if lastAccepted {
                 handleAcceptance()
@@ -337,9 +354,8 @@ struct ReduceFloatEncoder: AdaptiveEncoder, StallRecordable {
                 applyIntegralBinarySearchBest()
             }
             let target = targets[currentTargetIndex]
-            stallRecords[target.seqIdx] = (
-                value: target.currentBitPattern,
-                target: 0,
+            stallRecords[target.seqIdx] = WarmStart(
+                bound: target.currentBitPattern,
                 direction: .downward
             )
             return nil
@@ -424,9 +440,8 @@ struct ReduceFloatEncoder: AdaptiveEncoder, StallRecordable {
                 applyRatioBinarySearchBest()
             }
             let target = targets[currentTargetIndex]
-            stallRecords[target.seqIdx] = (
-                value: target.currentBitPattern,
-                target: 0,
+            stallRecords[target.seqIdx] = WarmStart(
+                bound: target.currentBitPattern,
                 direction: .downward
             )
             return nil

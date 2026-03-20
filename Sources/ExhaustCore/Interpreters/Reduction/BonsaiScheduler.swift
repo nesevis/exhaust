@@ -141,18 +141,13 @@ enum BonsaiScheduler {
         if isInstrumented, let instrumentation = state.stallInstrumentation {
             let records = instrumentation.records
             let totalConvergences = instrumentation.totalEncoderConvergences
-            let stallCount = records.count(where: { $0.isStall })
-
-            let stallFrequency = totalConvergences > 0
-                ? Double(stallCount) / Double(totalConvergences)
-                : 0
 
             // Stability: for each coordinate, compare stall values across consecutive cycles.
             var stabilityMatches = 0
             var stabilityPairs = 0
             let byCycle = Dictionary(grouping: records, by: { $0.cycle })
             let sortedCycles = byCycle.keys.sorted()
-            for index in 1 ..< sortedCycles.count {
+            for index in sortedCycles.indices.dropFirst() {
                 let previousCycle = sortedCycles[index - 1]
                 let currentCycle = sortedCycles[index]
                 guard let previousRecords = byCycle[previousCycle],
@@ -184,9 +179,7 @@ enum BonsaiScheduler {
                 category: .reducer,
                 event: "stall_instrumentation",
                 metadata: [
-                    "stall_count": "\(stallCount)",
                     "total_convergences": "\(totalConvergences)",
-                    "stall_frequency": String(format: "%.3f", stallFrequency),
                     "stall_stability": String(format: "%.3f", stallStability),
                     "stability_pairs": "\(stabilityPairs)",
                     "cycles": "\(cycles)",

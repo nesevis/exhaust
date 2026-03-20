@@ -27,7 +27,7 @@ public struct ZeroValueEncoder: AdaptiveEncoder {
 
     // MARK: - AdaptiveEncoder
 
-    public mutating func start(sequence: ChoiceSequence, targets: TargetSet) {
+    public mutating func start(sequence: ChoiceSequence, targets: TargetSet, warmStarts _: [Int: WarmStart]?) {
         self.sequence = sequence
         zeroPhase = .allAtOnce
         spanIndex = 0

@@ -8,10 +8,10 @@
 /// Binary-searches each target value toward a specific reduction target.
 ///
 /// The reduction target for each value is determined by its recorded valid range (see ``ChoiceValue/reductionTarget(in:)``). Processes targets sequentially, converging each via ``BinarySearchStepper`` before moving to the next.
-public struct BinarySearchToRangeMinimumEncoder: AdaptiveEncoder, StallRecordable {
+public struct BinarySearchToRangeMinimumEncoder: AdaptiveEncoder {
     public init() {}
 
-    var stallRecords: [Int: (value: UInt64, target: UInt64, direction: StallInstrumentation.Direction)] = [:]
+    public private(set) var stallRecords: [Int: WarmStart] = [:]
 
     public let name: EncoderName = .binarySearchToRangeMinimum
     public let phase = ReductionPhase.valueMinimization
@@ -32,6 +32,8 @@ public struct BinarySearchToRangeMinimumEncoder: AdaptiveEncoder, StallRecordabl
         let choiceTag: TypeTag
         let targetBP: UInt64
         var stepper: BinarySearchStepper
+        let isWarmStarted: Bool
+        let warmStartBound: UInt64
     }
 
     private var sequence = ChoiceSequence()
@@ -40,16 +42,19 @@ public struct BinarySearchToRangeMinimumEncoder: AdaptiveEncoder, StallRecordabl
     private var needsFirstProbe = true
     /// Saved entry for in-place mutation restore on rejection.
     private var savedEntry: ChoiceSequenceValue?
+    /// Pending validation probe state: after warm-started convergence, emits one probe at floor - 1.
+    private var pendingValidation: (seqIdx: Int, floor: UInt64, targetBP: UInt64)?
 
     // MARK: - AdaptiveEncoder
 
-    public mutating func start(sequence: ChoiceSequence, targets: TargetSet) {
+    public mutating func start(sequence: ChoiceSequence, targets: TargetSet, warmStarts: [Int: WarmStart]?) {
         self.sequence = sequence
         self.targets = []
         currentIndex = 0
         needsFirstProbe = true
         savedEntry = nil
         stallRecords = [:]
+        pendingValidation = nil
 
         guard case let .spans(spans) = targets else { return }
 
@@ -68,19 +73,60 @@ public struct BinarySearchToRangeMinimumEncoder: AdaptiveEncoder, StallRecordabl
                 ? v.choice.reductionTarget(in: v.validRange)
                 : v.choice.semanticSimplest.bitPattern64
             guard currentBP != targetBP else { i += 1; continue }
+
+            // Downward-only encoder: warm start narrows lo from targetBP upward.
+            let validWarmStart = (warmStarts?[seqIdx]?.direction == .downward) ? warmStarts?[seqIdx] : nil
+            let effectiveLo = validWarmStart?.bound ?? targetBP
+            let isWarmStarted = validWarmStart != nil
+
             self.targets.append(TargetState(
                 seqIdx: seqIdx,
                 validRange: v.validRange,
                 isRangeExplicit: v.isRangeExplicit,
                 choiceTag: v.choice.tag,
                 targetBP: targetBP,
-                stepper: BinarySearchStepper(lo: targetBP, hi: currentBP)
+                stepper: BinarySearchStepper(lo: effectiveLo, hi: currentBP),
+                isWarmStarted: isWarmStarted,
+                warmStartBound: effectiveLo
             ))
             i += 1
         }
     }
 
     public mutating func nextProbe(lastAccepted: Bool) -> ChoiceSequence? {
+        // Handle pending validation probe result first.
+        if let validation = pendingValidation {
+            pendingValidation = nil
+            if lastAccepted {
+                // Floor moved lower — cached bound was stale. Restart with cold stepper.
+                if let saved = savedEntry {
+                    sequence[validation.seqIdx] = saved
+                    savedEntry = nil
+                }
+                targets[currentIndex] = TargetState(
+                    seqIdx: targets[currentIndex].seqIdx,
+                    validRange: targets[currentIndex].validRange,
+                    isRangeExplicit: targets[currentIndex].isRangeExplicit,
+                    choiceTag: targets[currentIndex].choiceTag,
+                    targetBP: targets[currentIndex].targetBP,
+                    stepper: BinarySearchStepper(lo: validation.targetBP, hi: validation.floor - 1),
+                    isWarmStarted: false,
+                    warmStartBound: validation.targetBP
+                )
+                needsFirstProbe = true
+                // Fall through to main loop.
+            } else {
+                // Floor confirmed — restore and advance to next target.
+                if let saved = savedEntry {
+                    sequence[validation.seqIdx] = saved
+                    savedEntry = nil
+                }
+                currentIndex += 1
+                needsFirstProbe = true
+                // Fall through to main loop.
+            }
+        }
+
         while currentIndex < targets.count {
             let probeValue: UInt64?
 
@@ -120,13 +166,36 @@ public struct BinarySearchToRangeMinimumEncoder: AdaptiveEncoder, StallRecordabl
                 sequence[targets[currentIndex].seqIdx] = saved
                 savedEntry = nil
             }
-            // Record convergence for stall instrumentation before advancing.
+            // Record convergence for stall cache.
             let convergedTarget = targets[currentIndex]
-            stallRecords[convergedTarget.seqIdx] = (
-                value: convergedTarget.stepper.bestAccepted,
-                target: convergedTarget.targetBP,
+            stallRecords[convergedTarget.seqIdx] = WarmStart(
+                bound: convergedTarget.stepper.bestAccepted,
                 direction: .downward
             )
+
+            // Validation probe: if warm-started, verify the cached floor still holds.
+            let currentBP = sequence[convergedTarget.seqIdx].value?.choice.bitPattern64 ?? convergedTarget.stepper.bestAccepted
+            if convergedTarget.isWarmStarted,
+               convergedTarget.warmStartBound > convergedTarget.targetBP,
+               convergedTarget.warmStartBound > 0,
+               convergedTarget.warmStartBound < currentBP
+            {
+                pendingValidation = (
+                    seqIdx: convergedTarget.seqIdx,
+                    floor: convergedTarget.warmStartBound,
+                    targetBP: convergedTarget.targetBP
+                )
+                // Emit probe at floor - 1.
+                savedEntry = sequence[convergedTarget.seqIdx]
+                let probeBP = convergedTarget.warmStartBound - 1
+                sequence[convergedTarget.seqIdx] = .value(.init(
+                    choice: ChoiceValue(convergedTarget.choiceTag.makeConvertible(bitPattern64: probeBP), tag: convergedTarget.choiceTag),
+                    validRange: convergedTarget.validRange,
+                    isRangeExplicit: convergedTarget.isRangeExplicit
+                ))
+                return sequence
+            }
+
             currentIndex += 1
             needsFirstProbe = true
         }

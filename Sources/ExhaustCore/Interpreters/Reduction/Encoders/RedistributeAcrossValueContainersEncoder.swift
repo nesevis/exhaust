@@ -79,7 +79,7 @@ public struct RedistributeAcrossValueContainersEncoder: AdaptiveEncoder {
 
     // MARK: - AdaptiveEncoder
 
-    public mutating func start(sequence: ChoiceSequence, targets: TargetSet) {
+    public mutating func start(sequence: ChoiceSequence, targets: TargetSet, warmStarts _: [Int: WarmStart]?) {
         self.sequence = sequence
         semanticStats = SequenceSemanticStats(sequence: sequence)
         orientations = []

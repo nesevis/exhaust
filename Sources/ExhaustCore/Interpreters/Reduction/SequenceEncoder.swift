@@ -57,16 +57,6 @@ public protocol BatchEncoder: SequenceEncoderBase {
     ) -> any Sequence<ChoiceSequence>
 }
 
-/// Convergence record harvesting for stall instrumentation.
-///
-/// Conformers accumulate per-coordinate convergence data during their probe loop. After the loop, ``ReductionState/runAdaptive(_:decoder:targets:structureChanged:budget:fingerprintGuard:)`` drains the records into ``StallInstrumentation`` before the local encoder copy goes out of scope.
-protocol StallRecordable {
-    /// Convergence records accumulated during the probe loop.
-    ///
-    /// Each entry maps a flat sequence index to its convergence value, target value, and direction.
-    var stallRecords: [Int: (value: UInt64, target: UInt64, direction: StallInstrumentation.Direction)] { get }
-}
-
 /// Adaptive encoding: one probe at a time, feedback-driven.
 ///
 /// Conformers are stateful — they maintain internal search state (for example, `[lo, hi]` bounds per target for binary search). The scheduler drives the loop; the encoder navigates a decision tree based on acceptance/rejection feedback.
@@ -75,12 +65,27 @@ protocol StallRecordable {
 public protocol AdaptiveEncoder: SequenceEncoderBase {
     /// Initializes internal state for a new encoding pass.
     ///
-    /// Called once by the scheduler before the probe loop begins. The encoder captures the starting sequence and targets, and builds whatever internal state it needs.
-    mutating func start(sequence: ChoiceSequence, targets: TargetSet)
+    /// Called once by the scheduler before the probe loop begins. The encoder captures the starting sequence and targets, and builds whatever internal state it needs. Warm starts from the ``StallCache`` narrow binary search ranges for encoders that support them.
+    mutating func start(sequence: ChoiceSequence, targets: TargetSet, warmStarts: [Int: WarmStart]?)
 
     /// Produces the next probe given feedback on the previous one.
     ///
-    /// - Parameter lastAccepted: Whether the previous probe was accepted by the decoder. Ignored on the first call after ``start(sequence:targets:)``.
+    /// - Parameter lastAccepted: Whether the previous probe was accepted by the decoder. Ignored on the first call after ``start(sequence:targets:warmStarts:)``.
     /// - Returns: The next candidate to try, or `nil` when converged.
     mutating func nextProbe(lastAccepted: Bool) -> ChoiceSequence?
+
+    /// Convergence records accumulated during the probe loop.
+    ///
+    /// Each entry maps a flat sequence index to the ``WarmStart`` at which the search converged. Harvested by ``ReductionState/runAdaptive(_:decoder:targets:structureChanged:budget:fingerprintGuard:warmStarts:)`` into the ``StallCache`` and ``StallInstrumentation``.
+    var stallRecords: [Int: WarmStart] { get }
+}
+
+extension AdaptiveEncoder {
+    /// Convenience overload for callers that do not pass warm starts.
+    public mutating func start(sequence: ChoiceSequence, targets: TargetSet) {
+        start(sequence: sequence, targets: targets, warmStarts: nil)
+    }
+
+    /// Default implementation returning no stall records.
+    public var stallRecords: [Int: WarmStart] { [:] }
 }

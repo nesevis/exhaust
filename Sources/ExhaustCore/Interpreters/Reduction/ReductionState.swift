@@ -1,23 +1,66 @@
-// MARK: - Stall Instrumentation
+// MARK: - Warm Start
 
-/// Measurement-only instrumentation for encoder convergence events.
+/// Cached convergence bound from a prior binary search pass, used to narrow subsequent searches.
 ///
-/// Tracks per-coordinate stall frequency, stability, and cycle count across the reduction pipeline. Populated by encoders via ``StallRecordable`` and harvested by ``ReductionState/runAdaptive(_:decoder:targets:structureChanged:budget:fingerprintGuard:)``. Only allocated when debug logging is enabled.
-struct StallInstrumentation {
-    enum Direction {
+/// When a binary search encoder converges at a coordinate, it records the convergence bound and direction. On the next cycle, the cache supplies this as a warm start to skip the already-explored portion of the search range. A validation probe confirms the floor before committing.
+public struct WarmStart: Sendable {
+    /// The bit-pattern value at which the prior search converged.
+    public let bound: UInt64
+
+    /// The direction of the prior search.
+    public let direction: Direction
+
+    /// The direction a binary search was traveling when it converged.
+    public enum Direction: Sendable {
         case downward
         case upward
     }
 
+    public init(bound: UInt64, direction: Direction) {
+        self.bound = bound
+        self.direction = direction
+    }
+}
+
+// MARK: - Stall Cache
+
+/// Per-coordinate convergence cache for the reduction pipeline.
+///
+/// Records ``WarmStart`` entries from encoder convergence events. Fibre descent passes supply cached entries to binary search encoders to narrow (or skip) search ranges on subsequent cycles. Invalidated entirely on structural change.
+struct StallCache {
+    private var entries: [Int: WarmStart] = [:]
+
+    var isEmpty: Bool { entries.isEmpty }
+
+    func warmStart(at index: Int) -> WarmStart? {
+        entries[index]
+    }
+
+    /// Returns all cached entries, or `nil` if empty.
+    var allEntries: [Int: WarmStart]? {
+        entries.isEmpty ? nil : entries
+    }
+
+    mutating func record(index: Int, warmStart: WarmStart) {
+        entries[index] = warmStart
+    }
+
+    mutating func invalidateAll() {
+        entries.removeAll(keepingCapacity: true)
+    }
+}
+
+// MARK: - Stall Instrumentation
+
+/// Measurement-only instrumentation for encoder convergence events.
+///
+/// Tracks per-coordinate convergence stability and cycle count across the reduction pipeline. Populated by encoders via ``AdaptiveEncoder/stallRecords`` and harvested by ``ReductionState/runAdaptive(_:decoder:targets:structureChanged:budget:fingerprintGuard:)``. Only allocated when debug logging is enabled.
+struct StallInstrumentation {
     struct StallRecord {
         let coordinateIndex: Int
         let stallValue: UInt64
-        let targetValue: UInt64
-        let direction: Direction
+        let direction: WarmStart.Direction
         let cycle: Int
-
-        /// Whether the encoder stalled short of the target.
-        var isStall: Bool { stallValue != targetValue }
     }
 
     var records: [StallRecord] = []
@@ -48,6 +91,7 @@ final class ReductionState<Output> {
     var spanCache: SpanCache
     var lattice: DominanceLattice
     var rejectCache = Set<UInt64>(minimumCapacity: 512)
+    var stallCache = StallCache()
     var stallInstrumentation: StallInstrumentation?
 
     /// The current cycle number, set by the scheduler at the top of each cycle.
@@ -74,6 +118,7 @@ final class ReductionState<Output> {
         let branchTreeDirty: Bool
         let spanCache: SpanCache
         let lattice: DominanceLattice
+        let stallCache: StallCache
     }
 
     // Encoders
@@ -140,6 +185,7 @@ extension ReductionState {
         branchTreeDirty = true
         if structureChanged {
             spanCache.invalidate()
+            stallCache.invalidateAll()
             bindIndex = hasBind ? BindSpanIndex(from: sequence) : nil
             if config.useReductionMaterializer == false {
                 let seed = ZobristHash.hash(of: sequence)
@@ -232,13 +278,14 @@ extension ReductionState {
         targets: TargetSet,
         structureChanged: Bool,
         budget: inout ReductionScheduler.LegBudget,
-        fingerprintGuard: StructuralFingerprint? = nil
+        fingerprintGuard: StructuralFingerprint? = nil,
+        warmStarts: [Int: WarmStart]? = nil
     ) throws -> Bool {
         guard budget.isExhausted == false else { return false }
         if lattice.shouldSkip(encoder.name, phase: encoder.phase) { return false }
         let startSeqLen = sequence.count
         var encoder = encoder
-        encoder.start(sequence: sequence, targets: targets)
+        encoder.start(sequence: sequence, targets: targets, warmStarts: warmStarts)
         let cacheSalt = decoder.rejectCacheSalt
         var lastAccepted = false
         var anyAccepted = false
@@ -284,20 +331,23 @@ extension ReductionState {
                 rejectCache.insert(cacheKey)
             }
         }
-        // Harvest stall records from the encoder before the local copy goes out of scope.
-        if stallInstrumentation != nil, let recordable = encoder as? any StallRecordable {
-            for (index, record) in recordable.stallRecords {
+        // Harvest stall records into cache and instrumentation.
+        let harvested = encoder.stallRecords
+        for (index, warmStart) in harvested {
+            stallCache.record(index: index, warmStart: warmStart)
+        }
+        if stallInstrumentation != nil {
+            for (index, warmStart) in harvested {
                 stallInstrumentation?.records.append(
                     StallInstrumentation.StallRecord(
                         coordinateIndex: index,
-                        stallValue: record.value,
-                        targetValue: record.target,
-                        direction: record.direction,
+                        stallValue: warmStart.bound,
+                        direction: warmStart.direction,
                         cycle: currentCycle
                     )
                 )
             }
-            stallInstrumentation?.totalEncoderConvergences += recordable.stallRecords.count
+            stallInstrumentation?.totalEncoderConvergences += harvested.count
         }
         if anyAccepted {
             lattice.recordSuccess(encoder.name)
@@ -346,7 +396,8 @@ extension ReductionState {
             bestOutput: bestOutput,
             branchTreeDirty: branchTreeDirty,
             spanCache: spanCache,
-            lattice: lattice
+            lattice: lattice,
+            stallCache: stallCache
         )
     }
 
@@ -362,6 +413,7 @@ extension ReductionState {
         branchTreeDirty = snapshot.branchTreeDirty
         spanCache = snapshot.spanCache
         lattice = snapshot.lattice
+        stallCache = snapshot.stallCache
     }
 
 }

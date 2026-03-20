@@ -263,7 +263,7 @@ struct ProductSpaceAdaptiveEncoder: AdaptiveEncoder {
 
     // MARK: - AdaptiveEncoder
 
-    mutating func start(sequence: ChoiceSequence, targets _: TargetSet) {
+    mutating func start(sequence: ChoiceSequence, targets _: TargetSet, warmStarts _: [Int: WarmStart]?) {
         self.sequence = sequence
         coordinates = []
         savedEntries = [:]

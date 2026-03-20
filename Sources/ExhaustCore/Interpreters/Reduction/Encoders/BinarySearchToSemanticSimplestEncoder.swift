@@ -8,10 +8,10 @@
 /// Binary-searches each target value toward its semantic simplest form (zero for numerics).
 ///
 /// Processes targets sequentially, converging each via ``BinarySearchStepper`` before moving to the next. After bit-pattern binary search converges, a **cross-zero probe** phase walks down in shortlex key space to find simpler values that the bit-pattern search cannot reach. This is essential for signed integers: bit-pattern search from positive values toward zero stays on the positive side, missing negative values like -1 (shortlex key 1) which are simpler than 1 (shortlex key 2) in zigzag encoding.
-public struct BinarySearchToSemanticSimplestEncoder: AdaptiveEncoder, StallRecordable {
+public struct BinarySearchToSemanticSimplestEncoder: AdaptiveEncoder {
     public init() {}
 
-    var stallRecords: [Int: (value: UInt64, target: UInt64, direction: StallInstrumentation.Direction)] = [:]
+    public private(set) var stallRecords: [Int: WarmStart] = [:]
 
     public let name: EncoderName = .binarySearchToSemanticSimplest
     public let phase = ReductionPhase.valueMinimization
@@ -38,7 +38,7 @@ public struct BinarySearchToSemanticSimplestEncoder: AdaptiveEncoder, StallRecor
             }
         }
 
-        var direction: StallInstrumentation.Direction {
+        var direction: WarmStart.Direction {
             switch self {
             case .downward: .downward
             case .upward: .upward
@@ -79,10 +79,13 @@ public struct BinarySearchToSemanticSimplestEncoder: AdaptiveEncoder, StallRecor
         let choiceTag: TypeTag
         let targetBP: UInt64
         var stepper: DirectionalStepper
+        let isWarmStarted: Bool
+        let warmStartBound: UInt64
     }
 
     private enum Phase {
         case binarySearch
+        case validatingFloor(floor: UInt64, targetBP: UInt64)
         case crossZero(currentKey: UInt64, lowerBound: UInt64)
     }
 
@@ -96,7 +99,7 @@ public struct BinarySearchToSemanticSimplestEncoder: AdaptiveEncoder, StallRecor
 
     // MARK: - AdaptiveEncoder
 
-    public mutating func start(sequence: ChoiceSequence, targets: TargetSet) {
+    public mutating func start(sequence: ChoiceSequence, targets: TargetSet, warmStarts: [Int: WarmStart]?) {
         self.sequence = sequence
         self.targets = []
         currentIndex = 0
@@ -134,18 +137,35 @@ public struct BinarySearchToSemanticSimplestEncoder: AdaptiveEncoder, StallRecor
             let targetBP = target.bitPattern64
             let currentBP = v.choice.bitPattern64
             guard currentBP != targetBP else { i += 1; continue }
-            let stepper: DirectionalStepper = if currentBP > targetBP {
-                .downward(BinarySearchStepper(lo: targetBP, hi: currentBP))
+
+            let warmStart = warmStarts?[seqIdx]
+            let isWarmStarted: Bool
+            let effectiveBound: UInt64
+            let stepper: DirectionalStepper
+
+            if currentBP > targetBP {
+                // Downward search: warm start narrows lo from targetBP upward.
+                let validWarmStart = (warmStart?.direction == .downward) ? warmStart : nil
+                effectiveBound = validWarmStart?.bound ?? targetBP
+                isWarmStarted = validWarmStart != nil
+                stepper = .downward(BinarySearchStepper(lo: effectiveBound, hi: currentBP))
             } else {
-                .upward(MaxBinarySearchStepper(lo: currentBP, hi: targetBP))
+                // Upward search: warm start narrows hi from targetBP downward.
+                let validWarmStart = (warmStart?.direction == .upward) ? warmStart : nil
+                effectiveBound = validWarmStart?.bound ?? targetBP
+                isWarmStarted = validWarmStart != nil
+                stepper = .upward(MaxBinarySearchStepper(lo: currentBP, hi: effectiveBound))
             }
+
             self.targets.append(TargetState(
                 seqIdx: seqIdx,
                 validRange: v.validRange,
                 isRangeExplicit: v.isRangeExplicit,
                 choiceTag: v.choice.tag,
                 targetBP: targetBP,
-                stepper: stepper
+                stepper: stepper,
+                isWarmStarted: isWarmStarted,
+                warmStartBound: effectiveBound
             ))
             i += 1
         }
@@ -158,17 +178,84 @@ public struct BinarySearchToSemanticSimplestEncoder: AdaptiveEncoder, StallRecor
                 if let candidate = advanceBinarySearch(lastAccepted: lastAccepted) {
                     return candidate
                 }
-                // Binary search converged — record for stall instrumentation.
+                // Binary search converged — record stall record.
                 let convergedTarget = targets[currentIndex]
-                stallRecords[convergedTarget.seqIdx] = (
-                    value: convergedTarget.stepper.bestAccepted,
-                    target: convergedTarget.targetBP,
+                stallRecords[convergedTarget.seqIdx] = WarmStart(
+                    bound: convergedTarget.stepper.bestAccepted,
                     direction: convergedTarget.stepper.direction
                 )
+                // Validation probe: if this target was warm-started with a downward
+                // search, verify the cached floor still holds by probing floor - 1.
+                let state = targets[currentIndex]
+                if state.isWarmStarted,
+                   case .downward = state.stepper,
+                   state.warmStartBound > state.targetBP,
+                   state.warmStartBound > 0,
+                   state.warmStartBound < sequence[state.seqIdx].value?.choice.bitPattern64 ?? 0
+                {
+                    searchPhase = .validatingFloor(
+                        floor: state.warmStartBound,
+                        targetBP: state.targetBP
+                    )
+                    // Emit probe at floor - 1.
+                    savedEntry = sequence[state.seqIdx]
+                    let probeBP = state.warmStartBound - 1
+                    sequence[state.seqIdx] = .value(.init(
+                        choice: ChoiceValue(state.choiceTag.makeConvertible(bitPattern64: probeBP), tag: state.choiceTag),
+                        validRange: state.validRange,
+                        isRangeExplicit: state.isRangeExplicit
+                    ))
+                    return sequence
+                }
                 // Enter cross-zero phase for signed integers.
                 // Cross-zero walks shortlex key space (zigzag encoded), which only
                 // applies to signed types. Float shortlex keys use a different
                 // encoding that fromShortlexKey cannot reverse.
+                if state.choiceTag.isSigned {
+                    let currentChoice = sequence[state.seqIdx].value?.choice ?? ChoiceValue(
+                        state.choiceTag.makeConvertible(bitPattern64: state.stepper.bestAccepted),
+                        tag: state.choiceTag
+                    )
+                    let currentKey = currentChoice.shortlexKey
+                    if currentKey > 0 {
+                        let maxProbes: UInt64 = 16
+                        let lowerBound = currentKey > maxProbes ? currentKey - maxProbes : 0
+                        searchPhase = .crossZero(currentKey: currentKey, lowerBound: lowerBound)
+                        continue
+                    }
+                }
+                advanceToNextTarget()
+
+            case let .validatingFloor(floor, targetBP):
+                // Handle feedback from the validation probe at floor - 1.
+                if lastAccepted {
+                    // Floor moved lower — the cached bound was stale. Restore the
+                    // saved entry and restart with a cold stepper over the full
+                    // remaining range [targetBP, floor - 1].
+                    if let saved = savedEntry {
+                        sequence[targets[currentIndex].seqIdx] = saved
+                        savedEntry = nil
+                    }
+                    let state = targets[currentIndex]
+                    targets[currentIndex] = TargetState(
+                        seqIdx: state.seqIdx,
+                        validRange: state.validRange,
+                        isRangeExplicit: state.isRangeExplicit,
+                        choiceTag: state.choiceTag,
+                        targetBP: state.targetBP,
+                        stepper: .downward(BinarySearchStepper(lo: targetBP, hi: floor - 1)),
+                        isWarmStarted: false,
+                        warmStartBound: targetBP
+                    )
+                    needsFirstProbe = true
+                    searchPhase = .binarySearch
+                    continue
+                }
+                // Floor confirmed — restore saved entry and proceed to cross-zero or next target.
+                if let saved = savedEntry {
+                    sequence[targets[currentIndex].seqIdx] = saved
+                    savedEntry = nil
+                }
                 let state = targets[currentIndex]
                 if state.choiceTag.isSigned {
                     let currentChoice = sequence[state.seqIdx].value?.choice ?? ChoiceValue(

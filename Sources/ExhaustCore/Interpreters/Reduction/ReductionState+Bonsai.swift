@@ -614,6 +614,9 @@ extension ReductionState {
         lattice.invalidate()
         var anyAccepted = false
 
+        // Build warm starts once for all fibre descent calls.
+        let cachedWarmStarts = stallCache.allEntries
+
         // Compute target leaf ranges.
         let leafRanges = computeLeafRanges(dag: dag)
 
@@ -672,28 +675,32 @@ extension ReductionState {
                             zeroValueEncoder, decoder: decoder,
                             targets: .spans(leafSpans), structureChanged: structureChanged,
                             budget: &legBudget,
-                            fingerprintGuard: guard_
+                            fingerprintGuard: guard_,
+                            warmStarts: cachedWarmStarts
                         )
                     case .binarySearchToZero where leafSpans.isEmpty == false:
                         slotAccepted = try runAdaptive(
                             binarySearchToZeroEncoder, decoder: decoder,
                             targets: .spans(leafSpans), structureChanged: structureChanged,
                             budget: &legBudget,
-                            fingerprintGuard: guard_
+                            fingerprintGuard: guard_,
+                            warmStarts: cachedWarmStarts
                         )
                     case .binarySearchToTarget where leafSpans.isEmpty == false:
                         slotAccepted = try runAdaptive(
                             binarySearchToTargetEncoder, decoder: decoder,
                             targets: .spans(leafSpans), structureChanged: structureChanged,
                             budget: &legBudget,
-                            fingerprintGuard: guard_
+                            fingerprintGuard: guard_,
+                            warmStarts: cachedWarmStarts
                         )
                     case .reduceFloat where floatSpans.isEmpty == false:
                         slotAccepted = try runAdaptive(
                             reduceFloatEncoder, decoder: decoder,
                             targets: .spans(floatSpans), structureChanged: structureChanged,
                             budget: &legBudget,
-                            fingerprintGuard: guard_
+                            fingerprintGuard: guard_,
+                            warmStarts: cachedWarmStarts
                         )
                     default:
                         break
@@ -740,28 +747,32 @@ extension ReductionState {
                                 zeroValueEncoder, decoder: depthDecoder,
                                 targets: .spans(vSpans), structureChanged: hasBind,
                                 budget: &legBudget,
-                                fingerprintGuard: prePhaseFingerprint
+                                fingerprintGuard: prePhaseFingerprint,
+                                warmStarts: cachedWarmStarts
                             )
                         case .binarySearchToZero where vSpans.isEmpty == false:
                             slotAccepted = try runAdaptive(
                                 binarySearchToZeroEncoder, decoder: depthDecoder,
                                 targets: .spans(vSpans), structureChanged: hasBind,
                                 budget: &legBudget,
-                                fingerprintGuard: prePhaseFingerprint
+                                fingerprintGuard: prePhaseFingerprint,
+                                warmStarts: cachedWarmStarts
                             )
                         case .binarySearchToTarget where vSpans.isEmpty == false:
                             slotAccepted = try runAdaptive(
                                 binarySearchToTargetEncoder, decoder: depthDecoder,
                                 targets: .spans(vSpans), structureChanged: hasBind,
                                 budget: &legBudget,
-                                fingerprintGuard: prePhaseFingerprint
+                                fingerprintGuard: prePhaseFingerprint,
+                                warmStarts: cachedWarmStarts
                             )
                         case .reduceFloat where fSpans.isEmpty == false:
                             slotAccepted = try runAdaptive(
                                 reduceFloatEncoder, decoder: depthDecoder,
                                 targets: .spans(fSpans), structureChanged: hasBind,
                                 budget: &legBudget,
-                                fingerprintGuard: prePhaseFingerprint
+                                fingerprintGuard: prePhaseFingerprint,
+                                warmStarts: cachedWarmStarts
                             )
                         default:
                             break

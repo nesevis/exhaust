@@ -82,7 +82,6 @@ struct HypothesisShrinkQualityParityTests {
 
     @Test("Hypothesis::test_sum_of_pair_separated_int")
     func sumOfPairSeparatedInt() throws {
-        ExhaustLog.setConfiguration(.init(isEnabled: true, minimumLevel: .info, categoryMinimumLevels: [.reducer: .debug], format: .human))
         let separatedIntGen = #gen(
             .int(in: 0 ... 1000),
             .asciiString(),
