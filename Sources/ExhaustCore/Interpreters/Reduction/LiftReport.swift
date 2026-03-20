@@ -1,0 +1,66 @@
+/// Resolution tier for a single coordinate in the canonical cartesian lift.
+///
+/// Ordered from highest fidelity (exact carry-forward from the prefix) to lowest (PRNG fallback).
+/// The raw value encodes this ordering for use in ``LiftReport/fidelity``.
+public enum ResolutionTier: UInt8, Sendable {
+    /// Value carried forward unchanged from the prefix — the canonical lift.
+    case exactCarryForward = 0
+    /// Value resolved from the fallback tree (clamped to the new domain).
+    case fallbackTree = 1
+    /// Value generated from PRNG — no prefix or fallback data available.
+    case prng = 2
+}
+
+/// Aggregate fidelity score for a guided materialization pass.
+///
+/// Counts how many coordinates were resolved at each ``ResolutionTier`` and exposes a single
+/// ``fidelity`` score in `[0, 1]` that measures how closely the lift preserved the original
+/// value assignment.
+public struct LiftReport: Sendable {
+    private var exactCarryForwardCount = 0
+    private var fallbackTreeCount = 0
+    private var prngCount = 0
+
+    /// Records that one coordinate was resolved at the given tier.
+    mutating func record(tier: ResolutionTier) {
+        switch tier {
+        case .exactCarryForward:
+            exactCarryForwardCount += 1
+        case .fallbackTree:
+            fallbackTreeCount += 1
+        case .prng:
+            prngCount += 1
+        }
+    }
+
+    /// Total number of coordinates resolved across all tiers.
+    var totalCount: Int {
+        exactCarryForwardCount + fallbackTreeCount + prngCount
+    }
+
+    /// Weighted fidelity score in `[0, 1]`.
+    ///
+    /// Exact carry-forward scores 1.0, fallback tree scores 0.5, PRNG scores 0.0. Returns 0.0
+    /// when no coordinates have been recorded (empty lift).
+    var fidelity: Double {
+        let total = totalCount
+        guard total > 0 else { return 0.0 }
+        let score = Double(exactCarryForwardCount) + 0.5 * Double(fallbackTreeCount)
+        return score / Double(total)
+    }
+
+    /// Fraction of coordinates resolved from any data source (prefix or fallback tree) rather
+    /// than blind PRNG.
+    ///
+    /// Together with ``fidelity``, forms a sufficient statistic for the full tier distribution:
+    /// - Exact fraction: `2 * fidelity - coverage`.
+    /// - Fallback fraction: `2 * (coverage - fidelity)`.
+    /// - PRNG fraction: `1 - coverage`.
+    ///
+    /// Returns 0.0 when no coordinates have been recorded.
+    var coverage: Double {
+        let total = totalCount
+        guard total > 0 else { return 0.0 }
+        return Double(exactCarryForwardCount + fallbackTreeCount) / Double(total)
+    }
+}

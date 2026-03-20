@@ -93,7 +93,7 @@ extension ReductionScheduler {
                     prefix: candidate,
                     mode: .guided(seed: seed, fallbackTree: bestTree)
                 ) {
-                case let .success(output, freshTree):
+                case let .success(output, freshTree, _):
                     guard property(output) == false else { continue }
                     bestSequence = ChoiceSequence(freshTree)
                     bestTree = freshTree

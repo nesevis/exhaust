@@ -212,6 +212,15 @@ public struct BinarySearchToSemanticSimplestEncoder: AdaptiveEncoder {
                 // applies to signed types. Float shortlex keys use a different
                 // encoding that fromShortlexKey cannot reverse.
                 if state.choiceTag.isSigned {
+                    // Skip cross-zero when warm-started convergence left the value
+                    // unchanged — the same shortlex keys were tried last cycle.
+                    if state.isWarmStarted {
+                        let currentBP = sequence[state.seqIdx].value?.choice.bitPattern64 ?? 0
+                        if currentBP == state.warmStartBound {
+                            advanceToNextTarget()
+                            continue
+                        }
+                    }
                     let currentChoice = sequence[state.seqIdx].value?.choice ?? ChoiceValue(
                         state.choiceTag.makeConvertible(bitPattern64: state.stepper.bestAccepted),
                         tag: state.choiceTag
@@ -258,6 +267,15 @@ public struct BinarySearchToSemanticSimplestEncoder: AdaptiveEncoder {
                 }
                 let state = targets[currentIndex]
                 if state.choiceTag.isSigned {
+                    // Skip cross-zero when warm-started convergence left the value
+                    // unchanged — the same shortlex keys were tried last cycle.
+                    if state.isWarmStarted {
+                        let currentBP = sequence[state.seqIdx].value?.choice.bitPattern64 ?? 0
+                        if currentBP == state.warmStartBound {
+                            advanceToNextTarget()
+                            continue
+                        }
+                    }
                     let currentChoice = sequence[state.seqIdx].value?.choice ?? ChoiceValue(
                         state.choiceTag.makeConvertible(bitPattern64: state.stepper.bestAccepted),
                         tag: state.choiceTag

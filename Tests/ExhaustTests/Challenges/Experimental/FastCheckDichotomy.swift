@@ -25,6 +25,8 @@ struct FastCheckDichotomyChallenge {
      that restarts binary search from scratch at each level would take O(n²)
      probes; Bonsai's stall cache (when implemented) should make cycle 2+ a
      zero-cost confirmation pass.
+     
+     This is akin to the Difference tests from the shrinking challenge
      */
 
     @Test("fast-check dichotomy regression")

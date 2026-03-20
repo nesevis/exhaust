@@ -32,7 +32,9 @@ public enum ReductionMaterializer {
     /// Result of a reduction materialization attempt.
     public enum Result<Output> {
         /// Materialization succeeded with a value and fresh tree.
-        case success(value: Output, tree: ChoiceTree)
+        ///
+        /// `liftReport` is populated for guided mode only (`nil` for exact mode).
+        case success(value: Output, tree: ChoiceTree, liftReport: LiftReport?)
         /// Exact mode: out-of-range or structural mismatch — candidate is invalid.
         case rejected
         /// Guided mode: filter or generation failure.
@@ -79,7 +81,8 @@ public enum ReductionMaterializer {
             // or clamp valid values from larger-size generations.
             size: 100,
             maximizeBoundRegionIndices: maximizeBoundRegionIndices,
-            materializePicks: materializePicks
+            materializePicks: materializePicks,
+            liftReport: mode.isGuided ? LiftReport() : nil
         )
 
         do {
@@ -91,7 +94,7 @@ public enum ReductionMaterializer {
                 case .guided: return .failed
                 }
             }
-            return .success(value: value, tree: tree)
+            return .success(value: value, tree: tree, liftReport: context.liftReport)
         } catch is RejectionError {
             return .rejected
         } catch {
@@ -122,6 +125,13 @@ private extension ReductionMaterializer.Mode {
         switch self {
         case .exact: .exact
         case .guided: .guided
+        }
+    }
+
+    var isGuided: Bool {
+        switch self {
+        case .exact: false
+        case .guided: true
         }
     }
 }
@@ -426,15 +436,19 @@ private extension ReductionMaterializer {
                 if randomBits == bp {
                     reusedChoice = prefixValue.choice
                 }
+                context.liftReport?.record(tier: .exactCarryForward)
             } else if let indices = context.maximizeBoundRegionIndices,
                       context.cursor.isSuspended,
                       indices.contains(context.cursor.bindEncounterCount - 1)
             {
                 randomBits = max
+                context.liftReport?.record(tier: .fallbackTree)
             } else if let calleeFallback, case let .choice(value, _) = calleeFallback {
                 randomBits = Swift.min(Swift.max(value.bitPattern64, min), max)
+                context.liftReport?.record(tier: .fallbackTree)
             } else {
                 randomBits = context.prng.next(in: min ... max)
+                context.liftReport?.record(tier: .prng)
             }
 
         case .generate:
@@ -972,6 +986,9 @@ private extension ReductionMaterializer {
         /// When `false`, pick sites skip non-selected branch materialization.
         /// Only `DeleteByBranchPromotionEncoder` needs full branch alternatives.
         var materializePicks: Bool = false
+        /// Accumulates per-coordinate resolution tier data for guided mode.
+        /// `nil` for exact mode and pure-generate mode.
+        var liftReport: LiftReport?
     }
 }
 

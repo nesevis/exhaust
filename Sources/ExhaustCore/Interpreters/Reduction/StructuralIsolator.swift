@@ -121,7 +121,7 @@ enum StructuralIsolator {
             mode: .exact
         )
 
-        guard case let .success(value, freshTree) = result else {
+        guard case let .success(value, freshTree, _) = result else {
             if isInstrumented {
                 ExhaustLog.debug(
                     category: .reducer,
