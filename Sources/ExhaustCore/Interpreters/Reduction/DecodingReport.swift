@@ -1,7 +1,7 @@
 /// Resolution tier for a single coordinate in the canonical cartesian lift.
 ///
 /// Ordered from highest fidelity (exact carry-forward from the prefix) to lowest (PRNG fallback).
-/// The raw value encodes this ordering for use in ``LiftReport/fidelity``.
+/// The raw value encodes this ordering for use in ``DecodingReport/fidelity``.
 public enum ResolutionTier: UInt8, Sendable {
     /// Value carried forward unchanged from the prefix — the canonical lift.
     case exactCarryForward = 0
@@ -16,7 +16,7 @@ public enum ResolutionTier: UInt8, Sendable {
 /// Counts how many coordinates were resolved at each ``ResolutionTier`` and exposes a single
 /// ``fidelity`` score in `[0, 1]` that measures how closely the lift preserved the original
 /// value assignment.
-public struct LiftReport: Sendable {
+public struct DecodingReport: Sendable {
     private var exactCarryForwardCount = 0
     private var fallbackTreeCount = 0
     private var prngCount = 0
@@ -62,5 +62,18 @@ public struct LiftReport: Sendable {
         let total = totalCount
         guard total > 0 else { return 0.0 }
         return Double(exactCarryForwardCount + fallbackTreeCount) / Double(total)
+    }
+
+    /// Minimum coverage required for a stall point to be considered reliable enough to cache.
+    ///
+    /// Below this threshold, too many coordinates were resolved via PRNG for the stall outcome
+    /// to be reproducible — a different seed could yield a different result. Empirically, structural-phase
+    /// probes land at 0.167–0.250 while stable value-phase probes reach 1.0, so 0.9 cleanly separates
+    /// the two regimes.
+    static let stallCacheCoverageThreshold: Double = 0.9
+
+    /// Whether this materialization's coverage is high enough for stall points to be cached.
+    var isReliableForStallCache: Bool {
+        coverage >= Self.stallCacheCoverageThreshold
     }
 }

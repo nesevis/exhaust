@@ -67,7 +67,8 @@ enum BonsaiScheduler {
                     sequence: result.sequence,
                     tree: result.tree,
                     output: result.output,
-                    evaluations: 1
+                    evaluations: 1,
+                    decodingReport: nil
                 ),
                 structureChanged: false
             )

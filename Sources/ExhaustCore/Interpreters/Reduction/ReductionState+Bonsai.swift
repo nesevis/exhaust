@@ -408,7 +408,7 @@ extension ReductionState {
                     let regime: String
                     let probeResultLabel: String
                     switch probeResult {
-                    case let .success(value: probeValue, tree: freshTree, liftReport: _):
+                    case let .success(value: probeValue, tree: freshTree, decodingReport: _):
                         let freshSequence = ChoiceSequence(freshTree)
                         if property(probeValue) == false, freshSequence.shortLexPrecedes(sequence) {
                             // Elimination regime: failure is structural, not value-sensitive.
@@ -423,7 +423,8 @@ extension ReductionState {
                                     sequence: freshSequence,
                                     tree: freshTree,
                                     output: probeValue,
-                                    evaluations: 1
+                                    evaluations: 1,
+                                    decodingReport: nil
                                 ),
                                 structureChanged: true
                             )

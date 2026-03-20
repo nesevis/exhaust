@@ -291,6 +291,7 @@ extension ReductionState {
         var anyAccepted = false
         var probes = 0
         var accepted = 0
+        var lastDecodingReport: DecodingReport?
         while let probe = encoder.nextProbe(lastAccepted: lastAccepted) {
             guard budget.isExhausted == false else { break }
             probes += 1
@@ -304,6 +305,7 @@ extension ReductionState {
                 originalSequence: sequence, property: property
             ) {
                 budget.recordMaterialization()
+                lastDecodingReport = result.decodingReport
                 if let guardPrint = fingerprintGuard {
                     // Snapshot before accepting so a structural crossing can be fully rolled back.
                     let snap = makeSnapshot()
@@ -332,9 +334,14 @@ extension ReductionState {
             }
         }
         // Harvest stall records into cache and instrumentation.
+        // Gate cache recording on coverage: low-coverage materializations (PRNG-heavy)
+        // produce unreliable stall points that would cause validation-probe restarts.
         let harvested = encoder.stallRecords
+        let cacheReliable = lastDecodingReport?.isReliableForStallCache ?? true
         for (index, warmStart) in harvested {
-            stallCache.record(index: index, warmStart: warmStart)
+            if cacheReliable {
+                stallCache.record(index: index, warmStart: warmStart)
+            }
         }
         if stallInstrumentation != nil {
             for (index, warmStart) in harvested {
