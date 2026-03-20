@@ -81,6 +81,7 @@ enum BonsaiScheduler {
 
         while stallBudget > 0 {
             cycles += 1
+            state.currentCycle = cycles
             let cycleStartBest = state.bestSequence
 
             state.computeEncoderOrdering()
@@ -135,6 +136,62 @@ enum BonsaiScheduler {
                     ]
                 )
             }
+        }
+
+        if isInstrumented, let instrumentation = state.stallInstrumentation {
+            let records = instrumentation.records
+            let totalConvergences = instrumentation.totalEncoderConvergences
+            let stallCount = records.count(where: { $0.isStall })
+
+            let stallFrequency = totalConvergences > 0
+                ? Double(stallCount) / Double(totalConvergences)
+                : 0
+
+            // Stability: for each coordinate, compare stall values across consecutive cycles.
+            var stabilityMatches = 0
+            var stabilityPairs = 0
+            let byCycle = Dictionary(grouping: records, by: { $0.cycle })
+            let sortedCycles = byCycle.keys.sorted()
+            for index in 1 ..< sortedCycles.count {
+                let previousCycle = sortedCycles[index - 1]
+                let currentCycle = sortedCycles[index]
+                guard let previousRecords = byCycle[previousCycle],
+                      let currentRecords = byCycle[currentCycle]
+                else {
+                    continue
+                }
+                let previousByIndex = Dictionary(
+                    previousRecords.map { ($0.coordinateIndex, $0.stallValue) },
+                    uniquingKeysWith: { _, last in last }
+                )
+                for record in currentRecords {
+                    if let previousValue = previousByIndex[record.coordinateIndex] {
+                        stabilityPairs += 1
+                        let delta = record.stallValue > previousValue
+                            ? record.stallValue - previousValue
+                            : previousValue - record.stallValue
+                        if delta <= 1 {
+                            stabilityMatches += 1
+                        }
+                    }
+                }
+            }
+            let stallStability = stabilityPairs > 0
+                ? Double(stabilityMatches) / Double(stabilityPairs)
+                : 0
+
+            ExhaustLog.notice(
+                category: .reducer,
+                event: "stall_instrumentation",
+                metadata: [
+                    "stall_count": "\(stallCount)",
+                    "total_convergences": "\(totalConvergences)",
+                    "stall_frequency": String(format: "%.3f", stallFrequency),
+                    "stall_stability": String(format: "%.3f", stallStability),
+                    "stability_pairs": "\(stabilityPairs)",
+                    "cycles": "\(cycles)",
+                ]
+            )
         }
 
         if isInstrumented {

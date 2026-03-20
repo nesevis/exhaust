@@ -14,8 +14,10 @@
 /// 3. `as_integer_ratio`-style integer-part minimization
 ///
 /// Each stage processes one float span at a time. On convergence or exhaustion, advances to the next stage or the next span.
-struct ReduceFloatEncoder: AdaptiveEncoder {
+struct ReduceFloatEncoder: AdaptiveEncoder, StallRecordable {
     init() {}
+
+    var stallRecords: [Int: (value: UInt64, target: UInt64, direction: StallInstrumentation.Direction)] = [:]
 
     let name: EncoderName = .reduceFloat
     let phase = ReductionPhase.valueMinimization
@@ -88,6 +90,7 @@ struct ReduceFloatEncoder: AdaptiveEncoder {
         batchCandidates = []
         batchIndex = 0
         needsFirstProbe = true
+        stallRecords = [:]
 
         guard case let .spans(spans) = targets else { return }
 
@@ -333,6 +336,12 @@ struct ReduceFloatEncoder: AdaptiveEncoder {
             if stepper.bestAccepted > 0 {
                 applyIntegralBinarySearchBest()
             }
+            let target = targets[currentTargetIndex]
+            stallRecords[target.seqIdx] = (
+                value: target.currentBitPattern,
+                target: 0,
+                direction: .downward
+            )
             return nil
         }
 
@@ -414,6 +423,12 @@ struct ReduceFloatEncoder: AdaptiveEncoder {
             if stepper.bestAccepted > 0 {
                 applyRatioBinarySearchBest()
             }
+            let target = targets[currentTargetIndex]
+            stallRecords[target.seqIdx] = (
+                value: target.currentBitPattern,
+                target: 0,
+                direction: .downward
+            )
             return nil
         }
 

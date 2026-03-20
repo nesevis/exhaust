@@ -8,8 +8,10 @@
 /// Binary-searches each target value toward a specific reduction target.
 ///
 /// The reduction target for each value is determined by its recorded valid range (see ``ChoiceValue/reductionTarget(in:)``). Processes targets sequentially, converging each via ``BinarySearchStepper`` before moving to the next.
-public struct BinarySearchToRangeMinimumEncoder: AdaptiveEncoder {
+public struct BinarySearchToRangeMinimumEncoder: AdaptiveEncoder, StallRecordable {
     public init() {}
+
+    var stallRecords: [Int: (value: UInt64, target: UInt64, direction: StallInstrumentation.Direction)] = [:]
 
     public let name: EncoderName = .binarySearchToRangeMinimum
     public let phase = ReductionPhase.valueMinimization
@@ -28,6 +30,7 @@ public struct BinarySearchToRangeMinimumEncoder: AdaptiveEncoder {
         let validRange: ClosedRange<UInt64>?
         let isRangeExplicit: Bool
         let choiceTag: TypeTag
+        let targetBP: UInt64
         var stepper: BinarySearchStepper
     }
 
@@ -46,6 +49,7 @@ public struct BinarySearchToRangeMinimumEncoder: AdaptiveEncoder {
         currentIndex = 0
         needsFirstProbe = true
         savedEntry = nil
+        stallRecords = [:]
 
         guard case let .spans(spans) = targets else { return }
 
@@ -69,6 +73,7 @@ public struct BinarySearchToRangeMinimumEncoder: AdaptiveEncoder {
                 validRange: v.validRange,
                 isRangeExplicit: v.isRangeExplicit,
                 choiceTag: v.choice.tag,
+                targetBP: targetBP,
                 stepper: BinarySearchStepper(lo: targetBP, hi: currentBP)
             ))
             i += 1
@@ -115,6 +120,13 @@ public struct BinarySearchToRangeMinimumEncoder: AdaptiveEncoder {
                 sequence[targets[currentIndex].seqIdx] = saved
                 savedEntry = nil
             }
+            // Record convergence for stall instrumentation before advancing.
+            let convergedTarget = targets[currentIndex]
+            stallRecords[convergedTarget.seqIdx] = (
+                value: convergedTarget.stepper.bestAccepted,
+                target: convergedTarget.targetBP,
+                direction: .downward
+            )
             currentIndex += 1
             needsFirstProbe = true
         }

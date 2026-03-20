@@ -57,6 +57,16 @@ public protocol BatchEncoder: SequenceEncoderBase {
     ) -> any Sequence<ChoiceSequence>
 }
 
+/// Convergence record harvesting for stall instrumentation.
+///
+/// Conformers accumulate per-coordinate convergence data during their probe loop. After the loop, ``ReductionState/runAdaptive(_:decoder:targets:structureChanged:budget:fingerprintGuard:)`` drains the records into ``StallInstrumentation`` before the local encoder copy goes out of scope.
+protocol StallRecordable {
+    /// Convergence records accumulated during the probe loop.
+    ///
+    /// Each entry maps a flat sequence index to its convergence value, target value, and direction.
+    var stallRecords: [Int: (value: UInt64, target: UInt64, direction: StallInstrumentation.Direction)] { get }
+}
+
 /// Adaptive encoding: one probe at a time, feedback-driven.
 ///
 /// Conformers are stateful — they maintain internal search state (for example, `[lo, hi]` bounds per target for binary search). The scheduler drives the loop; the encoder navigates a decision tree based on acceptance/rejection feedback.

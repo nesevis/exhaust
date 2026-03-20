@@ -8,8 +8,10 @@
 /// Binary-searches each target value toward its semantic simplest form (zero for numerics).
 ///
 /// Processes targets sequentially, converging each via ``BinarySearchStepper`` before moving to the next. After bit-pattern binary search converges, a **cross-zero probe** phase walks down in shortlex key space to find simpler values that the bit-pattern search cannot reach. This is essential for signed integers: bit-pattern search from positive values toward zero stays on the positive side, missing negative values like -1 (shortlex key 1) which are simpler than 1 (shortlex key 2) in zigzag encoding.
-public struct BinarySearchToSemanticSimplestEncoder: AdaptiveEncoder {
+public struct BinarySearchToSemanticSimplestEncoder: AdaptiveEncoder, StallRecordable {
     public init() {}
+
+    var stallRecords: [Int: (value: UInt64, target: UInt64, direction: StallInstrumentation.Direction)] = [:]
 
     public let name: EncoderName = .binarySearchToSemanticSimplest
     public let phase = ReductionPhase.valueMinimization
@@ -33,6 +35,13 @@ public struct BinarySearchToSemanticSimplestEncoder: AdaptiveEncoder {
             switch self {
             case let .downward(s): s.bestAccepted
             case let .upward(s): s.bestAccepted
+            }
+        }
+
+        var direction: StallInstrumentation.Direction {
+            switch self {
+            case .downward: .downward
+            case .upward: .upward
             }
         }
 
@@ -68,6 +77,7 @@ public struct BinarySearchToSemanticSimplestEncoder: AdaptiveEncoder {
         let validRange: ClosedRange<UInt64>?
         let isRangeExplicit: Bool
         let choiceTag: TypeTag
+        let targetBP: UInt64
         var stepper: DirectionalStepper
     }
 
@@ -93,6 +103,7 @@ public struct BinarySearchToSemanticSimplestEncoder: AdaptiveEncoder {
         needsFirstProbe = true
         searchPhase = .binarySearch
         savedEntry = nil
+        stallRecords = [:]
 
         guard case let .spans(spans) = targets else { return }
 
@@ -133,6 +144,7 @@ public struct BinarySearchToSemanticSimplestEncoder: AdaptiveEncoder {
                 validRange: v.validRange,
                 isRangeExplicit: v.isRangeExplicit,
                 choiceTag: v.choice.tag,
+                targetBP: targetBP,
                 stepper: stepper
             ))
             i += 1
@@ -146,7 +158,14 @@ public struct BinarySearchToSemanticSimplestEncoder: AdaptiveEncoder {
                 if let candidate = advanceBinarySearch(lastAccepted: lastAccepted) {
                     return candidate
                 }
-                // Binary search converged. Enter cross-zero phase for signed integers.
+                // Binary search converged — record for stall instrumentation.
+                let convergedTarget = targets[currentIndex]
+                stallRecords[convergedTarget.seqIdx] = (
+                    value: convergedTarget.stepper.bestAccepted,
+                    target: convergedTarget.targetBP,
+                    direction: convergedTarget.stepper.direction
+                )
+                // Enter cross-zero phase for signed integers.
                 // Cross-zero walks shortlex key space (zigzag encoded), which only
                 // applies to signed types. Float shortlex keys use a different
                 // encoding that fromShortlexKey cannot reverse.

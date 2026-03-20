@@ -1,3 +1,31 @@
+// MARK: - Stall Instrumentation
+
+/// Measurement-only instrumentation for encoder convergence events.
+///
+/// Tracks per-coordinate stall frequency, stability, and cycle count across the reduction pipeline. Populated by encoders via ``StallRecordable`` and harvested by ``ReductionState/runAdaptive(_:decoder:targets:structureChanged:budget:fingerprintGuard:)``. Only allocated when debug logging is enabled.
+struct StallInstrumentation {
+    enum Direction {
+        case downward
+        case upward
+    }
+
+    struct StallRecord {
+        let coordinateIndex: Int
+        let stallValue: UInt64
+        let targetValue: UInt64
+        let direction: Direction
+        let cycle: Int
+
+        /// Whether the encoder stalled short of the target.
+        var isStall: Bool { stallValue != targetValue }
+    }
+
+    var records: [StallRecord] = []
+
+    /// Total convergence events recorded by encoders (stalls and successful reductions).
+    var totalEncoderConvergences = 0
+}
+
 /// Mutable state for the reduction cycle, including the current sequence, tree, encoder instances, and ordering.
 ///
 /// Allocated once per reduction invocation and passed to each leg method by reference. Using a class avoids Swift exclusivity conflicts when leg methods pass encoder properties to helper methods like ``runAdaptive(_:decoder:targets:structureChanged:budget:)``.
@@ -20,6 +48,10 @@ final class ReductionState<Output> {
     var spanCache: SpanCache
     var lattice: DominanceLattice
     var rejectCache = Set<UInt64>(minimumCapacity: 512)
+    var stallInstrumentation: StallInstrumentation?
+
+    /// The current cycle number, set by the scheduler at the top of each cycle.
+    var currentCycle = 0
 
     /// Whether the tree needs re-materialization with picks before branch encoders can run.
     ///
@@ -93,6 +125,7 @@ final class ReductionState<Output> {
         self.deleteAlignedWindowsEncoder = DeleteAlignedWindowsEncoder(
             beamTuning: config.alignedDeletionBeamSearchTuning
         )
+        self.stallInstrumentation = isInstrumented ? StallInstrumentation() : nil
     }
 }
 
@@ -250,6 +283,21 @@ extension ReductionState {
                 lastAccepted = false
                 rejectCache.insert(cacheKey)
             }
+        }
+        // Harvest stall records from the encoder before the local copy goes out of scope.
+        if stallInstrumentation != nil, let recordable = encoder as? any StallRecordable {
+            for (index, record) in recordable.stallRecords {
+                stallInstrumentation?.records.append(
+                    StallInstrumentation.StallRecord(
+                        coordinateIndex: index,
+                        stallValue: record.value,
+                        targetValue: record.target,
+                        direction: record.direction,
+                        cycle: currentCycle
+                    )
+                )
+            }
+            stallInstrumentation?.totalEncoderConvergences += recordable.stallRecords.count
         }
         if anyAccepted {
             lattice.recordSuccess(encoder.name)
