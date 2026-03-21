@@ -105,7 +105,7 @@ extension ReductionState {
         // Re-materialize with picks so branch encoders see all non-selected alternatives.
         // Skip if the tree is already up to date (no acceptance since last materialization).
         if branchTreeDirty {
-            if case let .success(_, freshTree) = ReductionMaterializer.materialize(
+            if case let .success(_, freshTree, _) = ReductionMaterializer.materialize(
                 gen, prefix: sequence, mode: .exact, fallbackTree: fallbackTree,
                 materializePicks: true
             ) {
@@ -408,7 +408,7 @@ extension ReductionState {
                     let regime: String
                     let probeResultLabel: String
                     switch probeResult {
-                    case let .success(value: probeValue, tree: freshTree):
+                    case let .success(value: probeValue, tree: freshTree, decodingReport: _):
                         let freshSequence = ChoiceSequence(freshTree)
                         if property(probeValue) == false, freshSequence.shortLexPrecedes(sequence) {
                             // Elimination regime: failure is structural, not value-sensitive.
@@ -423,7 +423,8 @@ extension ReductionState {
                                     sequence: freshSequence,
                                     tree: freshTree,
                                     output: probeValue,
-                                    evaluations: 1
+                                    evaluations: 1,
+                                    decodingReport: nil
                                 ),
                                 structureChanged: true
                             )
@@ -614,6 +615,15 @@ extension ReductionState {
         lattice.invalidate()
         var anyAccepted = false
 
+        // Build converged origins once for all fibre descent calls in this pass.
+        // Mid-pass updates (from one encoder's convergence records) must not leak into
+        // another encoder's converged origins — the cross-zero skip relies on the
+        // converged bound matching the value at which cross-zero was last attempted,
+        // which is encoder-specific. A shared mid-pass update would let one
+        // encoder's convergence trigger another encoder's cross-zero skip even
+        // though cross-zero at that value was never attempted by the second encoder.
+        let cachedOrigins = convergenceCache.allEntries
+
         // Compute target leaf ranges.
         let leafRanges = computeLeafRanges(dag: dag)
 
@@ -672,28 +682,32 @@ extension ReductionState {
                             zeroValueEncoder, decoder: decoder,
                             targets: .spans(leafSpans), structureChanged: structureChanged,
                             budget: &legBudget,
-                            fingerprintGuard: guard_
+                            fingerprintGuard: guard_,
+                            convergedOrigins: cachedOrigins
                         )
                     case .binarySearchToZero where leafSpans.isEmpty == false:
                         slotAccepted = try runAdaptive(
                             binarySearchToZeroEncoder, decoder: decoder,
                             targets: .spans(leafSpans), structureChanged: structureChanged,
                             budget: &legBudget,
-                            fingerprintGuard: guard_
+                            fingerprintGuard: guard_,
+                            convergedOrigins: cachedOrigins
                         )
                     case .binarySearchToTarget where leafSpans.isEmpty == false:
                         slotAccepted = try runAdaptive(
                             binarySearchToTargetEncoder, decoder: decoder,
                             targets: .spans(leafSpans), structureChanged: structureChanged,
                             budget: &legBudget,
-                            fingerprintGuard: guard_
+                            fingerprintGuard: guard_,
+                            convergedOrigins: cachedOrigins
                         )
                     case .reduceFloat where floatSpans.isEmpty == false:
                         slotAccepted = try runAdaptive(
                             reduceFloatEncoder, decoder: decoder,
                             targets: .spans(floatSpans), structureChanged: structureChanged,
                             budget: &legBudget,
-                            fingerprintGuard: guard_
+                            fingerprintGuard: guard_,
+                            convergedOrigins: cachedOrigins
                         )
                     default:
                         break
@@ -740,28 +754,32 @@ extension ReductionState {
                                 zeroValueEncoder, decoder: depthDecoder,
                                 targets: .spans(vSpans), structureChanged: hasBind,
                                 budget: &legBudget,
-                                fingerprintGuard: prePhaseFingerprint
+                                fingerprintGuard: prePhaseFingerprint,
+                                convergedOrigins: cachedOrigins
                             )
                         case .binarySearchToZero where vSpans.isEmpty == false:
                             slotAccepted = try runAdaptive(
                                 binarySearchToZeroEncoder, decoder: depthDecoder,
                                 targets: .spans(vSpans), structureChanged: hasBind,
                                 budget: &legBudget,
-                                fingerprintGuard: prePhaseFingerprint
+                                fingerprintGuard: prePhaseFingerprint,
+                                convergedOrigins: cachedOrigins
                             )
                         case .binarySearchToTarget where vSpans.isEmpty == false:
                             slotAccepted = try runAdaptive(
                                 binarySearchToTargetEncoder, decoder: depthDecoder,
                                 targets: .spans(vSpans), structureChanged: hasBind,
                                 budget: &legBudget,
-                                fingerprintGuard: prePhaseFingerprint
+                                fingerprintGuard: prePhaseFingerprint,
+                                convergedOrigins: cachedOrigins
                             )
                         case .reduceFloat where fSpans.isEmpty == false:
                             slotAccepted = try runAdaptive(
                                 reduceFloatEncoder, decoder: depthDecoder,
                                 targets: .spans(fSpans), structureChanged: hasBind,
                                 budget: &legBudget,
-                                fingerprintGuard: prePhaseFingerprint
+                                fingerprintGuard: prePhaseFingerprint,
+                                convergedOrigins: cachedOrigins
                             )
                         default:
                             break
@@ -929,7 +947,7 @@ extension ReductionState {
                         gen, prefix: modified, mode: .exact, fallbackTree: tree
                     )
 
-                    if case let .success(_, freshTree) = replayResult {
+                    if case let .success(_, freshTree, _) = replayResult {
                         let freshSequence = ChoiceSequence(freshTree)
                         let freshBindIndex = BindSpanIndex(from: freshSequence)
 

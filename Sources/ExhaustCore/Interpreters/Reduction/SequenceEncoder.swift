@@ -65,12 +65,27 @@ public protocol BatchEncoder: SequenceEncoderBase {
 public protocol AdaptiveEncoder: SequenceEncoderBase {
     /// Initializes internal state for a new encoding pass.
     ///
-    /// Called once by the scheduler before the probe loop begins. The encoder captures the starting sequence and targets, and builds whatever internal state it needs.
-    mutating func start(sequence: ChoiceSequence, targets: TargetSet)
+    /// Called once by the scheduler before the probe loop begins. The encoder captures the starting sequence and targets, and builds whatever internal state it needs. Converged origins from the ``ConvergenceCache`` narrow binary search ranges for encoders that support them.
+    mutating func start(sequence: ChoiceSequence, targets: TargetSet, convergedOrigins: [Int: ConvergedOrigin]?)
 
     /// Produces the next probe given feedback on the previous one.
     ///
-    /// - Parameter lastAccepted: Whether the previous probe was accepted by the decoder. Ignored on the first call after ``start(sequence:targets:)``.
+    /// - Parameter lastAccepted: Whether the previous probe was accepted by the decoder. Ignored on the first call after ``start(sequence:targets:convergedOrigins:)``.
     /// - Returns: The next candidate to try, or `nil` when converged.
     mutating func nextProbe(lastAccepted: Bool) -> ChoiceSequence?
+
+    /// Convergence records accumulated during the probe loop.
+    ///
+    /// Each entry maps a flat sequence index to the ``ConvergedOrigin`` at which the search converged. Harvested by ``ReductionState/runAdaptive(_:decoder:targets:structureChanged:budget:fingerprintGuard:convergedOrigins:)`` into the ``ConvergenceCache`` and ``ConvergenceInstrumentation``.
+    var convergenceRecords: [Int: ConvergedOrigin] { get }
+}
+
+extension AdaptiveEncoder {
+    /// Convenience overload for callers that do not pass converged origins.
+    public mutating func start(sequence: ChoiceSequence, targets: TargetSet) {
+        start(sequence: sequence, targets: targets, convergedOrigins: nil)
+    }
+
+    /// Default implementation returning no convergence records.
+    public var convergenceRecords: [Int: ConvergedOrigin] { [:] }
 }

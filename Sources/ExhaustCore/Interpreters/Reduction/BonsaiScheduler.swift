@@ -67,7 +67,8 @@ enum BonsaiScheduler {
                     sequence: result.sequence,
                     tree: result.tree,
                     output: result.output,
-                    evaluations: 1
+                    evaluations: 1,
+                    decodingReport: nil
                 ),
                 structureChanged: false
             )
@@ -81,6 +82,7 @@ enum BonsaiScheduler {
 
         while stallBudget > 0 {
             cycles += 1
+            state.currentCycle = cycles
             let cycleStartBest = state.bestSequence
 
             state.computeEncoderOrdering()
@@ -135,6 +137,55 @@ enum BonsaiScheduler {
                     ]
                 )
             }
+        }
+
+        if isInstrumented, let instrumentation = state.convergenceInstrumentation {
+            let records = instrumentation.records
+            let totalConvergences = instrumentation.totalEncoderConvergences
+
+            // Stability: for each coordinate, compare converged values across consecutive cycles.
+            var stabilityMatches = 0
+            var stabilityPairs = 0
+            let byCycle = Dictionary(grouping: records, by: { $0.cycle })
+            let sortedCycles = byCycle.keys.sorted()
+            for index in sortedCycles.indices.dropFirst() {
+                let previousCycle = sortedCycles[index - 1]
+                let currentCycle = sortedCycles[index]
+                guard let previousRecords = byCycle[previousCycle],
+                      let currentRecords = byCycle[currentCycle]
+                else {
+                    continue
+                }
+                let previousByIndex = Dictionary(
+                    previousRecords.map { ($0.coordinateIndex, $0.convergedValue) },
+                    uniquingKeysWith: { _, last in last }
+                )
+                for record in currentRecords {
+                    if let previousValue = previousByIndex[record.coordinateIndex] {
+                        stabilityPairs += 1
+                        let delta = record.convergedValue > previousValue
+                            ? record.convergedValue - previousValue
+                            : previousValue - record.convergedValue
+                        if delta <= 1 {
+                            stabilityMatches += 1
+                        }
+                    }
+                }
+            }
+            let convergenceStability = stabilityPairs > 0
+                ? Double(stabilityMatches) / Double(stabilityPairs)
+                : 0
+
+            ExhaustLog.notice(
+                category: .reducer,
+                event: "convergence_instrumentation",
+                metadata: [
+                    "total_convergences": "\(totalConvergences)",
+                    "convergence_stability": String(format: "%.3f", convergenceStability),
+                    "stability_pairs": "\(stabilityPairs)",
+                    "cycles": "\(cycles)",
+                ]
+            )
         }
 
         if isInstrumented {

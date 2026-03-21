@@ -1,3 +1,81 @@
+// MARK: - Converged Origin
+
+/// Cached convergence bound from a prior binary search pass, used to narrow subsequent searches.
+///
+/// When a binary search encoder converges at a coordinate, it records the convergence bound and direction. On the next cycle, the cache supplies this as a converged origin to skip the already-explored portion of the search range. A validation probe confirms the floor before committing.
+public struct ConvergedOrigin: Sendable {
+    /// The bit-pattern value at which the prior search converged.
+    public let bound: UInt64
+
+    /// The direction of the prior search.
+    public let direction: Direction
+
+    /// The direction a binary search was traveling when it converged.
+    public enum Direction: Sendable {
+        case downward
+        case upward
+    }
+
+    public init(bound: UInt64, direction: Direction) {
+        self.bound = bound
+        self.direction = direction
+    }
+}
+
+// MARK: - Convergence Cache
+
+/// Per-coordinate convergence cache for the reduction pipeline.
+///
+/// Records ``ConvergedOrigin`` entries from encoder convergence events. Fibre descent passes supply cached entries to binary search encoders to narrow (or skip) search ranges on subsequent cycles. Invalidated entirely on structural change.
+struct ConvergenceCache {
+    private var entries: [Int: ConvergedOrigin] = [:]
+
+    var isEmpty: Bool { entries.isEmpty }
+
+    func convergedOrigin(at index: Int) -> ConvergedOrigin? {
+        entries[index]
+    }
+
+    /// Returns all cached entries, or `nil` if empty.
+    var allEntries: [Int: ConvergedOrigin]? {
+        entries.isEmpty ? nil : entries
+    }
+
+    mutating func record(index: Int, convergedOrigin: ConvergedOrigin) {
+        entries[index] = convergedOrigin
+    }
+
+    mutating func invalidateAll() {
+        entries.removeAll(keepingCapacity: true)
+    }
+
+    /// Invalidates all entries whose index falls within the given range.
+    mutating func invalidate(in range: ClosedRange<Int>) {
+        for index in entries.keys where range.contains(index) {
+            entries.removeValue(forKey: index)
+        }
+    }
+}
+
+// MARK: - Convergence Instrumentation
+
+/// Measurement-only instrumentation for encoder convergence events.
+///
+/// Tracks per-coordinate convergence stability and cycle count across the reduction pipeline. Populated by encoders via ``AdaptiveEncoder/convergenceRecords`` and harvested by ``ReductionState/runAdaptive(_:decoder:targets:structureChanged:budget:fingerprintGuard:)``. Only allocated when debug logging is enabled.
+struct ConvergenceInstrumentation {
+    struct ConvergenceRecord {
+        let coordinateIndex: Int
+        let convergedValue: UInt64
+        let direction: ConvergedOrigin.Direction
+        let cycle: Int
+    }
+
+    var records: [ConvergenceRecord] = []
+
+    /// Total convergence events recorded by encoders (convergences and successful reductions).
+    var totalEncoderConvergences = 0
+}
+
 /// Mutable state for the reduction cycle, including the current sequence, tree, encoder instances, and ordering.
 ///
 /// Allocated once per reduction invocation and passed to each leg method by reference. Using a class avoids Swift exclusivity conflicts when leg methods pass encoder properties to helper methods like ``runAdaptive(_:decoder:targets:structureChanged:budget:)``.
@@ -20,6 +98,11 @@ final class ReductionState<Output> {
     var spanCache: SpanCache
     var lattice: DominanceLattice
     var rejectCache = Set<UInt64>(minimumCapacity: 512)
+    var convergenceCache = ConvergenceCache()
+    var convergenceInstrumentation: ConvergenceInstrumentation?
+
+    /// The current cycle number, set by the scheduler at the top of each cycle.
+    var currentCycle = 0
 
     /// Whether the tree needs re-materialization with picks before branch encoders can run.
     ///
@@ -42,6 +125,7 @@ final class ReductionState<Output> {
         let branchTreeDirty: Bool
         let spanCache: SpanCache
         let lattice: DominanceLattice
+        let convergenceCache: ConvergenceCache
     }
 
     // Encoders
@@ -93,6 +177,7 @@ final class ReductionState<Output> {
         self.deleteAlignedWindowsEncoder = DeleteAlignedWindowsEncoder(
             beamTuning: config.alignedDeletionBeamSearchTuning
         )
+        self.convergenceInstrumentation = isInstrumented ? ConvergenceInstrumentation() : nil
     }
 }
 
@@ -107,6 +192,7 @@ extension ReductionState {
         branchTreeDirty = true
         if structureChanged {
             spanCache.invalidate()
+            convergenceCache.invalidateAll()
             bindIndex = hasBind ? BindSpanIndex(from: sequence) : nil
             if config.useReductionMaterializer == false {
                 let seed = ZobristHash.hash(of: sequence)
@@ -128,6 +214,24 @@ extension ReductionState {
         } else if sequence.shortLexPrecedes(bestSequence) {
             bestSequence = sequence
             bestOutput = output
+        }
+    }
+
+    /// Invalidates convergence cache entries for coordinates that share a bind scope with any changed value.
+    ///
+    /// When a value changes at index *i* within a bind region's span, other coordinates in the same
+    /// region may have converged in a context that included the old value at *i*. Those converged origins
+    /// are stale: the property's behavior at those coordinates can differ now that *i* changed.
+    private func invalidateConvergenceCacheSiblings(
+        oldSequence: ChoiceSequence,
+        newSequence: ChoiceSequence,
+        bindIndex: BindSpanIndex
+    ) {
+        let count = min(oldSequence.count, newSequence.count)
+        for i in 0 ..< count where oldSequence[i] != newSequence[i] {
+            for region in bindIndex.regions where region.bindSpanRange.contains(i) {
+                convergenceCache.invalidate(in: region.bindSpanRange)
+            }
         }
     }
 
@@ -199,18 +303,21 @@ extension ReductionState {
         targets: TargetSet,
         structureChanged: Bool,
         budget: inout ReductionScheduler.LegBudget,
-        fingerprintGuard: StructuralFingerprint? = nil
+        fingerprintGuard: StructuralFingerprint? = nil,
+        convergedOrigins: [Int: ConvergedOrigin]? = nil
     ) throws -> Bool {
         guard budget.isExhausted == false else { return false }
         if lattice.shouldSkip(encoder.name, phase: encoder.phase) { return false }
         let startSeqLen = sequence.count
+        let startSequenceForCacheInvalidation = hasBind ? sequence : nil
         var encoder = encoder
-        encoder.start(sequence: sequence, targets: targets)
+        encoder.start(sequence: sequence, targets: targets, convergedOrigins: convergedOrigins)
         let cacheSalt = decoder.rejectCacheSalt
         var lastAccepted = false
         var anyAccepted = false
         var probes = 0
         var accepted = 0
+        var lastDecodingReport: DecodingReport?
         while let probe = encoder.nextProbe(lastAccepted: lastAccepted) {
             guard budget.isExhausted == false else { break }
             probes += 1
@@ -224,6 +331,7 @@ extension ReductionState {
                 originalSequence: sequence, property: property
             ) {
                 budget.recordMaterialization()
+                lastDecodingReport = result.decodingReport
                 if let guardPrint = fingerprintGuard {
                     // Snapshot before accepting so a structural crossing can be fully rolled back.
                     let snap = makeSnapshot()
@@ -251,6 +359,42 @@ extension ReductionState {
                 rejectCache.insert(cacheKey)
             }
         }
+        // Harvest convergence records into cache and instrumentation.
+        // Gate cache recording on coverage: low-coverage materializations (PRNG-heavy)
+        // produce unreliable convergence points that would cause validation-probe restarts.
+        let harvested = encoder.convergenceRecords
+        let cacheReliable = lastDecodingReport?.isReliableForConvergenceCache ?? true
+        for (index, convergedOrigin) in harvested {
+            if cacheReliable {
+                convergenceCache.record(index: index, convergedOrigin: convergedOrigin)
+            }
+        }
+        if convergenceInstrumentation != nil {
+            for (index, convergedOrigin) in harvested {
+                convergenceInstrumentation?.records.append(
+                    ConvergenceInstrumentation.ConvergenceRecord(
+                        coordinateIndex: index,
+                        convergedValue: convergedOrigin.bound,
+                        direction: convergedOrigin.direction,
+                        cycle: currentCycle
+                    )
+                )
+            }
+            convergenceInstrumentation?.totalEncoderConvergences += harvested.count
+        }
+        // Invalidate convergence cache entries for bind-scope siblings of changed values.
+        // When an encoder accepts a probe that changes value A, convergence records harvested
+        // from the same encoder run for sibling value B (in the same bind scope) were
+        // computed in a context that included the old value of A. Those converged origins are
+        // stale and must be cleared so subsequent cycles re-probe B.
+        if anyAccepted,
+           convergenceCache.isEmpty == false,
+           let startSeq = startSequenceForCacheInvalidation,
+           let index = bindIndex
+        {
+            invalidateConvergenceCacheSiblings(oldSequence: startSeq, newSequence: sequence, bindIndex: index)
+        }
+
         if anyAccepted {
             lattice.recordSuccess(encoder.name)
         }
@@ -298,7 +442,8 @@ extension ReductionState {
             bestOutput: bestOutput,
             branchTreeDirty: branchTreeDirty,
             spanCache: spanCache,
-            lattice: lattice
+            lattice: lattice,
+            convergenceCache: convergenceCache
         )
     }
 
@@ -314,6 +459,7 @@ extension ReductionState {
         branchTreeDirty = snapshot.branchTreeDirty
         spanCache = snapshot.spanCache
         lattice = snapshot.lattice
+        convergenceCache = snapshot.convergenceCache
     }
 
 }

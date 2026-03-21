@@ -5,6 +5,8 @@ public struct ReductionResult<Output> {
     public let output: Output
     /// Number of property evaluations consumed by this application.
     public let evaluations: Int
+    /// Populated for guided-mode materializations; `nil` for exact mode.
+    public let decodingReport: DecodingReport?
 }
 
 /// Categorizes which kind of spans a deletion encoder targets.

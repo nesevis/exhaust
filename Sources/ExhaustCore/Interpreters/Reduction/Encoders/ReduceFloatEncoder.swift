@@ -17,6 +17,8 @@
 struct ReduceFloatEncoder: AdaptiveEncoder {
     init() {}
 
+    var convergenceRecords: [Int: ConvergedOrigin] = [:]
+
     let name: EncoderName = .reduceFloat
     let phase = ReductionPhase.valueMinimization
 
@@ -41,6 +43,8 @@ struct ReduceFloatEncoder: AdaptiveEncoder {
         let isRangeExplicit: Bool
         var currentValue: Double
         var currentBitPattern: UInt64
+        /// When set, skips batch stages (special values and truncation) on warm start.
+        var initialStage: Stage?
     }
 
     private enum Stage: Int, Comparable {
@@ -80,7 +84,7 @@ struct ReduceFloatEncoder: AdaptiveEncoder {
 
     // MARK: - AdaptiveEncoder
 
-    mutating func start(sequence: ChoiceSequence, targets: TargetSet) {
+    mutating func start(sequence: ChoiceSequence, targets: TargetSet, convergedOrigins: [Int: ConvergedOrigin]?) {
         self.sequence = sequence
         self.targets = []
         currentTargetIndex = 0
@@ -88,6 +92,7 @@ struct ReduceFloatEncoder: AdaptiveEncoder {
         batchCandidates = []
         batchIndex = 0
         needsFirstProbe = true
+        convergenceRecords = [:]
 
         guard case let .spans(spans) = targets else { return }
 
@@ -98,13 +103,24 @@ struct ReduceFloatEncoder: AdaptiveEncoder {
             guard choiceTag == .double || choiceTag == .float else { continue }
             guard case let .floating(floatingValue, _, _) = v.choice else { continue }
 
+            // Stage-skip: if the warm start bound matches the current bit pattern,
+            // the value is unchanged since last convergence — skip batch stages.
+            let skipBatchStages: Stage? = if let convergedOrigin = convergedOrigins?[seqIdx],
+               convergedOrigin.bound == v.choice.bitPattern64
+            {
+                .integralBinarySearch
+            } else {
+                nil
+            }
+
             self.targets.append(FloatTarget(
                 seqIdx: seqIdx,
                 tag: choiceTag,
                 validRange: v.validRange,
                 isRangeExplicit: v.isRangeExplicit,
                 currentValue: floatingValue,
-                currentBitPattern: v.choice.bitPattern64
+                currentBitPattern: v.choice.bitPattern64,
+                initialStage: skipBatchStages
             ))
         }
     }
@@ -113,6 +129,10 @@ struct ReduceFloatEncoder: AdaptiveEncoder {
         while currentTargetIndex < targets.count {
             if needsFirstProbe {
                 needsFirstProbe = false
+                // Apply stage-skip from warm start before preparing the first stage.
+                if let skip = targets[currentTargetIndex].initialStage, skip > stage {
+                    stage = skip
+                }
                 prepareStage()
             } else if lastAccepted {
                 handleAcceptance()
@@ -333,6 +353,11 @@ struct ReduceFloatEncoder: AdaptiveEncoder {
             if stepper.bestAccepted > 0 {
                 applyIntegralBinarySearchBest()
             }
+            let target = targets[currentTargetIndex]
+            convergenceRecords[target.seqIdx] = ConvergedOrigin(
+                bound: target.currentBitPattern,
+                direction: .downward
+            )
             return nil
         }
 
@@ -414,6 +439,11 @@ struct ReduceFloatEncoder: AdaptiveEncoder {
             if stepper.bestAccepted > 0 {
                 applyRatioBinarySearchBest()
             }
+            let target = targets[currentTargetIndex]
+            convergenceRecords[target.seqIdx] = ConvergedOrigin(
+                bound: target.currentBitPattern,
+                direction: .downward
+            )
             return nil
         }
 

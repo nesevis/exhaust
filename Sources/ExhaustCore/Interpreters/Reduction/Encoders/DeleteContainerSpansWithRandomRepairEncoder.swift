@@ -23,7 +23,7 @@ public struct DeleteContainerSpansWithRandomRepairEncoder: AdaptiveEncoder {
 
     private var driver = AdaptiveDeletionEncoder()
 
-    public mutating func start(sequence: ChoiceSequence, targets: TargetSet) {
+    public mutating func start(sequence: ChoiceSequence, targets: TargetSet, convergedOrigins _: [Int: ConvergedOrigin]?) {
         guard case let .spans(spans) = targets else {
             driver.start(sequence: sequence, sortedSpans: [])
             return

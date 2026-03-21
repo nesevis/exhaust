@@ -145,10 +145,7 @@ public extension Gen {
         case .constant:
             Gen.choose(in: range)
         case .linear, .linearFrom, .exponential, .exponentialFrom:
-            Gen.getSize()._bound(
-                forward: { Gen.chooseDerived(in: scaledRange(range, scaling: scaling, size: $0)) },
-                backward: { _ in 100 } // Reflection always uses getSize(max)
-            )
+            Gen.getSize { Gen.chooseDerived(in: scaledRange(range, scaling: scaling, size: $0)) }
 
         }
     }

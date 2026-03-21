@@ -342,17 +342,22 @@ public extension ReflectiveGenerator where Operation == ReflectiveOperation {
         Gen.recursive(base: base, maxDepth: maxDepth, extend: extend)
     }
 
-    /// Retrieves the current size parameter controlling generator complexity.
+    /// Retrieves the current size parameter and feeds it into a generator-producing closure.
     ///
-    /// The size parameter ranges from 1–100 and controls how complex generated values should be. Use this to build generators that adapt to the testing phase.
+    /// The size parameter ranges from 1-100 and controls how complex generated values should be. Use this to build generators that adapt to the testing phase.
     ///
     /// ```swift
-    /// let adaptiveArray = ReflectiveGenerator.getSize().bind { size in
+    /// let adaptiveArray = ReflectiveGenerator.getSize { size in
     ///     .int(in: 0...Int(size)).array(length: 0...Int(size))
     /// }
     /// ```
-    static func getSize() -> ReflectiveGenerator<UInt64> {
-        Gen.getSize()
+    ///
+    /// - Parameter forward: A closure that receives the current size and returns a generator.
+    /// - Returns: A generator that produces the result of the size-dependent inner generator.
+    static func getSize<Output>(
+        _ forward: @escaping (UInt64) -> ReflectiveGenerator<Output>
+    ) -> ReflectiveGenerator<Output> {
+        Gen.getSize(forward)
     }
 
     // MARK: - Functor & Monad

@@ -11,6 +11,8 @@
 public struct BinarySearchToRangeMinimumEncoder: AdaptiveEncoder {
     public init() {}
 
+    public private(set) var convergenceRecords: [Int: ConvergedOrigin] = [:]
+
     public let name: EncoderName = .binarySearchToRangeMinimum
     public let phase = ReductionPhase.valueMinimization
 
@@ -28,7 +30,10 @@ public struct BinarySearchToRangeMinimumEncoder: AdaptiveEncoder {
         let validRange: ClosedRange<UInt64>?
         let isRangeExplicit: Bool
         let choiceTag: TypeTag
+        let targetBP: UInt64
         var stepper: BinarySearchStepper
+        let isConvergedOrigined: Bool
+        let convergedOriginBound: UInt64
     }
 
     private var sequence = ChoiceSequence()
@@ -37,15 +42,19 @@ public struct BinarySearchToRangeMinimumEncoder: AdaptiveEncoder {
     private var needsFirstProbe = true
     /// Saved entry for in-place mutation restore on rejection.
     private var savedEntry: ChoiceSequenceValue?
+    /// Pending validation probe state: after warm-started convergence, emits one probe at floor - 1.
+    private var pendingValidation: (seqIdx: Int, floor: UInt64, targetBP: UInt64)?
 
     // MARK: - AdaptiveEncoder
 
-    public mutating func start(sequence: ChoiceSequence, targets: TargetSet) {
+    public mutating func start(sequence: ChoiceSequence, targets: TargetSet, convergedOrigins: [Int: ConvergedOrigin]?) {
         self.sequence = sequence
         self.targets = []
         currentIndex = 0
         needsFirstProbe = true
         savedEntry = nil
+        convergenceRecords = [:]
+        pendingValidation = nil
 
         guard case let .spans(spans) = targets else { return }
 
@@ -64,18 +73,60 @@ public struct BinarySearchToRangeMinimumEncoder: AdaptiveEncoder {
                 ? v.choice.reductionTarget(in: v.validRange)
                 : v.choice.semanticSimplest.bitPattern64
             guard currentBP != targetBP else { i += 1; continue }
+
+            // Downward-only encoder: warm start narrows lo from targetBP upward.
+            let validConvergedOrigin = (convergedOrigins?[seqIdx]?.direction == .downward) ? convergedOrigins?[seqIdx] : nil
+            let effectiveLo = validConvergedOrigin?.bound ?? targetBP
+            let isConvergedOrigined = validConvergedOrigin != nil
+
             self.targets.append(TargetState(
                 seqIdx: seqIdx,
                 validRange: v.validRange,
                 isRangeExplicit: v.isRangeExplicit,
                 choiceTag: v.choice.tag,
-                stepper: BinarySearchStepper(lo: targetBP, hi: currentBP)
+                targetBP: targetBP,
+                stepper: BinarySearchStepper(lo: effectiveLo, hi: currentBP),
+                isConvergedOrigined: isConvergedOrigined,
+                convergedOriginBound: effectiveLo
             ))
             i += 1
         }
     }
 
     public mutating func nextProbe(lastAccepted: Bool) -> ChoiceSequence? {
+        // Handle pending validation probe result first.
+        if let validation = pendingValidation {
+            pendingValidation = nil
+            if lastAccepted {
+                // Floor moved lower — cached bound was stale. Restart with cold stepper.
+                if let saved = savedEntry {
+                    sequence[validation.seqIdx] = saved
+                    savedEntry = nil
+                }
+                targets[currentIndex] = TargetState(
+                    seqIdx: targets[currentIndex].seqIdx,
+                    validRange: targets[currentIndex].validRange,
+                    isRangeExplicit: targets[currentIndex].isRangeExplicit,
+                    choiceTag: targets[currentIndex].choiceTag,
+                    targetBP: targets[currentIndex].targetBP,
+                    stepper: BinarySearchStepper(lo: validation.targetBP, hi: validation.floor - 1),
+                    isConvergedOrigined: false,
+                    convergedOriginBound: validation.targetBP
+                )
+                needsFirstProbe = true
+                // Fall through to main loop.
+            } else {
+                // Floor confirmed — restore and advance to next target.
+                if let saved = savedEntry {
+                    sequence[validation.seqIdx] = saved
+                    savedEntry = nil
+                }
+                currentIndex += 1
+                needsFirstProbe = true
+                // Fall through to main loop.
+            }
+        }
+
         while currentIndex < targets.count {
             let probeValue: UInt64?
 
@@ -115,6 +166,36 @@ public struct BinarySearchToRangeMinimumEncoder: AdaptiveEncoder {
                 sequence[targets[currentIndex].seqIdx] = saved
                 savedEntry = nil
             }
+            // Record convergence for stall cache.
+            let convergedTarget = targets[currentIndex]
+            convergenceRecords[convergedTarget.seqIdx] = ConvergedOrigin(
+                bound: convergedTarget.stepper.bestAccepted,
+                direction: .downward
+            )
+
+            // Validation probe: if warm-started, verify the cached floor still holds.
+            let currentBP = sequence[convergedTarget.seqIdx].value?.choice.bitPattern64 ?? convergedTarget.stepper.bestAccepted
+            if convergedTarget.isConvergedOrigined,
+               convergedTarget.convergedOriginBound > convergedTarget.targetBP,
+               convergedTarget.convergedOriginBound > 0,
+               convergedTarget.convergedOriginBound < currentBP
+            {
+                pendingValidation = (
+                    seqIdx: convergedTarget.seqIdx,
+                    floor: convergedTarget.convergedOriginBound,
+                    targetBP: convergedTarget.targetBP
+                )
+                // Emit probe at floor - 1.
+                savedEntry = sequence[convergedTarget.seqIdx]
+                let probeBP = convergedTarget.convergedOriginBound - 1
+                sequence[convergedTarget.seqIdx] = .value(.init(
+                    choice: ChoiceValue(convergedTarget.choiceTag.makeConvertible(bitPattern64: probeBP), tag: convergedTarget.choiceTag),
+                    validRange: convergedTarget.validRange,
+                    isRangeExplicit: convergedTarget.isRangeExplicit
+                ))
+                return sequence
+            }
+
             currentIndex += 1
             needsFirstProbe = true
         }

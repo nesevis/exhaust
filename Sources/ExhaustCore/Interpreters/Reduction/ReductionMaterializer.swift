@@ -32,7 +32,9 @@ public enum ReductionMaterializer {
     /// Result of a reduction materialization attempt.
     public enum Result<Output> {
         /// Materialization succeeded with a value and fresh tree.
-        case success(value: Output, tree: ChoiceTree)
+        ///
+        /// `decodingReport` is populated for guided mode only (`nil` for exact mode).
+        case success(value: Output, tree: ChoiceTree, decodingReport: DecodingReport?)
         /// Exact mode: out-of-range or structural mismatch — candidate is invalid.
         case rejected
         /// Guided mode: filter or generation failure.
@@ -79,7 +81,8 @@ public enum ReductionMaterializer {
             // or clamp valid values from larger-size generations.
             size: 100,
             maximizeBoundRegionIndices: maximizeBoundRegionIndices,
-            materializePicks: materializePicks
+            materializePicks: materializePicks,
+            decodingReport: mode.isGuided ? DecodingReport() : nil
         )
 
         do {
@@ -91,7 +94,7 @@ public enum ReductionMaterializer {
                 case .guided: return .failed
                 }
             }
-            return .success(value: value, tree: tree)
+            return .success(value: value, tree: tree, decodingReport: context.decodingReport)
         } catch is RejectionError {
             return .rejected
         } catch {
@@ -112,8 +115,10 @@ private extension ReductionMaterializer {
         case exact
         /// Guided: tiered resolution (prefix → fallback → PRNG), cursor suspension at binds.
         case guided
-        /// Pure PRNG generation — used for non-selected branches at pick sites.
+        /// Pure PRNG generation — used when no prefix or fallback is available.
         case generate
+        /// Deterministic minimization — used for non-selected branches at pick sites. Produces the shortlex-simplest content so that pivot candidates start from a minimal baseline.
+        case minimize
     }
 }
 
@@ -122,6 +127,13 @@ private extension ReductionMaterializer.Mode {
         switch self {
         case .exact: .exact
         case .guided: .guided
+        }
+    }
+
+    var isGuided: Bool {
+        switch self {
+        case .exact: false
+        case .guided: true
         }
     }
 }
@@ -426,19 +438,27 @@ private extension ReductionMaterializer {
                 if randomBits == bp {
                     reusedChoice = prefixValue.choice
                 }
+                context.decodingReport?.record(tier: .exactCarryForward)
             } else if let indices = context.maximizeBoundRegionIndices,
                       context.cursor.isSuspended,
                       indices.contains(context.cursor.bindEncounterCount - 1)
             {
                 randomBits = max
+                context.decodingReport?.record(tier: .fallbackTree)
             } else if let calleeFallback, case let .choice(value, _) = calleeFallback {
                 randomBits = Swift.min(Swift.max(value.bitPattern64, min), max)
+                context.decodingReport?.record(tier: .fallbackTree)
             } else {
                 randomBits = context.prng.next(in: min ... max)
+                context.decodingReport?.record(tier: .prng)
             }
 
         case .generate:
             randomBits = context.prng.next(in: min ... max)
+
+        case .minimize:
+            let placeholder = ChoiceValue(min, tag: tag)
+            randomBits = placeholder.reductionTarget(in: min ... max)
         }
 
         let choice = reusedChoice ?? ChoiceValue(randomBits, tag: tag)
@@ -510,6 +530,9 @@ private extension ReductionMaterializer {
 
         case .generate:
             selectedChoice = WeightedPickSelection.draw(from: choices, using: &context.prng)
+
+        case .minimize:
+            selectedChoice = choices.first
         }
 
         guard let selectedChoice else { return nil }
@@ -555,11 +578,15 @@ private extension ReductionMaterializer {
                         id: choice.id, branchIDs: branchIDs, choice: contTree
                     )))
                 } else {
-                    // Non-selected branch: generate fresh via jumped PRNG.
+                    // Non-selected branch: minimize to produce the shortlex-simplest
+                    // content. Values use reductionTarget (semantic zero when in range),
+                    // nested picks select the first branch, and sequence lengths minimize.
+                    // The PRNG is only a fallback for operations without minimize-specific
+                    // handling (filters, recursive unfolds).
                     var branchContext = Context(
                         cursor: Cursor.empty,
                         prng: Xoshiro256(seed: jumpSeed),
-                        mode: .generate,
+                        mode: .minimize,
                         size: context.size
                     )
                     if let (result, branchTree) = try generateRecursive(
@@ -935,7 +962,7 @@ private extension ReductionMaterializer {
                     context: &context, continuationFallback: continuationFallback
                 )
 
-            case .generate:
+            case .generate, .minimize:
                 // Pure generation — no prefix, no suspension.
                 let boundResult = try generateRecursive(
                     boundGen, with: inputValue, context: &context, fallbackTree: nil
@@ -972,6 +999,9 @@ private extension ReductionMaterializer {
         /// When `false`, pick sites skip non-selected branch materialization.
         /// Only `DeleteByBranchPromotionEncoder` needs full branch alternatives.
         var materializePicks: Bool = false
+        /// Accumulates per-coordinate resolution tier data for guided mode.
+        /// `nil` for exact mode and pure-generate mode.
+        var decodingReport: DecodingReport?
     }
 }
 

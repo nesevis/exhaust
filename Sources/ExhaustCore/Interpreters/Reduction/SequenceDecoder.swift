@@ -73,14 +73,15 @@ public enum SequenceDecoder {
             mode: .exact, fallbackTree: fallbackTree,
             materializePicks: materializePicks
         ) {
-        case let .success(output, freshTree):
+        case let .success(output, freshTree, _):
             guard property(output) == false else { return nil }
             let freshSequence = ChoiceSequence(freshTree)
             return ReductionResult(
                 sequence: freshSequence,
                 tree: freshTree,
                 output: output,
-                evaluations: 1
+                evaluations: 1,
+                decodingReport: nil
             )
         case .rejected, .failed:
             return nil
@@ -109,17 +110,28 @@ public enum SequenceDecoder {
             ),
             materializePicks: materializePicks
         ) {
-        case let .success(output, freshTree):
+        case let .success(output, freshTree, decodingReport):
             guard property(output) == false else { return nil }
             let freshSequence = ChoiceSequence(freshTree)
             if skipShortlexCheck == false {
                 guard freshSequence.shortLexPrecedes(originalSequence) else { return nil }
             }
+            if let report = decodingReport, ExhaustLog.isEnabled(.debug, for: .reducer) {
+                ExhaustLog.debug(
+                    category: .reducer,
+                    event: "guided_materialization_fidelity",
+                    metadata: [
+                        "fidelity": String(format: "%.3f", report.fidelity),
+                        "coverage": String(format: "%.3f", report.coverage),
+                    ]
+                )
+            }
             return ReductionResult(
                 sequence: freshSequence,
                 tree: freshTree,
                 output: output,
-                evaluations: 1
+                evaluations: 1,
+                decodingReport: decodingReport
             )
         case .rejected, .failed:
             return nil

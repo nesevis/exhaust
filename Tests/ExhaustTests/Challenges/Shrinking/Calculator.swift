@@ -47,12 +47,7 @@ struct CalculatorShrinkingChallenge {
         }
 
         print("Output: \(result!)")
-        #expect(
-            result == .div(.value(0), .div(.value(0), .value(1))) ||
-                result == .div(.value(0), .div(.value(0), .value(-1))) ||
-                // The Bonsai reducer gets it to the minimum sometimes
-                result == .div(.value(0), .add(.value(0), .value(0)))
-        )
+        #expect(result == .div(.value(0), .add(.value(0), .value(0))))
     }
 
     // MARK: - Types
