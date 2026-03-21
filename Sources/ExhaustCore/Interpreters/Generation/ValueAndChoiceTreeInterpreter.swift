@@ -27,7 +27,6 @@ public struct ValueAndChoiceTreeInterpreter<FinalOutput>: ~Copyable, ExhaustIter
         maxRuns: UInt64? = nil
     ) {
         self.generator = generator
-        let baseSeed: UInt64
         let prng = seed.map { Xoshiro256(seed: $0) } ?? Xoshiro256()
         context = .init(
             maxRuns: maxRuns ?? 100,
@@ -600,6 +599,9 @@ public struct ValueAndChoiceTreeInterpreter<FinalOutput>: ~Copyable, ExhaustIter
             result = try forward(innerValue)
         case let .bind(forward, _, _, _):
             let boundGen = try forward(innerValue)
+            let savedMaterializePicks = context.materializePicks
+            context.materializePicks = false
+            defer { context.materializePicks = savedMaterializePicks }
             guard let (boundValue, boundTree) = try generateRecursive(boundGen, with: inputValue, context: &context) else {
                 return nil
             }
