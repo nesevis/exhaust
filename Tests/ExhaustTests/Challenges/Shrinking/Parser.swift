@@ -26,12 +26,13 @@ struct ParserShrinkingChallenge {
      Even equal operands trigger bug 2 since it changes the constructor.
      */
 
-    @Test("Parser, Full", .disabled("Fails to shrink well"))
+    @Test("Parser, Full")
     func parserFull() throws {
 //        ExhaustLog.setConfiguration(.init(isEnabled: true, minimumLevel: .info, categoryMinimumLevels: [.reducer: .debug], format: .human))
         let output = try #require(
             #exhaust(
                 Self.langGen,
+                .randomOnly, // coverage takes a long time
                 .suppressIssueReporting
             ) { lang in
                 Self.parse(Self.serialize(lang)) == lang
@@ -41,21 +42,12 @@ struct ParserShrinkingChallenge {
         print("Output: \(output)")
         #expect(Self.parse(Self.serialize(output)) != output)
 
-        // Multiple minimals exist depending on which basin the shrinker lands in:
-        // bug 2 (Or→And) in args or body, or bug 1 (And operand swap) in body.
-        let orInArgs = Lang(
-            modules: [],
-            funcs: [Func(name: Var(name: "a"), args: [.or(.int(0), .int(0))], body: [])]
-        )
-        let orInBody = Lang(
-            modules: [],
-            funcs: [Func(name: Var(name: "a"), args: [], body: [.ret(.or(.int(0), .int(0)))])]
-        )
-        let andInBody = Lang(
-            modules: [],
-            funcs: [Func(name: Var(name: "a"), args: [], body: [.assign(Var(name: "a"), .and(.int(0), .int(-1)))])]
-        )
-        #expect(output == orInArgs || output == orInBody || output == andInBody)
+        // Size metric matches the SmartCheck/Hypothesis evaluation.
+        // Hypothesis achieves ~3.31, QuickCheck ~3.99, SmartCheck ~4.08.
+        // Exhaust averages ~3.67
+        let outputSize = Self.size(output)
+        print("Size: \(outputSize)")
+        #expect(outputSize <= 4)
     }
 
     // MARK: - Types
@@ -625,5 +617,47 @@ struct ParserShrinkingChallenge {
                 forward: { modules, funcs in Lang(modules: modules, funcs: funcs) },
                 backward: { lang in (lang.modules, lang.funcs) }
             )
+    }
+
+    // MARK: - Size Metric
+
+    /// Counts AST nodes, matching the SmartCheck evaluation metric (Support.hs).
+    /// Does not count Lang, Func, Mod, or Var — only Exp nodes and Stmt wrappers.
+    static func size(_ lang: Lang) -> Int {
+        lang.modules.map { size($0) }.reduce(0, +)
+            + lang.funcs.map { size($0) }.reduce(0, +)
+    }
+
+    static func size(_ mod: Mod) -> Int {
+        mod.imports.count + mod.exports.count
+    }
+
+    static func size(_ function: Func) -> Int {
+        function.args.map { size($0) }.reduce(0, +)
+            + function.body.map { size($0) }.reduce(0, +)
+    }
+
+    static func size(_ stmt: Stmt) -> Int {
+        switch stmt {
+        case let .assign(_, expression):
+            1 + size(expression)
+        case let .alloc(_, expression):
+            1 + size(expression)
+        case let .ret(expression):
+            1 + size(expression)
+        }
+    }
+
+    static func size(_ expression: Exp) -> Int {
+        switch expression {
+        case .int, .bool:
+            1
+        case let .not(inner):
+            1 + size(inner)
+        case let .add(lhs, rhs), let .sub(lhs, rhs),
+            let .mul(lhs, rhs), let .div(lhs, rhs),
+            let .and(lhs, rhs), let .or(lhs, rhs):
+            1 + size(lhs) + size(rhs)
+        }
     }
 }

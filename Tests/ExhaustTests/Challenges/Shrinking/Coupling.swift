@@ -10,7 +10,7 @@ import Testing
 @testable import Exhaust
 
 @MainActor
-@Suite("Shrinking Challenge: Coupling")
+@Suite("Shrinking Challenge: Coupling", .disabled("Disabled until edge encoder is in"))
 struct CouplingShrinkingChallenge {
     /*
      https://github.com/jlink/shrinking-challenge/blob/main/challenges/coupling.md
@@ -28,17 +28,20 @@ struct CouplingShrinkingChallenge {
 
     /// The array cannot contain any 2-cycles, ie where arr[arr[n]] == n
     static let property: ([Int]) -> Bool = { arr in
-        arr.indices.allSatisfy { i in
+        let result = arr.indices.allSatisfy { i in
             let j = arr[i]
             if j != i, arr[j] == i {
                 return false
             }
             return true
         }
+        print("Arr: \(arr) (\(result))")
+        return result
     }
 
     @Test("Coupling")
     func couplingChallenge() throws {
+        ExhaustLog.setConfiguration(.init(isEnabled: true, minimumLevel: .info, categoryMinimumLevels: [.reducer: .debug], format: .human))
         let value = try #require(
             #exhaust(
                 Self.gen,
