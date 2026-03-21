@@ -143,12 +143,14 @@ public enum Interpreters {
             switch kind {
             case let .map(forward, inputType, outputType):
                 if let inputBPC = inputType as? any BitPatternConvertible.Type,
-                   let outputValue = finalOutput as? any BitPatternConvertible {
+                   let outputValue = finalOutput as? any BitPatternConvertible
+                {
                     let inverted = inputBPC.init(bitPattern64: outputValue.bitPattern64)
                     do {
                         let roundTripped = try forward(inverted)
                         if let roundTrippedBPC = roundTripped as? any BitPatternConvertible,
-                           roundTrippedBPC.bitPattern64 == outputValue.bitPattern64 {
+                           roundTrippedBPC.bitPattern64 == outputValue.bitPattern64
+                        {
                             return try reflectRecursive(inner, onFinalOutput: inverted).map { result in
                                 (value: roundTripped, path: result.path)
                             }

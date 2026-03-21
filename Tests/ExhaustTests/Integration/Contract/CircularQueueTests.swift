@@ -123,7 +123,7 @@ struct BuggyCircularQueue {
     var size: Int {
         count
     }
-    
+
     var isEmpty: Bool {
         size == 0
     }

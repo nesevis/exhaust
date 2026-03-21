@@ -127,10 +127,10 @@ public struct ChoiceDependencyGraph: Sendable {
         // Build edges between structural nodes.
         // Sort by lowerBound once. Non-overlapping node ranges guarantee upperBound is also
         // non-decreasing in this order, enabling binary-search start points for both queries.
-        let sortedByLower = (0..<nodes.count).sorted {
+        let sortedByLower = (0 ..< nodes.count).sorted {
             nodes[$0].positionRange.lowerBound < nodes[$1].positionRange.lowerBound
         }
-        for i in 0..<nodes.count {
+        for i in 0 ..< nodes.count {
             guard let scope = nodes[i].scopeRange else { continue }
             switch nodes[i].kind {
             case .structural(.bindInner):
@@ -168,7 +168,7 @@ public struct ChoiceDependencyGraph: Sendable {
                     let j = sortedByLower[lo]
                     let targetRange = nodes[j].positionRange
                     guard targetRange.lowerBound <= scope.upperBound else { break }
-                    if j != i && targetRange.upperBound <= scope.upperBound {
+                    if j != i, targetRange.upperBound <= scope.upperBound {
                         nodes[i].dependents.append(j)
                     }
                     lo += 1
@@ -253,7 +253,7 @@ private extension ChoiceDependencyGraph {
         }
 
         var queue = [Int]()
-        for i in 0..<count where inDegree[i] == 0 {
+        for i in 0 ..< count where inDegree[i] == 0 {
             queue.append(i)
         }
 
@@ -290,13 +290,12 @@ private extension ChoiceDependencyGraph {
         var leafPositions = [ClosedRange<Int>]()
         var currentLeafStart: Int?
 
-        for i in 0..<sequence.count {
-            let isLeaf: Bool
-            switch sequence[i] {
+        for i in 0 ..< sequence.count {
+            let isLeaf: Bool = switch sequence[i] {
             case .value, .reduced:
-                isLeaf = inStructural[i] == false
+                inStructural[i] == false
             default:
-                isLeaf = false
+                false
             }
 
             if isLeaf {
@@ -411,7 +410,7 @@ public struct StructuralFingerprint: Equatable, Sendable {
         let width = tree.flattenedEntryCount
         let sequence = ChoiceSequence(tree)
         var depthSum = 0
-        for i in 0..<sequence.count {
+        for i in 0 ..< sequence.count {
             switch sequence[i] {
             case .value, .reduced:
                 depthSum += bindIndex.bindDepth(at: i)

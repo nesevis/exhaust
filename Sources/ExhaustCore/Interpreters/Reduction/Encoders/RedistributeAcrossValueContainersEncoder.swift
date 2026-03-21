@@ -842,5 +842,4 @@ public struct RedistributeAcrossValueContainersEncoder: AdaptiveEncoder {
         }
         return UInt64(rhs &- lhs)
     }
-
 }

@@ -15,7 +15,7 @@ struct GeneratorTuningIntegrationTests {
     // MARK: - Pick Adaptation
 
     @Test("Pick adaptation produces only valid output via .probeSampling")
-    func pickAdaptationWeightsByPredicate() throws {
+    func pickAdaptationWeightsByPredicate() {
         let gen = #gen(.oneOf(weighted:
             (1, .int(in: 1 ... 100)),
             (1, .int(in: 901 ... 1000)))).filter(.probeSampling) { $0 <= 100 }
@@ -27,7 +27,7 @@ struct GeneratorTuningIntegrationTests {
     }
 
     @Test(".probeSampling produces more valid output than raw generation")
-    func tuneOutperformsRawGeneration() throws {
+    func tuneOutperformsRawGeneration() {
         let gen = #gen(.oneOf(weighted:
             (1, .int(in: 1 ... 500)),
             (1, .int(in: 501 ... 1000))))
@@ -48,7 +48,7 @@ struct GeneratorTuningIntegrationTests {
     // MARK: - ChooseBits Subdivision
 
     @Test("ChooseBits subdivision concentrates output in favoured subrange")
-    func chooseBitsSubdivision() throws {
+    func chooseBitsSubdivision() {
         let gen = #gen(.uint64(in: 1 ... 1000))
             .filter(.probeSampling) { $0 < 100 }
 
@@ -61,7 +61,7 @@ struct GeneratorTuningIntegrationTests {
     // MARK: - Depth Budget
 
     @Test("Deeply nested generators do not explode in sample count")
-    func depthBudget() throws {
+    func depthBudget() {
         // Create a deeply nested pick structure
         var gen: ReflectiveGenerator<Int> = #gen(.int(in: 1 ... 10))
         for _ in 0 ..< 10 {
@@ -81,7 +81,7 @@ struct GeneratorTuningIntegrationTests {
     // MARK: - Binary Search Tree
 
     @Test("BST: .probeSampling produces more valid BSTs than raw generation")
-    func bstProbeSamplingOutperformsRawGeneration() throws {
+    func bstProbeSamplingOutperformsRawGeneration() {
         let isValidNonLeafBST: @Sendable (BST) -> Bool = { tree in
             tree != .leaf && tree.isValidBST()
         }
@@ -102,7 +102,7 @@ struct GeneratorTuningIntegrationTests {
     }
 
     @Test("BST: timed benchmark — .probeSampling vs .rejectionSampling (paper comparison)", .disabled("Not required"))
-    func bstTimedBenchmark() throws {
+    func bstTimedBenchmark() {
         let isValidBST: @Sendable (BST) -> Bool = { $0.height >= 1 && $0.isValidBST() }
         let duration: TimeInterval = 1
 
@@ -121,7 +121,7 @@ struct GeneratorTuningIntegrationTests {
     }
 
     @Test("BST: .probeSampling produces valid non-leaf trees")
-    func bstProbeSamplingNonLeaf() throws {
+    func bstProbeSamplingNonLeaf() {
         let isValidNonLeafBST: @Sendable (BST) -> Bool = { tree in
             tree != .leaf && tree.isValidBST()
         }

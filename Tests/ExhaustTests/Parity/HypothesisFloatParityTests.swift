@@ -78,6 +78,7 @@ import Testing
 @testable import Exhaust
 
 // MARK: - Shrinking parity tests
+
 // NOTE: Float shrinking parity tests (HypothesisFloatShrinkingParityTests) and
 // encoding parity tests (HypothesisFloatEncodingParityTests) have been moved to
 // ExhaustCoreTests/Parity/ because they require Interpreters.reflect/reduce and
@@ -88,7 +89,7 @@ import Testing
 @Suite("Hypothesis Float Range/Subnormal Parity")
 struct HypothesisFloatRangeAndSubnormalParityTests {
     @Test("Generated doubles stay in very large finite ranges")
-    func doublesAreInRangeForLargeBounds() throws {
+    func doublesAreInRangeForLargeBounds() {
         // Adjustment relative to `test_floats_are_in_range`:
         // uses sampled draws via `#example` instead of Hypothesis `@given`.
         let ranges: [ClosedRange<Double>] = [
@@ -103,7 +104,7 @@ struct HypothesisFloatRangeAndSubnormalParityTests {
     }
 
     @Test("Can generate both signed zeros when interval is [-0.0, 0.0]")
-    func canGenerateBothZeros() throws {
+    func canGenerateBothZeros() {
         // Adjustment relative to `test_can_generate_both_zeros_when_in_interval`:
         // covers one canonical interval because Exhaust has no unconstrained float strategy
         // that includes NaN/Inf and Hypothesis-style assumptions.
@@ -113,21 +114,21 @@ struct HypothesisFloatRangeAndSubnormalParityTests {
     }
 
     @Test("Does not generate negative values when lower bound is +0.0")
-    func nonNegativeRangeDoesNotGenerateNegativeSigns() throws {
+    func nonNegativeRangeDoesNotGenerateNegativeSigns() {
         // Direct parity with `test_does_not_generate_negative_if_right_boundary_is_positive`.
         let values = #example(#gen(.double(in: 0.0 ... 1.0)), count: 256, seed: 42)
         #expect(values.allSatisfy { $0.sign == .plus })
     }
 
     @Test("Does not generate positive values when upper bound is -0.0")
-    func nonPositiveRangeDoesNotGeneratePositiveSigns() throws {
+    func nonPositiveRangeDoesNotGeneratePositiveSigns() {
         // Direct parity with `test_does_not_generate_positive_if_right_boundary_is_negative`.
         let values = #example(#gen(.double(in: -1.0 ... -0.0)), count: 256, seed: 42)
         #expect(values.allSatisfy { $0.sign == .minus })
     }
 
     @Test("Narrow interval generation remains within bounds")
-    func veryNarrowInterval() throws {
+    func veryNarrowInterval() {
         // Direct parity with `test_very_narrow_interval`, expressed with Swift `nextDown`.
         let upperBound = -1.0
         var lowerBound = upperBound
@@ -141,7 +142,7 @@ struct HypothesisFloatRangeAndSubnormalParityTests {
     }
 
     @Test("Can generate positive and negative subnormal doubles")
-    func canGenerateSubnormalDoubles() throws {
+    func canGenerateSubnormalDoubles() {
         // Adjustment relative to `test_can_generate_subnormals`:
         // uses bounded positive/negative subnormal ranges to avoid half-bounded strategy APIs.
         let smallestNormal = Double.leastNormalMagnitude
@@ -156,7 +157,7 @@ struct HypothesisFloatRangeAndSubnormalParityTests {
     }
 
     @Test("Can generate positive and negative subnormal floats")
-    func canGenerateSubnormalFloats() throws {
+    func canGenerateSubnormalFloats() {
         // Adjustment relative to `test_can_generate_subnormals`:
         // same as Double case, but for 32-bit Float.
         let smallestNormal = Float.leastNormalMagnitude

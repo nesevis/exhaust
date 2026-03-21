@@ -1,4 +1,5 @@
 // MARK: - Base Descent and Fibre Descent
+
 //
 // Extends ReductionState with the two phases of BonsaiScheduler's alternating minimisation.
 // Base descent (ramification) minimises the trace structure — the base of the fibration —
@@ -173,25 +174,23 @@ extension ReductionState {
 
             for slot in pruneOrder {
                 guard legBudget.isExhausted == false else { break }
-                let targets: [ChoiceSpan]
-                if let positionRange = scope.positionRange {
-                    targets = spanCache.deletionTargets(
+                let targets: [ChoiceSpan] = if let positionRange = scope.positionRange {
+                    spanCache.deletionTargets(
                         category: slot.spanCategory,
                         inRange: positionRange,
                         from: sequence
                     )
                 } else {
-                    targets = spanCache.deletionTargets(
+                    spanCache.deletionTargets(
                         category: slot.spanCategory,
                         depth: scope.depth,
                         from: sequence,
                         bindIndex: bindIndex
                     )
                 }
-                let slotAccepted: Bool
-                switch slot {
+                let slotAccepted: Bool = switch slot {
                 case .randomRepairDelete:
-                    slotAccepted = try runAdaptive(
+                    try runAdaptive(
                         randomRepairDelete,
                         decoder: makeSpeculativeDecoder(),
                         targets: .spans(targets),
@@ -199,7 +198,7 @@ extension ReductionState {
                         budget: &legBudget
                     )
                 case .containerSpans:
-                    slotAccepted = try runAdaptive(
+                    try runAdaptive(
                         deleteContainerSpans,
                         decoder: scopeDecoder,
                         targets: .spans(targets),
@@ -207,7 +206,7 @@ extension ReductionState {
                         budget: &legBudget
                     )
                 case .sequenceElements:
-                    slotAccepted = try runAdaptive(
+                    try runAdaptive(
                         deleteSequenceElements,
                         decoder: scopeDecoder,
                         targets: .spans(targets),
@@ -215,7 +214,7 @@ extension ReductionState {
                         budget: &legBudget
                     )
                 case .sequenceBoundaries:
-                    slotAccepted = try runAdaptive(
+                    try runAdaptive(
                         deleteSequenceBoundaries,
                         decoder: scopeDecoder,
                         targets: .spans(targets),
@@ -223,7 +222,7 @@ extension ReductionState {
                         budget: &legBudget
                     )
                 case .freeStandingValues:
-                    slotAccepted = try runAdaptive(
+                    try runAdaptive(
                         deleteFreeStandingValues,
                         decoder: scopeDecoder,
                         targets: .spans(targets),
@@ -231,7 +230,7 @@ extension ReductionState {
                         budget: &legBudget
                     )
                 case .alignedWindows:
-                    slotAccepted = try runAdaptive(
+                    try runAdaptive(
                         deleteAlignedWindowsEncoder,
                         decoder: scopeDecoder,
                         targets: .spans(targets),
@@ -252,6 +251,7 @@ extension ReductionState {
         }
 
         // MARK: - Mutation pool fallback (Opportunity 1: fibration pushout law)
+
         //
         // The sequential adaptive loop above finds the largest individually-accepted batch per scope
         // and slot. Two non-overlapping batches that are each rejected individually may be jointly
@@ -375,6 +375,7 @@ extension ReductionState {
                 )
 
                 // MARK: - Regime probe (Opportunity 2: fibration uniqueness of cartesian lifts)
+
                 //
                 // The uniqueness law says the canonical projection is the unique best projection — the
                 // PRNG retries below are not searching for a better one, they're asking whether any
@@ -440,28 +441,28 @@ extension ReductionState {
                         // Regime unknown: a value was out of range in exact mode. Fall back to retries.
                         regime = "unknown"
                         probeResultLabel = "rejected"
-                        // OPPORTUNITY 3 (commented out — enable after measuring `rejected` frequency)
-                        // Compute g!(semanticSimplest): materialize the candidate in guided mode
-                        // with minimal values, then compute shortlex distance between the result
-                        // and the current best sequence. Large distance → lossy reduction →
-                        // treat as elimination regime and skip retries.
-                        //
-                        // let cocartesianResult = ReductionMaterializer.materialize(
-                        //     gen,
-                        //     prefix: sequence,
-                        //     mode: .guided(
-                        //         seed: ZobristHash.hash(of: sequence),
-                        //         fallbackTree: fallbackTree ?? tree
-                        //     ),
-                        //     fallbackTree: fallbackTree
-                        // )
-                        // if case let .success(_, embeddedTree) = cocartesianResult {
-                        //     let embeddedSeq = ChoiceSequence(embeddedTree)
-                        //     let distance = ChoiceSequence.shortlexDistance(embeddedSeq, sequence)
-                        //     if distance > /* threshold TBD */ 0 {
-                        //         skipRetries = true
-                        //     }
-                        // }
+                    // OPPORTUNITY 3 (commented out — enable after measuring `rejected` frequency)
+                    // Compute g!(semanticSimplest): materialize the candidate in guided mode
+                    // with minimal values, then compute shortlex distance between the result
+                    // and the current best sequence. Large distance → lossy reduction →
+                    // treat as elimination regime and skip retries.
+                    //
+                    // let cocartesianResult = ReductionMaterializer.materialize(
+                    //     gen,
+                    //     prefix: sequence,
+                    //     mode: .guided(
+                    //         seed: ZobristHash.hash(of: sequence),
+                    //         fallbackTree: fallbackTree ?? tree
+                    //     ),
+                    //     fallbackTree: fallbackTree
+                    // )
+                    // if case let .success(_, embeddedTree) = cocartesianResult {
+                    //     let embeddedSeq = ChoiceSequence(embeddedTree)
+                    //     let distance = ChoiceSequence.shortlexDistance(embeddedSeq, sequence)
+                    //     if distance > /* threshold TBD */ 0 {
+                    //         skipRetries = true
+                    //     }
+                    // }
                     case .failed:
                         regime = "unknown"
                         probeResultLabel = "failed"
@@ -628,11 +629,10 @@ extension ReductionState {
         let leafRanges = computeLeafRanges(dag: dag)
 
         // Capture skeleton fingerprint before fibre descent starts.
-        let prePhaseFingerprint: StructuralFingerprint?
-        if hasBind, let bindSpanIndex = bindIndex {
-            prePhaseFingerprint = StructuralFingerprint.from(tree, bindIndex: bindSpanIndex)
+        let prePhaseFingerprint: StructuralFingerprint? = if hasBind, let bindSpanIndex = bindIndex {
+            StructuralFingerprint.from(tree, bindIndex: bindSpanIndex)
         } else {
-            prePhaseFingerprint = nil
+            nil
         }
 
         // Per-leaf-range value minimization pass.
@@ -733,61 +733,61 @@ extension ReductionState {
             for depth in stride(from: maxBindDepth, through: 1, by: -1) {
                 guard legBudget.isExhausted == false else { break }
                 lattice.invalidate()
-                    let depthContext = DecoderContext(
-                        depth: .specific(depth),
-                        bindIndex: bindIndex,
-                        fallbackTree: fallbackTree,
-                        strictness: .normal,
-                        useReductionMaterializer: config.useReductionMaterializer
-                    )
-                    let depthDecoder = SequenceDecoder.for(depthContext)
-                    let vSpans = spanCache.valueSpans(at: depth, from: sequence, bindIndex: bindIndex)
-                    let fSpans = spanCache.floatSpans(at: depth, from: sequence, bindIndex: bindIndex)
+                let depthContext = DecoderContext(
+                    depth: .specific(depth),
+                    bindIndex: bindIndex,
+                    fallbackTree: fallbackTree,
+                    strictness: .normal,
+                    useReductionMaterializer: config.useReductionMaterializer
+                )
+                let depthDecoder = SequenceDecoder.for(depthContext)
+                let vSpans = spanCache.valueSpans(at: depth, from: sequence, bindIndex: bindIndex)
+                let fSpans = spanCache.floatSpans(at: depth, from: sequence, bindIndex: bindIndex)
 
-                    for slot in trainOrder {
-                        guard legBudget.isExhausted == false else { break }
-                        var slotAccepted = false
-                        // structureChanged: hasBind ensures accept() rebuilds bindIndex before the per-acceptance fingerprint guard recomputes the fingerprint. Without a fresh bindIndex, StructuralFingerprint.from uses stale depth information and may miss structural changes.
-                        switch slot {
-                        case .zeroValue where vSpans.isEmpty == false:
-                            slotAccepted = try runAdaptive(
-                                zeroValueEncoder, decoder: depthDecoder,
-                                targets: .spans(vSpans), structureChanged: hasBind,
-                                budget: &legBudget,
-                                fingerprintGuard: prePhaseFingerprint,
-                                convergedOrigins: cachedOrigins
-                            )
-                        case .binarySearchToZero where vSpans.isEmpty == false:
-                            slotAccepted = try runAdaptive(
-                                binarySearchToZeroEncoder, decoder: depthDecoder,
-                                targets: .spans(vSpans), structureChanged: hasBind,
-                                budget: &legBudget,
-                                fingerprintGuard: prePhaseFingerprint,
-                                convergedOrigins: cachedOrigins
-                            )
-                        case .binarySearchToTarget where vSpans.isEmpty == false:
-                            slotAccepted = try runAdaptive(
-                                binarySearchToTargetEncoder, decoder: depthDecoder,
-                                targets: .spans(vSpans), structureChanged: hasBind,
-                                budget: &legBudget,
-                                fingerprintGuard: prePhaseFingerprint,
-                                convergedOrigins: cachedOrigins
-                            )
-                        case .reduceFloat where fSpans.isEmpty == false:
-                            slotAccepted = try runAdaptive(
-                                reduceFloatEncoder, decoder: depthDecoder,
-                                targets: .spans(fSpans), structureChanged: hasBind,
-                                budget: &legBudget,
-                                fingerprintGuard: prePhaseFingerprint,
-                                convergedOrigins: cachedOrigins
-                            )
-                        default:
-                            break
-                        }
-                        guard slotAccepted else { continue }
-                        anyAccepted = true
-                        ReductionScheduler.moveToFront(slot, in: &trainOrder)
+                for slot in trainOrder {
+                    guard legBudget.isExhausted == false else { break }
+                    var slotAccepted = false
+                    // structureChanged: hasBind ensures accept() rebuilds bindIndex before the per-acceptance fingerprint guard recomputes the fingerprint. Without a fresh bindIndex, StructuralFingerprint.from uses stale depth information and may miss structural changes.
+                    switch slot {
+                    case .zeroValue where vSpans.isEmpty == false:
+                        slotAccepted = try runAdaptive(
+                            zeroValueEncoder, decoder: depthDecoder,
+                            targets: .spans(vSpans), structureChanged: hasBind,
+                            budget: &legBudget,
+                            fingerprintGuard: prePhaseFingerprint,
+                            convergedOrigins: cachedOrigins
+                        )
+                    case .binarySearchToZero where vSpans.isEmpty == false:
+                        slotAccepted = try runAdaptive(
+                            binarySearchToZeroEncoder, decoder: depthDecoder,
+                            targets: .spans(vSpans), structureChanged: hasBind,
+                            budget: &legBudget,
+                            fingerprintGuard: prePhaseFingerprint,
+                            convergedOrigins: cachedOrigins
+                        )
+                    case .binarySearchToTarget where vSpans.isEmpty == false:
+                        slotAccepted = try runAdaptive(
+                            binarySearchToTargetEncoder, decoder: depthDecoder,
+                            targets: .spans(vSpans), structureChanged: hasBind,
+                            budget: &legBudget,
+                            fingerprintGuard: prePhaseFingerprint,
+                            convergedOrigins: cachedOrigins
+                        )
+                    case .reduceFloat where fSpans.isEmpty == false:
+                        slotAccepted = try runAdaptive(
+                            reduceFloatEncoder, decoder: depthDecoder,
+                            targets: .spans(fSpans), structureChanged: hasBind,
+                            budget: &legBudget,
+                            fingerprintGuard: prePhaseFingerprint,
+                            convergedOrigins: cachedOrigins
+                        )
+                    default:
+                        break
                     }
+                    guard slotAccepted else { continue }
+                    anyAccepted = true
+                    ReductionScheduler.moveToFront(slot, in: &trainOrder)
+                }
             }
         }
 

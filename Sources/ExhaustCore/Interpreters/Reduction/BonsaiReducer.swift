@@ -31,13 +31,13 @@ public extension Interpreters {
         init(from config: ReductionBudget) {
             switch config {
             case .fast: self = Self(
-                maxStalls: 1,
-                alignedDeletionBeamSearchTuning: .fast
-            )
+                    maxStalls: 1,
+                    alignedDeletionBeamSearchTuning: .fast
+                )
             case .slow: self = Self(
-                maxStalls: 8,
-                alignedDeletionBeamSearchTuning: .slow
-            )
+                    maxStalls: 8,
+                    alignedDeletionBeamSearchTuning: .slow
+                )
             }
         }
 

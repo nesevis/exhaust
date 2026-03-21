@@ -32,5 +32,4 @@ public enum ExploreSettings {
     /// Probability of generating a fresh value vs. mutating an existing seed.
     /// Default is 0.2 (20% fresh, 80% mutation).
     case generateRatio(Double)
-
 }

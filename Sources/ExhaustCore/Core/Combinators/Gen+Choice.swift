@@ -146,7 +146,6 @@ public extension Gen {
             Gen.choose(in: range)
         case .linear, .linearFrom, .exponential, .exponentialFrom:
             Gen.getSize { Gen.chooseDerived(in: scaledRange(range, scaling: scaling, size: $0)) }
-
         }
     }
 

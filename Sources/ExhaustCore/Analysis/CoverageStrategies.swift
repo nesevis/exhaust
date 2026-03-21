@@ -44,7 +44,7 @@ public struct TWayCoverageStrategy: CoverageStrategy {
         self.maxStrength = maxStrength
     }
 
-    public func estimatedRows(profile: FiniteDomainProfile, budget: UInt64) -> Int? {
+    public func estimatedRows(profile: FiniteDomainProfile, budget _: UInt64) -> Int? {
         guard profile.parameters.count >= 2 else { return nil }
         // Cannot cheaply estimate without running IPOG, so defer to generate.
         return 0
@@ -71,7 +71,7 @@ public struct SingleParameterCoverageStrategy: CoverageStrategy {
         return Int(domainSize)
     }
 
-    public func generate(profile: FiniteDomainProfile, budget: UInt64) -> CoveringArray? {
+    public func generate(profile: FiniteDomainProfile, budget _: UInt64) -> CoveringArray? {
         guard profile.parameters.count == 1 else { return nil }
         return CoveringArray.generate(profile: profile, strength: 1)
     }
@@ -91,7 +91,7 @@ public struct BoundaryValueCoverageStrategy: BoundaryCoverageStrategy {
 
     public init() {}
 
-    public func estimatedRows(profile: BoundaryDomainProfile, budget: UInt64) -> Int? {
+    public func estimatedRows(profile _: BoundaryDomainProfile, budget _: UInt64) -> Int? {
         // Cannot cheaply estimate without running IPOG, so defer to generate.
         0
     }

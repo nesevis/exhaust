@@ -164,7 +164,7 @@ struct BonsaiSchedulerTests {
         let lastLeafInBound = bindSpanIndex.isInBoundSubtree(leafRanges[leafRanges.count - 1].lowerBound)
 
         // If there are both bound and non-bound leaves, bound should come first.
-        if firstLeafInBound == false && lastLeafInBound {
+        if firstLeafInBound == false, lastLeafInBound {
             Issue.record("Bound leaves should be ordered before independent leaves")
         }
     }
@@ -220,7 +220,6 @@ struct BonsaiSchedulerTests {
 
         #expect(result != nil)
     }
-
 }
 
 // MARK: - Helpers

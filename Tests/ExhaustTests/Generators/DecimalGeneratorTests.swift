@@ -12,7 +12,7 @@ struct DecimalGeneratorTests {
     @Suite("Basic generation")
     struct BasicGeneration {
         @Test("Generated values are within range")
-        func valuesWithinRange() throws {
+        func valuesWithinRange() {
             let lower = Decimal(string: "10.00")!
             let upper = Decimal(string: "99.99")!
             let gen = #gen(.decimal(in: lower ... upper, precision: 2))
@@ -25,7 +25,7 @@ struct DecimalGeneratorTests {
         }
 
         @Test("Generated values have correct precision")
-        func correctPrecision() throws {
+        func correctPrecision() {
             let gen = #gen(.decimal(in: Decimal(0) ... Decimal(100), precision: 3))
             let values = #example(gen, count: 50, seed: 42)
 
@@ -38,7 +38,7 @@ struct DecimalGeneratorTests {
         }
 
         @Test("Precision 0 produces integer Decimals")
-        func integerDecimals() throws {
+        func integerDecimals() {
             let gen = #gen(.decimal(in: Decimal(-50) ... Decimal(50), precision: 0))
             let values = #example(gen, count: 50, seed: 42)
 
@@ -49,7 +49,7 @@ struct DecimalGeneratorTests {
         }
 
         @Test("Deterministic: same seed produces same values")
-        func deterministic() throws {
+        func deterministic() {
             let gen = #gen(.decimal(in: Decimal(0) ... Decimal(1000), precision: 2))
 
             let values1 = #example(gen, count: 20, seed: 99)
@@ -61,7 +61,7 @@ struct DecimalGeneratorTests {
     @Suite("Edge cases")
     struct EdgeCases {
         @Test("Negative range")
-        func negativeRange() throws {
+        func negativeRange() {
             let lower = Decimal(string: "-100.50")!
             let upper = Decimal(string: "-0.25")!
             let gen = #gen(.decimal(in: lower ... upper, precision: 2))
@@ -74,7 +74,7 @@ struct DecimalGeneratorTests {
         }
 
         @Test("Single-value range")
-        func singleValueRange() throws {
+        func singleValueRange() {
             let value = Decimal(string: "3.14")!
             let gen = #gen(.decimal(in: value ... value, precision: 2))
             let values = #example(gen, count: 5, seed: 42)
@@ -85,7 +85,7 @@ struct DecimalGeneratorTests {
         }
 
         @Test("Range spanning zero")
-        func spanningZero() throws {
+        func spanningZero() {
             let lower = Decimal(string: "-10.5")!
             let upper = Decimal(string: "10.5")!
             let gen = #gen(.decimal(in: lower ... upper, precision: 1))

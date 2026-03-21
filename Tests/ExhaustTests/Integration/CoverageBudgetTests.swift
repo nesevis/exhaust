@@ -8,7 +8,6 @@ import Testing
 
 @Suite("Coverage Budget")
 struct CoverageBudgetTests {
-
     @Test("randomOnly skips coverage phase entirely")
     func randomOnlySkipsCoverage() {
         let gen = #gen(.bool(), .bool())

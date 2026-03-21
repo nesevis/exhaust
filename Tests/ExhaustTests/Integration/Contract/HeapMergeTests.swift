@@ -34,7 +34,7 @@ struct HeapMergeTests {
                 .samplingBudget(2000),
 //                .argumentAwareCoverage,
                 .suppressIssueReporting,
-                .replay(2244429497963284422)
+                .replay(2_244_429_497_963_284_422)
             )
         )
 
@@ -63,9 +63,9 @@ struct HeapAliasingTests {
                 .replay(6_161_601_321_680_111_336)
             )
         )
-        
+
         // TODO: Make expectation stronger:
-        
+
         /*
          Counterexample:
            [

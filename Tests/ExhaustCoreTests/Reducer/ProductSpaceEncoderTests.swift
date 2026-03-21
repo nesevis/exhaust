@@ -1,9 +1,8 @@
-@testable import ExhaustCore
 import Testing
+@testable import ExhaustCore
 
 @Suite("ProductSpaceEncoder")
 struct ProductSpaceEncoderTests {
-
     // MARK: - BinarySearchLadder
 
     @Test("BinarySearchLadder: midpoints computed correctly")
@@ -105,7 +104,7 @@ struct ProductSpaceEncoderTests {
         #expect(candidates.count == expectedCount)
 
         // Candidates should be sorted shortlex.
-        for index in 0..<(candidates.count - 1) {
+        for index in 0 ..< (candidates.count - 1) {
             #expect(candidates[index].shortLexPrecedes(candidates[index + 1]))
         }
     }
@@ -138,7 +137,7 @@ struct ProductSpaceEncoderTests {
         #expect(candidates.isEmpty == false)
 
         // Candidates should be sorted shortlex.
-        for index in 0..<(candidates.count - 1) {
+        for index in 0 ..< (candidates.count - 1) {
             #expect(candidates[index].shortLexPrecedes(candidates[index + 1]))
         }
     }
@@ -178,11 +177,11 @@ struct ProductSpaceEncoderTests {
         let dependentDomains: [Int: [UInt64: ClosedRange<UInt64>]] = [
             1: [
                 10: 0 ... 15,
-                5:  0 ... 7,
-                2:  0 ... 3,
-                1:  0 ... 1,
-                0:  0 ... 0,
-            ]
+                5: 0 ... 7,
+                2: 0 ... 3,
+                1: 0 ... 1,
+                0: 0 ... 0,
+            ],
         ]
 
         var encoder = ProductSpaceBatchEncoder()
@@ -225,7 +224,7 @@ struct ProductSpaceEncoderTests {
     // MARK: - Joint Reduction
 
     @Test("Joint reduction required: batch finds it")
-    func jointReductionRequired() throws {
+    func jointReductionRequired() {
         // Two independent bind generators. Property fails only when BOTH inner values are above 5.
         // Sequential reduction of either alone would make the property pass.
         let bind1 = ChoiceTree.bind(
@@ -269,7 +268,7 @@ struct ProductSpaceEncoderTests {
 
     @Test("k=4: adaptive mode initializes with four coordinates")
     func adaptiveFourCoordinates() {
-        let binds = (0..<4).map { index in
+        let binds = (0 ..< 4).map { index in
             ChoiceTree.bind(
                 inner: .choice(.unsigned(UInt64(10 + index * 10), .uint64), .init(validRange: 0 ... 100, isRangeExplicit: true)),
                 bound: .choice(.unsigned(1, .uint64), .init(validRange: 0 ... 100, isRangeExplicit: true))
@@ -300,7 +299,7 @@ struct ProductSpaceEncoderTests {
 
     @Test("Delta-debug: partial halving on rejection")
     func deltaDebugPartialHalving() {
-        let binds = (0..<4).map { index in
+        let binds = (0 ..< 4).map { index in
             ChoiceTree.bind(
                 inner: .choice(.unsigned(UInt64(100 + index * 100), .uint64), .init(validRange: 0 ... 1000, isRangeExplicit: true)),
                 bound: .choice(.unsigned(1, .uint64), .init(validRange: 0 ... 1000, isRangeExplicit: true))
@@ -340,7 +339,7 @@ struct ProductSpaceEncoderTests {
 
     @Test("Estimated cost for k=3 is at most 512")
     func costEstimateK3() {
-        let binds = (0..<3).map { index in
+        let binds = (0 ..< 3).map { index in
             ChoiceTree.bind(
                 inner: .choice(.unsigned(UInt64(10 + index * 10), .uint64), .init(validRange: 0 ... 100, isRangeExplicit: true)),
                 bound: .choice(.unsigned(1, .uint64), .init(validRange: 0 ... 100, isRangeExplicit: true))

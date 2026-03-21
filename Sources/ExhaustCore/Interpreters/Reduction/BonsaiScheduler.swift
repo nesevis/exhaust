@@ -117,8 +117,7 @@ enum BonsaiScheduler {
             }
 
             // Stall detection.
-            if state.bestSequence.shortLexPrecedes(cycleStartBest)
-            {
+            if state.bestSequence.shortLexPrecedes(cycleStartBest) {
                 stallBudget = config.maxStalls
             } else {
                 stallBudget -= 1

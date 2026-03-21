@@ -72,7 +72,7 @@ struct BinaryHeapScalingVariant {
             #exhaust(
                 gen,
                 .suppressIssueReporting,
-                .replay(10128299447377935498),
+                .replay(10_128_299_447_377_935_498),
                 property: property
             )
         )
@@ -213,7 +213,7 @@ struct CouplingScalingVariant {
             #exhaust(
                 gen,
                 .suppressIssueReporting,
-                .replay(9293532994034525134)
+                .replay(9_293_532_994_034_525_134)
             ) { arr in
                 arr.indices.allSatisfy { i in
                     let j = arr[i]
@@ -419,7 +419,9 @@ enum ScalingVariant: String, CaseIterable, CustomTestStringConvertible {
     case exponential
     case exponentialFromOrigin
 
-    var testDescription: String { rawValue }
+    var testDescription: String {
+        rawValue
+    }
 
     func scaling<Bound: FixedWidthInteger & Sendable>(origin: Bound = 0) -> SizeScaling<Bound> {
         switch self {

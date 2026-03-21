@@ -58,7 +58,7 @@ public struct CommandTypeSCABuilder: SCADomainBuilder {
     public func buildDomain(
         sequenceLength: Int,
         pickChoices: ContiguousArray<ReflectiveOperation.PickTuple>,
-        coverageBudget: UInt64,
+        coverageBudget _: UInt64,
         strengthCap: Int
     ) -> SCADomain? {
         guard SequenceCoveringArray.allBranchesParameterFree(pickChoices) else { return nil }

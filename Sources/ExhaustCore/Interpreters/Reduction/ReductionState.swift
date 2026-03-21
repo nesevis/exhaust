@@ -30,7 +30,9 @@ public struct ConvergedOrigin: Sendable {
 struct ConvergenceCache {
     private var entries: [Int: ConvergedOrigin] = [:]
 
-    var isEmpty: Bool { entries.isEmpty }
+    var isEmpty: Bool {
+        entries.isEmpty
+    }
 
     func convergedOrigin(at index: Int) -> ConvergedOrigin? {
         entries[index]
@@ -166,18 +168,18 @@ final class ReductionState<Output> {
         self.sequence = sequence
         self.tree = tree
         self.output = output
-        self.hasBind = initialTree.containsBind
-        self.isInstrumented = ExhaustLog.isEnabled(.debug, for: .reducer)
-        self.bindIndex = hasBind ? BindSpanIndex(from: sequence) : nil
-        self.fallbackTree = hasBind ? tree : nil
-        self.bestSequence = sequence
-        self.bestOutput = output
-        self.spanCache = SpanCache()
-        self.lattice = DominanceLattice()
-        self.deleteAlignedWindowsEncoder = DeleteAlignedWindowsEncoder(
+        hasBind = initialTree.containsBind
+        isInstrumented = ExhaustLog.isEnabled(.debug, for: .reducer)
+        bindIndex = hasBind ? BindSpanIndex(from: sequence) : nil
+        fallbackTree = hasBind ? tree : nil
+        bestSequence = sequence
+        bestOutput = output
+        spanCache = SpanCache()
+        lattice = DominanceLattice()
+        deleteAlignedWindowsEncoder = DeleteAlignedWindowsEncoder(
             beamTuning: config.alignedDeletionBeamSearchTuning
         )
-        self.convergenceInstrumentation = isInstrumented ? ConvergenceInstrumentation() : nil
+        convergenceInstrumentation = isInstrumented ? ConvergenceInstrumentation() : nil
     }
 }
 
@@ -461,7 +463,6 @@ extension ReductionState {
         lattice = snapshot.lattice
         convergenceCache = snapshot.convergenceCache
     }
-
 }
 
 // MARK: - Encoder Ordering

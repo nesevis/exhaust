@@ -38,7 +38,7 @@ struct CompositionTests {
     @Suite("Array Generation")
     struct ArrayTests {
         @Test("Array generator creates arrays of specified size")
-        func arrayOfFixedLength() throws {
+        func arrayOfFixedLength() {
             let arrayGen = #gen(.int(in: 1 ... 100)).array(length: 5)
             let arrays = #example(arrayGen, count: 20, seed: 42)
 
@@ -51,7 +51,7 @@ struct CompositionTests {
         }
 
         @Test("Arbitrary .array(length:) creates arrays")
-        func arbitraryArray() throws {
+        func arbitraryArray() {
             let gen = #gen(.int()).array(length: 3 ... 7)
             let arrays = #example(gen, count: 20, seed: 42)
 
@@ -61,7 +61,7 @@ struct CompositionTests {
         }
 
         @Test("Nested .array(length:) creates nested arrays")
-        func nestedArray() throws {
+        func nestedArray() {
             let gen = #gen(.string())
                 .array(length: 2 ... 4) // Inner arrays of 2-4 strings
                 .array(length: 2 ... 3) // Outer array of 2-3 inner arrays
@@ -98,7 +98,7 @@ struct CompositionTests {
     @Suite("Choice Generation")
     struct ChoiceTests {
         @Test("oneOf chooses between alternatives")
-        func oneOfChoosesBetweenAlternatives() throws {
+        func oneOfChoosesBetweenAlternatives() {
             let intAsStringGen = #gen(.int(in: 1 ... 10)).map { "\($0)" }
 
             let choiceGen = #gen(.oneOf(weighted: (1, intAsStringGen), (1, .string())))
@@ -111,7 +111,7 @@ struct CompositionTests {
         }
 
         @Test("oneOf with weighted choices")
-        func oneOfWeighted() throws {
+        func oneOfWeighted() {
             let gen = #gen(.oneOf(weighted: (9, .just("common")), (1, .just("rare"))))
             let results = #example(gen, count: 1000, seed: 42)
 
@@ -149,7 +149,7 @@ struct CompositionTests {
             #examine(pickedGen, samples: 100, seed: 42)
         }
     }
-    
+
     @Test("Enum case generator is reflected")
     func enumCaseReflection() throws {
         enum Pet: Equatable {
@@ -163,7 +163,7 @@ struct CompositionTests {
             Pet.cat($0)
         }
         let petGen = #gen(.oneOf(dog, cat))
-        
+
         let target = Pet.dog(13, "Buddy")
 
         let tree = try #require(try Interpreters.reflect(petGen, with: target))
@@ -174,7 +174,7 @@ struct CompositionTests {
     @Suite("Bound tests")
     struct BoundTests {
         @Test("bound generates correct values in forward direction")
-        func boundForwardGeneration() throws {
+        func boundForwardGeneration() {
             // Generate an int n, then use it to produce an array of n zeros
             let gen = #gen(.int(in: 1 ... 5))
                 .bound(
@@ -201,7 +201,7 @@ struct CompositionTests {
         }
 
         @Test("bound with dependent generator works in forward direction")
-        func boundDependentGenerator() throws {
+        func boundDependentGenerator() {
             // Generate a max value, then generate an int within that range
             let gen = #gen(.int(in: 10 ... 20)).bound(
                 forward: { max in #gen(.int(in: 0 ... max)) },

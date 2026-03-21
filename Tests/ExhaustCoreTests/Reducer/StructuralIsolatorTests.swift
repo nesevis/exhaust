@@ -3,12 +3,11 @@
 //  Exhaust
 //
 
-@testable import ExhaustCore
 import Testing
+@testable import ExhaustCore
 
 @Suite("StructuralIsolator")
 struct StructuralIsolatorTests {
-
     @Test("Independent positions are zeroed when property still fails")
     func independentPositionsZeroed() throws {
         let gen = makeBindPlusIndependentGenerator()

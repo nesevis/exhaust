@@ -789,16 +789,13 @@ private extension ReductionMaterializer {
         calleeFallback: ChoiceTree? = nil,
         continuationFallback: ChoiceTree? = nil
     ) throws -> (Output, ChoiceTree)? {
-        
-        let fallbackChildren: [ChoiceTree]?
-        if
-            let calleeFallback,
-            case let .group(children, _) = calleeFallback,
-            children.count == generators.count
+        let fallbackChildren: [ChoiceTree]? = if let calleeFallback,
+                                                 case let .group(children, _) = calleeFallback,
+                                                 children.count == generators.count
         {
-            fallbackChildren = children
+            children
         } else {
-            fallbackChildren = nil
+            nil
         }
 
         var results = [Any]()

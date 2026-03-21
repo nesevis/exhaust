@@ -93,7 +93,7 @@ public extension ReflectiveGenerator where Operation == ReflectiveOperation {
             inner: erase()
         ))
     }
-    
+
     /// The bit pattern range associated with this generator's immediate choice operation.
     ///
     /// For generators wrapping a `chooseBits` operation, returns the min/max range that constrains the random values. Returns `nil` for pure values or non-choice operations.

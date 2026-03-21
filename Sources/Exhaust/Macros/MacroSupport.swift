@@ -540,8 +540,8 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
     ///
     /// Uses value comparison via `Equatable` for round-trip checks, providing richer failure output and correct handling of non-injective generators (for example `oneOf` where multiple branches can produce the same value).
     @discardableResult
-    public static func __examine<Output: Equatable>(
-        _ gen: ReflectiveGenerator<Output>,
+    public static func __examine(
+        _ gen: ReflectiveGenerator<some Equatable>,
         samples: Int,
         seed: UInt64?,
         fileID: StaticString,

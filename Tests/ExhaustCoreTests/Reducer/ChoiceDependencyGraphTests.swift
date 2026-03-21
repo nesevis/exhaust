@@ -10,7 +10,6 @@ import Testing
 
 @Suite("ChoiceDependencyGraph")
 struct ChoiceDependencyGraphTests {
-
     // MARK: - 0a: DAG Structure
 
     @Test("No binds, no branches — all positions are leaves")

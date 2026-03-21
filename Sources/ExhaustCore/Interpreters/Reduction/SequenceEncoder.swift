@@ -21,7 +21,7 @@ public enum EncoderName: String, Hashable {
     case redistributeSiblingValuesInLockstep
     case redistributeArbitraryValuePairsAcrossContainers
     case redistributeInnerValuesBetweenBindRegions
-    // Exploration
+    /// Exploration
     case relaxRound
 }
 
@@ -80,12 +80,14 @@ public protocol AdaptiveEncoder: SequenceEncoderBase {
     var convergenceRecords: [Int: ConvergedOrigin] { get }
 }
 
-extension AdaptiveEncoder {
+public extension AdaptiveEncoder {
     /// Convenience overload for callers that do not pass converged origins.
-    public mutating func start(sequence: ChoiceSequence, targets: TargetSet) {
+    mutating func start(sequence: ChoiceSequence, targets: TargetSet) {
         start(sequence: sequence, targets: targets, convergedOrigins: nil)
     }
 
     /// Default implementation returning no convergence records.
-    public var convergenceRecords: [Int: ConvergedOrigin] { [:] }
+    var convergenceRecords: [Int: ConvergedOrigin] {
+        [:]
+    }
 }

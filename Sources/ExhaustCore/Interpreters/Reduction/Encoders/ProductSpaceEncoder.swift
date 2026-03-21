@@ -31,7 +31,7 @@ struct BinarySearchLadder {
         var result = [current]
         result.reserveCapacity(maxSteps + 2)
         var value = current
-        for _ in 0..<maxSteps {
+        for _ in 0 ..< maxSteps {
             let midpoint = target + (value - target) / 2
             guard midpoint != value else { break }
             value = midpoint
@@ -64,14 +64,14 @@ struct ProductSpaceBatchEncoder: BatchEncoder {
     /// Outer key: downstream axis region index. Inner key: upstream bit pattern value. Value: downstream valid range for that upstream value. When set, dependent axes use per-upstream-value ladders instead of fixed Cartesian product.
     var dependentDomains: [Int: [UInt64: ClosedRange<UInt64>]]?
 
-    func estimatedCost(sequence: ChoiceSequence, bindIndex: BindSpanIndex?) -> Int? {
+    func estimatedCost(sequence _: ChoiceSequence, bindIndex: BindSpanIndex?) -> Int? {
         guard let bindIndex, bindIndex.regions.isEmpty == false else { return nil }
         let axisCount = bindIndex.regions.count
         guard axisCount <= 3 else { return nil }
         // Worst case: (maxSteps + 2)^k, capped at 512.
         let ladderSize = 8 // maxSteps(6) + 2
         var product = 1
-        for _ in 0..<axisCount {
+        for _ in 0 ..< axisCount {
             product *= ladderSize
             if product > 512 {
                 return 512
@@ -231,7 +231,7 @@ struct ProductSpaceAdaptiveEncoder: AdaptiveEncoder {
     /// Set by the caller before invocation.
     var bindIndex: BindSpanIndex?
 
-    func estimatedCost(sequence: ChoiceSequence, bindIndex: BindSpanIndex?) -> Int? {
+    func estimatedCost(sequence _: ChoiceSequence, bindIndex: BindSpanIndex?) -> Int? {
         guard let bindIndex, bindIndex.regions.count > 3 else { return nil }
         let count = bindIndex.regions.count
         // O(k * log(range) * log(k)) — conservative estimate.
@@ -358,7 +358,7 @@ struct ProductSpaceAdaptiveEncoder: AdaptiveEncoder {
     ) -> ChoiceSequence? {
         guard partitionIndex < partitions.count else {
             // All partitions tried — try subdividing if possible.
-            let allIndices = partitions.flatMap { $0 }
+            let allIndices = partitions.flatMap(\.self)
             if allIndices.count <= 2 {
                 searchPhase = .converged
                 return nil
@@ -481,12 +481,12 @@ struct PrecomputedBatchEncoder: BatchEncoder {
     let phase: ReductionPhase
     let candidates: [ChoiceSequence]
 
-    func estimatedCost(sequence: ChoiceSequence, bindIndex: BindSpanIndex?) -> Int? {
+    func estimatedCost(sequence _: ChoiceSequence, bindIndex _: BindSpanIndex?) -> Int? {
         candidates.isEmpty ? nil : candidates.count
     }
 
     func encode(
-        sequence: ChoiceSequence,
+        sequence _: ChoiceSequence,
         targets _: TargetSet
     ) -> any Sequence<ChoiceSequence> {
         candidates

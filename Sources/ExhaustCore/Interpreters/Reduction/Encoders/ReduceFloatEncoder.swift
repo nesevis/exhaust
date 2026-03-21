@@ -106,7 +106,7 @@ struct ReduceFloatEncoder: AdaptiveEncoder {
             // Stage-skip: if the warm start bound matches the current bit pattern,
             // the value is unchanged since last convergence — skip batch stages.
             let skipBatchStages: Stage? = if let convergedOrigin = convergedOrigins?[seqIdx],
-               convergedOrigin.bound == v.choice.bitPattern64
+                                             convergedOrigin.bound == v.choice.bitPattern64
             {
                 .integralBinarySearch
             } else {

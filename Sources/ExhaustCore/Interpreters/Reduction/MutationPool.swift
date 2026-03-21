@@ -1,4 +1,5 @@
 // MARK: - Mutation Pool
+
 //
 // Pairs of non-overlapping structural deletions that the sequential adaptive loop cannot discover.
 // The pushout law (fibration composition): two deletion span sets whose ranges are disjoint compose
@@ -37,15 +38,14 @@ enum MutationPool {
 
         for scope in scopes {
             for slot in slots {
-                let spans: [ChoiceSpan]
-                if let positionRange = scope.positionRange {
-                    spans = spanCache.deletionTargets(
+                let spans: [ChoiceSpan] = if let positionRange = scope.positionRange {
+                    spanCache.deletionTargets(
                         category: slot.spanCategory,
                         inRange: positionRange,
                         from: sequence
                     )
                 } else {
-                    spans = spanCache.deletionTargets(
+                    spanCache.deletionTargets(
                         category: slot.spanCategory,
                         depth: scope.depth,
                         from: sequence,
@@ -125,7 +125,7 @@ enum MutationPool {
         return pairs
     }
 
-    // Returns true if no span in `a` overlaps any span in `b`.
+    /// Returns true if no span in `a` overlaps any span in `b`.
     private static func areDisjoint(_ a: [ChoiceSpan], _ b: [ChoiceSpan]) -> Bool {
         for spanA in a {
             for spanB in b {

@@ -62,20 +62,26 @@ struct DecodingReportTests {
     func convergenceCacheReliability() {
         // 9 exact + 1 PRNG = coverage 0.9 — exactly at threshold
         var atThreshold = DecodingReport()
-        for _ in 0 ..< 9 { atThreshold.record(tier: .exactCarryForward) }
+        for _ in 0 ..< 9 {
+            atThreshold.record(tier: .exactCarryForward)
+        }
         atThreshold.record(tier: .prng)
         #expect(atThreshold.isReliableForConvergenceCache)
 
         // 8 exact + 2 PRNG = coverage 0.8 — below threshold
         var belowThreshold = DecodingReport()
-        for _ in 0 ..< 8 { belowThreshold.record(tier: .exactCarryForward) }
+        for _ in 0 ..< 8 {
+            belowThreshold.record(tier: .exactCarryForward)
+        }
         belowThreshold.record(tier: .prng)
         belowThreshold.record(tier: .prng)
         #expect(belowThreshold.isReliableForConvergenceCache == false)
 
         // All fallback = coverage 1.0 — above threshold
         var allFallback = DecodingReport()
-        for _ in 0 ..< 5 { allFallback.record(tier: .fallbackTree) }
+        for _ in 0 ..< 5 {
+            allFallback.record(tier: .fallbackTree)
+        }
         #expect(allFallback.isReliableForConvergenceCache)
 
         // Empty report = coverage 0.0 — below threshold

@@ -5,81 +5,81 @@ import Foundation
 
 // swiftlint:disable force_try
 
-//benchmark("Int Generation") {
+// benchmark("Int Generation") {
 //    let generator = Gen.choose(in: 0 ... 1000)
 //    var iterator = ValueInterpreter(generator, seed: 1, maxRuns: 100)
 //    while let next = try iterator.next() {
 //        _ = next
 //    }
-//}
+// }
 //
-//benchmark("String generation") {
+// benchmark("String generation") {
 //    let generator = #gen(.string())
 //    var iterator = ValueInterpreter(generator, seed: 1, maxRuns: 100)
 //    while let next = try iterator.next() {
 //        _ = next
 //    }
-//}
+// }
 //
-//benchmark("String generation with reflection") {
+// benchmark("String generation with reflection") {
 //    let generator = #gen(.string())
 //    var iterator = ValueInterpreter(generator, seed: 1, maxRuns: 100)
 //    while let next = try iterator.next() {
 //        _ = try Interpreters.reflect(generator, with: next)
 //    }
-//}
+// }
 //
-//benchmark("String generation with choiceTree") {
+// benchmark("String generation with choiceTree") {
 //    let generator = #gen(.string())
 //    var iterator = ValueAndChoiceTreeInterpreter(generator, seed: 1, maxRuns: 100)
 //    while let (value, tree) = try iterator.next() {
 //        _ = value
 //        _ = tree
 //    }
-//}
+// }
 //
 //// There's no functional difference here between calling next() repeatedly and creating an array from the prefix
 //
-//benchmark("Double generation with choiceTree materialised") {
+// benchmark("Double generation with choiceTree materialised") {
 //    let generator = #gen(.oneOf(weighted: (1, .double()), (2, .double()), (4, .double())))
 //    var iterator = ValueAndChoiceTreeInterpreter(generator, materializePicks: true, seed: 1, maxRuns: 100)
 //    while let (value, tree) = try iterator.next() {
 //        _ = value
 //        _ = tree
 //    }
-//}
+// }
 //
-//benchmark("String generation with choiceTree materialised") {
+// benchmark("String generation with choiceTree materialised") {
 //    let generator = #gen(.string())
 //    var iterator = ValueAndChoiceTreeInterpreter(generator, materializePicks: true, seed: 1, maxRuns: 100)
 //    while let _ = try iterator.next() {}
-//}
+// }
 //
-//private struct Person {
+// private struct Person {
 //    let name: String
 //    let age: UInt8
 //    let height: Double
-//}
+// }
 //
-//benchmark("Zipped person") {
+// benchmark("Zipped person") {
 //    let generator = #gen(.asciiString(), .uint8(), .double())
 //        .mapped(forward: { Person(name: $0.0, age: $0.1, height: $0.2) }, backward: { ($0.name, $0.age, $0.height) })
 //    var iterator = ValueInterpreter(generator, seed: 1, maxRuns: 100)
 //    while let next = try iterator.next() {
 //        _ = next
 //    }
-//}
+// }
 //
-//benchmark("Zipped person with reflection") {
+// benchmark("Zipped person with reflection") {
 //    let generator = #gen(.asciiString(), .uint8(), .double())
 //        .mapped(forward: { Person(name: $0.0, age: $0.1, height: $0.2) }, backward: { ($0.name, $0.age, $0.height) })
 //    var iterator = ValueInterpreter(generator, seed: 1, maxRuns: 100)
 //    while let next = try iterator.next() {
 //        _ = try Interpreters.reflect(generator, with: next)
 //    }
-//}
+// }
 //
-//benchmark("Zipped person with ChoiceTree") {
+// benchmark("Zipped person with ChoiceTree") {
 //    let generator = #gen(
 //        .asciiString(),
 //        .uint8(),
@@ -91,7 +91,7 @@ import Foundation
 //        _ = value
 //        _ = tree
 //    }
-//}
+// }
 
 struct Bound5: Equatable {
     let a: [Int16]
@@ -278,10 +278,7 @@ benchmark("Calculator, 100 iterations") {
     }
 }
 
-
-    
-
-//benchmark("ScalarRangeSet.scalar(at:)") {
+// benchmark("ScalarRangeSet.scalar(at:)") {
 //    let chars = CharacterSet.illegalCharacters.inverted.subtracting(.controlCharacters)
 //    let srs = chars.scalarRangeSet()
 //    var f: Unicode.Scalar?
@@ -289,9 +286,9 @@ benchmark("Calculator, 100 iterations") {
 //        f = srs.scalar(at: n)
 //    }
 //    precondition(f != nil)
-//}
+// }
 //
-//benchmark("ScalarRangeSet.index(of:)") {
+// benchmark("ScalarRangeSet.index(of:)") {
 //    let chars = CharacterSet.illegalCharacters.inverted.subtracting(.controlCharacters)
 //    let srs = chars.scalarRangeSet()
 //    let count = min(srs.scalarCount, 10000)
@@ -301,7 +298,7 @@ benchmark("Calculator, 100 iterations") {
 //        result = srs.index(of: scalar)
 //    }
 //    precondition(result >= 0)
-//}
+// }
 
 Benchmark.main()
 

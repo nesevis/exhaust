@@ -42,7 +42,7 @@ struct Bound5ShrinkingChallenge {
             Self.gen,
             .randomOnly,
             .suppressIssueReporting,
-            .replay(16799307796119368455),
+            .replay(16_799_307_796_119_368_455),
             property: Self.property
         )
 

@@ -37,15 +37,15 @@ struct BinaryHeapShrinkingChallenge {
             #exhaust(
                 Self.gen,
                 .suppressIssueReporting,
-                .replay(626_360_492_104_589_905),
+//                .replay(626_360_492_104_589_905),
+                .replay(7_669_171_433_675_367_730),
                 property: property
             )
         )
-        let outputValues = Self.toList(output).sorted()
-        // The shrunken result should have 4 values — the minimal failing heap
-        // The exact order and number of zeroes and ones (ie the size of the tree) isn't consistent
-        // Exhaust finds 4 and 5 value heaps
-        #expect(Set(outputValues) == [0, 1])
+        let outputValues = Self.toList(output)
+        // The shrunken result should have 4 values — the minimal failing heap.
+        // 1 should be the last value, as this is the shortlex smallest
+        #expect(outputValues == [0, 0, 1, 0])
     }
 
     // MARK: - Heap type
@@ -138,15 +138,15 @@ struct BinaryHeapShrinkingChallenge {
         let nodeGen = #gen(.int(in: min ... maxVal))
             .bind { value in
                 #gen(heapGen(min: value, depth: depth / 2), heapGen(min: value, depth: depth / 2))
-                .mapped(
-                    forward: { left, right in Heap.node(value, left, right) },
-                    backward: { heap in
-                        switch heap {
-                        case let .node(_, left, right): (left, right)
-                        case .empty: (.empty, .empty)
+                    .mapped(
+                        forward: { left, right in Heap.node(value, left, right) },
+                        backward: { heap in
+                            switch heap {
+                            case let .node(_, left, right): (left, right)
+                            case .empty: (.empty, .empty)
+                            }
                         }
-                    }
-                )
+                    )
             }
 
         return #gen(.oneOf(weighted:

@@ -655,14 +655,14 @@ struct ExtractSequenceElementSpansTests {
     func groupWrappedElementsInBindNestedSequence() {
         // Coupling pattern with group-wrapped elements: { V [ (V) (V) (V) ] }
         let seq: ChoiceSequence = [
-            bindOpen,                                   // 0
-            val(2),                                     // 1  — bound index (inner choice)
-            seqOpen,                                    // 2
-            grpOpen, val(10), grpClose,                 // 3, 4, 5
-            grpOpen, val(20), grpClose,                 // 6, 7, 8
-            grpOpen, val(30), grpClose,                 // 9, 10, 11
-            seqClose,                                   // 12
-            bindClose,                                  // 13
+            bindOpen, // 0
+            val(2), // 1  — bound index (inner choice)
+            seqOpen, // 2
+            grpOpen, val(10), grpClose, // 3, 4, 5
+            grpOpen, val(20), grpClose, // 6, 7, 8
+            grpOpen, val(30), grpClose, // 9, 10, 11
+            seqClose, // 12
+            bindClose, // 13
         ]
         let spans = ChoiceSequence.extractSequenceElementSpans(from: seq)
 
@@ -678,14 +678,14 @@ struct ExtractSequenceElementSpansTests {
         // Coupling pattern with bare values: { V [ V V V ] }
         // This is what arrays of simple types (Int, UInt, etc.) produce.
         let seq: ChoiceSequence = [
-            bindOpen,                                   // 0
-            val(2),                                     // 1  — bound index (inner choice)
-            seqOpen,                                    // 2
-            val(10),                                    // 3
-            val(20),                                    // 4
-            val(30),                                    // 5
-            seqClose,                                   // 6
-            bindClose,                                  // 7
+            bindOpen, // 0
+            val(2), // 1  — bound index (inner choice)
+            seqOpen, // 2
+            val(10), // 3
+            val(20), // 4
+            val(30), // 5
+            seqClose, // 6
+            bindClose, // 7
         ]
         let spans = ChoiceSequence.extractSequenceElementSpans(from: seq)
 
@@ -702,11 +702,11 @@ struct ExtractSequenceElementSpansTests {
     func bareValueElementsInFlatSequence() {
         // Simpler case without bind wrapping: [ V V V ]
         let seq: ChoiceSequence = [
-            seqOpen,                                    // 0
-            val(10),                                    // 1
-            val(20),                                    // 2
-            val(30),                                    // 3
-            seqClose,                                   // 4
+            seqOpen, // 0
+            val(10), // 1
+            val(20), // 2
+            val(30), // 3
+            seqClose, // 4
         ]
         let spans = ChoiceSequence.extractSequenceElementSpans(from: seq)
 
@@ -721,10 +721,10 @@ struct ExtractSequenceElementSpansTests {
     func groupWrappedElementsInFlatSequence() {
         // Baseline: [ (V) (V) ]
         let seq: ChoiceSequence = [
-            seqOpen,                                    // 0
-            grpOpen, val(10), grpClose,                 // 1, 2, 3
-            grpOpen, val(20), grpClose,                 // 4, 5, 6
-            seqClose,                                   // 7
+            seqOpen, // 0
+            grpOpen, val(10), grpClose, // 1, 2, 3
+            grpOpen, val(20), grpClose, // 4, 5, 6
+            seqClose, // 7
         ]
         let spans = ChoiceSequence.extractSequenceElementSpans(from: seq)
 
@@ -751,11 +751,11 @@ struct ExtractSequenceElementSpansTests {
     func mixedBareAndGroupWrapped() {
         // [ V (V) V ]
         let seq: ChoiceSequence = [
-            seqOpen,                                    // 0
-            val(10),                                    // 1
-            grpOpen, val(20), grpClose,                 // 2, 3, 4
-            val(30),                                    // 5
-            seqClose,                                   // 6
+            seqOpen, // 0
+            val(10), // 1
+            grpOpen, val(20), grpClose, // 2, 3, 4
+            val(30), // 5
+            seqClose, // 6
         ]
         let spans = ChoiceSequence.extractSequenceElementSpans(from: seq)
 

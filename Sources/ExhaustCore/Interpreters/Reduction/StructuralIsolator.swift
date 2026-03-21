@@ -4,6 +4,7 @@
 //
 
 // MARK: - Phase 0: Structural Independence Isolation
+
 //
 // Prepended to the V-cycle as a one-shot pass. Identifies leaf positions
 // that no structural node (bind-inner or branch-selector) can influence,
@@ -43,7 +44,7 @@ enum StructuralIsolator {
     static func project<Output>(
         gen: ReflectiveGenerator<Output>,
         sequence: ChoiceSequence,
-        tree: ChoiceTree,
+        tree _: ChoiceTree,
         bindIndex: BindSpanIndex?,
         property: @escaping (Output) -> Bool,
         isInstrumented: Bool
@@ -58,7 +59,7 @@ enum StructuralIsolator {
         }
 
         let containerSpans = ChoiceSequence.extractContainerSpans(from: sequence)
-        for index in 0..<sequence.count {
+        for index in 0 ..< sequence.count {
             if case .branch = sequence[index] {
                 if let groupRange = ChoiceDependencyGraph.smallestContainingGroupSpan(
                     at: index,
@@ -77,7 +78,7 @@ enum StructuralIsolator {
             }
         }
         var independentPositions: [Int] = []
-        for index in 0..<sequence.count {
+        for index in 0 ..< sequence.count {
             guard case .value = sequence[index] else {
                 continue
             }
