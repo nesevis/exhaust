@@ -21,7 +21,6 @@ struct StructuralIsolatorTests {
         let result = StructuralIsolator.project(
             gen: gen,
             sequence: sequence,
-            tree: tree,
             bindIndex: bindIndex,
             property: { _ in false },
             isInstrumented: false
@@ -49,7 +48,6 @@ struct StructuralIsolatorTests {
         let result = StructuralIsolator.project(
             gen: Gen.just(0 as UInt64),
             sequence: sequence,
-            tree: tree,
             bindIndex: bindIndex,
             property: { _ in false },
             isInstrumented: false
@@ -73,7 +71,6 @@ struct StructuralIsolatorTests {
         let result = StructuralIsolator.project(
             gen: gen,
             sequence: sequence,
-            tree: tree,
             bindIndex: bindIndex,
             property: { output in output.1 == 0 },
             isInstrumented: false
@@ -97,7 +94,6 @@ struct StructuralIsolatorTests {
         let result = StructuralIsolator.project(
             gen: gen,
             sequence: sequence,
-            tree: tree,
             bindIndex: bindIndex,
             property: { _ in false },
             isInstrumented: false
@@ -129,7 +125,6 @@ struct StructuralIsolatorTests {
         let result = StructuralIsolator.project(
             gen: Gen.just(0 as UInt64),
             sequence: sequence,
-            tree: tree,
             bindIndex: bindIndex,
             property: { _ in false },
             isInstrumented: false

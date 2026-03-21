@@ -30,10 +30,12 @@ public struct ConvergedOrigin: Sendable {
 struct ConvergenceCache {
     private var entries: [Int: ConvergedOrigin] = [:]
 
+    @inline(__always)
     var isEmpty: Bool {
         entries.isEmpty
     }
 
+    @inline(__always)
     func convergedOrigin(at index: Int) -> ConvergedOrigin? {
         entries[index]
     }
@@ -43,6 +45,7 @@ struct ConvergenceCache {
         entries.isEmpty ? nil : entries
     }
 
+    @inline(__always)
     mutating func record(index: Int, convergedOrigin: ConvergedOrigin) {
         entries[index] = convergedOrigin
     }
@@ -98,7 +101,7 @@ final class ReductionState<Output> {
     var bestSequence: ChoiceSequence
     var bestOutput: Output
     var spanCache: SpanCache
-    var lattice: DominanceLattice
+    var dominance: EncoderDominance
     var rejectCache = Set<UInt64>(minimumCapacity: 512)
     var convergenceCache = ConvergenceCache()
     var convergenceInstrumentation: ConvergenceInstrumentation?
@@ -126,7 +129,7 @@ final class ReductionState<Output> {
         let bestOutput: Output
         let branchTreeDirty: Bool
         let spanCache: SpanCache
-        let lattice: DominanceLattice
+        let dominance: EncoderDominance
         let convergenceCache: ConvergenceCache
     }
 
@@ -148,9 +151,17 @@ final class ReductionState<Output> {
     var productSpaceBatchEncoder = ProductSpaceBatchEncoder()
     var productSpaceAdaptiveEncoder = ProductSpaceAdaptiveEncoder()
 
-    // Encoder ordering: move-to-front per leg, persists across cycles.
+    /// Value encoder ordering for leaf-range passes in fibre descent.
+    ///
+    /// Diverges from ``trainOrder`` via move-to-front within the leaf-range loop.
     var snipOrder: [ReductionScheduler.ValueEncoderSlot] = ReductionScheduler.ValueEncoderSlot.allCases
+
+    /// Deletion encoder ordering for structural deletion in base descent.
     var pruneOrder: [ReductionScheduler.DeletionEncoderSlot] = ReductionScheduler.DeletionEncoderSlot.allCases
+
+    /// Value encoder ordering for the contravariant depth sweep in fibre descent.
+    ///
+    /// Starts identical to ``snipOrder`` each cycle; diverges via independent move-to-front.
     var trainOrder: [ReductionScheduler.ValueEncoderSlot] = ReductionScheduler.ValueEncoderSlot.allCases
 
     init(
@@ -175,7 +186,7 @@ final class ReductionState<Output> {
         bestSequence = sequence
         bestOutput = output
         spanCache = SpanCache()
-        lattice = DominanceLattice()
+        dominance = EncoderDominance()
         deleteAlignedWindowsEncoder = DeleteAlignedWindowsEncoder(
             beamTuning: config.alignedDeletionBeamSearchTuning
         )
@@ -246,7 +257,7 @@ extension ReductionState {
         budget: inout ReductionScheduler.LegBudget
     ) throws -> Bool {
         guard budget.isExhausted == false else { return false }
-        if lattice.shouldSkip(encoder.name, phase: encoder.phase) { return false }
+        if dominance.shouldSkip(encoder.name, phase: encoder.phase) { return false }
         let startSeqLen = sequence.count
         let cacheSalt = decoder.rejectCacheSalt
         var probes = 0
@@ -267,7 +278,7 @@ extension ReductionState {
             ) {
                 budget.recordMaterialization()
                 accept(result, structureChanged: structureChanged)
-                lattice.recordSuccess(encoder.name)
+                dominance.recordSuccess(encoder.name)
                 if isInstrumented {
                     ExhaustLog.debug(category: .reducer, event: "encoder_accepted", metadata: [
                         "encoder": encoder.name.rawValue, "probes": "\(probes)",
@@ -309,7 +320,7 @@ extension ReductionState {
         convergedOrigins: [Int: ConvergedOrigin]? = nil
     ) throws -> Bool {
         guard budget.isExhausted == false else { return false }
-        if lattice.shouldSkip(encoder.name, phase: encoder.phase) { return false }
+        if dominance.shouldSkip(encoder.name, phase: encoder.phase) { return false }
         let startSeqLen = sequence.count
         let startSequenceForCacheInvalidation = hasBind ? sequence : nil
         var encoder = encoder
@@ -341,7 +352,7 @@ extension ReductionState {
                     // bindIndex is now fresh (structureChanged: hasBind rebuilt it above).
                     // Compare the post-accept fingerprint against the pre-Phase-2 baseline.
                     if let currentBindIndex = bindIndex,
-                       StructuralFingerprint.from(tree, bindIndex: currentBindIndex) != guardPrint
+                       StructuralFingerprint.from(sequence, bindIndex: currentBindIndex) != guardPrint
                     {
                         // Structural boundary crossed: undo this acceptance and stop the encoder.
                         // Any clean acceptances already committed remain intact.
@@ -398,7 +409,7 @@ extension ReductionState {
         }
 
         if anyAccepted {
-            lattice.recordSuccess(encoder.name)
+            dominance.recordSuccess(encoder.name)
         }
         if isInstrumented {
             if probes > 0 {
@@ -444,7 +455,7 @@ extension ReductionState {
             bestOutput: bestOutput,
             branchTreeDirty: branchTreeDirty,
             spanCache: spanCache,
-            lattice: lattice,
+            dominance: dominance,
             convergenceCache: convergenceCache
         )
     }
@@ -460,7 +471,7 @@ extension ReductionState {
         bestOutput = snapshot.bestOutput
         branchTreeDirty = snapshot.branchTreeDirty
         spanCache = snapshot.spanCache
-        lattice = snapshot.lattice
+        dominance = snapshot.dominance
         convergenceCache = snapshot.convergenceCache
     }
 }
@@ -516,14 +527,9 @@ extension ReductionState {
     ///
     /// Pipeline acceptance: final state must shortlex-precede the pre-relaxation checkpoint. ``bestSequence`` and ``bestOutput`` only update if the full pipeline passes — intermediate results are discarded on rollback.
     func runRelaxRound(remaining: inout Int) throws -> Bool {
-        // Checkpoint all mutable state, including bestSequence/bestOutput.
-        let checkpointSequence = sequence
-        let checkpointTree = tree
-        let checkpointOutput = output
-        let checkpointFallbackTree = fallbackTree
-        let checkpointBindIndex = bindIndex
-        let checkpointBestSequence = bestSequence
-        let checkpointBestOutput = bestOutput
+        // Checkpoint all mutable state so rollback restores everything atomically,
+        // including convergenceCache, spanCache, dominance, and branchTreeDirty.
+        let checkpoint = makeSnapshot()
 
         // Run RelaxRoundEncoder with exact decoder — no fallback, no shortlex check.
         // Exact mode validates values against their explicit ranges, avoiding
@@ -573,10 +579,8 @@ extension ReductionState {
         }
 
         guard redistributionAccepted else {
-            // No speculative move found. Restore bestSequence/bestOutput
-            // (accept() may have transiently updated them).
-            bestSequence = checkpointBestSequence
-            bestOutput = checkpointBestOutput
+            // No speculative move found — restore all state atomically.
+            restoreSnapshot(checkpoint)
             remaining -= explorationBudget.used
             return false
         }
@@ -588,13 +592,13 @@ extension ReductionState {
         let fibreProgress = try runFibreDescent(budget: &exploitRemaining, dag: dag)
 
         // Pipeline acceptance: final state must shortlex-precede checkpoint.
-        if sequence.shortLexPrecedes(checkpointSequence) {
+        if sequence.shortLexPrecedes(checkpoint.sequence) {
             bestSequence = sequence
             bestOutput = output
             remaining = exploitRemaining
             if isInstrumented {
                 ExhaustLog.debug(category: .reducer, event: "exploration_accepted", metadata: [
-                    "seq_len": "\(checkpointSequence.count)→\(sequence.count)",
+                    "seq_len": "\(checkpoint.sequence.count)→\(sequence.count)",
                     "base_descent": "\(baseProgress)",
                     "fibre_descent": "\(fibreProgress)",
                 ])
@@ -602,14 +606,8 @@ extension ReductionState {
             return true
         }
 
-        // Rollback all state including bestSequence/bestOutput.
-        sequence = checkpointSequence
-        tree = checkpointTree
-        output = checkpointOutput
-        fallbackTree = checkpointFallbackTree
-        bindIndex = checkpointBindIndex
-        bestSequence = checkpointBestSequence
-        bestOutput = checkpointBestOutput
+        // Rollback all state atomically.
+        restoreSnapshot(checkpoint)
         remaining -= explorationBudget.used
         return false
     }

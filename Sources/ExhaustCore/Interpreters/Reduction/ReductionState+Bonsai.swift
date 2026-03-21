@@ -163,13 +163,13 @@ extension ReductionState {
 
         var legBudget = ReductionScheduler.LegBudget(hardCap: subBudget)
         spanCache.invalidate()
-        lattice.invalidate()
+        dominance.invalidate()
 
         let scopes = buildDeletionScopes(dag: dag)
 
         for scope in scopes {
             guard legBudget.isExhausted == false else { break }
-            lattice.invalidate()
+            dominance.invalidate()
             let scopeDecoder = makeDeletionDecoder(at: scope.depth)
 
             for slot in pruneOrder {
@@ -323,7 +323,7 @@ extension ReductionState {
 
         var legBudget = ReductionScheduler.LegBudget(hardCap: subBudget)
         spanCache.invalidate()
-        lattice.invalidate()
+        dominance.invalidate()
         var accepted = 0
 
         let bindInnerCount = bindSpanIndex.regions.count
@@ -613,7 +613,7 @@ extension ReductionState {
 
         var legBudget = ReductionScheduler.LegBudget(hardCap: subBudget)
         spanCache.invalidate()
-        lattice.invalidate()
+        dominance.invalidate()
         var anyAccepted = false
 
         // Build converged origins once for all fibre descent calls in this pass.
@@ -630,7 +630,7 @@ extension ReductionState {
 
         // Capture skeleton fingerprint before fibre descent starts.
         let prePhaseFingerprint: StructuralFingerprint? = if hasBind, let bindSpanIndex = bindIndex {
-            StructuralFingerprint.from(tree, bindIndex: bindSpanIndex)
+            StructuralFingerprint.from(sequence, bindIndex: bindSpanIndex)
         } else {
             nil
         }
@@ -732,7 +732,7 @@ extension ReductionState {
         if maxBindDepth >= 1, legBudget.isExhausted == false {
             for depth in stride(from: maxBindDepth, through: 1, by: -1) {
                 guard legBudget.isExhausted == false else { break }
-                lattice.invalidate()
+                dominance.invalidate()
                 let depthContext = DecoderContext(
                     depth: .specific(depth),
                     bindIndex: bindIndex,
@@ -931,13 +931,13 @@ extension ReductionState {
                 for value in upstreamLadder.values {
                     if value == upstreamAxis.currentBitPattern { continue }
 
+                    // Ladder values are shortlex keys — convert to bit patterns for materialization.
+                    let probeChoice = ChoiceValue.fromShortlexKey(value, tag: upstreamAxis.choiceTag)
+
                     // Create modified sequence with upstream set to candidate value.
                     var modified = sequence
                     modified[upstreamAxis.seqIdx] = .value(.init(
-                        choice: ChoiceValue(
-                            upstreamAxis.choiceTag.makeConvertible(bitPattern64: value),
-                            tag: upstreamAxis.choiceTag
-                        ),
+                        choice: probeChoice,
                         validRange: upstreamAxis.validRange,
                         isRangeExplicit: upstreamAxis.isRangeExplicit
                     ))
@@ -1011,7 +1011,14 @@ extension ReductionState {
         }
 
         // Depth-0 content outside all structural nodes.
-        scopes.append(DeletionScope(positionRange: nil, depth: 0))
+        // Only append if there are leaf positions at depth 0 not already covered
+        // by position-ranged scopes from DAG nodes.
+        let hasUncoveredDepthZeroContent = dag.leafPositions.contains { leafRange in
+            bindIndex?.bindDepth(at: leafRange.lowerBound) == 0 || bindIndex == nil
+        }
+        if hasUncoveredDepthZeroContent {
+            scopes.append(DeletionScope(positionRange: nil, depth: 0))
+        }
 
         return scopes
     }

@@ -12,6 +12,11 @@ struct SpanCache {
     private var cachedSequenceBoundarySpans: [ChoiceSpan]?
     private var cachedFreeStandingValueSpans: [ChoiceSpan]?
 
+    // Per-depth caches for filtered accessors, avoiding repeated O(n) .filter calls.
+    private var cachedValueSpansByDepth: [Int: [ChoiceSpan]] = [:]
+    private var cachedSiblingGroupsByDepth: [Int: [SiblingGroup]] = [:]
+    private var cachedDeletionTargetsByDepth: [DeletionDepthKey: [ChoiceSpan]] = [:]
+
     mutating func invalidate() {
         cachedAllValueSpans = nil
         cachedSiblingGroups = nil
@@ -19,6 +24,9 @@ struct SpanCache {
         cachedSequenceElementSpans = nil
         cachedSequenceBoundarySpans = nil
         cachedFreeStandingValueSpans = nil
+        cachedValueSpansByDepth.removeAll(keepingCapacity: true)
+        cachedSiblingGroupsByDepth.removeAll(keepingCapacity: true)
+        cachedDeletionTargetsByDepth.removeAll(keepingCapacity: true)
     }
 
     // MARK: - Raw cached extractions
@@ -70,40 +78,78 @@ struct SpanCache {
     mutating func valueSpans(
         at depth: Int, from sequence: ChoiceSequence, bindIndex: BindSpanIndex?
     ) -> [ChoiceSpan] {
+        if let cached = cachedValueSpansByDepth[depth] { return cached }
         let all = allValueSpans(from: sequence)
         if let bi = bindIndex {
-            return all.filter { bi.bindDepth(at: $0.range.lowerBound) == depth }
+            var result = [ChoiceSpan]()
+            result.reserveCapacity(all.count)
+            for i in 0 ..< all.count {
+                if bi.bindDepth(at: all[i].range.lowerBound) == depth {
+                    result.append(all[i])
+                }
+            }
+            cachedValueSpansByDepth[depth] = result
+            return result
         }
+        cachedValueSpansByDepth[depth] = all
         return all
     }
 
     mutating func siblingGroups(
         at depth: Int, from sequence: ChoiceSequence, bindIndex: BindSpanIndex?
     ) -> [SiblingGroup] {
+        if let cached = cachedSiblingGroupsByDepth[depth] { return cached }
         let all = allSiblingGroups(from: sequence)
         if let bi = bindIndex {
-            return all.filter { bi.bindDepth(at: $0.ranges[0].lowerBound) == depth }
+            var result = [SiblingGroup]()
+            result.reserveCapacity(all.count)
+            for i in 0 ..< all.count {
+                if bi.bindDepth(at: all[i].ranges[0].lowerBound) == depth {
+                    result.append(all[i])
+                }
+            }
+            cachedSiblingGroupsByDepth[depth] = result
+            return result
         }
+        cachedSiblingGroupsByDepth[depth] = all
         return all
     }
 
     mutating func floatSpans(
         at depth: Int, from sequence: ChoiceSequence, bindIndex: BindSpanIndex?
     ) -> [ChoiceSpan] {
-        valueSpans(at: depth, from: sequence, bindIndex: bindIndex).filter { span in
-            guard let v = sequence[span.range.lowerBound].value else { return false }
-            return v.choice.tag == .double || v.choice.tag == .float
+        let spans = valueSpans(at: depth, from: sequence, bindIndex: bindIndex)
+        var result = [ChoiceSpan]()
+        result.reserveCapacity(spans.count)
+        for i in 0 ..< spans.count {
+            if let value = sequence[spans[i].range.lowerBound].value,
+               value.choice.tag == .double || value.choice.tag == .float
+            {
+                result.append(spans[i])
+            }
         }
+        return result
     }
 
     mutating func deletionTargets(
         category: DeletionSpanCategory, depth: Int,
         from sequence: ChoiceSequence, bindIndex: BindSpanIndex?
     ) -> [ChoiceSpan] {
+        let key = DeletionDepthKey(category: category, depth: depth)
+        if let cached = cachedDeletionTargetsByDepth[key] { return cached }
         let spans = rawDeletionSpans(category: category, from: sequence)
         if let bi = bindIndex {
-            return spans.filter { bi.bindDepth(at: $0.range.lowerBound) == depth }
+            var result = [ChoiceSpan]()
+            result.reserveCapacity(spans.count)
+            for i in 0 ..< spans.count {
+                if bi.bindDepth(at: spans[i].range.lowerBound) == depth {
+                    result.append(spans[i])
+                }
+            }
+            cachedDeletionTargetsByDepth[key] = result
+            return result
         }
+        cachedDeletionTargetsByDepth[key] = spans
         return spans
     }
 
@@ -116,7 +162,14 @@ struct SpanCache {
         from sequence: ChoiceSequence
     ) -> [ChoiceSpan] {
         let spans = rawDeletionSpans(category: category, from: sequence)
-        return spans.filter { positionRange.contains($0.range.lowerBound) }
+        var result = [ChoiceSpan]()
+        result.reserveCapacity(spans.count)
+        for i in 0 ..< spans.count {
+            if positionRange.contains(spans[i].range.lowerBound) {
+                result.append(spans[i])
+            }
+        }
+        return result
     }
 
     /// Extracts raw (unfiltered) spans for a deletion category.
@@ -137,4 +190,12 @@ struct SpanCache {
             allContainerSpans(from: sequence)
         }
     }
+}
+
+// MARK: - Deletion Depth Key
+
+/// Composite key for per-(category, depth) deletion target caching.
+private struct DeletionDepthKey: Hashable {
+    let category: DeletionSpanCategory
+    let depth: Int
 }

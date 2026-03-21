@@ -1,33 +1,36 @@
-/// 2-cell pruning of dominated encoders within a hom-set.
+/// 2-cell dominance pruning of dominated encoders within a hom-set.
 ///
-/// Within each hom-set (encoders sharing the same decoder), the dominance relation
-/// defines when a less-aggressive encoder can be skipped because a more-aggressive one
-/// has already succeeded. The 2-cell relationships are:
+/// Tracks categorical 2-cell dominance (Sepulveda-Jimenez, Def 15.3) across encoder
+/// hom-sets. Within each hom-set (encoders sharing the same decoder), the dominance
+/// relation defines when a less-aggressive encoder can be skipped because a
+/// more-aggressive one has already succeeded. The 2-cell relationships are:
 ///
 /// - **Deletion**: `deleteContainerSpans` or `deleteAlignedSiblingWindows` ⇒ `deleteContainerSpansWithRandomRepair`
 /// - **Value minimization**: `zeroValue` ⇒ `binarySearchToSemanticSimplest` ⇒ `binarySearchToRangeMinimum`
 ///
-/// The lattice is scoped per hom-set: success in one hom-set (for example, deletion) does not
-/// affect dominance in another (for example, value minimization). The scheduler resets the
-/// lattice at leg boundaries where the decoder changes.
+/// The dominance relation is scoped per hom-set: success in one hom-set (for example, deletion)
+/// does not affect dominance in another (for example, value minimization). The scheduler resets
+/// dominance at leg boundaries where the decoder changes.
 ///
-/// During the contravariant sweep (structure-preserving), the lattice is stable — no
-/// structural changes occur. During the deletion sweep, the lattice must be invalidated
-/// after each success (spans change). During the covariant sweep, the lattice is stable
+/// During the contravariant sweep (structure-preserving), dominance is stable — no
+/// structural changes occur. During the deletion sweep, dominance must be invalidated
+/// after each success (spans change). During the covariant sweep, dominance is stable
 /// again.
 ///
 /// Reference: Sepulveda-Jimenez, Def 15.3 (2-cell dominance).
-struct DominanceLattice {
+struct EncoderDominance {
     /// Encoders that have accepted at least one candidate since the last invalidation.
     private var succeeded: Set<EncoderName> = []
 
     /// Records that an encoder accepted a candidate.
+    @inline(__always)
     mutating func recordSuccess(_ name: EncoderName) {
         succeeded.insert(name)
     }
 
     /// Clears all success tracking. Called at leg boundaries or after structural changes
     /// that invalidate the span layout.
+    @inline(__always)
     mutating func invalidate() {
         succeeded.removeAll()
     }

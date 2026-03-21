@@ -48,18 +48,43 @@ public struct BindSpanIndex {
     }
 
     /// Returns the ``BindRegion`` whose inner range contains the given index, or `nil`.
+    @inline(__always)
     public func bindRegionForInnerIndex(_ index: Int) -> BindRegion? {
-        regions.first { $0.innerRange.contains(index) }
+        var i = 0
+        while i < regions.count {
+            if regions[i].innerRange.contains(index) {
+                return regions[i]
+            }
+            i += 1
+        }
+        return nil
     }
 
     /// Whether the index falls inside any bind's bound range.
+    @inline(__always)
     public func isInBoundSubtree(_ index: Int) -> Bool {
-        regions.contains { $0.boundRange.contains(index) }
+        var i = 0
+        while i < regions.count {
+            if regions[i].boundRange.contains(index) {
+                return true
+            }
+            i += 1
+        }
+        return false
     }
 
     /// The number of bound ranges that contain this index (bind nesting depth).
+    @inline(__always)
     public func bindDepth(at index: Int) -> Int {
-        regions.count(where: { $0.boundRange.contains(index) })
+        var count = 0
+        var i = 0
+        while i < regions.count {
+            if regions[i].boundRange.contains(index) {
+                count += 1
+            }
+            i += 1
+        }
+        return count
     }
 
     /// The maximum bind nesting depth across all positions.

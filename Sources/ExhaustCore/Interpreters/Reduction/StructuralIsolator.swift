@@ -44,7 +44,6 @@ enum StructuralIsolator {
     static func project<Output>(
         gen: ReflectiveGenerator<Output>,
         sequence: ChoiceSequence,
-        tree _: ChoiceTree,
         bindIndex: BindSpanIndex?,
         property: @escaping (Output) -> Bool,
         isInstrumented: Bool

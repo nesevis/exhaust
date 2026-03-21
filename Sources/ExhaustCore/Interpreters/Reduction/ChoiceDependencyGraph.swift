@@ -392,32 +392,35 @@ private extension ChoiceDependencyGraph {
 
 // MARK: - Structural Fingerprint
 
-/// A lightweight summary of a choice tree's structural shape.
+/// A lightweight summary of a choice sequence's structural shape.
 ///
-/// Two trees with the same fingerprint have the same flattened width and the same total bind nesting depth across all value positions. A change in fingerprint indicates a structural change (positions added, removed, or moved across bind boundaries).
+/// Two sequences with the same fingerprint have the same flattened width and the same position-sensitive bind depth distribution across all value positions. A change in fingerprint indicates a structural change (positions added, removed, or moved across bind boundaries). Uses a rolling hash over (position, depth) pairs so that compensating depth migrations (for example, one value moving from depth 2 to 0 while another moves from 0 to 2) produce distinct fingerprints.
 public struct StructuralFingerprint: Equatable, Sendable {
     /// The total number of entries in the flattened ``ChoiceSequence``.
     public let width: Int
 
-    /// The sum of bind depths across all value positions.
-    public let bindDepthSum: Int
+    /// Position-sensitive rolling hash over per-value bind depths.
+    public let depthHash: UInt64
 
-    /// Computes the skeleton fingerprint from a choice tree and its bind span index.
+    /// Computes the skeleton fingerprint from a choice sequence and its bind span index.
+    ///
+    /// Uses a position-sensitive FNV-style rolling hash over per-value bind depths so that depth migrations with equal sums produce distinct fingerprints. Takes ``ChoiceSequence`` directly, eliminating the O(n) ``ChoiceSequence/init(_:)`` allocation that the prior ``ChoiceTree``-based signature required on every call.
     public static func from(
-        _ tree: ChoiceTree,
+        _ sequence: ChoiceSequence,
         bindIndex: BindSpanIndex
     ) -> StructuralFingerprint {
-        let width = tree.flattenedEntryCount
-        let sequence = ChoiceSequence(tree)
-        var depthSum = 0
+        let width = sequence.count
+        var hash: UInt64 = 14_695_981_039_346_656_037 // FNV offset basis
         for i in 0 ..< sequence.count {
             switch sequence[i] {
             case .value, .reduced:
-                depthSum += bindIndex.bindDepth(at: i)
+                let depth = UInt64(bindIndex.bindDepth(at: i))
+                hash = (hash ^ UInt64(i)) &* 1_099_511_628_211
+                hash = (hash ^ depth) &* 6_364_136_223_846_793_005
             default:
                 break
             }
         }
-        return StructuralFingerprint(width: width, bindDepthSum: depthSum)
+        return StructuralFingerprint(width: width, depthHash: hash)
     }
 }

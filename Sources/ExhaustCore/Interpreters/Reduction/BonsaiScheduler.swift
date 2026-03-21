@@ -19,6 +19,13 @@
 enum BonsaiScheduler {
     // MARK: - Budget Constants
 
+    // Empirically tuned on the shrinking challenge suite (March 2026).
+    // Ratio 6:3:1 reflects that structural changes (base descent) unlock
+    // more downstream value reduction than value changes alone, while
+    // the relax-round is speculative and should consume minimal budget.
+    // The total per-cycle budget (~3250 evaluations) balances reduction
+    // quality against wall-clock time for typical generators.
+
     /// Per-round budget for base descent (structural minimisation).
     static let baseDescentBudget = 1950
 
@@ -57,7 +64,6 @@ enum BonsaiScheduler {
         if let result = StructuralIsolator.project(
             gen: gen,
             sequence: state.sequence,
-            tree: state.tree,
             bindIndex: state.bindIndex,
             property: property,
             isInstrumented: state.isInstrumented

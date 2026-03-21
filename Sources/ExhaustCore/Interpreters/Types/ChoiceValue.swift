@@ -78,6 +78,7 @@ public enum ChoiceValue: Comparable, Hashable, Equatable, Sendable {
     }
 
     /// The numeric type tag for this value.
+    @inline(__always)
     var tag: TypeTag {
         switch self {
         case let .unsigned(_, tag): tag
@@ -107,6 +108,7 @@ public enum ChoiceValue: Comparable, Hashable, Equatable, Sendable {
     }
 
     /// Returns whether this value's bit pattern falls within the given range.
+    @inline(__always)
     func fits(in range: ClosedRange<UInt64>?) -> Bool {
         guard let range else { return true }
         return range.contains(bitPattern64)

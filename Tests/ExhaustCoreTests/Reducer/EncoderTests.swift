@@ -687,59 +687,59 @@ struct AdaptiveDeletionEncoderTests {
     }
 }
 
-// MARK: - DominanceLattice
+// MARK: - EncoderDominance
 
-@Suite("DominanceLattice")
-struct DominanceLatticeTests {
+@Suite("EncoderDominance")
+struct EncoderDominanceTests {
     @Test("Success at one depth does not skip dominated encoder at a different depth after invalidation")
     func crossDepthLeakage() {
-        var lattice = DominanceLattice()
+        var dominance = EncoderDominance()
 
         // Simulate depth-2 iteration: zeroValue succeeds.
-        lattice.recordSuccess(.zeroValue)
-        #expect(lattice.shouldSkip(.binarySearchToSemanticSimplest, phase: .valueMinimization))
+        dominance.recordSuccess(.zeroValue)
+        #expect(dominance.shouldSkip(.binarySearchToSemanticSimplest, phase: .valueMinimization))
 
         // Transitioning to depth 1 should invalidate, so binarySearchToSemanticSimplest is NOT skipped.
-        lattice.invalidate()
-        #expect(lattice.shouldSkip(.binarySearchToSemanticSimplest, phase: .valueMinimization) == false)
+        dominance.invalidate()
+        #expect(dominance.shouldSkip(.binarySearchToSemanticSimplest, phase: .valueMinimization) == false)
     }
 
-    @Test("Success in deletion lattice does not leak across depth boundaries after invalidation")
+    @Test("Success in deletion dominance does not leak across depth boundaries after invalidation")
     func crossDepthDeletionLeakage() {
-        var lattice = DominanceLattice()
+        var dominance = EncoderDominance()
 
         // Simulate depth-0 iteration: deleteContainerSpans succeeds.
-        lattice.recordSuccess(.deleteContainerSpans)
-        #expect(lattice.shouldSkip(.deleteContainerSpansWithRandomRepair, phase: .structuralDeletion))
+        dominance.recordSuccess(.deleteContainerSpans)
+        #expect(dominance.shouldSkip(.deleteContainerSpansWithRandomRepair, phase: .structuralDeletion))
 
         // Transitioning to depth 1 should invalidate.
-        lattice.invalidate()
-        #expect(lattice.shouldSkip(.deleteContainerSpansWithRandomRepair, phase: .structuralDeletion) == false)
+        dominance.invalidate()
+        #expect(dominance.shouldSkip(.deleteContainerSpansWithRandomRepair, phase: .structuralDeletion) == false)
     }
 
     @Test("Without invalidation, success leaks across depths")
     func withoutInvalidationLeaks() {
-        var lattice = DominanceLattice()
+        var dominance = EncoderDominance()
 
         // Record success — dominated encoder should be skipped.
-        lattice.recordSuccess(.zeroValue)
-        #expect(lattice.shouldSkip(.binarySearchToSemanticSimplest, phase: .valueMinimization))
+        dominance.recordSuccess(.zeroValue)
+        #expect(dominance.shouldSkip(.binarySearchToSemanticSimplest, phase: .valueMinimization))
         // Without invalidation, it stays skipped (this is the bug scenario).
-        #expect(lattice.shouldSkip(.binarySearchToSemanticSimplest, phase: .valueMinimization))
+        #expect(dominance.shouldSkip(.binarySearchToSemanticSimplest, phase: .valueMinimization))
     }
 
     @Test("deleteAlignedSiblingWindows success causes deleteContainerSpansWithRandomRepair to be skipped")
     func alignedWindowsDominatesRandomRepair() {
-        var lattice = DominanceLattice()
-        lattice.recordSuccess(.deleteAlignedSiblingWindows)
-        #expect(lattice.shouldSkip(.deleteContainerSpansWithRandomRepair, phase: .structuralDeletion))
+        var dominance = EncoderDominance()
+        dominance.recordSuccess(.deleteAlignedSiblingWindows)
+        #expect(dominance.shouldSkip(.deleteContainerSpansWithRandomRepair, phase: .structuralDeletion))
     }
 
     @Test("Unrelated encoder success does not cause deleteContainerSpansWithRandomRepair to be skipped")
     func unrelatedSuccessDoesNotDominateRandomRepair() {
-        var lattice = DominanceLattice()
-        lattice.recordSuccess(.deleteSequenceElements)
-        #expect(lattice.shouldSkip(.deleteContainerSpansWithRandomRepair, phase: .structuralDeletion) == false)
+        var dominance = EncoderDominance()
+        dominance.recordSuccess(.deleteSequenceElements)
+        #expect(dominance.shouldSkip(.deleteContainerSpansWithRandomRepair, phase: .structuralDeletion) == false)
     }
 }
 

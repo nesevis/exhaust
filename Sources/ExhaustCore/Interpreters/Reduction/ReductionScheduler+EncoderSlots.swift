@@ -19,11 +19,13 @@ extension ReductionScheduler {
         private(set) var used = 0
 
         /// Returns `true` when the hard cap has been reached.
+        @inline(__always)
         var isExhausted: Bool {
             used >= hardCap
         }
 
         /// Records a materialization attempt.
+        @inline(__always)
         mutating func recordMaterialization() {
             used += 1
         }

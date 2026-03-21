@@ -6,6 +6,7 @@
 //
 
 public extension ChoiceValue {
+    @inline(__always)
     var bitPattern64: UInt64 {
         switch self {
         case let .unsigned(uint, _):
@@ -21,6 +22,7 @@ public extension ChoiceValue {
     /// - Signed integers: zigzag encoding (0 → 0, -1 → 1, 1 → 2, -2 → 3, ...)
     /// - Floating point: absolute value's raw IEEE 754 bit pattern (0.0 → 0, ±small → small, ±large → large)
     /// - Unsigned integers: identical to `bitPattern64`
+    @inline(__always)
     var shortlexKey: UInt64 {
         switch self {
         case let .unsigned(uint, _):

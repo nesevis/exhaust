@@ -475,7 +475,6 @@ private extension ReductionMaterializer {
 
     // MARK: pick (with materialized alternatives)
 
-    @inline(__always)
     static func handlePick<Output>(
         _ choices: ContiguousArray<ReflectiveOperation.PickTuple>,
         continuation: (Any) throws -> ReflectiveGenerator<Output>,
@@ -634,7 +633,6 @@ private extension ReductionMaterializer {
 
     // MARK: sequence
 
-    @inline(__always)
     static func handleSequence<Output>(
         lengthGen: ReflectiveGenerator<UInt64>,
         elementGen: ReflectiveGenerator<Any>,
@@ -862,6 +860,7 @@ private extension ReductionMaterializer {
         guard let result = try generateRecursive(
             gen, with: inputValue, context: &context, fallbackTree: innerFallback
         ) else { return nil }
+        context.sizeOverride = nil // Defensive clear — consumed by getSize, but guard against missing getSize.
         return try runContinuation(
             result: result.0,
             calleeChoiceTree: .resize(newSize: newSize, choices: [result.1]),

@@ -91,8 +91,10 @@ struct ProductSpaceBatchEncoder: BatchEncoder {
         guard axes.isEmpty == false else { return [] as [ChoiceSequence] }
 
         // Compute per-axis ladders (used for independent axes and as fallback).
-        let ladders = axes.map { axis in
-            BinarySearchLadder.compute(current: axis.currentBitPattern, target: axis.targetBitPattern)
+        var ladders = [BinarySearchLadder]()
+        ladders.reserveCapacity(axes.count)
+        for ai in 0 ..< axes.count {
+            ladders.append(BinarySearchLadder.compute(current: axes[ai].currentBitPattern, target: axes[ai].targetBitPattern))
         }
 
         // Determine enumeration order and dependency mapping from DAG topology.
@@ -144,16 +146,28 @@ struct ProductSpaceBatchEncoder: BatchEncoder {
                     let upstreamValue = existing[upstreamPosition]
                     let ladder: BinarySearchLadder
                     if let domain = domains[upstreamValue] {
-                        // Compute ladder within the discovered domain.
-                        let effectiveCurrent = min(domain.upperBound, axis.currentBitPattern)
-                        let effectiveTarget = max(domain.lowerBound, axis.targetBitPattern)
-                        if effectiveCurrent >= effectiveTarget {
-                            ladder = BinarySearchLadder.compute(
-                                current: effectiveCurrent, target: effectiveTarget
-                            )
+                        // Domain bounds are in bit-pattern space; axis keys are in shortlex space.
+                        // Convert axis shortlex keys to bit patterns for domain clamping, then
+                        // convert the clamped bounds back to shortlex keys for the ladder.
+                        let currentBitPattern = ChoiceValue.fromShortlexKey(axis.currentBitPattern, tag: axis.choiceTag).bitPattern64
+                        let targetBitPattern = ChoiceValue.fromShortlexKey(axis.targetBitPattern, tag: axis.choiceTag).bitPattern64
+                        let effectiveCurrentBP = min(domain.upperBound, currentBitPattern)
+                        let effectiveTargetBP = max(domain.lowerBound, targetBitPattern)
+                        if effectiveCurrentBP >= effectiveTargetBP {
+                            // Convert clamped bit patterns back to shortlex keys for the ladder.
+                            let effectiveCurrentKey = ChoiceValue(axis.choiceTag.makeConvertible(bitPattern64: effectiveCurrentBP), tag: axis.choiceTag).shortlexKey
+                            let effectiveTargetKey = ChoiceValue(axis.choiceTag.makeConvertible(bitPattern64: effectiveTargetBP), tag: axis.choiceTag).shortlexKey
+                            if effectiveCurrentKey >= effectiveTargetKey {
+                                ladder = BinarySearchLadder.compute(
+                                    current: effectiveCurrentKey, target: effectiveTargetKey
+                                )
+                            } else {
+                                ladder = BinarySearchLadder(values: [effectiveTargetKey])
+                            }
                         } else {
                             // Domain collapsed (target above current in new range). Use target only.
-                            ladder = BinarySearchLadder(values: [effectiveTarget])
+                            let targetKey = ChoiceValue(axis.choiceTag.makeConvertible(bitPattern64: effectiveTargetBP), tag: axis.choiceTag).shortlexKey
+                            ladder = BinarySearchLadder(values: [targetKey])
                         }
                     } else {
                         // Upstream value has no discovered domain (downstream axis may not exist for this upstream value). Skip this combination.
@@ -188,12 +202,13 @@ struct ProductSpaceBatchEncoder: BatchEncoder {
 
         let tuplePositionToAxis = enumerationOrder
 
-        for tuple in tuples {
+        for ti in 0 ..< tuples.count {
+            let tuple = tuples[ti]
             // Skip the identity tuple (all values unchanged).
             var isIdentity = true
-            for (position, value) in tuple.enumerated() {
+            for position in 0 ..< tuple.count {
                 let axisIndex = tuplePositionToAxis[position]
-                if value != axes[axisIndex].currentBitPattern {
+                if tuple[position] != axes[axisIndex].currentBitPattern {
                     isIdentity = false
                     break
                 }
@@ -201,11 +216,13 @@ struct ProductSpaceBatchEncoder: BatchEncoder {
             if isIdentity { continue }
 
             var candidate = sequence
-            for (position, value) in tuple.enumerated() {
+            for position in 0 ..< tuple.count {
                 let axisIndex = tuplePositionToAxis[position]
                 let axis = axes[axisIndex]
+                // Ladder values are shortlex keys — convert back to bit patterns.
+                let choiceValue = ChoiceValue.fromShortlexKey(tuple[position], tag: axis.choiceTag)
                 candidate[axis.seqIdx] = .value(.init(
-                    choice: ChoiceValue(axis.choiceTag.makeConvertible(bitPattern64: value), tag: axis.choiceTag),
+                    choice: choiceValue,
                     validRange: axis.validRange,
                     isRangeExplicit: axis.isRangeExplicit
                 ))
@@ -259,14 +276,14 @@ struct ProductSpaceAdaptiveEncoder: AdaptiveEncoder {
     private var coordinates: [CoordinateState] = []
     private var searchPhase: SearchPhase = .converged
     private var sequence = ChoiceSequence()
-    private var savedEntries: [Int: ChoiceSequenceValue] = [:]
+    private var savedEntries: [(coordIndex: Int, saved: ChoiceSequenceValue)] = []
 
     // MARK: - AdaptiveEncoder
 
     mutating func start(sequence: ChoiceSequence, targets _: TargetSet, convergedOrigins _: [Int: ConvergedOrigin]?) {
         self.sequence = sequence
         coordinates = []
-        savedEntries = [:]
+        savedEntries = []
         searchPhase = .converged
 
         guard let bindIndex else { return }
@@ -274,6 +291,7 @@ struct ProductSpaceAdaptiveEncoder: AdaptiveEncoder {
         let axes = extractAxes(from: sequence, bindIndex: bindIndex)
         guard axes.isEmpty == false else { return }
 
+        savedEntries.reserveCapacity(axes.count)
         coordinates = axes.map { axis in
             CoordinateState(
                 seqIdx: axis.seqIdx,
@@ -324,9 +342,11 @@ struct ProductSpaceAdaptiveEncoder: AdaptiveEncoder {
             let midpoint = coord.lo + (coord.hi - coord.lo) / 2
             if midpoint != coord.hi {
                 anyChanged = true
-                savedEntries[index] = sequence[coord.seqIdx]
+                savedEntries.append((coordIndex: index, saved: sequence[coord.seqIdx]))
+                // Midpoint is a shortlex key — convert back to bit pattern.
+                let choiceValue = ChoiceValue.fromShortlexKey(midpoint, tag: coord.choiceTag)
                 sequence[coord.seqIdx] = .value(.init(
-                    choice: ChoiceValue(coord.choiceTag.makeConvertible(bitPattern64: midpoint), tag: coord.choiceTag),
+                    choice: choiceValue,
                     validRange: coord.validRange,
                     isRangeExplicit: coord.isRangeExplicit
                 ))
@@ -339,7 +359,12 @@ struct ProductSpaceAdaptiveEncoder: AdaptiveEncoder {
         }
 
         // On rejection, enter delta-debug phase.
-        let activeIndices = savedEntries.keys.sorted()
+        var activeIndices = [Int]()
+        activeIndices.reserveCapacity(savedEntries.count)
+        for i in 0 ..< savedEntries.count {
+            activeIndices.append(savedEntries[i].coordIndex)
+        }
+        activeIndices.sort()
         if activeIndices.count <= 1 {
             // Single coordinate — no point in delta debugging.
             searchPhase = .converged
@@ -394,9 +419,11 @@ struct ProductSpaceAdaptiveEncoder: AdaptiveEncoder {
             let midpoint = coord.lo + (coord.hi - coord.lo) / 2
             if midpoint != coord.hi {
                 anyChanged = true
-                savedEntries[coordIndex] = sequence[coord.seqIdx]
+                savedEntries.append((coordIndex: coordIndex, saved: sequence[coord.seqIdx]))
+                // Midpoint is a shortlex key — convert back to bit pattern.
+                let choiceValue = ChoiceValue.fromShortlexKey(midpoint, tag: coord.choiceTag)
                 sequence[coord.seqIdx] = .value(.init(
-                    choice: ChoiceValue(coord.choiceTag.makeConvertible(bitPattern64: midpoint), tag: coord.choiceTag),
+                    choice: choiceValue,
                     validRange: coord.validRange,
                     isRangeExplicit: coord.isRangeExplicit
                 ))
@@ -416,8 +443,9 @@ struct ProductSpaceAdaptiveEncoder: AdaptiveEncoder {
     // MARK: - Helpers
 
     private mutating func restoreSavedEntries() {
-        for (coordIndex, saved) in savedEntries {
-            sequence[coordinates[coordIndex].seqIdx] = saved
+        for i in 0 ..< savedEntries.count {
+            let entry = savedEntries[i]
+            sequence[coordinates[entry.coordIndex].seqIdx] = entry.saved
         }
         savedEntries.removeAll(keepingCapacity: true)
     }
@@ -438,7 +466,7 @@ struct AxisState {
 
 /// Extracts bind-inner axes that are not yet at their reduction target.
 ///
-/// Shared between ``ProductSpaceBatchEncoder``, ``ProductSpaceAdaptiveEncoder``, and the dependent domain computation in ``ReductionState``.
+/// Shared between ``ProductSpaceBatchEncoder``, ``ProductSpaceAdaptiveEncoder``, and the dependent domain computation in ``ReductionState``. Stores shortlex keys (not raw bit patterns) so that signed values near zero are correctly ordered relative to the target (for example, -1 has shortlex key 1, not `UInt64.max`).
 func extractAxes(
     from sequence: ChoiceSequence,
     bindIndex: BindSpanIndex
@@ -447,24 +475,31 @@ func extractAxes(
     for (regionIndex, region) in bindIndex.regions.enumerated() {
         for index in region.innerRange where index < sequence.count {
             guard let value = sequence[index].value else { continue }
-            let currentBitPattern = value.choice.bitPattern64
             let isWithinRecordedRange = value.isRangeExplicit && value.choice.fits(in: value.validRange)
             let targetBitPattern: UInt64 = if isWithinRecordedRange {
                 value.choice.reductionTarget(in: value.validRange)
             } else {
                 value.choice.semanticSimplest.bitPattern64
             }
-            guard currentBitPattern != targetBitPattern, currentBitPattern > targetBitPattern else {
+
+            // Compare in shortlex key space so that signed values near zero
+            // (for example, -1 with shortlex key 1) are correctly ordered relative to
+            // the target (for example, 0 with shortlex key 0).
+            let currentKey = value.choice.shortlexKey
+            let targetChoice = ChoiceValue(value.choice.tag.makeConvertible(bitPattern64: targetBitPattern), tag: value.choice.tag)
+            let targetKey = targetChoice.shortlexKey
+            guard currentKey != targetKey, currentKey > targetKey else {
                 continue
             }
+
             axes.append(AxisState(
                 regionIndex: regionIndex,
                 seqIdx: index,
                 validRange: value.validRange,
                 isRangeExplicit: value.isRangeExplicit,
                 choiceTag: value.choice.tag,
-                currentBitPattern: currentBitPattern,
-                targetBitPattern: targetBitPattern
+                currentBitPattern: currentKey,
+                targetBitPattern: targetKey
             ))
         }
     }

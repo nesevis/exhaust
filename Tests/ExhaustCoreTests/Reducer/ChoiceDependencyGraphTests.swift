@@ -264,8 +264,8 @@ struct ChoiceDependencyGraphTests {
             .choice(.unsigned(6, .uint64), .init(validRange: 0 ... 20, isRangeExplicit: true)),
         ])
 
-        let fingerprint1 = StructuralFingerprint.from(tree1, bindIndex: BindSpanIndex(from: ChoiceSequence(tree1)))
-        let fingerprint2 = StructuralFingerprint.from(tree2, bindIndex: BindSpanIndex(from: ChoiceSequence(tree2)))
+        let fingerprint1 = StructuralFingerprint.from(ChoiceSequence(tree1), bindIndex: BindSpanIndex(from: ChoiceSequence(tree1)))
+        let fingerprint2 = StructuralFingerprint.from(ChoiceSequence(tree2), bindIndex: BindSpanIndex(from: ChoiceSequence(tree2)))
 
         #expect(fingerprint1 == fingerprint2)
     }
@@ -280,33 +280,77 @@ struct ChoiceDependencyGraphTests {
             .choice(.unsigned(2, .uint64), .init(validRange: 0 ... 10, isRangeExplicit: true)),
         ])
 
-        let fingerprint1 = StructuralFingerprint.from(tree1, bindIndex: BindSpanIndex(from: ChoiceSequence(tree1)))
-        let fingerprint2 = StructuralFingerprint.from(tree2, bindIndex: BindSpanIndex(from: ChoiceSequence(tree2)))
+        let fingerprint1 = StructuralFingerprint.from(ChoiceSequence(tree1), bindIndex: BindSpanIndex(from: ChoiceSequence(tree1)))
+        let fingerprint2 = StructuralFingerprint.from(ChoiceSequence(tree2), bindIndex: BindSpanIndex(from: ChoiceSequence(tree2)))
 
         #expect(fingerprint1 != fingerprint2)
         #expect(fingerprint1.width < fingerprint2.width)
     }
 
-    @Test("Same width, different bind depth sum produces different fingerprints")
+    @Test("Same width, different bind depth distribution produces different fingerprints")
     func sameWidthDifferentBindDepth() {
-        // Group: .group(true), .value, .value, .group(false) = 4 entries, depth sum 0
+        // Group: .group(true), .value, .value, .group(false) = 4 entries, all at depth 0
         let tree1 = ChoiceTree.group([
             .choice(.unsigned(1, .uint64), .init(validRange: 0 ... 10, isRangeExplicit: true)),
             .choice(.unsigned(2, .uint64), .init(validRange: 0 ... 10, isRangeExplicit: true)),
         ])
 
-        // Bind: .bind(true), .value, .value, .bind(false) = 4 entries, depth sum > 0
+        // Bind: .bind(true), .value, .value, .bind(false) = 4 entries, bound value at depth 1
         let tree2 = ChoiceTree.bind(
             inner: .choice(.unsigned(1, .uint64), .init(validRange: 0 ... 10, isRangeExplicit: true)),
             bound: .choice(.unsigned(2, .uint64), .init(validRange: 0 ... 10, isRangeExplicit: true))
         )
 
-        let fingerprint1 = StructuralFingerprint.from(tree1, bindIndex: BindSpanIndex(from: ChoiceSequence(tree1)))
-        let fingerprint2 = StructuralFingerprint.from(tree2, bindIndex: BindSpanIndex(from: ChoiceSequence(tree2)))
+        let fingerprint1 = StructuralFingerprint.from(ChoiceSequence(tree1), bindIndex: BindSpanIndex(from: ChoiceSequence(tree1)))
+        let fingerprint2 = StructuralFingerprint.from(ChoiceSequence(tree2), bindIndex: BindSpanIndex(from: ChoiceSequence(tree2)))
 
         #expect(fingerprint1.width == fingerprint2.width)
         #expect(fingerprint1 != fingerprint2)
-        #expect(fingerprint1.bindDepthSum == 0)
-        #expect(fingerprint2.bindDepthSum == 1)
+        #expect(fingerprint1.depthHash != fingerprint2.depthHash)
+    }
+
+    @Test("Compensating depth sum produces different fingerprints with rolling hash")
+    func compensatingDepthSumProducesDifferentFingerprint() {
+        // Two sequences with same width and same total depth sum
+        // but different per-position depth distributions.
+        // Tree A: bind(inner=v1, bound=bind(inner=v2, bound=v3))
+        //   Sequence: [bind(t), v1@d0, bind(t), v2@d1, v3@d2, bind(f), bind(f)]
+        //   depths: v1=0, v2=1, v3=2 → sum=3
+        // Tree B: bind(inner=bind(inner=v1, bound=v2), bound=v3)
+        //   Sequence: [bind(t), bind(t), v1@d1, v2@d2, bind(f), v3@d1, bind(f)]
+        //   depths: v1=1, v2=2, v3=1 → sum=4 (different sum, trivially caught)
+        //
+        // For a true compensating-sum scenario, we need matched sums.
+        // Tree C: group([bind(inner=v1@d0, bound=v2@d1), v3@d0])
+        //   depths: v1=0, v2=1, v3=0 → sum=1
+        // Tree D: group([v1@d0, bind(inner=v2@d0, bound=v3@d1)])
+        //   depths: v1=0, v2=0, v3=1 → sum=1
+        // Same width, same depth sum, but depth-1 value is at different positions.
+
+        let treeC = ChoiceTree.group([
+            .bind(
+                inner: .choice(.unsigned(1, .uint64), .init(validRange: 0 ... 10, isRangeExplicit: true)),
+                bound: .choice(.unsigned(2, .uint64), .init(validRange: 0 ... 10, isRangeExplicit: true))
+            ),
+            .choice(.unsigned(3, .uint64), .init(validRange: 0 ... 10, isRangeExplicit: true)),
+        ])
+
+        let treeD = ChoiceTree.group([
+            .choice(.unsigned(1, .uint64), .init(validRange: 0 ... 10, isRangeExplicit: true)),
+            .bind(
+                inner: .choice(.unsigned(2, .uint64), .init(validRange: 0 ... 10, isRangeExplicit: true)),
+                bound: .choice(.unsigned(3, .uint64), .init(validRange: 0 ... 10, isRangeExplicit: true))
+            ),
+        ])
+
+        let seqC = ChoiceSequence(treeC)
+        let seqD = ChoiceSequence(treeD)
+        let fingerprintC = StructuralFingerprint.from(seqC, bindIndex: BindSpanIndex(from: seqC))
+        let fingerprintD = StructuralFingerprint.from(seqD, bindIndex: BindSpanIndex(from: seqD))
+
+        // Same width (both group two children with a bind), same depth sum,
+        // but different per-position depth distribution.
+        #expect(fingerprintC.width == fingerprintD.width)
+        #expect(fingerprintC != fingerprintD, "Rolling hash should distinguish compensating depth distributions")
     }
 }

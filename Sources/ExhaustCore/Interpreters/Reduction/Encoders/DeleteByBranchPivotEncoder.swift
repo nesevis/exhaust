@@ -40,10 +40,12 @@ public struct DeleteByBranchPivotEncoder: BatchEncoder {
             guard case let .group(elements, _) = tree[site] else { continue }
             guard let selectedIndex = elements.firstIndex(where: \.isSelected) else { continue }
 
-            let alternatives = elements.enumerated()
-                .filter { $0.offset != selectedIndex }
-                .map { (index: $0.offset, complexity: ChoiceSequence.flatten($0.element, includingAllBranches: true)) }
-                .sorted { lhs, rhs in lhs.complexity.shortLexPrecedes(rhs.complexity) }
+            var alternatives = [(index: Int, complexity: ChoiceSequence)]()
+            alternatives.reserveCapacity(elements.count)
+            for i in 0 ..< elements.count where i != selectedIndex {
+                alternatives.append((index: i, complexity: ChoiceSequence.flatten(elements[i], includingAllBranches: true)))
+            }
+            alternatives.sort { lhs, rhs in lhs.complexity.shortLexPrecedes(rhs.complexity) }
 
             for alternative in alternatives {
                 var candidateElements = elements

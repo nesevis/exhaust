@@ -27,6 +27,7 @@ public enum ChoiceSequenceValue: Hashable, Equatable, Sendable {
     /// A marker for a `.just` node. Carries no data but makes `.just` elements visible in the flat sequence (needed for element counting in ``GuidedMaterializer``).
     case just
 
+    @inline(__always)
     public var value: Value? {
         switch self {
         case let .value(value):
