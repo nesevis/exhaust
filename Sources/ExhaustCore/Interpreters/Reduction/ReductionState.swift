@@ -207,19 +207,6 @@ extension ReductionState {
             spanCache.invalidate()
             convergenceCache.invalidateAll()
             bindIndex = hasBind ? BindSpanIndex(from: sequence) : nil
-            if config.useReductionMaterializer == false {
-                let seed = ZobristHash.hash(of: sequence)
-                if case let .success(reDerivedOutput, reDerivedSequence, reDerivedTree) =
-                    GuidedMaterializer.materialize(gen, prefix: sequence, seed: seed, fallbackTree: tree),
-                    property(reDerivedOutput) == false,
-                    sequence.shortLexPrecedes(reDerivedSequence) == false
-                {
-                    sequence = reDerivedSequence
-                    tree = reDerivedTree
-                    output = reDerivedOutput
-                    fallbackTree = reDerivedTree
-                }
-            }
         }
         if hasBind {
             bestSequence = sequence
@@ -428,18 +415,18 @@ extension ReductionState {
     }
 
     func makeDeletionDecoder(at depth: Int) -> SequenceDecoder {
-        let context = DecoderContext(depth: .specific(depth), bindIndex: bindIndex, fallbackTree: fallbackTree, strictness: .relaxed, useReductionMaterializer: config.useReductionMaterializer)
+        let context = DecoderContext(depth: .specific(depth), bindIndex: bindIndex, fallbackTree: fallbackTree, strictness: .relaxed)
         return SequenceDecoder.for(context)
     }
 
     /// Decoder for speculative deletion: PRNG fallback for deleted entries,
     /// enabling repair with fresh (possibly shorter) values that satisfy filters.
     func makeSpeculativeDecoder() -> SequenceDecoder {
-        .guided(fallbackTree: nil, materializePicks: config.useReductionMaterializer, usePRNGFallback: true)
+        .guided(fallbackTree: nil, materializePicks: true, usePRNGFallback: true)
     }
 
     func makeDepthZeroDecoder() -> SequenceDecoder {
-        let context = DecoderContext(depth: .specific(0), bindIndex: bindIndex, fallbackTree: fallbackTree, strictness: .normal, useReductionMaterializer: config.useReductionMaterializer)
+        let context = DecoderContext(depth: .specific(0), bindIndex: bindIndex, fallbackTree: fallbackTree, strictness: .normal)
         return SequenceDecoder.for(context)
     }
 

@@ -41,9 +41,9 @@ public enum HillClimber {
         )
         var probePRNG = Xoshiro256(seed: probePRNGSeed)
 
-        // Materialize the seed via GuidedMaterializer to get baseline
-        guard case let .success(baselineValue, _, _) = GuidedMaterializer.materialize(
-            gen, prefix: currentSequence, seed: probePRNG.next()
+        // Materialize the seed to get baseline
+        guard case let .success(baselineValue, _, _) = ReductionMaterializer.materialize(
+            gen, prefix: currentSequence, mode: .guided(seed: probePRNG.next(), fallbackTree: nil)
         ) else {
             return .unchanged(probesUsed: 0)
         }
@@ -111,16 +111,17 @@ public enum HillClimber {
                         var probe = currentSequence
                         probe[i] = newEntry
 
-                        guard case let .success(value, sequence, tree) = GuidedMaterializer.materialize(
-                            gen, prefix: probe, seed: probePRNG.next()
+                        guard case let .success(value, freshTree, _) = ReductionMaterializer.materialize(
+                            gen, prefix: probe, mode: .guided(seed: probePRNG.next(), fallbackTree: nil)
                         ) else {
                             probesUsed += 1
                             return false
                         }
                         probesUsed += 1
+                        let sequence = ChoiceSequence(freshTree)
 
                         if property(value) == false {
-                            let ceTree = reflectOrFallback(gen: gen, value: value, fallback: tree)
+                            let ceTree = reflectOrFallback(gen: gen, value: value, fallback: freshTree)
                             foundCounterexample = (value, ceTree)
                             return false
                         }
@@ -175,16 +176,17 @@ public enum HillClimber {
                     var probe = currentSequence
                     probe[i] = .branch(.init(id: altID, validIDs: b.validIDs))
 
-                    guard case let .success(value, sequence, tree) = GuidedMaterializer.materialize(
-                        gen, prefix: probe, seed: probePRNG.next()
+                    guard case let .success(value, freshTree, _) = ReductionMaterializer.materialize(
+                        gen, prefix: probe, mode: .guided(seed: probePRNG.next(), fallbackTree: nil)
                     ) else {
                         probesUsed += 1
                         continue
                     }
                     probesUsed += 1
+                    let sequence = ChoiceSequence(freshTree)
 
                     if property(value) == false {
-                        let ceTree = reflectOrFallback(gen: gen, value: value, fallback: tree)
+                        let ceTree = reflectOrFallback(gen: gen, value: value, fallback: freshTree)
                         return .counterexample(value: value, tree: ceTree, probesUsed: probesUsed)
                     }
 

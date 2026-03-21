@@ -205,7 +205,6 @@ enum BonsaiScheduler {
                 gen: gen,
                 sequence: bestSequence,
                 tree: state.tree,
-                useReductionMaterializer: config.useReductionMaterializer,
                 property: property
             ) {
                 bestSequence = humanResult.sequence

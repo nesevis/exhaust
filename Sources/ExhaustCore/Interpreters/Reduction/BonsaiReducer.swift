@@ -9,22 +9,16 @@ public extension Interpreters {
         let maxStalls: Int
         /// Beam search tuning for aligned deletion.
         let alignedDeletionBeamSearchTuning: ReductionBudget.AlignedDeletionBeamSearchTuning
-        /// When `true`, use ``ReductionMaterializer``-backed decoders that produce
-        /// fresh trees with current `validRange` and all branch alternatives.
-        let useReductionMaterializer: Bool
-
         /// When `true`, run a one-shot post-processing pass after reduction stalls that reorders
         /// elements within type-homogeneous sibling groups into natural numeric order.
         public var humanOrderPostProcess: Bool = false
 
         private init(
             maxStalls: Int,
-            alignedDeletionBeamSearchTuning: ReductionBudget.AlignedDeletionBeamSearchTuning,
-            useReductionMaterializer: Bool = true
+            alignedDeletionBeamSearchTuning: ReductionBudget.AlignedDeletionBeamSearchTuning
         ) {
             self.maxStalls = maxStalls
             self.alignedDeletionBeamSearchTuning = alignedDeletionBeamSearchTuning
-            self.useReductionMaterializer = useReductionMaterializer
         }
 
         /// Maps a ``ReductionBudget`` preset to the corresponding configuration.

@@ -23,4 +23,3 @@ typealias ChoiceTreeAnalysis = ExhaustCore.ChoiceTreeAnalysis
 typealias CoveringArray = ExhaustCore.CoveringArray
 typealias CoveringArrayReplay = ExhaustCore.CoveringArrayReplay
 typealias ChoiceSequence = ExhaustCore.ChoiceSequence
-typealias GuidedMaterializer = ExhaustCore.GuidedMaterializer

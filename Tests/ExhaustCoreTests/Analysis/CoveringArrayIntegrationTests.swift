@@ -13,7 +13,7 @@ struct CoveringArrayIntegrationTests {
         // Gen.zip(bindGen, b, c) where bindGen has a bind.
         // Coverage analysis extracts only the inner parameter from the bind,
         // plus b and c — 3 finite parameters total.
-        // GuidedMaterializer must replay b and c from the covering array,
+        // The materializer must replay b and c from the covering array,
         // not consume their prefix entries into the bind's bound subtree.
         let bindGen: ReflectiveGenerator<[Int]> = Gen.choose(in: 0 ... 2 as ClosedRange<Int>)._bind { n in
             Gen.just(Array(repeating: n, count: n))
@@ -39,17 +39,16 @@ struct CoveringArrayIntegrationTests {
                 continue
             }
             let prefix = ChoiceSequence(tree)
-            guard case let .success(resultValue, _, _) = GuidedMaterializer.materialize(gen, prefix: prefix, seed: UInt64(rowIndex)) else {
+            guard case let .success(resultValue, _, _) = ReductionMaterializer.materialize(gen, prefix: prefix, mode: .guided(seed: UInt64(rowIndex), fallbackTree: nil)) else {
                 continue
             }
-            let value = resultValue
-            replayedValues.append(value)
+            replayedValues.append(resultValue)
 
             // b and c must match the covering array parameter values exactly
             let expectedB = Int(row.values[1])
             let expectedC = Int(row.values[2])
-            #expect(value.1 == expectedB, "b should be \(expectedB) but got \(value.1) for row \(rowIndex)")
-            #expect(value.2 == expectedC, "c should be \(expectedC) but got \(value.2) for row \(rowIndex)")
+            #expect(resultValue.1 == expectedB, "b should be \(expectedB) but got \(resultValue.1) for row \(rowIndex)")
+            #expect(resultValue.2 == expectedC, "c should be \(expectedC) but got \(resultValue.2) for row \(rowIndex)")
         }
 
         // Every row should replay successfully (no nils)
@@ -172,11 +171,10 @@ struct CoveringArrayIntegrationTests {
                 continue
             }
             let prefix = ChoiceSequence(tree)
-            guard case let .success(resultValue, _, _) = GuidedMaterializer.materialize(gen, prefix: prefix, seed: UInt64(rowIndex)) else {
+            guard case let .success(resultValue, _, _) = ReductionMaterializer.materialize(gen, prefix: prefix, mode: .guided(seed: UInt64(rowIndex), fallbackTree: nil)) else {
                 continue
             }
-            let value = resultValue
-            if value.0 == 2, value.1 == 3, value.3 == 1 {
+            if resultValue.0 == 2, resultValue.1 == 3, resultValue.3 == 1 {
                 foundFailure = true
                 break
             }

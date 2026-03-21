@@ -96,7 +96,6 @@ extension ReductionState {
             bindIndex: bindIndex,
             fallbackTree: fallbackTree,
             strictness: .relaxed,
-            useReductionMaterializer: config.useReductionMaterializer,
             materializePicks: true
         )
         let branchDecoder = SequenceDecoder.for(branchContext)
@@ -737,8 +736,7 @@ extension ReductionState {
                     depth: .specific(depth),
                     bindIndex: bindIndex,
                     fallbackTree: fallbackTree,
-                    strictness: .normal,
-                    useReductionMaterializer: config.useReductionMaterializer
+                    strictness: .normal
                 )
                 let depthDecoder = SequenceDecoder.for(depthContext)
                 let vSpans = spanCache.valueSpans(at: depth, from: sequence, bindIndex: bindIndex)
@@ -797,8 +795,7 @@ extension ReductionState {
                 depth: .global,
                 bindIndex: bindIndex,
                 fallbackTree: fallbackTree,
-                strictness: .normal,
-                useReductionMaterializer: config.useReductionMaterializer
+                strictness: .normal
             )
             let redistDecoder = SequenceDecoder.for(redistContext)
 

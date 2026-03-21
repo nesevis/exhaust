@@ -9,7 +9,6 @@ extension ReductionScheduler {
         gen: ReflectiveGenerator<Output>,
         sequence: ChoiceSequence,
         tree: ChoiceTree,
-        useReductionMaterializer: Bool,
         property: (Output) -> Bool
     ) -> (sequence: ChoiceSequence, tree: ChoiceTree, output: Output)? {
         let groups = ChoiceSequence.extractSiblingGroups(from: sequence)
@@ -87,30 +86,18 @@ extension ReductionScheduler {
             // property (for example, sorting characters within a string to make two anagram
             // strings identical) is rejected without poisoning other groups.
             let seed = ZobristHash.hash(of: candidate)
-            if useReductionMaterializer {
-                switch ReductionMaterializer.materialize(
-                    gen,
-                    prefix: candidate,
-                    mode: .guided(seed: seed, fallbackTree: bestTree)
-                ) {
-                case let .success(output, freshTree, _):
-                    guard property(output) == false else { continue }
-                    bestSequence = ChoiceSequence(freshTree)
-                    bestTree = freshTree
-                    bestOutput = output
-                case .rejected, .failed:
-                    continue
-                }
-            } else {
-                switch GuidedMaterializer.materialize(gen, prefix: candidate, seed: seed, fallbackTree: bestTree) {
-                case let .success(output, materializedSequence, materializedTree):
-                    guard property(output) == false else { continue }
-                    bestSequence = materializedSequence
-                    bestTree = materializedTree
-                    bestOutput = output
-                case .filterEncountered, .failed:
-                    continue
-                }
+            switch ReductionMaterializer.materialize(
+                gen,
+                prefix: candidate,
+                mode: .guided(seed: seed, fallbackTree: bestTree)
+            ) {
+            case let .success(output, freshTree, _):
+                guard property(output) == false else { continue }
+                bestSequence = ChoiceSequence(freshTree)
+                bestTree = freshTree
+                bestOutput = output
+            case .rejected, .failed:
+                continue
             }
         }
 
