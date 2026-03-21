@@ -115,8 +115,10 @@ private extension ReductionMaterializer {
         case exact
         /// Guided: tiered resolution (prefix → fallback → PRNG), cursor suspension at binds.
         case guided
-        /// Pure PRNG generation — used for non-selected branches at pick sites.
+        /// Pure PRNG generation — used when no prefix or fallback is available.
         case generate
+        /// Deterministic minimization — used for non-selected branches at pick sites. Produces the shortlex-simplest content so that pivot candidates start from a minimal baseline.
+        case minimize
     }
 }
 
@@ -453,6 +455,10 @@ private extension ReductionMaterializer {
 
         case .generate:
             randomBits = context.prng.next(in: min ... max)
+
+        case .minimize:
+            let placeholder = ChoiceValue(min, tag: tag)
+            randomBits = placeholder.reductionTarget(in: min ... max)
         }
 
         let choice = reusedChoice ?? ChoiceValue(randomBits, tag: tag)
@@ -524,6 +530,9 @@ private extension ReductionMaterializer {
 
         case .generate:
             selectedChoice = WeightedPickSelection.draw(from: choices, using: &context.prng)
+
+        case .minimize:
+            selectedChoice = choices.first
         }
 
         guard let selectedChoice else { return nil }
@@ -569,11 +578,15 @@ private extension ReductionMaterializer {
                         id: choice.id, branchIDs: branchIDs, choice: contTree
                     )))
                 } else {
-                    // Non-selected branch: generate fresh via jumped PRNG.
+                    // Non-selected branch: minimize to produce the shortlex-simplest
+                    // content. Values use reductionTarget (semantic zero when in range),
+                    // nested picks select the first branch, and sequence lengths minimize.
+                    // The PRNG is only a fallback for operations without minimize-specific
+                    // handling (filters, recursive unfolds).
                     var branchContext = Context(
                         cursor: Cursor.empty,
                         prng: Xoshiro256(seed: jumpSeed),
-                        mode: .generate,
+                        mode: .minimize,
                         size: context.size
                     )
                     if let (result, branchTree) = try generateRecursive(
@@ -949,7 +962,7 @@ private extension ReductionMaterializer {
                     context: &context, continuationFallback: continuationFallback
                 )
 
-            case .generate:
+            case .generate, .minimize:
                 // Pure generation — no prefix, no suspension.
                 let boundResult = try generateRecursive(
                     boundGen, with: inputValue, context: &context, fallbackTree: nil
