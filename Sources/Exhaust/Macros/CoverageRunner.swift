@@ -72,8 +72,6 @@ enum CoverageRunner {
             return .notApplicable
         }
 
-        let skipFilterCheck = covering.rows.count >= 100
-
         var iterations = 0
         for (rowIndex, row) in covering.rows.enumerated() {
             guard let tree = CoveringArrayReplay.buildTree(row: row, profile: profile) else {
@@ -81,29 +79,26 @@ enum CoverageRunner {
             }
 
             let value: Output?
-            if hasBinds {
-                // Bind-aware replay: flatten the full tree (including bind markers) to a prefix
-                // and use GuidedMaterializer. The cursor skips bind-bound content and suspends
-                // prefix consumption so the bound subtree is generated fresh via PRNG, while
-                // sibling parameters after the bind stay correctly aligned.
-                let prefix = ChoiceSequence(tree)
-                switch GuidedMaterializer.materialize(gen, prefix: prefix, seed: UInt64(rowIndex), abortOnFilter: skipFilterCheck) {
-                case let .success(v, _, _):
-                    value = v
-                case .filterEncountered:
-                    return .notApplicable
-                case .failed:
-                    value = nil
-                }
-            } else {
-                value = try? Interpreters.replay(gen, using: tree)
+            var materializerTree: ChoiceTree?
+            let prefix = ChoiceSequence(tree)
+            switch ReductionMaterializer.materialize(gen, prefix: prefix, mode: .guided(seed: UInt64(rowIndex), fallbackTree: nil)) {
+            case let .success(v, freshTree, _):
+                value = v
+                materializerTree = freshTree
+            case .rejected, .failed:
+                value = nil
             }
 
-            guard let value else { continue }
+            guard let value, let materializerTree else { continue }
             iterations += 1
             if property(value) == false {
+                ExhaustLog.debug(
+                    category: .propertyTest,
+                    event: "coverage_counterexample",
+                    "Coverage found counterexample at row \(rowIndex): \(value)"
+                )
                 return .failure(
-                    value: value, tree: tree, iteration: iterations,
+                    value: value, tree: materializerTree, iteration: iterations,
                     strength: covering.strength, rows: covering.rows.count,
                     parameters: profile.parameters.count, totalSpace: profile.totalSpace,
                     kind: .finiteDomain
@@ -139,9 +134,7 @@ enum CoverageRunner {
             return .notApplicable
         }
 
-        let hasBinds = profile.originalTree?.containsBind ?? false
         let totalRows = result.totalRows
-        let skipFilterCheck = totalRows >= 100
 
         // Build the list of (rows, profile) segments to iterate.
         // For flat results, there's one segment using the original profile.
@@ -177,26 +170,22 @@ enum CoverageRunner {
                 }
 
                 let value: Output?
-                if hasBinds {
-                    let prefix = ChoiceSequence(tree)
-                    switch GuidedMaterializer.materialize(gen, prefix: prefix, seed: UInt64(globalRowIndex), abortOnFilter: skipFilterCheck) {
-                    case let .success(v, _, _):
-                        value = v as? Output
-                    case .filterEncountered:
-                        return .notApplicable
-                    case .failed:
-                        value = nil
-                    }
-                } else {
-                    value = try? Interpreters.replay(gen, using: tree)
+                var materializerTree: ChoiceTree?
+                let prefix = ChoiceSequence(tree)
+                switch ReductionMaterializer.materialize(gen, prefix: prefix, mode: .guided(seed: UInt64(globalRowIndex), fallbackTree: nil)) {
+                case let .success(v, freshTree, _):
+                    value = v
+                    materializerTree = freshTree
+                case .rejected, .failed:
+                    value = nil
                 }
 
                 globalRowIndex += 1
-                guard let value else { continue }
+                guard let value, let materializerTree else { continue }
                 iterations += 1
                 if property(value) == false {
                     return .failure(
-                        value: value, tree: tree, iteration: iterations,
+                        value: value, tree: materializerTree, iteration: iterations,
                         strength: strength, rows: totalRows,
                         parameters: profile.parameters.count, totalSpace: totalSpace,
                         kind: kind
