@@ -1,6 +1,6 @@
 # Bonsai Reducer Code Review
 
-A structured analysis of the Bonsai reducer: Exhaust's alternating-minimisation shrinking engine operating over a fibred trace space. Covers ~4000 lines across `BonsaiScheduler`, `ReductionState`, `ReductionState+Bonsai`, `ReductionMaterializer`, `ChoiceDependencyGraph`, `StructuralIsolator`, `MutationPool`, `SequenceEncoder`, `DominanceLattice`, and 15+ encoder implementations.
+A structured analysis of the Bonsai reducer: Exhaust's alternating-minimisation shrinking engine operating over a fibred trace space. Covers ~4000 lines across `BonsaiScheduler`, `ReductionState`, `ReductionState+Bonsai`, `ReductionMaterializer`, `ChoiceDependencyGraph`, `StructuralIsolator`, `MutationPool`, `SequenceEncoder`, `EncoderDominance`, and 15+ encoder implementations.
 
 ## 1. Correctness Concerns
 
@@ -300,7 +300,7 @@ var bindIndex: BindSpanIndex?
 var bestSequence: ChoiceSequence
 var bestOutput: Output
 var spanCache: SpanCache
-var lattice: DominanceLattice
+var dominance: EncoderDominance
 var rejectCache = Set<UInt64>(minimumCapacity: 512)
 var convergenceCache = ConvergenceCache()
 var convergenceInstrumentation: ConvergenceInstrumentation?
@@ -470,7 +470,7 @@ This depth-0 scope uses depth-based filtering (`positionRange: nil`), which matc
 
 ---
 
-### 6.3 `DominanceLattice` naming is misleading
+### 6.3 `EncoderDominance` naming is misleading
 
 The implementation encodes categorical 2-cell dominance across encoder hom-sets (Sepulveda-Jimenez, Def 15.3, referenced in the fibred minimisation doc Section 2). The dominance edges capture a meaningful relationship: within each hom-set, a more-aggressive encoder's success makes a less-aggressive encoder's probes redundant because they can only find reductions the dominator already found. The two chains — deletion (`containerSpans`/`alignedWindows` ⇒ `randomRepair`) and value minimization (`zeroValue` ⇒ `binarySearchToSemanticSimplest` ⇒ `binarySearchToRangeMinimum`) — are correctly scoped per phase and invalidated at leg boundaries.
 
@@ -501,7 +501,7 @@ The cache uses Zobrist hashing (`ZobristHash.hash(of: candidate) &+ cacheSalt`) 
 
 Swift's `for...in` loops, `.enumerated()`, `.filter {}`, `.map {}`, and Dictionary iteration create iterator protocol witnesses that are not optimized away in debug builds (`-Onone`). Since property-based testing libraries are primarily exercised through test targets compiled without optimization, iterator overhead in hot paths directly impacts shrinking wall-clock time.
 
-**Audit scope:** All encoder files, `SpanCache`, `MutationPool`, `DominanceLattice`, and `SequenceEncoder`.
+**Audit scope:** All encoder files, `SpanCache`, `MutationPool`, `EncoderDominance`, and `SequenceEncoder`.
 
 ### Hot-path concerns (per-probe or per-acceptance)
 
@@ -1032,7 +1032,7 @@ When all depth-0 positions fall inside structural node scope ranges, `dag.leafPo
 
 ---
 
-### Fix 6.3 — Rename `DominanceLattice` to `EncoderDominance`
+### Fix 6.3 — Rename `EncoderDominance` to `EncoderDominance`
 
 **Priority: Low**
 
@@ -1050,7 +1050,7 @@ struct EncoderDominance {
 
 Update all references:
 
-- `DominanceLattice.swift` → rename struct to `EncoderDominance`
+- `EncoderDominance.swift` → rename struct to `EncoderDominance`
 - `ReductionState.swift:101` → `var dominance: EncoderDominance`
 - `Snapshot` → `let dominance: EncoderDominance`
 - `makeSnapshot`/`restoreSnapshot` → update field name

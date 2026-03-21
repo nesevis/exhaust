@@ -21,7 +21,7 @@ barriers, addressable by beam search (keeping k > 1 candidates per leg).
 Second, the proposed redistribution slack is correctly classified as Section
 11.5 heuristic search (empirical grade on Kleisli endomorphisms), not Section
 11.2 relax-round (a priori bound on decoding from a different problem).
-Third, the DominanceLattice directly implements Def 15.3's 2-cells.
+Third, the EncoderDominance directly implements Def 15.3's 2-cells.
 
 CoverageRunner is a one-shot pipeline operating in Set. The paper's extensions
 do not apply: coverage quality is ordinal (interaction strength in a finite
@@ -466,7 +466,7 @@ grade (1, 0) -- the pipeline is exact. If the train step only decreases cost
 by 10.0, accumulated beta is 7.0, and redistribution has `budget - 7.0`
 remaining before it pauses.
 
-#### DominanceLattice interaction under slack
+#### EncoderDominance interaction under slack
 
 Invalidating dominance whenever slack is nonzero is the right lightweight
 solution, and it costs less than it sounds. Dominance within the
@@ -572,7 +572,7 @@ contingent on first solving strategy composition at the array level.
 
 ### BonsaiReducer -- Strong fit
 
-`DominanceLattice` explicitly implements 2-cells. Within a hom-set (encoders
+`EncoderDominance` explicitly implements 2-cells. Within a hom-set (encoders
 sharing the same phase and decoder context), dominance prunes:
 
 - Value minimization: `zeroValue => binarySearchToZero => binarySearchToTarget`
@@ -680,7 +680,7 @@ The categorical framework is **productive** for the reducer. It reveals:
    Section 11.2 (relax-round). This prevents overstatement of what the grade
    guarantees.
 
-3. **DominanceLattice as 2-cells** (Section 7). The lattice implements Def
+3. **EncoderDominance as 2-cells** (Section 7). The lattice implements Def
    15.3 directly, and the framework clarifies when dominance should invalidate
    (at leg boundaries, on structural changes, and under nonzero slack).
 
@@ -743,7 +743,7 @@ that stand on their own merits without categorical motivation.
 | Kleisli effects | Strong -- AdaptiveEncoder is a Kleisli arrow; resolved per-leg | Partial -- only bind-aware replay |
 | Approximation / Quality | Exact subcategory (path to heuristic slack via Section 11.5) | Quality-ordered lattice, not Aff_>=0 or 2-cells |
 | Resources (W) | Strong -- CycleBudget with forwarding | Weak -- flat budget, intentional independence from random |
-| 2-cells / Dominance | Strong -- DominanceLattice | Not applicable -- coverage ordering is on output quality, not componentwise enc/dec |
+| 2-cells / Dominance | Strong -- EncoderDominance | Not applicable -- coverage ordering is on output quality, not componentwise enc/dec |
 | Right abstraction | Aff_>=0 x W (unified grade) | Base pipeline (Sections 3-5) fits; extensions (Sections 7-15) do not |
 
 ## Recommendations

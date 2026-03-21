@@ -427,7 +427,7 @@ If Train only decreased cost by 10.0:
   dominates) would be more faithful, at the expense of making the additive monoid
   structure less clean.
 
-- **DominanceLattice interaction**: Slack-accepting steps might invalidate 2-cell
+- **EncoderDominance interaction**: Slack-accepting steps might invalidate 2-cell
   dominance assumptions. If `zeroValue` succeeds on a slack-elevated sequence, it
   does not mean it would have succeeded on the exact-best sequence. The lattice might
   need a slack-aware invalidation rule (invalidate on any slack-using step).
