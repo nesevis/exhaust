@@ -64,6 +64,13 @@ public struct ChoiceDependencyGraph: Sendable {
     /// Ranges of ``ChoiceSequence`` indices that are leaf positions (values not inside any structural node's range).
     public let leafPositions: [ClosedRange<Int>]
 
+    /// Precomputed transitive closure of the dependency edges.
+    ///
+    /// `reachability[i]` contains all node indices reachable from node `i` via one or more directed edges. Computed during ``build(from:tree:bindIndex:)`` by propagating reachability sets in reverse topological order.
+    ///
+    /// - Complexity: O(*V*²) space, O(*V* · *E*) construction time.
+    let reachability: [Set<Int>]
+
     /// Builds a dependency DAG from a choice sequence, its tree, and the bind span index.
     ///
     /// Identifies bind-inner and branch-selector structural nodes, builds dependency edges between them, computes a topological ordering via Kahn's algorithm, and collects leaf positions.
@@ -180,11 +187,13 @@ public struct ChoiceDependencyGraph: Sendable {
 
         let topologicalOrder = kahnSort(nodes: nodes)
         let leafPositions = collectLeafPositions(from: sequence, nodes: nodes)
+        let reachability = computeReachability(nodes: nodes, topologicalOrder: topologicalOrder)
 
         return ChoiceDependencyGraph(
             nodes: nodes,
             topologicalOrder: topologicalOrder,
-            leafPositions: leafPositions
+            leafPositions: leafPositions,
+            reachability: reachability
         )
     }
 }
@@ -218,6 +227,41 @@ extension ChoiceDependencyGraph {
         return result
     }
 
+    /// Returns whether the node at `source` can reach the node at `target` via directed dependency edges.
+    ///
+    /// - Parameters:
+    ///   - source: Index into ``nodes`` of the upstream node.
+    ///   - target: Index into ``nodes`` of the downstream node.
+    func reachable(from source: Int, to target: Int) -> Bool {
+        reachability[source].contains(target)
+    }
+
+    /// Computes a maximal antichain of the dependency DAG.
+    ///
+    /// A maximal antichain is a set of node indices with no directed path between any pair, to which no further node can be added without violating independence. Uses greedy construction: iterates nodes by ``DependencyNode/scopeRange`` size descending (largest scopes first), adding each node to the antichain if it is independent of all existing members. Excludes nodes with no scope range (branch selectors with empty subtrees).
+    ///
+    /// This produces a maximal antichain (cannot be extended), but not necessarily the maximum antichain (largest possible). The true maximum requires bipartite matching via Hopcroft-Karp.
+    ///
+    /// - Complexity: O(*V*²) where *V* is the number of structural nodes.
+    func maximalAntichain() -> [Int] {
+        // Sort node indices by scope size descending so high-impact nodes are selected first.
+        let sortedIndices = (0 ..< nodes.count)
+            .filter { nodes[$0].scopeRange != nil }
+            .sorted { (nodes[$0].scopeRange?.count ?? 0) > (nodes[$1].scopeRange?.count ?? 0) }
+
+        var antichain = [Int]()
+        for candidate in sortedIndices {
+            let isIndependent = antichain.allSatisfy { existing in
+                reachability[candidate].contains(existing) == false
+                    && reachability[existing].contains(candidate) == false
+            }
+            if isIndependent {
+                antichain.append(candidate)
+            }
+        }
+        return antichain
+    }
+
     /// Finds the smallest group container span containing the given index.
     static func smallestContainingGroupSpan(
         at index: Int,
@@ -242,6 +286,28 @@ extension ChoiceDependencyGraph {
 // MARK: - Private Helpers
 
 private extension ChoiceDependencyGraph {
+    /// Computes the transitive closure of the dependency DAG.
+    ///
+    /// Iterates in reverse topological order so that each node's reachability set includes the transitive reachability of all its dependents.
+    ///
+    /// - Complexity: O(*V* · *E*) time, O(*V*²) space.
+    static func computeReachability(
+        nodes: [DependencyNode],
+        topologicalOrder: [Int]
+    ) -> [Set<Int>] {
+        var result = [Set<Int>](repeating: [], count: nodes.count)
+
+        for nodeIndex in topologicalOrder.reversed() {
+            var reachable = Set<Int>()
+            for dependent in nodes[nodeIndex].dependents {
+                reachable.insert(dependent)
+                reachable.formUnion(result[dependent])
+            }
+            result[nodeIndex] = reachable
+        }
+        return result
+    }
+
     /// Topological sort using Kahn's algorithm. Returns node indices in dependency order (roots first).
     static func kahnSort(nodes: [DependencyNode]) -> [Int] {
         let count = nodes.count
