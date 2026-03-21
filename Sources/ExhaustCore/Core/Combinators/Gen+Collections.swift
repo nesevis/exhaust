@@ -20,10 +20,7 @@ public extension Gen {
     ) -> ReflectiveGenerator<[Output]> {
         // Use `bind` to get the result of the length generator.
         let sequenceOperation = ReflectiveOperation.sequence(
-            length: length ?? Gen.getSize()._bound(
-                forward: { Gen.chooseDerived(in: 0 ... $0) },
-                backward: { _ in 100 }
-            ),
+            length: length ?? Gen.getSize { Gen.chooseDerived(in: 0 ... $0) },
             gen: elementGenerator.erase()
         )
         // Lift the operation. The continuation will decode the `[Any]` result.
@@ -202,7 +199,7 @@ public extension Gen {
         _ elementGenerator: ReflectiveGenerator<Output>,
         lengthRange: ClosedRange<UInt64>? = nil
     ) -> ReflectiveGenerator<[Output]> {
-        getSize()._bind { size in
+        getSize { size in
             let actualRange = lengthRange ?? (0 ... size)
             let clampedMin = max(actualRange.lowerBound, 0)
             let clampedMax = min(actualRange.upperBound, size)
@@ -216,7 +213,7 @@ public extension Gen {
     static func slice<AnyCollection: Collection>(
         of collection: AnyCollection
     ) -> ReflectiveGenerator<AnyCollection.SubSequence> {
-        getSize()._bind { size in
+        getSize { size in
             let count = collection.count
             // Max length with size as percentage of total space/count
             let maxLength = min(((count * Int(size)) / 100) + 2, count)

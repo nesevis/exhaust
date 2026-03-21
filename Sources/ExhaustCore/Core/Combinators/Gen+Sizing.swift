@@ -1,20 +1,14 @@
 // Operations for controlling and accessing the size parameter in generators.
 // The size parameter is used to control the complexity and scale of generated values.
 
-public extension Gen {
-    /// Retrieves the current size parameter controlling generator complexity.
+extension Gen {
+    /// Retrieves the raw size parameter without a backward comap.
     ///
-    /// The size parameter is a fundamental concept in property-based testing that controls how complex the generated values should be. It typically starts small and grows as tests progress, allowing the system to find simple counterexamples first before exploring more complex cases.
-    ///
-    /// Common uses:
-    /// - Controlling array/collection lengths
-    /// - Setting bounds for numeric ranges
-    /// - Determining recursion depth in tree structures
-    /// - Scaling the complexity of generated data structures
-    ///
-    /// - Returns: A generator that produces the current size parameter as a UInt64
+    /// Internal callers that need the raw size operation should use this. All public-facing
+    /// size access goes through ``getSize(_:)`` which wraps the result in a `._bound` with
+    /// `backward: { _ in 100 }`, giving reflection and Bonsai a usable default.
     @inlinable
-    static func getSize() -> ReflectiveGenerator<UInt64> {
+    static func rawGetSize() -> ReflectiveGenerator<UInt64> {
         .impure(operation: .getSize) { result in
             if let typedResult = result as? UInt64 {
                 return .pure(typedResult)
@@ -24,6 +18,23 @@ public extension Gen {
                 actual: String(describing: type(of: result))
             )
         }
+    }
+}
+
+public extension Gen {
+    /// Retrieves the current size parameter and feeds it into a generator-producing closure.
+    ///
+    /// The size parameter controls how complex generated values should be. It typically starts small and grows as tests progress, allowing the system to find simple counterexamples first before exploring more complex cases. The closure receives the current size (1-100) and returns a generator to run.
+    ///
+    /// Internally, this wraps the size lookup in a backward comap of 100, so that reflection and Bonsai always see the full range when reducing through size-dependent generators.
+    ///
+    /// - Parameter forward: A closure that receives the current size and returns a generator.
+    /// - Returns: A generator that produces the result of the size-dependent inner generator.
+    @inlinable
+    static func getSize<Output>(
+        _ forward: @escaping (UInt64) -> ReflectiveGenerator<Output>
+    ) -> ReflectiveGenerator<Output> {
+        rawGetSize()._bound(forward: forward, backward: { _ in 100 })
     }
 
     /// Creates a generator with a temporarily modified size parameter.
