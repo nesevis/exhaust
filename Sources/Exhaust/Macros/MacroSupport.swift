@@ -2,6 +2,7 @@
 //
 // The `__` prefix follows Swift Testing's convention (`Testing.__check`, `Testing.__Expression`)
 // to signal that this is macro infrastructure, not public API.
+import Darwin
 import ExhaustCore
 import IssueReporting
 
@@ -88,6 +89,9 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
         }
 
         // --- Structured coverage phase ---
+        let phaseTimingStart = clock_gettime_nsec_np(CLOCK_UPTIME_RAW)
+        var coveragePhaseEndTime = phaseTimingStart
+        var generationPhaseEndTime = phaseTimingStart
         var coverageIterations = 0
         if useRandomOnly {
             ExhaustLog.notice(
@@ -151,6 +155,13 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
                             category: .propertyTest,
                             event: "property_failed",
                             rendered
+                        )
+                        let reductionEndTime = clock_gettime_nsec_np(CLOCK_UPTIME_RAW)
+                        logPhaseTimings(
+                            start: phaseTimingStart,
+                            coverageEnd: coveragePhaseEndTime,
+                            generationEnd: coveragePhaseEndTime,
+                            reductionEnd: reductionEndTime
                         )
                         if !suppressIssueReporting {
                             reportIssue(
@@ -250,6 +261,7 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
                 )
             }
         }
+        coveragePhaseEndTime = clock_gettime_nsec_np(CLOCK_UPTIME_RAW)
         // --- Random sampling phase (full maxIterations budget) ---
 
         var iterations = 0
@@ -264,6 +276,7 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
         do { while let (next, tree) = try generator.next() {
             iterations += 1
             if property(next) == false {
+                generationPhaseEndTime = clock_gettime_nsec_np(CLOCK_UPTIME_RAW)
                 var propertyInvocationCount = 0
                 let countingProperty: (Output) -> Bool = { value in
                     propertyInvocationCount += 1
@@ -298,6 +311,13 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
                             category: .propertyTest,
                             event: "shrunk_blueprint",
                             "\(shrunkSequence.shortString)"
+                        )
+                        let reductionEndTime = clock_gettime_nsec_np(CLOCK_UPTIME_RAW)
+                        logPhaseTimings(
+                            start: phaseTimingStart,
+                            coverageEnd: coveragePhaseEndTime,
+                            generationEnd: generationPhaseEndTime,
+                            reductionEnd: reductionEndTime
                         )
                         if !suppressIssueReporting {
                             reportIssue(
@@ -375,6 +395,13 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
             category: .propertyTest,
             event: "property_passed",
             metadata: passMetadata
+        )
+        let passEndTime = clock_gettime_nsec_np(CLOCK_UPTIME_RAW)
+        logPhaseTimings(
+            start: phaseTimingStart,
+            coverageEnd: coveragePhaseEndTime,
+            generationEnd: passEndTime,
+            reductionEnd: passEndTime
         )
         return nil
     }
@@ -582,6 +609,30 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
         )
     }
 
+    // MARK: - Phase Timing
+
+    private static func logPhaseTimings(
+        start: UInt64,
+        coverageEnd: UInt64,
+        generationEnd: UInt64,
+        reductionEnd: UInt64
+    ) {
+        let coverageMs = Double(coverageEnd - start) / 1_000_000
+        let generationMs = Double(generationEnd - coverageEnd) / 1_000_000
+        let reductionMs = Double(reductionEnd - generationEnd) / 1_000_000
+        let totalMs = Double(reductionEnd - start) / 1_000_000
+        ExhaustLog.notice(
+            category: .propertyTest,
+            event: "phase_timing",
+            metadata: [
+                "coverage_ms": String(format: "%.1f", coverageMs),
+                "generation_ms": String(format: "%.1f", generationMs),
+                "reduction_ms": String(format: "%.1f", reductionMs),
+                "total_ms": String(format: "%.1f", totalMs),
+            ]
+        )
+    }
+
     // MARK: - Reflecting
 
     // swiftlint:disable:next function_parameter_count
@@ -598,6 +649,8 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
         column: UInt,
         property: @Sendable (Output) -> Bool
     ) throws -> Output? {
+        let reflectStart = clock_gettime_nsec_np(CLOCK_UPTIME_RAW)
+
         guard property(value) == false else {
             let message = "reflecting: value passes the property — reduction requires a failing value"
             ExhaustLog.error(
@@ -636,6 +689,8 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
             return nil
         }
 
+        let reflectionEnd = clock_gettime_nsec_np(CLOCK_UPTIME_RAW)
+
         var propertyInvocationCount = 0
         let countingProperty: (Output) -> Bool = { value in
             propertyInvocationCount += 1
@@ -663,6 +718,19 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
                 category: .propertyTest,
                 event: "reflecting_reduced",
                 rendered
+            )
+            let reductionEnd = clock_gettime_nsec_np(CLOCK_UPTIME_RAW)
+            let reflectionMs = Double(reflectionEnd - reflectStart) / 1_000_000
+            let reductionMs = Double(reductionEnd - reflectionEnd) / 1_000_000
+            let totalMs = Double(reductionEnd - reflectStart) / 1_000_000
+            ExhaustLog.notice(
+                category: .propertyTest,
+                event: "phase_timing",
+                metadata: [
+                    "reflection_ms": String(format: "%.1f", reflectionMs),
+                    "reduction_ms": String(format: "%.1f", reductionMs),
+                    "total_ms": String(format: "%.1f", totalMs),
+                ]
             )
             if !suppressIssueReporting {
                 reportIssue(
@@ -692,6 +760,19 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
             category: .propertyTest,
             event: "reflecting_unreduced",
             rendered
+        )
+        let reductionEnd = clock_gettime_nsec_np(CLOCK_UPTIME_RAW)
+        let reflectionMs = Double(reflectionEnd - reflectStart) / 1_000_000
+        let reductionMs = Double(reductionEnd - reflectionEnd) / 1_000_000
+        let totalMs = Double(reductionEnd - reflectStart) / 1_000_000
+        ExhaustLog.notice(
+            category: .propertyTest,
+            event: "phase_timing",
+            metadata: [
+                "reflection_ms": String(format: "%.1f", reflectionMs),
+                "reduction_ms": String(format: "%.1f", reductionMs),
+                "total_ms": String(format: "%.1f", totalMs),
+            ]
         )
         if !suppressIssueReporting {
             reportIssue(
