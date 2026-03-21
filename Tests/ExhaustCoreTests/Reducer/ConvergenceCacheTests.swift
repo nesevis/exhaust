@@ -1,48 +1,48 @@
 import Testing
 @testable import ExhaustCore
 
-// MARK: - StallCache Unit Tests
+// MARK: - Convergence Cache Unit Tests
 
-@Suite("StallCache")
-struct StallCacheTests {
-    @Test("Record and retrieve warm starts")
+@Suite("ConvergenceCache")
+struct ConvergenceCacheUnitTests {
+    @Test("Record and retrieve converged origins")
     func recordAndRetrieve() {
-        var cache = StallCache()
+        var cache = ConvergenceCache()
         #expect(cache.isEmpty)
-        #expect(cache.warmStart(at: 0) == nil)
+        #expect(cache.convergedOrigin(at: 0) == nil)
 
-        cache.record(index: 5, warmStart: WarmStart(bound: 42, direction: .downward))
+        cache.record(index: 5, convergedOrigin: ConvergedOrigin(bound: 42, direction: .downward))
         #expect(cache.isEmpty == false)
 
-        let entry = cache.warmStart(at: 5)
+        let entry = cache.convergedOrigin(at: 5)
         #expect(entry?.bound == 42)
         #expect(entry?.direction == .downward)
-        #expect(cache.warmStart(at: 0) == nil)
+        #expect(cache.convergedOrigin(at: 0) == nil)
     }
 
     @Test("invalidateAll clears all entries")
     func invalidateAll() {
-        var cache = StallCache()
-        cache.record(index: 0, warmStart: WarmStart(bound: 10, direction: .downward))
-        cache.record(index: 1, warmStart: WarmStart(bound: 20, direction: .upward))
+        var cache = ConvergenceCache()
+        cache.record(index: 0, convergedOrigin: ConvergedOrigin(bound: 10, direction: .downward))
+        cache.record(index: 1, convergedOrigin: ConvergedOrigin(bound: 20, direction: .upward))
         #expect(cache.isEmpty == false)
 
         cache.invalidateAll()
         #expect(cache.isEmpty)
-        #expect(cache.warmStart(at: 0) == nil)
-        #expect(cache.warmStart(at: 1) == nil)
+        #expect(cache.convergedOrigin(at: 0) == nil)
+        #expect(cache.convergedOrigin(at: 1) == nil)
     }
 
     @Test("allEntries returns nil when empty")
     func allEntriesEmpty() {
-        let cache = StallCache()
+        let cache = ConvergenceCache()
         #expect(cache.allEntries == nil)
     }
 
     @Test("allEntries returns populated dictionary")
     func allEntriesPopulated() {
-        var cache = StallCache()
-        cache.record(index: 3, warmStart: WarmStart(bound: 100, direction: .downward))
+        var cache = ConvergenceCache()
+        cache.record(index: 3, convergedOrigin: ConvergedOrigin(bound: 100, direction: .downward))
         let entries = cache.allEntries
         #expect(entries?.count == 1)
         #expect(entries?[3]?.bound == 100)
@@ -50,20 +50,20 @@ struct StallCacheTests {
 
     @Test("Later records overwrite earlier ones at the same index")
     func overwrite() {
-        var cache = StallCache()
-        cache.record(index: 0, warmStart: WarmStart(bound: 10, direction: .downward))
-        cache.record(index: 0, warmStart: WarmStart(bound: 20, direction: .upward))
-        let entry = cache.warmStart(at: 0)
+        var cache = ConvergenceCache()
+        cache.record(index: 0, convergedOrigin: ConvergedOrigin(bound: 10, direction: .downward))
+        cache.record(index: 0, convergedOrigin: ConvergedOrigin(bound: 20, direction: .upward))
+        let entry = cache.convergedOrigin(at: 0)
         #expect(entry?.bound == 20)
         #expect(entry?.direction == .upward)
     }
 }
 
-// MARK: - Warm Start Probe Savings
+// MARK: - Converged Origin Probe Savings
 
-@Suite("Warm Start Probe Savings")
-struct WarmStartProbeSavingsTests {
-    @Test("Warm-started search produces zero probes when bound equals current value")
+@Suite("Converged Origin Probe Savings")
+struct ConvergedOriginProbeSavingsTests {
+    @Test("Converged-origin search produces zero probes when bound equals current value")
     func zeroProbesWhenBoundMatchesCurrent() {
         let value: UInt64 = 1_000_000
         let seq = makeUnsignedSequence([value])
@@ -78,21 +78,21 @@ struct WarmStartProbeSavingsTests {
         let warmCount = countAllRejectedProbes(
             BinarySearchToSemanticSimplestEncoder(),
             sequence: seq, spans: spans,
-            warmStarts: [0: WarmStart(bound: value, direction: .downward)]
+            convergedOrigins: [0: ConvergedOrigin(bound: value, direction: .downward)]
         )
 
         #expect(coldCount >= 15)
         #expect(warmCount == 0)
     }
 
-    @Test("Eight coordinates each skip binary search with warm starts")
+    @Test("Eight coordinates each skip binary search with converged origins")
     func eightCoordinateSkip() {
         var values: [UInt64] = []
-        var warmStarts: [Int: WarmStart] = [:]
+        var convergedOrigins: [Int: ConvergedOrigin] = [:]
         for i in 0 ..< 8 {
             let value = UInt64(500_000 + i * 100_000)
             values.append(value)
-            warmStarts[i] = WarmStart(bound: value, direction: .downward)
+            convergedOrigins[i] = ConvergedOrigin(bound: value, direction: .downward)
         }
         let seq = makeUnsignedSequence(values)
         let spans = extractValueSpans(from: seq)
@@ -104,29 +104,29 @@ struct WarmStartProbeSavingsTests {
         let warmCount = countAllRejectedProbes(
             BinarySearchToSemanticSimplestEncoder(),
             sequence: seq, spans: spans,
-            warmStarts: warmStarts
+            convergedOrigins: convergedOrigins
         )
 
         #expect(coldCount >= 100)
         #expect(warmCount == 0)
     }
 
-    @Test("Stall records contain convergence bounds for cache harvesting")
-    func stallRecordsPopulated() {
+    @Test("Convergence records contain convergence bounds for cache harvesting")
+    func convergenceRecordsPopulated() {
         let seq = makeUnsignedSequence([1_000_000])
         let spans = extractValueSpans(from: seq)
 
         var encoder = BinarySearchToSemanticSimplestEncoder()
-        encoder.start(sequence: seq, targets: .spans(spans), warmStarts: nil)
+        encoder.start(sequence: seq, targets: .spans(spans), convergedOrigins: nil)
         while encoder.nextProbe(lastAccepted: false) != nil {}
 
-        let records = encoder.stallRecords
+        let records = encoder.convergenceRecords
         #expect(records.count == 1)
         #expect(records[0]?.bound == 1_000_000)
         #expect(records[0]?.direction == .downward)
     }
 
-    @Test("Range minimum encoder also skips search with matching warm start")
+    @Test("Range minimum encoder also skips search with matching converged origin")
     func rangeMinimumEncoderSkip() {
         let value: UInt64 = 1_000_000
         let seq = makeUnsignedSequence([value])
@@ -139,7 +139,7 @@ struct WarmStartProbeSavingsTests {
         let warmCount = countAllRejectedProbes(
             BinarySearchToRangeMinimumEncoder(),
             sequence: seq, spans: spans,
-            warmStarts: [0: WarmStart(bound: value, direction: .downward)]
+            convergedOrigins: [0: ConvergedOrigin(bound: value, direction: .downward)]
         )
 
         #expect(coldCount >= 15)
@@ -151,18 +151,18 @@ struct WarmStartProbeSavingsTests {
 
 @Suite("Validation Probe")
 struct ValidationProbeTests {
-    @Test("Validation probe at floor - 1 is emitted after warm-started convergence")
+    @Test("Validation probe at floor - 1 is emitted after converged-origin convergence")
     func emitsValidationProbe() {
-        // Value at 10000, warm start at 5000. After binary search over [5000, 10000]
+        // Value at 10000, converged origin at 5000. After binary search over [5000, 10000]
         // converges with all rejections, a validation probe at 4999 is emitted.
         let seq = makeUnsignedSequence([10000])
         let spans = extractValueSpans(from: seq)
-        let warmStarts: [Int: WarmStart] = [
-            0: WarmStart(bound: 5000, direction: .downward),
+        let convergedOrigins: [Int: ConvergedOrigin] = [
+            0: ConvergedOrigin(bound: 5000, direction: .downward),
         ]
 
         var encoder = BinarySearchToRangeMinimumEncoder()
-        encoder.start(sequence: seq, targets: .spans(spans), warmStarts: warmStarts)
+        encoder.start(sequence: seq, targets: .spans(spans), convergedOrigins: convergedOrigins)
 
         var probeValues: [UInt64] = []
         while let probe = encoder.nextProbe(lastAccepted: false) {
@@ -182,12 +182,12 @@ struct ValidationProbeTests {
     func acceptedValidationTriggersColdRestart() {
         let seq = makeUnsignedSequence([10000])
         let spans = extractValueSpans(from: seq)
-        let warmStarts: [Int: WarmStart] = [
-            0: WarmStart(bound: 5000, direction: .downward),
+        let convergedOrigins: [Int: ConvergedOrigin] = [
+            0: ConvergedOrigin(bound: 5000, direction: .downward),
         ]
 
         var encoder = BinarySearchToRangeMinimumEncoder()
-        encoder.start(sequence: seq, targets: .spans(spans), warmStarts: warmStarts)
+        encoder.start(sequence: seq, targets: .spans(spans), convergedOrigins: convergedOrigins)
 
         var probeValues: [UInt64] = []
         var lastAccepted = false
@@ -239,10 +239,10 @@ private func countAllRejectedProbes(
     _ encoder: some AdaptiveEncoder,
     sequence: ChoiceSequence,
     spans: [ChoiceSpan],
-    warmStarts: [Int: WarmStart]? = nil
+    convergedOrigins: [Int: ConvergedOrigin]? = nil
 ) -> Int {
     var encoder = encoder
-    encoder.start(sequence: sequence, targets: .spans(spans), warmStarts: warmStarts)
+    encoder.start(sequence: sequence, targets: .spans(spans), convergedOrigins: convergedOrigins)
     var count = 0
     while encoder.nextProbe(lastAccepted: false) != nil {
         count += 1

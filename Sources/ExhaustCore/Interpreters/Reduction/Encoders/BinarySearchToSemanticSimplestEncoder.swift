@@ -11,7 +11,7 @@
 public struct BinarySearchToSemanticSimplestEncoder: AdaptiveEncoder {
     public init() {}
 
-    public private(set) var stallRecords: [Int: WarmStart] = [:]
+    public private(set) var convergenceRecords: [Int: ConvergedOrigin] = [:]
 
     public let name: EncoderName = .binarySearchToSemanticSimplest
     public let phase = ReductionPhase.valueMinimization
@@ -38,7 +38,7 @@ public struct BinarySearchToSemanticSimplestEncoder: AdaptiveEncoder {
             }
         }
 
-        var direction: WarmStart.Direction {
+        var direction: ConvergedOrigin.Direction {
             switch self {
             case .downward: .downward
             case .upward: .upward
@@ -79,8 +79,8 @@ public struct BinarySearchToSemanticSimplestEncoder: AdaptiveEncoder {
         let choiceTag: TypeTag
         let targetBP: UInt64
         var stepper: DirectionalStepper
-        let isWarmStarted: Bool
-        let warmStartBound: UInt64
+        let isConvergedOrigined: Bool
+        let convergedOriginBound: UInt64
     }
 
     private enum Phase {
@@ -99,14 +99,14 @@ public struct BinarySearchToSemanticSimplestEncoder: AdaptiveEncoder {
 
     // MARK: - AdaptiveEncoder
 
-    public mutating func start(sequence: ChoiceSequence, targets: TargetSet, warmStarts: [Int: WarmStart]?) {
+    public mutating func start(sequence: ChoiceSequence, targets: TargetSet, convergedOrigins: [Int: ConvergedOrigin]?) {
         self.sequence = sequence
         self.targets = []
         currentIndex = 0
         needsFirstProbe = true
         searchPhase = .binarySearch
         savedEntry = nil
-        stallRecords = [:]
+        convergenceRecords = [:]
 
         guard case let .spans(spans) = targets else { return }
 
@@ -138,22 +138,22 @@ public struct BinarySearchToSemanticSimplestEncoder: AdaptiveEncoder {
             let currentBP = v.choice.bitPattern64
             guard currentBP != targetBP else { i += 1; continue }
 
-            let warmStart = warmStarts?[seqIdx]
-            let isWarmStarted: Bool
+            let convergedOrigin = convergedOrigins?[seqIdx]
+            let isConvergedOrigined: Bool
             let effectiveBound: UInt64
             let stepper: DirectionalStepper
 
             if currentBP > targetBP {
                 // Downward search: warm start narrows lo from targetBP upward.
-                let validWarmStart = (warmStart?.direction == .downward) ? warmStart : nil
-                effectiveBound = validWarmStart?.bound ?? targetBP
-                isWarmStarted = validWarmStart != nil
+                let validConvergedOrigin = (convergedOrigin?.direction == .downward) ? convergedOrigin : nil
+                effectiveBound = validConvergedOrigin?.bound ?? targetBP
+                isConvergedOrigined = validConvergedOrigin != nil
                 stepper = .downward(BinarySearchStepper(lo: effectiveBound, hi: currentBP))
             } else {
                 // Upward search: warm start narrows hi from targetBP downward.
-                let validWarmStart = (warmStart?.direction == .upward) ? warmStart : nil
-                effectiveBound = validWarmStart?.bound ?? targetBP
-                isWarmStarted = validWarmStart != nil
+                let validConvergedOrigin = (convergedOrigin?.direction == .upward) ? convergedOrigin : nil
+                effectiveBound = validConvergedOrigin?.bound ?? targetBP
+                isConvergedOrigined = validConvergedOrigin != nil
                 stepper = .upward(MaxBinarySearchStepper(lo: currentBP, hi: effectiveBound))
             }
 
@@ -164,8 +164,8 @@ public struct BinarySearchToSemanticSimplestEncoder: AdaptiveEncoder {
                 choiceTag: v.choice.tag,
                 targetBP: targetBP,
                 stepper: stepper,
-                isWarmStarted: isWarmStarted,
-                warmStartBound: effectiveBound
+                isConvergedOrigined: isConvergedOrigined,
+                convergedOriginBound: effectiveBound
             ))
             i += 1
         }
@@ -180,26 +180,26 @@ public struct BinarySearchToSemanticSimplestEncoder: AdaptiveEncoder {
                 }
                 // Binary search converged — record stall record.
                 let convergedTarget = targets[currentIndex]
-                stallRecords[convergedTarget.seqIdx] = WarmStart(
+                convergenceRecords[convergedTarget.seqIdx] = ConvergedOrigin(
                     bound: convergedTarget.stepper.bestAccepted,
                     direction: convergedTarget.stepper.direction
                 )
                 // Validation probe: if this target was warm-started with a downward
                 // search, verify the cached floor still holds by probing floor - 1.
                 let state = targets[currentIndex]
-                if state.isWarmStarted,
+                if state.isConvergedOrigined,
                    case .downward = state.stepper,
-                   state.warmStartBound > state.targetBP,
-                   state.warmStartBound > 0,
-                   state.warmStartBound < sequence[state.seqIdx].value?.choice.bitPattern64 ?? 0
+                   state.convergedOriginBound > state.targetBP,
+                   state.convergedOriginBound > 0,
+                   state.convergedOriginBound < sequence[state.seqIdx].value?.choice.bitPattern64 ?? 0
                 {
                     searchPhase = .validatingFloor(
-                        floor: state.warmStartBound,
+                        floor: state.convergedOriginBound,
                         targetBP: state.targetBP
                     )
                     // Emit probe at floor - 1.
                     savedEntry = sequence[state.seqIdx]
-                    let probeBP = state.warmStartBound - 1
+                    let probeBP = state.convergedOriginBound - 1
                     sequence[state.seqIdx] = .value(.init(
                         choice: ChoiceValue(state.choiceTag.makeConvertible(bitPattern64: probeBP), tag: state.choiceTag),
                         validRange: state.validRange,
@@ -214,9 +214,9 @@ public struct BinarySearchToSemanticSimplestEncoder: AdaptiveEncoder {
                 if state.choiceTag.isSigned {
                     // Skip cross-zero when warm-started convergence left the value
                     // unchanged — the same shortlex keys were tried last cycle.
-                    if state.isWarmStarted {
+                    if state.isConvergedOrigined {
                         let currentBP = sequence[state.seqIdx].value?.choice.bitPattern64 ?? 0
-                        if currentBP == state.warmStartBound {
+                        if currentBP == state.convergedOriginBound {
                             advanceToNextTarget()
                             continue
                         }
@@ -253,8 +253,8 @@ public struct BinarySearchToSemanticSimplestEncoder: AdaptiveEncoder {
                         choiceTag: state.choiceTag,
                         targetBP: state.targetBP,
                         stepper: .downward(BinarySearchStepper(lo: targetBP, hi: floor - 1)),
-                        isWarmStarted: false,
-                        warmStartBound: targetBP
+                        isConvergedOrigined: false,
+                        convergedOriginBound: targetBP
                     )
                     needsFirstProbe = true
                     searchPhase = .binarySearch
@@ -269,9 +269,9 @@ public struct BinarySearchToSemanticSimplestEncoder: AdaptiveEncoder {
                 if state.choiceTag.isSigned {
                     // Skip cross-zero when warm-started convergence left the value
                     // unchanged — the same shortlex keys were tried last cycle.
-                    if state.isWarmStarted {
+                    if state.isConvergedOrigined {
                         let currentBP = sequence[state.seqIdx].value?.choice.bitPattern64 ?? 0
-                        if currentBP == state.warmStartBound {
+                        if currentBP == state.convergedOriginBound {
                             advanceToNextTarget()
                             continue
                         }

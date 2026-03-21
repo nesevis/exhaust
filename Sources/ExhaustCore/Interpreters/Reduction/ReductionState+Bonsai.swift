@@ -615,14 +615,14 @@ extension ReductionState {
         lattice.invalidate()
         var anyAccepted = false
 
-        // Build warm starts once for all fibre descent calls in this pass.
-        // Mid-pass updates (from one encoder's stall records) must not leak into
-        // another encoder's warm starts — the cross-zero skip relies on the warm
-        // start bound matching the value at which cross-zero was last attempted,
+        // Build converged origins once for all fibre descent calls in this pass.
+        // Mid-pass updates (from one encoder's convergence records) must not leak into
+        // another encoder's converged origins — the cross-zero skip relies on the
+        // converged bound matching the value at which cross-zero was last attempted,
         // which is encoder-specific. A shared mid-pass update would let one
         // encoder's convergence trigger another encoder's cross-zero skip even
         // though cross-zero at that value was never attempted by the second encoder.
-        let cachedWarmStarts = stallCache.allEntries
+        let cachedOrigins = convergenceCache.allEntries
 
         // Compute target leaf ranges.
         let leafRanges = computeLeafRanges(dag: dag)
@@ -683,7 +683,7 @@ extension ReductionState {
                             targets: .spans(leafSpans), structureChanged: structureChanged,
                             budget: &legBudget,
                             fingerprintGuard: guard_,
-                            warmStarts: cachedWarmStarts
+                            convergedOrigins: cachedOrigins
                         )
                     case .binarySearchToZero where leafSpans.isEmpty == false:
                         slotAccepted = try runAdaptive(
@@ -691,7 +691,7 @@ extension ReductionState {
                             targets: .spans(leafSpans), structureChanged: structureChanged,
                             budget: &legBudget,
                             fingerprintGuard: guard_,
-                            warmStarts: cachedWarmStarts
+                            convergedOrigins: cachedOrigins
                         )
                     case .binarySearchToTarget where leafSpans.isEmpty == false:
                         slotAccepted = try runAdaptive(
@@ -699,7 +699,7 @@ extension ReductionState {
                             targets: .spans(leafSpans), structureChanged: structureChanged,
                             budget: &legBudget,
                             fingerprintGuard: guard_,
-                            warmStarts: cachedWarmStarts
+                            convergedOrigins: cachedOrigins
                         )
                     case .reduceFloat where floatSpans.isEmpty == false:
                         slotAccepted = try runAdaptive(
@@ -707,7 +707,7 @@ extension ReductionState {
                             targets: .spans(floatSpans), structureChanged: structureChanged,
                             budget: &legBudget,
                             fingerprintGuard: guard_,
-                            warmStarts: cachedWarmStarts
+                            convergedOrigins: cachedOrigins
                         )
                     default:
                         break
@@ -755,7 +755,7 @@ extension ReductionState {
                                 targets: .spans(vSpans), structureChanged: hasBind,
                                 budget: &legBudget,
                                 fingerprintGuard: prePhaseFingerprint,
-                                warmStarts: cachedWarmStarts
+                                convergedOrigins: cachedOrigins
                             )
                         case .binarySearchToZero where vSpans.isEmpty == false:
                             slotAccepted = try runAdaptive(
@@ -763,7 +763,7 @@ extension ReductionState {
                                 targets: .spans(vSpans), structureChanged: hasBind,
                                 budget: &legBudget,
                                 fingerprintGuard: prePhaseFingerprint,
-                                warmStarts: cachedWarmStarts
+                                convergedOrigins: cachedOrigins
                             )
                         case .binarySearchToTarget where vSpans.isEmpty == false:
                             slotAccepted = try runAdaptive(
@@ -771,7 +771,7 @@ extension ReductionState {
                                 targets: .spans(vSpans), structureChanged: hasBind,
                                 budget: &legBudget,
                                 fingerprintGuard: prePhaseFingerprint,
-                                warmStarts: cachedWarmStarts
+                                convergedOrigins: cachedOrigins
                             )
                         case .reduceFloat where fSpans.isEmpty == false:
                             slotAccepted = try runAdaptive(
@@ -779,7 +779,7 @@ extension ReductionState {
                                 targets: .spans(fSpans), structureChanged: hasBind,
                                 budget: &legBudget,
                                 fingerprintGuard: prePhaseFingerprint,
-                                warmStarts: cachedWarmStarts
+                                convergedOrigins: cachedOrigins
                             )
                         default:
                             break

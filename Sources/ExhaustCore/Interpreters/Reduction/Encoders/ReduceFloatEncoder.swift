@@ -17,7 +17,7 @@
 struct ReduceFloatEncoder: AdaptiveEncoder {
     init() {}
 
-    var stallRecords: [Int: WarmStart] = [:]
+    var convergenceRecords: [Int: ConvergedOrigin] = [:]
 
     let name: EncoderName = .reduceFloat
     let phase = ReductionPhase.valueMinimization
@@ -84,7 +84,7 @@ struct ReduceFloatEncoder: AdaptiveEncoder {
 
     // MARK: - AdaptiveEncoder
 
-    mutating func start(sequence: ChoiceSequence, targets: TargetSet, warmStarts: [Int: WarmStart]?) {
+    mutating func start(sequence: ChoiceSequence, targets: TargetSet, convergedOrigins: [Int: ConvergedOrigin]?) {
         self.sequence = sequence
         self.targets = []
         currentTargetIndex = 0
@@ -92,7 +92,7 @@ struct ReduceFloatEncoder: AdaptiveEncoder {
         batchCandidates = []
         batchIndex = 0
         needsFirstProbe = true
-        stallRecords = [:]
+        convergenceRecords = [:]
 
         guard case let .spans(spans) = targets else { return }
 
@@ -105,8 +105,8 @@ struct ReduceFloatEncoder: AdaptiveEncoder {
 
             // Stage-skip: if the warm start bound matches the current bit pattern,
             // the value is unchanged since last convergence — skip batch stages.
-            let skipBatchStages: Stage? = if let warmStart = warmStarts?[seqIdx],
-               warmStart.bound == v.choice.bitPattern64
+            let skipBatchStages: Stage? = if let convergedOrigin = convergedOrigins?[seqIdx],
+               convergedOrigin.bound == v.choice.bitPattern64
             {
                 .integralBinarySearch
             } else {
@@ -354,7 +354,7 @@ struct ReduceFloatEncoder: AdaptiveEncoder {
                 applyIntegralBinarySearchBest()
             }
             let target = targets[currentTargetIndex]
-            stallRecords[target.seqIdx] = WarmStart(
+            convergenceRecords[target.seqIdx] = ConvergedOrigin(
                 bound: target.currentBitPattern,
                 direction: .downward
             )
@@ -440,7 +440,7 @@ struct ReduceFloatEncoder: AdaptiveEncoder {
                 applyRatioBinarySearchBest()
             }
             let target = targets[currentTargetIndex]
-            stallRecords[target.seqIdx] = WarmStart(
+            convergenceRecords[target.seqIdx] = ConvergedOrigin(
                 bound: target.currentBitPattern,
                 direction: .downward
             )

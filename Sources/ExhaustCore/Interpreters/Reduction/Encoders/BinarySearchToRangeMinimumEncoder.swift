@@ -11,7 +11,7 @@
 public struct BinarySearchToRangeMinimumEncoder: AdaptiveEncoder {
     public init() {}
 
-    public private(set) var stallRecords: [Int: WarmStart] = [:]
+    public private(set) var convergenceRecords: [Int: ConvergedOrigin] = [:]
 
     public let name: EncoderName = .binarySearchToRangeMinimum
     public let phase = ReductionPhase.valueMinimization
@@ -32,8 +32,8 @@ public struct BinarySearchToRangeMinimumEncoder: AdaptiveEncoder {
         let choiceTag: TypeTag
         let targetBP: UInt64
         var stepper: BinarySearchStepper
-        let isWarmStarted: Bool
-        let warmStartBound: UInt64
+        let isConvergedOrigined: Bool
+        let convergedOriginBound: UInt64
     }
 
     private var sequence = ChoiceSequence()
@@ -47,13 +47,13 @@ public struct BinarySearchToRangeMinimumEncoder: AdaptiveEncoder {
 
     // MARK: - AdaptiveEncoder
 
-    public mutating func start(sequence: ChoiceSequence, targets: TargetSet, warmStarts: [Int: WarmStart]?) {
+    public mutating func start(sequence: ChoiceSequence, targets: TargetSet, convergedOrigins: [Int: ConvergedOrigin]?) {
         self.sequence = sequence
         self.targets = []
         currentIndex = 0
         needsFirstProbe = true
         savedEntry = nil
-        stallRecords = [:]
+        convergenceRecords = [:]
         pendingValidation = nil
 
         guard case let .spans(spans) = targets else { return }
@@ -75,9 +75,9 @@ public struct BinarySearchToRangeMinimumEncoder: AdaptiveEncoder {
             guard currentBP != targetBP else { i += 1; continue }
 
             // Downward-only encoder: warm start narrows lo from targetBP upward.
-            let validWarmStart = (warmStarts?[seqIdx]?.direction == .downward) ? warmStarts?[seqIdx] : nil
-            let effectiveLo = validWarmStart?.bound ?? targetBP
-            let isWarmStarted = validWarmStart != nil
+            let validConvergedOrigin = (convergedOrigins?[seqIdx]?.direction == .downward) ? convergedOrigins?[seqIdx] : nil
+            let effectiveLo = validConvergedOrigin?.bound ?? targetBP
+            let isConvergedOrigined = validConvergedOrigin != nil
 
             self.targets.append(TargetState(
                 seqIdx: seqIdx,
@@ -86,8 +86,8 @@ public struct BinarySearchToRangeMinimumEncoder: AdaptiveEncoder {
                 choiceTag: v.choice.tag,
                 targetBP: targetBP,
                 stepper: BinarySearchStepper(lo: effectiveLo, hi: currentBP),
-                isWarmStarted: isWarmStarted,
-                warmStartBound: effectiveLo
+                isConvergedOrigined: isConvergedOrigined,
+                convergedOriginBound: effectiveLo
             ))
             i += 1
         }
@@ -110,8 +110,8 @@ public struct BinarySearchToRangeMinimumEncoder: AdaptiveEncoder {
                     choiceTag: targets[currentIndex].choiceTag,
                     targetBP: targets[currentIndex].targetBP,
                     stepper: BinarySearchStepper(lo: validation.targetBP, hi: validation.floor - 1),
-                    isWarmStarted: false,
-                    warmStartBound: validation.targetBP
+                    isConvergedOrigined: false,
+                    convergedOriginBound: validation.targetBP
                 )
                 needsFirstProbe = true
                 // Fall through to main loop.
@@ -168,26 +168,26 @@ public struct BinarySearchToRangeMinimumEncoder: AdaptiveEncoder {
             }
             // Record convergence for stall cache.
             let convergedTarget = targets[currentIndex]
-            stallRecords[convergedTarget.seqIdx] = WarmStart(
+            convergenceRecords[convergedTarget.seqIdx] = ConvergedOrigin(
                 bound: convergedTarget.stepper.bestAccepted,
                 direction: .downward
             )
 
             // Validation probe: if warm-started, verify the cached floor still holds.
             let currentBP = sequence[convergedTarget.seqIdx].value?.choice.bitPattern64 ?? convergedTarget.stepper.bestAccepted
-            if convergedTarget.isWarmStarted,
-               convergedTarget.warmStartBound > convergedTarget.targetBP,
-               convergedTarget.warmStartBound > 0,
-               convergedTarget.warmStartBound < currentBP
+            if convergedTarget.isConvergedOrigined,
+               convergedTarget.convergedOriginBound > convergedTarget.targetBP,
+               convergedTarget.convergedOriginBound > 0,
+               convergedTarget.convergedOriginBound < currentBP
             {
                 pendingValidation = (
                     seqIdx: convergedTarget.seqIdx,
-                    floor: convergedTarget.warmStartBound,
+                    floor: convergedTarget.convergedOriginBound,
                     targetBP: convergedTarget.targetBP
                 )
                 // Emit probe at floor - 1.
                 savedEntry = sequence[convergedTarget.seqIdx]
-                let probeBP = convergedTarget.warmStartBound - 1
+                let probeBP = convergedTarget.convergedOriginBound - 1
                 sequence[convergedTarget.seqIdx] = .value(.init(
                     choice: ChoiceValue(convergedTarget.choiceTag.makeConvertible(bitPattern64: probeBP), tag: convergedTarget.choiceTag),
                     validRange: convergedTarget.validRange,

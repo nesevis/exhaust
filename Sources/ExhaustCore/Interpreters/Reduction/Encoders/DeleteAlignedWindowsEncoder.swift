@@ -81,7 +81,7 @@ struct DeleteAlignedWindowsEncoder: AdaptiveEncoder {
 
     // MARK: - AdaptiveEncoder
 
-    mutating func start(sequence: ChoiceSequence, targets _: TargetSet, warmStarts _: [Int: WarmStart]?) {
+    mutating func start(sequence: ChoiceSequence, targets _: TargetSet, convergedOrigins _: [Int: ConvergedOrigin]?) {
         structurallyStalled = (previousSequenceLength == sequence.count)
         previousSequenceLength = sequence.count
         self.sequence = sequence

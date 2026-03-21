@@ -64,16 +64,16 @@ public struct DecodingReport: Sendable {
         return Double(exactCarryForwardCount + fallbackTreeCount) / Double(total)
     }
 
-    /// Minimum coverage required for a stall point to be considered reliable enough to cache.
+    /// Minimum coverage required for a convergence point to be considered reliable enough to cache.
     ///
-    /// Below this threshold, too many coordinates were resolved via PRNG for the stall outcome
+    /// Below this threshold, too many coordinates were resolved via PRNG for the convergence outcome
     /// to be reproducible — a different seed could yield a different result. Empirically, structural-phase
     /// probes land at 0.167–0.250 while stable value-phase probes reach 1.0, so 0.9 cleanly separates
     /// the two regimes.
-    static let stallCacheCoverageThreshold: Double = 0.9
+    static let convergenceCacheCoverageThreshold: Double = 0.9
 
-    /// Whether this materialization's coverage is high enough for stall points to be cached.
-    var isReliableForStallCache: Bool {
-        coverage >= Self.stallCacheCoverageThreshold
+    /// Whether this materialization's coverage is high enough for convergence points to be cached.
+    var isReliableForConvergenceCache: Bool {
+        coverage >= Self.convergenceCacheCoverageThreshold
     }
 }
