@@ -8,7 +8,7 @@
 /// Materializer that always produces a fresh ``ChoiceTree`` with current ``validRange`` metadata
 /// and all branch alternatives at pick sites.
 ///
-/// Unlike the legacy ``Interpreters.materialize()`` + ``GuidedMaterializer`` path, this materializer:
+/// This materializer:
 /// - Rebuilds the tree from the generator on every invocation (no stale metadata).
 /// - Materializes all branch alternatives at pick sites (``DeleteByBranchPromotionEncoder`` sees candidates).
 /// - Supports exact and guided modes with inner-reject/bound-clamp semantics.
@@ -802,20 +802,26 @@ private extension ReductionMaterializer {
         choiceTrees.reserveCapacity(generators.count)
 
         let canScope = fallbackChildren != nil
-        // Skip transparent markers (group/bind/just) so childStartPosition
-        // is past the parent's group-open marker. Without this, the scope
-        // limit for the first child is too tight by the number of skipped
-        // markers, leaving the child's sequence-close outside the scope.
-        // The unconsumed close marker then blocks the next child's open.
+
+        // Scope limits are computed arithmetically from the cursor's current
+        // position (which sits at the zip's group-open marker). Each child's
+        // scope starts at basePosition + 1 (past the group-open) plus the
+        // cumulative flattenedEntryCount of preceding children. This avoids
+        // the cursor-position-based calculation that drifted when skipGroups()
+        // consumed a child's leading group(true) markers.
+        var childScopeStart = context.cursor.position + 1 // past the zip group open
+
+        // Advance the cursor past transparent markers so it is ready for the
+        // first child's consume calls (tryConsumeBranch / tryConsumeValue).
         if canScope { context.cursor.skipGroups() }
-        var childStartPosition = context.cursor.position
+
         // while-loop: avoiding zip/IteratorProtocol overhead in debug builds.
         var zipIndex = 0
         while zipIndex < generators.count {
             let gen = generators[zipIndex]
             let fb: ChoiceTree? = fallbackChildren?[zipIndex]
             if canScope, let fb {
-                context.cursor.pushScope(limit: childStartPosition + fb.flattenedEntryCount)
+                context.cursor.pushScope(limit: childScopeStart + fb.flattenedEntryCount)
             }
             guard let (result, tree) = try generateRecursive(
                 gen, with: inputValue, context: &context, fallbackTree: fb
@@ -825,7 +831,7 @@ private extension ReductionMaterializer {
             }
             if canScope, fb != nil { context.cursor.popScope() }
             if canScope { context.cursor.skipGroupCloses() }
-            childStartPosition = context.cursor.position
+            if let fb { childScopeStart += fb.flattenedEntryCount }
             results.append(result)
             choiceTrees.append(tree)
             zipIndex += 1
