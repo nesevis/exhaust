@@ -26,7 +26,6 @@ public extension Gen {
     ///   - generator: The base generator to wrap with classification
     ///   - classifiers: Variadic (label, predicate) pairs for categorizing generated values
     /// - Returns: A generator that produces the same values while collecting statistics
-    @inlinable
     static func classify<Output>(
         _ generator: ReflectiveGenerator<Output>,
         _ classifiers: (String, (Output) -> Bool)...

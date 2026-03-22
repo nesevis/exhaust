@@ -7,7 +7,6 @@ extension Gen {
     /// Internal callers that need the raw size operation should use this. All public-facing
     /// size access goes through ``getSize(_:)`` which wraps the result in a `._bound` with
     /// `backward: { _ in 100 }`, giving reflection and Bonsai a usable default.
-    @inlinable
     static func rawGetSize() -> ReflectiveGenerator<UInt64> {
         .impure(operation: .getSize) { result in
             if let typedResult = result as? UInt64 {
@@ -30,7 +29,6 @@ public extension Gen {
     ///
     /// - Parameter forward: A closure that receives the current size and returns a generator.
     /// - Returns: A generator that produces the result of the size-dependent inner generator.
-    @inlinable
     static func getSize<Output>(
         _ forward: @escaping (UInt64) -> ReflectiveGenerator<Output>
     ) -> ReflectiveGenerator<Output> {
@@ -52,7 +50,6 @@ public extension Gen {
     ///   - generator: The generator to run with the modified size
     /// - Returns: A generator that runs with the specified size parameter
     /// - Note: Size handling may need refinement in future versions
-    @inlinable
     static func resize<Output>(
         _ newSize: UInt64,
         _ generator: ReflectiveGenerator<Output>

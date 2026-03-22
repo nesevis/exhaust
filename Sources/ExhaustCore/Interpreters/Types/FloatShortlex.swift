@@ -20,7 +20,6 @@ public enum FloatShortlex {
     /// Maps a `Double` into a lexical key matching Hypothesis-style float ordering.
     ///
     /// This ordering treats non-negative integral floats up to 2^56 as "simple" (key equals the integer value), and encodes other finite values by transformed exponent/mantissa so coarse semantic moves are cheap to discover.
-    @inlinable
     public static func shortlexKey(for value: Double) -> UInt64 {
         let magnitude = abs(value)
 
@@ -66,7 +65,6 @@ public enum FloatShortlex {
     }
 
     /// Float overload for callers that are still working in `Float` precision.
-    @inlinable
     public static func shortlexKey(for value: Float) -> UInt64 {
         shortlexKey(for: Double(value))
     }

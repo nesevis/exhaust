@@ -28,7 +28,6 @@ public enum FloatShrink {
     public static let maxPreciseIntegerFloat = 16_777_216.0 // 2^24
 
     /// Returns the cutoff above which `x + 1 == x` for a given float tag.
-    @inlinable
     public static func maxPreciseInteger(for tag: TypeTag) -> Double {
         switch tag {
         case .double:
@@ -41,7 +40,6 @@ public enum FloatShrink {
     }
 
     /// Returns the Hypothesis-style special-value shortlist, in probe order.
-    @inlinable
     public static func specialValues(for tag: TypeTag) -> [Double] {
         switch tag {
         case .double:
@@ -54,7 +52,6 @@ public enum FloatShrink {
     }
 
     /// Exact integer ratio (`numerator / denominator`) for finite values, reduced by powers of two when representable as 64-bit integers.
-    @inlinable
     public static func integerRatio(for value: Double, tag: TypeTag) -> (numerator: Int64, denominator: UInt64)? {
         switch tag {
         case .double:

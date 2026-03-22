@@ -52,6 +52,7 @@ public struct Xoshiro256: ~Copyable {
         self.state = state
     }
 
+    @inline(__always)
     public mutating func next() -> UInt64 {
         let result = rotateLeft(state.1 &* 5, 7) &* 9
         let t = state.1 &<< 17

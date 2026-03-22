@@ -37,7 +37,6 @@ public enum TypeTag: Equatable, Hashable, Sendable {
     case bits
 
     /// Creates a type tag by matching the metatype of the given value against known numeric types.
-    @inlinable
     public init<T>(type: T) {
         self = switch type {
         case is Double.Type:

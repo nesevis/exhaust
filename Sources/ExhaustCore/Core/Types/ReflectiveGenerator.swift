@@ -45,7 +45,6 @@ public extension ReflectiveGenerator where Operation == ReflectiveOperation {
     /// - Parameter transform: A function that takes the current value and produces a new computation
     /// - Returns: A new computation representing the sequenced effects
     /// - Throws: Rethrows any errors from the transform function
-    @inlinable
     func _bind<NewValue>(_ transform: @escaping (Value) throws -> FreerMonad<Operation, NewValue>) rethrows -> FreerMonad<Operation, NewValue> {
         Gen.liftF(.transform(
             kind: .bind(
@@ -78,7 +77,6 @@ public extension ReflectiveGenerator where Operation == ReflectiveOperation {
     ///   - forward: Function that takes the generated value and returns a new generator
     ///   - backward: Function that extracts the inner value from the final output
     /// - Returns: A generator that sequences the two computations with bidirectional support
-    @inlinable
     func _bound<NewValue>(
         forward: @escaping (Value) throws -> ReflectiveGenerator<NewValue>,
         backward: @escaping (NewValue) throws -> Value

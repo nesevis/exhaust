@@ -6,7 +6,6 @@
 //
 
 public extension Gen {
-    @inlinable
     static func zip<each T>(
         _ generators: repeat ReflectiveGenerator<each T>,
         isOpaque: Bool = false

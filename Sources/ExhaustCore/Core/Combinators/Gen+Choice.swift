@@ -46,7 +46,6 @@ public extension Gen {
     /// - Parameter choices: An array of (weight, generator) pairs. Must not be empty.
     /// - Returns: A generator that produces values from one of the provided generators
     /// - Precondition: At least one choice must be provided
-    @inlinable
     static func pick<Output>(
         choices: [(weight: Int, generator: ReflectiveGenerator<Output>)]
     ) -> ReflectiveGenerator<Output> {
@@ -65,7 +64,6 @@ public extension Gen {
     ///   - range: The range of values to generate from. Defaults to the type's full range
     ///   - type: The output type to generate. Usually inferred from context
     /// - Returns: A generator that produces random values of the specified type within the range
-    @inlinable
     static func choose<Output: BitPatternConvertible>(
         in range: ClosedRange<Output>? = nil,
         type _: Output.Type = Output.self
@@ -79,7 +77,6 @@ public extension Gen {
     }
 
     /// Chooses a random element from a collection by generating a random index.
-    @inlinable
     static func choose<C: Collection>(
         from collection: C
     ) -> ReflectiveGenerator<C.Element> where C.Element: Equatable, C.Index == Int {
@@ -102,7 +99,6 @@ public extension Gen {
     }
 
     /// Chooses a random element from a collection by generating a random index.
-    @inlinable
     static func choose<C: Collection>(
         from collection: C
     ) -> ReflectiveGenerator<C.Element> where C.Index == Int {
@@ -115,7 +111,6 @@ public extension Gen {
     /// Internal helper for choose ranges derived from runtime context (e.g. `getSize`).
     ///
     /// These ranges should not be treated as strict during reflection because the contextual value that produced them may be opaque from the reflected output.
-    @inlinable
     static func chooseDerived<Output: BitPatternConvertible>(
         in range: ClosedRange<Output>,
         type _: Output.Type = Output.self
@@ -136,7 +131,6 @@ public extension Gen {
     ///   - range: The full range of values to generate from at size 100.
     ///   - scaling: The distribution strategy controlling how the range expands.
     /// - Returns: A generator that produces size-scaled random values.
-    @inlinable
     static func choose<Output: BitPatternConvertible>(
         in range: ClosedRange<Output>,
         scaling: SizeScaling<Output>

@@ -16,7 +16,6 @@ public extension Sequence {
     /// - Returns: The first non-`nil` return value of the transformation, or `nil` if no transformation is successful.
     ///
     /// - Complexity: O(*n*), where *n* is the number of elements at the start of the sequence that result in `nil` when applying the transformation.
-    @inlinable
     func firstNonNil<Result>(
         _ transform: (Element) throws -> Result?
     ) rethrows -> Result? {

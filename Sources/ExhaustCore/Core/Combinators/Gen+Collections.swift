@@ -13,7 +13,6 @@ public extension Gen {
     ///   - elementGenerator: A self-contained generator for the elements of the array
     ///   - length: Optional generator for the array length. Defaults to size-based length
     /// - Returns: A generator that produces an array of elements
-    @inlinable
     static func arrayOf<Output>(
         _ elementGenerator: ReflectiveGenerator<Output>,
         _ length: ReflectiveGenerator<UInt64>? = nil
@@ -49,7 +48,6 @@ public extension Gen {
     ///   - range: The allowed range for array length
     ///   - scaling: The distribution strategy for the length. Defaults to `.linear`
     /// - Returns: A generator that produces arrays with length in the specified range
-    @inlinable
     static func arrayOf<Output>(
         _ elementGenerator: ReflectiveGenerator<Output>,
         within range: ClosedRange<UInt64>,
@@ -73,7 +71,6 @@ public extension Gen {
     ///   - elementGenerator: The generator for array elements
     ///   - exactly: The exact length the array should have
     /// - Returns: A generator that produces arrays of the specified length
-    @inlinable
     static func arrayOf<Output>(
         _ elementGenerator: ReflectiveGenerator<Output>,
         exactly: UInt64
@@ -91,7 +88,6 @@ public extension Gen {
     ///   - keyGenerator: Generator for dictionary keys (must be Hashable)
     ///   - valueGenerator: Generator for dictionary values
     /// - Returns: A generator that produces dictionaries with random key-value pairs
-    @inlinable
     static func dictionaryOf<KeyOutput: Hashable, ValueOutput>(
         _ keyGenerator: ReflectiveGenerator<KeyOutput>,
         _ valueGenerator: ReflectiveGenerator<ValueOutput>
@@ -124,7 +120,6 @@ public extension Gen {
     ///   - elementGenerator: A generator for the elements of the set (must be Hashable)
     ///   - length: Optional generator for the set size. Defaults to size-based length
     /// - Returns: A generator that produces a set of unique elements
-    @inlinable
     static func setOf<Element: Hashable>(
         _ elementGenerator: ReflectiveGenerator<Element>,
         _ length: ReflectiveGenerator<UInt64>? = nil
@@ -139,7 +134,6 @@ public extension Gen {
     ///   - range: The allowed range for set size
     ///   - scaling: The distribution strategy for the set size. Defaults to `.linear`
     /// - Returns: A generator that produces sets with size in the specified range
-    @inlinable
     static func setOf<Element: Hashable>(
         _ elementGenerator: ReflectiveGenerator<Element>,
         within range: ClosedRange<UInt64>,
@@ -154,7 +148,6 @@ public extension Gen {
     ///   - elementGenerator: The generator for set elements (must be Hashable)
     ///   - exactly: The exact number of elements the set should have
     /// - Returns: A generator that produces sets of the specified size
-    @inlinable
     static func setOf<Element: Hashable>(
         _ elementGenerator: ReflectiveGenerator<Element>,
         exactly: UInt64
@@ -168,7 +161,6 @@ public extension Gen {
     ///
     /// - Parameter gen: An array generator whose output should be shuffled
     /// - Returns: A generator that produces a randomly permuted array
-    @inlinable
     static func shuffled<Element>(
         _ gen: ReflectiveGenerator<some Collection<Element>>
     ) -> ReflectiveGenerator<[Element]> {
@@ -194,7 +186,6 @@ public extension Gen {
     ///   - elementGenerator: The generator for array elements
     ///   - lengthRange: Optional range to constrain the array length. If nil, uses 0...size
     /// - Returns: A generator that produces arrays with size-controlled length
-    @inlinable
     static func sized<Output>(
         _ elementGenerator: ReflectiveGenerator<Output>,
         lengthRange: ClosedRange<UInt64>? = nil
@@ -209,7 +200,6 @@ public extension Gen {
         }
     }
 
-    @inlinable
     static func slice<AnyCollection: Collection>(
         of collection: AnyCollection
     ) -> ReflectiveGenerator<AnyCollection.SubSequence> {
@@ -265,7 +255,6 @@ public extension Gen {
     ///
     /// - Parameter gen: A generator that produces a collection
     /// - Returns: A generator that produces a contiguous subrange of the generated collection
-    @inlinable
     static func slice<C: Collection>(
         of gen: ReflectiveGenerator<C>
     ) -> ReflectiveGenerator<C.SubSequence> {
@@ -280,7 +269,6 @@ public extension Gen {
     ///
     /// - Parameter collection: The collection to pick elements from
     /// - Returns: A generator that produces random elements from the collection
-    @inlinable
     static func element<AnyCollection: Collection>(
         from collection: AnyCollection
     ) -> ReflectiveGenerator<AnyCollection.Element> {
@@ -310,7 +298,6 @@ public extension Gen {
     ///
     /// - Parameter collection: The collection to pick elements from
     /// - Returns: A generator that produces random elements from the collection
-    @inlinable
     static func element<AnyCollection: Collection>(
         from collection: AnyCollection
     ) -> ReflectiveGenerator<AnyCollection.Element> where AnyCollection.Element: Hashable {

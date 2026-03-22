@@ -53,7 +53,6 @@ public extension FreerMonad {
     /// - Parameter transform: A function that takes the current value and produces a new computation
     /// - Returns: A new computation representing the sequenced effects
     /// - Throws: Rethrows any errors from the transform function
-    @inlinable
     func _bind<NewValue>(_ transform: @escaping (Value) throws -> FreerMonad<Operation, NewValue>) rethrows -> FreerMonad<Operation, NewValue> {
         switch self {
         case let .pure(value):
@@ -76,7 +75,6 @@ public extension FreerMonad {
     /// - Parameter transform: A pure function to apply to the final value
     /// - Returns: A computation that produces the transformed value
     /// - Throws: Rethrows any errors from the transform function
-    @inlinable
     func _map<NewValue>(_ transform: @escaping (Value) throws -> NewValue) rethrows -> FreerMonad<Operation, NewValue> {
         switch self {
         case let .pure(value): try .pure(transform(value))
@@ -97,7 +95,6 @@ public extension FreerMonad {
     /// **Performance:** The erasure is structural - it traverses and rebuilds the entire computation tree to change the type parameter. This is necessary because Swift's type system requires the full generic signature to match.
     ///
     /// - Returns: An equivalent computation with value type erased to `Any`
-    @inlinable
     func erase() -> FreerMonad<Operation, Any> {
         switch self {
         case let .pure(value):
@@ -142,7 +139,6 @@ public extension FreerMonad where Value == Any {
     /// This optimization handles cases where `erase()` might be called multiple times on the same computation, ensuring idempotency and better performance.
     ///
     /// - Returns: The same computation unchanged (since it's already erased)
-    @inlinable
     func erase() -> FreerMonad<Operation, Any> {
         self
     }

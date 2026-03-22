@@ -10,7 +10,6 @@ public extension Gen {
     ///
     /// - Parameter operation: The low-level reflective operation to lift
     /// - Returns: A generator that executes the operation and validates the result type
-    @inlinable
     static func liftF<Output>(
         _ operation: ReflectiveOperation
     ) -> ReflectiveGenerator<Output> {
@@ -28,7 +27,6 @@ public extension Gen {
     ///
     /// - Parameter generator: The generator to apply pruning to
     /// - Returns: A generator with pruning applied
-    @inlinable
     static func prune<Output>(_ generator: ReflectiveGenerator<Output>) -> ReflectiveGenerator<Output> {
         liftF(.prune(next: generator.erase()))
     }
@@ -41,7 +39,6 @@ public extension Gen {
     ///   - transform: A function that transforms the new input type to the expected input type
     ///   - generator: The generator to apply the transformation to
     /// - Returns: A generator that accepts the new input type
-    @inlinable
     static func contramap<NewInput, Output>(
         _ transform: @escaping (NewInput) throws -> some Any,
         _ generator: ReflectiveGenerator<Output>
@@ -81,7 +78,6 @@ public extension Gen {
     ///   - transform: A function that transforms the input, returning nil to indicate failure
     ///   - generator: The generator to apply the transformation to
     /// - Returns: A generator that prunes on transformation failure
-    @inlinable
     static func comap<NewInput, Output>(
         _ transform: @escaping (NewInput) throws -> (some Any)?,
         _ generator: ReflectiveGenerator<Output>
