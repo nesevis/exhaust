@@ -422,11 +422,15 @@ This is the right migration strategy. Wrapping existing encoders first means the
 
 KleisliComposition makes some existing encoders and scheduler paths redundant because they exist only to work around the lack of compositional structure.
 
-### `DeleteContainerSpansWithRandomRepairEncoder` — fully redundant
+### `DeleteContainerSpansWithRandomRepairEncoder` — not redundant
 
-This encoder is identical to `DeleteContainerSpansEncoder`. Same `AdaptiveDeletionEncoder` driver, same span filtering, same batch-size search. The only difference is that the *scheduler* pairs it with `makeSpeculativeDecoder()` (guided/PRNG) instead of `scopeDecoder` (exact/scoped). The "random repair" is not in the encoder — it is in the decoder choice.
+This encoder is mechanically identical to `DeleteContainerSpansEncoder` — same `AdaptiveDeletionEncoder` driver, same span filtering, same batch-size search. The only difference is that the scheduler pairs it with `makeSpeculativeDecoder()` (guided/PRNG) instead of `scopeDecoder` (exact/scoped). Conceptually, the "random repair" is a lift mode parameter, not a separate encoder.
 
-With KleisliComposition, this distinction is a lift mode parameter, not a separate encoder type. The same deletion PointEncoder composed with `.guided` lift mode produces exactly the random-repair behavior. The separate encoder type exists only because the current architecture separates "what to mutate" (encoder) from "how to validate" (decoder) at the protocol level, forcing a new encoder type when you want a different decoder. One fewer encoder type, one fewer `EncoderName` case, one fewer `DeletionEncoderSlot`.
+However, this encoder is not a composition — it is one encoder with two decoders. The `KleisliComposition` operates between two encoders with a lift between them. The random-repair case has only one encoder (`deleteContainerSpans`) paired with a different decoder (`makeSpeculativeDecoder()`). Wrapping it in a `KleisliComposition` with an identity downstream adds a redundant lift materialization — the upstream produces a deletion candidate, the lift materializes it (no property check), then the `runAdaptive` decoder materializes it again and checks the property. Double materialization per probe.
+
+Additionally, the encoder's value comes from its integration into the slot rotation: move-to-front promotion, dominance pruning (skipped when `deleteContainerSpans` or `deleteAlignedSiblingWindows` already succeeded in the same scope), and per-scope target selection. Extracting it as a post-slot speculative pass caused a 25% regression on Bound5Many because it lost this integration.
+
+The encoder stays. The right abstraction for "same encoder, different decoder" is not composition — it is decoder parameterization, which the slot system already handles.
 
 ### Product-space Tier 2 (PRNG retries) — superseded
 

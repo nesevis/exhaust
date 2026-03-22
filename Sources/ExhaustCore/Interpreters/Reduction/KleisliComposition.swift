@@ -23,8 +23,8 @@
 public struct KleisliComposition<Output>: AdaptiveEncoder {
     // MARK: - Configuration
 
-    public let name: EncoderName = .kleisliComposition
-    public let phase: ReductionPhase = .exploration
+    public let name: EncoderName
+    public let phase: ReductionPhase
 
     /// The upstream point encoder — proposes mutations at the controlling position.
     var upstream: any PointEncoder
@@ -88,6 +88,8 @@ public struct KleisliComposition<Output>: AdaptiveEncoder {
     // MARK: - Initializer
 
     public init(
+        name: EncoderName = .kleisliComposition,
+        phase: ReductionPhase = .exploration,
         upstream: any PointEncoder,
         downstream: any PointEncoder,
         lift: GeneratorLift<Output>,
@@ -95,6 +97,8 @@ public struct KleisliComposition<Output>: AdaptiveEncoder {
         upstreamRange: ClosedRange<Int>,
         downstreamRange: ClosedRange<Int>
     ) {
+        self.name = name
+        self.phase = phase
         self.upstream = upstream
         self.downstream = downstream
         self.lift = lift
