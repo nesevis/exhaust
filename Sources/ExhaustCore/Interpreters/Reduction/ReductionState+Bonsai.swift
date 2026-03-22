@@ -1,7 +1,7 @@
 // MARK: - Base Descent and Fibre Descent
 
 //
-// Extends ReductionState with the two phases of BonsaiScheduler's alternating minimisation.
+// Extends ReductionState with the two phases of BonsaiScheduler's alternating minimization.
 // Base descent (ramification) minimises the trace structure — the base of the fibration —
 // via branch simplification, structural deletion, and bind-inner reduction.
 // Fibre descent (foliage) minimises the value assignment within a fixed trace structure —
@@ -1050,6 +1050,155 @@ extension ReductionState {
 
         budget -= legBudget.used
         return anyAccepted
+    }
+}
+
+// MARK: - Kleisli Exploration
+
+extension ReductionState {
+    /// Explores cross-level minima via ``KleisliComposition`` along CDG dependency edges.
+    ///
+    /// Targets the case where Phase 1c's guided lift does not preserve the failure at a reduced bind-inner value, but a specific downstream reduction in the new fibre recovers it. The composition searches both levels jointly — the upstream encoder proposes bind-inner values, the generator lift materializes without property check, and the downstream encoder searches the lifted fibre.
+    ///
+    /// Follows the ``runRelaxRound(remaining:)`` checkpoint/rollback pattern: snapshot before exploration, accept only if the net result is shortlex-better than the checkpoint.
+    ///
+    /// Returns `true` if the exploration found a net improvement.
+    func runKleisliExploration(
+        budget: inout Int,
+        dag: ChoiceDependencyGraph?
+    ) throws -> Bool {
+        guard hasBind, let dag, let bindSpanIndex = bindIndex else { return false }
+
+        let edges = dag.reductionEdges()
+        guard edges.isEmpty == false else {
+            if isInstrumented {
+                ExhaustLog.debug(
+                    category: .reducer,
+                    event: "kleisli_exploration_skip",
+                    metadata: ["reason": "no_edges"]
+                )
+            }
+            return false
+        }
+
+        if isInstrumented {
+            ExhaustLog.debug(
+                category: .reducer,
+                event: "kleisli_exploration_start",
+                metadata: [
+                    "edges": "\(edges.count)",
+                    "seq_len": "\(sequence.count)",
+                ]
+            )
+        }
+
+        let checkpoint = makeSnapshot()
+        var anyAccepted = false
+
+        for edge in edges {
+            guard budget > 0 else { break }
+
+            // Build fresh upstream and downstream point encoders.
+            // Upstream: binary search toward simplest bind-inner value.
+            // Downstream: fibre search — enumerates the downstream fibre
+            // to find ANY failure, not minimize an existing one. After a lift,
+            // the bound content is PRNG-filled and likely passes the property.
+            // The downstream needs to discover a failure, not minimize one.
+            let upstreamAdapter = LegacyEncoderAdapter(
+                inner: BinarySearchToSemanticSimplestEncoder()
+            )
+            let downstreamEncoder = FibreCoveringEncoder()
+
+            var composed = KleisliComposition(
+                upstream: upstreamAdapter,
+                downstream: downstreamEncoder,
+                lift: GeneratorLift(gen: gen, mode: .guided(fallbackTree: fallbackTree ?? tree)),
+                rollback: .atomic,
+                upstreamRange: edge.upstreamRange,
+                downstreamRange: edge.downstreamRange
+            )
+
+            // Run via manual loop (same pattern as runRelaxRound).
+            var legBudget = ReductionScheduler.LegBudget(hardCap: min(budget, 100))
+
+            let context = ReductionContext(
+                bindIndex: bindSpanIndex,
+                convergedOrigins: convergenceCache.allEntries,
+                dag: dag
+            )
+            // Do not pass converged origins to the composition. The convergence
+            // cache records floors established by the standalone pipeline — values
+            // below which the property passes WITHOUT downstream fibre search.
+            // The composition's purpose is to re-explore those values WITH
+            // downstream search. Passing the cache would tell the upstream encoder
+            // its current value is already at the floor, producing zero probes.
+            composed.start(
+                sequence: sequence,
+                targets: .wholeSequence,
+                convergedOrigins: nil
+            )
+
+            var lastAccepted = false
+            while let probe = composed.nextProbe(lastAccepted: lastAccepted) {
+                guard legBudget.isExhausted == false else { break }
+                legBudget.recordMaterialization()
+
+                let decoder = SequenceDecoder.exact()
+                if let result = try decoder.decode(
+                    candidate: probe,
+                    gen: gen,
+                    tree: tree,
+                    originalSequence: sequence,
+                    property: property
+                ) {
+                    if result.sequence.shortLexPrecedes(sequence) {
+                        accept(result, structureChanged: true)
+                        lastAccepted = true
+                        anyAccepted = true
+
+                        if isInstrumented {
+                            ExhaustLog.debug(
+                                category: .reducer,
+                                event: "kleisli_exploration_accepted",
+                                metadata: [
+                                    "region": "\(edge.regionIndex)",
+                                    "seq_len": "\(sequence.count)",
+                                ]
+                            )
+                        }
+                    } else {
+                        lastAccepted = false
+                    }
+                } else {
+                    lastAccepted = false
+                }
+            }
+
+            budget -= legBudget.used
+        }
+
+        // Pipeline acceptance: net improvement check.
+        if anyAccepted, sequence.shortLexPrecedes(checkpoint.sequence) {
+            bestSequence = sequence
+            bestOutput = output
+
+            if isInstrumented {
+                ExhaustLog.debug(
+                    category: .reducer,
+                    event: "kleisli_exploration_complete",
+                    metadata: [
+                        "accepted": "true",
+                        "seq_len": "\(sequence.count)",
+                    ]
+                )
+            }
+
+            return true
+        }
+
+        // Rollback: net result was not an improvement.
+        restoreSnapshot(checkpoint)
+        return false
     }
 }
 

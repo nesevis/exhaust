@@ -23,6 +23,7 @@ public enum EncoderName: String, Hashable {
     case redistributeInnerValuesBetweenBindRegions
     /// Exploration
     case relaxRound
+    case kleisliComposition
 }
 
 /// Shared metadata for all reduction encoders.
