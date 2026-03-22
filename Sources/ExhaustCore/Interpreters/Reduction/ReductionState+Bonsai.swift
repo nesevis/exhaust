@@ -818,7 +818,7 @@ extension ReductionState {
     ///
     /// Categorically, this is the vertical factor of the cartesian-vertical factorisation — every accepted candidate stays in the same fibre (same trace structure). A ``StructuralFingerprint`` guard detects accidental base changes and rolls them back, enforcing the factorisation boundary. In Bonsai terms, it refines the leaves of the tree: with the branch structure fixed, each leaf value is reduced toward its simplest form. In plain language, it makes the values in the failing test case smaller and simpler without changing how many values there are or how they relate to each other.
     ///
-    /// Processes DAG leaf positions first, then sweeps bound-content values at intermediate bind depths from maximum downward (contravariant). Returns `true` if any value reduction was committed.
+    /// Processes DAG leaf positions first, then sweeps bound-content values at intermediate bind depths from minimum upward (covariant). Returns `true` if any value reduction was committed.
     func runFibreDescent(
         budget: inout Int,
         dag: ChoiceDependencyGraph?
@@ -940,12 +940,12 @@ extension ReductionState {
             } while restartLeafRange && legBudget.isExhausted == false
         }
 
-        // Contravariant value sweep: reduce bound-content values at intermediate bind depths.
-        // DAG leaf positions miss values inside nested bind regions (for example, parent node values in a recursive bind generator like a binary heap). This mirrors the V-cycle's Snip leg.
+        // Covariant value sweep: reduce bound-content values at intermediate bind depths.
+        // DAG leaf positions miss values inside nested bind regions (for example, parent node values in a recursive bind generator like a binary heap). Shallow depths first so that deeper depths reduce in the correct context.
         // vSpans at depth D can include nested bind-inner positions whose reduction changes the inner bound structure, which belongs in base descent. The fingerprintGuard in each runAdaptive call catches this per-acceptance and rolls back the structural probe while preserving any earlier clean value reductions.
         let maxBindDepth = bindIndex?.maxBindDepth ?? 0
         if maxBindDepth >= 1, legBudget.isExhausted == false {
-            for depth in stride(from: maxBindDepth, through: 1, by: -1) {
+            for depth in stride(from: 1, through: maxBindDepth, by: 1) {
                 guard legBudget.isExhausted == false else { break }
                 dominance.invalidate()
                 let depthContext = DecoderContext(

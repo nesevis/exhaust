@@ -159,7 +159,7 @@ final class ReductionState<Output> {
     /// Deletion encoder ordering for structural deletion in base descent.
     var pruneOrder: [ReductionScheduler.DeletionEncoderSlot] = ReductionScheduler.DeletionEncoderSlot.allCases
 
-    /// Value encoder ordering for the contravariant depth sweep in fibre descent.
+    /// Value encoder ordering for the covariant depth sweep in fibre descent.
     ///
     /// Starts identical to ``snipOrder`` each cycle; diverges via independent move-to-front.
     var trainOrder: [ReductionScheduler.ValueEncoderSlot] = ReductionScheduler.ValueEncoderSlot.allCases

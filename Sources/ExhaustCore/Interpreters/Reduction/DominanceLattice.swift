@@ -12,10 +12,9 @@
 /// does not affect dominance in another (for example, value minimization). The scheduler resets
 /// dominance at leg boundaries where the decoder changes.
 ///
-/// During the contravariant sweep (structure-preserving), dominance is stable — no
+/// During the covariant depth sweep (structure-preserving), dominance is stable — no
 /// structural changes occur. During the deletion sweep, dominance must be invalidated
-/// after each success (spans change). During the covariant sweep, dominance is stable
-/// again.
+/// after each success (spans change).
 ///
 /// Reference: Sepulveda-Jimenez, Def 15.3 (2-cell dominance).
 struct EncoderDominance {
