@@ -174,7 +174,14 @@ public enum ChoiceTreeAnalysis {
         case let .sequence(length, elements, metadata):
             return walkSequence(length: length, elements: elements, metadata: metadata, parameters: &parameters)
 
-        case .getSize, .resize:
+        case .getSize:
+            // getSize reads the current size parameter — a fixed value during
+            // any given generation run. Not a choice point. The internal
+            // representation wraps getSize in a comap { _ in 100 } bind,
+            // making the tree deterministic at the configured size.
+            return true
+
+        case .resize:
             return false
 
         case .branch:
@@ -420,7 +427,10 @@ public enum ChoiceTreeAnalysis {
             // Bind inside a sequence element — treat as opaque (dependent parameters)
             return true
 
-        case .getSize, .resize, .sequence, .branch:
+        case .getSize:
+            return true
+
+        case .resize, .sequence, .branch:
             return false
         }
     }
