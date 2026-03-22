@@ -85,7 +85,19 @@ enum CoverageRunner {
             case let .success(v, freshTree, _):
                 value = v
                 materializerTree = freshTree
-            case .rejected, .failed:
+            case .rejected:
+                ExhaustLog.debug(
+                    category: .propertyTest,
+                    event: "coverage_row_rejected",
+                    metadata: ["row": "\(rowIndex)", "values": "\(row.values)"]
+                )
+                value = nil
+            case .failed:
+                ExhaustLog.debug(
+                    category: .propertyTest,
+                    event: "coverage_row_failed",
+                    metadata: ["row": "\(rowIndex)", "values": "\(row.values)"]
+                )
                 value = nil
             }
 
