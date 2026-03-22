@@ -198,6 +198,70 @@ public struct ChoiceDependencyGraph: Sendable {
     }
 }
 
+// MARK: - Reduction Edges
+
+/// A dependency edge in the CDG where a ``KleisliComposition`` can operate.
+///
+/// Each edge connects a controlling position (bind-inner value) to a controlled
+/// subtree (bound content). The upstream encoder operates on the controlling
+/// position; the downstream encoder operates on the controlled subtree; the
+/// ``GeneratorLift`` bridges them.
+public struct ReductionEdge: Sendable {
+    /// The controlling position — the upstream encoder operates here.
+    /// Its mutation is a base morphism because the CDG has an outgoing
+    /// dependency edge from this position.
+    public let upstreamRange: ClosedRange<Int>
+
+    /// The controlled subtree — the downstream encoder operates here.
+    /// Its mutation is a fibre morphism within the structure determined
+    /// by the upstream value.
+    public let downstreamRange: ClosedRange<Int>
+
+    /// The index of the bind region in ``BindSpanIndex``.
+    public let regionIndex: Int
+
+    /// Whether the downstream structure is invariant under upstream
+    /// value changes (the bind closure ignores its argument — no nested
+    /// binds or picks in the bound subtree). When true, the lift is
+    /// trivial regardless of the upstream value: the same fibre exists
+    /// for every upstream candidate. The ``KleisliComposition`` is
+    /// unnecessary at this edge.
+    public let isStructurallyConstant: Bool
+}
+
+extension ChoiceDependencyGraph {
+    /// Returns the dependency edges where ``KleisliComposition`` instances are meaningful.
+    ///
+    /// Each edge connects a bind-inner node (controlling position) to its scope
+    /// (controlled subtree). Edges where the downstream structure is invariant
+    /// under upstream value changes are filtered out — the lift is trivial and
+    /// the composition is unnecessary.
+    ///
+    /// Ordered by topological sort (roots first), so that upstream encoders for
+    /// shallower edges run before downstream encoders that depend on their results.
+    public func reductionEdges() -> [ReductionEdge] {
+        var edges: [ReductionEdge] = []
+        for nodeIndex in topologicalOrder {
+            let node = nodes[nodeIndex]
+            guard case let .structural(.bindInner(regionIndex: regionIndex)) = node.kind,
+                  let scopeRange = node.scopeRange
+            else { continue }
+            // Do not filter on isStructurallyConstant. A "structurally constant"
+            // bind (no nested binds/picks) can still have domain-dependent values —
+            // element ranges and array lengths that depend on the bind-inner value.
+            // The lift report's coverage will tell the composition whether the
+            // fibre actually changed.
+            edges.append(ReductionEdge(
+                upstreamRange: node.positionRange,
+                downstreamRange: scopeRange,
+                regionIndex: regionIndex,
+                isStructurallyConstant: node.isStructurallyConstant
+            ))
+        }
+        return edges
+    }
+}
+
 // MARK: - Internal Helpers
 
 extension ChoiceDependencyGraph {

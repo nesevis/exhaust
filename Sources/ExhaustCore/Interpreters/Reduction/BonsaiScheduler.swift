@@ -1,4 +1,4 @@
-/// Alternating minimisation over a fibred trace space: projection, base descent, fibre descent, relax-round.
+/// Alternating minimization over a fibred trace space: projection, base descent, fibre descent, relax-round.
 ///
 /// **The base is the trace / the fibre is the space**:
 ///
@@ -26,10 +26,10 @@ enum BonsaiScheduler {
     // The total per-cycle budget (~3250 evaluations) balances reduction
     // quality against wall-clock time for typical generators.
 
-    /// Per-round budget for base descent (structural minimisation).
+    /// Per-round budget for base descent (structural minimization).
     static let baseDescentBudget = 1950
 
-    /// Per-round budget for fibre descent (value minimisation).
+    /// Per-round budget for fibre descent (value minimization).
     static let fibreDescentBudget = 975
 
     /// Per-round budget for the relax-round when neither descent phase makes progress.
@@ -132,12 +132,21 @@ enum BonsaiScheduler {
             var fibreRemaining = Self.fibreDescentBudget
             let fibreProgress = try state.runFibreDescent(budget: &fibreRemaining, dag: dag)
 
-            // Relax-round: if neither descent made progress, redistribute and exploit.
+            // Exploration: if neither descent made progress, try cross-level and same-level minima.
             var cycleImproved = baseProgress || fibreProgress
             if cycleImproved == false {
-                var relaxRemaining = Self.relaxRoundBudget
-                if try state.runRelaxRound(remaining: &relaxRemaining) {
+                // Kleisli exploration: cross-level minima via dependency edge composition.
+                var kleisliRemaining = Self.relaxRoundBudget
+                if try state.runKleisliExploration(budget: &kleisliRemaining, dag: dag) {
                     cycleImproved = true
+                }
+
+                // Relax-round: same-level minima via value redistribution.
+                if cycleImproved == false {
+                    var relaxRemaining = Self.relaxRoundBudget
+                    if try state.runRelaxRound(remaining: &relaxRemaining) {
+                        cycleImproved = true
+                    }
                 }
             }
 

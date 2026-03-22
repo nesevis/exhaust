@@ -48,4 +48,7 @@ public enum ExhaustSettings<Output> {
     /// Reorders elements within type-homogeneous sibling groups into natural numeric order
     /// after test case reduction completes.
     case humanOrderPostProcess
+
+    /// Prints the choice tree before and after reduction as a bottom-up Unicode visualization.
+    case visualize
 }

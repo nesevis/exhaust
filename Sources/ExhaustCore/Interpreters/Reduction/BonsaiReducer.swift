@@ -13,6 +13,9 @@ public extension Interpreters {
         /// elements within type-homogeneous sibling groups into natural numeric order.
         public var humanOrderPostProcess: Bool = false
 
+        /// When `true`, prints the choice tree before and after reduction as a bottom-up Unicode visualization.
+        public var visualize: Bool = false
+
         private init(
             maxStalls: Int,
             alignedDeletionBeamSearchTuning: ReductionBudget.AlignedDeletionBeamSearchTuning
@@ -60,11 +63,19 @@ public extension Interpreters {
         output: Output,
         config: BonsaiReducerConfiguration,
         humanOrderPostProcess: Bool = false,
+        visualize: Bool = false,
         property: (Output) -> Bool
     ) throws -> (ChoiceSequence, Output)? {
         var bonsaiConfig = config
         bonsaiConfig.humanOrderPostProcess = humanOrderPostProcess
-        return try withoutActuallyEscaping(property) { escapingProperty in
+        bonsaiConfig.visualize = visualize
+
+        if visualize {
+            print("── Before reduction ──")
+            print(tree.visualization(width: 100))
+        }
+
+        let result = try withoutActuallyEscaping(property) { escapingProperty in
             try BonsaiScheduler.run(
                 gen: gen,
                 initialTree: tree,
@@ -73,6 +84,21 @@ public extension Interpreters {
                 property: escapingProperty
             )
         }
+
+        if visualize, let (resultSequence, _) = result {
+            let resultTree = ReductionMaterializer.materialize(
+                gen,
+                prefix: resultSequence,
+                mode: .exact,
+                fallbackTree: tree
+            )
+            if case let .success(_, resultChoiceTree, _) = resultTree {
+                print("── After reduction ──")
+                print(resultChoiceTree.visualization(width: 100))
+            }
+        }
+
+        return result
     }
 
     /// Convenience overload that materializes the output from the tree.
