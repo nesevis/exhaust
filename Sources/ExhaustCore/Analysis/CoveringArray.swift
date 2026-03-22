@@ -66,7 +66,7 @@ public struct CoveringArray: @unchecked Sendable {
     ///   - profile: The finite domain profile describing all parameters.
     ///   - strength: The interaction strength `t` (typically 2 or 3).
     /// - Returns: A covering array, or `nil` if generation fails.
-    public static func generate(profile: FiniteDomainProfile, strength: Int) -> CoveringArray? {
+    public static func generate(profile: FiniteDomainProfile, strength: Int, rowBudget: Int? = nil) -> CoveringArray? {
         let params = profile.parameters
         let n = params.count
         guard strength >= 1, strength <= n else { return nil }
@@ -76,7 +76,11 @@ public struct CoveringArray: @unchecked Sendable {
         }
 
         var builder = IPOGBuilder(params: params, strength: strength)
-        builder.run()
+        if let budget = rowBudget {
+            guard builder.run(rowBudget: budget) else { return nil }
+        } else {
+            builder.runUnbounded()
+        }
 
         let rows = builder.finalize()
         return CoveringArray(strength: strength, rows: rows, profile: profile)
@@ -424,15 +428,26 @@ private struct IPOGBuilder {
         self.combosIncludingKeys = combosIncludingKeys
     }
 
-    mutating func run() {
-        // Step 1: Start with exhaustive combinations of first `t` parameters
+    /// Runs IPOG without a row budget.
+    mutating func runUnbounded() {
         seedInitialRows()
-
-        // Step 2: Horizontal + vertical growth for parameters t..<n
         for i in strength ..< n {
             horizontalGrowth(paramIndex: i)
             verticalGrowth(paramIndex: i)
         }
+    }
+
+    /// Runs IPOG with a row budget. Returns `false` (and aborts) if the row
+    /// count exceeds the budget at any point during growth.
+    mutating func run(rowBudget: Int) -> Bool {
+        seedInitialRows()
+        if rows.count > rowBudget { return false }
+        for i in strength ..< n {
+            horizontalGrowth(paramIndex: i)
+            verticalGrowth(paramIndex: i)
+            if rows.count > rowBudget { return false }
+        }
+        return true
     }
 
     /// Convert working rows to final CoveringArrayRow, filling don't-cares with 0.
