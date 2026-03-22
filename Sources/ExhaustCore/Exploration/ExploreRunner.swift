@@ -198,10 +198,11 @@ public struct ExploreRunner<Output>: ~Copyable {
                 tree
             }
 
-            if let (shrunkSequence, shrunkValue) = try Interpreters.dispatchReduce(
+            if let (shrunkSequence, shrunkValue) = try Interpreters.bonsaiReduce(
                 gen: gen,
                 tree: shrinkTree,
-                config: reductionConfig,
+                output: value,
+                config: .init(from: reductionConfig),
                 property: property
             ) {
                 return .failure(

@@ -37,7 +37,7 @@ enum BonsaiScheduler {
 
     // MARK: - Entry Point
 
-    /// Runs the reduction pipeline to a fixed point or budget exhaustion.
+    /// Convenience overload that materializes the output from the tree.
     static func run<Output>(
         gen: ReflectiveGenerator<Output>,
         initialTree: ChoiceTree,
@@ -45,20 +45,37 @@ enum BonsaiScheduler {
         property: @escaping (Output) -> Bool
     ) throws -> (ChoiceSequence, Output)? {
         let prefix = ChoiceSequence.flatten(initialTree)
-        guard case let .success(output, tree, _) = ReductionMaterializer.materialize(
+        guard case let .success(output, _, _) = ReductionMaterializer.materialize(
             gen, prefix: prefix, mode: .exact, fallbackTree: initialTree
         ) else {
             return nil
         }
-        let sequence = ChoiceSequence.flatten(tree)
+        return try run(
+            gen: gen,
+            initialTree: initialTree,
+            initialOutput: output,
+            config: config,
+            property: property
+        )
+    }
+
+    /// Runs the reduction pipeline to a fixed point or budget exhaustion.
+    static func run<Output>(
+        gen: ReflectiveGenerator<Output>,
+        initialTree: ChoiceTree,
+        initialOutput: Output,
+        config: Interpreters.BonsaiReducerConfiguration,
+        property: @escaping (Output) -> Bool
+    ) throws -> (ChoiceSequence, Output)? {
+        let sequence = ChoiceSequence.flatten(initialTree)
 
         let state = ReductionState(
             gen: gen,
             property: property,
             config: config,
             sequence: sequence,
-            tree: tree,
-            output: output,
+            tree: initialTree,
+            output: initialOutput,
             initialTree: initialTree
         )
 

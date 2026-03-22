@@ -131,11 +131,11 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
                     return property(value)
                 }
                 do {
-                    if let (shrunkSequence, shrunkValue) = try Interpreters.dispatchReduce(
+                    if let (shrunkSequence, shrunkValue) = try Interpreters.bonsaiReduce(
                         gen: gen,
                         tree: shrinkTree,
-                        config: reductionConfig,
-
+                        output: value,
+                        config: .init(from: reductionConfig),
                         humanOrderPostProcess: humanOrderPostProcess,
                         property: countingProperty
                     ) {
@@ -283,11 +283,11 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
                     return property(value)
                 }
                 do {
-                    if let (shrunkSequence, shrunkValue) = try Interpreters.dispatchReduce(
+                    if let (shrunkSequence, shrunkValue) = try Interpreters.bonsaiReduce(
                         gen: gen,
                         tree: tree,
-                        config: reductionConfig,
-
+                        output: next,
+                        config: .init(from: reductionConfig),
                         humanOrderPostProcess: humanOrderPostProcess,
                         property: countingProperty
                     ) {
@@ -696,10 +696,11 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
             propertyInvocationCount += 1
             return property(value)
         }
-        if let (shrunkSequence, shrunkValue) = try Interpreters.dispatchReduce(
+        if let (shrunkSequence, shrunkValue) = try Interpreters.bonsaiReduce(
             gen: gen,
             tree: tree,
-            config: reductionConfig,
+            output: value,
+            config: .init(from: reductionConfig),
             humanOrderPostProcess: humanOrderPostProcess,
             property: countingProperty
         ) {

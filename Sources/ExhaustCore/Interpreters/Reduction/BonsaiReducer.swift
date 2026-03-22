@@ -22,7 +22,7 @@ public extension Interpreters {
         }
 
         /// Maps a ``ReductionBudget`` preset to the corresponding configuration.
-        init(from config: ReductionBudget) {
+        public init(from config: ReductionBudget) {
             switch config {
             case .fast: self = Self(
                     maxStalls: 1,
@@ -51,14 +51,51 @@ public extension Interpreters {
 
 public extension Interpreters {
     /// Bonsai reducer: iterative tree miniaturization via structured pass pipeline.
+    ///
+    /// Prefer the overload that accepts a pre-materialized `output` to avoid
+    /// a redundant materialization at the entry point.
+    static func bonsaiReduce<Output>(
+        gen: ReflectiveGenerator<Output>,
+        tree: ChoiceTree,
+        output: Output,
+        config: BonsaiReducerConfiguration,
+        humanOrderPostProcess: Bool = false,
+        property: (Output) -> Bool
+    ) throws -> (ChoiceSequence, Output)? {
+        var bonsaiConfig = config
+        bonsaiConfig.humanOrderPostProcess = humanOrderPostProcess
+        return try withoutActuallyEscaping(property) { escapingProperty in
+            try BonsaiScheduler.run(
+                gen: gen,
+                initialTree: tree,
+                initialOutput: output,
+                config: bonsaiConfig,
+                property: escapingProperty
+            )
+        }
+    }
+
+    /// Convenience overload that materializes the output from the tree.
+    ///
+    /// Use when the caller does not already have the generated value.
     static func bonsaiReduce<Output>(
         gen: ReflectiveGenerator<Output>,
         tree: ChoiceTree,
         config: BonsaiReducerConfiguration,
         property: (Output) -> Bool
     ) throws -> (ChoiceSequence, Output)? {
-        try withoutActuallyEscaping(property) { escapingProperty in
-            try BonsaiScheduler.run(gen: gen, initialTree: tree, config: config, property: escapingProperty)
+        let prefix = ChoiceSequence.flatten(tree)
+        guard case let .success(output, _, _) = ReductionMaterializer.materialize(
+            gen, prefix: prefix, mode: .exact, fallbackTree: tree
+        ) else {
+            return nil
         }
+        return try bonsaiReduce(
+            gen: gen,
+            tree: tree,
+            output: output,
+            config: config,
+            property: property
+        )
     }
 }
