@@ -138,9 +138,10 @@ struct ReducerReorderTests {
             try Interpreters.bonsaiReduce(gen: gen, tree: tree, config: .fast, property: property)
         )
 
-        let rematerialized = try #require(
-            try Interpreters.materialize(gen, with: tree, using: result.0)
-        )
+        guard case let .success(rematerialized, _, _) = ReductionMaterializer.materialize(gen, prefix: result.0, mode: .exact, fallbackTree: tree) else {
+            Issue.record("Expected .success")
+            return
+        }
 
         #expect(result.1 == rematerialized)
     }

@@ -20,7 +20,10 @@ struct MaterializeTests {
     ) -> Output? {
         guard let tree = try? Interpreters.reflect(gen, with: value) else { return nil }
         let sequence = ChoiceSequence.flatten(tree)
-        return try? Interpreters.materialize(gen, with: tree, using: sequence)
+        switch ReductionMaterializer.materialize(gen, prefix: sequence, mode: .exact, fallbackTree: tree) {
+        case let .success(output, _, _): return output
+        case .rejected, .failed: return nil
+        }
     }
 
     // MARK: - Round-trip properties
@@ -279,8 +282,8 @@ struct MaterializeTests {
                 continue
             }
             let sequence = ChoiceSequence.flatten(tree)
-            guard let first = try? Interpreters.materialize(gen, with: tree, using: sequence),
-                  let second = try? Interpreters.materialize(gen, with: tree, using: sequence)
+            guard case let .success(first, _, _) = ReductionMaterializer.materialize(gen, prefix: sequence, mode: .exact, fallbackTree: tree),
+                  case let .success(second, _, _) = ReductionMaterializer.materialize(gen, prefix: sequence, mode: .exact, fallbackTree: tree)
             else {
                 Issue.record("materialize returned nil")
                 continue
@@ -315,7 +318,10 @@ struct MaterializeTests {
                 }
             }
         }
-        let materialized = try Interpreters.materialize(gen, with: tree, using: emptySequence)
+        guard case let .success(materialized, _, _) = ReductionMaterializer.materialize(gen, prefix: emptySequence, mode: .exact, fallbackTree: tree) else {
+            Issue.record("Expected .success")
+            return
+        }
         #expect(materialized == [])
     }
 
@@ -329,7 +335,10 @@ struct MaterializeTests {
         let originalCount = flattened.count
         flattened.remove(at: 2)
         flattened.remove(at: 2)
-        let materialized = try #require(try Interpreters.materialize(gen, with: tree, using: flattened))
+        guard case let .success(materialized, _, _) = ReductionMaterializer.materialize(gen, prefix: flattened, mode: .exact, fallbackTree: tree) else {
+            Issue.record("Expected .success")
+            return
+        }
         #expect(materialized.count < originalCount)
     }
 
@@ -340,7 +349,10 @@ struct MaterializeTests {
         let (_, tree) = try #require(matIter3.prefix(1).last)
         let replacement = ChoiceSequenceValue.Value(choice: .unsigned(777, .uint64), validRange: 0 ... 1000)
         let modified: ChoiceSequence = [.value(replacement)]
-        let materialized = try Interpreters.materialize(gen, with: tree, using: modified)
+        guard case let .success(materialized, _, _) = ReductionMaterializer.materialize(gen, prefix: modified, mode: .exact, fallbackTree: tree) else {
+            Issue.record("Expected .success")
+            return
+        }
         #expect(materialized == 777)
     }
 
@@ -354,7 +366,10 @@ struct MaterializeTests {
             guard case .value = element else { return element }
             return .value(.init(choice: .unsigned(0, .uint64), validRange: nil))
         }
-        let materialized = try #require(try Interpreters.materialize(gen, with: tree, using: ContiguousArray(minimized)))
+        guard case let .success(materialized, _, _) = ReductionMaterializer.materialize(gen, prefix: ChoiceSequence(minimized), mode: .exact, fallbackTree: tree) else {
+            Issue.record("Expected .success")
+            return
+        }
         #expect(materialized == [0, 0, 0, 0, 0])
     }
 }

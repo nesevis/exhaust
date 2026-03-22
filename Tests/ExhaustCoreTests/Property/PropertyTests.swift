@@ -326,7 +326,7 @@ struct InterpreterAgreementPropertyTests {
                   let replayed = try? Interpreters.replay(gen, using: tree)
             else { return false }
             let sequence = ChoiceSequence.flatten(tree)
-            guard let materialized = try? Interpreters.materialize(gen, with: tree, using: sequence)
+            guard case let .success(materialized, _, _) = ReductionMaterializer.materialize(gen, prefix: sequence, mode: .exact, fallbackTree: tree)
             else { return false }
             return materialized == replayed
         }

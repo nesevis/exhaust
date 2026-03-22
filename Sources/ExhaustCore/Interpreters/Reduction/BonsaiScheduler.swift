@@ -44,11 +44,13 @@ enum BonsaiScheduler {
         config: Interpreters.BonsaiReducerConfiguration,
         property: @escaping (Output) -> Bool
     ) throws -> (ChoiceSequence, Output)? {
-        let sequence = ChoiceSequence.flatten(initialTree)
-        let tree = initialTree
-        guard let output = try Interpreters.materialize(gen, with: tree, using: sequence) else {
+        let prefix = ChoiceSequence.flatten(initialTree)
+        guard case let .success(output, tree, _) = ReductionMaterializer.materialize(
+            gen, prefix: prefix, mode: .exact, fallbackTree: initialTree
+        ) else {
             return nil
         }
+        let sequence = ChoiceSequence.flatten(tree)
 
         let state = ReductionState(
             gen: gen,

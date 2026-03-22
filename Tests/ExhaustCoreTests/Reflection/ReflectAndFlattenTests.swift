@@ -133,10 +133,13 @@ struct ReflectAndFlattenTests {
         // Flatten the reflected tree
         let flattened = ChoiceSequence.flatten(tree)
 
-        let materialised = try Interpreters.materialize(gen, with: tree, using: flattened)
+        guard case let .success(materialised, _, _) = ReductionMaterializer.materialize(gen, prefix: flattened, mode: .exact, fallbackTree: tree) else {
+            Issue.record("Expected .success")
+            return
+        }
 
-        #expect(value.0 == materialised?.0)
-        #expect(value.1 == materialised?.1)
+        #expect(value.0 == materialised.0)
+        #expect(value.1 == materialised.1)
     }
 
     @Test("Reflect and flatten pick/branch")
@@ -481,7 +484,10 @@ struct ReflectAndFlattenTests {
         flattened.remove(at: 2)
         flattened.remove(at: 2)
 
-        let materialized = try Interpreters.materialize(gen, with: tree, using: flattened)
+        guard case let .success(materialized, _, _) = ReductionMaterializer.materialize(gen, prefix: flattened, mode: .exact, fallbackTree: tree) else {
+            Issue.record("Expected .success")
+            return
+        }
 
         #expect(materialized == [1, 4, 5])
     }
@@ -506,7 +512,10 @@ struct ReflectAndFlattenTests {
         // Mess with it
         flattened[2] = .value(.init(choice: .unsigned(64, .uint64), validRange: nil))
 
-        let materialized = try Interpreters.materialize(gen, with: tree, using: flattened)
+        guard case let .success(materialized, _, _) = ReductionMaterializer.materialize(gen, prefix: flattened, mode: .exact, fallbackTree: tree) else {
+            Issue.record("Expected .success")
+            return
+        }
 
         #expect(value != 64)
         #expect(materialized == 64)
@@ -530,7 +539,10 @@ struct ReflectAndFlattenTests {
         let candidate = try #require(sequenceStarts.last)
         sequence.removeSubrange((candidate - 1) ... candidate)
         try #require(ChoiceSequence.validate(sequence))
-        let materialized = try #require(try Interpreters.materialize(gen, with: tree, using: sequence, strictness: .relaxed))
+        guard case let .success(materialized, _, _) = ReductionMaterializer.materialize(gen, prefix: sequence, mode: .exact, fallbackTree: tree) else {
+            Issue.record("Expected .success")
+            return
+        }
 
         // Merging removed one boundary, so one fewer array
         #expect(materialized.count == value.count - 1)

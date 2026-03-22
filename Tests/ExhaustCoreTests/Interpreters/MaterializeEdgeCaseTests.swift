@@ -19,7 +19,10 @@ struct MaterializeEdgeCaseTests {
         var results: [(original: Output, materialized: Output)] = []
         while let (value, tree) = try iterator.next() {
             let sequence = ChoiceSequence(tree)
-            let materialized = try #require(try Interpreters.materialize(gen, with: tree, using: sequence))
+            guard case let .success(materialized, _, _) = ReductionMaterializer.materialize(gen, prefix: sequence, mode: .exact, fallbackTree: tree) else {
+                Issue.record("Expected .success")
+                continue
+            }
             results.append((value, materialized))
         }
         return results

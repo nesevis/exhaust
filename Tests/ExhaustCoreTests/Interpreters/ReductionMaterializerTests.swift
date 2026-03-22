@@ -375,55 +375,7 @@ struct ReductionMaterializerTests {
         }
     }
 
-    // MARK: - Compatibility with VACTI
 
-    @Test("Exact mode produces same output as Interpreters.materialize for simple generators")
-    func compatibilityWithLegacyMaterialize() throws {
-        let gen = Gen.choose(in: 0 ... 1000 as ClosedRange<Int>)
-
-        var interpreter = ValueAndChoiceTreeInterpreter(gen, materializePicks: false, seed: 42, maxRuns: 20)
-        while let (_, originalTree) = try interpreter.next() {
-            let sequence = ChoiceSequence(originalTree)
-            let legacyOutput = try #require(
-                try Interpreters.materialize(gen, with: originalTree, using: sequence)
-            )
-
-            guard case let .success(freshOutput, _, _) = ReductionMaterializer.materialize(
-                gen, prefix: sequence, mode: .exact
-            ) else {
-                Issue.record("ReductionMaterializer rejected valid sequence")
-                return
-            }
-
-            #expect(freshOutput == legacyOutput,
-                    "Expected same output: legacy=\(legacyOutput), fresh=\(freshOutput)")
-        }
-    }
-
-    @Test("Exact mode produces same output as legacy for sequence generators")
-    func compatibilityWithLegacySequence() throws {
-        let gen = Gen.arrayOf(
-            Gen.choose(in: 0 ... 50 as ClosedRange<Int>),
-            exactly: 3
-        )
-
-        var interpreter = ValueAndChoiceTreeInterpreter(gen, materializePicks: false, seed: 42, maxRuns: 10)
-        while let (_, originalTree) = try interpreter.next() {
-            let sequence = ChoiceSequence(originalTree)
-            let legacyOutput = try #require(
-                try Interpreters.materialize(gen, with: originalTree, using: sequence)
-            )
-
-            guard case let .success(freshOutput, _, _) = ReductionMaterializer.materialize(
-                gen, prefix: sequence, mode: .exact
-            ) else {
-                Issue.record("ReductionMaterializer rejected valid sequence")
-                return
-            }
-
-            #expect(freshOutput == legacyOutput)
-        }
-    }
 
     // MARK: - Guided mode: fallback tree
 

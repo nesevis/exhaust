@@ -19,7 +19,10 @@ struct OneOfTests {
         var interpreter = ValueAndChoiceTreeInterpreter(gen, materializePicks: false, seed: seed)
         let (value, tree) = try #require(try interpreter.prefix(1).last)
         let flattened = ChoiceSequence.flatten(tree)
-        let materialized = try #require(try Interpreters.materialize(gen, with: tree, using: flattened))
+        guard case let .success(materialized, _, _) = ReductionMaterializer.materialize(gen, prefix: flattened, mode: .exact, fallbackTree: tree) else {
+            Issue.record("Expected .success")
+            return (value, value)
+        }
         return (value, materialized)
     }
 

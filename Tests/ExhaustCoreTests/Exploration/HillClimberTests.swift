@@ -28,8 +28,7 @@ struct HillClimberTests {
         switch result {
         case let .improved(newSeed, output, _):
             // The climber should have moved the value upward (higher score = higher value)
-            let originalValue = try? Interpreters.materialize(gen, with: tree, using: sequence, strictness: .relaxed)
-            if let orig = originalValue {
+            if case let .success(orig, _, _) = ReductionMaterializer.materialize(gen, prefix: sequence, mode: .exact, fallbackTree: tree) {
                 #expect(output > orig, "Hill climber should increase value when scorer = Double($0)")
             }
             #expect(newSeed.fitness > 0)

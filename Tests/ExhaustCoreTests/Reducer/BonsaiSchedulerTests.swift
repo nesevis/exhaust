@@ -92,11 +92,12 @@ struct BonsaiSchedulerTests {
             return arr.count <= 3
         }
 
-        let sequence = ChoiceSequence.flatten(tree)
-        guard let output = try Interpreters.materialize(gen, with: tree, using: sequence) else {
+        let prefix = ChoiceSequence.flatten(tree)
+        guard case let .success(output, freshTree, _) = ReductionMaterializer.materialize(gen, prefix: prefix, mode: .exact, fallbackTree: tree) else {
             Issue.record("Failed to materialize initial tree")
             return
         }
+        let sequence = ChoiceSequence.flatten(freshTree)
 
         let state = ReductionState(
             gen: gen,
@@ -106,7 +107,7 @@ struct BonsaiSchedulerTests {
             },
             config: Self.bonsaiConfig,
             sequence: sequence,
-            tree: tree,
+            tree: freshTree,
             output: output,
             initialTree: tree
         )
@@ -131,11 +132,12 @@ struct BonsaiSchedulerTests {
             return arr.count <= 2
         }
 
-        let sequence = ChoiceSequence.flatten(tree)
-        guard let output = try Interpreters.materialize(gen, with: tree, using: sequence) else {
+        let prefix = ChoiceSequence.flatten(tree)
+        guard case let .success(output, freshTree, _) = ReductionMaterializer.materialize(gen, prefix: prefix, mode: .exact, fallbackTree: tree) else {
             Issue.record("Failed to materialize")
             return
         }
+        let sequence = ChoiceSequence.flatten(freshTree)
 
         let state = ReductionState(
             gen: gen,
@@ -145,7 +147,7 @@ struct BonsaiSchedulerTests {
             },
             config: Self.bonsaiConfig,
             sequence: sequence,
-            tree: tree,
+            tree: freshTree,
             output: output,
             initialTree: tree
         )
