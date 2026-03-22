@@ -9,11 +9,11 @@ as a heuristic.
 ## Motivation
 
 The current BonsaiReducer uses a V-cycle with five interleaved legs: branch
-promotion, contravariant value minimization (depth max to 1), structural
+promotion, covariant value minimization (depth 1 to max), structural
 deletion (depth 0 to max), covariant value minimization (depth 0), and
 redistribution. Two problems:
 
-1. **Wasted probes on doomed values.** The contravariant sweep (snip) runs
+1. **Wasted probes on doomed values.** The snip sweep runs
    before structural deletion (prune), spending property evaluations
    minimizing values inside containers that will later be deleted entirely.
    Value work within a fibre that will be abandoned is pure waste.
@@ -575,7 +575,7 @@ evaluation, which is the bottleneck for all phases.
 ### Why the DAG, not bind-depth?
 
 The current BonsaiReducer uses bind-depth as a proxy for ordering:
-contravariant sweep processes depths max to 1, covariant sweep processes
+the depth sweep processes depths 1 to max (covariant), covariant sweep processes
 depth 0, deletion processes depths 0 to max. This works for simple
 generators but breaks down with nested binds, branches inside binds, and
 independent subtrees at the same depth.

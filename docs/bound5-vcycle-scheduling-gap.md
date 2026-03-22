@@ -59,7 +59,7 @@ Even when deletion succeeds and the array reaches 2 elements, the V-cycle's
 leg ordering creates a dead end for redistribution.
 
 **V-cycle flow (per cycle):**
-1. Contravariant sweep (depths max→1) — no-op for depth-0 generators
+1. Covariant sweep (depths 1→max) — no-op for depth-0 generators
 2. Deletion sweep — removes containers, elements
 3. Covariant sweep (depth 0) — reduces values toward targets
 4. Redistribution — moves mass between coordinates

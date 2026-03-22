@@ -47,7 +47,7 @@ The current implementation has two decoding paths (TacticEvaluation and TacticRe
 
 Concretely: structural deletion uses `.relaxed` / `.guided` (rebuilds tree from scratch), while value minimization at depth > 0 uses `.normal` / `.direct` (replays against the fixed tree). These are different hom-sets at the same depth. Cross-stage redistribution (depth -1) uses `.crossStage`, which routes per-candidate based on whether inner values changed — a third hom-set with its own decoder. The paper's uniformity requirement applies *within* each hom-set, not across them.
 
-**The 2-cell dominance lattice has separate components per hom-set.** Within the deletion hom-set, all deletion encoders share `.guided(fallbackTree:, strictness: .relaxed)` and dominance is well-defined (e.g., `DeleteContainerSpans` ⇒ `SpeculativeDelete`). Within the value minimization hom-set, all value encoders share their decoder and dominance is well-defined (e.g., `ZeroValue` ⇒ `BinarySearchToZero`). Cross-hom-set dominance is not defined — the leg ordering (contravariant → deletion → covariant) replaces it.
+**The 2-cell dominance lattice has separate components per hom-set.** Within the deletion hom-set, all deletion encoders share `.guided(fallbackTree:, strictness: .relaxed)` and dominance is well-defined (e.g., `DeleteContainerSpans` ⇒ `SpeculativeDelete`). Within the value minimization hom-set, all value encoders share their decoder and dominance is well-defined (e.g., `ZeroValue` ⇒ `BinarySearchToZero`). Cross-hom-set dominance is not defined — the leg ordering (snip → deletion → train) replaces it.
 
 ### 1.3 Grade Composition
 
@@ -64,7 +64,7 @@ We therefore use a qualitative `ApproximationClass` enum (`exact`, `bounded`, `s
 2. **Morphism + morphism → pipeline grade.** Sequential morphisms compose via the same lattice join. The scheduler tracks the aggregate pipeline class across a cycle.
 
 This means:
-- **Exact morphisms** (`.exact`, w) — encoder exact, decoder `.direct`. Contravariant sweep value minimization.
+- **Exact morphisms** (`.exact`, w) — encoder exact, decoder `.direct`. Covariant sweep value minimization.
 - **Bounded morphisms** (`.bounded`, w) — shortlex-guarded. Two sources: (1) encoder `.exact` + decoder `.guided` — all deletion morphisms, all depth-0 bind morphisms; (2) encoder `.bounded` — redistribution (Phase 4), where the encoder itself introduces approximation.
 - **Speculative morphisms** (`.speculative`, w) — Phase 5. May temporarily regress.
 - Resource budgets decompose additively: `w₁ + w₂`.
@@ -78,11 +78,11 @@ The paper defines covariant and contravariant functors on the reduction category
 
 The bonsai vocabulary ([bonsai-naming-analysis.md](bonsai-naming-analysis.md)) names each category by its horticultural analogue: **snip** (contravariant), **prune** (deletion), **train** (covariant), **shape** (redistribution). The bonsai term leads in doc comments; the technical definition follows.
 
-**Contravariant passes / snip** (against the chain: depth max → depth 1):
+**Snip passes** (covariant: depth 1 → depth max):
 - **Value minimization only.** Reduce bound values *within fixed ranges* — moving backward through the bind chain without disturbing the inner generators that determined those ranges.
 - **Structure-preserving**: span boundaries, container groupings, sibling relationships are unchanged. The dominance lattice computed at sweep start remains valid throughout.
 - **Exact**: no re-derivation needed. Grade: `(.exact, w)`. The `dec` is `Interpreters.materialize()` with a fixed tree.
-- **Can get stuck**: limited to the current feasible region. If the property failure requires a specific structural shape, contravariant passes can only minimize values within that shape, never escape it.
+- **Can get stuck**: limited to the current feasible region. If the property failure requires a specific structural shape, covariant passes can only minimize values within that shape, never escape it.
 - In the paper's terms: these operate on the `Cand^op` functor (paper §4.2) — decoding maps candidates backward.
 
 **Deletion passes / prune** (all depths, 0 → max):
@@ -90,13 +90,13 @@ The bonsai vocabulary ([bonsai-naming-analysis.md](bonsai-naming-analysis.md)) n
 - **Structure-destroying at every depth.** Deletion removes spans, invalidating the tree's positional mapping. Even at depth > 0, the tree must be rebuilt — `TacticEvaluation.evaluate()` routes all `.relaxed` strictness through `GuidedMaterializer` regardless of depth.
 - **All depths, not just depth 0.** Deletion at depth 2 removes bound spans; deletion at depth 0 can eliminate entire bind regions. Both require the same decoder (`.guided`).
 - **Bounded**: re-derivation produces new content for the gap left by deletion. The shortlex guard rejects regressions. Grade: `(.bounded, w)`.
-- **Lattice-invalidating**: span positions shift after deletion, so the dominance lattice must be rebuilt after each success. This is why deletion cannot share a leg with the contravariant sweep (which depends on lattice stability).
+- **Lattice-invalidating**: span positions shift after deletion, so the dominance lattice must be rebuilt after each success. This is why deletion cannot share a leg with the covariant sweep (which depends on lattice stability).
 - Categorically distinct from both contravariant (not structure-preserving, not exact) and covariant (not depth-0-specific, not about shifting bound ranges via inner-value changes). Deletion shares the covariant property of using GuidedMaterializer, but its operational characteristics — all-depth scope, shortening purpose, per-success lattice rebuild — justify a separate leg.
 
 **Covariant passes / train** (with the chain: depth 0):
 - **Value minimization at the inner level.** Reduce inner values, causing bound content to be *re-derived forward* through the Kleisli chain via GuidedMaterializer (prolongation).
 - **Bounded**: re-derivation is nondeterministic, but the shortlex guard rejects regressions. Grade: `(.bounded, w)`. Can explore entirely new regions of the candidate space.
-- **Can escape local minima**: by changing inner values (depth 0), the covariant sweep changes the bound ranges themselves — opening new territory for the next contravariant sweep. Re-derivation via PRNG/fallback may find shorter bound content than the current state.
+- **Can escape local minima**: by changing inner values (depth 0), the covariant sweep changes the bound ranges themselves — opening new territory for the next covariant sweep. Re-derivation via PRNG/fallback may find shorter bound content than the current state.
 - In the paper's terms: these operate on the `Cand` functor (paper §4.1) — encoding maps candidates forward.
 
 ### 1.5 The Cultivation Cycle (V-Cycle)
@@ -113,7 +113,7 @@ The optimal cycle structure interleaves the three pass categories. The structure
     Built on post-branch state. Valid for the entire snip sweep.
          │
          ▼
-  Snip — contravariant sweep (depth max → 1):
+  Snip — covariant sweep (depth max → 1):
     Value minimization ONLY.
     Exact, structure-preserving, lattice-stable.
     Converges to local minimum within fixed bound ranges.
@@ -167,8 +167,8 @@ The optimal cycle structure interleaves the three pass categories. The structure
 **Why this ordering minimizes re-derivation regression (snip before prune before train):**
 - Snip reductions at depth > 0 are `.exact` — no regression possible.
 - The subsequent prune and train reductions are both `.bounded` — the shortlex guard rejects regressions, but re-derivation can still produce suboptimal values at bound positions. The quality of those values depends on the tiered resolution inputs:
-  1. **Prefix mechanism (tier 1).** The candidate sequence carries contravariant-improved bound values directly. When a covariant encoder mutates inner values, bound positions retain their old (optimized) values in the prefix. If the bound ranges haven't shifted, GuidedMaterializer uses these directly — no regression.
-  2. **Fallback tree mechanism (tier 2).** For bound values that *are* out of range after an inner value change, GuidedMaterializer clamps to the fallback tree's value. When the fallback tree contains contravariant-improved values, clamping lands near the optimum rather than at a random point.
+  1. **Prefix mechanism (tier 1).** The candidate sequence carries snip-improved bound values directly. When a covariant encoder mutates inner values, bound positions retain their old (optimized) values in the prefix. If the bound ranges haven't shifted, GuidedMaterializer uses these directly — no regression.
+  2. **Fallback tree mechanism (tier 2).** For bound values that *are* out of range after an inner value change, GuidedMaterializer clamps to the fallback tree's value. When the fallback tree contains snip-improved values, clamping lands near the optimum rather than at a random point.
 - If covariant ran first (top-down), *both* mechanisms have worse inputs: the prefix contains unoptimized bound values, and the fallback tree does too. Re-derivation regresses more, and more candidates fail the shortlex guard (wasting materializations).
 
 This is Gauss-Seidel ordering applied to block coordinate descent with one-directional dependencies (inner → bound): process unconstrained blocks (snip, bound depths) before constraining blocks (train, inner depth).
@@ -212,7 +212,7 @@ The three-category distinction gives a precise characterization of local minima:
 
 **Termination guarantee (practical).** The theoretical bound is the cardinality of the shortlex-below set, which is exponential in (sequence length × entry range). This is finite but astronomically large. The practical backstop is the **total materialization budget** — a hard cap on the number of property evaluations across all cycles, all legs. When the budget is exhausted, the reducer returns the best result found so far. The per-leg budget allocation (Section 4.5) shapes how the budget is spent, but the total is the termination guarantee that matters in practice. The `cycleTerminated` check (zero acceptances across all legs) is the *fast* termination path; the budget cap is the *safe* termination path.
 
-**Degenerate case: no binds.** When `maxBindDepth == 0` (no bind generators), the V-cycle collapses. The contravariant sweep has no depths to visit (zero iterations). The three-category distinction collapses — there are no bound ranges to shift, no Kleisli chain, no re-derivation for value minimization. The deletion sweep runs at depth 0 only (using `.guided` because deletion invalidates the tree, not because of binds). The covariant sweep also runs at depth 0 with `.direct` (no bind re-derivation needed). The post-processing merge is skipped entirely (pre-check 0: `bindIndex` is nil → no bound values to recover). Redistribution uses `.direct` (depth -1, no binds → no cross-stage routing needed). The result is a flat sweep: delete → minimize → reorder → redistribute → done. This is the Hypothesis/QuickCheck regime. The scheduler doesn't need to detect this explicitly — empty legs cost zero iterations, and the merge's pre-check 0 handles the no-bind case before any region logic is reached. The V-cycle's structural power comes entirely from the bind/Kleisli depth structure; without it, the scheduler is running phases in order at a single depth.
+**Degenerate case: no binds.** When `maxBindDepth == 0` (no bind generators), the V-cycle collapses. The covariant sweep has no depths to visit (zero iterations). The three-category distinction collapses — there are no bound ranges to shift, no Kleisli chain, no re-derivation for value minimization. The deletion sweep runs at depth 0 only (using `.guided` because deletion invalidates the tree, not because of binds). The covariant sweep also runs at depth 0 with `.direct` (no bind re-derivation needed). The post-processing merge is skipped entirely (pre-check 0: `bindIndex` is nil → no bound values to recover). Redistribution uses `.direct` (depth -1, no binds → no cross-stage routing needed). The result is a flat sweep: delete → minimize → reorder → redistribute → done. This is the Hypothesis/QuickCheck regime. The scheduler doesn't need to detect this explicitly — empty legs cost zero iterations, and the merge's pre-check 0 handles the no-bind case before any region logic is reached. The V-cycle's structural power comes entirely from the bind/Kleisli depth structure; without it, the scheduler is running phases in order at a single depth.
 
 ---
 
@@ -577,7 +577,7 @@ extension SequenceDecoder {
 
 Three cases:
 
-- **`.direct`**: Wraps `Interpreters.materialize()`. Replays the full generator at materialization time — the tree provides navigation structure (which branch to take, which pick to select), while ranges are computed dynamically from the current sequence values. Used for structure-preserving mutations at depth > 0 (contravariant sweep). Deterministic. `approximation = .exact`.
+- **`.direct`**: Wraps `Interpreters.materialize()`. Replays the full generator at materialization time — the tree provides navigation structure (which branch to take, which pick to select), while ranges are computed dynamically from the current sequence values. Used for structure-preserving mutations at depth > 0 (covariant sweep). Deterministic. `approximation = .exact`.
 
 - **`.guided`**: Wraps `GuidedMaterializer.materialize()`. Sequence-driven with tiered value resolution. Used whenever the tree must be rebuilt: deletion at any depth (even without binds — the tree's positional mapping is invalidated), and value minimization/reordering at depth 0 with binds (bound content must be re-derived). Nondeterministic. `approximation = .bounded`. The shortlex guard (`reDerivedSequence.shortLexPrecedes(originalSequence)`) is the runtime enforcement — it rejects any re-derivation that regresses past the original.
 
@@ -680,9 +680,9 @@ Previously housed `ReorderSiblingsEncoder`, which sorted siblings into ascending
 
 **Trigger criterion.** The scheduler runs shaping when the *snip and prune sweeps* made zero progress in the current cycle, **or** when a deferral cap has been reached.
 
-The primary trigger checks `contravariantAccepted == 0 && deletionAccepted == 0`. If training also stalled, shaping is the only escape before the tree settles. If training made progress, shaping still runs — the two address orthogonal stall modes (inner-value minima versus bound-value joint configurations). The shortlex guard prevents shaping from introducing regressions regardless.
+The primary trigger checks `snipAccepted == 0 && deletionAccepted == 0`. If training also stalled, shaping is the only escape before the tree settles. If training made progress, shaping still runs — the two address orthogonal stall modes (inner-value minima versus bound-value joint configurations). The shortlex guard prevents shaping from introducing regressions regardless.
 
-**Deferral cap: shaping starvation guard.** A subtle failure mode: marginal training progress (reducing one inner value by 1 per cycle) shifts bound ranges slightly, enabling marginal snip progress (reducing one bound value by 1). This keeps `contravariantAccepted > 0`, preventing the primary trigger from firing — even though shaping could unlock a much larger bound-value improvement by transferring mass between coordinates. The train and snip sweeps are making progress, but they are grinding linearly through a landscape that shaping could reshape in one step.
+**Deferral cap: shaping starvation guard.** A subtle failure mode: marginal training progress (reducing one inner value by 1 per cycle) shifts bound ranges slightly, enabling marginal snip progress (reducing one bound value by 1). This keeps `snipAccepted > 0`, preventing the primary trigger from firing — even though shaping could unlock a much larger bound-value improvement by transferring mass between coordinates. The train and snip sweeps are making progress, but they are grinding linearly through a landscape that shaping could reshape in one step.
 
 Fix: the scheduler tracks `cyclesSinceRedistribution` — incremented each cycle where shaping was skipped, reset to 0 when shaping runs. When `cyclesSinceRedistribution >= redistributionDeferralCap` (default: 3), shaping fires regardless of snip/prune progress. If shaping finds an improvement, the deferral counter resets and normal triggering resumes. If shaping finds nothing, the counter resets anyway — the cap is a periodic probe, not a persistent mode change. The cost of a fruitless shaping probe is bounded by Phase 4's budget allocation (10%), which flows forward to subsequent legs if unspent (Section 4.5).
 
@@ -726,7 +726,7 @@ After the train sweep, before the next cycle. The merge recovers pre-train bound
 
 Pre-checks gate the merge:
 
-0. **Pre-check 0 — binds present.** If `bindIndex` is nil, skip the merge entirely. The merge exists to recover contravariant-optimized bound values that re-derivation degraded. No binds = no bound values = no re-derivation = nothing to recover. This makes the no-bind degenerate case (Section 1.6) clean: the merge step is a no-op, not a series of vacuously-passing checks.
+0. **Pre-check 0 — binds present.** If `bindIndex` is nil, skip the merge entirely. The merge exists to recover snip-optimized bound values that re-derivation degraded. No binds = no bound values = no re-derivation = nothing to recover. This makes the no-bind degenerate case (Section 1.6) clean: the merge step is a no-op, not a series of vacuously-passing checks.
 
 0. **Pre-check 1 — covariant progress.** If the covariant sweep made no progress, the post-covariant state equals the pre-covariant state. Nothing to merge. O(1) check on a flag the scheduler already tracks.
 
@@ -747,13 +747,13 @@ If pre-checks 0–4 pass (and pre-check 4 has pre-filtered the merge candidates)
 
 1. **Shortlex merge of bound entries** — start from `S_post` (inner values are authoritative — they're the covariant improvement). For each size-matched region pair, substitute `S_pre[offset]` only at positions that passed the range-validity filter. All other positions keep `S_post` values. This is inspired by paper §5.3 (representation-invariant post-processing), applied only where structural correspondence holds and the substitution is range-valid. Unlike the paper's §5.3 which defines a unary endotransformation h : Cand(P) → Cand(P), the merge is a binary operation on two states — it doesn't satisfy the naturality condition enc_a ∘ h_P = h_Q ∘ enc_a. Its correctness is instead guaranteed by the GuidedMaterializer re-materialization (step 2) and the shortlex acceptance check. The merged sequence is a Frankenstein: bound values cherry-picked from different states, not produced by running the generator.
 
-2. **Tree re-materialization** — the merged sequence has no corresponding tree. Run `GuidedMaterializer` on the merged sequence with the **pre-covariant tree** as fallback (captured before the covariant sweep — see Section 4.1 pseudocode). This is critical: the merge's purpose is to recover pre-covariant bound values. If tier-2 clamping used the post-covariant tree, out-of-range positions would clamp to the values the merge is trying to improve upon. The pre-covariant tree (post-deletion state, including surviving contravariant optimizations) provides better clamping targets. The re-materialized triple may change span boundaries — the next cycle's lattice (computed fresh at cycle start) reflects whatever structure the re-materialization produces.
+2. **Tree re-materialization** — the merged sequence has no corresponding tree. Run `GuidedMaterializer` on the merged sequence with the **pre-covariant tree** as fallback (captured before the covariant sweep — see Section 4.1 pseudocode). This is critical: the merge's purpose is to recover pre-covariant bound values. If tier-2 clamping used the post-covariant tree, out-of-range positions would clamp to the values the merge is trying to improve upon. The pre-covariant tree (post-deletion state, including surviving snip optimizations) provides better clamping targets. The re-materialized triple may change span boundaries — the next cycle's lattice (computed fresh at cycle start) reflects whatever structure the re-materialization produces.
 
 3. **Fallback on merge failure** — if `GuidedMaterializer` can't materialize the merged sequence (dynamic range interactions between cherry-picked positions make the combination inconsistent), keep the unmerged state. The merge is speculative; failure is expected when substitutions at earlier positions shift ranges at later positions beyond what the static pre-check could predict.
 
 **Safety of the Frankenstein sequence.** The pre-checks can't catch all non-corresponding regions (coincidental inner-range-size matches from different generator sites pass pre-check 2). Could the hybrid accidentally succeed — property fails on a "malformed" output — producing a misleading counterexample? No. GuidedMaterializer doesn't blindly replay the cherry-picked values. It runs the actual generator with the merged sequence as a prefix, producing a fully consistent `(sequence, tree, output)` triple. If a cherry-picked value falls outside the generator's current valid range, GuidedMaterializer clamps it (tier 2) or replaces it (tier 3). The output is always a legitimate generator output — the generator ran, produced a value, and the property was evaluated on that value. If the property fails, that value is a genuine counterexample, not a "malformed" artifact. The merge can produce *surprising* counterexamples (values the user didn't expect from the generator), but never *invalid* ones. The shortlex guard further ensures the merged result is strictly simpler than the pre-merge state.
 
-At most one `GuidedMaterializer` call per cycle, and only when the pre-checks indicate the merge has a realistic chance of recovering lost contravariant improvements. **This materialization is not charged to any leg's budget** — it's a fixed per-cycle overhead (at most one call), gated by cheap O(n) pre-checks that reject the vast majority of cycles. Charging it to a leg would either (a) penalize the covariant sweep for the merge's cost (unfair — the covariant sweep already ran), or (b) require a separate "merge budget" that's always 0 or 1 (overengineered). The cycle's hard cap (Section 4.5) accounts for total materializations including the merge.
+At most one `GuidedMaterializer` call per cycle, and only when the pre-checks indicate the merge has a realistic chance of recovering lost snip improvements. **This materialization is not charged to any leg's budget** — it's a fixed per-cycle overhead (at most one call), gated by cheap O(n) pre-checks that reject the vast majority of cycles. Charging it to a leg would either (a) penalize the covariant sweep for the merge's cost (unfair — the covariant sweep already ran), or (b) require a separate "merge budget" that's always 0 or 1 (overengineered). The cycle's hard cap (Section 4.5) accounts for total materializations including the merge.
 
 ---
 
@@ -802,7 +802,7 @@ for each cycle:
     // Note: 1 ... 0 is a fatal error in Swift. Guard the range.
     var dirtyDepths: Set<Int> = maxBindDepth > 0 ? Set(1 ... maxBindDepth) : []
 
-    // ── Leg 1: Snip — contravariant sweep (fine → coarse) ──
+    // ── Leg 1: Snip — covariant sweep (fine → coarse) ──
     // Value minimization ONLY. Structure-preserving, exact.
     // Depth-major: all encoders at depth d before moving to d−1.
     var rejectCache = ReducerCache()  // fresh per leg
@@ -867,7 +867,7 @@ for each cycle:
 
     // ── Post-processing (natural transformation) ──
     // NOT a leg — no ReductionLeg case, no budget allocation.
-    // Shortlex merge to recover contravariant improvements
+    // Shortlex merge to recover snip improvements
     // degraded by covariant re-derivation.
     //
     // Uses preCovariantTree as the merge's fallback tree, NOT the
@@ -876,13 +876,13 @@ for each cycle:
     // post-covariant tree, it would clamp to the exact values the
     // merge is trying to improve upon — defeating the purpose.
     // The pre-covariant tree contains pre-covariant values (post-deletion,
-    // including surviving contravariant optimizations), so tier-2 clamping
+    // including surviving snip optimizations), so tier-2 clamping
     // lands near the desired recovery targets.
     if let mergeResult = applyShortlexMerge(sequence, preCovariantTree):
         accept(mergeResult, structureChanged: true)
         // Mark depths dirty: the merge substituted bound values that
         // may not be locally minimal within their (post-covariant) ranges.
-        // The next contravariant sweep should re-optimize them.
+        // The next covariant sweep should re-optimize them.
         dirtyDepths.formUnion(mergeAffectedDepths)
         //
         // A successful merge counts as cycle progress. This can create
@@ -931,7 +931,7 @@ for each cycle:
     // of deferral (default 3). Prevents marginal train/snip
     // progress from starving shaping indefinitely.
     let redistributionTriggered =
-        (contravariantAccepted == 0 && deletionAccepted == 0)
+        (snipAccepted == 0 && deletionAccepted == 0)
         || cyclesSinceRedistribution >= redistributionDeferralCap
     if redistributionTriggered:
         cyclesSinceRedistribution = 0
@@ -959,10 +959,10 @@ for each cycle:
 
 **Fallback tree lifecycle.** The fallback tree is **updated after every accepted candidate** — the `accept()` function sets `fallbackTree = result.tree`. This gives tier-2 clamping the freshest possible targets at all times. Consequences by leg:
 
-- **Contravariant sweep:** `.direct` doesn't use the fallback tree, so updates are a no-op in practice (structure-preserving — the tree doesn't change). But the variable stays current for subsequent legs.
+- **Covariant sweep:** `.direct` doesn't use the fallback tree, so updates are a no-op in practice (structure-preserving — the tree doesn't change). But the variable stays current for subsequent legs.
 - **Deletion sweep:** Each successful deletion produces a new tree via GuidedMaterializer. The next encoder's `DecoderContext` captures the post-deletion tree, so tier-2 clamping uses the most recent post-deletion structure. This matters because later deletions (at deeper depths in 0→max order) benefit from the updated tree — positions that shifted after an earlier deletion have a structurally corresponding fallback tree.
 - **Covariant sweep:** Each successful value reduction at depth 0 re-derives bound content. The updated fallback tree contains the re-derived bound values, giving subsequent probes tier-2 clamping that reflects the latest inner-value state. This is where freshness matters most — stale clamping targets can cause regression.
-- **Post-processing merge:** Uses the **pre-covariant tree** (captured before leg 3), NOT the continuously-updated `fallbackTree`. The merge's purpose is to recover pre-covariant bound values that re-derivation degraded. If tier-2 clamping used the post-covariant tree, it would clamp to the values the merge is trying to improve upon. The pre-covariant tree is the post-deletion state — it includes contravariant optimizations that survived deletion, so tier-2 clamping lands near the desired recovery targets. This requires a separate `preCovariantTree` variable, captured once at the start of leg 3.
+- **Post-processing merge:** Uses the **pre-covariant tree** (captured before leg 3), NOT the continuously-updated `fallbackTree`. The merge's purpose is to recover pre-covariant bound values that re-derivation degraded. If tier-2 clamping used the post-covariant tree, it would clamp to the values the merge is trying to improve upon. The pre-covariant tree is the post-deletion state — it includes snip optimizations that survived deletion, so tier-2 clamping lands near the desired recovery targets. This requires a separate `preCovariantTree` variable, captured once at the start of leg 3.
 
 The `DecoderContext` is reconstructed per encoder invocation (not per leg or per depth), as shown in the pseudocode. This ensures every decode call sees the current fallback tree. The cost is negligible — `DecoderContext` is a value type with no allocation.
 
@@ -982,7 +982,7 @@ The `DecoderContext` is reconstructed per encoder invocation (not per leg or per
 
 Both functions are O(n) scans over the sequence with a bind-depth lookup per span. The bind-depth lookup is O(log r) where r is the number of bind regions (binary search over sorted region bounds).
 
-### 4.2 Snip (Contravariant Sweep) Details
+### 4.2 Snip (Covariant Depth Sweep) Details
 
 The snip sweep handles value minimization at bound depths with exact guarantees:
 
@@ -996,16 +996,16 @@ The snip sweep handles value minimization at bound depths with exact guarantees:
 
   **Alternative: 1→max.** The reverse direction would reduce shallower depths first, immediately tightening ranges for deeper depths within the same sweep — cascade convergence in a single pass rather than the D−1 cycles that max→1 requires (see convergence bound below). The tradeoff: in max→1, deeper depths are processed first against un-tightened ranges. Their reductions are valid (within the ranges that exist at the time) but may become suboptimal when shallower values are later reduced in the same sweep, tightening the deeper ranges. In 1→max, deeper depths always see the tightest available ranges — no such staleness. The actual max→1 advantage is stability: each depth is processed against ranges that don't change during its processing (deeper ranges don't constrain shallower ones), so encoders never generate candidates against ranges that shift mid-sweep. For the common case (D = 1, no nested binds), both directions are equivalent. For D ≥ 2, max→1 trades slower cross-depth convergence (D−1 cycles) for per-depth range stability. This choice should be validated empirically — 1→max's single-pass convergence may outweigh the range-stability benefit for generators with deep nesting.
 
-  **Cross-depth interaction for nested binds.** For generators with nested binds, depth d values determine depth d+1 ranges (e.g., `bind { d1 in Gen.int(in: 0...d1) }`). Reducing d1 at depth d during the contravariant sweep shrinks depth d+1's valid range. `Interpreters.materialize()` handles this correctly — it runs the full generator, computes ranges dynamically, and rejects candidates where deeper values are out of the new range. This is safe but suboptimal: a single max→1 pass may leave opportunities. After depth 2 is reduced (constrained by the already-processed depth 3), depth 3 could be further reduced within the new tighter range. This converges across cycles: the cycle repeats, and the next contravariant sweep re-reduces deeper depths within updated ranges. For non-nested binds (single bind, depths 0 and 1 only), there is no cross-depth interaction within the contravariant sweep — depth 0 is untouched, and depth 1 has no dependency on other bound depths.
+  **Cross-depth interaction for nested binds.** For generators with nested binds, depth d values determine depth d+1 ranges (e.g., `bind { d1 in Gen.int(in: 0...d1) }`). Reducing d1 at depth d during the covariant sweep shrinks depth d+1's valid range. `Interpreters.materialize()` handles this correctly — it runs the full generator, computes ranges dynamically, and rejects candidates where deeper values are out of the new range. This is safe but suboptimal: a single max→1 pass may leave opportunities. After depth 2 is reduced (constrained by the already-processed depth 3), depth 3 could be further reduced within the new tighter range. This converges across cycles: the cycle repeats, and the next covariant sweep re-reduces deeper depths within updated ranges. For non-nested binds (single bind, depths 0 and 1 only), there is no cross-depth interaction within the covariant sweep — depth 0 is untouched, and depth 1 has no dependency on other bound depths.
 
-  **Convergence bound for nested binds.** The max→1 direction processes deeper depths first, then the shallower depths that determine their ranges. Constraint tightening propagates one level per sweep: cycle 1 optimizes depth 1 (no constraint from other bound depths — depth 0 is untouched in the contravariant sweep), but depth 2 was optimized against the old depth 1 values. Cycle 2 re-optimizes depth 2 against the new depth 1 values, but depth 3 was still using the old depth 2 values. In general, for `maxBindDepth = D`, full contravariant convergence requires **D − 1 V-cycles** *from a fixed baseline*.
+  **Convergence bound for nested binds.** The max→1 direction processes deeper depths first, then the shallower depths that determine their ranges. Constraint tightening propagates one level per sweep: cycle 1 optimizes depth 1 (no constraint from other bound depths — depth 0 is untouched in the covariant sweep), but depth 2 was optimized against the old depth 1 values. Cycle 2 re-optimizes depth 2 against the new depth 1 values, but depth 3 was still using the old depth 2 values. In general, for `maxBindDepth = D`, full snip convergence requires **D − 1 V-cycles** *from a fixed baseline*.
 
-  **Interference from other legs.** The D − 1 bound counts cycles of *pure contravariant propagation* — it assumes the baseline (inner values, span structure) is stable. In practice, each cycle also runs deletion and covariant sweeps that can change the baseline:
-  - A **covariant success** at depth 0 shifts bound ranges at all depths. The contravariant propagation restarts from the new baseline — the D − 1 counter resets. This is by design: the covariant sweep opened new territory that the contravariant sweep must explore from scratch.
+  **Interference from other legs.** The D − 1 bound counts cycles of *pure covariant propagation* — it assumes the baseline (inner values, span structure) is stable. In practice, each cycle also runs deletion and covariant sweeps that can change the baseline:
+  - A **covariant success** at depth 0 shifts bound ranges at all depths. The covariant propagation restarts from the new baseline — the D − 1 counter resets. This is by design: the covariant sweep opened new territory that the covariant sweep must explore from scratch.
   - A **deletion success** can shift span positions and degrade values at deeper depths. Again, the propagation restarts from the post-deletion baseline.
   - A **merge success** substitutes pre-covariant values at specific depths. These may not be minimal within their post-covariant ranges, so the propagation restarts for the affected chain.
 
-  The D − 1 bound is therefore a *per-baseline* bound, not a global one. The total number of contravariant convergence restarts is bounded by the number of non-contravariant successes across all cycles, which is in turn bounded by the global materialization budget. In practice, the covariant sweep makes progressively smaller changes as it converges, and each restart of the contravariant propagation starts from a better baseline than the last. For the common case (D = 1), the bound is 0 restarts — single-bind contravariant convergence completes in one sweep regardless of other legs. For D = 2, each restart adds one extra cycle. D ≥ 3 is rare in practice — deeply nested bind chains are uncommon in real generators.
+  The D − 1 bound is therefore a *per-baseline* bound, not a global one. The total number of snip convergence restarts is bounded by the number of non-snip successes across all cycles, which is in turn bounded by the global materialization budget. In practice, the covariant sweep makes progressively smaller changes as it converges, and each restart of the covariant propagation starts from a better baseline than the last. For the common case (D = 1), the bound is 0 restarts — single-bind snip convergence completes in one sweep regardless of other legs. For D = 2, each restart adds one extra cycle. D ≥ 3 is rare in practice — deeply nested bind chains are uncommon in real generators.
 
 - **Within-depth fixpoint.** The scheduler loops value-minimization encoders at each depth until none makes progress. The leg's hard cap (Section 4.5) is the backstop — the fixpoint runs until natural convergence or budget exhaustion, whichever comes first.
 
@@ -1017,7 +1017,7 @@ The snip sweep handles value minimization at bound depths with exact guarantees:
 
   **Tree update after acceptance.** When a depth-2 value is reduced, `accept()` updates `sequence` and `tree`. But does the tree "know" about the tighter range at depth 3? The answer is that the tree doesn't store ranges — it stores branching structure and element metadata. `Interpreters.materialize()` (the `.direct` path) replays the full generator at materialization time, computing ranges dynamically from the current sequence values. So after a depth-2 acceptance, subsequent depth-3 encoders produce candidates with depth-3 values based on the old (pre-depth-2-change) ranges. When the scheduler decodes those candidates, `Interpreters.materialize()` replays the generator with the *updated* depth-2 values, computes the *new* (tighter) depth-3 range, and rejects any depth-3 value that's now out of range. This is safe (no invalid candidates accepted) but wasteful — the encoder generates candidates against stale ranges, and the decoder rejects them. The cost is bounded: binary search converges in O(log V) probes regardless, and the `lastAccepted: false` feedback steers the adaptive encoder away from the now-invalid region. The max→1 direction minimizes this waste by processing deeper depths first (before shallower changes tighten their ranges), at the cost of slower cross-depth convergence (Section 4.2, convergence bound).
 
-- **Dirty-depth tracking:** On cycle restart after a covariant, deletion, or merge success, re-sweep depths whose bound ranges or span structure may have changed. A successful merge substitutes pre-covariant bound values at specific depths — those values may not be locally minimal within their post-covariant ranges, so the contravariant sweep should re-optimize them.
+- **Dirty-depth tracking:** On cycle restart after a covariant, deletion, or merge success, re-sweep depths whose bound ranges or span structure may have changed. A successful merge substitutes pre-covariant bound values at specific depths — those values may not be locally minimal within their post-covariant ranges, so the covariant sweep should re-optimize them.
 
   `BindSpanIndex` provides **per-region** precision, not per-depth precision. `bindRegionForInnerIndex(i)` identifies which `BindRegion` a depth-0 inner value feeds. But within a single bind chain, the cascade is structural: a depth-0 change shifts bound ranges at depth 1, which can shift ranges at depth 2 (if nested), and so on. **Within a chain, all depths are dirty.** The per-region precision only helps when there are **independent bind chains** — e.g. `(bind1, bind2)` where a change in bind1's inner values doesn't affect bind2's depths.
 
@@ -1027,7 +1027,7 @@ The snip sweep handles value minimization at bound depths with exact guarantees:
 
 The prune sweep runs after snipping, at all depths (0 → max):
 
-- **Direction 0→max: most aggressive first.** Depth-0 deletions can eliminate entire bind regions — all spans at depths 1+ within that region cease to exist. Processing 0→max means we don't waste materializations trying to delete individual spans within a region that a depth-0 deletion will remove wholesale. This is the same principle as the encoder ordering within the deletion phase (container spans before free-standing values) — applied to depth ordering. The Gauss-Seidel dependency argument from the contravariant sweep does not apply here: GuidedMaterializer re-derives from scratch regardless of depth, so there's no constraint-propagation benefit to either direction. The alternative (max→0) would try small, low-impact deletions first. A depth-3 deletion that removes a small span preserves more contravariant work, but its shortlex impact is small. The 0→max ordering prioritizes shortlex impact — shorter sequences from aggressive deletions outweigh the value degradation that the next contravariant sweep will repair. Neither direction is categorically optimal; 0→max is the waste-avoidance heuristic.
+- **Direction 0→max: most aggressive first.** Depth-0 deletions can eliminate entire bind regions — all spans at depths 1+ within that region cease to exist. Processing 0→max means we don't waste materializations trying to delete individual spans within a region that a depth-0 deletion will remove wholesale. This is the same principle as the encoder ordering within the deletion phase (container spans before free-standing values) — applied to depth ordering. The Gauss-Seidel dependency argument from the covariant sweep does not apply here: GuidedMaterializer re-derives from scratch regardless of depth, so there's no constraint-propagation benefit to either direction. The alternative (max→0) would try small, low-impact deletions first. A depth-3 deletion that removes a small span preserves more snip work, but its shortlex impact is small. The 0→max ordering prioritizes shortlex impact — shorter sequences from aggressive deletions outweigh the value degradation that the next covariant sweep will repair. Neither direction is categorically optimal; 0→max is the waste-avoidance heuristic.
 
 - **Decoder: `.guided`** with `.relaxed` strictness. Deletion invalidates the tree's element scripts — GuidedMaterializer rebuilds a fresh tree from the generator using the shortened candidate as a prefix.
 
@@ -1035,7 +1035,7 @@ The prune sweep runs after snipping, at all depths (0 → max):
 
 - **Includes all deletion encoders:** container spans, sequence elements, boundaries, free-standing values, aligned windows, speculative delete.
 
-- **Separate from the contravariant sweep** because deletion at depth > 0 is `.bounded` — re-derivation via GuidedMaterializer can produce different content for the gap left by the deleted span. Grouping it with the exact contravariant sweep would violate the lattice stability guarantee.
+- **Separate from the covariant sweep** because deletion at depth > 0 is `.bounded` — re-derivation via GuidedMaterializer can produce different content for the gap left by the deleted span. Grouping it with the exact covariant sweep would violate the lattice stability guarantee.
 
 - **Pruning can degrade snip-optimized bound values.** When pruning at depth d removes a span, GuidedMaterializer re-derives the sequence using the shortened candidate as a prefix. Values *before* the deletion site are intact in the prefix (tier 1) — fully preserved. Values *after* the deletion site are structurally misaligned: they were optimized for their original generator request points, but are now consumed at shifted positions. If out of range for the new requests, they fall to tier 2 (fallback tree) — but the fallback tree also has the pre-deletion structure, so it may not align either, dropping to tier 3 (PRNG). The damage is proportional to how much content follows the deletion site. This is the inherent cost of structure-destroying operations — the payoff is a shorter sequence (shortlex improvement from pruning outweighs value degradation). The next cycle's snip sweep re-optimizes the post-prune state.
 
@@ -1055,7 +1055,7 @@ The train sweep runs at depth 0 only, after pruning:
 
 ### 4.5 Resource Budget
 
-The budget is organized by **leg**, not by phase — matching the execution model. Each leg has an independent budget, preventing the contravariant sweep from starving the covariant sweep.
+The budget is organized by **leg**, not by phase — matching the execution model. Each leg has an independent budget, preventing the covariant sweep from starving the covariant sweep.
 
 ```swift
 struct CycleBudget {
@@ -1072,7 +1072,7 @@ struct CycleBudget {
 
 enum ReductionLeg: CaseIterable {
     case branch
-    case contravariant
+    case snip
     case deletion
     case covariant
     case redistribution
@@ -1081,18 +1081,18 @@ enum ReductionLeg: CaseIterable {
 
 Default leg weights:
 - Top-work / re-head (branch tactics): 5%
-- Snip (contravariant sweep): 30%
+- Snip (covariant sweep): 30%
 - Prune (deletion sweep): 30%
 - Train (covariant sweep): 25%
 - Shape (redistribution): 10%
 
-**No within-leg phase splits.** The contravariant and covariant legs run value-minimization encoders from a single undivided leg budget. The fixpoint loop's natural termination (no encoder makes progress) is the scheduling mechanism.
+**No within-leg phase splits.** The snip and train legs run value-minimization encoders from a single undivided leg budget. The fixpoint loop's natural termination (no encoder makes progress) is the scheduling mechanism.
 
 The train sweep gets its own 25%, independent of how many depths the snip sweep processes. A 4-depth snip sweep consumes its 30% across four depths; the train sweep's 25% is reserved for the single depth-0 pass that escapes fixed points. Without per-leg budgets, the train sweep would starve whenever `maxBindDepth` is large.
 
-**Leg weights are fixed across cycles — no cross-cycle adaptation.** The weights are structurally motivated: the covariant sweep gets 25% because it operates at a single depth while the contravariant sweep distributes its 30% across many. This rationale doesn't change between cycles, so adapting weights would undermine the starvation guarantee that justified the allocation.
+**Leg weights are fixed across cycles — no cross-cycle adaptation.** The weights are structurally motivated: the covariant sweep gets 25% because it operates at a single depth while the covariant sweep distributes its 30% across many. This rationale doesn't change between cycles, so adapting weights would undermine the starvation guarantee that justified the allocation.
 
-**Intra-cycle unused-budget forwarding.** When a leg stalls before exhausting its allocation, the unused budget flows forward to subsequent legs in execution order. This makes the per-leg weights a *floor*, not a ceiling: the covariant sweep gets at least 25% of the cycle budget, plus whatever the contravariant and deletion legs didn't use. Forwarding is the only adaptation mechanism — it's stateless (no cross-cycle memory), monotonic (later legs can only gain), and preserves the structural invariant (earlier legs never lose budget to later ones). In the scheduler:
+**Intra-cycle unused-budget forwarding.** When a leg stalls before exhausting its allocation, the unused budget flows forward to subsequent legs in execution order. This makes the per-leg weights a *floor*, not a ceiling: the covariant sweep gets at least 25% of the cycle budget, plus whatever the snip and deletion legs didn't use. Forwarding is the only adaptation mechanism — it's stateless (no cross-cycle memory), monotonic (later legs can only gain), and preserves the structural invariant (earlier legs never lose budget to later ones). In the scheduler:
 
 ```swift
 var remaining = cycleBudget.total
@@ -1112,7 +1112,7 @@ for leg in ReductionLeg.allCases {
 
 **Stall patience does NOT scale with forwarded budget.** If the covariant sweep has target = 50 and cap = 200 (150 forwarded from earlier legs), it still gives up after 50 consecutive fruitless materializations. The forwarded budget helps productive legs continue longer — it doesn't make unproductive legs more persistent. The rationale: if 50 consecutive probes found nothing, 150 more from the same encoders at the same depth are unlikely to either. The forwarded budget's value is in extending legs that are making progress, not in extending fruitless search.
 
-**Within-depth fixpoint budget.** The contravariant leg distributes its budget across depths. At each depth, the fixpoint loop (value-min → reorder → value-min → ...) consumes materializations from the leg's remaining budget. The fixpoint terminates when: (a) neither phase makes progress (natural convergence), or (b) the leg's hard cap is reached. The stall patience applies per-encoder within each fixpoint iteration — an encoder that exhausts its probe count (`O(n × log V)` for binary search) without success counts those probes toward the consecutive-fruitless counter. A success in reordering resets the counter, and the next value-min iteration starts with fresh patience.
+**Within-depth fixpoint budget.** The snip leg distributes its budget across depths. At each depth, the fixpoint loop (value-min → reorder → value-min → ...) consumes materializations from the leg's remaining budget. The fixpoint terminates when: (a) neither phase makes progress (natural convergence), or (b) the leg's hard cap is reached. The stall patience applies per-encoder within each fixpoint iteration — an encoder that exhausts its probe count (`O(n × log V)` for binary search) without success counts those probes toward the consecutive-fruitless counter. A success in reordering resets the counter, and the next value-min iteration starts with fresh patience.
 
 ```swift
 func runLeg(_ leg: ReductionLeg, budget target: Int, cap: Int) -> Int {
@@ -1155,7 +1155,7 @@ The tree is **read-only input** — branch encoders need it to identify branch p
 
 **Overlap with deletion.** Branch promotion can eliminate a subtree (the unpromoted child is discarded), which superficially resembles container deletion. But the mechanism is different: deletion removes spans from the existing tree, while promotion replaces the tree's branching structure. A promotion that eliminates a subtree also eliminates the *branch point itself*, something deletion can't do (deletion works within the existing branch structure). In practice, the overlap is small — branch tactics address a different fixed-point escape (the current branch choice is suboptimal, not the current structure length).
 
-**Budget allocation (5%).** Based on the empirical observation that branch tactics fire rarely. The current reducer attempts promote and pivot at most twice per cycle. Typical generators have 0–3 branch points, each with 2–5 children. Promote tries O(branches × children) candidates; pivot tries O(branches) candidates. For a typical generator, this is 5–15 materializations per cycle — a tiny fraction of the total budget. The 5% allocation (typically 10–50 materializations for a 200–1000 cycle budget) is generous relative to the expected cost. If branch tactics fire more frequently for a specific generator class (e.g., deeply branching recursive generators), the unused-budget forwarding mechanism (Section 4.5) ensures subsequent legs aren't starved — branch's unused 5% flows forward to the contravariant sweep.
+**Budget allocation (5%).** Based on the empirical observation that branch tactics fire rarely. The current reducer attempts promote and pivot at most twice per cycle. Typical generators have 0–3 branch points, each with 2–5 children. Promote tries O(branches × children) candidates; pivot tries O(branches) candidates. For a typical generator, this is 5–15 materializations per cycle — a tiny fraction of the total budget. The 5% allocation (typically 10–50 materializations for a 200–1000 cycle budget) is generous relative to the expected cost. If branch tactics fire more frequently for a specific generator class (e.g., deeply branching recursive generators), the unused-budget forwarding mechanism (Section 4.5) ensures subsequent legs aren't starved — branch's unused 5% flows forward to the covariant sweep.
 
 ### 4.7 Adaptive Encoder Selection Within Equivalence Classes
 
@@ -1195,7 +1195,7 @@ At each cycle boundary, decay all priors toward Beta(1,1):
 
 With γ = 0.8, the last ~5 cycles dominate the posterior. After a successful reduction changes the landscape, old observations fade and the selector re-explores. The decay target Beta(1,1) is the uniform prior — "no information, try anything."
 
-**Dirty-depth prior reset.** Cycle-boundary decay handles gradual landscape drift, but a covariant or deletion success mid-cycle can abruptly restructure bound ranges at specific depths. The next cycle's contravariant sweep re-visits those depths with priors shaped by the pre-restructuring landscape — the first re-sweep always uses stale priors, since decay only fires at cycle boundaries. For generators where a covariant success substantially restructures bound ranges (e.g., reducing an inner value that gates a branch, collapsing a subtree), the stale priors could persistently favour the wrong encoder for several probes.
+**Dirty-depth prior reset.** Cycle-boundary decay handles gradual landscape drift, but a covariant or deletion success mid-cycle can abruptly restructure bound ranges at specific depths. The next cycle's covariant sweep re-visits those depths with priors shaped by the pre-restructuring landscape — the first re-sweep always uses stale priors, since decay only fires at cycle boundaries. For generators where a covariant success substantially restructures bound ranges (e.g., reducing an inner value that gates a branch, collapsing a subtree), the stale priors could persistently favour the wrong encoder for several probes.
 
 Fix: when the scheduler marks depths dirty (from a covariant, deletion, or merge success), it also resets the Thompson Sampling priors at those depths to Beta(1,1). This is a local reset — only the affected depths lose their history. Unaffected depths retain their learned priors. The cost is negligible (O(k) per dirty depth, where k is the equivalence class size). The benefit is that the first re-sweep of a freshly-dirtied depth explores all encoders uniformly rather than persisting a stale preference. At worst, it re-learns the same ranking in one cycle (2–4 probes). At best, it avoids wasting probes on a newly-suboptimal encoder whose success was contingent on the old bound ranges.
 
@@ -1297,14 +1297,14 @@ The enc/dec separation makes the most complex logic (structural mutation) the ea
 - `mergeRangeFilter(pre:post:postTree:postBindIndex:) -> Set<Int>` — range-validity filter (pre-check 4). Returns the set of bound positions where substitution is in-range. Pure function over two sequences and the post-covariant tree.
 - `shortlexMerge(old:new:validPositions:newBindIndex:) -> ChoiceSequence` — substitutes `old` values only at positions in `validPositions`; keeps `new` values elsewhere. Pure function.
 - `mergeAffectedDepths(preBindIndex:postBindIndex:validPositions:) -> Set<Int>` — which depths were modified by the merge, for dirty-depth tracking. Pure function over two bind indexes and the substitution positions.
-- **Merge fallback tree invariant** — the merge's GuidedMaterializer call uses the pre-covariant tree (captured before leg 3), NOT the continuously-updated fallbackTree. Testable by verifying that tier-2 clamping lands on contravariant-optimized values rather than post-covariant values.
+- **Merge fallback tree invariant** — the merge's GuidedMaterializer call uses the pre-covariant tree (captured before leg 3), NOT the continuously-updated fallbackTree. Testable by verifying that tier-2 clamping lands on snip-optimized values rather than post-covariant values.
 - `extractTargets(sequence:depth:bindIndex:) -> TargetSet` — filters value spans by bind depth. Pure function over sequence and bind index. Testable with BindSpanIndex fixtures.
 - `extractDeletionTargets(sequence:depth:bindIndex:spanCategory:) -> TargetSet` — filters spans of a specific category by bind depth. Pure function. Testable with sequence fixtures containing known span structures.
 - `shouldStall(consecutiveFruitless:target:) -> Bool` — stall patience check. Trivially testable.
 - `allocateBudget(total:legWeights:) -> CycleBudget` — pure arithmetic from weights to per-leg initial budgets.
 - `legBudget(target:cap:) -> (budget: Int, remaining: Int)` — unused-budget forwarding logic. Given a leg's initial target and the remaining cycle cap, returns the effective budget (= cap, hard upper bound) and stall patience (= target, consecutive-fruitless limit). Pure arithmetic.
 - `canAfford(remaining:grade:) -> Bool` — does the remaining budget accommodate this encoder's declared grade?
-- `redistributionTriggered(contravariantAccepted:deletionAccepted:cyclesSinceRedistribution:cap:) -> Bool` — redistribution trigger logic. Primary: both zero. Deferral cap: counter ≥ cap. Pure function, trivially testable.
+- `redistributionTriggered(snipAccepted:deletionAccepted:cyclesSinceRedistribution:cap:) -> Bool` — redistribution trigger logic. Primary: both zero. Deferral cap: counter ≥ cap. Pure function, trivially testable.
 - `selectEncoder(equivalenceClass:posteriors:seed:) -> EncoderIndex` — Thompson Sampling ranking. Deterministic given a fixed seed.
 - `updatePosterior(prior:accepted:) -> BetaParameters` — binary Bayesian update. Pure arithmetic.
 - `decayPosteriors(priors:gamma:) -> [BetaParameters]` — cycle-boundary decay toward Beta(1,1). Pure arithmetic.

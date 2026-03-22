@@ -278,7 +278,7 @@ In the Bonsai cycle's exploration phase, **just before** `runRelaxRound`. The ed
 ```
 Bonsai cycle:
   1. runBaseDescent (branch simplification → structural deletion → bind-inner reduction)
-  2. runFibreDescent (leaf-range values → contravariant depth sweep → redistribution)
+  2. runFibreDescent (leaf-range values → covariant depth sweep → redistribution)
   3. → NEW: runDependencyEdgeExploration (only in value-sensitive regime)
   4. runRelaxRound (speculative redistribution → exploit)
 ```

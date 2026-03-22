@@ -125,7 +125,7 @@ BonsaiScheduler's two-phase pipeline is an instance of this factorisation:
 
 - **Phase 1** (structural minimisation) is the **cartesian factor**. It changes the base point of the fibration — the trace structure. Branch simplification (1a) replaces a branch with one of its alternatives, altering the choice-point topology. Structural deletion (1b) removes spans, shrinking the base. Joint bind-inner reduction (1c) reduces the controlling values that determine downstream structure — these are base coordinates in the Kleisli tower, because changing an inner value changes which fibre the bound content lives in.
 
-- **Phase 2** (value minimisation) is the **vertical factor**. It operates within the fibre above the base point that Phase 1 has fixed. The DAG leaf pass and the contravariant depth sweep both modify only non-controlling values — they cannot change the trace structure. The `StructuralFingerprint` guard between phases detects any accidental structural change during Phase 2 — a violation of the factorisation — and forces a restart from Phase 1.
+- **Phase 2** (value minimisation) is the **vertical factor**. It operates within the fibre above the base point that Phase 1 has fixed. The DAG leaf pass and the covariant depth sweep both modify only non-controlling values — they cannot change the trace structure. The `StructuralFingerprint` guard between phases detects any accidental structural change during Phase 2 — a violation of the factorisation — and forces a restart from Phase 1.
 
 The cleavage in Bonsai's fibration is the `ReductionMaterializer` in guided mode: given a structural reduction `g: T' → T` in the base, the materializer computes the canonical projection `g*(e)` by replaying the old value assignment against the new structure. This cleavage is well-defined in the reduction direction (projecting away deleted coordinates), which is the only direction the algorithm uses. The reverse direction — adding structure — would require choosing canonical values for new choice points, and the choice between `semanticSimplest` and PRNG makes the cleavage non-canonical there. This asymmetry is relevant to the cocartesian direction (Section 4.3) but does not affect the implemented reduction path.
 
@@ -135,9 +135,7 @@ Hermida (1999, Theorem 4.3) proves a stronger result: adjunctions in the 2-categ
 
 The vertical factor is not internally flat. The Kleisli tower reappears inside Phase 2 as a chain of nested fibrewise adjustments, each conditioned on the level above.
 
-The contravariant sweep in `runFibreDescent` iterates bind depths from the maximum downward: depth *d*, then *d* − 1, and so on to depth 1. At each level, value encoders reduce the bound-content values at that depth while holding all upstream structure fixed. This traversal order is dictated by the Kleisli tower's dependency direction: a bound value at depth *d* may depend on a controlling value at depth *d* − 1, so reducing depth *d* first ensures that upstream reductions at shallower depths do not invalidate work already done at deeper levels.
-
-This mirrors the Phase 1 → Phase 2 ordering at a finer grain. By the same dominance argument (Section 2), the contravariant sweep exhausts deeper (more dependent) levels before shallower (more controlling) ones, ensuring no accepted reduction is invalidated by a later change to a coordinate it was conditioned on.
+The covariant sweep in `runFibreDescent` iterates bind depths from 1 upward to the maximum: depth 1, then 2, and so on. At each level, value encoders reduce the bound-content values at that depth while holding all upstream structure fixed. This traversal order settles shallow (less dependent) levels first so that deeper levels reduce in the correct context — a value at depth *d* may depend on a value at depth *d* − 1, so reducing depth *d* − 1 first ensures that deeper reductions are not invalidated by later changes to coordinates they were conditioned on.
 
 ---
 
@@ -153,7 +151,7 @@ Three laws from that theory have been examined:
 
 - **The cocartesian direction** (Section 4.3) `g!`, dual to the `g*` that the `ReductionMaterializer` computes, provides the canonical embedding of a new-fibre value assignment back into the original fibre. The adjunction `g! ⊣ g*` could sharpen the unknown-regime branch of the regime detector: compute `g!(semanticSimplest)` and measure shortlex distance to decide whether the unknown probe rejection signals a lossy reduction (skip retries) or a transparent one (proceed). A code scaffold exists but is not yet active; the decision to enable it depends on measured frequency of the unknown regime in practice.
 
-Beyond the three laws, the **Kleisli tower structure** of bind-depth chains (Section 5) connects BonsaiScheduler's two-phase pipeline to the cartesian-vertical factorisation of morphisms in a fibration (Jacobs 1999, §1.4): Phase 1 is the cartesian factor, Phase 2 is the vertical factor, and the decomposition is canonical given the cleavage. The same dependency-respecting ordering reappears within Phase 2 as the contravariant depth sweep, which processes bind depths from the maximum downward to avoid invalidating dependent reductions.
+Beyond the three laws, the **Kleisli tower structure** of bind-depth chains (Section 5) connects BonsaiScheduler's two-phase pipeline to the cartesian-vertical factorisation of morphisms in a fibration (Jacobs 1999, §1.4): Phase 1 is the cartesian factor, Phase 2 is the vertical factor, and the decomposition is canonical given the cleavage. The same dependency-respecting ordering reappears within Phase 2 as the covariant depth sweep, which processes bind depths from minimum upward, settling shallow depths first so that deeper depths reduce in the correct context.
 
 ---
 

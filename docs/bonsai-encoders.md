@@ -250,7 +250,7 @@ Phase 1 (halveAll): halves all active coordinates simultaneously toward their ta
 
 ## Fibre Descent encoders
 
-Processes DAG leaf ranges first (bound leaves before independent leaves), then a contravariant sweep at intermediate bind depths (max depth → 1). Redistribution runs once at the end.
+Processes DAG leaf ranges first (bound leaves before independent leaves), then a covariant sweep at intermediate bind depths (depth 1 → max depth). Redistribution runs once at the end.
 
 Value encoders run in `trainOrder` with move-to-front. A `StructuralFingerprint` guard fires per-acceptance for bound non-constant leaf ranges, rolling back any probe that causes a structural change.
 

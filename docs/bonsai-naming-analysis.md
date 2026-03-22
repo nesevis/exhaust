@@ -41,7 +41,7 @@ same operation applied at each coordinate, just restricted to that dimension.
 The reducer does three fundamentally different things at the same depth depending
 on which pass it's in:
 
-- **Contravariant at depth 2**: exact value minimization, `.direct` decoder,
+- **Value sweep at depth 2**: exact value minimization, `.direct` decoder,
   structure-preserving, lattice-stable
 - **Deletion at depth 2**: structure-destroying span removal, `.guided` decoder,
   lattice-invalidating

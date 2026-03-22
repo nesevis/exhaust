@@ -351,7 +351,7 @@ var trainOrder: [ReductionScheduler.ValueEncoderSlot] = ...
 `snipOrder` and `trainOrder` both contain `ValueEncoderSlot` elements and start identical (line 502: `trainOrder = snipOrder`). They diverge via independent `moveToFront` calls during the cycle. The naming does not clearly convey which phase each serves:
 
 - `snipOrder` is used for leaf-range value minimization in fibre descent
-- `trainOrder` is used for contravariant-sweep value minimization in fibre descent
+- `trainOrder` is used for covariant-sweep value minimization in fibre descent
 - `pruneOrder` is used for structural deletion in base descent
 
 The interaction between `snipOrder` and `trainOrder` is not documented — they share the same encoder pool but maintain independent move-to-front state.
@@ -1101,7 +1101,7 @@ var snipOrder: [ReductionScheduler.ValueEncoderSlot] = ReductionScheduler.ValueE
 /// Deletion encoder ordering for structural deletion in base descent.
 var pruneOrder: [ReductionScheduler.DeletionEncoderSlot] = ReductionScheduler.DeletionEncoderSlot.allCases
 
-/// Value encoder ordering for the contravariant depth sweep in fibre descent.
+/// Value encoder ordering for the covariant depth sweep in fibre descent.
 /// Starts identical to ``snipOrder`` each cycle; diverges via independent move-to-front.
 var trainOrder: [ReductionScheduler.ValueEncoderSlot] = ReductionScheduler.ValueEncoderSlot.allCases
 ```
