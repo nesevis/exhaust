@@ -6,13 +6,16 @@ PACKAGE_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 BUILD_DIR="${PACKAGE_DIR}/.build/xcframework-staging"
 OUTPUT_DIR="${PACKAGE_DIR}/Frameworks"
 
-EVOLUTION_FLAGS=(-Xswiftc -enable-library-evolution -Xswiftc -emit-module-interface)
+EVOLUTION_FLAGS=(-Xswiftc -enable-library-evolution -Xswiftc -emit-module-interface -Xswiftc -lto=llvm-full)
 IOS_SIM_SDK="$(xcrun --sdk iphonesimulator --show-sdk-path)"
 IOS_DEPLOYMENT_TARGET="18.0"
 
 echo "==> Cleaning staging area"
 rm -rf "${BUILD_DIR}"
 mkdir -p "${BUILD_DIR}"
+
+# Pre-resolve so parallel builds don't race on the workspace lock
+swift package resolve --package-path "${PACKAGE_DIR}"
 
 # ---------- Build for each triple ----------
 # Use --target to avoid building tool dependencies (like SwiftLint, DocC)
@@ -31,15 +34,22 @@ build_triple() {
         --target ExhaustCore 2>&1 | tail -1
 }
 
-build_triple arm64-apple-macosx
+build_triple arm64-apple-macosx &
+PID_MACOS=$!
 
 build_triple arm64-apple-ios-simulator \
     -Xswiftc -sdk -Xswiftc "${IOS_SIM_SDK}" \
-    -Xswiftc -target -Xswiftc "arm64-apple-ios${IOS_DEPLOYMENT_TARGET}-simulator"
+    -Xswiftc -target -Xswiftc "arm64-apple-ios${IOS_DEPLOYMENT_TARGET}-simulator" &
+PID_IOS_ARM=$!
 
 build_triple x86_64-apple-ios-simulator \
     -Xswiftc -sdk -Xswiftc "${IOS_SIM_SDK}" \
-    -Xswiftc -target -Xswiftc "x86_64-apple-ios${IOS_DEPLOYMENT_TARGET}-simulator"
+    -Xswiftc -target -Xswiftc "x86_64-apple-ios${IOS_DEPLOYMENT_TARGET}-simulator" &
+PID_IOS_X86=$!
+
+wait "${PID_MACOS}"
+wait "${PID_IOS_ARM}"
+wait "${PID_IOS_X86}"
 
 # ---------- Collect artefacts per-platform ----------
 #
