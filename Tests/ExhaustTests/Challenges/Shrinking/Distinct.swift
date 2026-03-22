@@ -25,7 +25,7 @@ struct DistinctShrinkingChallenge {
     @Test("Distinct, Full")
     func distinct() {
         let gen = #gen(.int().array(length: 3 ... 30))
-        ExhaustLog.setConfiguration(.init(isEnabled: true, minimumLevel: .info, categoryMinimumLevels: [.reducer: .debug], format: .human))
+//        ExhaustLog.setConfiguration(.init(isEnabled: true, minimumLevel: .info, categoryMinimumLevels: [.reducer: .debug], format: .human))
         let counterExample = #exhaust(
             gen,
             .suppressIssueReporting,

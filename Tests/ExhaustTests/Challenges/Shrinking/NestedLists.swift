@@ -21,7 +21,7 @@ struct NestedListsShrinkingChallenge {
      */
     @Test("Nested Lists")
     func nestedListsFull() {
-        ExhaustLog.setConfiguration(.init(isEnabled: true, minimumLevel: .info, categoryMinimumLevels: [.reducer: .debug], format: .human))
+//        ExhaustLog.setConfiguration(.init(isEnabled: true, minimumLevel: .info, categoryMinimumLevels: [.reducer: .debug], format: .human))
         let gen = #gen(.uint().array().array())
         print()
         let output = #exhaust(

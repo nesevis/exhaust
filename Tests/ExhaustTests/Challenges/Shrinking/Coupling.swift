@@ -10,7 +10,7 @@ import Testing
 @testable import Exhaust
 
 @MainActor
-@Suite("Shrinking Challenge: Coupling", .disabled("Disabled until edge encoder is in"))
+@Suite("Shrinking Challenge: Coupling", .disabled("Disabled until encoder composition is in"))
 struct CouplingShrinkingChallenge {
     /*
      https://github.com/jlink/shrinking-challenge/blob/main/challenges/coupling.md

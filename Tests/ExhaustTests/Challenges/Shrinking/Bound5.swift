@@ -124,7 +124,7 @@ struct Bound5ShrinkingChallenge {
             d: [-4862, 11017, 12831, 19004],
             e: [-25748, 8284, -13626, 12773, 4040]
         )
-        ExhaustLog.setConfiguration(.init(isEnabled: true, minimumLevel: .info, categoryMinimumLevels: [.reducer: .debug], format: .human))
+        //ExhaustLog.setConfiguration(.init(isEnabled: true, minimumLevel: .info, categoryMinimumLevels: [.reducer: .debug], format: .human))
         let output = #exhaust(
             Self.gen,
             .suppressIssueReporting,
