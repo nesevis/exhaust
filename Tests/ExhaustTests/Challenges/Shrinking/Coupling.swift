@@ -10,7 +10,7 @@ import Testing
 @testable import Exhaust
 
 @MainActor
-@Suite("Shrinking Challenge: Coupling", .disabled("Disabled until encoder composition is in"))
+@Suite("Shrinking Challenge: Coupling")
 struct CouplingShrinkingChallenge {
     /*
      https://github.com/jlink/shrinking-challenge/blob/main/challenges/coupling.md
@@ -41,7 +41,7 @@ struct CouplingShrinkingChallenge {
 
     @Test("Coupling")
     func couplingChallenge() throws {
-        ExhaustLog.setConfiguration(.init(isEnabled: true, minimumLevel: .info, categoryMinimumLevels: [.reducer: .debug], format: .human))
+        ExhaustLog.setConfiguration(.init(isEnabled: true, minimumLevel: .debug, categoryMinimumLevels: [.reducer: .debug], format: .human))
         let value = try #require(
             #exhaust(
                 Self.gen,
