@@ -7,7 +7,7 @@
 /// Two regimes based on the fibre's total domain size:
 /// - **Small fibres** (total space ≤ ``exhaustiveThreshold``): exhaustive enumeration of all value assignments via mixed-radix counting.
 /// - **Large fibres**: pairwise covering array (strength 2) via IPOG, reusing the existing ``CoveringArray.bestFitting(budget:profile:)`` infrastructure. Guarantees every pair of parameter values appears in at least one probe.
-public struct FibreCoveringEncoder: PointEncoder {
+public struct FibreCoveringEncoder: ComposableEncoder {
     public let name: EncoderName = .kleisliComposition
     public let phase: ReductionPhase = .exploration
 
@@ -42,7 +42,7 @@ public struct FibreCoveringEncoder: PointEncoder {
 
     public init() {}
 
-    // MARK: - PointEncoder
+    // MARK: - ComposableEncoder
 
     public func estimatedCost(
         sequence: ChoiceSequence,

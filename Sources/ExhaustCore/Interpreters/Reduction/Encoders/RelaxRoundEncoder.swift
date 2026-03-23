@@ -5,32 +5,38 @@
 /// Conforms to ``AdaptiveEncoder`` rather than ``BatchEncoder`` because ``ReductionState/runRelaxRound(remaining:)`` drives it through a manual loop that needs per-probe decoder access. The `lastAccepted` feedback is ignored — each relaxation is independent, so acceptance of one pair does not inform which pair to try next.
 ///
 /// Grade: `(.speculative, w)`. Requires pipeline acceptance — the caller must verify that the final state (after exploit passes) improves over the pre-relaxation checkpoint.
-public struct RelaxRoundEncoder: AdaptiveEncoder {
+public struct RelaxRoundEncoder: ComposableEncoder {
     public init() {}
 
     public let name: EncoderName = .relaxRound
     public let phase = ReductionPhase.exploration
 
-    public func estimatedCost(sequence: ChoiceSequence, bindIndex _: BindSpanIndex?) -> Int? {
-        let valueCount = ChoiceSequence.extractAllValueSpans(from: sequence).count
+    // MARK: - Dual conformance disambiguation
+
+    public var convergenceRecords: [Int: ConvergedOrigin] { [:] }
+
+    // MARK: - ComposableEncoder
+
+    public func estimatedCost(
+        sequence: ChoiceSequence,
+        tree: ChoiceTree,
+        positionRange: ClosedRange<Int>,
+        context: ReductionContext
+    ) -> Int? {
+        let valueCount = Self.extractFilteredSpans(from: sequence, in: positionRange, context: context).count
         guard valueCount >= 2 else { return nil }
         return valueCount * (valueCount - 1)
     }
 
-    // MARK: - State
-
-    private var sequence = ChoiceSequence()
-    private var probes: [(lhsIndex: Int, rhsIndex: Int)] = []
-    private var probeIndex = 0
-
-    // MARK: - AdaptiveEncoder
-
-    public mutating func start(sequence: ChoiceSequence, targets: TargetSet, convergedOrigins _: [Int: ConvergedOrigin]?) {
+    public mutating func start(
+        sequence: ChoiceSequence,
+        tree: ChoiceTree,
+        positionRange: ClosedRange<Int>,
+        context: ReductionContext
+    ) {
         self.sequence = sequence
         probes = []
         probeIndex = 0
-
-        guard case .wholeSequence = targets else { return }
 
         var candidates: [(index: Int, value: ChoiceSequenceValue.Value)] = []
         var index = 0
@@ -66,6 +72,12 @@ public struct RelaxRoundEncoder: AdaptiveEncoder {
             Self.distance(at: lhs.lhsIndex, in: seq) > Self.distance(at: rhs.lhsIndex, in: seq)
         }
     }
+
+    // MARK: - State
+
+    private var sequence = ChoiceSequence()
+    private var probes: [(lhsIndex: Int, rhsIndex: Int)] = []
+    private var probeIndex = 0
 
     public mutating func nextProbe(lastAccepted _: Bool) -> ChoiceSequence? {
         while probeIndex < probes.count {

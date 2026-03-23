@@ -1,24 +1,62 @@
+// MARK: - Convergence Signal
+
+/// Records what an encoder observed when it terminated, reported to the factory for cross-cycle decisions.
+///
+/// Each encoder produces a signal at convergence. The factory pattern-matches on the signal to select the recovery encoder for the next cycle. Signals are stored in ``ConvergedOrigin`` alongside the warm-start bound.
+public enum ConvergenceSignal: Hashable, Sendable {
+    /// Binary search converged normally. Monotonicity held throughout.
+    case monotoneConvergence
+
+    /// Binary search: the property passed at a value where the monotonicity assumption predicted failure. The failure surface has a gap — bounded scan below the convergence point may find a lower floor.
+    case nonMonotoneGap(remainingRange: Int)
+
+    /// Zero-value: batch zeroing failed but at least one individual zeroing succeeded. The coordinate has dependencies on other coordinates.
+    case zeroingDependency
+
+    /// Linear scan completed. The factory reverts to binary search on the next cycle.
+    case scanComplete(foundLowerFloor: Bool)
+}
+
+// MARK: - Encoder Configuration
+
+/// Identifies the encoder configuration that produced a convergence record.
+///
+/// The factory uses this to reject cache entries from a different configuration. When the factory switches from `.binarySearchSemanticSimplest` to `.binarySearchRangeMinimum` for the same position between cycles, the cached bound from the upward search is not meaningful as a downward starting point. The configuration discriminant catches this.
+public enum EncoderConfiguration: Hashable, Sendable {
+    case binarySearchRangeMinimum
+    case binarySearchSemanticSimplest
+    case linearScan
+    case zeroValue
+}
+
 // MARK: - Converged Origin
 
-/// Cached convergence bound from a prior binary search pass, used to narrow subsequent searches.
+/// Stores the convergence bound and observation from a prior encoder pass.
 ///
-/// When a binary search encoder converges at a coordinate, it records the convergence bound and direction. On the next cycle, the cache supplies this as a converged origin to skip the already-explored portion of the search range. A validation probe confirms the floor before committing.
+/// Carries warm-start data (`bound`), the encoder's observation (`signal`), the configuration that produced it (`configuration`), and the cycle number for staleness detection. Stored in the ``ConvergenceCache`` and supplied to encoders via ``ReductionContext/convergedOrigins``.
 public struct ConvergedOrigin: Sendable {
-    /// The bit-pattern value at which the prior search converged.
+    /// The bit-pattern value at which the search converged. Warm-start data.
     public let bound: UInt64
 
-    /// The direction of the prior search.
-    public let direction: Direction
+    /// Describes what the encoder observed at convergence. Factory decision data.
+    public let signal: ConvergenceSignal
 
-    /// The direction a binary search was traveling when it converged.
-    public enum Direction: Sendable {
-        case downward
-        case upward
-    }
+    /// Identifies which encoder configuration produced this entry. Staleness discriminant.
+    public let configuration: EncoderConfiguration
 
-    public init(bound: UInt64, direction: Direction) {
+    /// The cycle in which this observation was recorded. Staleness detection.
+    public let cycle: Int
+
+    public init(
+        bound: UInt64,
+        signal: ConvergenceSignal,
+        configuration: EncoderConfiguration,
+        cycle: Int
+    ) {
         self.bound = bound
-        self.direction = direction
+        self.signal = signal
+        self.configuration = configuration
+        self.cycle = cycle
     }
 }
 
@@ -62,6 +100,34 @@ struct ConvergenceCache {
     }
 }
 
+// MARK: - Edge Observation
+
+/// Describes what the downstream encoder observed about a composition edge's fibre.
+///
+/// Per-fibre signals from the downstream role. Stored per-edge on ``ReductionState``, keyed by region index. The factory reads these to skip fully-searched edges or adjust budgets.
+enum FibreSignal: Hashable, Sendable {
+    /// Exhaustive or pairwise search covered the full fibre. No failure found.
+    case exhaustedClean
+
+    /// Exhaustive or pairwise search covered the full fibre. At least one failure found.
+    case exhaustedWithFailure
+
+    /// The downstream encoder bailed before completing coverage.
+    case bail(paramCount: Int)
+}
+
+/// Records the downstream observation for a composition edge after the edge completes.
+struct EdgeObservation: Sendable {
+    /// Describes what the downstream encoder observed about the fibre.
+    let signal: FibreSignal
+
+    /// The upstream bit-pattern value that produced this fibre.
+    let upstreamValue: UInt64
+
+    /// The cycle in which this observation was recorded.
+    let cycle: Int
+}
+
 // MARK: - Convergence Instrumentation
 
 /// Measurement-only instrumentation for encoder convergence events.
@@ -71,7 +137,8 @@ struct ConvergenceInstrumentation {
     struct ConvergenceRecord {
         let coordinateIndex: Int
         let convergedValue: UInt64
-        let direction: ConvergedOrigin.Direction
+        let configuration: EncoderConfiguration
+        let signal: ConvergenceSignal
         let cycle: Int
     }
 
@@ -105,6 +172,7 @@ final class ReductionState<Output> {
     var dominance: EncoderDominance
     var rejectCache = Set<UInt64>(minimumCapacity: 512)
     var convergenceCache = ConvergenceCache()
+    var edgeObservations: [Int: EdgeObservation] = [:]
     var convergenceInstrumentation: ConvergenceInstrumentation?
 
     /// The current cycle number, set by the scheduler at the top of each cycle.
@@ -128,6 +196,7 @@ final class ReductionState<Output> {
     var totalValueCoordinatesAtPhaseTwoStart: Int = 0
     var fibreExceededExhaustiveThreshold: Int = 0
     var pairwiseOnExhaustibleFibre: Int = 0
+    var fibreZeroValueStarts: Int = 0
     var futileCompositions: Int = 0
     var compositionEdgesAttempted: Int = 0
     var convergenceTransfersAttempted: Int = 0
@@ -135,6 +204,12 @@ final class ReductionState<Output> {
     var convergenceTransfersStale: Int = 0
     var verificationSweepProbes: Int = 0
     var verificationSweepFoundStaleness: Bool = false
+    var fibrePredictionCorrect: Int = 0
+    var fibrePredictionWrong: Int = 0
+    var zeroingDependencyCount: Int = 0
+    var fibreExhaustedCleanCount: Int = 0
+    var fibreExhaustedWithFailureCount: Int = 0
+    var fibreBailCount: Int = 0
     var statsCycles: Int = 0
 
     /// Extracts accumulated statistics from this reduction run.
@@ -147,6 +222,7 @@ final class ReductionState<Output> {
         stats.totalValueCoordinatesAtPhaseTwoStart = totalValueCoordinatesAtPhaseTwoStart
         stats.fibreExceededExhaustiveThreshold = fibreExceededExhaustiveThreshold
         stats.pairwiseOnExhaustibleFibre = pairwiseOnExhaustibleFibre
+        stats.fibreZeroValueStarts = fibreZeroValueStarts
         stats.futileCompositions = futileCompositions
         stats.compositionEdgesAttempted = compositionEdgesAttempted
         stats.convergenceTransfersAttempted = convergenceTransfersAttempted
@@ -154,7 +230,49 @@ final class ReductionState<Output> {
         stats.convergenceTransfersStale = convergenceTransfersStale
         stats.verificationSweepProbes = verificationSweepProbes
         stats.verificationSweepFoundStaleness = verificationSweepFoundStaleness
+        stats.fibrePredictionCorrect = fibrePredictionCorrect
+        stats.fibrePredictionWrong = fibrePredictionWrong
+        stats.zeroingDependencyCount = zeroingDependencyCount
+        stats.fibreExhaustedCleanCount = fibreExhaustedCleanCount
+        stats.fibreExhaustedWithFailureCount = fibreExhaustedWithFailureCount
+        stats.fibreBailCount = fibreBailCount
         return stats
+    }
+
+    // MARK: - Fibre Descent Gating
+
+    /// Returns true when every value coordinate is either cached or already at its reduction target.
+    ///
+    /// Used by the fibre descent gate (signal 4): when all coordinates are effectively converged
+    /// AND base descent made no structural progress AND Phase 2 stalled last cycle, further
+    /// Phase 2 probes would only re-confirm floors — skip it.
+    ///
+    /// A coordinate is effectively converged if:
+    /// - It has a cached convergence floor (binary search ran and converged), OR
+    /// - Its current value equals its reduction target (nothing to reduce — binary search would skip it).
+    func allValueCoordinatesConverged() -> Bool {
+        var hasAnyValue = false
+        for index in 0 ..< sequence.count {
+            guard let value = sequence[index].value else { continue }
+            hasAnyValue = true
+            // A coordinate is converged if binary search has a cached floor at or below the current value.
+            if let origin = convergenceCache.convergedOrigin(at: index) {
+                if value.choice.bitPattern64 <= origin.bound {
+                    continue
+                }
+                return false
+            }
+            // No cache entry — check if the value is already at its reduction target.
+            let isWithinRecordedRange = value.isRangeExplicit && value.choice.fits(in: value.validRange)
+            let targetBitPattern = isWithinRecordedRange
+                ? value.choice.reductionTarget(in: value.validRange)
+                : value.choice.semanticSimplest.bitPattern64
+            if value.choice.bitPattern64 == targetBitPattern {
+                continue
+            }
+            return false
+        }
+        return hasAnyValue
     }
 
     // MARK: - Snapshot
@@ -177,18 +295,14 @@ final class ReductionState<Output> {
     }
 
     // Encoders
-    var promoteBranchesEncoder = DeleteByBranchPromotionEncoder()
-    var pivotBranchesEncoder = DeleteByBranchPivotEncoder()
-    var deleteContainerSpans = DeleteContainerSpansEncoder()
-    var deleteSequenceElements = DeleteSequenceElementsEncoder()
-    var deleteSequenceBoundaries = DeleteSequenceBoundariesEncoder()
-    var deleteFreeStandingValues = DeleteFreeStandingValuesEncoder()
-    var randomRepairDelete = DeleteContainerSpansWithRandomRepairEncoder()
+    var promoteBranchesEncoder = BranchSimplificationEncoder(strategy: .promote)
+    var pivotBranchesEncoder = BranchSimplificationEncoder(strategy: .pivot)
     var zeroValueEncoder = ZeroValueEncoder()
     var binarySearchToZeroEncoder = BinarySearchToSemanticSimplestEncoder()
     var binarySearchToTargetEncoder = BinarySearchToRangeMinimumEncoder()
     var reduceFloatEncoder = ReduceFloatEncoder()
-    var deleteAlignedWindowsEncoder: DeleteAlignedWindowsEncoder
+    var contiguousWindowEncoder = ContiguousWindowDeletionEncoder()
+    var beamSearchEncoder: BeamSearchDeletionEncoder
     var tandemEncoder = RedistributeByTandemReductionEncoder()
     var redistributeEncoder = RedistributeAcrossValueContainersEncoder()
     var productSpaceBatchEncoder = ProductSpaceBatchEncoder()
@@ -232,7 +346,7 @@ final class ReductionState<Output> {
         bestOutput = output
         spanCache = SpanCache()
         dominance = EncoderDominance()
-        deleteAlignedWindowsEncoder = DeleteAlignedWindowsEncoder(
+        beamSearchEncoder = BeamSearchDeletionEncoder(
             beamTuning: config.alignedDeletionBeamSearchTuning
         )
         convergenceInstrumentation = isInstrumented ? ConvergenceInstrumentation() : nil
@@ -251,6 +365,7 @@ extension ReductionState {
         if structureChanged {
             spanCache.invalidate()
             convergenceCache.invalidateAll()
+            edgeObservations.removeAll(keepingCapacity: true)
             bindIndex = hasBind ? BindSpanIndex(from: sequence) : nil
         }
         if hasBind {
@@ -280,90 +395,31 @@ extension ReductionState {
         }
     }
 
-    /// Runs a batch encoder against a decoder, tracking materializations. Returns true if a candidate was accepted.
-    func runBatch(
-        _ encoder: some BatchEncoder,
-        decoder: SequenceDecoder,
-        targets: TargetSet,
-        structureChanged: Bool,
-        budget: inout ReductionScheduler.LegBudget
-    ) throws -> Bool {
-        guard budget.isExhausted == false else { return false }
-        if dominance.shouldSkip(encoder.name, phase: encoder.phase) { return false }
-        let startSeqLen = sequence.count
-        let cacheSalt = decoder.rejectCacheSalt
-        var probes = 0
-        let budgetBefore = budget.used
-        defer {
-            if collectStats {
-                encoderProbes[encoder.name, default: 0] += probes
-                totalMaterializations += (budget.used - budgetBefore)
-            }
-        }
-        for candidate in encoder.encode(sequence: sequence, targets: targets) {
-            guard budget.isExhausted == false else { break }
-            probes += 1
-            let cacheKey = ZobristHash.hash(of: candidate) &+ cacheSalt
-            if rejectCache.contains(cacheKey) {
-                budget.recordMaterialization()
-                continue
-            }
-            if let result = try decoder.decode(
-                candidate: candidate,
-                gen: gen,
-                tree: tree,
-                originalSequence: sequence,
-                property: property
-            ) {
-                budget.recordMaterialization()
-                accept(result, structureChanged: structureChanged)
-                dominance.recordSuccess(encoder.name)
-                if isInstrumented {
-                    ExhaustLog.debug(category: .reducer, event: "encoder_accepted", metadata: [
-                        "encoder": encoder.name.rawValue, "probes": "\(probes)",
-                        "seq_len": "\(startSeqLen)→\(sequence.count)",
-                        "output": "\(output)",
-                    ])
-                }
-                return true
-            }
-            budget.recordMaterialization()
-            rejectCache.insert(cacheKey)
-        }
-        if isInstrumented {
-            if probes > 0 {
-                ExhaustLog.debug(category: .reducer, event: "encoder_exhausted", metadata: [
-                    "encoder": encoder.name.rawValue, "probes": "\(probes)",
-                    "seq_len": "\(startSeqLen)",
-                ])
-            } else {
-                ExhaustLog.debug(category: .reducer, event: "encoder_no_probes", metadata: [
-                    "encoder": encoder.name.rawValue,
-                ])
-            }
-        }
-        return false
-    }
+    // MARK: - ComposableEncoder runner
 
-    /// Runs an adaptive encoder against a decoder, tracking materializations. Returns true if any probe was accepted.
+    /// Runs a composable encoder against a decoder, tracking materializations.
     ///
-    /// - Parameters:
-    ///   - fingerprintGuard: When non-nil, enforces a per-acceptance Phase 1/Phase 2 boundary. Before committing each accepted probe, the method takes a snapshot, calls `accept`, then recomputes the ``StructuralFingerprint``. If the fingerprint differs from the guard value, the acceptance is rolled back via the snapshot and the encoder loop terminates immediately. Any clean acceptances committed before the crossing are preserved. This prevents Phase 2 value encoders from accidentally committing structural changes — for example, reducing a nested bind-inner value that changes bound-array length — that belong in Phase 1. The guard requires `structureChanged: hasBind` so that `accept` rebuilds ``BindSpanIndex`` before the fingerprint is recomputed.
-    func runAdaptive(
-        _ encoder: some AdaptiveEncoder,
+    /// The encoder derives its own targets from `positionRange` rather than receiving a pre-extracted ``TargetSet``.
+    func runComposable(
+        _ encoder: some ComposableEncoder,
         decoder: SequenceDecoder,
-        targets: TargetSet,
+        positionRange: ClosedRange<Int>,
+        context: ReductionContext,
         structureChanged: Bool,
         budget: inout ReductionScheduler.LegBudget,
-        fingerprintGuard: StructuralFingerprint? = nil,
-        convergedOrigins: [Int: ConvergedOrigin]? = nil
+        fingerprintGuard: StructuralFingerprint? = nil
     ) throws -> Bool {
         guard budget.isExhausted == false else { return false }
         if dominance.shouldSkip(encoder.name, phase: encoder.phase) { return false }
         let startSeqLen = sequence.count
         let startSequenceForCacheInvalidation = hasBind ? sequence : nil
         var encoder = encoder
-        encoder.start(sequence: sequence, targets: targets, convergedOrigins: convergedOrigins)
+        encoder.start(
+            sequence: sequence,
+            tree: tree,
+            positionRange: positionRange,
+            context: context
+        )
         let cacheSalt = decoder.rejectCacheSalt
         var lastAccepted = false
         var anyAccepted = false
@@ -392,16 +448,11 @@ extension ReductionState {
                 budget.recordMaterialization()
                 lastDecodingReport = result.decodingReport
                 if let guardPrint = fingerprintGuard {
-                    // Snapshot before accepting so a structural crossing can be fully rolled back.
                     let snap = makeSnapshot()
                     accept(result, structureChanged: structureChanged)
-                    // bindIndex is now fresh (structureChanged: hasBind rebuilt it above).
-                    // Compare the post-accept fingerprint against the pre-Phase-2 baseline.
                     if let currentBindIndex = bindIndex,
                        StructuralFingerprint.from(sequence, bindIndex: currentBindIndex) != guardPrint
                     {
-                        // Structural boundary crossed: undo this acceptance and stop the encoder.
-                        // Any clean acceptances already committed remain intact.
                         restoreSnapshot(snap)
                         lastAccepted = false
                         break
@@ -418,14 +469,14 @@ extension ReductionState {
                 rejectCache.insert(cacheKey)
             }
         }
-        // Harvest convergence records into cache and instrumentation.
-        // Gate cache recording on coverage: low-coverage materializations (PRNG-heavy)
-        // produce unreliable convergence points that would cause validation-probe restarts.
         let harvested = encoder.convergenceRecords
         let cacheReliable = lastDecodingReport?.isReliableForConvergenceCache ?? true
         for (index, convergedOrigin) in harvested {
             if cacheReliable {
                 convergenceCache.record(index: index, convergedOrigin: convergedOrigin)
+            }
+            if convergedOrigin.signal == .zeroingDependency {
+                zeroingDependencyCount += 1
             }
         }
         if convergenceInstrumentation != nil {
@@ -434,18 +485,14 @@ extension ReductionState {
                     ConvergenceInstrumentation.ConvergenceRecord(
                         coordinateIndex: index,
                         convergedValue: convergedOrigin.bound,
-                        direction: convergedOrigin.direction,
+                        configuration: convergedOrigin.configuration,
+                        signal: convergedOrigin.signal,
                         cycle: currentCycle
                     )
                 )
             }
             convergenceInstrumentation?.totalEncoderConvergences += harvested.count
         }
-        // Invalidate convergence cache entries for bind-scope siblings of changed values.
-        // When an encoder accepts a probe that changes value A, convergence records harvested
-        // from the same encoder run for sibling value B (in the same bind scope) were
-        // computed in a context that included the old value of A. Those converged origins are
-        // stale and must be cleared so subsequent cycles re-probe B.
         if anyAccepted,
            convergenceCache.isEmpty == false,
            let startSeq = startSequenceForCacheInvalidation,
@@ -471,6 +518,121 @@ extension ReductionState {
             }
         }
         return anyAccepted
+    }
+
+    // MARK: - Descriptor chain runner
+
+    /// Processes an ordered array of morphism descriptors with dominance suppression.
+    ///
+    /// For each descriptor (not suppressed), builds a decoder from the descriptor's factory,
+    /// runs the encoder via ``runComposable(_:decoder:positionRange:context:structureChanged:budget:fingerprintGuard:)``, and on acceptance suppresses all descriptors listed in ``MorphismDescriptor/dominates``.
+    ///
+    /// Descriptors with ``MorphismDescriptor/maxRetries`` > 1 are re-run up to that many times
+    /// with fresh decoder instances, stopping on the first acceptance.
+    func runDescriptorChain(
+        _ descriptors: [MorphismDescriptor],
+        positionRange: ClosedRange<Int>,
+        context: ReductionContext,
+        budget: inout ReductionScheduler.LegBudget
+    ) throws -> Bool {
+        var suppressed = Set<Int>()
+        var anyAccepted = false
+
+        for (index, descriptor) in descriptors.enumerated() {
+            guard budget.isExhausted == false else { break }
+            guard suppressed.contains(index) == false else { continue }
+
+            var descriptorAccepted = false
+
+            for _ in 0 ..< descriptor.maxRetries {
+                guard budget.isExhausted == false else { break }
+
+                let decoder = descriptor.decoderFactory()
+
+                let accepted = try runComposable(
+                    descriptor.encoder,
+                    decoder: decoder,
+                    positionRange: positionRange,
+                    context: context,
+                    structureChanged: descriptor.structureChanged,
+                    budget: &budget,
+                    fingerprintGuard: descriptor.fingerprintGuard
+                )
+
+                if accepted {
+                    descriptorAccepted = true
+                    anyAccepted = true
+                    break
+                }
+            }
+
+            if descriptorAccepted {
+                for dominated in descriptor.dominates {
+                    suppressed.insert(dominated)
+                }
+            }
+        }
+
+        return anyAccepted
+    }
+
+    /// Result from ``runDescriptorChain(_:positionRange:context:budget:)`` that includes per-descriptor acceptance info.
+    struct DescriptorChainResult {
+        /// Whether any descriptor in the chain accepted a probe.
+        let anyAccepted: Bool
+        /// Indices of descriptors that accepted at least one probe, in execution order.
+        let acceptedIndices: [Int]
+    }
+
+    /// Processes descriptors with dominance suppression, reporting which descriptors accepted.
+    func runDescriptorChainDetailed(
+        _ descriptors: [MorphismDescriptor],
+        positionRange: ClosedRange<Int>,
+        context: ReductionContext,
+        budget: inout ReductionScheduler.LegBudget
+    ) throws -> DescriptorChainResult {
+        var suppressed = Set<Int>()
+        var acceptedIndices = [Int]()
+
+        for (index, descriptor) in descriptors.enumerated() {
+            guard budget.isExhausted == false else { break }
+            guard suppressed.contains(index) == false else { continue }
+
+            var descriptorAccepted = false
+
+            for _ in 0 ..< descriptor.maxRetries {
+                guard budget.isExhausted == false else { break }
+
+                let decoder = descriptor.decoderFactory()
+
+                let accepted = try runComposable(
+                    descriptor.encoder,
+                    decoder: decoder,
+                    positionRange: positionRange,
+                    context: context,
+                    structureChanged: descriptor.structureChanged,
+                    budget: &budget,
+                    fingerprintGuard: descriptor.fingerprintGuard
+                )
+
+                if accepted {
+                    descriptorAccepted = true
+                    break
+                }
+            }
+
+            if descriptorAccepted {
+                acceptedIndices.append(index)
+                for dominated in descriptor.dominates {
+                    suppressed.insert(dominated)
+                }
+            }
+        }
+
+        return DescriptorChainResult(
+            anyAccepted: acceptedIndices.isEmpty == false,
+            acceptedIndices: acceptedIndices
+        )
     }
 
     func makeDeletionDecoder(at depth: Int) -> SequenceDecoder {
@@ -527,28 +689,32 @@ extension ReductionState {
 extension ReductionState {
     /// Computes cost-based encoder ordering for the current sequence. Called once per cycle.
     func computeEncoderOrdering() {
+        let fullRange = 0 ... max(0, sequence.count - 1)
+        let orderingContext = ReductionContext(bindIndex: bindIndex)
         var valueCosts = [ReductionScheduler.ValueEncoderSlot: Int]()
         for slot in ReductionScheduler.ValueEncoderSlot.allCases {
             let cost: Int? = switch slot {
-            case .zeroValue: zeroValueEncoder.estimatedCost(sequence: sequence, bindIndex: bindIndex)
-            case .binarySearchToZero: binarySearchToZeroEncoder.estimatedCost(sequence: sequence, bindIndex: bindIndex)
-            case .binarySearchToTarget: binarySearchToTargetEncoder.estimatedCost(sequence: sequence, bindIndex: bindIndex)
-            case .reduceFloat: reduceFloatEncoder.estimatedCost(sequence: sequence, bindIndex: bindIndex)
+            case .zeroValue: zeroValueEncoder.estimatedCost(sequence: sequence, tree: tree, positionRange: fullRange, context: orderingContext)
+            case .binarySearchToZero: binarySearchToZeroEncoder.estimatedCost(sequence: sequence, tree: tree, positionRange: fullRange, context: orderingContext)
+            case .binarySearchToTarget: binarySearchToTargetEncoder.estimatedCost(sequence: sequence, tree: tree, positionRange: fullRange, context: orderingContext)
+            case .reduceFloat: reduceFloatEncoder.estimatedCost(sequence: sequence, tree: tree, positionRange: fullRange, context: orderingContext)
             }
             if let cost { valueCosts[slot] = cost }
         }
 
         var deletionCosts = [ReductionScheduler.DeletionEncoderSlot: Int]()
+        // Global span count across all depths — matches the old per-encoder estimatedCost
+        // which used ChoiceSequence.extractContainerSpans (all depths, not depth-filtered).
+        let containerCount = ChoiceSequence.extractContainerSpans(from: sequence).count
+        let allSpanCount = ChoiceSequence.extractAllValueSpans(from: sequence).count
         for slot in ReductionScheduler.DeletionEncoderSlot.allCases {
-            let cost: Int? = switch slot {
-            case .containerSpans: deleteContainerSpans.estimatedCost(sequence: sequence, bindIndex: bindIndex)
-            case .sequenceElements: deleteSequenceElements.estimatedCost(sequence: sequence, bindIndex: bindIndex)
-            case .sequenceBoundaries: deleteSequenceBoundaries.estimatedCost(sequence: sequence, bindIndex: bindIndex)
-            case .freeStandingValues: deleteFreeStandingValues.estimatedCost(sequence: sequence, bindIndex: bindIndex)
-            case .alignedWindows: deleteAlignedWindowsEncoder.estimatedCost(sequence: sequence, bindIndex: bindIndex)
-            case .randomRepairDelete: randomRepairDelete.estimatedCost(sequence: sequence, bindIndex: bindIndex)
+            let spanCount: Int = switch slot {
+            case .containerSpans, .alignedWindows, .randomRepairDelete: containerCount
+            case .sequenceElements, .sequenceBoundaries, .freeStandingValues: allSpanCount
             }
-            if let cost { deletionCosts[slot] = cost }
+            if spanCount > 0 {
+                deletionCosts[slot] = spanCount * 10
+            }
         }
 
         snipOrder = ReductionScheduler.ValueEncoderSlot.allCases
@@ -583,7 +749,13 @@ extension ReductionState {
         let speculativeDecoder: SequenceDecoder = .exact()
         var explorationBudget = ReductionScheduler.LegBudget(hardCap: remaining)
         var relaxEncoder = RelaxRoundEncoder()
-        relaxEncoder.start(sequence: sequence, targets: .wholeSequence)
+        let relaxRange = 0 ... max(0, sequence.count - 1)
+        relaxEncoder.start(
+            sequence: sequence,
+            tree: tree,
+            positionRange: relaxRange,
+            context: ReductionContext(bindIndex: bindIndex)
+        )
         var lastAccepted = false
         var redistributionAccepted = false
         var explorationProbes = 0

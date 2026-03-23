@@ -77,6 +77,7 @@ struct AsyncContractTests {
 
     @Test("Async contract with argumentAwareCoverage finds and shrinks failure")
     func asyncWithCoverage() async {
+        ExhaustLog.setConfiguration(.init(isEnabled: true, minimumLevel: .info, categoryMinimumLevels: [.reducer: .debug], format: .human))
         let result = await #exhaust(
             BuggyAsyncCounterSpec.self,
             commandLimit: 20,

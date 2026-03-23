@@ -139,6 +139,7 @@ enum BonsaiScheduler {
         let isInstrumented = state.isInstrumented
         var stallBudget = config.maxStalls
         var cycles = 0
+        var previousFibreProgress = true // assume progress before cycle 1
 
         // MARK: - Alternating Minimisation Loop
 
@@ -165,9 +166,29 @@ enum BonsaiScheduler {
             var baseRemaining = Self.baseDescentBudget
             let (dag, baseProgress) = try state.runBaseDescent(budget: &baseRemaining, cycle: cycles)
 
-            // Fibre descent: simplify values within the fixed structure.
-            var fibreRemaining = Self.fibreDescentBudget
-            let fibreProgress = try state.runFibreDescent(budget: &fibreRemaining, dag: dag)
+            // Fibre descent gating (signal 4): skip when all value coordinates are at
+            // cached floors, base descent made no structural progress, AND Phase 2 made
+            // no progress in the previous cycle. The stall condition prevents skipping
+            // when cross-zero or ZeroValue can still improve beyond cached binary search floors.
+            let fibreProgress: Bool
+            if baseProgress == false,
+               previousFibreProgress == false,
+               cycles > 1,
+               state.allValueCoordinatesConverged()
+            {
+                fibreProgress = false
+                if state.isInstrumented {
+                    ExhaustLog.debug(
+                        category: .reducer,
+                        event: "fibre_descent_gated",
+                        metadata: ["cycle": "\(cycles)"]
+                    )
+                }
+            } else {
+                var fibreRemaining = Self.fibreDescentBudget
+                fibreProgress = try state.runFibreDescent(budget: &fibreRemaining, dag: dag)
+            }
+            previousFibreProgress = fibreProgress
 
             // Exploration: if neither descent made progress, try cross-level and same-level minima.
             var cycleImproved = baseProgress || fibreProgress

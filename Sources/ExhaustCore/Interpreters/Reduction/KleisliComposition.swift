@@ -1,6 +1,6 @@
 // MARK: - Kleisli Composition
 
-/// Kleisli composition of two point encoders through a generator lift.
+/// Kleisli composition of two composable encoders through a generator lift.
 ///
 /// The upstream encoder proposes a mutation. The generator lift replays through the generator to produce a valid `(sequence, tree)` — the Kleisli bind. The downstream encoder operates in the lifted trace. The property checks only the final output.
 ///
@@ -19,18 +19,18 @@
 ///
 /// ## Conformance
 ///
-/// Conforms to ``AdaptiveEncoder`` so the scheduler can run it via the existing `runAdaptive` path or a manual loop (following the `runRelaxRound` pattern). Does NOT conform to ``PointEncoder`` — this is intentional to prevent nesting compositions, which would produce multiplicative budget explosion. Multi-hop composition uses topological iteration instead.
-public struct KleisliComposition<Output>: AdaptiveEncoder {
+/// Conforms to ``ComposableEncoder`` so the scheduler can run it via ``ReductionState/runComposable(_:decoder:positionRange:context:structureChanged:budget:fingerprintGuard:)`` or a manual loop (following the `runRelaxRound` pattern).
+public struct KleisliComposition<Output>: ComposableEncoder {
     // MARK: - Configuration
 
     public let name: EncoderName
     public let phase: ReductionPhase
 
-    /// The upstream point encoder — proposes mutations at the controlling position.
-    var upstream: any PointEncoder
+    /// The upstream composable encoder — proposes mutations at the controlling position.
+    var upstream: any ComposableEncoder
 
-    /// The downstream point encoder — operates in the lifted fibre.
-    var downstream: any PointEncoder
+    /// The downstream composable encoder — operates in the lifted fibre.
+    var downstream: any ComposableEncoder
 
     /// The generator lift — the Kleisli bind between upstream and downstream.
     let lift: GeneratorLift<Output>
@@ -73,6 +73,17 @@ public struct KleisliComposition<Output>: AdaptiveEncoder {
     /// The lift report from the most recent successful lift.
     private var lastLiftReport: DecodingReport?
 
+    // MARK: - Fibre telemetry
+
+    /// Number of downstream starts where the fibre was searched exhaustively (≤ 64 combinations).
+    public private(set) var fibreExhaustiveStarts = 0
+    /// Number of downstream starts where the fibre was searched via pairwise covering (> 64 combinations, ≤ 20 parameters).
+    public private(set) var fibrePairwiseStarts = 0
+    /// Number of downstream starts where the fibre was too large for covering and ZeroValue fallback ran.
+    public private(set) var fibreZeroValueStarts = 0
+    /// Maximum fibre size observed across all downstream starts.
+    public private(set) var maxObservedFibreSize: UInt64 = 0
+
     /// Raw convergence records from the previous upstream iteration's downstream, unvalidated.
     ///
     /// Populated when the downstream exhausts. The driver (`runKleisliExploration`) reads this, validates each origin at `floor - 1`, and calls ``setValidatedOrigins(_:)`` with the validated subset (or nil for cold-start).
@@ -104,8 +115,8 @@ public struct KleisliComposition<Output>: AdaptiveEncoder {
     public init(
         name: EncoderName = .kleisliComposition,
         phase: ReductionPhase = .exploration,
-        upstream: any PointEncoder,
-        downstream: any PointEncoder,
+        upstream: any ComposableEncoder,
+        downstream: any ComposableEncoder,
         lift: GeneratorLift<Output>,
         rollback: RollbackPolicy,
         upstreamRange: ClosedRange<Int>,
@@ -121,29 +132,45 @@ public struct KleisliComposition<Output>: AdaptiveEncoder {
         self.downstreamRange = downstreamRange
     }
 
-    // MARK: - AdaptiveEncoder Conformance
+    // MARK: - ComposableEncoder
 
-    public func estimatedCost(sequence: ChoiceSequence, bindIndex: BindSpanIndex?) -> Int? {
-        let ctx = ReductionContext(bindIndex: bindIndex)
+    public func estimatedCost(
+        sequence: ChoiceSequence,
+        tree: ChoiceTree,
+        positionRange: ClosedRange<Int>,
+        context: ReductionContext
+    ) -> Int? {
         guard let upCost = upstream.estimatedCost(
             sequence: sequence, tree: baseTree,
-            positionRange: upstreamRange, context: ctx
+            positionRange: upstreamRange, context: context
         ) else { return nil }
         let downCost = downstream.estimatedCost(
             sequence: sequence, tree: baseTree,
-            positionRange: downstreamRange, context: ctx
+            positionRange: downstreamRange, context: context
         ) ?? 0
         return upCost * (1 + downCost)
     }
 
     public mutating func start(
         sequence: ChoiceSequence,
-        targets: TargetSet,
+        tree: ChoiceTree,
+        positionRange: ClosedRange<Int>,
+        context: ReductionContext
+    ) {
+        // Do not pass converged origins to the composition — the convergence cache records
+        // floors from the standalone pipeline. The composition re-explores those values WITH
+        // downstream fibre search. Passing the cache would tell the upstream its current
+        // value is at the floor, producing zero probes.
+        startInternal(sequence: sequence, tree: tree, convergedOrigins: nil)
+    }
+
+    private mutating func startInternal(
+        sequence: ChoiceSequence,
+        tree: ChoiceTree,
         convergedOrigins: [Int: ConvergedOrigin]?
     ) {
         baseSequence = sequence
-        // Use a minimal tree — the actual tree will come from the lift
-        baseTree = .just("")
+        baseTree = tree
         context = ReductionContext(convergedOrigins: convergedOrigins)
 
         upstreamStarted = false
@@ -157,6 +184,10 @@ public struct KleisliComposition<Output>: AdaptiveEncoder {
         previousUpstreamBitPattern = nil
         upstreamDelta = nil
         upstreamProbesUsed = 0
+        fibreExhaustiveStarts = 0
+        fibrePairwiseStarts = 0
+        fibreZeroValueStarts = 0
+        maxObservedFibreSize = 0
 
         upstream.start(
             sequence: sequence,
@@ -245,6 +276,39 @@ public struct KleisliComposition<Output>: AdaptiveEncoder {
                 context: downstreamContext
             )
             downstreamActive = true
+
+            // If the downstream's internal strategy changed (DownstreamPick selected a
+            // different alternative), convergence transfer is invalid — cold-start.
+            if downstream.isConvergenceTransferSafe == false {
+                pendingTransferOrigins = nil
+            }
+
+            // Capture fibre telemetry from the downstream encoder.
+            if let fibreEncoder = downstream as? FibreCoveringEncoder {
+                let fibreSize = fibreEncoder.lastComputedFibreSize
+                if fibreSize > maxObservedFibreSize { maxObservedFibreSize = fibreSize }
+                if fibreSize <= FibreCoveringEncoder.exhaustiveThreshold {
+                    fibreExhaustiveStarts += 1
+                } else {
+                    fibrePairwiseStarts += 1
+                }
+            } else if let pick = downstream as? DownstreamPick {
+                // DownstreamPick selected an alternative at start() — classify by which one.
+                if let selected = pick.selectedEncoder {
+                    if selected is FibreCoveringEncoder {
+                        let fibreEncoder = selected as! FibreCoveringEncoder
+                        let fibreSize = fibreEncoder.lastComputedFibreSize
+                        if fibreSize > maxObservedFibreSize { maxObservedFibreSize = fibreSize }
+                        if fibreSize <= FibreCoveringEncoder.exhaustiveThreshold {
+                            fibreExhaustiveStarts += 1
+                        } else {
+                            fibrePairwiseStarts += 1
+                        }
+                    } else {
+                        fibreZeroValueStarts += 1
+                    }
+                }
+            }
 
             // Get the first downstream probe
             if let firstProbe = downstream.nextProbe(lastAccepted: false) {

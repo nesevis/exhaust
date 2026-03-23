@@ -1,17 +1,9 @@
-/// Sets each target value to its semantic simplest form (zero for numerics), or to the
-/// range's lower bound when zero falls outside an explicit valid range.
+/// Sets each target value to its semantic simplest form (zero for numerics), or to the range's lower bound when zero falls outside an explicit valid range.
 ///
-/// Two phases: first tries setting ALL values to simplest simultaneously (handles filter-coupled generators), then iterates individually. The 2-cell chain ZeroValue => BinarySearchToZero means that targets where ZeroValue succeeds can skip binary search entirely.
-public struct ZeroValueEncoder: AdaptiveEncoder {
+/// Two phases: first tries setting all values to simplest simultaneously (handles filter-coupled generators), then iterates individually. The two-cell chain ZeroValue followed by BinarySearchToZero means that targets where ZeroValue succeeds can skip binary search entirely.
+public struct ZeroValueEncoder: ComposableEncoder {
     public let name: EncoderName = .zeroValue
     public let phase = ReductionPhase.valueMinimization
-
-    public func estimatedCost(sequence: ChoiceSequence, bindIndex _: BindSpanIndex?) -> Int? {
-        let t = ChoiceSequence.extractAllValueSpans(from: sequence).count
-        guard t > 0 else { return nil }
-        // 1 all-at-once probe + t individual probes, one per non-zero target.
-        return 1 + t
-    }
 
     // MARK: - State
 
@@ -24,16 +16,54 @@ public struct ZeroValueEncoder: AdaptiveEncoder {
     private var filteredSpans: [(seqIdx: Int, target: ChoiceValue, validRange: ClosedRange<UInt64>?, isRangeExplicit: Bool)] = []
     private var zeroPhase = ZeroValuePhase.allAtOnce
     private var spanIndex = 0
+    private var batchRejected = false
+    private var individuallyAccepted: Set<Int> = []
+    private var currentCycle: Int = 0
 
-    // MARK: - AdaptiveEncoder
+    // MARK: - Convergence
 
-    public mutating func start(sequence: ChoiceSequence, targets: TargetSet, convergedOrigins _: [Int: ConvergedOrigin]?) {
+    public var convergenceRecords: [Int: ConvergedOrigin] {
+        guard batchRejected, individuallyAccepted.isEmpty == false else { return [:] }
+        var records: [Int: ConvergedOrigin] = [:]
+        for entry in filteredSpans where individuallyAccepted.contains(entry.seqIdx) {
+            records[entry.seqIdx] = ConvergedOrigin(
+                bound: entry.target.bitPattern64,
+                signal: .zeroingDependency,
+                configuration: .zeroValue,
+                cycle: currentCycle
+            )
+        }
+        return records
+    }
+
+    // MARK: - ComposableEncoder
+
+    public func estimatedCost(
+        sequence: ChoiceSequence,
+        tree: ChoiceTree,
+        positionRange: ClosedRange<Int>,
+        context: ReductionContext
+    ) -> Int? {
+        let spans = Self.extractFilteredSpans(from: sequence, in: positionRange, context: context)
+        guard spans.isEmpty == false else { return nil }
+        return 1 + spans.count
+    }
+
+    public mutating func start(
+        sequence: ChoiceSequence,
+        tree: ChoiceTree,
+        positionRange: ClosedRange<Int>,
+        context: ReductionContext
+    ) {
+        currentCycle = context.cycle
+        let spans = Self.extractFilteredSpans(from: sequence, in: positionRange, context: context)
+
         self.sequence = sequence
         zeroPhase = .allAtOnce
         spanIndex = 0
         filteredSpans = []
-
-        guard case let .spans(spans) = targets else { return }
+        batchRejected = false
+        individuallyAccepted = []
 
         for span in spans {
             let seqIdx = span.range.lowerBound
@@ -75,9 +105,15 @@ public struct ZeroValueEncoder: AdaptiveEncoder {
                         isRangeExplicit: entry.isRangeExplicit
                     ))
                 }
-            } else if lastAccepted, spanIndex > 0 {
-                // Update base sequence with the previously accepted value.
+            } else if lastAccepted == false, spanIndex == 0 {
+                // All-at-once probe was rejected — batch zeroing failed.
+                batchRejected = true
+            }
+
+            if lastAccepted, spanIndex > 0 {
+                // Individual probe was accepted.
                 let prev = filteredSpans[spanIndex - 1]
+                individuallyAccepted.insert(prev.seqIdx)
                 sequence[prev.seqIdx] = .value(.init(
                     choice: prev.target,
                     validRange: prev.validRange,

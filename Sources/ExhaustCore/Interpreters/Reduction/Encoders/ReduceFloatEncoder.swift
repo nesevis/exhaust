@@ -14,24 +14,79 @@
 /// 3. `as_integer_ratio`-style integer-part minimization
 ///
 /// Each stage processes one float span at a time. On convergence or exhaustion, advances to the next stage or the next span.
-struct ReduceFloatEncoder: AdaptiveEncoder {
+struct ReduceFloatEncoder: ComposableEncoder {
     init() {}
 
     var convergenceRecords: [Int: ConvergedOrigin] = [:]
+    private var currentCycle: Int = 0
 
     let name: EncoderName = .reduceFloat
     let phase = ReductionPhase.valueMinimization
 
-    func estimatedCost(sequence: ChoiceSequence, bindIndex _: BindSpanIndex?) -> Int? {
-        let spans = ChoiceSequence.extractAllValueSpans(from: sequence)
-        let t = spans.count(where: { span in
+    // MARK: - ComposableEncoder
+
+    func estimatedCost(
+        sequence: ChoiceSequence,
+        tree: ChoiceTree,
+        positionRange: ClosedRange<Int>,
+        context: ReductionContext
+    ) -> Int? {
+        let spans = Self.extractFilteredSpans(from: sequence, in: positionRange, context: context)
+        let floatCount = spans.count(where: { span in
             let seqIdx = span.range.lowerBound
-            guard let v = sequence[seqIdx].value else { return false }
-            return v.choice.tag == .double || v.choice.tag == .float
+            guard let value = sequence[seqIdx].value else { return false }
+            return value.choice.tag == .double || value.choice.tag == .float
         })
-        guard t > 0 else { return nil }
-        // t float targets × ~94: four stages per target (special values, precision truncation, integral binary search, ratio binary search) with ~20 batch candidates + ~64 binary search steps + overhead.
-        return t * 94
+        guard floatCount > 0 else { return nil }
+        return floatCount * 94
+    }
+
+    mutating func start(
+        sequence: ChoiceSequence,
+        tree: ChoiceTree,
+        positionRange: ClosedRange<Int>,
+        context: ReductionContext
+    ) {
+        currentCycle = context.cycle
+        let spans = Self.extractFilteredSpans(from: sequence, in: positionRange, context: context)
+        let convergedOrigins = context.convergedOrigins
+
+        self.sequence = sequence
+        self.targets = []
+        currentTargetIndex = 0
+        stage = .specialValues
+        batchCandidates = []
+        batchIndex = 0
+        needsFirstProbe = true
+        convergenceRecords = [:]
+
+        for span in spans {
+            let seqIdx = span.range.lowerBound
+            guard let v = sequence[seqIdx].value else { continue }
+            let choiceTag = v.choice.tag
+            guard choiceTag == .double || choiceTag == .float else { continue }
+            guard case let .floating(floatingValue, _, _) = v.choice else { continue }
+
+            // Stage-skip: if the warm start bound matches the current bit pattern,
+            // the value is unchanged since last convergence — skip batch stages.
+            let skipBatchStages: Stage? = if let convergedOrigin = convergedOrigins?[seqIdx],
+                                             convergedOrigin.bound == v.choice.bitPattern64
+            {
+                .integralBinarySearch
+            } else {
+                nil
+            }
+
+            self.targets.append(FloatTarget(
+                seqIdx: seqIdx,
+                tag: choiceTag,
+                validRange: v.validRange,
+                isRangeExplicit: v.isRangeExplicit,
+                currentValue: floatingValue,
+                currentBitPattern: v.choice.bitPattern64,
+                initialStage: skipBatchStages
+            ))
+        }
     }
 
     // MARK: - Types
@@ -81,49 +136,6 @@ struct ReduceFloatEncoder: AdaptiveEncoder {
     private var ratioRemainder: Int64 = 0
     private var ratioIntegerPart: Int64 = 0
     private var ratioDistance: UInt64 = 0
-
-    // MARK: - AdaptiveEncoder
-
-    mutating func start(sequence: ChoiceSequence, targets: TargetSet, convergedOrigins: [Int: ConvergedOrigin]?) {
-        self.sequence = sequence
-        self.targets = []
-        currentTargetIndex = 0
-        stage = .specialValues
-        batchCandidates = []
-        batchIndex = 0
-        needsFirstProbe = true
-        convergenceRecords = [:]
-
-        guard case let .spans(spans) = targets else { return }
-
-        for span in spans {
-            let seqIdx = span.range.lowerBound
-            guard let v = sequence[seqIdx].value else { continue }
-            let choiceTag = v.choice.tag
-            guard choiceTag == .double || choiceTag == .float else { continue }
-            guard case let .floating(floatingValue, _, _) = v.choice else { continue }
-
-            // Stage-skip: if the warm start bound matches the current bit pattern,
-            // the value is unchanged since last convergence — skip batch stages.
-            let skipBatchStages: Stage? = if let convergedOrigin = convergedOrigins?[seqIdx],
-                                             convergedOrigin.bound == v.choice.bitPattern64
-            {
-                .integralBinarySearch
-            } else {
-                nil
-            }
-
-            self.targets.append(FloatTarget(
-                seqIdx: seqIdx,
-                tag: choiceTag,
-                validRange: v.validRange,
-                isRangeExplicit: v.isRangeExplicit,
-                currentValue: floatingValue,
-                currentBitPattern: v.choice.bitPattern64,
-                initialStage: skipBatchStages
-            ))
-        }
-    }
 
     mutating func nextProbe(lastAccepted: Bool) -> ChoiceSequence? {
         while currentTargetIndex < targets.count {
@@ -356,7 +368,9 @@ struct ReduceFloatEncoder: AdaptiveEncoder {
             let target = targets[currentTargetIndex]
             convergenceRecords[target.seqIdx] = ConvergedOrigin(
                 bound: target.currentBitPattern,
-                direction: .downward
+                signal: .monotoneConvergence,
+                configuration: .binarySearchRangeMinimum,
+                cycle: currentCycle
             )
             return nil
         }
@@ -442,7 +456,9 @@ struct ReduceFloatEncoder: AdaptiveEncoder {
             let target = targets[currentTargetIndex]
             convergenceRecords[target.seqIdx] = ConvergedOrigin(
                 bound: target.currentBitPattern,
-                direction: .downward
+                signal: .monotoneConvergence,
+                configuration: .binarySearchRangeMinimum,
+                cycle: currentCycle
             )
             return nil
         }

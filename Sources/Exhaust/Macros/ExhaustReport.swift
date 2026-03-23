@@ -47,6 +47,9 @@ public struct ExhaustReport: Sendable {
     /// Times pairwise ran on a fibre ≤ 64 (pairwise selected, exhaustive would have worked).
     public var pairwiseOnExhaustibleFibre: Int = 0
 
+    /// Number of downstream starts using ZeroValue fallback (fibre too large for covering).
+    public var fibreZeroValueStarts: Int = 0
+
     /// Compositions that produced zero accepted probes within budget.
     public var futileCompositions: Int = 0
 
@@ -68,12 +71,39 @@ public struct ExhaustReport: Sendable {
     /// Whether the verification sweep detected cache staleness.
     public var verificationSweepFoundStaleness: Bool = false
 
+    /// Composition edges where the pre-lift fibre prediction matched the actual encoder mode.
+    public var fibrePredictionCorrect: Int = 0
+
+    /// Composition edges where the pre-lift fibre prediction disagreed with the actual encoder mode.
+    public var fibrePredictionWrong: Int = 0
+
+    // MARK: - Convergence Signal Counts
+
+    /// Coordinates where zero-value batch zeroing failed but individual zeroing succeeded.
+    public var zeroingDependencyCount: Int = 0
+
+    /// Composition edges where the downstream exhaustively searched the fibre and found no failure.
+    public var fibreExhaustedCleanCount: Int = 0
+
+    /// Composition edges where the downstream exhaustively searched the fibre and found a failure.
+    public var fibreExhaustedWithFailureCount: Int = 0
+
+    /// Composition edges where the downstream bailed before completing coverage.
+    public var fibreBailCount: Int = 0
+
     /// One-line summary of profiling data for the reduction planning decision tree.
     public var profilingSummary: String {
         let reconfirmRatio = totalValueCoordinatesAtPhaseTwoStart > 0
             ? String(format: "%.0f%%", Double(convergedCoordinatesAtPhaseTwoStart) / Double(totalValueCoordinatesAtPhaseTwoStart) * 100)
             : "n/a"
-        return "cycles=\(cycles) probes=\(propertyInvocations) mats=\(totalMaterializations) reconfirm=\(reconfirmRatio) edges=\(compositionEdgesAttempted) futile=\(futileCompositions) transfers=\(convergenceTransfersAttempted)/\(convergenceTransfersValidated)/\(convergenceTransfersStale) sweep=\(verificationSweepProbes)p/\(verificationSweepFoundStaleness ? "stale" : "ok")"
+        let predictionTotal = fibrePredictionCorrect + fibrePredictionWrong
+        let predictionLabel = predictionTotal > 0
+            ? "\(fibrePredictionCorrect)/\(predictionTotal)"
+            : "n/a"
+        let signalLabel = (zeroingDependencyCount > 0 || fibreExhaustedCleanCount > 0 || fibreBailCount > 0)
+            ? " signals=\(zeroingDependencyCount)dep/\(fibreExhaustedCleanCount)clean/\(fibreExhaustedWithFailureCount)fail/\(fibreBailCount)bail"
+            : ""
+        return "cycles=\(cycles) probes=\(propertyInvocations) mats=\(totalMaterializations) reconfirm=\(reconfirmRatio) edges=\(compositionEdgesAttempted) futile=\(futileCompositions) fibre=\(pairwiseOnExhaustibleFibre)e/\(fibreExceededExhaustiveThreshold)p/\(fibreZeroValueStarts)z predict=\(predictionLabel) transfers=\(convergenceTransfersAttempted)/\(convergenceTransfersValidated)/\(convergenceTransfersStale) sweep=\(verificationSweepProbes)p/\(verificationSweepFoundStaleness ? "stale" : "ok")\(signalLabel)"
     }
 
     /// Populates reduction statistics from a ``ReductionStats`` value.
@@ -92,5 +122,12 @@ public struct ExhaustReport: Sendable {
         convergenceTransfersStale = stats.convergenceTransfersStale
         verificationSweepProbes = stats.verificationSweepProbes
         verificationSweepFoundStaleness = stats.verificationSweepFoundStaleness
+        fibrePredictionCorrect = stats.fibrePredictionCorrect
+        fibrePredictionWrong = stats.fibrePredictionWrong
+        fibreZeroValueStarts = stats.fibreZeroValueStarts
+        zeroingDependencyCount = stats.zeroingDependencyCount
+        fibreExhaustedCleanCount = stats.fibreExhaustedCleanCount
+        fibreExhaustedWithFailureCount = stats.fibreExhaustedWithFailureCount
+        fibreBailCount = stats.fibreBailCount
     }
 }

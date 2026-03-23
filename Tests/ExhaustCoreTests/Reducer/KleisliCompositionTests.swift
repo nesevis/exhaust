@@ -6,10 +6,10 @@ import Testing
 @Suite("KleisliComposition")
 struct KleisliCompositionTests {
 
-    // MARK: - LegacyEncoderAdapter
+    // MARK: - ComposableEncoder Interface
 
-    @Test("LegacyEncoderAdapter produces same probes as direct encoder call")
-    func legacyAdapterProbeEquivalence() throws {
+    @Test("ComposableEncoder start produces same probes as direct start call")
+    func composableEncoderProbeEquivalence() throws {
         let gen = Gen.arrayOf(
             Gen.choose(in: 0 ... 100 as ClosedRange<UInt64>),
             Gen.choose(in: 3 ... 3 as ClosedRange<UInt64>)
@@ -21,37 +21,37 @@ struct KleisliCompositionTests {
         // Direct encoder call
         let allSpans = ChoiceSequence.extractAllValueSpans(from: sequence)
         var directEncoder = ZeroValueEncoder()
-        directEncoder.start(sequence: sequence, targets: .spans(allSpans), convergedOrigins: nil)
+        directEncoder.start(sequence: sequence, tree: .just(""), positionRange: 0 ... max(0, sequence.count - 1), context: ReductionContext())
         var directProbes: [ChoiceSequence] = []
         while let probe = directEncoder.nextProbe(lastAccepted: false) {
             directProbes.append(probe)
         }
 
-        // Adapter call with full range
+        // ComposableEncoder call with full range
         let positionRange = 0 ... max(0, sequence.count - 1)
-        var adapter = LegacyEncoderAdapter(inner: ZeroValueEncoder())
-        adapter.start(
+        var composable = ZeroValueEncoder()
+        composable.start(
             sequence: sequence,
             tree: tree,
             positionRange: positionRange,
             context: ReductionContext()
         )
-        var adapterProbes: [ChoiceSequence] = []
-        while let probe = adapter.nextProbe(lastAccepted: false) {
-            adapterProbes.append(probe)
+        var composableProbes: [ChoiceSequence] = []
+        while let probe = composable.nextProbe(lastAccepted: false) {
+            composableProbes.append(probe)
         }
 
         #expect(
-            directProbes.count == adapterProbes.count,
-            "Probe count mismatch: direct=\(directProbes.count) adapter=\(adapterProbes.count)"
+            directProbes.count == composableProbes.count,
+            "Probe count mismatch: direct=\(directProbes.count) composable=\(composableProbes.count)"
         )
-        for (index, (direct, adapted)) in zip(directProbes, adapterProbes).enumerated() {
-            #expect(direct == adapted, "Probe \(index) differs")
+        for (index, (direct, composed)) in zip(directProbes, composableProbes).enumerated() {
+            #expect(direct == composed, "Probe \(index) differs")
         }
     }
 
-    @Test("LegacyEncoderAdapter filters spans to position range")
-    func legacyAdapterFiltersToRange() throws {
+    @Test("ComposableEncoder filters spans to position range")
+    func composableEncoderFiltersToRange() throws {
         let gen = Gen.arrayOf(
             Gen.choose(in: 0 ... 100 as ClosedRange<UInt64>),
             Gen.choose(in: 5 ... 5 as ClosedRange<UInt64>)
@@ -65,7 +65,7 @@ struct KleisliCompositionTests {
 
         // Adapter with range covering only the first two value spans
         let restrictedRange = allSpans[0].range.lowerBound ... allSpans[1].range.upperBound
-        var adapter = LegacyEncoderAdapter(inner: ZeroValueEncoder())
+        var adapter = ZeroValueEncoder()
         adapter.start(
             sequence: sequence,
             tree: tree,
@@ -78,7 +78,7 @@ struct KleisliCompositionTests {
         }
 
         // Full-range adapter for comparison
-        var fullAdapter = LegacyEncoderAdapter(inner: ZeroValueEncoder())
+        var fullAdapter = ZeroValueEncoder()
         fullAdapter.start(
             sequence: sequence,
             tree: tree,
@@ -153,14 +153,15 @@ struct KleisliCompositionTests {
 
         let fullRange = 0 ... max(0, sequence.count - 1)
         var composed = KleisliComposition(
-            upstream: IdentityPointEncoder(),
-            downstream: LegacyEncoderAdapter(inner: ZeroValueEncoder()),
+            upstream: IdentityComposableEncoder(),
+            downstream: ZeroValueEncoder(),
             lift: GeneratorLift(gen: gen, mode: .exact),
             rollback: .atomic,
             upstreamRange: fullRange,
             downstreamRange: fullRange
         )
-        composed.start(sequence: sequence, targets: .wholeSequence, convergedOrigins: nil)
+        let fullPositionRange = 0 ... max(0, sequence.count - 1)
+        composed.start(sequence: sequence, tree: .just(""), positionRange: fullPositionRange, context: ReductionContext())
 
         // Identity upstream returns nil immediately — nothing to lift
         let firstProbe = composed.nextProbe(lastAccepted: false)

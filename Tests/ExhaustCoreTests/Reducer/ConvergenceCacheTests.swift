@@ -11,20 +11,21 @@ struct ConvergenceCacheUnitTests {
         #expect(cache.isEmpty)
         #expect(cache.convergedOrigin(at: 0) == nil)
 
-        cache.record(index: 5, convergedOrigin: ConvergedOrigin(bound: 42, direction: .downward))
+        cache.record(index: 5, convergedOrigin: makeOrigin(bound: 42, configuration: .binarySearchRangeMinimum))
         #expect(cache.isEmpty == false)
 
         let entry = cache.convergedOrigin(at: 5)
         #expect(entry?.bound == 42)
-        #expect(entry?.direction == .downward)
+        #expect(entry?.configuration == .binarySearchRangeMinimum)
+        #expect(entry?.signal == .monotoneConvergence)
         #expect(cache.convergedOrigin(at: 0) == nil)
     }
 
     @Test("invalidateAll clears all entries")
     func invalidateAll() {
         var cache = ConvergenceCache()
-        cache.record(index: 0, convergedOrigin: ConvergedOrigin(bound: 10, direction: .downward))
-        cache.record(index: 1, convergedOrigin: ConvergedOrigin(bound: 20, direction: .upward))
+        cache.record(index: 0, convergedOrigin: makeOrigin(bound: 10, configuration: .binarySearchRangeMinimum))
+        cache.record(index: 1, convergedOrigin: makeOrigin(bound: 20, configuration: .binarySearchSemanticSimplest))
         #expect(cache.isEmpty == false)
 
         cache.invalidateAll()
@@ -42,7 +43,7 @@ struct ConvergenceCacheUnitTests {
     @Test("allEntries returns populated dictionary")
     func allEntriesPopulated() {
         var cache = ConvergenceCache()
-        cache.record(index: 3, convergedOrigin: ConvergedOrigin(bound: 100, direction: .downward))
+        cache.record(index: 3, convergedOrigin: makeOrigin(bound: 100, configuration: .binarySearchRangeMinimum))
         let entries = cache.allEntries
         #expect(entries?.count == 1)
         #expect(entries?[3]?.bound == 100)
@@ -51,11 +52,11 @@ struct ConvergenceCacheUnitTests {
     @Test("Later records overwrite earlier ones at the same index")
     func overwrite() {
         var cache = ConvergenceCache()
-        cache.record(index: 0, convergedOrigin: ConvergedOrigin(bound: 10, direction: .downward))
-        cache.record(index: 0, convergedOrigin: ConvergedOrigin(bound: 20, direction: .upward))
+        cache.record(index: 0, convergedOrigin: makeOrigin(bound: 10, configuration: .binarySearchRangeMinimum))
+        cache.record(index: 0, convergedOrigin: makeOrigin(bound: 20, configuration: .binarySearchSemanticSimplest))
         let entry = cache.convergedOrigin(at: 0)
         #expect(entry?.bound == 20)
-        #expect(entry?.direction == .upward)
+        #expect(entry?.configuration == .binarySearchSemanticSimplest)
     }
 }
 
@@ -78,7 +79,7 @@ struct ConvergedOriginProbeSavingsTests {
         let warmCount = countAllRejectedProbes(
             BinarySearchToSemanticSimplestEncoder(),
             sequence: seq, spans: spans,
-            convergedOrigins: [0: ConvergedOrigin(bound: value, direction: .downward)]
+            convergedOrigins: [0: makeOrigin(bound: value, configuration: .binarySearchSemanticSimplest)]
         )
 
         #expect(coldCount >= 15)
@@ -92,7 +93,7 @@ struct ConvergedOriginProbeSavingsTests {
         for i in 0 ..< 8 {
             let value = UInt64(500_000 + i * 100_000)
             values.append(value)
-            convergedOrigins[i] = ConvergedOrigin(bound: value, direction: .downward)
+            convergedOrigins[i] = makeOrigin(bound: value, configuration: .binarySearchSemanticSimplest)
         }
         let seq = makeUnsignedSequence(values)
         let spans = extractValueSpans(from: seq)
@@ -117,13 +118,13 @@ struct ConvergedOriginProbeSavingsTests {
         let spans = extractValueSpans(from: seq)
 
         var encoder = BinarySearchToSemanticSimplestEncoder()
-        encoder.start(sequence: seq, targets: .spans(spans), convergedOrigins: nil)
+        encoder.start(sequence: seq, tree: .just(""), positionRange: 0 ... max(0, seq.count - 1), context: ReductionContext())
         while encoder.nextProbe(lastAccepted: false) != nil {}
 
         let records = encoder.convergenceRecords
         #expect(records.count == 1)
         #expect(records[0]?.bound == 1_000_000)
-        #expect(records[0]?.direction == .downward)
+        #expect(records[0]?.configuration == .binarySearchSemanticSimplest)
     }
 
     @Test("Range minimum encoder also skips search with matching converged origin")
@@ -139,7 +140,7 @@ struct ConvergedOriginProbeSavingsTests {
         let warmCount = countAllRejectedProbes(
             BinarySearchToRangeMinimumEncoder(),
             sequence: seq, spans: spans,
-            convergedOrigins: [0: ConvergedOrigin(bound: value, direction: .downward)]
+            convergedOrigins: [0: makeOrigin(bound: value, configuration: .binarySearchRangeMinimum)]
         )
 
         #expect(coldCount >= 15)
@@ -158,11 +159,11 @@ struct ValidationProbeTests {
         let seq = makeUnsignedSequence([10000])
         let spans = extractValueSpans(from: seq)
         let convergedOrigins: [Int: ConvergedOrigin] = [
-            0: ConvergedOrigin(bound: 5000, direction: .downward),
+            0: makeOrigin(bound: 5000, configuration: .binarySearchRangeMinimum),
         ]
 
         var encoder = BinarySearchToRangeMinimumEncoder()
-        encoder.start(sequence: seq, targets: .spans(spans), convergedOrigins: convergedOrigins)
+        encoder.start(sequence: seq, tree: .just(""), positionRange: 0 ... max(0, seq.count - 1), context: ReductionContext(convergedOrigins: convergedOrigins))
 
         var probeValues: [UInt64] = []
         while let probe = encoder.nextProbe(lastAccepted: false) {
@@ -183,11 +184,11 @@ struct ValidationProbeTests {
         let seq = makeUnsignedSequence([10000])
         let spans = extractValueSpans(from: seq)
         let convergedOrigins: [Int: ConvergedOrigin] = [
-            0: ConvergedOrigin(bound: 5000, direction: .downward),
+            0: makeOrigin(bound: 5000, configuration: .binarySearchRangeMinimum),
         ]
 
         var encoder = BinarySearchToRangeMinimumEncoder()
-        encoder.start(sequence: seq, targets: .spans(spans), convergedOrigins: convergedOrigins)
+        encoder.start(sequence: seq, tree: .just(""), positionRange: 0 ... max(0, seq.count - 1), context: ReductionContext(convergedOrigins: convergedOrigins))
 
         var probeValues: [UInt64] = []
         var lastAccepted = false
@@ -204,6 +205,118 @@ struct ValidationProbeTests {
         let belowFloor = probeValues.filter { $0 < 4999 }
         #expect(aboveFloor.isEmpty == false)
         #expect(belowFloor.isEmpty == false)
+    }
+}
+
+// MARK: - Linear Scan Encoder
+
+@Suite("LinearScanEncoder")
+struct LinearScanEncoderTests {
+    @Test("Upward scan produces probes in ascending order")
+    func upwardScanOrder() {
+        let seq = makeUnsignedSequence([100])
+        var encoder = LinearScanEncoder(
+            targetPosition: 0,
+            scanRange: 0 ... 4,
+            scanDirection: .upward
+        )
+        encoder.start(
+            sequence: seq, tree: .just(""),
+            positionRange: 0 ... 0,
+            context: ReductionContext()
+        )
+
+        var probeValues: [UInt64] = []
+        while let probe = encoder.nextProbe(lastAccepted: false) {
+            probeValues.append(probe[0].value?.choice.bitPattern64 ?? 0)
+        }
+        #expect(probeValues == [0, 1, 2, 3, 4])
+    }
+
+    @Test("Upward scan stops early on acceptance")
+    func upwardScanEarlyStop() {
+        let seq = makeUnsignedSequence([100])
+        var encoder = LinearScanEncoder(
+            targetPosition: 0,
+            scanRange: 0 ... 9,
+            scanDirection: .upward
+        )
+        encoder.start(
+            sequence: seq, tree: .just(""),
+            positionRange: 0 ... 0,
+            context: ReductionContext()
+        )
+
+        // Reject 0, reject 1, accept 2 → stop.
+        var probeCount = 0
+        var lastAccepted = false
+        while let _ = encoder.nextProbe(lastAccepted: lastAccepted) {
+            probeCount += 1
+            lastAccepted = (probeCount == 3)
+        }
+        #expect(probeCount == 3)
+    }
+
+    @Test("Convergence record reports scanComplete with foundLowerFloor")
+    func convergenceRecordOnAcceptance() {
+        let seq = makeUnsignedSequence([100])
+        var encoder = LinearScanEncoder(
+            targetPosition: 0,
+            scanRange: 0 ... 4,
+            scanDirection: .upward
+        )
+        encoder.start(
+            sequence: seq, tree: .just(""),
+            positionRange: 0 ... 0,
+            context: ReductionContext()
+        )
+
+        // Accept the first probe (value 0).
+        _ = encoder.nextProbe(lastAccepted: false)
+        _ = encoder.nextProbe(lastAccepted: true)
+
+        let records = encoder.convergenceRecords
+        #expect(records.count == 1)
+        #expect(records[0]?.signal == .scanComplete(foundLowerFloor: true))
+        #expect(records[0]?.bound == 0)
+        #expect(records[0]?.configuration == .linearScan)
+    }
+
+    @Test("Convergence record reports scanComplete without lower floor when all rejected")
+    func convergenceRecordAllRejected() {
+        let seq = makeUnsignedSequence([100])
+        var encoder = LinearScanEncoder(
+            targetPosition: 0,
+            scanRange: 0 ... 2,
+            scanDirection: .upward
+        )
+        encoder.start(
+            sequence: seq, tree: .just(""),
+            positionRange: 0 ... 0,
+            context: ReductionContext()
+        )
+
+        while encoder.nextProbe(lastAccepted: false) != nil {}
+
+        let records = encoder.convergenceRecords
+        #expect(records.count == 1)
+        #expect(records[0]?.signal == .scanComplete(foundLowerFloor: false))
+    }
+
+    @Test("Estimated cost equals scan range size")
+    func estimatedCost() {
+        let seq = makeUnsignedSequence([100])
+        let encoder = LinearScanEncoder(
+            targetPosition: 0,
+            scanRange: 5 ... 14,
+            scanDirection: .upward
+        )
+        let cost = encoder.estimatedCost(
+            sequence: seq, tree: .just(""),
+            positionRange: 0 ... 0,
+            context: ReductionContext()
+        )
+        #expect(cost == 10)
     }
 }
 
@@ -236,16 +349,38 @@ private func extractValueSpans(from seq: ChoiceSequence) -> [ChoiceSpan] {
 }
 
 private func countAllRejectedProbes(
-    _ encoder: some AdaptiveEncoder,
+    _ encoder: some ComposableEncoder,
     sequence: ChoiceSequence,
     spans: [ChoiceSpan],
     convergedOrigins: [Int: ConvergedOrigin]? = nil
 ) -> Int {
     var encoder = encoder
-    encoder.start(sequence: sequence, targets: .spans(spans), convergedOrigins: convergedOrigins)
+    let positionRange = spans.isEmpty
+        ? 0 ... 0
+        : spans.map(\.range.lowerBound).min()! ... spans.map(\.range.upperBound).max()!
+    encoder.start(
+        sequence: sequence,
+        tree: .just(""),
+        positionRange: positionRange,
+        context: ReductionContext(convergedOrigins: convergedOrigins)
+    )
     var count = 0
     while encoder.nextProbe(lastAccepted: false) != nil {
         count += 1
     }
     return count
+}
+
+private func makeOrigin(
+    bound: UInt64,
+    configuration: EncoderConfiguration,
+    signal: ConvergenceSignal = .monotoneConvergence,
+    cycle: Int = 0
+) -> ConvergedOrigin {
+    ConvergedOrigin(
+        bound: bound,
+        signal: signal,
+        configuration: configuration,
+        cycle: cycle
+    )
 }

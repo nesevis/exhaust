@@ -48,8 +48,8 @@ struct BinarySearchLadder {
 
 /// Enumerates the joint product space of all bind-inner values for k <= 3 binds.
 ///
-/// Computes per-axis ``BinarySearchLadder`` midpoints and builds their Cartesian product (or dependent product for nested binds), sorted shortlex. The scheduler's ``ReductionState/runBatch(_:decoder:targets:structureChanged:budget:)`` evaluates candidates in order and accepts the first one that preserves property failure.
-struct ProductSpaceBatchEncoder: BatchEncoder {
+/// Computes per-axis ``BinarySearchLadder`` midpoints and builds their Cartesian product (or dependent product for nested binds), sorted shortlex. The caller wraps the result in a ``PrecomputedComposableEncoder`` for evaluation via descriptor chains.
+struct ProductSpaceBatchEncoder: SequenceEncoderBase {
     let name: EncoderName = .productSpaceBatch
     let phase = ReductionPhase.valueMinimization
 
@@ -241,20 +241,34 @@ struct ProductSpaceBatchEncoder: BatchEncoder {
 /// Delta-debug coordinate halving for k > 3 bind-inner values.
 ///
 /// Halves all active coordinates simultaneously, then uses delta-debugging to find the maximal accepted subset on rejection.
-struct ProductSpaceAdaptiveEncoder: AdaptiveEncoder {
+struct ProductSpaceAdaptiveEncoder: ComposableEncoder {
     let name: EncoderName = .productSpaceAdaptive
     let phase = ReductionPhase.valueMinimization
 
-    /// Set by the caller before invocation.
-    var bindIndex: BindSpanIndex?
+    // MARK: - ComposableEncoder
 
-    func estimatedCost(sequence _: ChoiceSequence, bindIndex: BindSpanIndex?) -> Int? {
-        guard let bindIndex, bindIndex.regions.count > 3 else { return nil }
+    func estimatedCost(
+        sequence: ChoiceSequence,
+        tree: ChoiceTree,
+        positionRange: ClosedRange<Int>,
+        context: ReductionContext
+    ) -> Int? {
+        guard let bindIndex = context.bindIndex, bindIndex.regions.count > 3 else { return nil }
         let count = bindIndex.regions.count
-        // O(k * log(range) * log(k)) — conservative estimate.
         let logK = count.bitWidth - count.leadingZeroBitCount
         return count * 64 * max(1, logK)
     }
+
+    mutating func start(
+        sequence: ChoiceSequence,
+        tree: ChoiceTree,
+        positionRange: ClosedRange<Int>,
+        context: ReductionContext
+    ) {
+        startInternal(sequence: sequence, bindIndex: context.bindIndex)
+    }
+
+    var convergenceRecords: [Int: ConvergedOrigin] { [:] }
 
     // MARK: - State
 
@@ -278,9 +292,9 @@ struct ProductSpaceAdaptiveEncoder: AdaptiveEncoder {
     private var sequence = ChoiceSequence()
     private var savedEntries: [(coordIndex: Int, saved: ChoiceSequenceValue)] = []
 
-    // MARK: - AdaptiveEncoder
+    // MARK: - Internal
 
-    mutating func start(sequence: ChoiceSequence, targets _: TargetSet, convergedOrigins _: [Int: ConvergedOrigin]?) {
+    private mutating func startInternal(sequence: ChoiceSequence, bindIndex: BindSpanIndex?) {
         self.sequence = sequence
         coordinates = []
         savedEntries = []
@@ -506,25 +520,38 @@ func extractAxes(
     return axes
 }
 
-// MARK: - PrecomputedBatchEncoder
+// MARK: - PrecomputedComposableEncoder
 
-/// Wraps a pre-built array of candidate sequences as a ``BatchEncoder``.
+/// Wraps a pre-built array of candidate sequences as a ``ComposableEncoder``.
 ///
-/// Used by Tier 2 salted retries to iterate candidates in largest-fibre-first order instead of the encoder's default shortlex ordering.
-struct PrecomputedBatchEncoder: BatchEncoder {
+/// The `start()` method is a no-op (candidates are pre-computed). `nextProbe()` yields them in order. Feedback is ignored — each candidate is independent.
+struct PrecomputedComposableEncoder: ComposableEncoder {
     let name: EncoderName
     let phase: ReductionPhase
     let candidates: [ChoiceSequence]
 
-    func estimatedCost(sequence _: ChoiceSequence, bindIndex _: BindSpanIndex?) -> Int? {
-        candidates.isEmpty ? nil : candidates.count
+    private var index = 0
+
+    init(name: EncoderName, phase: ReductionPhase, candidates: [ChoiceSequence]) {
+        self.name = name
+        self.phase = phase
+        self.candidates = candidates
     }
 
-    func encode(
-        sequence _: ChoiceSequence,
-        targets _: TargetSet
-    ) -> any Sequence<ChoiceSequence> {
-        candidates
+    mutating func start(
+        sequence: ChoiceSequence,
+        tree: ChoiceTree,
+        positionRange: ClosedRange<Int>,
+        context: ReductionContext
+    ) {
+        index = 0
+    }
+
+    mutating func nextProbe(lastAccepted: Bool) -> ChoiceSequence? {
+        guard index < candidates.count else { return nil }
+        let candidate = candidates[index]
+        index += 1
+        return candidate
     }
 }
 

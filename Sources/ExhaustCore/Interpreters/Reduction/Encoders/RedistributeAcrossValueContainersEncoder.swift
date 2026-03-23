@@ -10,17 +10,87 @@
 /// For each pair of numeric values in the sequence, tries to decrease one value (toward its reduction target) while increasing the other by the same amount. Supports same-tag integer pairs, same-tag float pairs (via rational arithmetic), and cross-type float+integer pairs (mixed redistribution).
 ///
 /// Uses ``FindIntegerStepper`` for feedback-driven delta search.
-public struct RedistributeAcrossValueContainersEncoder: AdaptiveEncoder {
+public struct RedistributeAcrossValueContainersEncoder: ComposableEncoder {
     public init() {}
 
     public let name: EncoderName = .redistributeArbitraryValuePairsAcrossContainers
     public let phase = ReductionPhase.redistribution
 
-    public func estimatedCost(sequence: ChoiceSequence, bindIndex _: BindSpanIndex?) -> Int? {
-        let t = ChoiceSequence.extractAllValueSpans(from: sequence).count
-        guard t >= 2 else { return nil }
-        // O(t²) pair orientations capped at 240 × ~20: FindIntegerStepper monotone search (~log(distance)) + non-monotonic fallback phase with ~5 targeted deltas per pair.
-        return min(t * (t - 1), 240) * 20
+    // MARK: - Dual conformance disambiguation
+
+    public var convergenceRecords: [Int: ConvergedOrigin] { [:] }
+
+    // MARK: - ComposableEncoder
+
+    public func estimatedCost(
+        sequence: ChoiceSequence,
+        tree: ChoiceTree,
+        positionRange: ClosedRange<Int>,
+        context: ReductionContext
+    ) -> Int? {
+        let spanCount = Self.extractFilteredSpans(from: sequence, in: positionRange, context: context).count
+        guard spanCount >= 2 else { return nil }
+        return min(spanCount * (spanCount - 1), 240) * 20
+    }
+
+    public mutating func start(
+        sequence: ChoiceSequence,
+        tree: ChoiceTree,
+        positionRange: ClosedRange<Int>,
+        context: ReductionContext
+    ) {
+        self.sequence = sequence
+        semanticStats = SequenceSemanticStats(sequence: sequence)
+        orientations = []
+        orientationIndex = 0
+        needsFirstProbe = true
+        resetMonotoneState()
+
+        // Extract all numeric values.
+        var candidates = [NumericCandidate]()
+        var i = 0
+        // while-loop: avoiding IteratorProtocol overhead in debug builds
+        while i < sequence.count {
+            let entry = sequence[i]
+            switch entry {
+            case let .value(v), let .reduced(v):
+                switch v.choice {
+                case .unsigned, .signed, .floating:
+                    candidates.append(NumericCandidate(index: i, value: v))
+                }
+            default:
+                break
+            }
+            i += 1
+        }
+
+        // Cost is O(v² × probes_per_pair). The estimatedCost cap at 240 pairs × 20
+        // probes already limits total work; no need to gate on candidate count.
+
+        // Build all pair orientations.
+        var ci = 0
+        // while-loop: avoiding IteratorProtocol overhead in debug builds
+        while ci < candidates.count {
+            var cj = ci + 1
+            while cj < candidates.count {
+                // Try both orientations so index ordering does not block useful redistributions.
+                for (lhs, rhs) in [(ci, cj), (cj, ci)] {
+                    if let orientation = makeOrientation(
+                        lhs: candidates[lhs],
+                        rhs: candidates[rhs],
+                        sequence: sequence
+                    ) {
+                        orientations.append(orientation)
+                    }
+                }
+                cj += 1
+            }
+            ci += 1
+        }
+
+        // Largest-distance orientations first: high-impact consolidation pairs
+        // get probed before trivial distance=1 pairs.
+        orientations.sort { $0.distance > $1.distance }
     }
 
     // MARK: - Internal types
@@ -76,65 +146,6 @@ public struct RedistributeAcrossValueContainersEncoder: AdaptiveEncoder {
     private var bestMonotoneEntry1: ChoiceSequenceValue?
     private var bestMonotoneEntry2: ChoiceSequenceValue?
     private var bestMonotoneNonSemanticCount = Int.max
-
-    // MARK: - AdaptiveEncoder
-
-    public mutating func start(sequence: ChoiceSequence, targets: TargetSet, convergedOrigins _: [Int: ConvergedOrigin]?) {
-        self.sequence = sequence
-        semanticStats = SequenceSemanticStats(sequence: sequence)
-        orientations = []
-        orientationIndex = 0
-        needsFirstProbe = true
-        resetMonotoneState()
-
-        guard case .wholeSequence = targets else { return }
-
-        // Extract all numeric values.
-        var candidates = [NumericCandidate]()
-        var i = 0
-        // while-loop: avoiding IteratorProtocol overhead in debug builds
-        while i < sequence.count {
-            let entry = sequence[i]
-            switch entry {
-            case let .value(v), let .reduced(v):
-                switch v.choice {
-                case .unsigned, .signed, .floating:
-                    candidates.append(NumericCandidate(index: i, value: v))
-                }
-            default:
-                break
-            }
-            i += 1
-        }
-
-        // Cost is O(v² × probes_per_pair). The estimatedCost cap at 240 pairs × 20
-        // probes already limits total work; no need to gate on candidate count.
-
-        // Build all pair orientations.
-        var ci = 0
-        // while-loop: avoiding IteratorProtocol overhead in debug builds
-        while ci < candidates.count {
-            var cj = ci + 1
-            while cj < candidates.count {
-                // Try both orientations so index ordering does not block useful redistributions.
-                for (lhs, rhs) in [(ci, cj), (cj, ci)] {
-                    if let orientation = makeOrientation(
-                        lhs: candidates[lhs],
-                        rhs: candidates[rhs],
-                        sequence: sequence
-                    ) {
-                        orientations.append(orientation)
-                    }
-                }
-                cj += 1
-            }
-            ci += 1
-        }
-
-        // Largest-distance orientations first: high-impact consolidation pairs
-        // get probed before trivial distance=1 pairs.
-        orientations.sort { $0.distance > $1.distance }
-    }
 
     public mutating func nextProbe(lastAccepted: Bool) -> ChoiceSequence? {
         // while-loop: avoiding IteratorProtocol overhead in debug builds

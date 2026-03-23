@@ -26,8 +26,11 @@ public struct ReductionStats: Sendable {
     /// Number of times ``FibreCoveringEncoder`` discovered a fibre > 64 at `start()` time (exhaustive selected but fibre was too large, fell back to pairwise or produced no probes).
     public var fibreExceededExhaustiveThreshold: Int
 
-    /// Number of times ``FibreCoveringEncoder`` ran in pairwise mode on a fibre ≤ 64 (pairwise selected but exhaustive would have worked — missed guaranteed coverage).
+    /// Number of downstream starts using exhaustive enumeration (fibre ≤ 64).
     public var pairwiseOnExhaustibleFibre: Int
+
+    /// Number of downstream starts using ZeroValue fallback (fibre too large for covering).
+    public var fibreZeroValueStarts: Int
 
     /// Number of times a ``KleisliComposition`` in the exploration leg produced zero accepted probes within budget (composition was futile for this edge).
     public var futileCompositions: Int
@@ -54,6 +57,28 @@ public struct ReductionStats: Sendable {
     /// Whether the verification sweep detected cache staleness.
     public var verificationSweepFoundStaleness: Bool
 
+    // MARK: - Fibre Prediction Accuracy (Decision Tree: Step 2)
+
+    /// Number of composition edges where the pre-lift fibre size prediction matched the actual encoder mode.
+    public var fibrePredictionCorrect: Int
+
+    /// Number of composition edges where the prediction disagreed with the actual encoder mode.
+    public var fibrePredictionWrong: Int
+
+    // MARK: - Convergence Signal Counts
+
+    /// Number of coordinates where zero-value batch zeroing failed but individual zeroing succeeded.
+    public var zeroingDependencyCount: Int
+
+    /// Number of composition edges where the downstream exhaustively searched the fibre and found no failure.
+    public var fibreExhaustedCleanCount: Int
+
+    /// Number of composition edges where the downstream exhaustively searched the fibre and found a failure.
+    public var fibreExhaustedWithFailureCount: Int
+
+    /// Number of composition edges where the downstream bailed before completing coverage.
+    public var fibreBailCount: Int
+
     /// Creates an empty stats value.
     public init() {
         encoderProbes = [:]
@@ -63,6 +88,7 @@ public struct ReductionStats: Sendable {
         totalValueCoordinatesAtPhaseTwoStart = 0
         fibreExceededExhaustiveThreshold = 0
         pairwiseOnExhaustibleFibre = 0
+        fibreZeroValueStarts = 0
         futileCompositions = 0
         compositionEdgesAttempted = 0
         convergenceTransfersAttempted = 0
@@ -70,5 +96,11 @@ public struct ReductionStats: Sendable {
         convergenceTransfersStale = 0
         verificationSweepProbes = 0
         verificationSweepFoundStaleness = false
+        fibrePredictionCorrect = 0
+        fibrePredictionWrong = 0
+        zeroingDependencyCount = 0
+        fibreExhaustedCleanCount = 0
+        fibreExhaustedWithFailureCount = 0
+        fibreBailCount = 0
     }
 }

@@ -10,17 +10,35 @@
 /// For each sibling group, identifies index sets of values sharing the same ``TypeTag``, builds suffix-window plans (dropping the leading sibling on each iteration to prevent a near-target leader from blocking the set), and binary-searches for the optimal shared delta using ``BinarySearchStepper``. Before starting binary search for each plan, a direct shot at the full distance is attempted to handle non-monotonic predicates where intermediate deltas break coupling constraints but the full target delta preserves them.
 ///
 /// - Complexity: O(*g* . *w* . log *d*), where *g* is the number of sibling groups, *w* is the number of tandem windows explored per group, and *d* is the maximum bit-pattern distance between a value and its reduction target.
-public struct RedistributeByTandemReductionEncoder: AdaptiveEncoder {
+public struct RedistributeByTandemReductionEncoder: ComposableEncoder {
     public init() {}
 
     public let name: EncoderName = .redistributeSiblingValuesInLockstep
     public let phase = ReductionPhase.redistribution
 
-    public func estimatedCost(sequence: ChoiceSequence, bindIndex _: BindSpanIndex?) -> Int? {
-        let g = ChoiceSequence.extractSiblingGroups(from: sequence).count
-        guard g > 0 else { return nil }
-        // g sibling groups × ~65: 1 direct shift probe + FindIntegerStepper search over the inter-value distance (~64 binary search steps) per group.
-        return g * 65
+    // MARK: - ComposableEncoder
+
+    public var convergenceRecords: [Int: ConvergedOrigin] { [:] }
+
+    public func estimatedCost(
+        sequence: ChoiceSequence,
+        tree: ChoiceTree,
+        positionRange: ClosedRange<Int>,
+        context: ReductionContext
+    ) -> Int? {
+        let groupCount = ChoiceSequence.extractSiblingGroups(from: sequence).count
+        guard groupCount > 0 else { return nil }
+        return groupCount * 65
+    }
+
+    public mutating func start(
+        sequence: ChoiceSequence,
+        tree: ChoiceTree,
+        positionRange: ClosedRange<Int>,
+        context: ReductionContext
+    ) {
+        let groups = ChoiceSequence.extractSiblingGroups(from: sequence)
+        startInternal(sequence: sequence, groups: groups)
     }
 
     // MARK: - Internal types
@@ -61,17 +79,15 @@ public struct RedistributeByTandemReductionEncoder: AdaptiveEncoder {
     private var lastDirectShotCandidate: WindowCandidate?
     private var lastBinaryCandidate: WindowCandidate?
 
-    // MARK: - AdaptiveEncoder
+    // MARK: - Internal
 
-    public mutating func start(sequence: ChoiceSequence, targets: TargetSet, convergedOrigins _: [Int: ConvergedOrigin]?) {
+    private mutating func startInternal(sequence: ChoiceSequence, groups: [SiblingGroup]) {
         self.sequence = sequence
         plans = []
         planIndex = 0
         probePhase = .directShot
         lastDirectShotCandidate = nil
         lastBinaryCandidate = nil
-
-        guard case let .siblingGroups(groups) = targets else { return }
 
         // Build all window plans across all sibling groups.
         // while-loop: avoiding IteratorProtocol overhead in debug builds

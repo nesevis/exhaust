@@ -1,14 +1,14 @@
-# Implementation Plan: Horizontal/Vertical Encoder Refactoring
+# Implementation Plan: Composable Encoder Refactoring
 
 ## Overview
 
-The 20 implemented encoders are monolithic — each embeds both a search strategy and assumptions about where it operates. The horizontal/vertical factorisation (see "Fibrational Structure of the Encoder Algebra" in `reduction-planning.md`) separates these concerns: horizontal encoders move between fibres (manipulate upstream values, trigger lifts), vertical encoders move within a fibre (search downstream spaces). The same encoder primitive can serve either role depending on where the CDG places it.
+The 20 implemented encoders are monolithic — each embeds both a search strategy and assumptions about where it operates. The compositional algebra (see "Fibrational Structure of the Encoder Algebra" in `reduction-planning.md`) separates these concerns: a composable encoder is a role-agnostic probe strategy, and the factory assigns it to a role (upstream, downstream, or standalone) based on CDG position. The same encoder can serve in any role — it does not know or care which one.
 
-This refactoring does not split the existing encoders into two groups. It makes them role-agnostic by migrating them to the `PointEncoder` protocol, then builds the scheduling infrastructure that assigns roles based on CDG position.
+This refactoring makes encoders composable by migrating them to the `ComposableEncoder` protocol, then builds the scheduling infrastructure that assigns roles and processes descriptors.
 
 ## Encoder Classification
 
-The horizontal/vertical distinction applies to the value-reduction and redistribution encoders. Structural deletion encoders (Phase 1) operate on the ChoiceTree before the factorisation is relevant — they remain unchanged.
+The role-based composition applies to the value-reduction and redistribution encoders. Structural deletion encoders (Phase 1) operate on the ChoiceTree before compositions are relevant — they remain unchanged.
 
 ### Structural (unchanged)
 
@@ -27,7 +27,7 @@ These operate on tree structure, not on the opfibration's base or fibres. They s
 
 ### Position-agnostic value encoders (migrate to PointEncoder)
 
-These already work on any value coordinate. Their logic does not assume a CDG role — they binary-search, zero, or float-reduce whatever targets they receive. In a composition, the same encoder instance serves as horizontal (when targeting a bind-inner position) or vertical (when targeting a leaf position).
+These already work on any value coordinate. Their logic does not assume a CDG role — they binary-search, zero, or float-reduce whatever targets they receive. In a composition, the same encoder instance can serve as upstream (when targeting a bind-inner position) or downstream (when targeting a leaf position). The encoder does the same thing in both cases.
 
 | Encoder | File | Notes |
 |---------|------|-------|
@@ -92,32 +92,23 @@ The transformation is mechanical. The `LegacyEncoderAdapter` already shows the m
 
 The slot rotation in `ReductionState.swift` and `BonsaiScheduler.swift` instantiates encoders and calls `start()`. These call sites need to pass `ReductionContext` instead of individual parameters. The `ReductionContext` struct already exists and carries `bindIndex`, `convergedOrigins`, and `dag`.
 
-## Phase 2: Position-Specific Encoder Adaptation
+## Phase 2: Position-Specific Encoder Adaptation — COMPLETE (2 of 3)
 
-The position-specific encoders need their structural assumptions moved from constructor parameters to `ReductionContext`.
+### ProductSpaceAdaptive — DONE
 
-### ProductSpaceBatch / ProductSpaceAdaptive
+Conforms to `ComposableEncoder`. Reads `context.bindIndex` instead of caller-set instance variable. Delta-debug coordinate halving logic unchanged.
 
-These coordinate reduction across bind-inner values. They are inherently horizontal — they propose base morphisms (bind-inner value changes) and the composition's lift handles reindexing. In the new framework, the factory selects `ProductSpaceBatch` (for ≤ 3 bind axes) or `ProductSpaceAdaptive` (for > 3) as the horizontal encoder for bind-inner CDG positions.
+### RedistributeByTandemReduction — DONE
 
-**Changes:**
-- Move `BindSpanIndex` dependency from constructor to `context.bindIndex` in `start()`.
-- Conform to `PointEncoder`. The `positionRange` parameter scopes which bind-inner positions to coordinate.
-- The existing `BinarySearchLadder` and Cartesian product logic is unchanged.
+Conforms to `ComposableEncoder`. Self-extracts sibling groups via `ChoiceSequence.extractSiblingGroups()` in `start()`, consistent with Phase 1's self-extraction pattern.
 
-### RedistributeSiblingValuesInLockstep
+### ProductSpaceBatch — DEFERRED TO PHASE 3
 
-This redistributes values between siblings within a group. In the factorisation:
-- When both siblings are in the same fibre → vertical (within-fibre redistribution).
-- When siblings span a bind boundary → horizontal (cross-fibre redistribution, but this case is already handled by `RedistributeAcross`).
-
-**Changes:**
-- Conform to `PointEncoder`. The `positionRange` scopes which sibling groups to consider.
-- Group membership derived from `tree` and `positionRange` in `start()`, not from pre-filtered target sets.
+The current caller has a multi-tier pattern: guided decoder → regime probe → PRNG retries, all on the same pre-computed candidates. This orchestration doesn't fit `runComposable` (single encoder, single decoder). Phase 3 replaces it with a dominance chain of three `MorphismDescriptor` entries — same encoder with different decoder modes, connected by dominance edges. See "Decoder parameterisation as dominance chains" in Phase 3.
 
 ### FibreCoveringEncoder
 
-Already conforms to `PointEncoder`. No changes needed.
+Already conforms to `ComposableEncoder`. No changes needed.
 
 ## Phase 3: Factory and Role Assignment
 
@@ -125,45 +116,77 @@ Build the factory that reads CDG structure and emits `MorphismDescriptor` arrays
 
 ### MorphismDescriptor
 
-Already sketched in `reduction-planning.md`:
-
 ```swift
 struct MorphismDescriptor {
-    let encoder: any PointEncoder
-    let decoder: DecoderMode
+    let encoder: any ComposableEncoder
+    let decoderMode: DecoderMode
     let probeBudget: Int
     let rollback: RollbackPolicy
+    let role: CompositionRole
     let classification: PositionClassification
+    let dominates: [MorphismDescriptor.ID]
 }
 ```
 
-Add `role: CompositionRole`:
+`dominates` expresses priority ordering between descriptors. When a descriptor's encoder accepts a probe, all descriptors it dominates are suppressed by the scheduler. This replaces hand-coded multi-tier orchestration with a declarative dominance chain.
 
 ```swift
 enum CompositionRole {
-    case horizontal  // Upstream in a KleisliComposition. Opcartesian.
-    case vertical    // Downstream in a KleisliComposition. Within-fibre.
-    case independent // Outside composition. Current Phase 2/3 behaviour.
+    case upstream    // Proposes fibres. Output is lifted before evaluation.
+    case downstream  // Explores within a fibre. Output is evaluated directly.
+    case standalone  // No composition. Output is evaluated directly.
 }
 ```
+
+### Decoder parameterisation as dominance chains
+
+The two parameterisation axes (encoder configuration, decoder mode) interact through dominance. The same encoder with different decoder modes produces a family of morphisms. The factory orders them by reliability (exact > guided > PRNG) and connects them with dominance edges.
+
+**Example: ProductSpaceBatch migration.** The current 170-line multi-tier orchestration block becomes three descriptors:
+
+```
+[
+  (encoder: productSpaceBatch, decoder: .guided,   dominates: [regimeProbe, prng]),
+  (encoder: regimeProbe,       decoder: .exact,    dominates: [prng]),
+  (encoder: productSpaceBatch, decoder: .prng,     dominates: [])
+]
+```
+
+The guided tier dominates both the regime probe and the PRNG tier. If guided succeeds, the scheduler suppresses both. If guided fails, the regime probe runs — if IT succeeds (elimination regime: failure is structural, not value-sensitive), the PRNG tier is suppressed. If the regime probe fails (value-sensitive regime), the PRNG tier runs.
+
+This pattern generalises: any multi-tier reduction strategy is a dominance chain of decoder-parameterised morphisms over the same encoder. The factory emits the chain; the scheduler processes it generically. No per-strategy orchestration code.
 
 ### Factory logic
 
 The factory walks CDG nodes and emits descriptors:
 
-1. **Bind-inner with outgoing edges** → horizontal descriptor. Encoder selected by position classification (ProductSpace for multi-bind coordination, BinarySearch for single-bind). Budget from `leverage / requiredBudget` scoring.
-2. **Value positions within a bind's downstream range** → vertical descriptor, scoped to the fibre. Encoder selected by fibre size: exhaustive (≤ 64), pairwise (≤ 20 params), or per-coordinate search (> 20 params).
+1. **Bind-inner with outgoing edges** → upstream role. Encoder selected by position classification (ProductSpace for multi-bind coordination, BinarySearch for single-bind). Budget from `leverage / requiredBudget` scoring.
+2. **Value positions within a bind's downstream range** → downstream role, scoped to the fibre. Encoder selected by fibre size: exhaustive (≤ 64), pairwise (≤ 20 params), or per-coordinate search (> 20 params).
 3. **Value positions outside any bind** → independent descriptor. Same encoder, no composition. Current Phase 2 behaviour.
 4. **Branch selectors** → independent descriptor. Branch promotion/pivot, no composition.
+5. **Bind-inner joint reduction (≤ 3 axes)** → dominance chain: `(ProductSpaceBatch, .guided)` → `(RegimeProbe, .exact)` → `(ProductSpaceBatch, .prng)`. Replaces the multi-tier orchestration in `runJointBindInnerReduction`.
+6. **Bind-inner joint reduction (> 3 axes)** → single `(ProductSpaceAdaptive, .prng)` descriptor. No dominance chain needed.
 
 The factory runs once per cycle, after structural deletion (Phase 1) stabilises the tree.
+
+### RegimeProbe encoder
+
+A minimal `ComposableEncoder` that emits a single probe: all values set to their semantic simplest (zero for numerics). If the property still fails, the failure is structural (elimination regime) — value assignments don't matter, and PRNG retries are waste. If the property passes, the failure is value-sensitive and retries are needed.
+
+```swift
+struct RegimeProbeEncoder: ComposableEncoder {
+    // start(): build the all-zeroed probe from the sequence
+    // nextProbe(): yield it once, then nil
+}
+```
 
 ### Files
 
 | File | Change |
 |------|--------|
-| `MorphismDescriptor.swift` (new) | Descriptor type, `CompositionRole`, `PositionClassification` |
-| `EncoderFactory.swift` (new) | CDG → descriptor array. Position classification. Encoder selection. Budget allocation. |
+| `MorphismDescriptor.swift` (new) | Descriptor type, `CompositionRole`, `PositionClassification`, dominance edges |
+| `EncoderFactory.swift` (new) | CDG → descriptor array. Position classification. Encoder selection. Budget allocation. Dominance chain construction. |
+| `RegimeProbeEncoder.swift` (new) | Single-probe encoder for elimination/value-sensitive regime detection |
 
 ## Phase 4: Scheduler Migration
 
@@ -192,7 +215,7 @@ BonsaiScheduler.run():
 
 `runDescriptors` processes descriptors in priority order (leverage / budget score):
 - **Independent** descriptors: execute the encoder directly on the full sequence. Same as current Phase 2.
-- **Horizontal + vertical** descriptor pairs: wire into a `KleisliComposition`. The horizontal encoder is the upstream, the lift materialises, the vertical encoder is the downstream.
+- **Upstream + downstream** descriptor pairs: wire into a `KleisliComposition`. The upstream encoder proposes fibres, the lift materialises, the downstream encoder explores the fibre.
 
 ### Transition strategy
 
@@ -240,12 +263,12 @@ The A/B success criterion from `reduction-planning.md`: equal or better countere
 ### New test coverage
 
 - **Factory unit tests**: given a CDG with known topology, assert the factory emits the expected descriptors (role, encoder type, budget).
-- **Role assignment tests**: for each encoder primitive, verify it produces correct probes when assigned to horizontal role (scoped to bind-inner) and vertical role (scoped to fibre).
+- **Role assignment tests**: for each encoder primitive, verify it produces correct probes when assigned to the upstream role (scoped to bind-inner) and the downstream role (scoped to fibre).
 - **Composition integration tests**: the structural pathological suite, especially CrossLevelSum (composition-required) and NestedBind3 (three edges).
 
 ## Risks
 
-**Dominance lattice interaction.** The current dominance lattice suppresses encoders based on acceptance during a phase. The factory pre-selects encoders at construction time, so a dominator's acceptance can't suppress already-constructed alternatives. The budget-cap mechanism replaces intra-encoder convergence with self-termination. This is a behavioural change — the same encoders run, but in different order and with different stopping conditions. The A/B comparison catches regressions.
+**Dominance lattice interaction.** The current dominance lattice suppresses encoders based on acceptance during a phase. The factory replaces this with explicit `dominates` edges on `MorphismDescriptor`. When a descriptor accepts, the scheduler suppresses all descriptors it dominates. This is strictly more expressive than the current lattice — it handles multi-tier decoder-parameterised chains (for example, ProductSpaceBatch guided → regime probe → PRNG) that the current lattice cannot express. The A/B comparison verifies that the explicit dominance produces equivalent or better suppression decisions.
 
 **Warm-start invalidation.** The convergence cache is populated by Phase 2 and consumed by subsequent cycles. If the factory changes which encoders run on which positions, the cache keys must still align. The `ConvergedOrigin` is keyed by sequence position, which is stable across encoder changes.
 
@@ -258,16 +281,16 @@ The A/B success criterion from `reduction-planning.md`: equal or better countere
 - **Splitting structural deletion encoders.** Phase 1 encoders operate on tree structure, not on the opfibration. They remain as-is.
 - **Merging encoder implementations.** The refactoring changes interfaces and scheduling, not internal search logic. Encoder consolidation (for example, unifying the two binary search variants) is a separate effort.
 - **Prediction-validation loop (steps 4-5).** The factory is step 2-3 infrastructure. Steps 4-5 (fibre stability prediction, confidence tracking, skip gates) build on the factory but are not part of this refactoring.
-- **Search-based downstream encoders.** The vertical encoder selection currently dispatches to FibreCoveringEncoder (exhaustive or pairwise). Adding a per-coordinate binary search vertical encoder for large fibres is a future extension that the factory would accommodate by adding a row to the classification table.
+- **Search-based downstream encoders.** The downstream role currently dispatches to FibreCoveringEncoder (exhaustive or pairwise). Adding a per-coordinate binary search encoder for the downstream role on large fibres is a future extension that the factory would accommodate by adding a row to the classification table.
 
 ## Sequencing
 
-| Phase | Estimated scope | Depends on |
-|-------|----------------|------------|
-| 1: Protocol migration | 6 encoders, ~50 lines each | Nothing |
-| 2: Position-specific adaptation | 3 encoders, ~100 lines each | Phase 1 |
-| 3: Factory | 1 new file, ~300 lines | Phase 1 (needs PointEncoder conformance) |
-| 4: Scheduler migration | ~200 lines in BonsaiScheduler | Phase 3 |
-| 5: Cleanup | Deletion only | Phase 4 validated |
+| Phase | Status | Scope |
+|-------|--------|-------|
+| 1: Protocol migration | DONE | `PointEncoder` → `ComposableEncoder`, six encoders migrated, `BinarySearchEncoder` merged, `runComposable` helper, caller migration |
+| 2: Position-specific adaptation | DONE (2 of 3) | ProductSpaceAdaptive and TandemReduction migrated. ProductSpaceBatch deferred to Phase 3 (dominance chain). |
+| 3: Factory + dominance chains | Next | `MorphismDescriptor` with `dominates` edges, `EncoderFactory`, `RegimeProbeEncoder`, ProductSpaceBatch as a three-descriptor dominance chain |
+| 4: Scheduler migration | Pending | `runDescriptors` replaces Phase 2–4 slot rotation |
+| 5: Cleanup | Pending | Remove `LegacyEncoderAdapter`, `AdaptiveEncoder` (structural only), slot rotation types |
 
-Phases 1 and 2 can proceed incrementally (one encoder at a time). Phase 3 can start as soon as the first few encoders are migrated — the factory can mix PointEncoder and LegacyEncoderAdapter instances. Phase 4 requires the factory to be complete. Phase 5 is optional until the old path is demonstrably unused.
+Phase 3 subsumes the remaining Phase 2 work (ProductSpaceBatch) by expressing its multi-tier pattern as a dominance chain rather than a single `runComposable` call.

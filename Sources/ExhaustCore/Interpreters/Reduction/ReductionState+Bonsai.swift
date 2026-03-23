@@ -114,11 +114,13 @@ extension ReductionState {
             branchTreeDirty = false
         }
 
-        promoteBranchesEncoder.currentTree = tree
-        if try runBatch(
+        let branchReductionContext = ReductionContext(bindIndex: bindIndex)
+        let fullBranchRange = 0 ... max(0, sequence.count - 1)
+        if try runComposable(
             promoteBranchesEncoder,
             decoder: branchDecoder,
-            targets: .wholeSequence,
+            positionRange: fullBranchRange,
+            context: branchReductionContext,
             structureChanged: true,
             budget: &legBudget
         ) {
@@ -129,11 +131,11 @@ extension ReductionState {
             }
         }
 
-        pivotBranchesEncoder.currentTree = tree
-        if try runBatch(
+        if try runComposable(
             pivotBranchesEncoder,
             decoder: branchDecoder,
-            targets: .wholeSequence,
+            positionRange: fullBranchRange,
+            context: branchReductionContext,
             structureChanged: true,
             budget: &legBudget
         ) {
@@ -171,6 +173,13 @@ extension ReductionState {
             dominance.invalidate()
             let scopeDecoder = makeDeletionDecoder(at: scope.depth)
 
+            // Structural deletion uses per-encoder calls with restart-on-acceptance.
+            // Deletions change sequence length, invalidating span positions for remaining
+            // encoders. A descriptor chain would process stale spans — per-encoder restart
+            // ensures each encoder gets fresh spans.
+            let deletionContext = ReductionContext(bindIndex: bindIndex)
+            let fullRange = 0 ... max(0, sequence.count - 1)
+
             for slot in pruneOrder {
                 guard legBudget.isExhausted == false else { break }
                 let targets: [ChoiceSpan] = if let positionRange = scope.positionRange {
@@ -187,52 +196,40 @@ extension ReductionState {
                         bindIndex: bindIndex
                     )
                 }
-                let slotAccepted: Bool = switch slot {
-                case .randomRepairDelete:
-                    try runAdaptive(
-                        randomRepairDelete,
-                        decoder: makeSpeculativeDecoder(),
-                        targets: .spans(targets),
+                let slotAccepted: Bool
+                if slot == .alignedWindows {
+                    // Contiguous window search dominates beam search.
+                    // Both self-extract sibling groups — don't skip on empty container spans.
+                    let contiguousAccepted = try runComposable(
+                        contiguousWindowEncoder,
+                        decoder: scopeDecoder,
+                        positionRange: fullRange,
+                        context: deletionContext,
                         structureChanged: true,
                         budget: &legBudget
                     )
-                case .containerSpans:
-                    try runAdaptive(
-                        deleteContainerSpans,
-                        decoder: scopeDecoder,
-                        targets: .spans(targets),
-                        structureChanged: true,
-                        budget: &legBudget
-                    )
-                case .sequenceElements:
-                    try runAdaptive(
-                        deleteSequenceElements,
-                        decoder: scopeDecoder,
-                        targets: .spans(targets),
-                        structureChanged: true,
-                        budget: &legBudget
-                    )
-                case .sequenceBoundaries:
-                    try runAdaptive(
-                        deleteSequenceBoundaries,
-                        decoder: scopeDecoder,
-                        targets: .spans(targets),
-                        structureChanged: true,
-                        budget: &legBudget
-                    )
-                case .freeStandingValues:
-                    try runAdaptive(
-                        deleteFreeStandingValues,
-                        decoder: scopeDecoder,
-                        targets: .spans(targets),
-                        structureChanged: true,
-                        budget: &legBudget
-                    )
-                case .alignedWindows:
-                    try runAdaptive(
-                        deleteAlignedWindowsEncoder,
-                        decoder: scopeDecoder,
-                        targets: .spans(targets),
+                    if contiguousAccepted {
+                        slotAccepted = true
+                    } else {
+                        // Contiguous exhausted — try beam search fallback.
+                        slotAccepted = try runComposable(
+                            beamSearchEncoder,
+                            decoder: scopeDecoder,
+                            positionRange: fullRange,
+                            context: deletionContext,
+                            structureChanged: true,
+                            budget: &legBudget
+                        )
+                    }
+                } else {
+                    guard targets.isEmpty == false else { continue }
+                    let decoder = slot == .randomRepairDelete ? makeSpeculativeDecoder() : scopeDecoder
+                    let category = slot.spanCategory
+                    slotAccepted = try runComposable(
+                        DeletionEncoder(spanCategory: category, spans: targets),
+                        decoder: decoder,
+                        positionRange: fullRange,
+                        context: deletionContext,
                         structureChanged: true,
                         budget: &legBudget
                     )
@@ -545,170 +542,40 @@ extension ReductionState {
 
         if bindInnerCount <= 3 {
             // Batch: enumerate product space of bind-inner values.
+            // Three-descriptor dominance chain replaces the hand-coded multi-tier orchestration:
+            //   Tier 1 (guided) → Regime probe → Tier 2 (PRNG retries)
             let bindDag = ChoiceDependencyGraph.build(
                 from: sequence, tree: tree, bindIndex: bindSpanIndex
             )
             productSpaceBatchEncoder.bindIndex = bindSpanIndex
             productSpaceBatchEncoder.dag = bindDag
-
-            // Compute dependent domains for nested binds via lightweight replay.
             productSpaceBatchEncoder.dependentDomains = computeDependentDomains(
                 bindSpanIndex: bindSpanIndex, dag: bindDag
             )
 
-            // Pre-materialize once; both tiers reuse the same [ChoiceSequence] array.
             let allCandidates = Array(productSpaceBatchEncoder.encode(
                 sequence: sequence, targets: .wholeSequence
             ))
-            let tier1Encoder = PrecomputedBatchEncoder(
-                name: productSpaceBatchEncoder.name,
-                phase: productSpaceBatchEncoder.phase,
-                candidates: allCandidates
+            let tier2Candidates = sortByLargestFibreFirst(
+                allCandidates, bindIndex: bindSpanIndex
             )
 
-            // Tier 1: guided replay (clamp bound entries to current tree).
-            let guidedDecoder: SequenceDecoder = .guided(
-                fallbackTree: fallbackTree ?? tree
+            let descriptors = EncoderFactory.productSpaceBatchDescriptors(
+                allCandidates: allCandidates,
+                tier2Candidates: tier2Candidates,
+                guidedDecoder: .guided(fallbackTree: fallbackTree ?? tree),
+                cycle: cycle
             )
-            if try runBatch(
-                tier1Encoder, decoder: guidedDecoder,
-                targets: .wholeSequence, structureChanged: true,
+
+            let chainContext = ReductionContext(bindIndex: bindSpanIndex, dag: bindDag)
+            let fullRange = 0 ... max(0, sequence.count - 1)
+            if try runDescriptorChain(
+                descriptors,
+                positionRange: fullRange,
+                context: chainContext,
                 budget: &legBudget
             ) {
                 accepted += 1
-            } else {
-                // Tier 2: PRNG fallback with salted retries, largest-fibre-first ordering.
-                // Sort candidates by bind-inner value sum descending so that candidates with larger inner values (wider downstream domains) are tried first, giving PRNG more room to find a failure.
-                // Capped at 5 candidates per the spec.
-                let tier2Candidates = sortByLargestFibreFirst(
-                    allCandidates, bindIndex: bindSpanIndex
-                )
-                let tier2Encoder = PrecomputedBatchEncoder(
-                    name: .productSpaceBatch,
-                    phase: .valueMinimization,
-                    candidates: tier2Candidates
-                )
-
-                // MARK: - Regime probe (Opportunity 2: fibration uniqueness of cartesian lifts)
-
-                //
-                // The uniqueness law says the canonical projection is the unique best projection — the
-                // PRNG retries below are not searching for a better one, they're asking whether any
-                // point in the new fibre witnesses the failure. When the failure is structural (elimination
-                // regime), all four retries are guaranteed waste. Build the simplest-values probe to
-                // detect the regime before committing to the retry budget.
-                var simplestProbe = sequence
-                var probeNeedsRun = false
-                var probeIdx = 0
-                while probeIdx < simplestProbe.count {
-                    if let v = simplestProbe[probeIdx].value {
-                        let target = ZeroValueEncoder.simplestTarget(for: v)
-                        if target != v.choice {
-                            probeNeedsRun = true
-                            simplestProbe[probeIdx] = .value(.init(
-                                choice: target,
-                                validRange: v.validRange,
-                                isRangeExplicit: v.isRangeExplicit
-                            ))
-                        }
-                    }
-                    probeIdx += 1
-                }
-
-                var skipRetries = false
-                if probeNeedsRun {
-                    legBudget.recordMaterialization()
-                    let probeResult = ReductionMaterializer.materialize(
-                        gen, prefix: simplestProbe, mode: .exact, fallbackTree: fallbackTree
-                    )
-                    let regime: String
-                    let probeResultLabel: String
-                    switch probeResult {
-                    case let .success(value: probeValue, tree: freshTree, decodingReport: _):
-                        let freshSequence = ChoiceSequence(freshTree)
-                        if property(probeValue) == false, freshSequence.shortLexPrecedes(sequence) {
-                            // Elimination regime: failure is structural, not value-sensitive.
-                            // Accept the simplest-values witness and skip the PRNG retries — no
-                            // value assignment can improve on this. The shortlex guard ensures we
-                            // never corrupt bestSequence by accepting a non-improving result (which
-                            // can happen when zeroing bind-inner values expands the bound subtree).
-                            regime = "elimination"
-                            probeResultLabel = "success"
-                            accept(
-                                ReductionResult(
-                                    sequence: freshSequence,
-                                    tree: freshTree,
-                                    output: probeValue,
-                                    evaluations: 1,
-                                    decodingReport: nil
-                                ),
-                                structureChanged: true
-                            )
-                            accepted += 1
-                            skipRetries = true
-                        } else {
-                            // Value-sensitive regime: specific values are required to reproduce the
-                            // failure. Proceed with PRNG retries.
-                            regime = "value_sensitive"
-                            probeResultLabel = "success"
-                        }
-                    case .rejected:
-                        // Regime unknown: a value was out of range in exact mode. Fall back to retries.
-                        regime = "unknown"
-                        probeResultLabel = "rejected"
-                    // OPPORTUNITY 3 (commented out — enable after measuring `rejected` frequency)
-                    // Compute g!(semanticSimplest): materialize the candidate in guided mode
-                    // with minimal values, then compute shortlex distance between the result
-                    // and the current best sequence. Large distance → lossy reduction →
-                    // treat as elimination regime and skip retries.
-                    //
-                    // let cocartesianResult = ReductionMaterializer.materialize(
-                    //     gen,
-                    //     prefix: sequence,
-                    //     mode: .guided(
-                    //         seed: ZobristHash.hash(of: sequence),
-                    //         fallbackTree: fallbackTree ?? tree
-                    //     ),
-                    //     fallbackTree: fallbackTree
-                    // )
-                    // if case let .success(_, embeddedTree) = cocartesianResult {
-                    //     let embeddedSeq = ChoiceSequence(embeddedTree)
-                    //     let distance = ChoiceSequence.shortlexDistance(embeddedSeq, sequence)
-                    //     if distance > /* threshold TBD */ 0 {
-                    //         skipRetries = true
-                    //     }
-                    // }
-                    case .failed:
-                        regime = "unknown"
-                        probeResultLabel = "failed"
-                    }
-                    if isInstrumented {
-                        ExhaustLog.debug(
-                            category: .reducer,
-                            event: "bonsai_regime_probe",
-                            metadata: ["regime": regime, "result": probeResultLabel]
-                        )
-                    }
-                }
-
-                let maxRetries = 4
-                if skipRetries == false {
-                    for attempt in 0 ..< maxRetries {
-                        guard legBudget.isExhausted == false else { break }
-                        let saltedDecoder: SequenceDecoder = .guided(
-                            fallbackTree: nil, usePRNGFallback: true,
-                            prngSalt: UInt64(cycle * maxRetries + attempt)
-                        )
-                        if try runBatch(
-                            tier2Encoder, decoder: saltedDecoder,
-                            targets: .wholeSequence, structureChanged: true,
-                            budget: &legBudget
-                        ) {
-                            accepted += 1
-                            break
-                        }
-                    }
-                }
             }
         } else {
             // Adaptive: delta-debug coordinate halving for k > 3.
@@ -716,11 +583,13 @@ extension ReductionState {
                 fallbackTree: nil, usePRNGFallback: true,
                 prngSalt: UInt64(cycle)
             )
-            productSpaceAdaptiveEncoder.bindIndex = bindSpanIndex
+            let adaptiveContext = ReductionContext(bindIndex: bindSpanIndex)
             while legBudget.isExhausted == false {
-                if try runAdaptive(
+                if try runComposable(
                     productSpaceAdaptiveEncoder, decoder: adaptivePRNGDecoder,
-                    targets: .wholeSequence, structureChanged: true,
+                    positionRange: 0 ... max(0, sequence.count - 1),
+                    context: adaptiveContext,
+                    structureChanged: true,
                     budget: &legBudget
                 ) {
                     accepted += 1
@@ -740,50 +609,59 @@ extension ReductionState {
         let bindInnerSpans = buildBindInnerValueSpans(bindSpanIndex: currentBindSpanIndex)
         if bindInnerSpans.isEmpty == false {
             let trainDecoder = makeDepthZeroDecoder()
+            // Compute bounding range for bind-inner positions.
+            let innerMin = bindInnerSpans.map(\.range.lowerBound).min()!
+            let innerMax = bindInnerSpans.map(\.range.upperBound).max()!
+            let bindInnerRange = innerMin ... innerMax
+            // No depth filter — bind-inner positions are explicitly scoped by buildBindInnerValueSpans.
+            // The encoder sees all value spans in the bounding range; bind-inner positions are a subset.
+            // This is slightly broader than the pre-extracted spans but acceptable — extra spans
+            // are non-bind-inner values that the encoder will attempt to reduce (harmless, same decoder).
+            let bindInnerContext = ReductionContext(
+                bindIndex: bindIndex
+            )
             for slot in trainOrder {
                 guard legBudget.isExhausted == false else { break }
                 switch slot {
                 case .zeroValue:
-                    if try runAdaptive(
+                    if try runComposable(
                         zeroValueEncoder, decoder: trainDecoder,
-                        targets: .spans(bindInnerSpans), structureChanged: true,
+                        positionRange: bindInnerRange, context: bindInnerContext,
+                        structureChanged: true,
                         budget: &legBudget
                     ) {
                         accepted += 1
                         ReductionScheduler.moveToFront(.zeroValue, in: &trainOrder)
                     }
                 case .binarySearchToZero:
-                    if try runAdaptive(
+                    if try runComposable(
                         binarySearchToZeroEncoder, decoder: trainDecoder,
-                        targets: .spans(bindInnerSpans), structureChanged: true,
+                        positionRange: bindInnerRange, context: bindInnerContext,
+                        structureChanged: true,
                         budget: &legBudget
                     ) {
                         accepted += 1
                         ReductionScheduler.moveToFront(.binarySearchToZero, in: &trainOrder)
                     }
                 case .binarySearchToTarget:
-                    if try runAdaptive(
+                    if try runComposable(
                         binarySearchToTargetEncoder, decoder: trainDecoder,
-                        targets: .spans(bindInnerSpans), structureChanged: true,
+                        positionRange: bindInnerRange, context: bindInnerContext,
+                        structureChanged: true,
                         budget: &legBudget
                     ) {
                         accepted += 1
                         ReductionScheduler.moveToFront(.binarySearchToTarget, in: &trainOrder)
                     }
                 case .reduceFloat:
-                    let floatSpans = bindInnerSpans.filter { span in
-                        guard let value = sequence[span.range.lowerBound].value else { return false }
-                        return value.choice.tag == .double || value.choice.tag == .float
-                    }
-                    if floatSpans.isEmpty == false {
-                        if try runAdaptive(
-                            reduceFloatEncoder, decoder: trainDecoder,
-                            targets: .spans(floatSpans), structureChanged: true,
-                            budget: &legBudget
-                        ) {
-                            accepted += 1
-                            ReductionScheduler.moveToFront(.reduceFloat, in: &trainOrder)
-                        }
+                    if try runComposable(
+                        reduceFloatEncoder, decoder: trainDecoder,
+                        positionRange: bindInnerRange, context: bindInnerContext,
+                        structureChanged: true,
+                        budget: &legBudget
+                    ) {
+                        accepted += 1
+                        ReductionScheduler.moveToFront(.reduceFloat, in: &trainOrder)
                     }
                 }
             }
@@ -863,6 +741,13 @@ extension ReductionState {
             nil
         }
 
+        let valueEncoders = EncoderFactory.ValueEncoders(
+            zeroValue: zeroValueEncoder,
+            binarySearchToZero: binarySearchToZeroEncoder,
+            binarySearchToTarget: binarySearchToTargetEncoder,
+            reduceFloat: reduceFloatEncoder
+        )
+
         // Per-leaf-range value minimization pass.
         for leafRange in leafRanges {
             guard legBudget.isExhausted == false else { break }
@@ -899,55 +784,46 @@ extension ReductionState {
                     ? .guided(fallbackTree: fallbackTree ?? tree)
                     : .exact()
 
-                for slot in trainOrder {
-                    guard legBudget.isExhausted == false else { break }
-                    var slotAccepted = false
-                    // Pass the guard into runAdaptive so the boundary fires per-acceptance, not after the full encoder run. Adaptive encoders capture seqIdx at start() time; a structural change mid-loop makes those indices stale before the encoder produces its next probe.
-                    let guard_ = needsFingerprintGuard ? prePhaseFingerprint : nil
-                    switch slot {
-                    case .zeroValue where leafSpans.isEmpty == false:
-                        slotAccepted = try runAdaptive(
-                            zeroValueEncoder, decoder: decoder,
-                            targets: .spans(leafSpans), structureChanged: structureChanged,
-                            budget: &legBudget,
-                            fingerprintGuard: guard_,
-                            convergedOrigins: cachedOrigins
-                        )
-                    case .binarySearchToZero where leafSpans.isEmpty == false:
-                        slotAccepted = try runAdaptive(
-                            binarySearchToZeroEncoder, decoder: decoder,
-                            targets: .spans(leafSpans), structureChanged: structureChanged,
-                            budget: &legBudget,
-                            fingerprintGuard: guard_,
-                            convergedOrigins: cachedOrigins
-                        )
-                    case .binarySearchToTarget where leafSpans.isEmpty == false:
-                        slotAccepted = try runAdaptive(
-                            binarySearchToTargetEncoder, decoder: decoder,
-                            targets: .spans(leafSpans), structureChanged: structureChanged,
-                            budget: &legBudget,
-                            fingerprintGuard: guard_,
-                            convergedOrigins: cachedOrigins
-                        )
-                    case .reduceFloat where floatSpans.isEmpty == false:
-                        slotAccepted = try runAdaptive(
-                            reduceFloatEncoder, decoder: decoder,
-                            targets: .spans(floatSpans), structureChanged: structureChanged,
-                            budget: &legBudget,
-                            fingerprintGuard: guard_,
-                            convergedOrigins: cachedOrigins
-                        )
-                    default:
-                        break
-                    }
-                    guard slotAccepted else { continue }
+                let leafContext = ReductionContext(
+                    bindIndex: bindIndex,
+                    convergedOrigins: cachedOrigins,
+                    dag: dag
+                )
+                let guard_ = needsFingerprintGuard ? prePhaseFingerprint : nil
+                let hasFloats = floatSpans.isEmpty == false
 
+                let descriptors = EncoderFactory.valueMinimizationDescriptors(
+                    ordering: trainOrder,
+                    encoders: valueEncoders,
+                    decoder: decoder,
+                    hasValueSpans: leafSpans.isEmpty == false,
+                    hasFloatSpans: hasFloats,
+                    structureChanged: structureChanged,
+                    fingerprintGuard: guard_,
+                    budgetCap: legBudget.hardCap,
+                    convergedOrigins: cachedOrigins
+                )
+
+                let result = try runDescriptorChainDetailed(
+                    descriptors,
+                    positionRange: leafRange,
+                    context: leafContext,
+                    budget: &legBudget
+                )
+                if result.anyAccepted {
                     anyAccepted = true
-                    ReductionScheduler.moveToFront(slot, in: &trainOrder)
+                    if let firstAccepted = result.acceptedIndices.first {
+                        let survivingSlots = ReductionScheduler.survivingSlots(
+                            from: trainOrder,
+                            hasValueSpans: leafSpans.isEmpty == false,
+                            hasFloatSpans: hasFloats
+                        )
+                        if firstAccepted < survivingSlots.count {
+                            ReductionScheduler.moveToFront(survivingSlots[firstAccepted], in: &trainOrder)
+                        }
+                    }
                     if needsFingerprintGuard {
-                        // A clean acceptance in a non-constant bind region means leafSpans and the decoder are stale (sequence changed). Restart the repeat loop to recompute both before the remaining slots run.
                         restartLeafRange = true
-                        break
                     }
                 }
             } while restartLeafRange && legBudget.isExhausted == false
@@ -955,96 +831,91 @@ extension ReductionState {
 
         // Covariant value sweep: reduce bound-content values at intermediate bind depths.
         // DAG leaf positions miss values inside nested bind regions (for example, parent node values in a recursive bind generator like a binary heap). Shallow depths first so that deeper depths reduce in the correct context.
-        // vSpans at depth D can include nested bind-inner positions whose reduction changes the inner bound structure, which belongs in base descent. The fingerprintGuard in each runAdaptive call catches this per-acceptance and rolls back the structural probe while preserving any earlier clean value reductions.
+        // vSpans at depth D can include nested bind-inner positions whose reduction changes the inner bound structure, which belongs in base descent. The fingerprintGuard in each runComposable call catches this per-acceptance and rolls back the structural probe while preserving any earlier clean value reductions.
         let maxBindDepth = bindIndex?.maxBindDepth ?? 0
+        let fullRange = 0 ... max(0, sequence.count - 1)
         if maxBindDepth >= 1, legBudget.isExhausted == false {
             for depth in stride(from: 1, through: maxBindDepth, by: 1) {
                 guard legBudget.isExhausted == false else { break }
                 dominance.invalidate()
-                let depthContext = DecoderContext(
+                let depthDecoderContext = DecoderContext(
                     depth: .specific(depth),
                     bindIndex: bindIndex,
                     fallbackTree: fallbackTree,
                     strictness: .normal
                 )
-                let depthDecoder = SequenceDecoder.for(depthContext)
-                let vSpans = spanCache.valueSpans(at: depth, from: sequence, bindIndex: bindIndex)
-                let fSpans = spanCache.floatSpans(at: depth, from: sequence, bindIndex: bindIndex)
+                let depthDecoder = SequenceDecoder.for(depthDecoderContext)
+                let depthContext = ReductionContext(
+                    bindIndex: bindIndex,
+                    convergedOrigins: cachedOrigins,
+                    dag: dag,
+                    depthFilter: depth
+                )
+                let hasValueSpansAtDepth = spanCache.valueSpans(at: depth, from: sequence, bindIndex: bindIndex).isEmpty == false
+                let hasFloatsAtDepth = spanCache.floatSpans(at: depth, from: sequence, bindIndex: bindIndex).isEmpty == false
 
-                for slot in trainOrder {
-                    guard legBudget.isExhausted == false else { break }
-                    var slotAccepted = false
-                    // structureChanged: hasBind ensures accept() rebuilds bindIndex before the per-acceptance fingerprint guard recomputes the fingerprint. Without a fresh bindIndex, StructuralFingerprint.from uses stale depth information and may miss structural changes.
-                    switch slot {
-                    case .zeroValue where vSpans.isEmpty == false:
-                        slotAccepted = try runAdaptive(
-                            zeroValueEncoder, decoder: depthDecoder,
-                            targets: .spans(vSpans), structureChanged: hasBind,
-                            budget: &legBudget,
-                            fingerprintGuard: prePhaseFingerprint,
-                            convergedOrigins: cachedOrigins
-                        )
-                    case .binarySearchToZero where vSpans.isEmpty == false:
-                        slotAccepted = try runAdaptive(
-                            binarySearchToZeroEncoder, decoder: depthDecoder,
-                            targets: .spans(vSpans), structureChanged: hasBind,
-                            budget: &legBudget,
-                            fingerprintGuard: prePhaseFingerprint,
-                            convergedOrigins: cachedOrigins
-                        )
-                    case .binarySearchToTarget where vSpans.isEmpty == false:
-                        slotAccepted = try runAdaptive(
-                            binarySearchToTargetEncoder, decoder: depthDecoder,
-                            targets: .spans(vSpans), structureChanged: hasBind,
-                            budget: &legBudget,
-                            fingerprintGuard: prePhaseFingerprint,
-                            convergedOrigins: cachedOrigins
-                        )
-                    case .reduceFloat where fSpans.isEmpty == false:
-                        slotAccepted = try runAdaptive(
-                            reduceFloatEncoder, decoder: depthDecoder,
-                            targets: .spans(fSpans), structureChanged: hasBind,
-                            budget: &legBudget,
-                            fingerprintGuard: prePhaseFingerprint,
-                            convergedOrigins: cachedOrigins
-                        )
-                    default:
-                        break
-                    }
-                    guard slotAccepted else { continue }
+                let depthDescriptors = EncoderFactory.valueMinimizationDescriptors(
+                    ordering: trainOrder,
+                    encoders: valueEncoders,
+                    decoder: depthDecoder,
+                    hasValueSpans: hasValueSpansAtDepth,
+                    hasFloatSpans: hasFloatsAtDepth,
+                    structureChanged: hasBind,
+                    fingerprintGuard: prePhaseFingerprint,
+                    budgetCap: legBudget.hardCap,
+                    convergedOrigins: cachedOrigins
+                )
+
+                let depthResult = try runDescriptorChainDetailed(
+                    depthDescriptors,
+                    positionRange: fullRange,
+                    context: depthContext,
+                    budget: &legBudget
+                )
+                if depthResult.anyAccepted {
                     anyAccepted = true
-                    ReductionScheduler.moveToFront(slot, in: &trainOrder)
+                    if let firstAccepted = depthResult.acceptedIndices.first {
+                        let survivingSlots = ReductionScheduler.survivingSlots(
+                            from: trainOrder,
+                            hasValueSpans: hasValueSpansAtDepth,
+                            hasFloatSpans: hasFloatsAtDepth
+                        )
+                        if firstAccepted < survivingSlots.count {
+                            ReductionScheduler.moveToFront(survivingSlots[firstAccepted], in: &trainOrder)
+                        }
+                    }
                 }
             }
         }
 
         // Redistribution (once at end of fibre descent).
         if legBudget.isExhausted == false {
-            let redistContext = DecoderContext(
+            let redistDecoderContext = DecoderContext(
                 depth: .global,
                 bindIndex: bindIndex,
                 fallbackTree: fallbackTree,
                 strictness: .normal
             )
-            let redistDecoder = SequenceDecoder.for(redistContext)
+            let redistDecoder = SequenceDecoder.for(redistDecoderContext)
+            let redistContext = ReductionContext(
+                bindIndex: bindIndex,
+                convergedOrigins: cachedOrigins,
+                dag: dag
+            )
 
-            // Tandem reduction on sibling groups.
-            let allSiblings = ChoiceSequence.extractSiblingGroups(from: sequence)
-            if allSiblings.isEmpty == false {
-                if try runAdaptive(
-                    tandemEncoder, decoder: redistDecoder,
-                    targets: .siblingGroups(allSiblings),
-                    structureChanged: hasBind, budget: &legBudget
-                ) {
-                    anyAccepted = true
-                }
-            }
+            let redistDescriptors = EncoderFactory.redistributionDescriptors(
+                tandemEncoder: tandemEncoder,
+                redistributeEncoder: redistributeEncoder,
+                decoder: redistDecoder,
+                structureChanged: hasBind,
+                budgetCap: legBudget.hardCap
+            )
 
-            // Cross-stage redistribution.
-            if try runAdaptive(
-                redistributeEncoder, decoder: redistDecoder,
-                targets: .wholeSequence,
-                structureChanged: hasBind, budget: &legBudget
+            if try runDescriptorChain(
+                redistDescriptors,
+                positionRange: fullRange,
+                context: redistContext,
+                budget: &legBudget
             ) {
                 anyAccepted = true
             }
@@ -1110,29 +981,31 @@ extension ReductionState {
         var kleisliProbes = 0
         var kleisliMaterializations = 0
 
-        for edge in edges {
+        let compositionEdges = EncoderFactory.compositionDescriptors(
+            edges: edges,
+            gen: gen,
+            sequence: sequence,
+            tree: tree,
+            fallbackTree: fallbackTree
+        )
+
+        for var compositionEdge in compositionEdges {
             guard budget > 0 else { break }
             compositionEdgesAttempted += 1
 
-            // Build fresh upstream and downstream point encoders.
-            // Upstream: binary search toward simplest bind-inner value.
-            // Downstream: fibre search — enumerates the downstream fibre
-            // to find ANY failure, not minimize an existing one. After a lift,
-            // the bound content is PRNG-filled and likely passes the property.
-            // The downstream needs to discover a failure, not minimize one.
-            let upstreamAdapter = LegacyEncoderAdapter(
-                inner: BinarySearchToSemanticSimplestEncoder()
-            )
-            let downstreamEncoder = FibreCoveringEncoder()
+            let edge = compositionEdge.edge
+            let prediction = compositionEdge.prediction
 
-            var composed = KleisliComposition(
-                upstream: upstreamAdapter,
-                downstream: downstreamEncoder,
-                lift: GeneratorLift(gen: gen, mode: .guided(fallbackTree: fallbackTree ?? tree)),
-                rollback: .atomic,
-                upstreamRange: edge.upstreamRange,
-                downstreamRange: edge.downstreamRange
-            )
+            // Skip structurally constant edges where the prior cycle's downstream
+            // exhaustively searched the fibre and found no failure at this upstream value.
+            if edge.isStructurallyConstant,
+               let observation = edgeObservations[edge.regionIndex],
+               observation.signal == .exhaustedClean,
+               let currentUpstreamValue = sequence[edge.upstreamRange.lowerBound].value?.choice.bitPattern64,
+               observation.upstreamValue == currentUpstreamValue
+            {
+                continue
+            }
 
             // Run via manual loop (same pattern as runRelaxRound).
             var legBudget = ReductionScheduler.LegBudget(hardCap: min(budget, 100))
@@ -1148,10 +1021,11 @@ extension ReductionState {
             // The composition's purpose is to re-explore those values WITH
             // downstream search. Passing the cache would tell the upstream encoder
             // its current value is already at the floor, producing zero probes.
-            composed.start(
+            compositionEdge.composition.start(
                 sequence: sequence,
-                targets: .wholeSequence,
-                convergedOrigins: nil
+                tree: tree,
+                positionRange: 0 ... max(0, sequence.count - 1),
+                context: context
             )
 
             var lastAccepted = false
@@ -1159,8 +1033,8 @@ extension ReductionState {
                 // Warm-start validation: before the composition advances to the
                 // next upstream probe and initializes the downstream, validate any
                 // pending convergence transfer from the previous downstream.
-                if let pending = composed.pendingTransferOrigins,
-                   let delta = composed.upstreamDelta, delta == 1
+                if let pending = compositionEdge.composition.pendingTransferOrigins,
+                   let delta = compositionEdge.composition.upstreamDelta, delta == 1
                 {
                     // Adjacent upstream values — validate each origin at floor - 1.
                     convergenceTransfersAttempted += 1
@@ -1205,13 +1079,13 @@ extension ReductionState {
                     } else {
                         convergenceTransfersStale += 1
                     }
-                    composed.setValidatedOrigins(allValid ? pending : nil)
+                    compositionEdge.composition.setValidatedOrigins(allValid ? pending : nil)
                 } else {
                     // First probe, delta > 1, or no pending origins: cold-start.
-                    composed.setValidatedOrigins(nil)
+                    compositionEdge.composition.setValidatedOrigins(nil)
                 }
 
-                guard let probe = composed.nextProbe(lastAccepted: lastAccepted) else { break }
+                guard let probe = compositionEdge.composition.nextProbe(lastAccepted: lastAccepted) else { break }
                 guard legBudget.isExhausted == false else { break }
                 if collectStats { kleisliProbes += 1 }
                 legBudget.recordMaterialization()
@@ -1250,6 +1124,89 @@ extension ReductionState {
             // Track futile compositions (zero accepted probes for this edge)
             if legBudget.used > 0, lastAccepted == false {
                 futileCompositions += 1
+            }
+
+            // Harvest fibre telemetry from the composition's downstream encoder.
+            if collectStats {
+                fibreExceededExhaustiveThreshold += compositionEdge.composition.fibrePairwiseStarts
+                pairwiseOnExhaustibleFibre += compositionEdge.composition.fibreExhaustiveStarts
+                fibreZeroValueStarts += compositionEdge.composition.fibreZeroValueStarts
+
+                // Compare prediction against ground truth.
+                // The prediction uses the current sequence; the ground truth uses the lifted sequences.
+                // "Correct" means the predicted mode matches the MAJORITY of actual downstream starts.
+                let actualMajorityMode: EncoderFactory.FibrePrediction.Mode
+                if compositionEdge.composition.fibreExhaustiveStarts >= compositionEdge.composition.fibrePairwiseStarts,
+                   compositionEdge.composition.fibreExhaustiveStarts >= compositionEdge.composition.fibreZeroValueStarts
+                {
+                    actualMajorityMode = .exhaustive
+                } else if compositionEdge.composition.fibrePairwiseStarts >= compositionEdge.composition.fibreZeroValueStarts {
+                    actualMajorityMode = .pairwise
+                } else {
+                    actualMajorityMode = .tooLarge
+                }
+
+                let totalStarts = compositionEdge.composition.fibreExhaustiveStarts + compositionEdge.composition.fibrePairwiseStarts + compositionEdge.composition.fibreZeroValueStarts
+                if totalStarts > 0 {
+                    if prediction.predictedMode == actualMajorityMode {
+                        fibrePredictionCorrect += 1
+                    } else {
+                        fibrePredictionWrong += 1
+                    }
+                }
+            }
+
+            // Log prediction vs ground truth for encoder selection accuracy measurement.
+            if isInstrumented {
+                let actualExhaustive = compositionEdge.composition.fibreExhaustiveStarts
+                let actualPairwise = compositionEdge.composition.fibrePairwiseStarts
+                let actualBail = compositionEdge.composition.fibreZeroValueStarts
+                let predictionLabel: String = switch prediction.predictedMode {
+                case .exhaustive: "exhaustive"
+                case .pairwise: "pairwise"
+                case .tooLarge: "too_large"
+                }
+                ExhaustLog.debug(
+                    category: .reducer,
+                    event: "fibre_prediction",
+                    metadata: [
+                        "region": "\(edge.regionIndex)",
+                        "predicted_mode": predictionLabel,
+                        "predicted_size": "\(prediction.predictedSize)",
+                        "predicted_params": "\(prediction.parameterCount)",
+                        "actual_exhaustive": "\(actualExhaustive)",
+                        "actual_pairwise": "\(actualPairwise)",
+                        "actual_bail": "\(actualBail)",
+                        "max_fibre": "\(compositionEdge.composition.maxObservedFibreSize)",
+                    ]
+                )
+            }
+
+            // Record per-edge observation for cross-cycle factory decisions.
+            let totalDownstreamStarts = compositionEdge.composition.fibreExhaustiveStarts
+                + compositionEdge.composition.fibrePairwiseStarts
+                + compositionEdge.composition.fibreZeroValueStarts
+            let edgeSignal: FibreSignal
+            if totalDownstreamStarts == 0 {
+                edgeSignal = .bail(paramCount: edge.downstreamRange.count)
+            } else if lastAccepted {
+                edgeSignal = .exhaustedWithFailure
+            } else {
+                edgeSignal = .exhaustedClean
+            }
+            if let upstreamValue = compositionEdge.composition.previousUpstreamBitPattern {
+                edgeObservations[edge.regionIndex] = EdgeObservation(
+                    signal: edgeSignal,
+                    upstreamValue: upstreamValue,
+                    cycle: currentCycle
+                )
+            }
+            if collectStats {
+                switch edgeSignal {
+                case .exhaustedClean: fibreExhaustedCleanCount += 1
+                case .exhaustedWithFailure: fibreExhaustedWithFailureCount += 1
+                case .bail: fibreBailCount += 1
+                }
             }
 
             budget -= legBudget.used

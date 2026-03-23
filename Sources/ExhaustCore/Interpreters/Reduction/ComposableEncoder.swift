@@ -1,8 +1,8 @@
-// MARK: - Point Encoder Protocol
+// MARK: - Composable Encoder Protocol
 
-/// Produces candidate mutations for a position (or range) in the choice sequence.
+/// Produces candidate mutations for a position range in the choice sequence.
 ///
-/// Point encoders are the composable primitives of the reduction algebra. Each targets a specific point in the total space — agnostic to whether that point is a base position (structural) or a fibre position (value). The categorical role (base morphism vs vertical morphism) is determined by the position's relationship in the ``ChoiceDependencyGraph``, not by the encoder itself.
+/// Composable encoders are role-agnostic probe strategies. Each operates on a scoped position range and produces candidate sequences — it does not know or care whether it is assigned to the upstream role (proposing fibres), the downstream role (exploring within a fibre), or the standalone role (evaluated directly). The role is determined by where the ``EncoderFactory`` places the encoder in the pipeline based on the ``ChoiceDependencyGraph``, not by the encoder itself.
 ///
 /// ## Interface Changes from `AdaptiveEncoder`
 ///
@@ -13,8 +13,8 @@
 ///
 /// ## Composability
 ///
-/// A ``KleisliComposition`` composes two point encoders through a ``GeneratorLift``. The upstream encoder's output is lifted (materialized without property check) to produce a fresh `(sequence, tree)` for the downstream encoder. The property is checked only on the downstream's final output.
-public protocol PointEncoder {
+/// A ``KleisliComposition`` composes two composable encoders through a ``GeneratorLift``. The upstream encoder's output is lifted (materialized without property check) to produce a fresh `(sequence, tree)` for the downstream encoder. The property is checked only on the downstream's final output.
+public protocol ComposableEncoder {
     /// Typed identifier for dominance pruning and logging.
     var name: EncoderName { get }
 
@@ -51,13 +51,25 @@ public protocol PointEncoder {
     ///
     /// Each entry maps a flat sequence index to the ``ConvergedOrigin`` at which the search converged.
     var convergenceRecords: [Int: ConvergedOrigin] { get }
+
+    /// Whether convergence records from the previous run are compatible with this run.
+    ///
+    /// Returns `true` by default — the encoder's semantics have not changed between runs.
+    /// ``DownstreamPick`` overrides this to return `false` when a different alternative was
+    /// selected, invalidating convergence records from the previous alternative.
+    /// ``KleisliComposition`` checks this after ``start()`` and cold-starts the convergence
+    /// transfer when it returns `false`.
+    var isConvergenceTransferSafe: Bool { get }
 }
 
-public extension PointEncoder {
+public extension ComposableEncoder {
     /// Default implementation returning no convergence records.
     var convergenceRecords: [Int: ConvergedOrigin] {
         [:]
     }
+
+    /// Default: convergence transfer is always safe (same encoder semantics across runs).
+    var isConvergenceTransferSafe: Bool { true }
 
     /// Default cost estimate: nil (no work to do). Conformers should override.
     func estimatedCost(
@@ -68,11 +80,29 @@ public extension PointEncoder {
     ) -> Int? {
         nil
     }
+
+    /// Extracts value spans from a choice sequence, filtered to those whose lower bound falls within the given position range.
+    ///
+    /// When ``ReductionContext/depthFilter`` is non-nil, further restricts to spans at that bind depth (using ``BindSpanIndex/bindDepth(at:)``). This supports the covariant depth sweep, where spans at a given depth may be non-contiguous across multiple bind regions.
+    static func extractFilteredSpans(
+        from sequence: ChoiceSequence,
+        in positionRange: ClosedRange<Int>,
+        context: ReductionContext = ReductionContext()
+    ) -> [ChoiceSpan] {
+        let allSpans = ChoiceSequence.extractAllValueSpans(from: sequence)
+        if let depth = context.depthFilter, let bindIndex = context.bindIndex {
+            return allSpans.filter {
+                positionRange.contains($0.range.lowerBound)
+                    && bindIndex.bindDepth(at: $0.range.lowerBound) == depth
+            }
+        }
+        return allSpans.filter { positionRange.contains($0.range.lowerBound) }
+    }
 }
 
 // MARK: - Reduction Context
 
-/// Shared state passed to point encoders without coupling to ``ReductionState``.
+/// Shared state passed to composable encoders without coupling to ``ReductionState``.
 public struct ReductionContext {
     /// The bind span index, or `nil` if the generator has no binds.
     public let bindIndex: BindSpanIndex?
@@ -83,23 +113,35 @@ public struct ReductionContext {
     /// The choice dependency graph, or `nil` if not available.
     public let dag: ChoiceDependencyGraph?
 
+    /// When non-nil, restricts the encoder to value spans at this bind depth.
+    ///
+    /// Used by the covariant depth sweep, where spans at a given depth may be non-contiguous across multiple bind regions. The encoder applies this filter during span extraction via ``ComposableEncoder/extractFilteredSpans(from:in:context:)``. When `nil`, all spans in the position range are eligible.
+    public let depthFilter: Int?
+
+    /// The current reduction cycle number. Used by encoders to timestamp convergence records.
+    public let cycle: Int
+
     public init(
         bindIndex: BindSpanIndex? = nil,
         convergedOrigins: [Int: ConvergedOrigin]? = nil,
-        dag: ChoiceDependencyGraph? = nil
+        dag: ChoiceDependencyGraph? = nil,
+        depthFilter: Int? = nil,
+        cycle: Int = 0
     ) {
         self.bindIndex = bindIndex
         self.convergedOrigins = convergedOrigins
         self.dag = dag
+        self.depthFilter = depthFilter
+        self.cycle = cycle
     }
 }
 
-// MARK: - Identity Point Encoder
+// MARK: - Identity Composable Encoder
 
-/// A point encoder that produces no probes — the identity element of the composition algebra.
+/// A composable encoder that produces no probes — the identity element of the composition algebra.
 ///
 /// Used in ``KleisliComposition`` to express standalone phases: `KleisliComposition(upstream: .identity, downstream: encoder, ...)` runs only the downstream encoder, and vice versa.
-public struct IdentityPointEncoder: PointEncoder {
+public struct IdentityComposableEncoder: ComposableEncoder {
     public let name: EncoderName
     public let phase: ReductionPhase
 
@@ -120,51 +162,3 @@ public struct IdentityPointEncoder: PointEncoder {
     }
 }
 
-// MARK: - Legacy Encoder Adapter
-
-/// Bridges an existing ``AdaptiveEncoder`` into the ``PointEncoder`` protocol.
-///
-/// Translates `positionRange` to `TargetSet` by extracting value spans within the range from the sequence. This lets existing encoders participate in ``KleisliComposition`` without internal changes.
-///
-/// Uses `any AdaptiveEncoder` (existential) — acceptable for the exploration leg (325 probes budget, not a hot path). Make generic if moved to a hotter path.
-public struct LegacyEncoderAdapter: PointEncoder {
-    public var inner: any AdaptiveEncoder
-    public var name: EncoderName { inner.name }
-    public var phase: ReductionPhase { inner.phase }
-
-    public init(inner: any AdaptiveEncoder) {
-        self.inner = inner
-    }
-
-    public func estimatedCost(
-        sequence: ChoiceSequence,
-        tree: ChoiceTree,
-        positionRange: ClosedRange<Int>,
-        context: ReductionContext
-    ) -> Int? {
-        inner.estimatedCost(sequence: sequence, bindIndex: context.bindIndex)
-    }
-
-    public mutating func start(
-        sequence: ChoiceSequence,
-        tree: ChoiceTree,
-        positionRange: ClosedRange<Int>,
-        context: ReductionContext
-    ) {
-        let allSpans = ChoiceSequence.extractAllValueSpans(from: sequence)
-        let filteredSpans = allSpans.filter { positionRange.contains($0.range.lowerBound) }
-        inner.start(
-            sequence: sequence,
-            targets: .spans(filteredSpans),
-            convergedOrigins: context.convergedOrigins
-        )
-    }
-
-    public mutating func nextProbe(lastAccepted: Bool) -> ChoiceSequence? {
-        inner.nextProbe(lastAccepted: lastAccepted)
-    }
-
-    public var convergenceRecords: [Int: ConvergedOrigin] {
-        inner.convergenceRecords
-    }
-}
