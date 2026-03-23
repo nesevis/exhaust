@@ -33,15 +33,18 @@ struct BinaryHeapShrinkingChallenge {
             return sorted == xs.sorted() && xs == xs.sorted()
         }
 //        ExhaustLog.setConfiguration(.init(isEnabled: true, minimumLevel: .info, categoryMinimumLevels: [.reducer: .debug], format: .human))
+        var report: ExhaustReport?
         let output = try #require(
             #exhaust(
                 Self.gen,
                 .suppressIssueReporting,
 //                .replay(626_360_492_104_589_905),
                 .replay(7_669_171_433_675_367_730),
+                .onReport { report = $0 },
                 property: property
             )
         )
+        if let report { print("[PROFILE] BinaryHeap: \(report.profilingSummary)") }
         let outputValues = Self.toList(output)
         // The shrunken result should have 4 values — the minimal failing heap.
         // 1 should be the last value, as this is the shortlex smallest

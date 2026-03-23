@@ -25,6 +25,12 @@ public struct FibreCoveringEncoder: PointEncoder {
     private var probeIndex = 0
     private var isExhaustive = false
 
+    /// The total fibre space computed at `start()` time. Used by the driver for profiling (fibre size vs exhaustive threshold).
+    public private(set) var lastComputedFibreSize: UInt64 = 0
+
+    /// The number of probes generated at `start()` time. Zero means the fibre was too large or had too few parameters for pairwise.
+    public var probeCount: Int { probes.count }
+
     private struct ValuePosition {
         let index: Int
         let domainLower: UInt64
@@ -67,9 +73,13 @@ public struct FibreCoveringEncoder: PointEncoder {
         probes = []
         isExhaustive = false
 
-        guard valuePositions.isEmpty == false else { return }
+        guard valuePositions.isEmpty == false else {
+            lastComputedFibreSize = 0
+            return
+        }
 
         let totalSpace = computeTotalSpace(valuePositions)
+        lastComputedFibreSize = totalSpace
 
         if totalSpace <= Self.exhaustiveThreshold {
             // Exhaustive: generate all combinations as rows

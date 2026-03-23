@@ -123,11 +123,37 @@ final class ReductionState<Output> {
     /// Total materialization attempts (decoder invocations) during reduction.
     var totalMaterializations: Int = 0
 
+    // Decision tree profiling counters
+    var convergedCoordinatesAtPhaseTwoStart: Int = 0
+    var totalValueCoordinatesAtPhaseTwoStart: Int = 0
+    var fibreExceededExhaustiveThreshold: Int = 0
+    var pairwiseOnExhaustibleFibre: Int = 0
+    var futileCompositions: Int = 0
+    var compositionEdgesAttempted: Int = 0
+    var convergenceTransfersAttempted: Int = 0
+    var convergenceTransfersValidated: Int = 0
+    var convergenceTransfersStale: Int = 0
+    var verificationSweepProbes: Int = 0
+    var verificationSweepFoundStaleness: Bool = false
+    var statsCycles: Int = 0
+
     /// Extracts accumulated statistics from this reduction run.
     func extractStats() -> ReductionStats {
         var stats = ReductionStats()
         stats.encoderProbes = encoderProbes.filter { $0.value > 0 }
         stats.totalMaterializations = totalMaterializations
+        stats.cycles = statsCycles
+        stats.convergedCoordinatesAtPhaseTwoStart = convergedCoordinatesAtPhaseTwoStart
+        stats.totalValueCoordinatesAtPhaseTwoStart = totalValueCoordinatesAtPhaseTwoStart
+        stats.fibreExceededExhaustiveThreshold = fibreExceededExhaustiveThreshold
+        stats.pairwiseOnExhaustibleFibre = pairwiseOnExhaustibleFibre
+        stats.futileCompositions = futileCompositions
+        stats.compositionEdgesAttempted = compositionEdgesAttempted
+        stats.convergenceTransfersAttempted = convergenceTransfersAttempted
+        stats.convergenceTransfersValidated = convergenceTransfersValidated
+        stats.convergenceTransfersStale = convergenceTransfersStale
+        stats.verificationSweepProbes = verificationSweepProbes
+        stats.verificationSweepFoundStaleness = verificationSweepFoundStaleness
         return stats
     }
 

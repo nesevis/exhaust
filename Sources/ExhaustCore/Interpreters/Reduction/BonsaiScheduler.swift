@@ -209,6 +209,8 @@ enum BonsaiScheduler {
             }
         }
 
+        state.statsCycles = cycles
+
         // MARK: - Post-Termination Verification Sweep
         //
         // Detect stale convergence cache entries that produced a non-minimal
@@ -220,6 +222,8 @@ enum BonsaiScheduler {
         var verificationSweepCompleted = false
         verificationSweep: do {
             let staleness = try Self.detectStaleness(state: state, gen: gen, property: property)
+            state.verificationSweepProbes = staleness.probesUsed
+            state.verificationSweepFoundStaleness = staleness.hasStaleFloors
             if staleness.hasStaleFloors {
                 if isInstrumented {
                     ExhaustLog.debug(

@@ -29,15 +29,18 @@ struct ParserShrinkingChallenge {
     @Test("Parser, Full")
     func parserFull() throws {
 //        ExhaustLog.setConfiguration(.init(isEnabled: true, minimumLevel: .info, categoryMinimumLevels: [.reducer: .debug], format: .human))
+        var report: ExhaustReport?
         let output = try #require(
             #exhaust(
                 Self.langGen,
                 .randomOnly, // coverage takes a long time
-                .suppressIssueReporting
+                .suppressIssueReporting,
+                .onReport { report = $0 }
             ) { lang in
                 Self.parse(Self.serialize(lang)) == lang
             }
         )
+        if let report { print("[PROFILE] Parser: \(report.profilingSummary)") }
 
         print("Output: \(output)")
         #expect(Self.parse(Self.serialize(output)) != output)

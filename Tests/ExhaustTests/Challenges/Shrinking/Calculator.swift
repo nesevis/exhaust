@@ -28,10 +28,12 @@ struct CalculatorShrinkingChallenge {
     func calculatorFull() throws {
         let gen = #gen(Self.expression(depth: 4))
 //        ExhaustLog.setConfiguration(.init(isEnabled: true, minimumLevel: .info, categoryMinimumLevels: [.reducer: .debug], format: .human))
+        var report: ExhaustReport?
         let result = #exhaust(
             gen,
             .suppressIssueReporting,
-            .replay(1_117_838_118_804_311_299)
+            .replay(1_117_838_118_804_311_299),
+            .onReport { report = $0 }
         ) { expr in
             guard Self.containsLiteralDivisionByZero(expr) == false else {
                 return true
@@ -46,6 +48,7 @@ struct CalculatorShrinkingChallenge {
             }
         }
 
+        if let report { print("[PROFILE] Calculator: \(report.profilingSummary)") }
         print("Output: \(result!)")
         #expect(result == .div(.value(0), .add(.value(0), .value(0))))
     }

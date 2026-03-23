@@ -41,29 +41,34 @@ struct CouplingShrinkingChallenge {
 
     @Test("Coupling")
     func couplingChallenge() throws {
-        ExhaustLog.setConfiguration(.init(isEnabled: true, minimumLevel: .debug, categoryMinimumLevels: [.reducer: .debug], format: .human))
+//        ExhaustLog.setConfiguration(.init(isEnabled: true, minimumLevel: .debug, categoryMinimumLevels: [.reducer: .debug], format: .human))
+        var report: ExhaustReport?
         let value = try #require(
             #exhaust(
                 Self.gen,
                 .suppressIssueReporting,
+                .onReport { report = $0 },
                 property: Self.property
             )
         )
+        if let report { print("[PROFILE] Coupling: \(report.profilingSummary)") }
         #expect(value.count == 2)
         #expect(value == [1, 0])
     }
 
     @Test("Coupling Pathological 1")
     func couplingPathlogical1() throws {
-        ExhaustLog.setConfiguration(.init(isEnabled: true, minimumLevel: .info, categoryMinimumLevels: [.reducer: .debug, .propertyTest: .debug], format: .human))
+//        ExhaustLog.setConfiguration(.init(isEnabled: true, minimumLevel: .info, categoryMinimumLevels: [.reducer: .debug, .propertyTest: .debug], format: .human))
+        var report: ExhaustReport?
         let value = try #require(
             #exhaust(
                 Self.gen,
                 .suppressIssueReporting,
+                .onReport { report = $0 },
                 property: Self.property
             )
         )
-        print()
+        if let report { print("[PROFILE] CouplingPath: \(report.profilingSummary)") }
         #expect(value.count == 2)
         #expect(value == [1, 0])
     }

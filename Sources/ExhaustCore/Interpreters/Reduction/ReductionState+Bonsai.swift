@@ -831,6 +831,19 @@ extension ReductionState {
         dominance.invalidate()
         var anyAccepted = false
 
+        // Profiling: count coordinates with cached floors at Phase 2 start
+        var convergedCount = 0
+        var totalValueCount = 0
+        for index in 0 ..< sequence.count {
+            guard sequence[index].value != nil else { continue }
+            totalValueCount += 1
+            if convergenceCache.convergedOrigin(at: index) != nil {
+                convergedCount += 1
+            }
+        }
+        convergedCoordinatesAtPhaseTwoStart += convergedCount
+        totalValueCoordinatesAtPhaseTwoStart += totalValueCount
+
         // Build converged origins once for all fibre descent calls in this pass.
         // Mid-pass updates (from one encoder's convergence records) must not leak into
         // another encoder's converged origins — the cross-zero skip relies on the
@@ -1099,6 +1112,7 @@ extension ReductionState {
 
         for edge in edges {
             guard budget > 0 else { break }
+            compositionEdgesAttempted += 1
 
             // Build fresh upstream and downstream point encoders.
             // Upstream: binary search toward simplest bind-inner value.
@@ -1149,6 +1163,7 @@ extension ReductionState {
                    let delta = composed.upstreamDelta, delta == 1
                 {
                     // Adjacent upstream values — validate each origin at floor - 1.
+                    convergenceTransfersAttempted += 1
                     var allValid = true
                     for (index, origin) in pending {
                         guard index < sequence.count,
@@ -1184,6 +1199,11 @@ extension ReductionState {
                             anyAccepted = true
                             break
                         }
+                    }
+                    if allValid {
+                        convergenceTransfersValidated += 1
+                    } else {
+                        convergenceTransfersStale += 1
                     }
                     composed.setValidatedOrigins(allValid ? pending : nil)
                 } else {
@@ -1225,6 +1245,11 @@ extension ReductionState {
                 } else {
                     lastAccepted = false
                 }
+            }
+
+            // Track futile compositions (zero accepted probes for this edge)
+            if legBudget.used > 0, lastAccepted == false {
+                futileCompositions += 1
             }
 
             budget -= legBudget.used

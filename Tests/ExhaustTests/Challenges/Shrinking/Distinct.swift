@@ -26,14 +26,17 @@ struct DistinctShrinkingChallenge {
     func distinct() {
         let gen = #gen(.int().array(length: 3 ... 30))
 //        ExhaustLog.setConfiguration(.init(isEnabled: true, minimumLevel: .info, categoryMinimumLevels: [.reducer: .debug], format: .human))
+        var report: ExhaustReport?
         let counterExample = #exhaust(
             gen,
             .suppressIssueReporting,
             .humanOrderPostProcess,
-            .replay(5_023_515_172_476_973_421)
+            .replay(5_023_515_172_476_973_421),
+            .onReport { report = $0 }
         ) {
             Set($0).count < 3
         }
+        if let report { print("[PROFILE] Distinct: \(report.profilingSummary)") }
         #expect(counterExample == [-1, 0, 1])
     }
 
@@ -41,14 +44,17 @@ struct DistinctShrinkingChallenge {
     func distinctReflected() {
         let gen = #gen(.int().array(length: 3 ... 30))
         let value = [1337, 80085, 69, 67]
+        var report: ExhaustReport?
         let counterExample = #exhaust(
             gen,
             .suppressIssueReporting,
             .humanOrderPostProcess,
-            .reflecting(value)
+            .reflecting(value),
+            .onReport { report = $0 }
         ) {
             Set($0).count < 3
         }
+        if let report { print("[PROFILE] DistinctReflected: \(report.profilingSummary)") }
         #expect(counterExample == [-1, 0, 1])
     }
 }

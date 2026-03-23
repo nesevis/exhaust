@@ -39,11 +39,14 @@ struct DeletionShrinkingChallenge {
             return xs.contains(x) == false
         }
 
+        var report: ExhaustReport?
         let output = #exhaust(
             gen,
             .suppressIssueReporting,
+            .onReport { report = $0 },
             property: property
         )
+        if let report { print("[PROFILE] Deletion: \(report.profilingSummary)") }
 
         #expect(output?.0 == [0, 0])
         #expect(output?.1 == 0)

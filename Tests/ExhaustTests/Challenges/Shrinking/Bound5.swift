@@ -37,14 +37,17 @@ struct Bound5ShrinkingChallenge {
 
     @Test("Bound5, Single")
     func bound5Single() {
-        ExhaustLog.setConfiguration(.init(isEnabled: true, minimumLevel: .info, categoryMinimumLevels: [.reducer: .debug], format: .human))
+//        ExhaustLog.setConfiguration(.init(isEnabled: true, minimumLevel: .info, categoryMinimumLevels: [.reducer: .debug], format: .human))
+        var report: ExhaustReport?
         let output = #exhaust(
             Self.gen,
             .randomOnly,
             .suppressIssueReporting,
             .replay(16_799_307_796_119_368_455),
+            .onReport { report = $0 },
             property: Self.property
         )
+        if let report { print("[PROFILE] Bound5Single: \(report.profilingSummary)") }
 
         #expect(output?.arr.count == 2)
         #expect(output?.arr == [-1, -32768])
@@ -61,12 +64,15 @@ struct Bound5ShrinkingChallenge {
             e: [12744, -11152, -18025, -29069, 30825]
         )
 
+        var report: ExhaustReport?
         let output = #exhaust(
             Self.gen,
             .suppressIssueReporting,
             .reflecting(value),
+            .onReport { report = $0 },
             property: Self.property
         )
+        if let report { print("[PROFILE] Bound5Path1: \(report.profilingSummary)") }
 
         #expect(output?.arr.count == 2)
         #expect(output?.arr.sorted() == [-32768, -1])
@@ -83,12 +89,15 @@ struct Bound5ShrinkingChallenge {
             e: [16775, -32275, 813, 11044]
         )
 
+        var report: ExhaustReport?
         let output = #exhaust(
             Self.gen,
             .suppressIssueReporting,
             .reflecting(value),
+            .onReport { report = $0 },
             property: Self.property
         )
+        if let report { print("[PROFILE] Bound5Path2: \(report.profilingSummary)") }
 
         #expect(output?.arr.count == 2)
         #expect(output?.arr.sorted() == [-32768, -1])
@@ -131,13 +140,16 @@ struct Bound5ShrinkingChallenge {
             d: [-4862, 11017, 12831, 19004],
             e: [-25748, 8284, -13626, 12773, 4040]
         )
-        //ExhaustLog.setConfiguration(.init(isEnabled: true, minimumLevel: .info, categoryMinimumLevels: [.reducer: .debug], format: .human))
+//        ExhaustLog.setConfiguration(.init(isEnabled: true, minimumLevel: .info, categoryMinimumLevels: [.reducer: .debug], format: .human))
+        var report: ExhaustReport?
         let output = #exhaust(
             Self.gen,
             .suppressIssueReporting,
             .reflecting(value),
+            .onReport { report = $0 },
             property: Self.property
         )
+        if let report { print("[PROFILE] Bound5Path4: \(report.profilingSummary)") }
 
         #expect(output?.arr.count == 2)
         #expect(output?.arr.sorted() == [-32768, -1])

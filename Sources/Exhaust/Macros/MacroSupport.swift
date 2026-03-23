@@ -151,8 +151,7 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
                         visualize: visualize,
                         property: countingProperty
                     )
-                    report.encoderProbes = reduceResult.stats.encoderProbes
-                    report.totalMaterializations = reduceResult.stats.totalMaterializations
+                    report.applyReductionStats(reduceResult.stats)
                     if let (shrunkSequence, shrunkValue) = reduceResult.reduced {
                         var failure = PropertyTestFailure(
                             counterexample: shrunkValue,
@@ -317,8 +316,7 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
                         visualize: visualize,
                         property: countingProperty
                     )
-                    report.encoderProbes = reduceResult.stats.encoderProbes
-                    report.totalMaterializations = reduceResult.stats.totalMaterializations
+                    report.applyReductionStats(reduceResult.stats)
                     if let (shrunkSequence, shrunkValue) = reduceResult.reduced {
                         let failure = PropertyTestFailure(
                             counterexample: shrunkValue,
@@ -749,8 +747,7 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
             visualize: visualize,
             property: countingProperty
         )
-        report.encoderProbes = reduceResult.stats.encoderProbes
-        report.totalMaterializations = reduceResult.stats.totalMaterializations
+        report.applyReductionStats(reduceResult.stats)
 
         if let (shrunkSequence, shrunkValue) = reduceResult.reduced {
             let failure = PropertyTestFailure(
