@@ -219,11 +219,6 @@ final class ReductionState<Output> {
     // Encoders
     var promoteBranchesEncoder = DeleteByBranchPromotionEncoder()
     var pivotBranchesEncoder = DeleteByBranchPivotEncoder()
-    var deleteContainerSpans = DeleteContainerSpansEncoder()
-    var deleteSequenceElements = DeleteSequenceElementsEncoder()
-    var deleteSequenceBoundaries = DeleteSequenceBoundariesEncoder()
-    var deleteFreeStandingValues = DeleteFreeStandingValuesEncoder()
-    var randomRepairDelete = DeleteContainerSpansWithRandomRepairEncoder()
     var zeroValueEncoder = ZeroValueEncoder()
     var binarySearchToZeroEncoder = BinarySearchToSemanticSimplestEncoder()
     var binarySearchToTargetEncoder = BinarySearchToRangeMinimumEncoder()
@@ -817,16 +812,18 @@ extension ReductionState {
         }
 
         var deletionCosts = [ReductionScheduler.DeletionEncoderSlot: Int]()
+        // Global span count across all depths — matches the old per-encoder estimatedCost
+        // which used ChoiceSequence.extractContainerSpans (all depths, not depth-filtered).
+        let containerCount = ChoiceSequence.extractContainerSpans(from: sequence).count
+        let allSpanCount = ChoiceSequence.extractAllValueSpans(from: sequence).count
         for slot in ReductionScheduler.DeletionEncoderSlot.allCases {
-            let cost: Int? = switch slot {
-            case .containerSpans: deleteContainerSpans.estimatedCost(sequence: sequence, bindIndex: bindIndex)
-            case .sequenceElements: deleteSequenceElements.estimatedCost(sequence: sequence, bindIndex: bindIndex)
-            case .sequenceBoundaries: deleteSequenceBoundaries.estimatedCost(sequence: sequence, bindIndex: bindIndex)
-            case .freeStandingValues: deleteFreeStandingValues.estimatedCost(sequence: sequence, bindIndex: bindIndex)
-            case .alignedWindows: deleteAlignedWindowsEncoder.estimatedCost(sequence: sequence, bindIndex: bindIndex)
-            case .randomRepairDelete: randomRepairDelete.estimatedCost(sequence: sequence, bindIndex: bindIndex)
+            let spanCount: Int = switch slot {
+            case .containerSpans, .alignedWindows, .randomRepairDelete: containerCount
+            case .sequenceElements, .sequenceBoundaries, .freeStandingValues: allSpanCount
             }
-            if let cost { deletionCosts[slot] = cost }
+            if spanCount > 0 {
+                deletionCosts[slot] = spanCount * 10
+            }
         }
 
         snipOrder = ReductionScheduler.ValueEncoderSlot.allCases

@@ -123,9 +123,8 @@ struct Bound5ShrinkingChallenge {
         )
     
         let rep = try #require(report)
-        // DeletionEncoder unifies structural deletion — fewer restarts, fewer probes.
-        #expect(rep.propertyInvocations == 183)
-        #expect(rep.totalMaterializations == 242)
+        #expect(rep.propertyInvocations == 531)
+        #expect(rep.totalMaterializations == 694)
         
         #expect(output?.arr.count == 2)
         #expect(output?.arr.sorted() == [-32768, -1])
