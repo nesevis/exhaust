@@ -545,170 +545,77 @@ extension ReductionState {
 
         if bindInnerCount <= 3 {
             // Batch: enumerate product space of bind-inner values.
+            // Three-descriptor dominance chain replaces the hand-coded multi-tier orchestration:
+            //   Tier 1 (guided) → Regime probe → Tier 2 (PRNG retries)
             let bindDag = ChoiceDependencyGraph.build(
                 from: sequence, tree: tree, bindIndex: bindSpanIndex
             )
             productSpaceBatchEncoder.bindIndex = bindSpanIndex
             productSpaceBatchEncoder.dag = bindDag
-
-            // Compute dependent domains for nested binds via lightweight replay.
             productSpaceBatchEncoder.dependentDomains = computeDependentDomains(
                 bindSpanIndex: bindSpanIndex, dag: bindDag
             )
 
-            // Pre-materialize once; both tiers reuse the same [ChoiceSequence] array.
             let allCandidates = Array(productSpaceBatchEncoder.encode(
                 sequence: sequence, targets: .wholeSequence
             ))
-            let tier1Encoder = PrecomputedBatchEncoder(
-                name: productSpaceBatchEncoder.name,
-                phase: productSpaceBatchEncoder.phase,
-                candidates: allCandidates
+            let tier2Candidates = sortByLargestFibreFirst(
+                allCandidates, bindIndex: bindSpanIndex
             )
+            let currentFallbackTree = fallbackTree ?? tree
 
-            // Tier 1: guided replay (clamp bound entries to current tree).
-            let guidedDecoder: SequenceDecoder = .guided(
-                fallbackTree: fallbackTree ?? tree
-            )
-            if try runBatch(
-                tier1Encoder, decoder: guidedDecoder,
-                targets: .wholeSequence, structureChanged: true,
+            let descriptors: [MorphismDescriptor] = [
+                // Tier 1: guided replay — clamp bound entries to current tree.
+                // Dominates both regime probe and PRNG retries on acceptance.
+                MorphismDescriptor(
+                    encoder: PrecomputedComposableEncoder(
+                        name: .productSpaceBatch,
+                        phase: .valueMinimization,
+                        candidates: allCandidates
+                    ),
+                    decoderFactory: { .guided(fallbackTree: currentFallbackTree) },
+                    probeBudget: allCandidates.count,
+                    structureChanged: true,
+                    dominates: [1, 2]
+                ),
+                // Regime probe: all values zeroed, exact decoder.
+                // Tests elimination vs value-sensitive regime.
+                // Dominates PRNG retries if the all-zeroed probe fails the property
+                // (structural failure — retries are waste).
+                MorphismDescriptor(
+                    encoder: RegimeProbeEncoder(),
+                    decoderFactory: { .exact() },
+                    probeBudget: 1,
+                    structureChanged: true,
+                    dominates: [2]
+                ),
+                // Tier 2: PRNG fallback with salted retries, largest-fibre-first ordering.
+                MorphismDescriptor(
+                    encoder: PrecomputedComposableEncoder(
+                        name: .productSpaceBatch,
+                        phase: .valueMinimization,
+                        candidates: tier2Candidates
+                    ),
+                    decoderFactory: { .guided(
+                        fallbackTree: nil, usePRNGFallback: true,
+                        prngSalt: UInt64(cycle * 4)
+                    ) },
+                    probeBudget: tier2Candidates.count,
+                    structureChanged: true,
+                    maxRetries: 4,
+                    retrySaltBase: UInt64(cycle * 4)
+                ),
+            ]
+
+            let chainContext = ReductionContext(bindIndex: bindSpanIndex, dag: bindDag)
+            let fullRange = 0 ... max(0, sequence.count - 1)
+            if try runDescriptorChain(
+                descriptors,
+                positionRange: fullRange,
+                context: chainContext,
                 budget: &legBudget
             ) {
                 accepted += 1
-            } else {
-                // Tier 2: PRNG fallback with salted retries, largest-fibre-first ordering.
-                // Sort candidates by bind-inner value sum descending so that candidates with larger inner values (wider downstream domains) are tried first, giving PRNG more room to find a failure.
-                // Capped at 5 candidates per the spec.
-                let tier2Candidates = sortByLargestFibreFirst(
-                    allCandidates, bindIndex: bindSpanIndex
-                )
-                let tier2Encoder = PrecomputedBatchEncoder(
-                    name: .productSpaceBatch,
-                    phase: .valueMinimization,
-                    candidates: tier2Candidates
-                )
-
-                // MARK: - Regime probe (Opportunity 2: fibration uniqueness of cartesian lifts)
-
-                //
-                // The uniqueness law says the canonical projection is the unique best projection — the
-                // PRNG retries below are not searching for a better one, they're asking whether any
-                // point in the new fibre witnesses the failure. When the failure is structural (elimination
-                // regime), all four retries are guaranteed waste. Build the simplest-values probe to
-                // detect the regime before committing to the retry budget.
-                var simplestProbe = sequence
-                var probeNeedsRun = false
-                var probeIdx = 0
-                while probeIdx < simplestProbe.count {
-                    if let v = simplestProbe[probeIdx].value {
-                        let target = ZeroValueEncoder.simplestTarget(for: v)
-                        if target != v.choice {
-                            probeNeedsRun = true
-                            simplestProbe[probeIdx] = .value(.init(
-                                choice: target,
-                                validRange: v.validRange,
-                                isRangeExplicit: v.isRangeExplicit
-                            ))
-                        }
-                    }
-                    probeIdx += 1
-                }
-
-                var skipRetries = false
-                if probeNeedsRun {
-                    legBudget.recordMaterialization()
-                    let probeResult = ReductionMaterializer.materialize(
-                        gen, prefix: simplestProbe, mode: .exact, fallbackTree: fallbackTree
-                    )
-                    let regime: String
-                    let probeResultLabel: String
-                    switch probeResult {
-                    case let .success(value: probeValue, tree: freshTree, decodingReport: _):
-                        let freshSequence = ChoiceSequence(freshTree)
-                        if property(probeValue) == false, freshSequence.shortLexPrecedes(sequence) {
-                            // Elimination regime: failure is structural, not value-sensitive.
-                            // Accept the simplest-values witness and skip the PRNG retries — no
-                            // value assignment can improve on this. The shortlex guard ensures we
-                            // never corrupt bestSequence by accepting a non-improving result (which
-                            // can happen when zeroing bind-inner values expands the bound subtree).
-                            regime = "elimination"
-                            probeResultLabel = "success"
-                            accept(
-                                ReductionResult(
-                                    sequence: freshSequence,
-                                    tree: freshTree,
-                                    output: probeValue,
-                                    evaluations: 1,
-                                    decodingReport: nil
-                                ),
-                                structureChanged: true
-                            )
-                            accepted += 1
-                            skipRetries = true
-                        } else {
-                            // Value-sensitive regime: specific values are required to reproduce the
-                            // failure. Proceed with PRNG retries.
-                            regime = "value_sensitive"
-                            probeResultLabel = "success"
-                        }
-                    case .rejected:
-                        // Regime unknown: a value was out of range in exact mode. Fall back to retries.
-                        regime = "unknown"
-                        probeResultLabel = "rejected"
-                    // OPPORTUNITY 3 (commented out — enable after measuring `rejected` frequency)
-                    // Compute g!(semanticSimplest): materialize the candidate in guided mode
-                    // with minimal values, then compute shortlex distance between the result
-                    // and the current best sequence. Large distance → lossy reduction →
-                    // treat as elimination regime and skip retries.
-                    //
-                    // let cocartesianResult = ReductionMaterializer.materialize(
-                    //     gen,
-                    //     prefix: sequence,
-                    //     mode: .guided(
-                    //         seed: ZobristHash.hash(of: sequence),
-                    //         fallbackTree: fallbackTree ?? tree
-                    //     ),
-                    //     fallbackTree: fallbackTree
-                    // )
-                    // if case let .success(_, embeddedTree) = cocartesianResult {
-                    //     let embeddedSeq = ChoiceSequence(embeddedTree)
-                    //     let distance = ChoiceSequence.shortlexDistance(embeddedSeq, sequence)
-                    //     if distance > /* threshold TBD */ 0 {
-                    //         skipRetries = true
-                    //     }
-                    // }
-                    case .failed:
-                        regime = "unknown"
-                        probeResultLabel = "failed"
-                    }
-                    if isInstrumented {
-                        ExhaustLog.debug(
-                            category: .reducer,
-                            event: "bonsai_regime_probe",
-                            metadata: ["regime": regime, "result": probeResultLabel]
-                        )
-                    }
-                }
-
-                let maxRetries = 4
-                if skipRetries == false {
-                    for attempt in 0 ..< maxRetries {
-                        guard legBudget.isExhausted == false else { break }
-                        let saltedDecoder: SequenceDecoder = .guided(
-                            fallbackTree: nil, usePRNGFallback: true,
-                            prngSalt: UInt64(cycle * maxRetries + attempt)
-                        )
-                        if try runBatch(
-                            tier2Encoder, decoder: saltedDecoder,
-                            targets: .wholeSequence, structureChanged: true,
-                            budget: &legBudget
-                        ) {
-                            accepted += 1
-                            break
-                        }
-                    }
-                }
             }
         } else {
             // Adaptive: delta-debug coordinate halving for k > 3.

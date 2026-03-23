@@ -594,6 +594,62 @@ extension ReductionState {
         return anyAccepted
     }
 
+    // MARK: - Descriptor chain runner
+
+    /// Processes an ordered array of morphism descriptors with dominance suppression.
+    ///
+    /// For each descriptor (not suppressed), builds a decoder from the descriptor's factory,
+    /// runs the encoder via ``runComposable(_:decoder:positionRange:context:structureChanged:budget:fingerprintGuard:)``, and on acceptance suppresses all descriptors listed in ``MorphismDescriptor/dominates``.
+    ///
+    /// Descriptors with ``MorphismDescriptor/maxRetries`` > 1 are re-run up to that many times
+    /// with fresh decoder instances, stopping on the first acceptance.
+    func runDescriptorChain(
+        _ descriptors: [MorphismDescriptor],
+        positionRange: ClosedRange<Int>,
+        context: ReductionContext,
+        budget: inout ReductionScheduler.LegBudget
+    ) throws -> Bool {
+        var suppressed = Set<Int>()
+        var anyAccepted = false
+
+        for (index, descriptor) in descriptors.enumerated() {
+            guard budget.isExhausted == false else { break }
+            guard suppressed.contains(index) == false else { continue }
+
+            var descriptorAccepted = false
+
+            for _ in 0 ..< descriptor.maxRetries {
+                guard budget.isExhausted == false else { break }
+
+                let decoder = descriptor.decoderFactory()
+
+                let accepted = try runComposable(
+                    descriptor.encoder,
+                    decoder: decoder,
+                    positionRange: positionRange,
+                    context: context,
+                    structureChanged: descriptor.structureChanged,
+                    budget: &budget,
+                    fingerprintGuard: descriptor.fingerprintGuard
+                )
+
+                if accepted {
+                    descriptorAccepted = true
+                    anyAccepted = true
+                    break
+                }
+            }
+
+            if descriptorAccepted {
+                for dominated in descriptor.dominates {
+                    suppressed.insert(dominated)
+                }
+            }
+        }
+
+        return anyAccepted
+    }
+
     func makeDeletionDecoder(at depth: Int) -> SequenceDecoder {
         let context = DecoderContext(depth: .specific(depth), bindIndex: bindIndex, fallbackTree: fallbackTree, strictness: .relaxed)
         return SequenceDecoder.for(context)
