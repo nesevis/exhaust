@@ -2,7 +2,7 @@
 
 /// Produces candidate mutations for a position range in the choice sequence.
 ///
-/// Composable encoders are the primitives of the horizontal/vertical reduction algebra. Each operates on a scoped position range — agnostic to whether that range represents a horizontal role (upstream of a composition, proposing base morphisms between fibres) or a vertical role (downstream, searching within a fibre). The role is determined by the position's relationship in the ``ChoiceDependencyGraph``, not by the encoder itself.
+/// Composable encoders are role-agnostic probe strategies. Each operates on a scoped position range and produces candidate sequences — it does not know or care whether it is assigned to the upstream role (proposing fibres), the downstream role (exploring within a fibre), or the standalone role (evaluated directly). The role is determined by where the ``EncoderFactory`` places the encoder in the pipeline based on the ``ChoiceDependencyGraph``, not by the encoder itself.
 ///
 /// ## Interface Changes from `AdaptiveEncoder`
 ///

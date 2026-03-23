@@ -21,10 +21,6 @@ public struct BinarySearchToSemanticSimplestEncoder: ComposableEncoder {
     public var phase: ReductionPhase { inner.phase }
     public var convergenceRecords: [Int: ConvergedOrigin] { inner.convergenceRecords }
 
-    public func estimatedCost(sequence: ChoiceSequence, bindIndex: BindSpanIndex?) -> Int? {
-        inner.estimatedCost(sequence: sequence, bindIndex: bindIndex)
-    }
-
     public func estimatedCost(
         sequence: ChoiceSequence,
         tree: ChoiceTree,

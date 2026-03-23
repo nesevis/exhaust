@@ -1,14 +1,14 @@
-# Implementation Plan: Horizontal/Vertical Encoder Refactoring
+# Implementation Plan: Composable Encoder Refactoring
 
 ## Overview
 
-The 20 implemented encoders are monolithic — each embeds both a search strategy and assumptions about where it operates. The horizontal/vertical factorisation (see "Fibrational Structure of the Encoder Algebra" in `reduction-planning.md`) separates these concerns: horizontal encoders move between fibres (manipulate upstream values, trigger lifts), vertical encoders move within a fibre (search downstream spaces). The same encoder primitive can serve either role depending on where the CDG places it.
+The 20 implemented encoders are monolithic — each embeds both a search strategy and assumptions about where it operates. The compositional algebra (see "Fibrational Structure of the Encoder Algebra" in `reduction-planning.md`) separates these concerns: a composable encoder is a role-agnostic probe strategy, and the factory assigns it to a role (upstream, downstream, or standalone) based on CDG position. The same encoder can serve in any role — it does not know or care which one.
 
-This refactoring does not split the existing encoders into two groups. It makes them role-agnostic by migrating them to the `PointEncoder` protocol, then builds the scheduling infrastructure that assigns roles based on CDG position.
+This refactoring makes encoders composable by migrating them to the `ComposableEncoder` protocol, then builds the scheduling infrastructure that assigns roles and processes descriptors.
 
 ## Encoder Classification
 
-The horizontal/vertical distinction applies to the value-reduction and redistribution encoders. Structural deletion encoders (Phase 1) operate on the ChoiceTree before the factorisation is relevant — they remain unchanged.
+The role-based composition applies to the value-reduction and redistribution encoders. Structural deletion encoders (Phase 1) operate on the ChoiceTree before compositions are relevant — they remain unchanged.
 
 ### Structural (unchanged)
 
@@ -27,7 +27,7 @@ These operate on tree structure, not on the opfibration's base or fibres. They s
 
 ### Position-agnostic value encoders (migrate to PointEncoder)
 
-These already work on any value coordinate. Their logic does not assume a CDG role — they binary-search, zero, or float-reduce whatever targets they receive. In a composition, the same encoder instance serves as horizontal (when targeting a bind-inner position) or vertical (when targeting a leaf position).
+These already work on any value coordinate. Their logic does not assume a CDG role — they binary-search, zero, or float-reduce whatever targets they receive. In a composition, the same encoder instance can serve as upstream (when targeting a bind-inner position) or downstream (when targeting a leaf position). The encoder does the same thing in both cases.
 
 | Encoder | File | Notes |
 |---------|------|-------|
@@ -132,9 +132,9 @@ struct MorphismDescriptor {
 
 ```swift
 enum CompositionRole {
-    case horizontal  // Upstream in a KleisliComposition. Opcartesian.
-    case vertical    // Downstream in a KleisliComposition. Within-fibre.
-    case independent // Outside composition. Current Phase 2/3 behaviour.
+    case upstream    // Proposes fibres. Output is lifted before evaluation.
+    case downstream  // Explores within a fibre. Output is evaluated directly.
+    case standalone  // No composition. Output is evaluated directly.
 }
 ```
 
@@ -160,8 +160,8 @@ This pattern generalises: any multi-tier reduction strategy is a dominance chain
 
 The factory walks CDG nodes and emits descriptors:
 
-1. **Bind-inner with outgoing edges** → horizontal descriptor. Encoder selected by position classification (ProductSpace for multi-bind coordination, BinarySearch for single-bind). Budget from `leverage / requiredBudget` scoring.
-2. **Value positions within a bind's downstream range** → vertical descriptor, scoped to the fibre. Encoder selected by fibre size: exhaustive (≤ 64), pairwise (≤ 20 params), or per-coordinate search (> 20 params).
+1. **Bind-inner with outgoing edges** → upstream role. Encoder selected by position classification (ProductSpace for multi-bind coordination, BinarySearch for single-bind). Budget from `leverage / requiredBudget` scoring.
+2. **Value positions within a bind's downstream range** → downstream role, scoped to the fibre. Encoder selected by fibre size: exhaustive (≤ 64), pairwise (≤ 20 params), or per-coordinate search (> 20 params).
 3. **Value positions outside any bind** → independent descriptor. Same encoder, no composition. Current Phase 2 behaviour.
 4. **Branch selectors** → independent descriptor. Branch promotion/pivot, no composition.
 5. **Bind-inner joint reduction (≤ 3 axes)** → dominance chain: `(ProductSpaceBatch, .guided)` → `(RegimeProbe, .exact)` → `(ProductSpaceBatch, .prng)`. Replaces the multi-tier orchestration in `runJointBindInnerReduction`.
@@ -215,7 +215,7 @@ BonsaiScheduler.run():
 
 `runDescriptors` processes descriptors in priority order (leverage / budget score):
 - **Independent** descriptors: execute the encoder directly on the full sequence. Same as current Phase 2.
-- **Horizontal + vertical** descriptor pairs: wire into a `KleisliComposition`. The horizontal encoder is the upstream, the lift materialises, the vertical encoder is the downstream.
+- **Upstream + downstream** descriptor pairs: wire into a `KleisliComposition`. The upstream encoder proposes fibres, the lift materialises, the downstream encoder explores the fibre.
 
 ### Transition strategy
 
@@ -263,7 +263,7 @@ The A/B success criterion from `reduction-planning.md`: equal or better countere
 ### New test coverage
 
 - **Factory unit tests**: given a CDG with known topology, assert the factory emits the expected descriptors (role, encoder type, budget).
-- **Role assignment tests**: for each encoder primitive, verify it produces correct probes when assigned to horizontal role (scoped to bind-inner) and vertical role (scoped to fibre).
+- **Role assignment tests**: for each encoder primitive, verify it produces correct probes when assigned to the upstream role (scoped to bind-inner) and the downstream role (scoped to fibre).
 - **Composition integration tests**: the structural pathological suite, especially CrossLevelSum (composition-required) and NestedBind3 (three edges).
 
 ## Risks
@@ -281,7 +281,7 @@ The A/B success criterion from `reduction-planning.md`: equal or better countere
 - **Splitting structural deletion encoders.** Phase 1 encoders operate on tree structure, not on the opfibration. They remain as-is.
 - **Merging encoder implementations.** The refactoring changes interfaces and scheduling, not internal search logic. Encoder consolidation (for example, unifying the two binary search variants) is a separate effort.
 - **Prediction-validation loop (steps 4-5).** The factory is step 2-3 infrastructure. Steps 4-5 (fibre stability prediction, confidence tracking, skip gates) build on the factory but are not part of this refactoring.
-- **Search-based downstream encoders.** The vertical encoder selection currently dispatches to FibreCoveringEncoder (exhaustive or pairwise). Adding a per-coordinate binary search vertical encoder for large fibres is a future extension that the factory would accommodate by adding a row to the classification table.
+- **Search-based downstream encoders.** The downstream role currently dispatches to FibreCoveringEncoder (exhaustive or pairwise). Adding a per-coordinate binary search encoder for the downstream role on large fibres is a future extension that the factory would accommodate by adding a row to the classification table.
 
 ## Sequencing
 

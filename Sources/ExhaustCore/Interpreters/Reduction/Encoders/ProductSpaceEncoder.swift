@@ -245,14 +245,6 @@ struct ProductSpaceAdaptiveEncoder: ComposableEncoder {
     let name: EncoderName = .productSpaceAdaptive
     let phase = ReductionPhase.valueMinimization
 
-    func estimatedCost(sequence _: ChoiceSequence, bindIndex: BindSpanIndex?) -> Int? {
-        guard let bindIndex, bindIndex.regions.count > 3 else { return nil }
-        let count = bindIndex.regions.count
-        // O(k * log(range) * log(k)) — conservative estimate.
-        let logK = count.bitWidth - count.leadingZeroBitCount
-        return count * 64 * max(1, logK)
-    }
-
     // MARK: - ComposableEncoder
 
     func estimatedCost(
@@ -261,7 +253,10 @@ struct ProductSpaceAdaptiveEncoder: ComposableEncoder {
         positionRange: ClosedRange<Int>,
         context: ReductionContext
     ) -> Int? {
-        estimatedCost(sequence: sequence, bindIndex: context.bindIndex)
+        guard let bindIndex = context.bindIndex, bindIndex.regions.count > 3 else { return nil }
+        let count = bindIndex.regions.count
+        let logK = count.bitWidth - count.leadingZeroBitCount
+        return count * 64 * max(1, logK)
     }
 
     mutating func start(

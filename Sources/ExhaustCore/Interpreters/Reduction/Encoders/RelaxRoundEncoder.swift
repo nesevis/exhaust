@@ -11,12 +11,6 @@ public struct RelaxRoundEncoder: ComposableEncoder {
     public let name: EncoderName = .relaxRound
     public let phase = ReductionPhase.exploration
 
-    public func estimatedCost(sequence: ChoiceSequence, bindIndex _: BindSpanIndex?) -> Int? {
-        let valueCount = ChoiceSequence.extractAllValueSpans(from: sequence).count
-        guard valueCount >= 2 else { return nil }
-        return valueCount * (valueCount - 1)
-    }
-
     // MARK: - Dual conformance disambiguation
 
     public var convergenceRecords: [Int: ConvergedOrigin] { [:] }

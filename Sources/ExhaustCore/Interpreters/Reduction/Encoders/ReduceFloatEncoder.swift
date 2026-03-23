@@ -22,18 +22,6 @@ struct ReduceFloatEncoder: ComposableEncoder {
     let name: EncoderName = .reduceFloat
     let phase = ReductionPhase.valueMinimization
 
-    func estimatedCost(sequence: ChoiceSequence, bindIndex _: BindSpanIndex?) -> Int? {
-        let spans = ChoiceSequence.extractAllValueSpans(from: sequence)
-        let t = spans.count(where: { span in
-            let seqIdx = span.range.lowerBound
-            guard let v = sequence[seqIdx].value else { return false }
-            return v.choice.tag == .double || v.choice.tag == .float
-        })
-        guard t > 0 else { return nil }
-        // t float targets × ~94: four stages per target (special values, precision truncation, integral binary search, ratio binary search) with ~20 batch candidates + ~64 binary search steps + overhead.
-        return t * 94
-    }
-
     // MARK: - ComposableEncoder
 
     func estimatedCost(

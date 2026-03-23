@@ -136,9 +136,9 @@ struct EncoderFactory {
 
     /// Builds ``KleisliComposition`` instances for each CDG reduction edge.
     ///
-    /// Each edge produces a composition wiring a horizontal encoder (binary search on the
-    /// bind-inner value) to a vertical encoder (fibre covering on the downstream) through a
-    /// generator lift. The caller runs the compositions via ``ReductionState/runCompositionEdges``.
+    /// Each edge produces a composition wiring an upstream encoder (binary search on the
+    /// bind-inner value) to a downstream encoder (fibre covering) through a generator lift.
+    /// The caller runs the compositions with warm-start validation in ``runKleisliExploration``.
     static func compositionDescriptors<Output>(
         edges: [ReductionEdge],
         gen: FreerMonad<ReflectiveOperation, Output>,

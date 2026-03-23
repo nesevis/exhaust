@@ -37,12 +37,6 @@ public struct BinarySearchEncoder: ComposableEncoder {
         self.configuration = configuration
     }
 
-    public func estimatedCost(sequence: ChoiceSequence, bindIndex _: BindSpanIndex?) -> Int? {
-        let spanCount = ChoiceSequence.extractAllValueSpans(from: sequence).count
-        guard spanCount > 0 else { return nil }
-        return spanCount * costPerTarget
-    }
-
     // MARK: - ComposableEncoder
 
     public func estimatedCost(

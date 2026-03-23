@@ -763,13 +763,15 @@ extension ReductionState {
 extension ReductionState {
     /// Computes cost-based encoder ordering for the current sequence. Called once per cycle.
     func computeEncoderOrdering() {
+        let fullRange = 0 ... max(0, sequence.count - 1)
+        let orderingContext = ReductionContext(bindIndex: bindIndex)
         var valueCosts = [ReductionScheduler.ValueEncoderSlot: Int]()
         for slot in ReductionScheduler.ValueEncoderSlot.allCases {
             let cost: Int? = switch slot {
-            case .zeroValue: zeroValueEncoder.estimatedCost(sequence: sequence, bindIndex: bindIndex)
-            case .binarySearchToZero: binarySearchToZeroEncoder.estimatedCost(sequence: sequence, bindIndex: bindIndex)
-            case .binarySearchToTarget: binarySearchToTargetEncoder.estimatedCost(sequence: sequence, bindIndex: bindIndex)
-            case .reduceFloat: reduceFloatEncoder.estimatedCost(sequence: sequence, bindIndex: bindIndex)
+            case .zeroValue: zeroValueEncoder.estimatedCost(sequence: sequence, tree: tree, positionRange: fullRange, context: orderingContext)
+            case .binarySearchToZero: binarySearchToZeroEncoder.estimatedCost(sequence: sequence, tree: tree, positionRange: fullRange, context: orderingContext)
+            case .binarySearchToTarget: binarySearchToTargetEncoder.estimatedCost(sequence: sequence, tree: tree, positionRange: fullRange, context: orderingContext)
+            case .reduceFloat: reduceFloatEncoder.estimatedCost(sequence: sequence, tree: tree, positionRange: fullRange, context: orderingContext)
             }
             if let cost { valueCosts[slot] = cost }
         }

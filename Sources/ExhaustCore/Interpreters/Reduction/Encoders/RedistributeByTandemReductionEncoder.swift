@@ -16,13 +16,6 @@ public struct RedistributeByTandemReductionEncoder: ComposableEncoder {
     public let name: EncoderName = .redistributeSiblingValuesInLockstep
     public let phase = ReductionPhase.redistribution
 
-    public func estimatedCost(sequence: ChoiceSequence, bindIndex _: BindSpanIndex?) -> Int? {
-        let groupCount = ChoiceSequence.extractSiblingGroups(from: sequence).count
-        guard groupCount > 0 else { return nil }
-        // g sibling groups × ~65: 1 direct shift probe + FindIntegerStepper search over the inter-value distance (~64 binary search steps) per group.
-        return groupCount * 65
-    }
-
     // MARK: - ComposableEncoder
 
     public var convergenceRecords: [Int: ConvergedOrigin] { [:] }
@@ -33,7 +26,9 @@ public struct RedistributeByTandemReductionEncoder: ComposableEncoder {
         positionRange: ClosedRange<Int>,
         context: ReductionContext
     ) -> Int? {
-        estimatedCost(sequence: sequence, bindIndex: context.bindIndex)
+        let groupCount = ChoiceSequence.extractSiblingGroups(from: sequence).count
+        guard groupCount > 0 else { return nil }
+        return groupCount * 65
     }
 
     public mutating func start(

@@ -6,13 +6,6 @@ public struct ZeroValueEncoder: ComposableEncoder {
     public let name: EncoderName = .zeroValue
     public let phase = ReductionPhase.valueMinimization
 
-    public func estimatedCost(sequence: ChoiceSequence, bindIndex _: BindSpanIndex?) -> Int? {
-        let t = ChoiceSequence.extractAllValueSpans(from: sequence).count
-        guard t > 0 else { return nil }
-        // 1 all-at-once probe + t individual probes, one per non-zero target.
-        return 1 + t
-    }
-
     // MARK: - State
 
     private enum ZeroValuePhase {

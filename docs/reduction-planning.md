@@ -8,14 +8,17 @@ The compositional encoder algebra changes this by separating *where to search* f
 
 A new generator shape — deeper nesting, conditional binds, non-monotonic fibres — does not require a new encoder type. The composition discovers the structure at runtime through the CDG, materializes candidate fibres through the lift, and searches them with whatever downstream is appropriate for the fibre's size and parameter count. The planning framework parametrizes this selection (domain ratio picks the downstream, leverage orders the edges, budget allocation funds them), but the underlying machinery is the same generic composition.
 
-This reframes the encoder design space. Instead of monolithic tactics, the primitives fall into two families:
+This reframes the encoder design space. Instead of monolithic tactics, the primitives are role-agnostic composable encoders — probe strategies that work on any position range. The same encoder can serve in any of three roles:
 
-- **Horizontal encoders** (manipulations): reduce toward range minimum, set to semantic simplest, redistribute between siblings, promote a branch. These move between fibres — they change an upstream value, and the lift reindexes the downstream to match. Reusable across any upstream position, regardless of what lies downstream.
-- **Vertical encoders** (search methods): binary search, exhaustive enumeration, pairwise covering, random sampling. These move within a single fibre — they explore the downstream space at a fixed upstream value. Reusable across any fibre, regardless of which generator produced it.
+- **Upstream role**: your probes propose fibres. Each probe changes the context for something downstream — the composition lifts the output before anyone searches in it.
+- **Downstream role**: you explore inside a fibre someone else proposed. The fibre you see was produced by a lift from the upstream probe.
+- **Standalone role**: no composition. Your probes are evaluated directly. Most encoders in the current pipeline operate here — Phase 2 value reduction, redistribution, relaxation.
 
-The composition wires horizontal encoders to upstream coordinates and vertical encoders to structural positions. A new reduction capability is a new horizontal encoder or a new vertical encoder — not a monolithic tactic that re-implements scheduling, convergence tracking, and dominance logic from scratch.
+These are positions in the pipeline, not properties of the encoder. `BinarySearchEncoder(configuration: .semanticSimplest)` does not know or care which role it is in. It binary-searches toward the semantic simplest value in whatever position range it was given. If that range is a bind-inner, the composition treats its output as a base change and lifts it. If that range is a leaf, the output is evaluated directly. The encoder did the same thing in both cases.
 
-The two families are orthogonal. Every reduction step decomposes into a horizontal move (manipulation + lift) followed by a vertical move (search). The existing encoders fuse these two moves into a single monolithic step, which is why each one is specific to a particular generator shape. Unfusing them is what makes the algebra composable. The formal structure behind this decomposition is a Grothendieck opfibration (see "Fibrational Structure of the Encoder Algebra" below). The terminology is deliberate: "horizontal" and "vertical" refer to the opcartesian and vertical components of that factorisation, and are chosen to avoid collision with the scheduler's existing "base descent" (Phase 1, structural) and "fibre descent" (Phase 2, value) phases.
+The composition wires a composable encoder to the upstream role and another to the downstream role. A new reduction capability is a new composable encoder — not a monolithic tactic that re-implements scheduling, convergence tracking, and dominance logic from scratch. The factory assigns encoders to roles based on CDG position: bind-inner nodes get the upstream role, fibre positions get the downstream role, everything else is standalone.
+
+The formal structure behind the role decomposition is a Grothendieck opfibration (see "Fibrational Structure of the Encoder Algebra" below). In the algebra, the upstream role contributes the opcartesian (horizontal) component of the morphism and the downstream role contributes the vertical component. Every reduction step in a composition decomposes uniquely into these two components.
 
 ## The Signals
 
@@ -250,9 +253,9 @@ The separation of search methods from manipulations has a precise categorical de
 
 ### Setup
 
-**Base category B.** Objects are upstream values (bind-inner positions in the choice sequence). For a bind-inner with range `lo...hi`, the objects are the integers in that range. A morphism n → k (where n ≥ k) represents a reduction of the upstream value. Horizontal encoders (manipulations — reduce toward range minimum, set to semantic simplest, redistribute between siblings) are morphisms in B.
+**Base category B.** Objects are upstream values (bind-inner positions in the choice sequence). For a bind-inner with range `lo...hi`, the objects are the integers in that range. A morphism n → k (where n ≥ k) represents a reduction of the upstream value. An encoder assigned to the upstream role in a composition produces these morphisms.
 
-**Fibre F(n).** For a fixed upstream value n, the fibre is the category of valid downstream configurations: choice sequences where every bound entry is in range for the generator materialised at n. Vertical encoders (search methods — binary search steps, exhaustive enumeration probes, pairwise covering rows) are morphisms within F(n). They do not change the upstream value.
+**Fibre F(n).** For a fixed upstream value n, the fibre is the category of valid downstream configurations: choice sequences where every bound entry is in range for the generator materialised at n. An encoder assigned to the downstream role produces morphisms within F(n) — it does not change the upstream value.
 
 **Reindexing F(n → k).** A base morphism n → k induces a functor F(n) → F(k): take a downstream configuration valid at n and materialise it at k, clamping or regenerating entries that fall out of range. This is the `GeneratorLift`. The reindexing is covariant (pushforward), making this an opfibration, not a fibration.
 
@@ -263,7 +266,7 @@ The Grothendieck construction assembles B and the fibres into a total category �
 1. A **horizontal** (opcartesian, between-fibre) component: the base morphism n → k and the induced lift F(n) → F(k), producing an intermediate configuration s' ∈ F(k).
 2. A **vertical** (within-fibre) component: a morphism s' → t in F(k), the search step that finds the downstream configuration where the property fails.
 
-This is the standard opcartesian/vertical factorisation. Every reduction step in the Kleisli composition follows this decomposition: a horizontal encoder proposes a base morphism (manipulation), the `GeneratorLift` computes the opcartesian lift (materialisation without property check), and a vertical encoder performs the fibre step (search within the reindexed fibre, with property checks).
+This is the standard opcartesian/vertical factorisation. Every reduction step in the Kleisli composition follows this decomposition: the encoder in the upstream role proposes a base morphism, the `GeneratorLift` computes the opcartesian lift (materialisation without property check), and the encoder in the downstream role performs the vertical step (search within the reindexed fibre, with property checks). The same encoder type can serve in either role — the factorisation is a property of the morphism, not of the encoder.
 
 ### The materialisation monad
 
@@ -275,7 +278,7 @@ The horizontal/vertical factorisation aligns with the cost model. The horizontal
 
 ### Why the existing encoders are hard to extend
 
-Each existing encoder is a specific path through ∫F that fuses the horizontal and vertical components into a single step. The encoder knows both what base morphism to apply and how to search the resulting fibre — but this knowledge is compiled into its implementation, not available as composable data. Adding a new generator shape requires a new fused path, because the factorisation was never exposed. The compositional algebra unfuses the paths into horizontal and vertical encoders, making each reusable across generator shapes. The planning framework's encoder selection (step 2) operates on this unfused representation: it selects a vertical encoder (search method) based on the fibre's structural properties, independently of the horizontal encoder (manipulation) that produced the fibre.
+Each existing encoder is a specific path through ∫F that fuses the opcartesian and vertical components into a single step. The encoder knows both what base morphism to apply and how to search the resulting fibre — but this knowledge is compiled into its implementation, not available as composable data. Adding a new generator shape requires a new fused path, because the factorisation was never exposed. The compositional algebra unfuses the path: the factory assigns one composable encoder to the upstream role and another to the downstream role, and the composition wires them through a lift. The same encoder type can serve in either role. The planning framework's encoder selection (step 2) operates on this unfused representation: it selects an encoder for the downstream role based on the fibre's structural properties, independently of which encoder produced the fibre from the upstream role.
 
 ## Addendum: Profiling Results (March 2026)
 
