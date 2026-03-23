@@ -562,50 +562,13 @@ extension ReductionState {
             let tier2Candidates = sortByLargestFibreFirst(
                 allCandidates, bindIndex: bindSpanIndex
             )
-            let currentFallbackTree = fallbackTree ?? tree
 
-            let descriptors: [MorphismDescriptor] = [
-                // Tier 1: guided replay — clamp bound entries to current tree.
-                // Dominates both regime probe and PRNG retries on acceptance.
-                MorphismDescriptor(
-                    encoder: PrecomputedComposableEncoder(
-                        name: .productSpaceBatch,
-                        phase: .valueMinimization,
-                        candidates: allCandidates
-                    ),
-                    decoderFactory: { .guided(fallbackTree: currentFallbackTree) },
-                    probeBudget: allCandidates.count,
-                    structureChanged: true,
-                    dominates: [1, 2]
-                ),
-                // Regime probe: all values zeroed, exact decoder.
-                // Tests elimination vs value-sensitive regime.
-                // Dominates PRNG retries if the all-zeroed probe fails the property
-                // (structural failure — retries are waste).
-                MorphismDescriptor(
-                    encoder: RegimeProbeEncoder(),
-                    decoderFactory: { .exact() },
-                    probeBudget: 1,
-                    structureChanged: true,
-                    dominates: [2]
-                ),
-                // Tier 2: PRNG fallback with salted retries, largest-fibre-first ordering.
-                MorphismDescriptor(
-                    encoder: PrecomputedComposableEncoder(
-                        name: .productSpaceBatch,
-                        phase: .valueMinimization,
-                        candidates: tier2Candidates
-                    ),
-                    decoderFactory: { .guided(
-                        fallbackTree: nil, usePRNGFallback: true,
-                        prngSalt: UInt64(cycle * 4)
-                    ) },
-                    probeBudget: tier2Candidates.count,
-                    structureChanged: true,
-                    maxRetries: 4,
-                    retrySaltBase: UInt64(cycle * 4)
-                ),
-            ]
+            let descriptors = EncoderFactory.productSpaceBatchDescriptors(
+                allCandidates: allCandidates,
+                tier2Candidates: tier2Candidates,
+                guidedDecoder: .guided(fallbackTree: fallbackTree ?? tree),
+                cycle: cycle
+            )
 
             let chainContext = ReductionContext(bindIndex: bindSpanIndex, dag: bindDag)
             let fullRange = 0 ... max(0, sequence.count - 1)
@@ -781,6 +744,13 @@ extension ReductionState {
             nil
         }
 
+        let valueEncoders = EncoderFactory.ValueEncoders(
+            zeroValue: zeroValueEncoder,
+            binarySearchToZero: binarySearchToZeroEncoder,
+            binarySearchToTarget: binarySearchToTargetEncoder,
+            reduceFloat: reduceFloatEncoder
+        )
+
         // Per-leaf-range value minimization pass.
         for leafRange in leafRanges {
             guard legBudget.isExhausted == false else { break }
@@ -825,29 +795,16 @@ extension ReductionState {
                 let guard_ = needsFingerprintGuard ? prePhaseFingerprint : nil
                 let hasFloats = floatSpans.isEmpty == false
 
-                // Build descriptors in trainOrder for this leaf range.
-                let descriptors: [MorphismDescriptor] = trainOrder.compactMap { slot in
-                    let encoder: any ComposableEncoder
-                    switch slot {
-                    case .zeroValue where leafSpans.isEmpty == false:
-                        encoder = zeroValueEncoder
-                    case .binarySearchToZero where leafSpans.isEmpty == false:
-                        encoder = binarySearchToZeroEncoder
-                    case .binarySearchToTarget where leafSpans.isEmpty == false:
-                        encoder = binarySearchToTargetEncoder
-                    case .reduceFloat where hasFloats:
-                        encoder = reduceFloatEncoder
-                    default:
-                        return nil
-                    }
-                    return MorphismDescriptor(
-                        encoder: encoder,
-                        decoderFactory: { decoder },
-                        probeBudget: legBudget.hardCap,
-                        structureChanged: structureChanged,
-                        fingerprintGuard: guard_
-                    )
-                }
+                let descriptors = EncoderFactory.valueMinimizationDescriptors(
+                    ordering: trainOrder,
+                    encoders: valueEncoders,
+                    decoder: decoder,
+                    hasValueSpans: leafSpans.isEmpty == false,
+                    hasFloatSpans: hasFloats,
+                    structureChanged: structureChanged,
+                    fingerprintGuard: guard_,
+                    budgetCap: legBudget.hardCap
+                )
 
                 let result = try runDescriptorChainDetailed(
                     descriptors,
@@ -857,21 +814,12 @@ extension ReductionState {
                 )
                 if result.anyAccepted {
                     anyAccepted = true
-                    // Promote the first accepted slot for the next leaf range.
                     if let firstAccepted = result.acceptedIndices.first {
-                        // Map descriptor index back to the slot via trainOrder.
-                        // The descriptors were built from trainOrder via compactMap,
-                        // so we need to track which slots survived the filter.
-                        var survivingSlots = [ReductionScheduler.ValueEncoderSlot]()
-                        for slot in trainOrder {
-                            switch slot {
-                            case .zeroValue where leafSpans.isEmpty == false: survivingSlots.append(slot)
-                            case .binarySearchToZero where leafSpans.isEmpty == false: survivingSlots.append(slot)
-                            case .binarySearchToTarget where leafSpans.isEmpty == false: survivingSlots.append(slot)
-                            case .reduceFloat where hasFloats: survivingSlots.append(slot)
-                            default: break
-                            }
-                        }
+                        let survivingSlots = ReductionScheduler.survivingSlots(
+                            from: trainOrder,
+                            hasValueSpans: leafSpans.isEmpty == false,
+                            hasFloatSpans: hasFloats
+                        )
                         if firstAccepted < survivingSlots.count {
                             ReductionScheduler.moveToFront(survivingSlots[firstAccepted], in: &trainOrder)
                         }
@@ -905,31 +853,19 @@ extension ReductionState {
                     dag: dag,
                     depthFilter: depth
                 )
-                let vSpans = spanCache.valueSpans(at: depth, from: sequence, bindIndex: bindIndex)
+                let hasValueSpansAtDepth = spanCache.valueSpans(at: depth, from: sequence, bindIndex: bindIndex).isEmpty == false
                 let hasFloatsAtDepth = spanCache.floatSpans(at: depth, from: sequence, bindIndex: bindIndex).isEmpty == false
 
-                let depthDescriptors: [MorphismDescriptor] = trainOrder.compactMap { slot in
-                    let encoder: any ComposableEncoder
-                    switch slot {
-                    case .zeroValue where vSpans.isEmpty == false:
-                        encoder = zeroValueEncoder
-                    case .binarySearchToZero where vSpans.isEmpty == false:
-                        encoder = binarySearchToZeroEncoder
-                    case .binarySearchToTarget where vSpans.isEmpty == false:
-                        encoder = binarySearchToTargetEncoder
-                    case .reduceFloat where hasFloatsAtDepth:
-                        encoder = reduceFloatEncoder
-                    default:
-                        return nil
-                    }
-                    return MorphismDescriptor(
-                        encoder: encoder,
-                        decoderFactory: { depthDecoder },
-                        probeBudget: legBudget.hardCap,
-                        structureChanged: hasBind,
-                        fingerprintGuard: prePhaseFingerprint
-                    )
-                }
+                let depthDescriptors = EncoderFactory.valueMinimizationDescriptors(
+                    ordering: trainOrder,
+                    encoders: valueEncoders,
+                    decoder: depthDecoder,
+                    hasValueSpans: hasValueSpansAtDepth,
+                    hasFloatSpans: hasFloatsAtDepth,
+                    structureChanged: hasBind,
+                    fingerprintGuard: prePhaseFingerprint,
+                    budgetCap: legBudget.hardCap
+                )
 
                 let depthResult = try runDescriptorChainDetailed(
                     depthDescriptors,
@@ -940,16 +876,11 @@ extension ReductionState {
                 if depthResult.anyAccepted {
                     anyAccepted = true
                     if let firstAccepted = depthResult.acceptedIndices.first {
-                        var survivingSlots = [ReductionScheduler.ValueEncoderSlot]()
-                        for slot in trainOrder {
-                            switch slot {
-                            case .zeroValue where vSpans.isEmpty == false: survivingSlots.append(slot)
-                            case .binarySearchToZero where vSpans.isEmpty == false: survivingSlots.append(slot)
-                            case .binarySearchToTarget where vSpans.isEmpty == false: survivingSlots.append(slot)
-                            case .reduceFloat where hasFloatsAtDepth: survivingSlots.append(slot)
-                            default: break
-                            }
-                        }
+                        let survivingSlots = ReductionScheduler.survivingSlots(
+                            from: trainOrder,
+                            hasValueSpans: hasValueSpansAtDepth,
+                            hasFloatSpans: hasFloatsAtDepth
+                        )
                         if firstAccepted < survivingSlots.count {
                             ReductionScheduler.moveToFront(survivingSlots[firstAccepted], in: &trainOrder)
                         }
@@ -973,20 +904,13 @@ extension ReductionState {
                 dag: dag
             )
 
-            let redistDescriptors: [MorphismDescriptor] = [
-                MorphismDescriptor(
-                    encoder: tandemEncoder,
-                    decoderFactory: { redistDecoder },
-                    probeBudget: legBudget.hardCap,
-                    structureChanged: hasBind
-                ),
-                MorphismDescriptor(
-                    encoder: redistributeEncoder,
-                    decoderFactory: { redistDecoder },
-                    probeBudget: legBudget.hardCap,
-                    structureChanged: hasBind
-                ),
-            ]
+            let redistDescriptors = EncoderFactory.redistributionDescriptors(
+                tandemEncoder: tandemEncoder,
+                redistributeEncoder: redistributeEncoder,
+                decoder: redistDecoder,
+                structureChanged: hasBind,
+                budgetCap: legBudget.hardCap
+            )
 
             if try runDescriptorChain(
                 redistDescriptors,
