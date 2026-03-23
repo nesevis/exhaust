@@ -19,8 +19,8 @@
 ///
 /// ## Conformance
 ///
-/// Conforms to ``AdaptiveEncoder`` so the scheduler can run it via the existing `runAdaptive` path or a manual loop (following the `runRelaxRound` pattern). Does NOT conform to ``ComposableEncoder`` — this is intentional to prevent nesting compositions, which would produce multiplicative budget explosion. Multi-hop composition uses topological iteration instead.
-public struct KleisliComposition<Output>: AdaptiveEncoder, ComposableEncoder {
+/// Conforms to ``ComposableEncoder`` so the scheduler can run it via ``ReductionState/runComposable(_:decoder:positionRange:context:structureChanged:budget:fingerprintGuard:)`` or a manual loop (following the `runRelaxRound` pattern).
+public struct KleisliComposition<Output>: ComposableEncoder {
     // MARK: - Configuration
 
     public let name: EncoderName
@@ -132,21 +132,6 @@ public struct KleisliComposition<Output>: AdaptiveEncoder, ComposableEncoder {
         self.downstreamRange = downstreamRange
     }
 
-    // MARK: - AdaptiveEncoder Conformance
-
-    public func estimatedCost(sequence: ChoiceSequence, bindIndex: BindSpanIndex?) -> Int? {
-        let ctx = ReductionContext(bindIndex: bindIndex)
-        guard let upCost = upstream.estimatedCost(
-            sequence: sequence, tree: baseTree,
-            positionRange: upstreamRange, context: ctx
-        ) else { return nil }
-        let downCost = downstream.estimatedCost(
-            sequence: sequence, tree: baseTree,
-            positionRange: downstreamRange, context: ctx
-        ) ?? 0
-        return upCost * (1 + downCost)
-    }
-
     // MARK: - ComposableEncoder
 
     public func estimatedCost(
@@ -155,7 +140,15 @@ public struct KleisliComposition<Output>: AdaptiveEncoder, ComposableEncoder {
         positionRange: ClosedRange<Int>,
         context: ReductionContext
     ) -> Int? {
-        estimatedCost(sequence: sequence, bindIndex: context.bindIndex)
+        guard let upCost = upstream.estimatedCost(
+            sequence: sequence, tree: baseTree,
+            positionRange: upstreamRange, context: context
+        ) else { return nil }
+        let downCost = downstream.estimatedCost(
+            sequence: sequence, tree: baseTree,
+            positionRange: downstreamRange, context: context
+        ) ?? 0
+        return upCost * (1 + downCost)
     }
 
     public mutating func start(
@@ -169,16 +162,6 @@ public struct KleisliComposition<Output>: AdaptiveEncoder, ComposableEncoder {
         // downstream fibre search. Passing the cache would tell the upstream its current
         // value is at the floor, producing zero probes.
         startInternal(sequence: sequence, tree: tree, convergedOrigins: nil)
-    }
-
-    // MARK: - AdaptiveEncoder (legacy)
-
-    public mutating func start(
-        sequence: ChoiceSequence,
-        targets: TargetSet,
-        convergedOrigins: [Int: ConvergedOrigin]?
-    ) {
-        startInternal(sequence: sequence, tree: .just(""), convergedOrigins: convergedOrigins)
     }
 
     private mutating func startInternal(

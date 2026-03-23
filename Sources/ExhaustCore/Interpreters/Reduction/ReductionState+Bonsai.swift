@@ -1023,8 +1023,9 @@ extension ReductionState {
             // its current value is already at the floor, producing zero probes.
             compositionEdge.composition.start(
                 sequence: sequence,
-                targets: .wholeSequence,
-                convergedOrigins: nil
+                tree: tree,
+                positionRange: 0 ... max(0, sequence.count - 1),
+                context: context
             )
 
             var lastAccepted = false

@@ -160,7 +160,8 @@ struct KleisliCompositionTests {
             upstreamRange: fullRange,
             downstreamRange: fullRange
         )
-        composed.start(sequence: sequence, targets: .wholeSequence, convergedOrigins: nil)
+        let fullPositionRange = 0 ... max(0, sequence.count - 1)
+        composed.start(sequence: sequence, tree: .just(""), positionRange: fullPositionRange, context: ReductionContext())
 
         // Identity upstream returns nil immediately — nothing to lift
         let firstProbe = composed.nextProbe(lastAccepted: false)

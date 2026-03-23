@@ -48,8 +48,8 @@ struct BinarySearchLadder {
 
 /// Enumerates the joint product space of all bind-inner values for k <= 3 binds.
 ///
-/// Computes per-axis ``BinarySearchLadder`` midpoints and builds their Cartesian product (or dependent product for nested binds), sorted shortlex. The scheduler's ``ReductionState/runBatch(_:decoder:targets:structureChanged:budget:)`` evaluates candidates in order and accepts the first one that preserves property failure.
-struct ProductSpaceBatchEncoder: BatchEncoder {
+/// Computes per-axis ``BinarySearchLadder`` midpoints and builds their Cartesian product (or dependent product for nested binds), sorted shortlex. The caller wraps the result in a ``PrecomputedComposableEncoder`` for evaluation via descriptor chains.
+struct ProductSpaceBatchEncoder: SequenceEncoderBase {
     let name: EncoderName = .productSpaceBatch
     let phase = ReductionPhase.valueMinimization
 
