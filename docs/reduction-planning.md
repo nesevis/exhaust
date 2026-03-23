@@ -1,143 +1,228 @@
 # Reduction Planning: Structural Prediction and Validation
 
-## The Six Signals
+## The Signals
 
-The CDG, ChoiceTree, and ChoiceSequence together provide six signals about the reduction landscape. They split into two categories: exact signals that drive hard decisions, and estimates that drive soft decisions.
+The CDG, ChoiceTree, and ChoiceSequence provide signals about the reduction landscape. The set is empirical — not derived from a completeness argument.
 
-### Exact signals (hard decisions)
+### Potential seventh signal: probe history
 
-**1. Domain ratio at dependency edges.** At a bind edge where the inner value is `n` with range `0...R`, and downstream elements have range `0...n`, reducing `n` to value `k` produces a fibre of size `(k+1)^count`. This is computable before any probe. It directly selects the downstream encoder in a `KleisliComposition`: below the exhaustive threshold (64), use `FibreCoveringEncoder` in exhaustive mode; above it, use pairwise covering. The coupling challenge at `n = 1` produces a 4-point fibre — the planner would route straight to exhaustive enumeration without trying anything first.
+The property's internals are behind an opacity wall. But the reducer observes the property's boolean output at each probe. Non-monotone failure surfaces (where pass/fail alternates across a coordinate's range) defeat binary search: the search narrows to the last confirmed range and misses lower failures. Example: failure surface {0, 1, 3, 5, 6, 7, ...} with passes at {2, 4}. Binary search from 10 toward 0 converges at 5, missing floor 0.
 
-**3. Structural leverage.** A bind-inner that controls a large `scopeRange` has high leverage — reducing it eliminates many downstream entries. The CDG already has `scopeRange.count` per node. Ordering edges by leverage (largest scope first) within the same depth level prioritizes high-impact reductions. The topological sort handles cross-depth ordering; leverage handles within-depth prioritization.
+**Detection.** The reducer's replay is deterministic — an unexpected result during binary search is never noise. Detect via `sawUnexpectedResult: Bool` on the stepper, harvested into the convergence cache. **Response.** Per-coordinate exhaustive scan of the remaining range, capped at ≤ 64 values. If binary search converged at floor 5, the remaining range is 0...4 (5 values, cheap). If binary search converged at floor 2³² on a 64-bit range, the remaining range is 0...2³² — exhaustive scan is impossible. Fall back to accepting the non-minimal floor with a diagnostic flag when the remaining range exceeds the cap. Joint non-monotonicity from inter-coordinate coupling is redistribution's domain. Rare in practice but simple to implement and prevents a subtle correctness issue.
 
-**5. Fibre stability prediction.** For each downstream coordinate, check whether its current value equals the upper bound of its range (determined by the bind-inner value). If `value < n` for all downstream coordinates, reducing `n` by 1 leaves all values valid — tier 1 carry-forward, coverage 1.0 predicted. If any `value == n`, that coordinate will be clamped or PRNG-filled — coverage drops. This is a per-coordinate boolean check against sequence entries already held. It predicts the lift report before the lift, gating convergence transfer: high predicted coverage → warm-start from previous convergence points; low predicted coverage → cold-start.
+### Signal classification
 
-### Estimates (soft decisions)
+Computable (derivable from data held now, exact given model assumptions) vs inferential (requiring interpretation). "Computable" does not mean "always correct."
 
-**2. Shortlex distance (reduction potential).** For each value position, the distance from the current bit pattern to the target (semantic simplest or range minimum) is computable. Summing across a scope gives a reduction potential — how much improvement is available. Useful as a tiebreaker between scopes of equal leverage. Not reliable as a primary budget allocator: high potential could mean "lots of easy wins" or "lots of coupled coordinates that resist per-coordinate reduction."
+### Computable signals
 
-**4. Convergence cache correlation.** Two coordinates that converged in the same cycle are suggestively coupled — the property's boolean depends on both values jointly. Two coordinates that converged in different cycles are suggestively independent. The correlation is not causal: coordinates with similar-depth binary searches terminate on the same cycle regardless of coupling. Safe use: as a filter for the relax-round's redistribution pairs (prefer same-cycle pairs), not as a hard routing decision.
+**1. Domain ratio.** Reducing a bind-inner from `n` to `k` produces a downstream fibre of at least `(k+1)^count`. A lower bound when nested binds are present.
 
-**6. Property sensitivity estimation.** If all values are at their convergence-cached floors and the property still fails, the failure is structural — skip fibre descent entirely. This is exact in one direction: it can eliminate fibre descent (saving 20–50 probes) but cannot eliminate base descent (non-floor values might still indicate structural failure). Asymmetric but valuable.
+**2. Structural leverage.** `scopeRange.count` per CDG node.
 
-## Lazy Per-Decision Computation
+**3. Fibre stability.** Per-coordinate check `currentValue < n`. Predicts coverage, not semantic stability. Search-based downstream encoders only.
 
-The signals should be computed lazily at the point of decision, not as an upfront plan. A structural acceptance in Phase 1b changes the CDG, invalidating domain ratios and leverage scores for every downstream edge. An upfront plan would need rebuilding after every acceptance. Lazy computation uses the current state at each decision point and is naturally robust to mid-cycle changes.
+**4. Property sensitivity.** All values at cached floors + no structural acceptance this cycle + property still fails → skip fibre descent. Conditional on cache freshness.
 
-The signals become a plan when decisions interact — when budget allocation for edge A depends on the domain ratio at edge B because the total exploration budget is shared. That global optimization requires centralized planning. For the first implementation, lazy per-decision computation delivers most of the benefit with less machinery.
+### Inferential signals
+
+**5. Shortlex distance.** Tiebreaker only.
+
+**6. Convergence correlation.** Weakest signal. Biases redistribution pair selection only.
+
+## Budget Allocation
+
+Greedy, not proportional. Partial coverage arrays waste every probe.
+
+**Score: `leverage / requiredBudget`.** Required budget is the actual probe cost: fibreSize for exhaustive, IPOG estimate for pairwise (`max_domain² × ceil(log₂(num_params))`). NOT fibreSize — that is exponential in coordinates and systematically starves multi-coordinate edges.
+
+A reliability factor (exhaustive = 1.0, pairwise < 1.0) could distinguish coverage guarantees, but there is no empirical basis for the pairwise reliability value. Measure it on the test suite first: for each edge where pairwise coverage runs, check whether the failure was found. The fraction is the reliability. Until measured, use reliability = 1.0 for both — no reliability penalty. Add the factor only after measurement establishes that pairwise misses failures at a measurable rate.
+
+**Allocation order by score.** Give each edge its estimated required budget until the pool is exhausted. Skip edges that cannot get their minimum.
+
+**Nested binds: two-phase allocation.** For edges where the downstream contains nested binds, the parameter count (and therefore IPOG budget) is unknown pre-lift. Allocate a "discovery budget" of one lift at the target upstream value (the smallest the encoder will try). The target value produces the best-case fibre (fewest parameters from nested binds in the common case where ranges shrink with the upstream value). Intermediate upstream candidates may produce larger fibres; the composition discovers this at lift time for each candidate and IPOG aborts individually if over budget.
+
+The "smallest at target" claim is not safe for conditional nested binds that activate at intermediate values. A nested bind that activates at `n > 3` means `n = 4` has a larger fibre than `n = 0`. The discovery lift at the target sees the small fibre and the edge is scored on best-case cost. The early-abort feature handles the per-candidate cost overrun, but the edge's score overestimates its productivity for intermediate candidates. This is a best-case estimate — accurate for generators with monotonic fibre sizes, optimistic for generators with conditional nesting.
+
+**Staleness after structural acceptance.** The scoring pass is a batch computation — stale after the first acceptance in the exploration leg. Within a CDG subtree, topological ordering guarantees that a shallow edge's acceptance changes the ranges for all deeper edges in the same subtree. Overlap is the common case, not rare. Fix: after a structural acceptance, re-score edges in the same subtree (scoped via `BindSpanIndex`). Re-scoring affects only the ordering of remaining unfunded edges. Budget already committed to funded-but-not-yet-started edges is not reclaimed — the funded edge keeps its priority position but unused probes flow to later edges at runtime (the edge self-terminates early and returns the remainder). This is a priority error (wrong execution order), not a probe waste error.
+
+## Activation Regime
+
+**Criterion: no structural acceptance from any phase in the current cycle.**
+
+Steps 1–3 (fibre descent gating, domain ratio, leverage) are available from cycle 1. Step 1 first becomes active on cycle 2 or later — it requires the convergence cache to be populated, which happens after Phase 2 runs in cycle 1. Steps 2–3 are active from cycle 1 (they depend on the CDG and sequence, not the cache). Steps 4–5 activate after the first stall.
+
+**Step 5 activation depends on user budget.** The prediction-validation loop needs multiple stall cycles to learn. The user's `ReductionBudget` determines `maxStalls` (`.fast` = 1, `.slow` = 8). At `.fast`, edges stay at "uncertain" and step 5 provides no value — only steps 1–4 run, with no skip gate. At `.slow`, the loop has enough cycles for promotion and demotion. Step 5 activates when the user's budget provides ≥ 3 stall cycles.
 
 ## The Prediction-Validation Loop
 
-The current reducer reacts: the lift report comes back, the next encoder adapts. The proposed reducer predicts *and* reacts.
+**Confidence states.** Structural / uncertain / empirical. Promotion requires three-region upstream diversity (low, middle, high thirds of the range). Scoped reset via `BindSpanIndex`.
 
-**Prediction.** Before traversing a bind edge, compute the domain ratio and fibre stability. The domain ratio selects the downstream encoder. The fibre stability prediction gates convergence transfer.
+**Decision point gate.** Step 5 requires both domain ratio decision accuracy > 70% AND stability prediction divergence < 0.2 for > 70% of edges. Each signal measured independently.
 
-**Validation.** The lift report confirms or contradicts the prediction. If predicted coverage was high but actual coverage was low, the domain ratio was wrong — the downstream's range depends on something other than the inner value (perhaps a nested bind, a filter, or a property-mediated coupling the CDG cannot see).
+### Warm-start validation (standalone fix)
 
-**Update.** If contradicted, the reducer adjusts: discard the convergence transfer for this edge, cold-start the downstream, and flag the edge as "prediction-unreliable" for subsequent cycles. If confirmed, the prediction is reinforced: convergence transfer is safe, the downstream converges in one or two probes.
+The warm-start validation fixes a pre-existing correctness issue in `KleisliComposition`, independent of the planning proposal. The current KleisliComposition transfers convergence records between adjacent upstream values, gated by lift report coverage. If coverage is high but floors are semantically stale, premature convergence already occurs. This fix should be implemented as a standalone bugfix to `KleisliComposition`, not deferred to the planning implementation.
 
-Over multiple cycles, the predictions converge on the actual dependency structure — including property-mediated couplings invisible to the CDG. The reducer learns the failure surface's dependency structure, not just its per-coordinate floors. This is a Bayesian update loop: the prior is the structural prediction, the likelihood is the lift report, the posterior is the updated confidence.
+**Problem: premature convergence.** A stale floor that still fails the property looks valid. The encoder converges to a non-minimal value.
 
-## What This Changes
+**Fix.** Validate at `floor - 1`. If the property fails there, the floor is stale — discard all transferred convergence points and cold-restart. If the property passes, the floor is valid. At floor == rangeLowerBound, the floor is trivially valid — skip validation.
 
-The current reducer's cycle is: compute CDG → run base descent → run fibre descent → explore. Every cycle runs the same phases with the same encoders. The signals change what runs and how much budget it gets:
+**Scope.** Search-based downstream encoders only.
 
-- **Signal 1 gates downstream encoder selection** in `KleisliComposition`. No trial and error — the domain ratio selects exhaustive vs covering before any probe.
-- **Signal 3 orders edge traversal** within the exploration leg. High-leverage edges first, using the most budget.
-- **Signal 5 gates convergence transfer** across adjacent upstream values. Predicted high coverage → transfer. Predicted low coverage → cold-start. Validated by the lift report.
-- **Signal 6 gates fibre descent**. If the convergence cache says all coordinates are at their floors, skip Phase 2 entirely.
-- **Signals 2 and 4 bias soft decisions** — budget tiebreaking and redistribution pair selection.
+**Upstream delta > 1.** Skip validation, cold-restart immediately.
 
-The prediction-validation loop is the qualitative shift: the reducer doesn't just try encoders and measure outcomes — it predicts which encoders will work based on structural analysis, tries them, and validates the predictions against the lift report. Over cycles, the predictions improve. The reducer learns.
+**No skip gate without step 5.** The skip gate (< 0.3 → skip downstream) risks missing productive edges when the prediction is wrong. Without step 5's validation to catch and downgrade wrong predictions, the skip gate fires permanently on wrongly-predicted edges. At `.fast` budget (`maxStalls = 1`), no second chance. Step 4 without step 5 provides only cold-start/warm-start, not skip.
 
 ## Implementation Steps
 
-### Step 1: Domain ratio at edge selection (Signal 1)
+The progression is a decision tree based on profiling data, not a fixed sequence.
 
-**What it does.** Before `runKleisliExploration` constructs a `KleisliComposition` for a `ReductionEdge`, compute the downstream fibre size at the upstream encoder's target value. This selects the downstream encoder and decides whether the composition is worth running at all.
+### Step 1: Fibre descent gating (Signal 4)
 
-**Where it lives.** In `runKleisliExploration` in `ReductionState+Bonsai.swift`, between the edge iteration and the `KleisliComposition` construction.
+Skip Phase 2 when all coordinates are at cached floors and no structural acceptance occurred this cycle.
 
-**How to compute it.** For a `ReductionEdge` with `upstreamRange` and `downstreamRange`:
-1. Read the upstream value's current bit pattern and valid range from `sequence[upstreamRange.lowerBound]`.
-2. Compute the upstream target: `semanticSimplest` or `reductionTarget(in: validRange)`. Call this `targetValue`.
-3. Walk the downstream value positions in `downstreamRange`. For each `.value` entry, read its `validRange`. The upper bound of each downstream range is typically `targetValue` (for generators like `.int(in: 0...n)`). Compute the domain size at the target: `min(currentDomainSize, targetValue + 1)` or more precisely, clamp the current range's upper bound to the target value.
-4. Multiply the domain sizes across all downstream value positions. This is the predicted fibre size at the upstream target.
+**Precondition.** Profile: what fraction of Phase 2 probes re-confirm floors? Threshold is property-cost-dependent.
 
-**What it decides.**
-- Fibre size ≤ 64: construct `KleisliComposition` with `FibreCoveringEncoder` in exhaustive mode. Guaranteed to find any failure.
-- Fibre size ≤ `coveringBudget` and ≥ 2 parameters: construct with `FibreCoveringEncoder` in pairwise mode.
-- Fibre size > `coveringBudget` with < 2 parameters or > 20 parameters: skip this edge. The fibre is too large to cover within budget — structural encoders have more work to do.
+### Step 2: Domain ratio at edge selection (Signal 1)
 
-**What changes.** Currently the `FibreCoveringEncoder` discovers the fibre size at `start()` time, after the lift has already happened. Moving the decision to edge selection time avoids the lift materialization entirely for edges where the fibre is too large. For the coupling challenge, the planner would see that `n = 1` produces a 4-point fibre and prioritize that edge.
+Compute fibre size lower bound. Select downstream encoder. Allocate budget greedily by `leverage / requiredBudget`. Skip gate only for "structural" confidence edges.
 
-**Nested binds.** The domain ratio is computed for the immediate downstream coordinates only. Nested binds within the downstream range are treated as opaque — their contribution to fibre size is discovered at lift time, not predicted. This underpredicts the fibre size for nested generators (the actual fibre is larger because the nested bind adds more coordinates), but the underprediction is conservative: it might route to exhaustive enumeration when pairwise covering would have been needed, which wastes probes but does not miss failures.
+**Precondition.** After implementing, measure decision accuracy (did the prediction select the correct encoder?). A prediction 3x off but on the same side of the threshold makes the same decision. Decision accuracy, not estimation accuracy.
 
-**Skip gate for the entire composition.** If the domain ratio predicts that *every* upstream target value produces a fibre too large to cover, the entire `KleisliComposition` for this edge is futile — the downstream encoder cannot systematically explore any of the fibres the upstream would produce. Skip the edge entirely and leave the budget for the relax-round. This is a hard skip decision from an exact signal, saving the upstream encoder's probes and the lift materializations.
+### Step 3: Structural leverage ordering (Signal 2)
 
-**Failure mode.** The domain ratio assumes downstream ranges scale linearly with the upstream value. For generators where the downstream range depends on the upstream value through a nonlinear function (for example, `.int(in: 0...n*n)`), the prediction is wrong. The lift report catches this: if predicted coverage was high but actual coverage was low, the domain ratio model is invalid for this edge. Fall back to the current unguided behavior.
+Sort edges by leverage within depth levels. One comparator change. No precondition.
 
-### Step 2: Fibre stability prediction (Signal 5)
+### Steps 4 + 5: Fibre stability prediction and validation (Signal 3)
 
-**What it does.** Before convergence transfer in the `KleisliComposition`'s inner loop, predict whether the downstream convergence points from the previous upstream iteration are still valid. Gate the transfer on the prediction instead of waiting for the lift report.
+Steps 4 and 5 are bundled — they share the implementation site (KleisliComposition's inner loop) and step 4's standalone value is marginal (15–40 probes saved at `.fast` budget, < 5% of the exploration budget). Step 4 is only worth implementing as part of the step 5 package, where the skip gate makes the modification high-value.
 
-**Where it lives.** In `KleisliComposition.convergenceTransferOrigins(from:)`, replacing or supplementing the current coverage-threshold check.
+**At `.fast` budget**: cold-start/warm-start only, no skip gate. Activates after first stall. With the standalone warm-start validation fix in place (`floor - 1` probe catches stale transfers regardless), step 4's remaining `.fast` value is marginal efficiency: skipping the transfer and its validation probe saves ~1 probe per coordinate per upstream candidate. The `.fast` activation is incidental to the bundled implementation — the code exists, so it runs, but the correctness case is handled by the standalone fix.
 
-**How to compute it.** After the upstream encoder proposes a new value `k` (reduced from `n`):
-1. For each downstream value position in the lifted sequence, check: `currentValue < k`. If true, the value fits in the new range `0...k` — tier 1 carry-forward predicted. If `currentValue >= k`, the value will be clamped or PRNG-filled — tier 2 or 3.
-2. Count the fraction of downstream coordinates where `currentValue < k`. This is the predicted coverage.
+**At `.slow` budget** (`maxStalls ≥ 3`): full prediction-validation loop with confidence states, skip gate, and convergence transfer gating.
 
-**What it decides.**
-- Predicted coverage ≥ 0.7: transfer convergence points from the previous upstream iteration. The downstream encoder warm-starts and converges in one or two probes.
-- Predicted coverage < 0.7: cold-start the downstream. The fibre changed too much for the old stall points to be valid.
+**Alternative morphism budget cap.** Derived from `ceil(log₂(rangeSize)) + 1`. Adapts to each position's domain.
 
-**What changes.** Currently the `KleisliComposition` computes convergence transfer *after* the lift, using the lift report's actual coverage. The prediction moves the decision *before* the lift. For adjacent upstream values with high stability (most downstream values well below the range boundary), this is free — no lift needed to decide. For upstream values where stability is low, the prediction matches what the lift report would have said, so no change in behavior.
+### Progression (decision tree)
 
-**Interaction with signal 1.** Signal 5 applies only when the downstream encoder is search-based (binary search, covering with pairwise). For exhaustive enumeration (signal 1 selected fibre ≤ 64), convergence transfer is unused — the exhaustive encoder enumerates everything regardless.
+- **If > 80% of wasted probes are floor re-confirmation** → step 1 only.
+- **If > 30% of probe budget is wasted on wrong encoder selection** (probe-weighted, not event-count — a single wrong selection on a large fibre costs more than ten on tiny fibres) → steps 1 + 2 + 3.
+- **If encoder selection is accurate but convergence transfer is wasteful, AND user budget is `.slow`** → steps 1 + 2 + 3 + 4/5 (bundled).
+- **If all signals are accurate and the factory would simplify the codebase** → factory progression.
+- **If profiling shows the current reducer is not measurably wasteful** → do nothing. The plan adds complexity without measurable benefit.
 
-**Known limitation: coverage versus semantic stability.** Fibre stability predicts coverage, not semantic stability. Two fibres can have identical coverage (all tier 1) but different property behavior because the value interpretation changed. A generator like `Gen.int(in: n...n+10)` has downstream values that are always valid regardless of `n` — the range shifts rather than shrinks. Coverage is high (all tier 1), but a downstream value of 5 means something different at `n = 3` (5 is in `3...13`) versus `n = 1` (5 is in `1...11`). The convergence point is semantically stale despite high predicted coverage. The property check catches this (the transferred floor does not hold), but the probes are wasted. This requires understanding the generator's range function, not just the current range bounds — not worth implementing now but worth noting.
+Each step has a measurable precondition. The "do nothing" branch is a valid outcome.
 
-**Validation.** After the lift, compare predicted coverage against the lift report's actual coverage. If they diverge by more than 0.2, the stability model is wrong for this edge — the downstream ranges do not simply scale with the upstream value. Log the divergence and fall back to lift-report-based transfer for subsequent upstream iterations on this edge.
+## Post-Termination Verification
 
-### Step 3: Structural leverage ordering (Signal 3)
+The reducer converges toward cached floors by design. If the cache is stale (floor higher than the true floor), the counterexample is at the cached floors — indistinguishable from the correct case during reduction. No in-cycle gate detects this.
 
-**What it does.** Within the exploration leg, order the `ReductionEdge` traversal by structural leverage (scope size) instead of the CDG's topological order alone.
+**Fix: post-termination sweep.** After the reducer terminates, probe `floor - 1` for each coordinate. Clamp to `max(rangeLowerBound, floor - 1)` — for coordinates inside bind scopes, the valid range may have narrowed. When the clamped value equals the floor, the range won't allow anything lower — skip the probe (the floor is trivially valid at the range minimum).
 
-**Where it lives.** In `reductionEdges()` on `ChoiceDependencyGraph`, or in `runKleisliExploration` where edges are iterated.
+If the property fails at any `floor - 1`, the cache is stale and the counterexample is non-minimal. Run a Phase-2-only verification cycle (skip base descent and exploration) with all gates disabled and `convergedOrigins: nil`. Phase 2 runs binary search on every coordinate from the current state without cached bounds — it probes below the cached floor and discovers new floors, including cascading staleness from property-mediated coupling. One Phase-2 cycle is sufficient — Phase 2's own convergence logic handles cascading changes.
 
-**How to compute it.** For each `ReductionEdge`, `downstreamRange.count` is the leverage. Sort edges by leverage descending within each topological depth level. Edges at shallower depths still run first (topological order), but among edges at the same depth, higher-leverage edges run first.
+**Budget for the verification cycle.** The fixed Phase-2 budget (975 probes) was calibrated for cached operation (most coordinates converge in 1–2 probes). The cache-free sweep is a fundamentally different workload — each coordinate needs up to `ceil(log₂(rangeSize))` probes. The verification cycle should use an expanded budget: `sum(ceil(log₂(rangeSize_i)))` across all value coordinates, computable from the sequence (walk value positions, read range sizes) at zero property-invocation cost.
 
-**What it decides.** Budget allocation within the exploration leg. The first edge gets the full budget. If it succeeds and the cycle restarts, the remaining edges are re-evaluated on the new state. If it fails and returns budget, the next edge gets the remainder. High-leverage edges are more likely to produce shortlex-significant improvements, so they should get first access to the budget.
+**Re-entry on success.** If the verification Phase-2 cycle accepts any reduction, the stall was false — the cache was stale, not the reducer converged. Reset the stall counter and re-enter the main reduction loop. New floors may enable structural reductions previously blocked.
 
-**What changes.** Currently `reductionEdges()` returns edges in pure topological order. Adding leverage ordering within depth levels is a sort key change — one line in the sort comparator. The effect is that the exploration leg tries the most impactful edges first.
+**Re-entry guard.** Limited to one occurrence. A `verificationSweepCompleted` flag on the scheduler prevents a second re-entry. If the second termination's sweep also detects staleness, the cache invalidation logic has a systematic defect — re-entry cannot fix it. Log the second detection as a diagnostic (indicates a cache invalidation bug to investigate), terminate without sweeping.
 
-### Step 4: Fibre descent gating (Signal 6)
+**Budget cap.** The sweep respects the user's `ReductionBudget`. At `.fast`: cap at the standard Phase-2 budget (975 probes) — the quality guarantee is best-effort, not complete. High-impact coordinates are validated first; low-impact coordinates may be unvalidated. `.slow` is needed for a full guarantee. At `.slow`: use the expanded budget (`sum(ceil(log₂(rangeSize_i)))` across all value coordinates). If the capped budget is insufficient, the sweep is partial — validates as many coordinates as budget allows, prioritized by shortlex impact (largest current values first).
 
-**What it does.** Before fibre descent starts, check whether all value coordinates are at their convergence-cached floors. If so, skip Phase 2 entirely — the fibre is already at its per-coordinate minimum and no value encoder will make progress.
+The sweep fires only when staleness is detected — no cost in the common case.
 
-**Where it lives.** At the top of `runFibreDescent` in `ReductionState+Bonsai.swift`, before the leaf-range loop.
+## Signal Interaction and Priority
 
-**How to compute it.** Walk all value positions in the sequence. For each position, check `convergenceCache.convergedOrigin(at: index)`. If every value position has a cached floor *and* the current value at that position matches the cached floor's bound, Phase 2 has nothing to do.
+1. **Skip gates** (signal 3 < 0.3 for search-based encoders when step 5 is active, signal 4 all converged): override. Signal 3's skip does NOT override signal 1's exhaustive — exhaustive handles changed fibres by construction.
+2. **Encoder selection** (signal 1).
+3. **Budget allocation** (greedy by `leverage / requiredBudget`; reliability factor added after empirical measurement).
+4. **Convergence transfer** (signal 3, search-based only).
+5. **Soft biases** (signals 5, 6).
 
-**What it decides.** Skip or run Phase 2. Skipping saves the full fibre descent budget (975 probes) worth of encoder invocations — zero-value, binary search, and redistribution all return immediately if their targets are already at floor. But currently they each spend a few probes re-confirming the floor before converging. The gate eliminates those re-confirmation probes.
+**Signal 4 / exploration leg interaction.** Signal 4 gates the Phase 2 that runs before the exploration leg. If the exploration leg makes structural progress (KleisliComposition acceptance), the convergence cache is invalidated, and the next cycle's signal 4 sees missing cache entries — Phase 2 runs. This is handled by signal 4's precondition ("no structural acceptance this cycle"). Worth calling out explicitly: if the precondition is ever relaxed, Phase 2 could be skipped based on stale cache state while the exploration leg changed the fibre underneath.
 
-**What changes.** A boolean check at the top of `runFibreDescent`. If all coordinates have converged and the values match, return `false` immediately. The convergence cache already holds the data; the check is O(n) in the number of value positions. The benefit scales with the number of coordinates — generators with many value positions (like Bound5 with 50+ coordinates) save the most.
+## Deriving Encoders from Structure
 
-**Failure mode.** A structural change in Phase 1 can invalidate convergence cache entries without clearing them (the cache invalidation is range-based, not total). If a structural change shifted a coordinate's range but did not invalidate its cache entry, the gate would incorrectly skip Phase 2 for a coordinate that now has room to improve. The fix: the gate only fires when `convergenceCache` has entries for *all* value positions, not just some. A partial cache (some entries missing) means Phase 2 should run to fill the gaps.
+### Position-level classification
 
-**Interaction with the exploration leg.** Phase 2 runs after Phase 1 and before the exploration leg. The exploration leg's structural changes (from `KleisliComposition`) happen after Phase 2. The convergence cache invalidation runs on structural acceptance, so by the time the next cycle's Phase 2 starts, invalidated entries are gone. The gate sees missing entries (not all coordinates converged) and runs Phase 2. The "all positions have entries" guard handles this correctly.
+| Tree node | CDG role | Primitive |
+|---|---|---|
+| `.choice` | Leaf | Binary search |
+| `.choice` | Leaf, float | Float reduction |
+| `.choice` | Bind-inner with outgoing edges | KleisliComposition |
+| `.branch` | Branch selector | Branch promotion/pivot |
+| `.sequence` container | Structural | Span deletion |
+| `.bind` container | Structural | Span deletion |
 
-### Step 5: Prediction-validation per edge (Signals 1 + 5 combined)
+For overlapping roles, the factory emits alternatives with a budget cap per alternative derived from `ceil(log₂(rangeSize)) + 1`.
 
-**What it does.** Annotate each `ReductionEdge` with a prediction confidence that updates across cycles. The confidence starts at "structural" (the domain ratio model is assumed correct) and degrades to "empirical" if the lift report contradicts the prediction.
+### Morphism descriptors
 
-**Where it lives.** A new `EdgeConfidence` annotation on `ReductionEdge`, persisted across cycles in `ReductionState`.
+```swift
+struct MorphismDescriptor {
+    let encoder: any PointEncoder
+    let decoder: DecoderMode
+    let probeBudget: Int
+    let rollback: RollbackPolicy
+    let classification: PositionClassification
+}
+```
 
-**How it works.**
-1. **Cycle 1.** For each edge, predict the domain ratio and fibre stability (steps 1 and 2). Run the composition. Compare the lift report against the prediction. If they match (within tolerance), the edge's confidence stays at "structural." If they diverge, downgrade to "empirical."
-2. **Cycle 2+.** For "structural" edges, use the prediction to gate convergence transfer and select the downstream encoder without consulting the lift report. For "empirical" edges, fall back to lift-report-based decisions — no prediction, pure reaction.
-3. **After a structural acceptance.** Reset edge confidences to "structural" for edges whose upstream or downstream ranges overlap with the structural change's affected range. Edges in unrelated branches of the CDG keep their learned confidence. The `BindSpanIndex` already provides this scoping for convergence cache invalidation — the same mechanism works for edge confidence invalidation.
+`classification` preserves the factory's static knowledge through the existential boundary.
 
-**What changes.** This adds per-edge state to the reduction pipeline. Currently edge information is computed fresh each cycle from the CDG. The confidence annotation persists across cycles, carrying forward what the reducer learned about each edge's predictability. The state is lightweight — one enum per edge (`.structural` or `.empirical`), reset on structural changes.
+### Factory-primitive boundary
 
-**The long-term arc.** The confidence annotation is the seed of the Bayesian update loop described in the Prediction-Validation Loop section. Full Bayesian updating (continuous confidence scores, prior distributions on domain ratio models) is future work. The binary structural/empirical classification captures the essential distinction: does the structural prediction work for this edge, or does it need empirical measurement?
+Signals modify the new types (KleisliComposition, FibreCoveringEncoder), not the 20 existing ones. The two systems operate in different phases — existing types run in base/fibre descent, new types run in the exploration leg. When the factory arrives, existing encoders' internal probe logic is unchanged, but the scheduling context changes — the factory adds metadata (classification, decoder mode, rollback policy) and the scheduler uses it for signal-based decisions. This IS a behavioral change at the system level: the factory changes which encoders run, in what order, with what budget.
+
+Testing the factory transition as a behavioral change means: same counterexample quality (shortlex), same or fewer probes, same phase ordering for the common case (the factory's construction-time decisions should match the current slot rotation's runtime decisions). At least one generator per classification row catches row-level regressions. The success criterion (equal or better quality, ≥ 10% fewer probes, no individual regressions) applies.
+
+The "construction-time dominance loses mid-phase adaptivity" concern: currently the dominance lattice suppresses an encoder during its run if a dominating encoder was accepted. The factory pre-selects at construction time, so a dominator's acceptance can't suppress already-constructed alternatives. The budget-cap mechanism handles this differently — each alternative runs until its cap, not until a dominator fires. This changes probe distribution but should produce the same final result. Whether it does is an empirical question. Signals first, factory later minimizes rework.
+
+### Runtime vs construction-time dominance
+
+Construction-time dominance loses mid-phase adaptivity. Self-termination replaces intra-encoder convergence. Budget-cap alternatives prevent fixed-order over-pruning. Per-edge invalidation is O(downstream coordinates) — negligible relative to materialization cost.
+
+## The Optimization Target
+
+The plan optimizes probe count as a proxy for wall-clock time. The user's primary goal is counterexample quality (smallest shortlex), with time as secondary.
+
+**Tension.** Every skip gate trades quality risk for probe savings. Stale floors mean skipped probes might have found a lower floor. Probe savings that risk larger counterexamples are acceptable only when stale-floor probability is low AND property cost is high.
+
+**Post-termination verification catches the dangerous case.** The in-cycle skip gates are aggressive — they trust the cache. The post-termination sweep is the safety net — it probes `floor - 1` for every coordinate after the reducer terminates. If any floor is stale, one Phase-2-only cycle runs with gates disabled. This separates the aggressive optimization (during reduction, skip what looks converged) from the quality guarantee (after reduction, verify the result).
+
+## Open Questions
+
+**Profiling.** Measure before implementing. Profiling categories overlap — use hierarchical primary attribution: (1) wrong encoder selection, (2) floor re-confirmation, (3) productive. "Wrong encoder" measurable in both directions without step 2's machinery: count fibre > 64 discoveries at `start()` time (exhaustive selected, fibre too large), and log actual fibre size when pairwise runs to check post-hoc how many were ≤ 64 (pairwise selected, exhaustive would have worked). Both measurements are byproducts of FibreCoveringEncoder's existing `start()` computation.
+
+**Success criterion.** Two dimensions:
+- **Efficiency**: across the test suite, equal or better counterexample quality in ≥ 10% fewer property invocations, with no regression on any individual test case.
+- **Adaptability**: a new generator shape that exposes a reduction gap (like the coupling challenge's cross-level minimum) can be addressed by adding a row to the classification table or adjusting a signal threshold, not by implementing a new encoder type with its own file, `EncoderName` case, slot assignment, and dominance rules.
+
+**Seed determinism.** The success criterion assumes fixed seeds for A/B comparison. Each shrinking challenge uses `.replay(seed)` — a fixed seed producing a deterministic initial failure. Counterexample size differences are attributable to the reducer, not seed variation. For batch tests without fixed seeds (Bound5Many with 52 random runs), the comparison uses aggregate statistics (mean and max invocation count) rather than per-run counterexample quality.
+
+**Per-cycle overhead.** Steps 1–3 at `.fast` budget: step 1 is O(value positions), step 2 walks downstream coordinates per edge and sorts, step 3 is a comparator change. For a generator with 10 edges and 50 downstream coordinates, step 2 is ~500 comparisons per cycle — microseconds, negligible relative to a single materialization. The CDG has at most as many edges as bind regions, bounded by nesting depth (typically < 20). Steps 1–3 are free in practice.
+
+**Budget-dependent features.** At `.fast` budget: steps 1–4 active, no skip gate, no prediction-validation loop. At `.slow` budget: full loop with validation, confidence tracking, and skip gates. The user's budget choice determines which reduction planning features activate.
+
+**Non-monotonicity.** Detect via stepper flag. Per-coordinate exhaustive scan. Rare but prevents subtle correctness issue.
+
+**Regression risk.** Runtime toggle + clean A/B testing (fresh caches, same initial state). At least one generator per classification row.
+
+**Invalidation cost.** Per-edge: O(downstream coordinates), negligible. Per-signal: microsecond savings, not worth the complexity.
+
+## Insights from Algorithm Selection Literature
+
+The planning framework instantiates Rice's (1976) Algorithm Selection Problem: structural signals are instance features, primitives are the algorithm space, probe count is the performance measure, the classification table is the selection mapping. Three insights from the literature improve the plan:
+
+**Feature computation cost (SATzilla).** Some features cost more to compute than the time they save. Signal computation for signals 1–4 is free (arithmetic on held data). But the discovery lift for nested-bind edges costs a materialization. Charge it against the edge's budget. In practice, the discovery lift is almost always worth its cost: if it reveals a small fibre, the edge succeeds quickly; if it reveals a large fibre, the "skip" outcome saves the much larger cost of attempting coverage on an infeasible fibre. The only case where charging matters is when the edge's total budget is so small that one materialization exhausts it — which means the edge was underfunded regardless.
+
+**Interleaved portfolio execution (Huberman et al. 1997, future work).** Running multiple algorithms with interleaved time shares and taking the first success outperforms the best single algorithm when failure cases don't overlap. For the current implementation, sequential execution scored by `leverage / requiredBudget` with early termination is preferred — principled and understandable. The upstream budget cap (10–15 candidates) bounds the pathological case where a top-scored edge is futile. If profiling shows that top-scored edges frequently fail while lower-scored edges would have succeeded, interleaving becomes justified. The `AdaptiveEncoder` protocol already supports suspension (`nextProbe` is stateful and resumable), but the implementation complexity (k parallel convergence transfer states) is not warranted until the sequential approach is demonstrably insufficient.
+
+**Credit assignment (adaptive operator selection, Fialho et al. 2010).** When a prediction succeeds, distinguish model credit from luck. Credit the model only when the structural prediction matched the lift report AND the downstream found a failure. If the prediction diverged from the lift report but the downstream succeeded anyway, that is luck — do not promote. The promotion criterion becomes: prediction accuracy AND downstream productivity, not productivity alone.
+
+Symmetric corollary for demotion: demote when the prediction was confident and wrong (predicted high coverage, got low coverage, downstream failed). Do not demote when the prediction was uncertain — the model did not claim to know, so the failure does not contradict it. The three-state confidence system handles this naturally: uncertain edges are exempt from credit assignment. They have insufficient observations for the model to be right or wrong.
+
+**IPOG budget estimation vs exact computation.** The budget allocation uses `max_domain² × ceil(log₂(num_params))` as the required budget for pairwise covering. The actual IPOG array is almost always smaller (mixed domains, serendipitous coverage from greedy horizontal growth). The risk of under-allocation from over-estimation is low. The risk of over-allocation (wasted budget slots) is bounded by early termination.
+
+If the actual IPOG row count computation is cheap enough for the scoring pass, use it instead of the estimate. IPOG row count is O(parameters × domains × log(parameters)) — much cheaper than generating the array. The `CoveringArray` library already has the `generate` function with `rowBudget` for early abort. A lightweight "dry run" that computes row count without generating the array would eliminate the estimation gap entirely. If the dry run is too expensive, the estimate is conservative and the early-termination mechanism handles the rest.

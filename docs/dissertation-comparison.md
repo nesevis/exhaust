@@ -39,7 +39,7 @@ Structurally identical. The existential intermediate type is handled via `Any` +
 | `GetSize` | `.getSize` | Identical |
 | `Resize Int` | `.resize(newSize:, next:)` | Identical |
 
-### Exhaust-only operations (6 additional)
+### Exhaust-only operations (7 additional)
 
 | Operation | Purpose |
 |---|---|
@@ -49,8 +49,9 @@ Structurally identical. The existential intermediate type is handled via `Any` +
 | `.filter(gen:, fingerprint:, filterType:, predicate:)` | Explicit validity marker for CGS optimization |
 | `.classify(gen:, fingerprint:, classifiers:)` | Distribution statistics and coverage reporting |
 | `.unique(gen:, fingerprint:, keyExtractor:)` | Deduplication via choice-sequence or key-based tracking |
+| `.transform(kind:, inner:)` | Reifies `map`/`bind` as inspectable data. `TransformKind.bind` fuses `comap` with `>>=` (Xia et al. ESOP 2019), making bind dependencies visible to every interpreter — VACTI records them as `ChoiceTree.bind`, the reducer exploits them for depth-ordered reduction. See [academic-influences.md](academic-influences.md), Section 2 |
 
-**Verdict: Superset.** All 6 dissertation operations are present with faithful semantics. Exhaust adds 6 more, primarily for practical concerns: stack safety (`sequence`), ergonomics (`zip`, `just`), and observability (`filter`, `classify`, `unique`). The `filter` operation is particularly notable — the dissertation handles validity constraints at the CGS level, but Exhaust reifies them into the operation set so any interpreter can react to them.
+**Verdict: Superset.** All 6 dissertation operations are present with faithful semantics. Exhaust adds 7 more for practical concerns: stack safety (`sequence`), ergonomics (`zip`, `just`), observability (`filter`, `classify`, `unique`), and structural visibility (`.transform` — see Section 5 and 6 for how this enables the bind-aware reducer). The `filter` operation is particularly notable — the dissertation handles validity constraints at the CGS level, but Exhaust reifies them into the operation set so any interpreter can react to them.
 
 ---
 
@@ -74,12 +75,11 @@ Plus `probabilityOf` and `enumerate` as sketched extensions.
 |---|---|---|
 | `ValueInterpreter` | generate | `Interpreters/Generation/ValueInterpreter.swift` |
 | `ValueAndChoiceTreeInterpreter` | generate + randomness | `Interpreters/Generation/ValueAndChoiceTreeInterpreter.swift` |
-| `OnlineCGSInterpreter` | CGS algorithm (Fig 3.3) | `Interpreters/Generation/OnlineCGSInterpreter.swift` |
+| `OnlineCGSInterpreter` | CGS algorithm (Fig 3.3) | `Interpreters/Adaptation/OnlineCGSInterpreter.swift` |
 | `Reflect` | reflect | `Interpreters/Reflection/Reflect.swift` |
-| `Replay` | parse (from ChoiceTree) | `Interpreters/Replay/Replay.swift` |
-| `Materialize` | parse (from ChoiceSequence) | `Interpreters/Replay/Materialize.swift` |
-| `PrefixMaterializer` | partial parse + generate | `Exploration/PrefixMaterializer.swift` |
-| `Reducer` | choices + shrinking passes | Validity-preserving shrinking via choice sequence manipulation |
+| `Replay` | parse | `Interpreters/Replay/Replay.swift` |
+| `ReductionMaterializer` | parse (during reduction) | `Interpreters/Reduction/ReductionMaterializer.swift` |
+| `BonsaiScheduler` | choices + shrinking passes | Validity-preserving shrinking via categorical enc/dec pipeline |
 
 ### Not yet implemented
 
@@ -162,7 +162,7 @@ Per-site entropy analysis identifies bottleneck sites (where one choice dominate
 **Dissertation**: Flat bit strings and bracketed choice sequences (e.g., `(10(1(100)0))`). Shrinking operates on these strings via `subTrees`, `zeroDraws`, and `swapBits` passes to find the shortlex minimum.
 
 **Exhaust**: Dual representation:
-- `ChoiceTree` — hierarchical, with cases for `choice`, `just`, `sequence`, `branch`, `group`, `selected`, `getSize`, `resize`. Preserves structural information from generation.
+- `ChoiceTree` — hierarchical, with cases for `choice`, `just`, `sequence`, `branch`, `group`, `selected`, `getSize`, `resize`, `bind`. Preserves structural information from generation. The `bind(inner:, bound:)` case is architecturally significant — it records data dependencies from `.transform(.bind(...))` operations, enabling the BonsaiScheduler's depth-ordered reduction.
 - `ChoiceSequence` — flat `ContiguousArray<ChoiceSequenceValue>` for mutation and reduction.
 
 The hierarchical `ChoiceTree` is richer than anything in the dissertation. It enables structural manipulation (e.g., the `Reducer` can swap subtrees or zero out groups while respecting generator structure), whereas the dissertation's flat bit strings require the shrinking passes to rediscover structure.
@@ -171,7 +171,7 @@ The hierarchical `ChoiceTree` is richer than anything in the dissertation. It en
 
 ## 6. Test Case Reduction (Shrinking)
 
-The dissertation devotes §4.6 to validity-preserving shrinking and mutation. Exhaust's `Reducer` is a substantially expanded implementation of these ideas.
+The dissertation devotes §4.6 to validity-preserving shrinking and mutation. Exhaust's BonsaiReducer is a substantially expanded implementation of these ideas, organised by a categorical framework (Sepulveda-Jimenez, "Categories of Optimization Reductions", 2026; see [academic-influences.md](academic-influences.md), Section 3).
 
 ### Dissertation's approach (§4.6.1–4.6.3)
 
@@ -186,44 +186,60 @@ The dissertation describes two shrinking systems:
 
 **Reflective mutation** (§4.6.3): Applies the same principle to HypoFuzz-style fuzzing — mutate the choice sequence rather than the value, guaranteeing structural validity.
 
-### Exhaust's Reducer (`Interpreters/Reduction/`)
+### Exhaust's BonsaiReducer (`Interpreters/Reduction/`)
 
-Exhaust implements a 12-pass reduction system that goes far beyond the dissertation's 3-pass description. Most passes operate on `ChoiceSequence` (the flattened form of `ChoiceTree`), but the structural passes `promoteBranches` and `pivotBranches` operate directly on the `ChoiceTree` — walking branch nodes, mutating the tree via fingerprint-indexed subscripts, and flattening to `ChoiceSequence` only for shortlex comparison and replay. All passes use the generator to replay candidates and check validity — the same "shrink the choices, not the value" principle, but with dramatically more sophisticated strategies.
+Exhaust implements a categorical reduction pipeline with 21 encoders across 5 phases, organised by the enc/dec separation from Sepulveda-Jimenez. Encoders propose pure structural mutations; the `ReductionMaterializer` (the decoder) re-runs the generator against each candidate to produce a fresh `ChoiceTree` with current metadata. All encoders use the same "shrink the choices, not the value" principle, but the categorical framework enables composability (Kleisli composition of encoder pairs through a generator lift) and principled phase ordering.
 
-#### The 12 passes
+#### The 5-phase pipeline
 
-| # | Pass | Dissertation equivalent | Description |
-|---|---|---|---|
-| 1 | `naiveSimplifyValuesToSemanticSimplest` | `zeroDraws` (partial) | One-shot: sets all values to semantic simplest (0 for numbers, index 0 for characters) |
-| 2 | `promoteBranches` | Targeted alternative to `subTrees` | Operates on `ChoiceTree`: replaces a shallow branch's subtree with a deeper, simpler one at structurally compatible pick sites. Achieves the same effect as `subTrees` for recursive generators without needing a flat sequence-cursor interpreter |
-| 3 | `pivotBranches` | None | Operates on `ChoiceTree`: switches which branch is `.selected` at pick sites, preferring alternatives whose subtrees are shortlex-simpler |
-| 4 | `deleteContainerSpans` | None | Adaptive deletion of container structure spans (removing structural groupings, not replacing root with children) |
-| 5 | `deleteSequenceBoundaries` | None | Collapses sequence boundaries (e.g., `[[V][V][V]]` -> `[[VVV]]`) |
-| 6 | `deleteFreeStandingValues` | `zeroDraws` (generalized) | Removes individual value elements within sequences |
-| 7 | `deleteAlignedSiblingWindows` | None | Coordinated deletion across structurally aligned sibling containers via beam search |
-| 8 | `simplifyValuesToSemanticSimplest` | `zeroDraws` (partial) | Batched simplification using `findInteger` adaptive probing |
-| 9 | `reduceValues` | `swapBits` (vastly expanded) | Binary search each value toward its reduction target, with specialized float handling (truncation, cross-zero probing, NaN/infinity, as-integer-ratio) |
-| 10 | `redistributeNumericPairs` | None | Cross-container value redistribution — decreases earlier values while increasing later ones |
-| 11 | `speculativeDeleteAndRepair` | None | Divide-and-conquer deletion with value repair for out-of-bounds adjustments |
-| 12 | `normaliseSiblingOrder` | None | Reorders sibling elements to normalized order; falls back to bubble-sort if full sort fails |
+Phases progress from exact encoders (guaranteed shortlex improvement) through bounded (re-derivation introduces slack) to speculative (may temporarily worsen before improving):
+
+| Phase | Guarantee | Encoders |
+|---|---|---|
+| structuralDeletion | Exact | `deleteByPromotingSimplestBranch`, `deleteByPivotingToAlternativeBranch`, `deleteContainerSpans`, `deleteSequenceElements`, `deleteSequenceBoundaries`, `deleteFreeStandingValues`, `deleteContainerSpansWithRandomRepair`, `deleteAlignedSiblingWindows` |
+| valueMinimization | Exact or bounded | `zeroValue`, `binarySearchToSemanticSimplest`, `binarySearchToRangeMinimum`, `reduceFloat`, `bindRootSearch`, `productSpaceBatch`, `productSpaceAdaptive` |
+| reordering | Exact or bounded | Human-order post-processing (not a named encoder) |
+| redistribution | Bounded | `redistributeSiblingValuesInLockstep`, `redistributeArbitraryValuePairsAcrossContainers`, `redistributeInnerValuesBetweenBindRegions` |
+| exploration | Speculative | `relaxRound`, `kleisliComposition` |
+
+Plus `FibreCoveringEncoder` — a `PointEncoder` used as the downstream leg of `KleisliComposition` to search fibres for failures via IPOG covering arrays.
+
+#### Mapping to dissertation passes
+
+| Dissertation pass | Exhaust encoders | Notes |
+|---|---|---|
+| `subTrees` | `deleteByPromotingSimplestBranch` | Operates on `ChoiceTree` rather than flat sequences — replaces shallow branches with deeper, simpler ones at structurally compatible pick sites |
+| `zeroDraws` | `zeroValue`, `binarySearchToSemanticSimplest`, `deleteFreeStandingValues` | Split into adaptive zero-fill, batched binary search toward semantic simplest, and individual value deletion |
+| `swapBits` | `binarySearchToRangeMinimum`, `reduceFloat` | Binary search toward range minimum with specialised float handling (truncation, cross-zero probing, NaN/infinity normalisation, as-integer-ratio simplification) |
+| (none) | The remaining 14 encoders | Bind-aware passes, structural deletion variants, redistribution, Kleisli exploration — all without dissertation equivalents |
+
+#### BonsaiScheduler's two-phase pipeline
+
+The scheduler exploits the `ChoiceTree.bind(inner:, bound:)` structure for depth-ordered reduction — a capability the dissertation's flat bit strings do not support:
+
+- **Base descent** (Phase 1): structural deletion encoders remove unnecessary structure
+- **Fibre descent** (Phase 2): value minimisation encoders reduce values within the current structure, sweeping from minimum bind depth upward so shallow values settle before deeper ones
+- **Exploration** (when both stall): Kleisli composition proposes upstream mutations, lifts them through the generator via `GeneratorLift`, then searches the resulting fibre with `FibreCoveringEncoder`. If that fails, `RelaxRoundEncoder` redistributes values to escape local minima, with pipeline-level checkpoint acceptance
 
 #### Key architectural differences from the dissertation
 
+**Categorical enc/dec separation**: Encoders propose pure mutations; the `ReductionMaterializer` decodes them by re-running the generator. This separation (from Sepulveda-Jimenez) enables composability — `KleisliComposition` composes two `PointEncoder`s through a `GeneratorLift` — and principled phase ordering via grade composition.
+
 **Shortlex ordering as the invariant**: Like Hypothesis and the dissertation, all candidates must satisfy `shortLexPrecedes(original)`. But Exhaust's richer `ChoiceSequence` (typed values rather than raw bits) makes shortlex comparisons more semantically meaningful.
 
-**Adaptive probing via `findInteger`**: Many passes use `AdaptiveProbe.findInteger()` — a binary-search-like strategy that finds the largest batch of changes that can be made while preserving the failing property. The dissertation's passes are fixed-step; Exhaust's adapt to the landscape.
+**Bind-depth ordering**: The `BindSpanIndex` builds a structural index of every bind region. BonsaiScheduler's covariant sweep reduces bound-content values from minimum bind depth upward, settling shallow depths first so that deeper depths reduce in the correct context. The dissertation has no notion of bind dependencies.
 
-**Budget constraints**: Expensive passes (especially `deleteAlignedSiblingWindows` with its beam search) are budget-constrained via `ProbeBudget` to prevent runaway property invocations. The dissertation doesn't discuss computational budgets.
+**Adaptive probing via `findInteger`**: Many encoders use `AdaptiveProbe.findInteger()` — a binary-search-like strategy that finds the largest batch of changes that can be made while preserving the failing property. The dissertation's passes are fixed-step; Exhaust's adapt to the landscape.
 
-**Pass reordering**: After a successful improvement, the successful pass moves to the front of the next iteration. This exploitative strategy concentrates effort on passes that are making progress. The dissertation describes a fixed pass order.
+**Budget constraints**: Expensive encoders (especially `deleteAlignedSiblingWindows` with its beam search) are budget-constrained. `CycleBudget` allocates across legs using dynamic cost estimates from each encoder's Big-O model and the current tree shape. `LegBudget` enforces per-leg hard caps with stall patience. The dissertation doesn't discuss computational budgets.
 
-**Cycle detection**: The reducer tracks `recentSequences` to detect when passes are cycling without progress, triggering early termination. The dissertation doesn't address convergence.
+**Kleisli composition**: `KleisliComposition` composes an upstream and downstream `PointEncoder` through a `GeneratorLift` — the upstream proposes a structural mutation, the lift re-derives the fibre (producing a fresh tree and sequence), and the downstream searches the fibre for a better candidate. This is a direct instantiation of Sepulveda-Jimenez §7 (Kleisli generalisation), enabling cross-level exploration that neither the dissertation nor Hypothesis addresses.
 
-**Float-specific reduction**: `reduceValues` has extensive Hypothesis-inspired float handling — truncation shrinks, integral-float binary reduction, as-integer-ratio reduction, cross-zero probing, NaN/infinity normalization. The dissertation mentions floats only in passing.
+**Tiered materialisation**: `ReductionMaterializer` uses three-tier resolution: prefix replay → fallback tree → PRNG. This handles stale ranges from upstream mutations gracefully, a practical concern that arises when shrinking changes upstream choices that affect downstream ranges.
 
-**Stale range handling**: The "unlock boundary" probe (`UnlockProbeInput`) handles cases where recorded generator ranges become invalid mid-reduction — a practical concern that arises when shrinking changes upstream choices that affect downstream ranges.
+**Float-specific reduction**: `ReduceFloatEncoder` has extensive Hypothesis-inspired float handling — truncation shrinks, integral-float binary reduction, as-integer-ratio reduction, cross-zero probing, NaN/infinity normalisation. The dissertation mentions floats only in passing.
 
-**Verdict: Massively expanded.** The dissertation's 3 passes (`subTrees`, `zeroDraws`, `swapBits`) establish the principle. Exhaust's 12 passes implement a production-grade reduction system with adaptive probing, budget management, float specialization, cross-container redistribution, and convergence control. The core idea (shrink the choice sequence, replay through the generator) is faithful; the execution is an order of magnitude more sophisticated.
+**Verdict: Massively expanded.** The dissertation's 3 passes (`subTrees`, `zeroDraws`, `swapBits`) establish the principle. Exhaust's 21 encoders across 5 categorical phases implement a production-grade reduction system with bind-aware scheduling, Kleisli composition, adaptive probing, budget management, float specialisation, cross-container redistribution, and fibre-based exploration. The core idea (shrink the choice sequence, replay through the generator) is faithful; the execution is categorically organised and an order of magnitude more sophisticated.
 
 ---
 
@@ -234,7 +250,7 @@ Both systems implement the same core bidirectional pattern. The dissertation's k
 > **Theorem 1**: `P[[g]] <$> R[[g]] === G[[g]]`
 > (Parsing the randomness of a generator is equivalent to running it forward.)
 
-Exhaust's `Reflect` interpreter implements the backward pass (`P[[g]]`), and `ValueAndChoiceTreeInterpreter` captures both the forward value and the choice tree (`G[[g]]` + `R[[g]]`). The `Materialize` interpreter replays a choice tree to recreate the value (`P[[g]]` applied to recorded randomness).
+Exhaust's `Reflect` interpreter implements the backward pass (`P[[g]]`), and `ValueAndChoiceTreeInterpreter` captures both the forward value and the choice tree (`G[[g]]` + `R[[g]]`). The `Replay` interpreter replays a choice tree to recreate the value (`P[[g]]` applied to recorded randomness).
 
 The correctness properties the dissertation establishes — soundness, completeness, pure projection, overlap — are structurally maintained by Exhaust's operation-by-operation interpretation in `Reflect.swift`. Each `ReflectiveOperation` case mirrors the dissertation's backward interpretation rules:
 
@@ -250,15 +266,15 @@ The correctness properties the dissertation establishes — soundness, completen
 | Aspect | Dissertation | Exhaust | Assessment |
 |---|---|---|---|
 | Freer monad | `Freer f a` with existential | `FreerMonad<Op, Val>` with `Any` | Faithful translation |
-| Operation set | 6 constructors in `R b a` | 12 constructors in `ReflectiveOperation` | Superset — all 6 present + 6 practical additions |
+| Operation set | 6 constructors in `R b a` | 13 constructors in `ReflectiveOperation` | Superset — all 6 present + 7 practical additions |
 | Choice representation | Flat bit strings, bracketed sequences | Hierarchical `ChoiceTree` + flat `ChoiceSequence` | Richer — enables structural manipulation |
 | CGS algorithm | Online, per-value | Offline, amortized warmup + baked weights | Same core, different deployment strategy |
 | Diversity preservation | Not addressed | Fitness sharing, UCB, adaptive smoothing | Novel extension |
 | Continuous values | `ChooseInteger (Int, Int)` | `chooseBits` with `TypeTag` for Int/Float/Char/Bool | Generalized |
 | Stack safety | Relies on Haskell laziness | Explicit `sequence`/`zip` operations | Necessary for Swift |
 | Filter/validity | Implicit in CGS predicate | Reified as `.filter` operation | More explicit |
-| Interpreter count | 7+ (exploring generality) | 6 (optimized for production) | Narrower but deeper |
-| Test case reduction | 3 passes (`subTrees`, `zeroDraws`, `swapBits`) | 12 passes with adaptive probing, budgets, float specialization | Massively expanded |
+| Interpreter count | 7+ (exploring generality) | 5 core interpreters + BonsaiScheduler | Narrower but deeper |
+| Test case reduction | 3 passes (`subTrees`, `zeroDraws`, `swapBits`) | 21 encoders across 5 categorical phases with Kleisli composition, adaptive probing, budgets, float specialisation | Massively expanded |
 | Combinatorial coverage | Not addressed | Unified ChoiceTree analysis → automatic t-way covering arrays (IPOG) for finite domains + boundary value synthesis for large domains | Novel — draws on Lei & Kacker (ECBS 2007), Kuhn et al. (IEEE TSE 2004), and NIST SP 800-142 |
 | Example-based generation | `reflect -> analyzeWeights -> genWithWeights` | Not yet implemented | Future opportunity |
 | Partial completion | `complete` interpreter | Not yet implemented | Future opportunity |
@@ -270,6 +286,16 @@ The correctness properties the dissertation establishes — soundness, completen
 
 Exhaust is a **faithful implementation** of the dissertation's core theory — the freer monad foundation, the reflective operation set, and the forward/backward/replay interpreter triangle are all directly traceable to Goldstein's formalization. The CGS algorithm is implemented correctly at the derivative level.
 
-Where Exhaust adds genuine novelty is in the **offline CGS pipeline** (warmup -> fitness sharing -> adaptive smoothing), the **12-pass Reducer** (adaptive probing, budget management, float specialization, cross-container redistribution), the **sequence length subdivision** preprocessing, the **reification of filter/classify/unique** into the operation set, and **automatic combinatorial coverage** via unified ChoiceTree analysis. The coverage system is particularly notable: `ChoiceTreeAnalysis` runs the generator through VACTI to produce a `ChoiceTree`, then walks it to extract a parameter model — handling not just finite domains but also large-range boundary value synthesis and sequence parameters. This approach sees through opaque bind chains that defeat recursive generator walkers, because VACTI evaluates the full generator before analysis begins. The extracted parameters feed IPOG covering arrays for t-way combinatorial coverage, composing boundary value analysis (selecting *which values* to test) with interaction testing (ensuring *combinations* of those values are covered) — the standard practice recommended by NIST SP 800-142. This leverages the inspectability of the freer monad representation in a way the dissertation doesn't explore: using a forward interpretation (VACTI) to enable structural analysis that selects a fundamentally different testing strategy.
+Where Exhaust adds genuine novelty is in:
+
+- The **reification of `map`/`bind`** as `.transform` — fusing Xia et al.'s `comap` with monadic `>>=` to make bind dependencies visible to every interpreter, enabling depth-ordered reduction.
+- The **offline CGS pipeline** (warmup → fitness sharing → adaptive smoothing).
+- The **BonsaiReducer** — 21 encoders across 5 categorical phases (Sepulveda-Jimenez), with bind-aware scheduling, Kleisli composition of encoder pairs through a generator lift, adaptive probing, budget management, float specialisation, and fibre-based exploration via covering arrays.
+- The **`Gen.recursive` combinator** — transparent recursive generator composition with per-layer CGS tuning, no dissertation equivalent.
+- The **sequence length subdivision** preprocessing.
+- The **reification of filter/classify/unique** into the operation set.
+- **Automatic combinatorial coverage** via unified ChoiceTree analysis.
+
+The coverage system is particularly notable: `ChoiceTreeAnalysis` runs the generator through VACTI to produce a `ChoiceTree`, then walks it to extract a parameter model — handling not just finite domains but also large-range boundary value synthesis and sequence parameters. This approach sees through opaque bind chains that defeat recursive generator walkers, because VACTI evaluates the full generator before analysis begins. The extracted parameters feed IPOG covering arrays for t-way combinatorial coverage, composing boundary value analysis (selecting *which values* to test) with interaction testing (ensuring *combinations* of those values are covered) — the standard practice recommended by NIST SP 800-142. This leverages the inspectability of the freer monad representation in a way the dissertation doesn't explore: using a forward interpretation (VACTI) to enable structural analysis that selects a fundamentally different testing strategy.
 
 What Exhaust hasn't yet explored are the dissertation's more **speculative interpretations** — completers, `probabilityOf`, and the example-based generation workflow. These represent the dissertation's exploration of what's possible with the freer monad representation, and they remain available as future directions since the underlying architecture supports them.

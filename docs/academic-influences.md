@@ -23,7 +23,7 @@ Primary intellectual ancestor. Exhaust is a faithful Swift translation of Goldst
 
 - Reification of `map`/`bind` as `.transform` (see Section 2).
 - Offline CGS pipeline wrapping the online algorithm (see Section 5).
-- 16 reduction encoders in place of 3 passes, organised by a categorical framework (see Section 3).
+- 21 reduction encoders in place of 3 passes, organised by a categorical framework (see Section 3).
 - Automatic combinatorial coverage via ChoiceTree analysis (see Section 4).
 
 ### Key files
@@ -32,7 +32,7 @@ Primary intellectual ancestor. Exhaust is a faithful Swift translation of Goldst
 - `Sources/ExhaustCore/Core/Types/ReflectiveOperation.swift`
 - `Sources/ExhaustCore/Interpreters/Generation/ValueAndChoiceTreeInterpreter.swift`
 - `Sources/ExhaustCore/Interpreters/Reflection/Reflect.swift`
-- `Sources/ExhaustCore/Interpreters/Replay/Materialize.swift`
+- `Sources/ExhaustCore/Interpreters/Replay/Replay.swift`
 
 ### Cross-references
 
@@ -128,7 +128,7 @@ This is the bridge between Goldstein (the representation) and Sepulveda-Jimenez 
 ### Key files
 
 - `Sources/ExhaustCore/Core/Types/ReflectiveOperation.swift` — `TransformKind.bind` with optional `backward`
-- `Sources/ExhaustCore/Core/Combinators/ReflectiveGenerator+Combinators.swift` — `bound(forward:backward:)`
+- `Sources/Exhaust/Core/ReflectiveGenerator+Combinators.swift` — `bound(forward:backward:)`
 - `Sources/ExhaustCore/Interpreters/Reflection/Reflect.swift` — bidirectional bind reflection
 
 ### Cross-references
@@ -151,7 +151,7 @@ This is the bridge between Goldstein (the representation) and Sepulveda-Jimenez 
 - **Covariant/contravariant functors** on OptRed (`Cand`, `Sol`, Section 4). Sepúlveda-Jiménez provides the directional vocabulary: covariant passes propagate changes forward through the dependency chain. The fibration theory (Section 8) provides the justification for the ordering: the covariant depth sweep within Phase 2 reduces bound-content values from minimum bind depth upward, settling shallow depths first so that deeper depths reduce in the correct context.
 - **Natural transformations as post-processing** (Section 5.3) — inspiration for the shortlex merge step that recovers optimised bound values after re-derivation.
 - **Relax-round pattern** (Section 11.2) — implemented in BonsaiScheduler's speculation leg (`runRelaxRound`) via `RelaxRoundEncoder`: when the two-phase pipeline stalls, value redistribution relaxes the objective, then prune + train passes exploit the relaxed state, with pipeline-level checkpoint acceptance.
-- **Kleisli generalisation** (Section 7) — lifting deterministic reductions to nondeterministic/randomised settings via Kleisli categories. Phase 1c's PRNG retries, where re-derivation via the guided materializer is nondeterministic, operates in this regime.
+- **Kleisli generalisation** (Section 7) — lifting deterministic reductions to nondeterministic/randomised settings via Kleisli categories. Exhaust instantiates this at two levels: (1) the `ReductionMaterializer`'s guided mode, where re-derivation via three-tier resolution (prefix → fallback tree → PRNG) is nondeterministic, and (2) the `KleisliComposition` encoder, which composes two `PointEncoder`s through a `GeneratorLift`. The upstream encoder proposes a structural mutation, the lift re-derives the fibre (producing a fresh tree and sequence via the materialiser), and the downstream encoder (typically `FibreCoveringEncoder`) searches the fibre for a failure-preserving candidate. This is a full categorical composition `dec ∘ enc₂ ∘ lift ∘ enc₁`, not just nondeterministic retries.
 
 ### Where the instantiation is domain-specific
 
@@ -161,6 +161,7 @@ The paper defines the algebra; Exhaust supplies:
 - The bind-depth ordering for dependent generators (BonsaiScheduler's covariant sweep within Phase 2)
 - The tiered decoder resolution (prefix -> fallback tree -> PRNG)
 - Deletion as a category of pass (the paper models fixed-structure reductions; deletion changes sequence length)
+- The `ProductSpaceEncoder` for batch enumeration of bind-inner product spaces (up to 3 bind regions) — a fibrewise search strategy that jointly explores correlated bind-inner values
 - **Adaptive resource estimation** in place of the paper's static resource annotations (§9). The paper models resource costs as fixed monoidal annotations `w_a` on morphisms, composed via `w_{b∘a} = w_a ⊗ w_b`. Exhaust instead computes `estimatedCost` dynamically from the current `ChoiceTree` structure (span counts, depth, sequence lengths) and each encoder's Big-O model. This re-estimates after every structural change, so the budget reflects the *current* tree shape rather than a static worst-case bound. `CycleBudget` allocates across legs using these estimates, and `LegBudget` enforces per-leg hard caps with stall patience.
 
 ### Key files
@@ -170,6 +171,9 @@ The paper defines the algebra; Exhaust supplies:
 - `Sources/ExhaustCore/Interpreters/Reduction/SequenceEncoder.swift`
 - `Sources/ExhaustCore/Interpreters/Reduction/SequenceDecoder.swift`
 - `Sources/ExhaustCore/Interpreters/Reduction/BindSpanIndex.swift`
+- `Sources/ExhaustCore/Interpreters/Reduction/PointEncoder.swift` — composable encoder protocol for Kleisli composition
+- `Sources/ExhaustCore/Interpreters/Reduction/GeneratorLift.swift` — Kleisli bind `μ: T²X → TX`, lifts mutations through the generator
+- `Sources/ExhaustCore/Interpreters/Reduction/KleisliComposition.swift` — composes two `PointEncoder`s via a `GeneratorLift`
 
 ### Cross-references
 
@@ -216,11 +220,16 @@ Exhaust's coverage system leverages the inspectability of the freer monad in a w
 
 The covering array rows are replayed through the existing `Interpreters.replay` infrastructure. The coverage budget is separate from and additive with `maxIterations` — structured coverage runs first, then random sampling runs for the full random budget.
 
+### Covering arrays in the reducer: FibreCoveringEncoder
+
+The IPOG covering array infrastructure is also reused inside the BonsaiReducer. `FibreCoveringEncoder` — a `PointEncoder` used as the downstream leg of `KleisliComposition` (Section 3) — searches a fibre for *any* failure-preserving candidate rather than minimising toward a target. It operates in two regimes: exhaustive mixed-radix enumeration for small fibres (total space ≤ 64), and pairwise (strength-2) IPOG covering for larger ones. This connects the combinatorial testing infrastructure (Section 4) with the fibration theory (Section 8): the upstream mutation selects a point in the base (trace structure), and `FibreCoveringEncoder` systematically explores the fibre above it.
+
 ### Key files
 
 - `Sources/ExhaustCore/Analysis/ChoiceTreeAnalysis.swift`
 - `Sources/ExhaustCore/Analysis/CoveringArray.swift`
-- `Sources/ExhaustCore/Analysis/CoverageRunner.swift`
+- `Sources/Exhaust/Macros/CoverageRunner.swift`
+- `Sources/ExhaustCore/Interpreters/Reduction/Encoders/FibreCoveringEncoder.swift`
 
 ### Cross-references
 
@@ -252,9 +261,9 @@ Exhaust adds three mechanisms not in the paper:
 
 ### Key files
 
-- `Sources/ExhaustCore/Interpreters/Generation/OnlineCGSInterpreter.swift`
-- `Sources/ExhaustCore/Adaptation/ChoiceGradientTuner.swift`
-- `Sources/ExhaustCore/Adaptation/GeneratorTuning.swift`
+- `Sources/ExhaustCore/Interpreters/Adaptation/OnlineCGSInterpreter.swift`
+- `Sources/ExhaustCore/Interpreters/Adaptation/ChoiceGradientTuner.swift`
+- `Sources/ExhaustCore/Interpreters/Adaptation/GeneratorTuning.swift`
 
 ### Cross-references
 
@@ -283,9 +292,9 @@ This paper deserves individual treatment, not just a mention under "Hypothesis."
 
 - **Generator/reducer co-design** (Section 3.3). The paper notes that designing generators to be "reduction friendly" — e.g., generating lists by drawing a per-element continue/stop bit rather than drawing a length first — makes structural deletions O(n) instead of O(n^2). Exhaust's `.sequence` operation is the reified version of this: it encodes array boundaries as `.sequence(true/false)` markers in the `ChoiceSequence`, so the reducer can delete elements by removing the region between markers without needing to adjust a separate length entry.
 
-- **The 15-pass reducer architecture** (Section 3.1). Hypothesis 5.15.1 had 15 passes across 5 categories: contiguous deletion (6), sub-region replacement (1), zero-fill (1), lexicographic reduction (4), and simultaneous reduce-and-delete (3). Exhaust's 16 encoders across 5 phases are a direct descendant — expanded with bind-aware passes and reorganised by the categorical framework from Sepulveda-Jimenez, but covering the same operational space.
+- **The 15-pass reducer architecture** (Section 3.1). Hypothesis 5.15.1 had 15 passes across 5 categories: contiguous deletion (6), sub-region replacement (1), zero-fill (1), lexicographic reduction (4), and simultaneous reduce-and-delete (3). Exhaust's 21 encoders across 5 phases are a direct descendant — expanded with bind-aware passes, Kleisli composition, and fibre-based exploration, reorganised by the categorical framework from Sepulveda-Jimenez, but covering the same operational space.
 
-- **The `find_integer` adaptive binary search** (from MacIver's blog post "Improving Binary Search by Guessing", 2019). An O(log n) search that finds the largest integer satisfying a predicate by exponential probing followed by binary search — achieving logarithmic complexity relative to the *answer* rather than the search space. Exhaust's `BinarySearchToZeroEncoder` and `BinarySearchToTargetEncoder` implement this pattern as `AdaptiveEncoder` conformances.
+- **The `find_integer` adaptive binary search** (from MacIver's blog post "Improving Binary Search by Guessing", 2019). An O(log n) search that finds the largest integer satisfying a predicate by exponential probing followed by binary search — achieving logarithmic complexity relative to the *answer* rather than the search space. Exhaust's `ZeroValueEncoder`, `BinarySearchToSemanticSimplestEncoder`, and `BinarySearchToRangeMinimumEncoder` implement this pattern as `AdaptiveEncoder` conformances.
 
 - **Integrated shrinking.** Hypothesis pioneered the idea that shrinking should be built into the generator infrastructure rather than requiring users to write separate `shrink` functions per type (the QuickCheck `Arbitrary` model). This had a huge influence — Goldstein's dissertation explicitly builds on it, and Exhaust inherits the principle completely: users never write shrinking logic. The generator's choice structure *is* the shrinking strategy. MacIver & Donaldson's ECOOP 2020 paper formalises this as internal reduction, and Goldstein's freer monad representation takes it further by making the choice structure inspectable. But the foundational insight — that shrinking is a property of the *randomness consumed*, not the *value produced* — originates with Hypothesis.
 
@@ -354,6 +363,7 @@ The standard reference for fibration theory. Exhaust uses:
 - **Uniqueness of cartesian lifts** (§1.1, Proposition 1.1.4) — motivates doing exactly one guided materialisation attempt before falling back to PRNG, since the canonical projection is essentially unique. Implemented as the regime probe in Phase 1c.
 - **Composition of cartesian morphisms** (§1.1, Exercise 1.1.4(ii); §1.5, Lemma 1.5.5) — motivates the `MutationPool` in Phase 1b, which composes non-overlapping structural deletions.
 - **Bifibrations and the `g! ⊣ g*` adjunction** (§9.1, Lemma 9.1.2; §1.9, Proposition 1.9.8) — the cocartesian direction `g!` provides the theoretical basis for the scaffolded counit test in the regime probe's unknown branch.
+- **Fibrewise search** — the `FibreCoveringEncoder` (Section 4) is a direct application of fibrewise reasoning: given a fixed base point (trace structure from an upstream mutation), it systematically explores the fibre above it using covering arrays. `KleisliComposition` implements the categorical structure: the upstream `PointEncoder` selects a base morphism, `GeneratorLift` computes the cartesian lift, and `FibreCoveringEncoder` searches the resulting fibre.
 
 **Hermida, "Some Properties of Fib as a Fibred 2-Category" (JPAA, 1999)**
 
