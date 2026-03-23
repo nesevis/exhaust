@@ -241,12 +241,9 @@ struct ProductSpaceBatchEncoder: BatchEncoder {
 /// Delta-debug coordinate halving for k > 3 bind-inner values.
 ///
 /// Halves all active coordinates simultaneously, then uses delta-debugging to find the maximal accepted subset on rejection.
-struct ProductSpaceAdaptiveEncoder: AdaptiveEncoder {
+struct ProductSpaceAdaptiveEncoder: ComposableEncoder {
     let name: EncoderName = .productSpaceAdaptive
     let phase = ReductionPhase.valueMinimization
-
-    /// Set by the caller before invocation.
-    var bindIndex: BindSpanIndex?
 
     func estimatedCost(sequence _: ChoiceSequence, bindIndex: BindSpanIndex?) -> Int? {
         guard let bindIndex, bindIndex.regions.count > 3 else { return nil }
@@ -255,6 +252,28 @@ struct ProductSpaceAdaptiveEncoder: AdaptiveEncoder {
         let logK = count.bitWidth - count.leadingZeroBitCount
         return count * 64 * max(1, logK)
     }
+
+    // MARK: - ComposableEncoder
+
+    func estimatedCost(
+        sequence: ChoiceSequence,
+        tree: ChoiceTree,
+        positionRange: ClosedRange<Int>,
+        context: ReductionContext
+    ) -> Int? {
+        estimatedCost(sequence: sequence, bindIndex: context.bindIndex)
+    }
+
+    mutating func start(
+        sequence: ChoiceSequence,
+        tree: ChoiceTree,
+        positionRange: ClosedRange<Int>,
+        context: ReductionContext
+    ) {
+        startInternal(sequence: sequence, bindIndex: context.bindIndex)
+    }
+
+    var convergenceRecords: [Int: ConvergedOrigin] { [:] }
 
     // MARK: - State
 
@@ -278,9 +297,9 @@ struct ProductSpaceAdaptiveEncoder: AdaptiveEncoder {
     private var sequence = ChoiceSequence()
     private var savedEntries: [(coordIndex: Int, saved: ChoiceSequenceValue)] = []
 
-    // MARK: - AdaptiveEncoder
+    // MARK: - Internal
 
-    mutating func start(sequence: ChoiceSequence, targets _: TargetSet, convergedOrigins _: [Int: ConvergedOrigin]?) {
+    private mutating func startInternal(sequence: ChoiceSequence, bindIndex: BindSpanIndex?) {
         self.sequence = sequence
         coordinates = []
         savedEntries = []

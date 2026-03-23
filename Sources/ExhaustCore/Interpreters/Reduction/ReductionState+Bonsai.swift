@@ -716,11 +716,13 @@ extension ReductionState {
                 fallbackTree: nil, usePRNGFallback: true,
                 prngSalt: UInt64(cycle)
             )
-            productSpaceAdaptiveEncoder.bindIndex = bindSpanIndex
+            let adaptiveContext = ReductionContext(bindIndex: bindSpanIndex)
             while legBudget.isExhausted == false {
-                if try runAdaptive(
+                if try runComposable(
                     productSpaceAdaptiveEncoder, decoder: adaptivePRNGDecoder,
-                    targets: .wholeSequence, structureChanged: true,
+                    positionRange: 0 ... max(0, sequence.count - 1),
+                    context: adaptiveContext,
+                    structureChanged: true,
                     budget: &legBudget
                 ) {
                     accepted += 1
@@ -1052,15 +1054,13 @@ extension ReductionState {
             let redistDecoder = SequenceDecoder.for(redistContext)
 
             // Tandem reduction on sibling groups.
-            let allSiblings = ChoiceSequence.extractSiblingGroups(from: sequence)
-            if allSiblings.isEmpty == false {
-                if try runAdaptive(
-                    tandemEncoder, decoder: redistDecoder,
-                    targets: .siblingGroups(allSiblings),
-                    structureChanged: hasBind, budget: &legBudget
-                ) {
-                    anyAccepted = true
-                }
+            let tandemContext = ReductionContext(bindIndex: bindIndex, dag: dag)
+            if try runComposable(
+                tandemEncoder, decoder: redistDecoder,
+                positionRange: fullRange, context: tandemContext,
+                structureChanged: hasBind, budget: &legBudget
+            ) {
+                anyAccepted = true
             }
 
             // Cross-stage redistribution.

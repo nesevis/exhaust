@@ -279,8 +279,12 @@ struct ProductSpaceEncoderTests {
         let bindIndex = BindSpanIndex(from: sequence)
 
         var encoder = ProductSpaceAdaptiveEncoder()
-        encoder.bindIndex = bindIndex
-        encoder.start(sequence: sequence, targets: .wholeSequence)
+        encoder.start(
+            sequence: sequence,
+            tree: tree,
+            positionRange: 0 ... max(0, sequence.count - 1),
+            context: ReductionContext(bindIndex: bindIndex)
+        )
 
         // First probe should halve all four coordinates.
         let probe = encoder.nextProbe(lastAccepted: false)
@@ -310,8 +314,12 @@ struct ProductSpaceEncoderTests {
         let bindIndex = BindSpanIndex(from: sequence)
 
         var encoder = ProductSpaceAdaptiveEncoder()
-        encoder.bindIndex = bindIndex
-        encoder.start(sequence: sequence, targets: .wholeSequence)
+        encoder.start(
+            sequence: sequence,
+            tree: tree,
+            positionRange: 0 ... max(0, sequence.count - 1),
+            context: ReductionContext(bindIndex: bindIndex)
+        )
 
         // First probe: halve all four.
         let firstProbe = encoder.nextProbe(lastAccepted: false)

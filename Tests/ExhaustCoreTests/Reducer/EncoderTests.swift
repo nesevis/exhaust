@@ -269,18 +269,16 @@ struct BinarySearchToSemanticSimplestEncoderTests {
 
 @Suite("RedistributeByTandemReductionEncoder")
 struct RedistributeByTandemReductionEncoderTests {
-    @Test("Empty sibling groups produce no probes")
-    func emptySiblingGroups() {
+    @Test("Flat sequence with no sibling groups produces no probes")
+    func noSiblingGroups() {
+        let seq = makeSequence([5, 10])
         var encoder = RedistributeByTandemReductionEncoder()
-        encoder.start(sequence: makeSequence([5, 10]), targets: .siblingGroups([]))
-        let probe = encoder.nextProbe(lastAccepted: false)
-        #expect(probe == nil)
-    }
-
-    @Test("Wrong target type produces no probes")
-    func wrongTargetType() {
-        var encoder = RedistributeByTandemReductionEncoder()
-        encoder.start(sequence: makeSequence([5, 10]), targets: .wholeSequence)
+        encoder.start(
+            sequence: seq,
+            tree: .just(""),
+            positionRange: 0 ... max(0, seq.count - 1),
+            context: ReductionContext()
+        )
         let probe = encoder.nextProbe(lastAccepted: false)
         #expect(probe == nil)
     }
@@ -298,7 +296,12 @@ struct RedistributeByTandemReductionEncoderTests {
         let groups = ChoiceSequence.extractSiblingGroups(from: seq)
 
         var encoder = RedistributeByTandemReductionEncoder()
-        encoder.start(sequence: seq, targets: .siblingGroups(groups))
+        encoder.start(
+            sequence: seq,
+            tree: tree,
+            positionRange: 0 ... max(0, seq.count - 1),
+            context: ReductionContext()
+        )
         let probe = encoder.nextProbe(lastAccepted: false)
         #expect(probe == nil)
     }
@@ -318,7 +321,12 @@ struct RedistributeByTandemReductionEncoderTests {
         #expect(groups.isEmpty == false)
 
         var encoder = RedistributeByTandemReductionEncoder()
-        encoder.start(sequence: seq, targets: .siblingGroups(groups))
+        encoder.start(
+            sequence: seq,
+            tree: tree,
+            positionRange: 0 ... max(0, seq.count - 1),
+            context: ReductionContext()
+        )
 
         var probes: [ChoiceSequence] = []
         var accepted = false
@@ -344,7 +352,12 @@ struct RedistributeByTandemReductionEncoderTests {
         let groups = ChoiceSequence.extractSiblingGroups(from: seq)
 
         var encoder = RedistributeByTandemReductionEncoder()
-        encoder.start(sequence: seq, targets: .siblingGroups(groups))
+        encoder.start(
+            sequence: seq,
+            tree: tree,
+            positionRange: 0 ... max(0, seq.count - 1),
+            context: ReductionContext()
+        )
 
         var lastProbe: ChoiceSequence?
         var probeCount = 0
@@ -377,7 +390,12 @@ struct RedistributeByTandemReductionEncoderTests {
         let groups = ChoiceSequence.extractSiblingGroups(from: seq)
 
         var encoder = RedistributeByTandemReductionEncoder()
-        encoder.start(sequence: seq, targets: .siblingGroups(groups))
+        encoder.start(
+            sequence: seq,
+            tree: tree,
+            positionRange: 0 ... max(0, seq.count - 1),
+            context: ReductionContext()
+        )
 
         var probeCount = 0
         while let _ = encoder.nextProbe(lastAccepted: false) {
@@ -404,7 +422,12 @@ struct RedistributeByTandemReductionEncoderTests {
         let groups = ChoiceSequence.extractSiblingGroups(from: seq)
 
         var encoder = RedistributeByTandemReductionEncoder()
-        encoder.start(sequence: seq, targets: .siblingGroups(groups))
+        encoder.start(
+            sequence: seq,
+            tree: tree,
+            positionRange: 0 ... max(0, seq.count - 1),
+            context: ReductionContext()
+        )
         let probe = encoder.nextProbe(lastAccepted: false)
         #expect(probe == nil)
     }
@@ -426,7 +449,12 @@ struct RedistributeByTandemReductionEncoderTests {
         let groups = ChoiceSequence.extractSiblingGroups(from: seq)
 
         var encoder = RedistributeByTandemReductionEncoder()
-        encoder.start(sequence: seq, targets: .siblingGroups(groups))
+        encoder.start(
+            sequence: seq,
+            tree: tree,
+            positionRange: 0 ... max(0, seq.count - 1),
+            context: ReductionContext()
+        )
 
         // With mixed tags (one uint64, one uint32), each tag has only 1 entry,
         // so no tandem pair can be formed. Should produce no probes.
