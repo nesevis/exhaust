@@ -39,10 +39,6 @@ public struct BinarySearchToSemanticSimplestEncoder: ComposableEncoder {
         inner.start(sequence: sequence, tree: tree, positionRange: positionRange, context: context)
     }
 
-    public mutating func start(sequence: ChoiceSequence, targets: TargetSet, convergedOrigins: [Int: ConvergedOrigin]? = nil) {
-        inner.start(sequence: sequence, targets: targets, convergedOrigins: convergedOrigins)
-    }
-
     public mutating func nextProbe(lastAccepted: Bool) -> ChoiceSequence? {
         inner.nextProbe(lastAccepted: lastAccepted)
     }

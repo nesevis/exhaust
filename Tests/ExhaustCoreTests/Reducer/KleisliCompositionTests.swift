@@ -21,7 +21,7 @@ struct KleisliCompositionTests {
         // Direct encoder call
         let allSpans = ChoiceSequence.extractAllValueSpans(from: sequence)
         var directEncoder = ZeroValueEncoder()
-        directEncoder.start(sequence: sequence, targets: .spans(allSpans), convergedOrigins: nil)
+        directEncoder.start(sequence: sequence, tree: .just(""), positionRange: 0 ... max(0, sequence.count - 1), context: ReductionContext())
         var directProbes: [ChoiceSequence] = []
         while let probe = directEncoder.nextProbe(lastAccepted: false) {
             directProbes.append(probe)

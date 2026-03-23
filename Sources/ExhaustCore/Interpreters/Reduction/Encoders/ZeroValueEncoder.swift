@@ -57,20 +57,13 @@ public struct ZeroValueEncoder: ComposableEncoder {
     ) {
         currentCycle = context.cycle
         let spans = Self.extractFilteredSpans(from: sequence, in: positionRange, context: context)
-        start(sequence: sequence, targets: .spans(spans), convergedOrigins: context.convergedOrigins)
-    }
 
-    // MARK: - AdaptiveEncoder
-
-    public mutating func start(sequence: ChoiceSequence, targets: TargetSet, convergedOrigins _: [Int: ConvergedOrigin]? = nil) {
         self.sequence = sequence
         zeroPhase = .allAtOnce
         spanIndex = 0
         filteredSpans = []
         batchRejected = false
         individuallyAccepted = []
-
-        guard case let .spans(spans) = targets else { return }
 
         for span in spans {
             let seqIdx = span.range.lowerBound

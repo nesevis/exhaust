@@ -63,16 +63,12 @@ struct ZeroValueEncoderTests {
         }
     }
 
-    @Test("Empty targets produce no candidates")
-    func emptyTargets() {
-        let candidates = collectZeroValueProbes(sequence: makeSequence([5]), spans: [])
-        #expect(candidates.isEmpty)
-    }
-
-    @Test("Wrong target type produces no candidates")
-    func wrongTargetType() {
+    @Test("Position range with no values produces no candidates")
+    func emptyPositionRange() {
         var encoder = ZeroValueEncoder()
-        encoder.start(sequence: makeSequence([5]), targets: .wholeSequence)
+        let seq = makeSequence([5])
+        // Position range beyond the sequence — no spans to extract.
+        encoder.start(sequence: seq, tree: .just(""), positionRange: 100 ... 100, context: ReductionContext())
         let probe = encoder.nextProbe(lastAccepted: false)
         #expect(probe == nil)
     }
@@ -82,7 +78,7 @@ struct ZeroValueEncoderTests {
         let seq = makeSequence([5, 7, 3])
         let spans = allValueSpans(from: seq)
         var encoder = ZeroValueEncoder()
-        encoder.start(sequence: seq, targets: .spans(spans))
+        encoder.start(sequence: seq, tree: .just(""), positionRange: positionRange(from: spans), context: ReductionContext())
 
         // First probe: all-at-once (zeros all values).
         let allAtOnce = encoder.nextProbe(lastAccepted: false)
@@ -224,7 +220,7 @@ struct BinarySearchToSemanticSimplestEncoderTests {
         let seq = makeSequence([8])
         let spans = allValueSpans(from: seq)
         var encoder = BinarySearchToSemanticSimplestEncoder()
-        encoder.start(sequence: seq, targets: TargetSet.spans(spans))
+        encoder.start(sequence: seq, tree: .just(""), positionRange: positionRange(from: spans), context: ReductionContext())
 
         var probes: [ChoiceSequence] = []
         var accepted = false
@@ -243,7 +239,7 @@ struct BinarySearchToSemanticSimplestEncoderTests {
         let seq = makeSequence([0, 5])
         let spans = allValueSpans(from: seq)
         var encoder = BinarySearchToSemanticSimplestEncoder()
-        encoder.start(sequence: seq, targets: TargetSet.spans(spans))
+        encoder.start(sequence: seq, tree: .just(""), positionRange: positionRange(from: spans), context: ReductionContext())
 
         // Only index 1 should be probed.
         var probeCount = 0
@@ -256,10 +252,10 @@ struct BinarySearchToSemanticSimplestEncoderTests {
         #expect(probeCount > 0)
     }
 
-    @Test("Empty targets produce no probes")
-    func emptyTargets() {
+    @Test("Position range with no values produces no probes")
+    func emptyPositionRange() {
         var encoder = BinarySearchToSemanticSimplestEncoder()
-        encoder.start(sequence: makeSequence([5]), targets: TargetSet.spans([]))
+        encoder.start(sequence: makeSequence([5]), tree: .just(""), positionRange: 100 ... 100, context: ReductionContext())
         let probe = encoder.nextProbe(lastAccepted: false)
         #expect(probe == nil)
     }
@@ -606,7 +602,7 @@ struct RedistributeAcrossValueContainersEncoderTests {
     func emptySequence() {
         let seq = ChoiceSequence()
         var encoder = RedistributeAcrossValueContainersEncoder()
-        encoder.start(sequence: seq, targets: .wholeSequence)
+        encoder.start(sequence: seq, tree: .just(""), positionRange: 0 ... max(0, seq.count - 1), context: ReductionContext())
         let probe = encoder.nextProbe(lastAccepted: false)
         #expect(probe == nil)
     }
@@ -615,16 +611,7 @@ struct RedistributeAcrossValueContainersEncoderTests {
     func singleValue() {
         let seq = makeSequence([42])
         var encoder = RedistributeAcrossValueContainersEncoder()
-        encoder.start(sequence: seq, targets: .wholeSequence)
-        let probe = encoder.nextProbe(lastAccepted: false)
-        #expect(probe == nil)
-    }
-
-    @Test("Wrong target type produces no probes")
-    func wrongTargetType() {
-        let seq = makeSequence([5, 10])
-        var encoder = RedistributeAcrossValueContainersEncoder()
-        encoder.start(sequence: seq, targets: .spans([]))
+        encoder.start(sequence: seq, tree: .just(""), positionRange: 0 ... max(0, seq.count - 1), context: ReductionContext())
         let probe = encoder.nextProbe(lastAccepted: false)
         #expect(probe == nil)
     }
@@ -635,7 +622,7 @@ struct RedistributeAcrossValueContainersEncoderTests {
         // Value 30 can compensate by increasing.
         let seq = makeSequence([50, 30])
         var encoder = RedistributeAcrossValueContainersEncoder()
-        encoder.start(sequence: seq, targets: .wholeSequence)
+        encoder.start(sequence: seq, tree: .just(""), positionRange: 0 ... max(0, seq.count - 1), context: ReductionContext())
 
         var probes: [ChoiceSequence] = []
         var accepted = false
@@ -651,7 +638,7 @@ struct RedistributeAcrossValueContainersEncoderTests {
     func allAcceptedConverges() {
         let seq = makeSequence([50, 30])
         var encoder = RedistributeAcrossValueContainersEncoder()
-        encoder.start(sequence: seq, targets: .wholeSequence)
+        encoder.start(sequence: seq, tree: .just(""), positionRange: 0 ... max(0, seq.count - 1), context: ReductionContext())
 
         var probeCount = 0
         while let _ = encoder.nextProbe(lastAccepted: true) {
@@ -668,7 +655,7 @@ struct RedistributeAcrossValueContainersEncoderTests {
         // Both values are 0 (the reduction target for unsigned integers).
         let seq = makeSequence([0, 0])
         var encoder = RedistributeAcrossValueContainersEncoder()
-        encoder.start(sequence: seq, targets: .wholeSequence)
+        encoder.start(sequence: seq, tree: .just(""), positionRange: 0 ... max(0, seq.count - 1), context: ReductionContext())
         let probe = encoder.nextProbe(lastAccepted: false)
         #expect(probe == nil)
     }
@@ -787,7 +774,7 @@ private func generateForEncoder<Output>(
 /// Collects all probes from a ZeroValueEncoder, rejecting every probe.
 private func collectZeroValueProbes(sequence: ChoiceSequence, spans: [ChoiceSpan]) -> [ChoiceSequence] {
     var encoder = ZeroValueEncoder()
-    encoder.start(sequence: sequence, targets: .spans(spans))
+    encoder.start(sequence: sequence, tree: .just(""), positionRange: positionRange(from: spans), context: ReductionContext())
     var results: [ChoiceSequence] = []
     while let probe = encoder.nextProbe(lastAccepted: false) {
         results.append(probe)
@@ -807,4 +794,9 @@ private func makeTaggedGenForEncoder() -> ReflectiveGenerator<(Int, Int)> {
     )
     let pickGen = Gen.pick(choices: [(1, smallBranch), (1, bigBranch)])
     return Gen.zip(pickGen, pickGen)
+}
+
+private func positionRange(from spans: [ChoiceSpan]) -> ClosedRange<Int> {
+    guard spans.isEmpty == false else { return 0 ... 0 }
+    return spans.map(\.range.lowerBound).min()! ... spans.map(\.range.upperBound).max()!
 }

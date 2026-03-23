@@ -34,23 +34,9 @@ public struct RelaxRoundEncoder: ComposableEncoder {
         positionRange: ClosedRange<Int>,
         context: ReductionContext
     ) {
-        start(sequence: sequence, targets: .wholeSequence, convergedOrigins: nil)
-    }
-
-    // MARK: - State
-
-    private var sequence = ChoiceSequence()
-    private var probes: [(lhsIndex: Int, rhsIndex: Int)] = []
-    private var probeIndex = 0
-
-    // MARK: - AdaptiveEncoder
-
-    public mutating func start(sequence: ChoiceSequence, targets: TargetSet, convergedOrigins _: [Int: ConvergedOrigin]? = nil) {
         self.sequence = sequence
         probes = []
         probeIndex = 0
-
-        guard case .wholeSequence = targets else { return }
 
         var candidates: [(index: Int, value: ChoiceSequenceValue.Value)] = []
         var index = 0
@@ -86,6 +72,12 @@ public struct RelaxRoundEncoder: ComposableEncoder {
             Self.distance(at: lhs.lhsIndex, in: seq) > Self.distance(at: rhs.lhsIndex, in: seq)
         }
     }
+
+    // MARK: - State
+
+    private var sequence = ChoiceSequence()
+    private var probes: [(lhsIndex: Int, rhsIndex: Int)] = []
+    private var probeIndex = 0
 
     public mutating func nextProbe(lastAccepted _: Bool) -> ChoiceSequence? {
         while probeIndex < probes.count {

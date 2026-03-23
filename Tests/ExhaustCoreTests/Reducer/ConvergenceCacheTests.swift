@@ -118,7 +118,7 @@ struct ConvergedOriginProbeSavingsTests {
         let spans = extractValueSpans(from: seq)
 
         var encoder = BinarySearchToSemanticSimplestEncoder()
-        encoder.start(sequence: seq, targets: .spans(spans), convergedOrigins: nil)
+        encoder.start(sequence: seq, tree: .just(""), positionRange: 0 ... max(0, seq.count - 1), context: ReductionContext())
         while encoder.nextProbe(lastAccepted: false) != nil {}
 
         let records = encoder.convergenceRecords
@@ -163,7 +163,7 @@ struct ValidationProbeTests {
         ]
 
         var encoder = BinarySearchToRangeMinimumEncoder()
-        encoder.start(sequence: seq, targets: .spans(spans), convergedOrigins: convergedOrigins)
+        encoder.start(sequence: seq, tree: .just(""), positionRange: 0 ... max(0, seq.count - 1), context: ReductionContext(convergedOrigins: convergedOrigins))
 
         var probeValues: [UInt64] = []
         while let probe = encoder.nextProbe(lastAccepted: false) {
@@ -188,7 +188,7 @@ struct ValidationProbeTests {
         ]
 
         var encoder = BinarySearchToRangeMinimumEncoder()
-        encoder.start(sequence: seq, targets: .spans(spans), convergedOrigins: convergedOrigins)
+        encoder.start(sequence: seq, tree: .just(""), positionRange: 0 ... max(0, seq.count - 1), context: ReductionContext(convergedOrigins: convergedOrigins))
 
         var probeValues: [UInt64] = []
         var lastAccepted = false

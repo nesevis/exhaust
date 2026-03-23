@@ -65,8 +65,73 @@ public struct BinarySearchEncoder: ComposableEncoder {
         context: ReductionContext
     ) {
         currentCycle = context.cycle
+        self.sequence = sequence
+        self.targets = []
+        currentIndex = 0
+        needsFirstProbe = true
+        searchPhase = .binarySearch
+        savedEntry = nil
+        convergenceRecords = [:]
+
         let spans = Self.extractFilteredSpans(from: sequence, in: positionRange, context: context)
-        start(sequence: sequence, targets: .spans(spans), convergedOrigins: context.convergedOrigins)
+        let convergedOrigins = context.convergedOrigins
+
+        var index = 0
+        while index < spans.count {
+            let seqIdx = spans[index].range.lowerBound
+            guard let value = sequence[seqIdx].value else {
+                index += 1
+                continue
+            }
+            if value.choice.tag == .float || value.choice.tag == .double {
+                index += 1
+                continue
+            }
+            let currentBP = value.choice.bitPattern64
+            let isWithinRecordedRange = value.isRangeExplicit && value.choice.fits(in: value.validRange)
+            let targetBP = isWithinRecordedRange
+                ? value.choice.reductionTarget(in: value.validRange)
+                : value.choice.semanticSimplest.bitPattern64
+            guard currentBP != targetBP else {
+                index += 1
+                continue
+            }
+
+            // In rangeMinimum mode, only search downward — skip targets below the current value.
+            if configuration == .rangeMinimum, currentBP < targetBP {
+                index += 1
+                continue
+            }
+
+            let convergedOrigin = convergedOrigins?[seqIdx]
+            let isConvergedOrigined: Bool
+            let effectiveBound: UInt64
+            let stepper: DirectionalStepper
+
+            if currentBP > targetBP {
+                let validConvergedOrigin = (convergedOrigin?.configuration == encoderConfiguration) ? convergedOrigin : nil
+                effectiveBound = validConvergedOrigin?.bound ?? targetBP
+                isConvergedOrigined = validConvergedOrigin != nil
+                stepper = .downward(BinarySearchStepper(lo: effectiveBound, hi: currentBP))
+            } else {
+                let validConvergedOrigin = (convergedOrigin?.configuration == encoderConfiguration) ? convergedOrigin : nil
+                effectiveBound = validConvergedOrigin?.bound ?? targetBP
+                isConvergedOrigined = validConvergedOrigin != nil
+                stepper = .upward(MaxBinarySearchStepper(lo: currentBP, hi: effectiveBound))
+            }
+
+            self.targets.append(TargetState(
+                seqIdx: seqIdx,
+                validRange: value.validRange,
+                isRangeExplicit: value.isRangeExplicit,
+                choiceTag: value.choice.tag,
+                targetBP: targetBP,
+                stepper: stepper,
+                isConvergedOrigined: isConvergedOrigined,
+                convergedOriginBound: effectiveBound
+            ))
+            index += 1
+        }
     }
 
     // MARK: - State
@@ -138,65 +203,6 @@ public struct BinarySearchEncoder: ComposableEncoder {
         switch configuration {
         case .rangeMinimum: 64
         case .semanticSimplest: 80
-        }
-    }
-
-    // MARK: - Start
-
-    public mutating func start(sequence: ChoiceSequence, targets: TargetSet, convergedOrigins: [Int: ConvergedOrigin]? = nil) {
-        self.sequence = sequence
-        self.targets = []
-        currentIndex = 0
-        needsFirstProbe = true
-        searchPhase = .binarySearch
-        savedEntry = nil
-        convergenceRecords = [:]
-
-        guard case let .spans(spans) = targets else { return }
-
-        var index = 0
-        while index < spans.count {
-            let seqIdx = spans[index].range.lowerBound
-            guard let value = sequence[seqIdx].value else { index += 1; continue }
-            if value.choice.tag == .float || value.choice.tag == .double { index += 1; continue }
-            let currentBP = value.choice.bitPattern64
-            let isWithinRecordedRange = value.isRangeExplicit && value.choice.fits(in: value.validRange)
-            let targetBP = isWithinRecordedRange
-                ? value.choice.reductionTarget(in: value.validRange)
-                : value.choice.semanticSimplest.bitPattern64
-            guard currentBP != targetBP else { index += 1; continue }
-
-            // In rangeMinimum mode, only search downward — skip targets below the current value.
-            if configuration == .rangeMinimum, currentBP < targetBP { index += 1; continue }
-
-            let convergedOrigin = convergedOrigins?[seqIdx]
-            let isConvergedOrigined: Bool
-            let effectiveBound: UInt64
-            let stepper: DirectionalStepper
-
-            if currentBP > targetBP {
-                let validConvergedOrigin = (convergedOrigin?.configuration == encoderConfiguration) ? convergedOrigin : nil
-                effectiveBound = validConvergedOrigin?.bound ?? targetBP
-                isConvergedOrigined = validConvergedOrigin != nil
-                stepper = .downward(BinarySearchStepper(lo: effectiveBound, hi: currentBP))
-            } else {
-                let validConvergedOrigin = (convergedOrigin?.configuration == encoderConfiguration) ? convergedOrigin : nil
-                effectiveBound = validConvergedOrigin?.bound ?? targetBP
-                isConvergedOrigined = validConvergedOrigin != nil
-                stepper = .upward(MaxBinarySearchStepper(lo: currentBP, hi: effectiveBound))
-            }
-
-            self.targets.append(TargetState(
-                seqIdx: seqIdx,
-                validRange: value.validRange,
-                isRangeExplicit: value.isRangeExplicit,
-                choiceTag: value.choice.tag,
-                targetBP: targetBP,
-                stepper: stepper,
-                isConvergedOrigined: isConvergedOrigined,
-                convergedOriginBound: effectiveBound
-            ))
-            index += 1
         }
     }
 

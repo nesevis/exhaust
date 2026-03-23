@@ -49,7 +49,44 @@ struct ReduceFloatEncoder: ComposableEncoder {
     ) {
         currentCycle = context.cycle
         let spans = Self.extractFilteredSpans(from: sequence, in: positionRange, context: context)
-        start(sequence: sequence, targets: .spans(spans), convergedOrigins: context.convergedOrigins)
+        let convergedOrigins = context.convergedOrigins
+
+        self.sequence = sequence
+        self.targets = []
+        currentTargetIndex = 0
+        stage = .specialValues
+        batchCandidates = []
+        batchIndex = 0
+        needsFirstProbe = true
+        convergenceRecords = [:]
+
+        for span in spans {
+            let seqIdx = span.range.lowerBound
+            guard let v = sequence[seqIdx].value else { continue }
+            let choiceTag = v.choice.tag
+            guard choiceTag == .double || choiceTag == .float else { continue }
+            guard case let .floating(floatingValue, _, _) = v.choice else { continue }
+
+            // Stage-skip: if the warm start bound matches the current bit pattern,
+            // the value is unchanged since last convergence — skip batch stages.
+            let skipBatchStages: Stage? = if let convergedOrigin = convergedOrigins?[seqIdx],
+                                             convergedOrigin.bound == v.choice.bitPattern64
+            {
+                .integralBinarySearch
+            } else {
+                nil
+            }
+
+            self.targets.append(FloatTarget(
+                seqIdx: seqIdx,
+                tag: choiceTag,
+                validRange: v.validRange,
+                isRangeExplicit: v.isRangeExplicit,
+                currentValue: floatingValue,
+                currentBitPattern: v.choice.bitPattern64,
+                initialStage: skipBatchStages
+            ))
+        }
     }
 
     // MARK: - Types
@@ -99,49 +136,6 @@ struct ReduceFloatEncoder: ComposableEncoder {
     private var ratioRemainder: Int64 = 0
     private var ratioIntegerPart: Int64 = 0
     private var ratioDistance: UInt64 = 0
-
-    // MARK: - AdaptiveEncoder
-
-    mutating func start(sequence: ChoiceSequence, targets: TargetSet, convergedOrigins: [Int: ConvergedOrigin]? = nil) {
-        self.sequence = sequence
-        self.targets = []
-        currentTargetIndex = 0
-        stage = .specialValues
-        batchCandidates = []
-        batchIndex = 0
-        needsFirstProbe = true
-        convergenceRecords = [:]
-
-        guard case let .spans(spans) = targets else { return }
-
-        for span in spans {
-            let seqIdx = span.range.lowerBound
-            guard let v = sequence[seqIdx].value else { continue }
-            let choiceTag = v.choice.tag
-            guard choiceTag == .double || choiceTag == .float else { continue }
-            guard case let .floating(floatingValue, _, _) = v.choice else { continue }
-
-            // Stage-skip: if the warm start bound matches the current bit pattern,
-            // the value is unchanged since last convergence — skip batch stages.
-            let skipBatchStages: Stage? = if let convergedOrigin = convergedOrigins?[seqIdx],
-                                             convergedOrigin.bound == v.choice.bitPattern64
-            {
-                .integralBinarySearch
-            } else {
-                nil
-            }
-
-            self.targets.append(FloatTarget(
-                seqIdx: seqIdx,
-                tag: choiceTag,
-                validRange: v.validRange,
-                isRangeExplicit: v.isRangeExplicit,
-                currentValue: floatingValue,
-                currentBitPattern: v.choice.bitPattern64,
-                initialStage: skipBatchStages
-            ))
-        }
-    }
 
     mutating func nextProbe(lastAccepted: Bool) -> ChoiceSequence? {
         while currentTargetIndex < targets.count {
