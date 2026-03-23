@@ -134,20 +134,44 @@ struct EncoderFactory {
 
     // MARK: - Composition descriptors
 
-    /// Builds ``KleisliComposition`` instances for each CDG reduction edge.
+    /// A composition edge paired with its fibre prediction, ready for execution.
+    struct CompositionEdge<Output> {
+        var composition: KleisliComposition<Output>
+        let prediction: FibrePrediction
+        let edge: ReductionEdge
+    }
+
+    /// Builds composition edges from CDG reduction edges, ordered by predicted fibre size.
     ///
-    /// Each edge produces a composition wiring an upstream encoder (binary search on the
-    /// bind-inner value) to a downstream encoder (fibre covering) through a generator lift.
-    /// The caller runs the compositions with warm-start validation in ``runKleisliExploration``.
+    /// Each edge gets a discovery lift at the upstream's reduction target to predict the
+    /// downstream fibre size. Edges predicted as too large (> 20 parameters, downstream
+    /// encoder would bail with 0 probes) are excluded. Remaining edges are ordered by
+    /// ascending predicted fibre size — cheaper edges first.
     static func compositionDescriptors<Output>(
         edges: [ReductionEdge],
         gen: FreerMonad<ReflectiveOperation, Output>,
+        sequence: ChoiceSequence,
         tree: ChoiceTree,
-        fallbackTree: ChoiceTree?,
-        budgetPerEdge: Int
-    ) -> [KleisliComposition<Output>] {
-        edges.map { edge in
-            KleisliComposition(
+        fallbackTree: ChoiceTree?
+    ) -> [CompositionEdge<Output>] {
+        var result = [CompositionEdge<Output>]()
+        result.reserveCapacity(edges.count)
+
+        for edge in edges {
+            let prediction = predictFibreSizeAtTarget(
+                sequence: sequence,
+                edge: edge,
+                gen: gen,
+                tree: tree,
+                fallbackTree: fallbackTree
+            )
+
+            // Skip edges where the downstream encoder would bail (> 20 params or overflow).
+            if prediction.predictedMode == .tooLarge {
+                continue
+            }
+
+            let composition = KleisliComposition(
                 upstream: BinarySearchToSemanticSimplestEncoder(),
                 downstream: FibreCoveringEncoder(),
                 lift: GeneratorLift(gen: gen, mode: .guided(fallbackTree: fallbackTree ?? tree)),
@@ -155,7 +179,18 @@ struct EncoderFactory {
                 upstreamRange: edge.upstreamRange,
                 downstreamRange: edge.downstreamRange
             )
+
+            result.append(CompositionEdge(
+                composition: composition,
+                prediction: prediction,
+                edge: edge
+            ))
         }
+
+        // Order by ascending predicted fibre size — cheaper edges first.
+        result.sort { $0.prediction.predictedSize < $1.prediction.predictedSize }
+
+        return result
     }
 
     // MARK: - Fibre size prediction

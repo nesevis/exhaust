@@ -982,29 +982,20 @@ extension ReductionState {
         var kleisliProbes = 0
         var kleisliMaterializations = 0
 
-        let compositions = EncoderFactory.compositionDescriptors(
+        let compositionEdges = EncoderFactory.compositionDescriptors(
             edges: edges,
             gen: gen,
+            sequence: sequence,
             tree: tree,
-            fallbackTree: fallbackTree,
-            budgetPerEdge: 100
+            fallbackTree: fallbackTree
         )
 
-        for (edgeIndex, edge) in edges.enumerated() {
+        for var compositionEdge in compositionEdges {
             guard budget > 0 else { break }
             compositionEdgesAttempted += 1
 
-            var composed = compositions[edgeIndex]
-
-            // Predict fibre size at the upstream's reduction target via a discovery lift.
-            // One materialisation per edge — the "discovery budget" from the planning document.
-            let prediction = EncoderFactory.predictFibreSizeAtTarget(
-                sequence: sequence,
-                edge: edge,
-                gen: gen,
-                tree: tree,
-                fallbackTree: fallbackTree
-            )
+            let edge = compositionEdge.edge
+            let prediction = compositionEdge.prediction
 
             // Run via manual loop (same pattern as runRelaxRound).
             var legBudget = ReductionScheduler.LegBudget(hardCap: min(budget, 100))
@@ -1020,7 +1011,7 @@ extension ReductionState {
             // The composition's purpose is to re-explore those values WITH
             // downstream search. Passing the cache would tell the upstream encoder
             // its current value is already at the floor, producing zero probes.
-            composed.start(
+            compositionEdge.composition.start(
                 sequence: sequence,
                 targets: .wholeSequence,
                 convergedOrigins: nil
@@ -1031,8 +1022,8 @@ extension ReductionState {
                 // Warm-start validation: before the composition advances to the
                 // next upstream probe and initializes the downstream, validate any
                 // pending convergence transfer from the previous downstream.
-                if let pending = composed.pendingTransferOrigins,
-                   let delta = composed.upstreamDelta, delta == 1
+                if let pending = compositionEdge.composition.pendingTransferOrigins,
+                   let delta = compositionEdge.composition.upstreamDelta, delta == 1
                 {
                     // Adjacent upstream values — validate each origin at floor - 1.
                     convergenceTransfersAttempted += 1
@@ -1077,13 +1068,13 @@ extension ReductionState {
                     } else {
                         convergenceTransfersStale += 1
                     }
-                    composed.setValidatedOrigins(allValid ? pending : nil)
+                    compositionEdge.composition.setValidatedOrigins(allValid ? pending : nil)
                 } else {
                     // First probe, delta > 1, or no pending origins: cold-start.
-                    composed.setValidatedOrigins(nil)
+                    compositionEdge.composition.setValidatedOrigins(nil)
                 }
 
-                guard let probe = composed.nextProbe(lastAccepted: lastAccepted) else { break }
+                guard let probe = compositionEdge.composition.nextProbe(lastAccepted: lastAccepted) else { break }
                 guard legBudget.isExhausted == false else { break }
                 if collectStats { kleisliProbes += 1 }
                 legBudget.recordMaterialization()
@@ -1126,24 +1117,24 @@ extension ReductionState {
 
             // Harvest fibre telemetry from the composition's downstream encoder.
             if collectStats {
-                fibreExceededExhaustiveThreshold += composed.fibrePairwiseStarts + composed.fibreBailOuts
-                pairwiseOnExhaustibleFibre += composed.fibreExhaustiveStarts
+                fibreExceededExhaustiveThreshold += compositionEdge.composition.fibrePairwiseStarts + compositionEdge.composition.fibreBailOuts
+                pairwiseOnExhaustibleFibre += compositionEdge.composition.fibreExhaustiveStarts
 
                 // Compare prediction against ground truth.
                 // The prediction uses the current sequence; the ground truth uses the lifted sequences.
                 // "Correct" means the predicted mode matches the MAJORITY of actual downstream starts.
                 let actualMajorityMode: EncoderFactory.FibrePrediction.Mode
-                if composed.fibreExhaustiveStarts >= composed.fibrePairwiseStarts,
-                   composed.fibreExhaustiveStarts >= composed.fibreBailOuts
+                if compositionEdge.composition.fibreExhaustiveStarts >= compositionEdge.composition.fibrePairwiseStarts,
+                   compositionEdge.composition.fibreExhaustiveStarts >= compositionEdge.composition.fibreBailOuts
                 {
                     actualMajorityMode = .exhaustive
-                } else if composed.fibrePairwiseStarts >= composed.fibreBailOuts {
+                } else if compositionEdge.composition.fibrePairwiseStarts >= compositionEdge.composition.fibreBailOuts {
                     actualMajorityMode = .pairwise
                 } else {
                     actualMajorityMode = .tooLarge
                 }
 
-                let totalStarts = composed.fibreExhaustiveStarts + composed.fibrePairwiseStarts + composed.fibreBailOuts
+                let totalStarts = compositionEdge.composition.fibreExhaustiveStarts + compositionEdge.composition.fibrePairwiseStarts + compositionEdge.composition.fibreBailOuts
                 if totalStarts > 0 {
                     if prediction.predictedMode == actualMajorityMode {
                         fibrePredictionCorrect += 1
@@ -1155,9 +1146,9 @@ extension ReductionState {
 
             // Log prediction vs ground truth for encoder selection accuracy measurement.
             if isInstrumented {
-                let actualExhaustive = composed.fibreExhaustiveStarts
-                let actualPairwise = composed.fibrePairwiseStarts
-                let actualBail = composed.fibreBailOuts
+                let actualExhaustive = compositionEdge.composition.fibreExhaustiveStarts
+                let actualPairwise = compositionEdge.composition.fibrePairwiseStarts
+                let actualBail = compositionEdge.composition.fibreBailOuts
                 let predictionLabel: String = switch prediction.predictedMode {
                 case .exhaustive: "exhaustive"
                 case .pairwise: "pairwise"
@@ -1174,7 +1165,7 @@ extension ReductionState {
                         "actual_exhaustive": "\(actualExhaustive)",
                         "actual_pairwise": "\(actualPairwise)",
                         "actual_bail": "\(actualBail)",
-                        "max_fibre": "\(composed.maxObservedFibreSize)",
+                        "max_fibre": "\(compositionEdge.composition.maxObservedFibreSize)",
                     ]
                 )
             }

@@ -68,12 +68,22 @@ public struct ExhaustReport: Sendable {
     /// Whether the verification sweep detected cache staleness.
     public var verificationSweepFoundStaleness: Bool = false
 
+    /// Composition edges where the pre-lift fibre prediction matched the actual encoder mode.
+    public var fibrePredictionCorrect: Int = 0
+
+    /// Composition edges where the pre-lift fibre prediction disagreed with the actual encoder mode.
+    public var fibrePredictionWrong: Int = 0
+
     /// One-line summary of profiling data for the reduction planning decision tree.
     public var profilingSummary: String {
         let reconfirmRatio = totalValueCoordinatesAtPhaseTwoStart > 0
             ? String(format: "%.0f%%", Double(convergedCoordinatesAtPhaseTwoStart) / Double(totalValueCoordinatesAtPhaseTwoStart) * 100)
             : "n/a"
-        return "cycles=\(cycles) probes=\(propertyInvocations) mats=\(totalMaterializations) reconfirm=\(reconfirmRatio) edges=\(compositionEdgesAttempted) futile=\(futileCompositions) fibre=\(pairwiseOnExhaustibleFibre)e/\(fibreExceededExhaustiveThreshold)p transfers=\(convergenceTransfersAttempted)/\(convergenceTransfersValidated)/\(convergenceTransfersStale) sweep=\(verificationSweepProbes)p/\(verificationSweepFoundStaleness ? "stale" : "ok")"
+        let predictionTotal = fibrePredictionCorrect + fibrePredictionWrong
+        let predictionLabel = predictionTotal > 0
+            ? "\(fibrePredictionCorrect)/\(predictionTotal)"
+            : "n/a"
+        return "cycles=\(cycles) probes=\(propertyInvocations) mats=\(totalMaterializations) reconfirm=\(reconfirmRatio) edges=\(compositionEdgesAttempted) futile=\(futileCompositions) fibre=\(pairwiseOnExhaustibleFibre)e/\(fibreExceededExhaustiveThreshold)p predict=\(predictionLabel) transfers=\(convergenceTransfersAttempted)/\(convergenceTransfersValidated)/\(convergenceTransfersStale) sweep=\(verificationSweepProbes)p/\(verificationSweepFoundStaleness ? "stale" : "ok")"
     }
 
     /// Populates reduction statistics from a ``ReductionStats`` value.
@@ -92,5 +102,7 @@ public struct ExhaustReport: Sendable {
         convergenceTransfersStale = stats.convergenceTransfersStale
         verificationSweepProbes = stats.verificationSweepProbes
         verificationSweepFoundStaleness = stats.verificationSweepFoundStaleness
+        fibrePredictionCorrect = stats.fibrePredictionCorrect
+        fibrePredictionWrong = stats.fibrePredictionWrong
     }
 }
