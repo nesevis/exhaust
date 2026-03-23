@@ -20,7 +20,7 @@
 /// ## Conformance
 ///
 /// Conforms to ``AdaptiveEncoder`` so the scheduler can run it via the existing `runAdaptive` path or a manual loop (following the `runRelaxRound` pattern). Does NOT conform to ``ComposableEncoder`` — this is intentional to prevent nesting compositions, which would produce multiplicative budget explosion. Multi-hop composition uses topological iteration instead.
-public struct KleisliComposition<Output>: AdaptiveEncoder {
+public struct KleisliComposition<Output>: AdaptiveEncoder, ComposableEncoder {
     // MARK: - Configuration
 
     public let name: EncoderName
@@ -136,14 +136,47 @@ public struct KleisliComposition<Output>: AdaptiveEncoder {
         return upCost * (1 + downCost)
     }
 
+    // MARK: - ComposableEncoder
+
+    public func estimatedCost(
+        sequence: ChoiceSequence,
+        tree: ChoiceTree,
+        positionRange: ClosedRange<Int>,
+        context: ReductionContext
+    ) -> Int? {
+        estimatedCost(sequence: sequence, bindIndex: context.bindIndex)
+    }
+
+    public mutating func start(
+        sequence: ChoiceSequence,
+        tree: ChoiceTree,
+        positionRange: ClosedRange<Int>,
+        context: ReductionContext
+    ) {
+        // Do not pass converged origins to the composition — the convergence cache records
+        // floors from the standalone pipeline. The composition re-explores those values WITH
+        // downstream fibre search. Passing the cache would tell the upstream its current
+        // value is at the floor, producing zero probes.
+        startInternal(sequence: sequence, tree: tree, convergedOrigins: nil)
+    }
+
+    // MARK: - AdaptiveEncoder (legacy)
+
     public mutating func start(
         sequence: ChoiceSequence,
         targets: TargetSet,
         convergedOrigins: [Int: ConvergedOrigin]?
     ) {
+        startInternal(sequence: sequence, tree: .just(""), convergedOrigins: convergedOrigins)
+    }
+
+    private mutating func startInternal(
+        sequence: ChoiceSequence,
+        tree: ChoiceTree,
+        convergedOrigins: [Int: ConvergedOrigin]?
+    ) {
         baseSequence = sequence
-        // Use a minimal tree — the actual tree will come from the lift
-        baseTree = .just("")
+        baseTree = tree
         context = ReductionContext(convergedOrigins: convergedOrigins)
 
         upstreamStarted = false

@@ -132,6 +132,32 @@ struct EncoderFactory {
         ]
     }
 
+    // MARK: - Composition descriptors
+
+    /// Builds ``KleisliComposition`` instances for each CDG reduction edge.
+    ///
+    /// Each edge produces a composition wiring a horizontal encoder (binary search on the
+    /// bind-inner value) to a vertical encoder (fibre covering on the downstream) through a
+    /// generator lift. The caller runs the compositions via ``ReductionState/runCompositionEdges``.
+    static func compositionDescriptors<Output>(
+        edges: [ReductionEdge],
+        gen: FreerMonad<ReflectiveOperation, Output>,
+        tree: ChoiceTree,
+        fallbackTree: ChoiceTree?,
+        budgetPerEdge: Int
+    ) -> [KleisliComposition<Output>] {
+        edges.map { edge in
+            KleisliComposition(
+                upstream: BinarySearchToSemanticSimplestEncoder(),
+                downstream: FibreCoveringEncoder(),
+                lift: GeneratorLift(gen: gen, mode: .guided(fallbackTree: fallbackTree ?? tree)),
+                rollback: .atomic,
+                upstreamRange: edge.upstreamRange,
+                downstreamRange: edge.downstreamRange
+            )
+        }
+    }
+
     // MARK: - Types
 
     /// The four value minimization encoder instances, passed by the caller.

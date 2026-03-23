@@ -982,27 +982,19 @@ extension ReductionState {
         var kleisliProbes = 0
         var kleisliMaterializations = 0
 
-        for edge in edges {
+        let compositions = EncoderFactory.compositionDescriptors(
+            edges: edges,
+            gen: gen,
+            tree: tree,
+            fallbackTree: fallbackTree,
+            budgetPerEdge: 100
+        )
+
+        for (edgeIndex, edge) in edges.enumerated() {
             guard budget > 0 else { break }
             compositionEdgesAttempted += 1
 
-            // Build fresh upstream and downstream composable encoders.
-            // Upstream: binary search toward simplest bind-inner value.
-            // Downstream: fibre search — enumerates the downstream fibre
-            // to find ANY failure, not minimize an existing one. After a lift,
-            // the bound content is PRNG-filled and likely passes the property.
-            // The downstream needs to discover a failure, not minimize one.
-            let upstreamEncoder = BinarySearchToSemanticSimplestEncoder()
-            let downstreamEncoder = FibreCoveringEncoder()
-
-            var composed = KleisliComposition(
-                upstream: upstreamEncoder,
-                downstream: downstreamEncoder,
-                lift: GeneratorLift(gen: gen, mode: .guided(fallbackTree: fallbackTree ?? tree)),
-                rollback: .atomic,
-                upstreamRange: edge.upstreamRange,
-                downstreamRange: edge.downstreamRange
-            )
+            var composed = compositions[edgeIndex]
 
             // Run via manual loop (same pattern as runRelaxRound).
             var legBudget = ReductionScheduler.LegBudget(hardCap: min(budget, 100))
