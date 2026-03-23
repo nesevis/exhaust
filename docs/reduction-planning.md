@@ -60,9 +60,9 @@ Steps 1–3 (fibre descent gating, domain ratio, leverage) are available from cy
 
 **Decision point gate.** Step 5 requires both domain ratio decision accuracy > 70% AND stability prediction divergence < 0.2 for > 70% of edges. Each signal measured independently.
 
-### Warm-start validation (standalone fix)
+### Warm-start validation (implemented)
 
-The warm-start validation fixes a pre-existing correctness issue in `KleisliComposition`, independent of the planning proposal. The current KleisliComposition transfers convergence records between adjacent upstream values, gated by lift report coverage. If coverage is high but floors are semantically stale, premature convergence already occurs. This fix should be implemented as a standalone bugfix to `KleisliComposition`, not deferred to the planning implementation.
+The warm-start validation fixes a pre-existing correctness issue in `KleisliComposition`, independent of the planning proposal. Implemented as a standalone bugfix. The validation lives in `runKleisliExploration` (the driver) — the composition exposes `pendingTransferOrigins` and `upstreamDelta`; the driver validates at `floor - 1` and calls `setValidatedOrigins`. See `docs/reduction-planning-implementation.md` for details.
 
 **Problem: premature convergence.** A stale floor that still fails the property looks valid. The encoder converges to a non-minimal value.
 
@@ -114,11 +114,11 @@ Steps 4 and 5 are bundled — they share the implementation site (KleisliComposi
 
 Each step has a measurable precondition. The "do nothing" branch is a valid outcome.
 
-## Post-Termination Verification
+## Post-Termination Verification (implemented)
 
-The reducer converges toward cached floors by design. If the cache is stale (floor higher than the true floor), the counterexample is at the cached floors — indistinguishable from the correct case during reduction. No in-cycle gate detects this.
+The reducer converges toward cached floors by design. If the cache is stale (floor higher than the true floor), the counterexample is at the cached floors — indistinguishable from the correct case during reduction. No in-cycle gate detects this. Implemented in `BonsaiScheduler.run()` after the main loop. See `docs/reduction-planning-implementation.md` for details.
 
-**Fix: post-termination sweep.** After the reducer terminates, probe `floor - 1` for each coordinate. Clamp to `max(rangeLowerBound, floor - 1)` — for coordinates inside bind scopes, the valid range may have narrowed. When the clamped value equals the floor, the range won't allow anything lower — skip the probe (the floor is trivially valid at the range minimum).
+**Post-termination sweep.** After the reducer terminates, probe `floor - 1` for each coordinate. Skip trivially valid floors (floor == rangeLowerBound).
 
 If the property fails at any `floor - 1`, the cache is stale and the counterexample is non-minimal. Run a Phase-2-only verification cycle (skip base descent and exploration) with all gates disabled and `convergedOrigins: nil`. Phase 2 runs binary search on every coordinate from the current state without cached bounds — it probes below the cached floor and discovers new floors, including cascading staleness from property-mediated coupling. One Phase-2 cycle is sufficient — Phase 2's own convergence logic handles cascading changes.
 
