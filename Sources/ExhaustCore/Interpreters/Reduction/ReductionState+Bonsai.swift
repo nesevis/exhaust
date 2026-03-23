@@ -1114,6 +1114,12 @@ extension ReductionState {
                 futileCompositions += 1
             }
 
+            // Harvest fibre telemetry from the composition's downstream encoder.
+            if collectStats {
+                fibreExceededExhaustiveThreshold += composed.fibrePairwiseStarts + composed.fibreBailOuts
+                pairwiseOnExhaustibleFibre += composed.fibreExhaustiveStarts
+            }
+
             budget -= legBudget.used
             if collectStats { kleisliMaterializations += legBudget.used }
         }

@@ -73,7 +73,7 @@ public struct ExhaustReport: Sendable {
         let reconfirmRatio = totalValueCoordinatesAtPhaseTwoStart > 0
             ? String(format: "%.0f%%", Double(convergedCoordinatesAtPhaseTwoStart) / Double(totalValueCoordinatesAtPhaseTwoStart) * 100)
             : "n/a"
-        return "cycles=\(cycles) probes=\(propertyInvocations) mats=\(totalMaterializations) reconfirm=\(reconfirmRatio) edges=\(compositionEdgesAttempted) futile=\(futileCompositions) transfers=\(convergenceTransfersAttempted)/\(convergenceTransfersValidated)/\(convergenceTransfersStale) sweep=\(verificationSweepProbes)p/\(verificationSweepFoundStaleness ? "stale" : "ok")"
+        return "cycles=\(cycles) probes=\(propertyInvocations) mats=\(totalMaterializations) reconfirm=\(reconfirmRatio) edges=\(compositionEdgesAttempted) futile=\(futileCompositions) fibre=\(pairwiseOnExhaustibleFibre)e/\(fibreExceededExhaustiveThreshold)p transfers=\(convergenceTransfersAttempted)/\(convergenceTransfersValidated)/\(convergenceTransfersStale) sweep=\(verificationSweepProbes)p/\(verificationSweepFoundStaleness ? "stale" : "ok")"
     }
 
     /// Populates reduction statistics from a ``ReductionStats`` value.

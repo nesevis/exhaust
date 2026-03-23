@@ -73,6 +73,17 @@ public struct KleisliComposition<Output>: AdaptiveEncoder, ComposableEncoder {
     /// The lift report from the most recent successful lift.
     private var lastLiftReport: DecodingReport?
 
+    // MARK: - Fibre telemetry
+
+    /// Number of downstream starts where the fibre was searched exhaustively (≤ 64 combinations).
+    public private(set) var fibreExhaustiveStarts = 0
+    /// Number of downstream starts where the fibre was searched via pairwise covering (> 64 combinations, ≤ 20 parameters).
+    public private(set) var fibrePairwiseStarts = 0
+    /// Number of downstream starts where the fibre was too large for any search (> 20 parameters or 0 probes).
+    public private(set) var fibreBailOuts = 0
+    /// Maximum fibre size observed across all downstream starts.
+    public private(set) var maxObservedFibreSize: UInt64 = 0
+
     /// Raw convergence records from the previous upstream iteration's downstream, unvalidated.
     ///
     /// Populated when the downstream exhausts. The driver (`runKleisliExploration`) reads this, validates each origin at `floor - 1`, and calls ``setValidatedOrigins(_:)`` with the validated subset (or nil for cold-start).
@@ -190,6 +201,10 @@ public struct KleisliComposition<Output>: AdaptiveEncoder, ComposableEncoder {
         previousUpstreamBitPattern = nil
         upstreamDelta = nil
         upstreamProbesUsed = 0
+        fibreExhaustiveStarts = 0
+        fibrePairwiseStarts = 0
+        fibreBailOuts = 0
+        maxObservedFibreSize = 0
 
         upstream.start(
             sequence: sequence,
@@ -278,6 +293,21 @@ public struct KleisliComposition<Output>: AdaptiveEncoder, ComposableEncoder {
                 context: downstreamContext
             )
             downstreamActive = true
+
+            // Capture fibre telemetry from FibreCoveringEncoder.
+            if let fibreEncoder = downstream as? FibreCoveringEncoder {
+                let fibreSize = fibreEncoder.lastComputedFibreSize
+                if fibreSize > maxObservedFibreSize {
+                    maxObservedFibreSize = fibreSize
+                }
+                if fibreEncoder.probeCount == 0 {
+                    fibreBailOuts += 1
+                } else if fibreSize <= FibreCoveringEncoder.exhaustiveThreshold {
+                    fibreExhaustiveStarts += 1
+                } else {
+                    fibrePairwiseStarts += 1
+                }
+            }
 
             // Get the first downstream probe
             if let firstProbe = downstream.nextProbe(lastAccepted: false) {
