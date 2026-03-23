@@ -47,6 +47,9 @@ public struct ExhaustReport: Sendable {
     /// Times pairwise ran on a fibre ≤ 64 (pairwise selected, exhaustive would have worked).
     public var pairwiseOnExhaustibleFibre: Int = 0
 
+    /// Number of downstream starts using ZeroValue fallback (fibre too large for covering).
+    public var fibreZeroValueStarts: Int = 0
+
     /// Compositions that produced zero accepted probes within budget.
     public var futileCompositions: Int = 0
 
@@ -83,7 +86,7 @@ public struct ExhaustReport: Sendable {
         let predictionLabel = predictionTotal > 0
             ? "\(fibrePredictionCorrect)/\(predictionTotal)"
             : "n/a"
-        return "cycles=\(cycles) probes=\(propertyInvocations) mats=\(totalMaterializations) reconfirm=\(reconfirmRatio) edges=\(compositionEdgesAttempted) futile=\(futileCompositions) fibre=\(pairwiseOnExhaustibleFibre)e/\(fibreExceededExhaustiveThreshold)p predict=\(predictionLabel) transfers=\(convergenceTransfersAttempted)/\(convergenceTransfersValidated)/\(convergenceTransfersStale) sweep=\(verificationSweepProbes)p/\(verificationSweepFoundStaleness ? "stale" : "ok")"
+        return "cycles=\(cycles) probes=\(propertyInvocations) mats=\(totalMaterializations) reconfirm=\(reconfirmRatio) edges=\(compositionEdgesAttempted) futile=\(futileCompositions) fibre=\(pairwiseOnExhaustibleFibre)e/\(fibreExceededExhaustiveThreshold)p/\(fibreZeroValueStarts)z predict=\(predictionLabel) transfers=\(convergenceTransfersAttempted)/\(convergenceTransfersValidated)/\(convergenceTransfersStale) sweep=\(verificationSweepProbes)p/\(verificationSweepFoundStaleness ? "stale" : "ok")"
     }
 
     /// Populates reduction statistics from a ``ReductionStats`` value.
@@ -104,5 +107,6 @@ public struct ExhaustReport: Sendable {
         verificationSweepFoundStaleness = stats.verificationSweepFoundStaleness
         fibrePredictionCorrect = stats.fibrePredictionCorrect
         fibrePredictionWrong = stats.fibrePredictionWrong
+        fibreZeroValueStarts = stats.fibreZeroValueStarts
     }
 }

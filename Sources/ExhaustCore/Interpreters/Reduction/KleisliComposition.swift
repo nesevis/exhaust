@@ -79,8 +79,8 @@ public struct KleisliComposition<Output>: AdaptiveEncoder, ComposableEncoder {
     public private(set) var fibreExhaustiveStarts = 0
     /// Number of downstream starts where the fibre was searched via pairwise covering (> 64 combinations, ≤ 20 parameters).
     public private(set) var fibrePairwiseStarts = 0
-    /// Number of downstream starts where the fibre was too large for any search (> 20 parameters or 0 probes).
-    public private(set) var fibreBailOuts = 0
+    /// Number of downstream starts where the fibre was too large for covering and ZeroValue fallback ran.
+    public private(set) var fibreZeroValueStarts = 0
     /// Maximum fibre size observed across all downstream starts.
     public private(set) var maxObservedFibreSize: UInt64 = 0
 
@@ -203,7 +203,7 @@ public struct KleisliComposition<Output>: AdaptiveEncoder, ComposableEncoder {
         upstreamProbesUsed = 0
         fibreExhaustiveStarts = 0
         fibrePairwiseStarts = 0
-        fibreBailOuts = 0
+        fibreZeroValueStarts = 0
         maxObservedFibreSize = 0
 
         upstream.start(
@@ -294,18 +294,36 @@ public struct KleisliComposition<Output>: AdaptiveEncoder, ComposableEncoder {
             )
             downstreamActive = true
 
-            // Capture fibre telemetry from FibreCoveringEncoder.
+            // If the downstream's internal strategy changed (DownstreamPick selected a
+            // different alternative), convergence transfer is invalid — cold-start.
+            if downstream.isConvergenceTransferSafe == false {
+                pendingTransferOrigins = nil
+            }
+
+            // Capture fibre telemetry from the downstream encoder.
             if let fibreEncoder = downstream as? FibreCoveringEncoder {
                 let fibreSize = fibreEncoder.lastComputedFibreSize
-                if fibreSize > maxObservedFibreSize {
-                    maxObservedFibreSize = fibreSize
-                }
-                if fibreEncoder.probeCount == 0 {
-                    fibreBailOuts += 1
-                } else if fibreSize <= FibreCoveringEncoder.exhaustiveThreshold {
+                if fibreSize > maxObservedFibreSize { maxObservedFibreSize = fibreSize }
+                if fibreSize <= FibreCoveringEncoder.exhaustiveThreshold {
                     fibreExhaustiveStarts += 1
                 } else {
                     fibrePairwiseStarts += 1
+                }
+            } else if let pick = downstream as? DownstreamPick {
+                // DownstreamPick selected an alternative at start() — classify by which one.
+                if let selected = pick.selectedEncoder {
+                    if selected is FibreCoveringEncoder {
+                        let fibreEncoder = selected as! FibreCoveringEncoder
+                        let fibreSize = fibreEncoder.lastComputedFibreSize
+                        if fibreSize > maxObservedFibreSize { maxObservedFibreSize = fibreSize }
+                        if fibreSize <= FibreCoveringEncoder.exhaustiveThreshold {
+                            fibreExhaustiveStarts += 1
+                        } else {
+                            fibrePairwiseStarts += 1
+                        }
+                    } else {
+                        fibreZeroValueStarts += 1
+                    }
                 }
             }
 

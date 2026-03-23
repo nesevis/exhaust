@@ -128,6 +128,7 @@ final class ReductionState<Output> {
     var totalValueCoordinatesAtPhaseTwoStart: Int = 0
     var fibreExceededExhaustiveThreshold: Int = 0
     var pairwiseOnExhaustibleFibre: Int = 0
+    var fibreZeroValueStarts: Int = 0
     var futileCompositions: Int = 0
     var compositionEdgesAttempted: Int = 0
     var convergenceTransfersAttempted: Int = 0
@@ -149,6 +150,7 @@ final class ReductionState<Output> {
         stats.totalValueCoordinatesAtPhaseTwoStart = totalValueCoordinatesAtPhaseTwoStart
         stats.fibreExceededExhaustiveThreshold = fibreExceededExhaustiveThreshold
         stats.pairwiseOnExhaustibleFibre = pairwiseOnExhaustibleFibre
+        stats.fibreZeroValueStarts = fibreZeroValueStarts
         stats.futileCompositions = futileCompositions
         stats.compositionEdgesAttempted = compositionEdgesAttempted
         stats.convergenceTransfersAttempted = convergenceTransfersAttempted

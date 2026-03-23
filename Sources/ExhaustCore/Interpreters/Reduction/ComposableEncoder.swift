@@ -51,6 +51,15 @@ public protocol ComposableEncoder {
     ///
     /// Each entry maps a flat sequence index to the ``ConvergedOrigin`` at which the search converged.
     var convergenceRecords: [Int: ConvergedOrigin] { get }
+
+    /// Whether convergence records from the previous run are compatible with this run.
+    ///
+    /// Returns `true` by default — the encoder's semantics haven't changed between runs.
+    /// ``DownstreamPick`` overrides this to return `false` when a different alternative was
+    /// selected, invalidating convergence records from the previous alternative.
+    /// ``KleisliComposition`` checks this after ``start()`` and cold-starts the convergence
+    /// transfer when it returns `false`.
+    var isConvergenceTransferSafe: Bool { get }
 }
 
 public extension ComposableEncoder {
@@ -58,6 +67,9 @@ public extension ComposableEncoder {
     var convergenceRecords: [Int: ConvergedOrigin] {
         [:]
     }
+
+    /// Default: convergence transfer is always safe (same encoder semantics across runs).
+    var isConvergenceTransferSafe: Bool { true }
 
     /// Default cost estimate: nil (no work to do). Conformers should override.
     func estimatedCost(

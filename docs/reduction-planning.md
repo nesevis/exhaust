@@ -2,7 +2,7 @@
 
 ## Why Composition, Not Tactics
 
-The 20 existing encoders are hand-crafted tactics — each one embeds both a search strategy (binary search, exhaustive enumeration, lockstep redistribution) and the structural context where it applies (leaf values, branch selectors, container spans, sibling pairs). When a new generator shape exposes a reduction gap, the response is a round trip to the library maintainer: diagnose the gap, design a new encoder, implement it, add an `EncoderName` case, wire it into the slot rotation, define dominance rules, test it. Every novel reduction shape requires bespoke code.
+The original 20 encoders were hand-crafted tactics — each embedded both a search strategy (binary search, exhaustive enumeration, lockstep redistribution) and the structural context where it applies (leaf values, branch selectors, container spans, sibling pairs). When a new generator shape exposes a reduction gap, the response is a round trip to the library maintainer: diagnose the gap, design a new encoder, implement it, add an `EncoderName` case, wire it into the slot rotation, define dominance rules, test it. Every novel reduction shape requires bespoke code.
 
 The compositional encoder algebra changes this by separating *where to search* from *how to search*. The CDG identifies structural positions (bind-inner nodes, fibre boundaries, dependency edges). The lift materializes candidate fibres without checking the property. The downstream encoder searches the fibre using a generic primitive — exhaustive enumeration, pairwise covering, binary search per coordinate. These are reusable components, not generator-specific tactics.
 
@@ -98,21 +98,27 @@ The warm-start validation fixes a pre-existing correctness issue in `KleisliComp
 
 The progression is a decision tree based on profiling data, not a fixed sequence.
 
-### Step 1: Fibre descent gating (Signal 4)
+### Step 1: Fibre descent gating (Signal 4) — implemented
 
-Skip Phase 2 when all coordinates are at cached floors and no structural acceptance occurred this cycle.
+Skip Phase 2 when all coordinates are at cached floors, no structural acceptance occurred this cycle, AND Phase 2 made no progress in the previous cycle. The stall condition prevents skipping when cross-zero or ZeroValue can still improve beyond cached binary search floors.
 
-**Precondition.** Profile: what fraction of Phase 2 probes re-confirm floors? Threshold is property-cost-dependent.
+**Result.** Gates on stall cycles. Saves computational overhead (span extraction, encoder startup) but not property invocations — converged encoders already produce 0 probes. Fires on the FibreDescentGate test (7 of 9 cycles gated). Does not fire at `.fast` budget on tests where exploration invalidates the convergence cache each cycle.
 
-### Step 2: Domain ratio at edge selection (Signal 1)
+### Step 2: Domain ratio at edge selection (Signal 1) — implemented, split on structural constancy
 
-Compute fibre size lower bound. Select downstream encoder. Allocate budget greedily by `leverage / requiredBudget`. Skip gate only for "structural" confidence edges.
+The prediction serves different purposes at different edges. The factory splits on `isStructurallyConstant`:
 
-**Precondition.** After implementing, measure decision accuracy (did the prediction select the correct encoder?). A prediction 3x off but on the same side of the threshold makes the same decision. Decision accuracy, not estimation accuracy.
+**Structurally constant edges** (fibre shape invariant under upstream value changes): discovery lift at the upstream's reduction target. The prediction is a structural fact — the target fibre IS the fibre at every upstream value. The factory commits and selects the downstream encoder at construction time. Skip gate for `tooLarge` predictions. **Accuracy: 5/5, exact by construction.**
 
-### Step 3: Structural leverage ordering (Signal 2)
+**Data-dependent edges** (fibre varies with upstream value): current-sequence fibre size as an ordering heuristic only. The factory does NOT commit to a downstream encoder based on this — it defers to runtime. `FibreCoveringEncoder` inspects the actual fibre at `start()` and selects exhaustive or pairwise. The prediction is used only to prioritise which edges get budget first via `leverage / requiredBudget`. **Ordering accuracy: 8/11.** Wrong orderings don't cause regressions — a less-optimal edge runs first, same counterexample quality.
 
-Sort edges by leverage within depth levels. One comparator change. No precondition.
+This split resolves the prediction accuracy problem: the original 75% headline number blended a 100% structural-fact metric with a 73% ordering-heuristic metric. These have different failure modes (wrong encoder selection vs suboptimal budget allocation), different severity, and different improvement paths.
+
+**Remaining gap.** For data-dependent edges where `FibreCoveringEncoder` bails at runtime (fibre > 20 params), no downstream search happens. A runtime fallback (bail → retry with `ZeroValueEncoder` in discover mode) would close this. The `SearchMode` infrastructure is in place but wiring it to the composition's downstream context needs careful integration.
+
+### Step 3: Structural leverage ordering (Signal 2) — implemented
+
+Edges ordered by `leverage / requiredBudget` (descending). Leverage is `downstreamRange.count`. Required budget is the predicted fibre size capped at the covering budget. Cross-multiplication avoids division.
 
 ### Steps 4 + 5: Fibre stability prediction and validation (Signal 3)
 
@@ -162,46 +168,55 @@ The sweep fires only when staleness is detected — no cost in the common case.
 
 **Signal 4 / exploration leg interaction.** Signal 4 gates the Phase 2 that runs before the exploration leg. If the exploration leg makes structural progress (KleisliComposition acceptance), the convergence cache is invalidated, and the next cycle's signal 4 sees missing cache entries — Phase 2 runs. This is handled by signal 4's precondition ("no structural acceptance this cycle"). Worth calling out explicitly: if the precondition is ever relaxed, Phase 2 could be skipped based on stale cache state while the exploration leg changed the fibre underneath.
 
-## Deriving Encoders from Structure
+## Deriving Encoders from Structure — implemented
 
-### Position-level classification
+The factory and composable encoder toolbox are implemented. See `docs/composable-encoder-implementation-report.md` for the full outcome. This section summarises the implemented design.
 
-| Tree node | CDG role | Primitive |
+### Composable encoder toolbox
+
+20 monolithic encoders became 13 composable ones. Each is a role-agnostic `ComposableEncoder` — the factory assigns it to a role (upstream, downstream, standalone) based on CDG position.
+
+| CDG role | Encoder | Configuration |
 |---|---|---|
-| `.choice` | Leaf | Binary search |
-| `.choice` | Leaf, float | Float reduction |
-| `.choice` | Bind-inner with outgoing edges | KleisliComposition |
-| `.branch` | Branch selector | Branch promotion/pivot |
-| `.sequence` container | Structural | Span deletion |
-| `.bind` container | Structural | Span deletion |
+| Leaf value | `BinarySearchEncoder` | `.rangeMinimum`, `.semanticSimplest` |
+| Leaf float | `ReduceFloatEncoder` | — |
+| All values | `ZeroValueEncoder` | — |
+| Bind-inner (upstream in composition) | `BinarySearchEncoder` | `.semanticSimplest` |
+| Fibre (downstream in composition) | `FibreCoveringEncoder` | exhaustive (≤ 64) or pairwise (IPOG) at runtime |
+| Branch selector | `BranchSimplificationEncoder` | `.promote`, `.pivot` |
+| Container/sequence/boundary/value spans | `DeletionEncoder` | `.containerSpans`, `.sequenceElements`, `.sequenceBoundaries`, `.freeStandingValues` |
+| Aligned siblings (contiguous) | `ContiguousWindowDeletionEncoder` | — |
+| Aligned siblings (non-contiguous) | `BeamSearchDeletionEncoder` | beam tuning |
+| Cross-container pairs | `RedistributeAcrossValueContainersEncoder` | — |
+| Sibling pairs | `RedistributeByTandemReductionEncoder` | — |
+| Speculative zero-and-redistribute | `RelaxRoundEncoder` | — |
 
-For overlapping roles, the factory emits alternatives with a budget cap per alternative derived from `ceil(log₂(rangeSize)) + 1`.
-
-### Morphism descriptors
+### Morphism descriptors and dominance chains
 
 ```swift
 struct MorphismDescriptor {
-    let encoder: any PointEncoder
-    let decoder: DecoderMode
+    let encoder: any ComposableEncoder
+    let decoderFactory: () -> SequenceDecoder
     let probeBudget: Int
-    let rollback: RollbackPolicy
-    let classification: PositionClassification
+    let structureChanged: Bool
+    let dominates: [Int]
+    let maxRetries: Int
+    let retrySaltBase: UInt64
+    let fingerprintGuard: StructuralFingerprint?
 }
 ```
 
-`classification` preserves the factory's static knowledge through the existential boundary.
+`dominates` expresses priority ordering. When a descriptor accepts, the scheduler suppresses dominated descriptors. Multi-tier strategies are dominance chains — for example, ProductSpaceBatch guided → regime probe → PRNG retries. Contiguous window search dominates beam search. The same encoder with different decoder modes produces a family of morphisms connected by dominance edges.
 
-### Factory-primitive boundary
+### Factory and descriptor chains
 
-Signals modify the new types (KleisliComposition, FibreCoveringEncoder), not the 20 existing ones. The two systems operate in different phases — existing types run in base/fibre descent, new types run in the exploration leg. When the factory arrives, existing encoders' internal probe logic is unchanged, but the scheduling context changes — the factory adds metadata (classification, decoder mode, rollback policy) and the scheduler uses it for signal-based decisions. This IS a behavioral change at the system level: the factory changes which encoders run, in what order, with what budget.
+`EncoderFactory` centralises all encoder selection via static methods. `runDescriptorChain` and `runDescriptorChainDetailed` process factory-emitted descriptors with dominance suppression and move-to-front promotion. The slot rotation is replaced — no `ValueEncoderSlot` or `DeletionEncoderSlot` switch statements remain in the scheduling path.
 
-Testing the factory transition as a behavioral change means: same counterexample quality (shortlex), same or fewer probes, same phase ordering for the common case (the factory's construction-time decisions should match the current slot rotation's runtime decisions). At least one generator per classification row catches row-level regressions. The success criterion (equal or better quality, ≥ 10% fewer probes, no individual regressions) applies.
+Structural deletion uses per-encoder `runComposable` calls with restart-on-acceptance (deletions change sequence length, invalidating span positions). Value reduction and redistribution use descriptor chains.
 
-The "construction-time dominance loses mid-phase adaptivity" concern: currently the dominance lattice suppresses an encoder during its run if a dominating encoder was accepted. The factory pre-selects at construction time, so a dominator's acceptance can't suppress already-constructed alternatives. The budget-cap mechanism handles this differently — each alternative runs until its cap, not until a dominator fires. This changes probe distribution but should produce the same final result. Whether it does is an empirical question. Signals first, factory later minimizes rework.
+### Construction-time vs runtime encoder selection
 
-### Runtime vs construction-time dominance
-
-Construction-time dominance loses mid-phase adaptivity. Self-termination replaces intra-encoder convergence. Budget-cap alternatives prevent fixed-order over-pruning. Per-edge invalidation is O(downstream coordinates) — negligible relative to materialization cost.
+For structurally constant edges (`isStructurallyConstant == true`), the factory commits to the downstream encoder at construction time — the prediction is a structural fact. For data-dependent edges, the factory defers to runtime — `FibreCoveringEncoder` inspects the actual fibre at `start()` and selects exhaustive or pairwise. The factory's prediction is used only for edge ordering (leverage / requiredBudget).
 
 ## The Optimization Target
 
@@ -237,7 +252,7 @@ The planning framework instantiates Rice's (1976) Algorithm Selection Problem: s
 
 **Feature computation cost (SATzilla).** Some features cost more to compute than the time they save. Signal computation for signals 1–4 is free (arithmetic on held data). But the discovery lift for nested-bind edges costs a materialization. Charge it against the edge's budget. In practice, the discovery lift is almost always worth its cost: if it reveals a small fibre, the edge succeeds quickly; if it reveals a large fibre, the "skip" outcome saves the much larger cost of attempting coverage on an infeasible fibre. The only case where charging matters is when the edge's total budget is so small that one materialization exhausts it — which means the edge was underfunded regardless.
 
-**Interleaved portfolio execution (Huberman et al. 1997, future work).** Running multiple algorithms with interleaved time shares and taking the first success outperforms the best single algorithm when failure cases don't overlap. For the current implementation, sequential execution scored by `leverage / requiredBudget` with early termination is preferred — principled and understandable. The upstream budget cap (10–15 candidates) bounds the pathological case where a top-scored edge is futile. If profiling shows that top-scored edges frequently fail while lower-scored edges would have succeeded, interleaving becomes justified. The `AdaptiveEncoder` protocol already supports suspension (`nextProbe` is stateful and resumable), but the implementation complexity (k parallel convergence transfer states) is not warranted until the sequential approach is demonstrably insufficient.
+**Interleaved portfolio execution (Huberman et al. 1997, future work).** Running multiple algorithms with interleaved time shares and taking the first success outperforms the best single algorithm when failure cases don't overlap. For the current implementation, sequential execution scored by `leverage / requiredBudget` with early termination is preferred — principled and understandable. The upstream budget cap (10–15 candidates) bounds the pathological case where a top-scored edge is futile. If profiling shows that top-scored edges frequently fail while lower-scored edges would have succeeded, interleaving becomes justified. The `ComposableEncoder` protocol supports suspension (`nextProbe` is stateful and resumable), but the implementation complexity (k parallel convergence transfer states) is not warranted until the sequential approach is demonstrably insufficient.
 
 **Credit assignment (adaptive operator selection, Fialho et al. 2010).** When a prediction succeeds, distinguish model credit from luck. Credit the model only when the structural prediction matched the lift report AND the downstream found a failure. If the prediction diverged from the lift report but the downstream succeeded anyway, that is luck — do not promote. The promotion criterion becomes: prediction accuracy AND downstream productivity, not productivity alone.
 
@@ -328,13 +343,23 @@ Purpose-built generators exercising bind-dependent CDG topologies that the stand
 
 ### Decision tree evaluation
 
-**Branch 1: > 80% of wasted probes are floor re-confirmation → step 1 only.** Not triggered. The highest `reconfirm` is WideCDG at 75% and Bound5Path4 at 68%. The `reconfirm` metric is coordinate-weighted (fraction of value coordinates already converged at Phase 2 start), not probe-weighted. A converged coordinate costs ~1 re-confirmation probe; an unconverged coordinate costs ~log₂(range). The probe-weighted re-confirmation fraction is lower than the reported coordinate fraction.
+**Branch 1: > 80% of wasted probes are floor re-confirmation → step 1 only.** Step 1 implemented. The gate fires on stall cycles when all coordinates are converged. Saves computational overhead but not property invocations (converged encoders already produce 0 probes). The gate's value scales with generator complexity — many coordinates = expensive span extraction skipped.
 
-**Branch 2: > 30% of probe budget wasted on wrong encoder selection → steps 1 + 2 + 3.** Cannot evaluate. The `futile` field counts composition edges that produced no improvement — it does not distinguish "wrong encoder type" from "right encoder, unproductive edge." The missing telemetry is: fibre size at `start()` time, which encoder variant (exhaustive vs pairwise) was selected, and whether the selection was correct post-hoc. The document's profiling section describes how to measure this as a byproduct of `FibreCoveringEncoder.start()`, but the fields are not yet surfaced in `ExhaustReport`.
+**Branch 2: > 30% of probe budget wasted on wrong encoder selection → steps 1 + 2 + 3.** Steps 1–3 implemented. Encoder selection is now split on structural constancy:
+- Constant edges: factory-time selection, 100% accurate (5/5). No wrong selections possible — the prediction is a structural fact.
+- Data-dependent edges: runtime selection via `FibreCoveringEncoder.start()`. The factory provides an ordering heuristic (73% accurate, 8/11) but does not commit to a downstream encoder. Wrong ordering = suboptimal budget allocation, not wrong encoder.
 
-**Branch 3: convergence transfer wasteful → steps 1 + 2 + 3 + 4/5.** Not triggered. Convergence transfer is 0/0/0 across every test. The transfer mechanism requires a search-based downstream encoder; the current downstream is always `FibreCoveringEncoder`, which cold-starts. This path is structurally dead until a search-based downstream exists.
+The branch 2 threshold ("> 30% of probe budget wasted on wrong encoder selection") is no longer applicable in its original form. For constant edges, there is no waste. For data-dependent edges, the factory defers — runtime selection eliminates selection waste at the cost of one discovery lift per constant edge.
 
-**Branch 4: not measurably wasteful → do nothing.** This is where the data currently points. The confidence in this conclusion is moderate: the structural pathological tests fill the CDG coverage gap (every test has edges ≥ 1, up to 3), but the encoder-type and transfer telemetry gaps remain.
+**Branch 3: convergence transfer wasteful → steps 1 + 2 + 3 + 4/5.** Not triggered. Convergence transfer is 0/0/0 across every test. The transfer mechanism requires a search-based downstream encoder; the current downstream is always `FibreCoveringEncoder`, which cold-starts. `SearchMode.discoverFailure` is the infrastructure for search-based downstreams but wiring it triggered a regression on data-dependent edges (CouplingScaling). The remaining gap: runtime fallback when `FibreCoveringEncoder` bails (fibre > 20 params).
+
+**Branch 4: not measurably wasteful → do nothing.** Steps 1–3 are implemented. The remaining waste is on data-dependent edges where `FibreCoveringEncoder` bails at runtime — the composition does 12 lifts and 0 downstream probes (CouplingScaling). A runtime bail → fallback mechanism would close this.
+
+### What was built
+
+Steps 1–3 and post-termination verification are implemented. The encoder algebra — 20 monolithic encoders consolidated into 13 composable ones, `EncoderFactory` with descriptor chains replacing the slot rotation, `MorphismDescriptor` with dominance edges replacing hand-coded multi-tier orchestration — is the infrastructure that makes steps 1–3 possible and steps 4–5 feasible. The `ComposableEncoder` protocol, `SearchMode` on `ReductionContext`, and the structural-constancy split in the factory's prediction logic are the extension points the closed-loop reducer will use.
+
+See `docs/composable-encoder-implementation-report.md` for the full implementation outcome: what changed, what worked, what didn't, and next steps.
 
 ### Key observations
 
@@ -350,8 +375,8 @@ Purpose-built generators exercising bind-dependent CDG topologies that the stand
 
 ### Gaps remaining
 
-1. **Encoder-type telemetry.** The profiling fields do not surface fibre size at `start()` time or the encoder variant selected. Branch 2's threshold cannot be evaluated without this data.
-2. **Search-based downstream.** No search-based downstream encoder exists. Branch 3 and convergence transfer remain untestable.
-3. **Probe-weighted re-confirmation.** The `reconfirm` metric is coordinate-weighted. Branch 1's "> 80% of wasted probes" threshold requires probe-level attribution.
-4. **No `.slow` budget tests.** Steps 4 and 5 activate only at `.slow` budget (≥ 3 stall cycles). All tests run at default `.fast` budget.
-5. **No expensive-property tests.** All properties are trivial computations. The value proposition of probe savings scales with property cost; at sub-millisecond cost, the absolute savings from planning are negligible.
+1. **Runtime bail fallback.** For data-dependent edges where `FibreCoveringEncoder` bails at runtime (fibre > 20 params), the composition does lifts with 0 downstream probes — wasted materializations. A fallback to `ZeroValueEncoder` in discover mode would close this. `SearchMode` infrastructure is in place; wiring needs careful integration (CouplingScaling regression canary).
+2. **Convergence transfer.** Still 0/0/0. Requires a search-based downstream that uses warm-start. `FibreCoveringEncoder` always cold-starts. Steps 4+5 depend on this.
+3. **Prediction accuracy reporting.** The `predict=X/Y` field in `ExhaustReport` blends structural-fact accuracy (100%) with ordering-heuristic accuracy (73%). These should be reported separately — different failure modes, different severity.
+4. **No `.slow` budget tests.** Steps 4 and 5 activate only at `.slow` budget (≥ 3 stall cycles). The FibreDescentGate test uses `.slow` but other tests run at default `.fast`.
+5. **Non-monotonicity detection** (Signal 7). Independent of composition. `sawUnexpectedResult` flag on binary search steppers + bounded exhaustive scan. Correctness improvement, not yet implemented.

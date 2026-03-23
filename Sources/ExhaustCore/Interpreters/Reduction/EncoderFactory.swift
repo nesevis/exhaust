@@ -158,22 +158,67 @@ struct EncoderFactory {
         result.reserveCapacity(edges.count)
 
         for edge in edges {
-            let prediction = predictFibreSizeAtTarget(
-                sequence: sequence,
-                edge: edge,
-                gen: gen,
-                tree: tree,
-                fallbackTree: fallbackTree
-            )
+            let prediction: FibrePrediction
 
-            // Skip edges where the downstream encoder would bail (> 20 params or overflow).
-            if prediction.predictedMode == .tooLarge {
-                continue
+            // Structurally constant edges: the fibre shape is invariant under upstream
+            // value changes. The discovery lift at the target sees the same fibre as every
+            // other upstream value — the prediction is exact. Select the downstream encoder
+            // at factory time.
+            //
+            // Data-dependent edges: the fibre varies with each upstream candidate. The
+            // discovery lift sees the target's fibre (typically the smallest). Don't commit
+            // to a downstream encoder based on this — let FibreCoveringEncoder inspect
+            // the actual fibre at start() time and select exhaustive or pairwise.
+            if edge.isStructurallyConstant {
+                prediction = predictFibreSizeAtTarget(
+                    sequence: sequence,
+                    edge: edge,
+                    gen: gen,
+                    tree: tree,
+                    fallbackTree: fallbackTree
+                )
+                // For constant edges, the prediction is exact. Skip if tooLarge.
+                if prediction.predictedMode == .tooLarge {
+                    continue
+                }
+            } else {
+                // For data-dependent edges, use the current-sequence prediction for ordering
+                // only. Don't skip — the actual fibre may be smaller at some upstream values.
+                prediction = predictFibreSize(
+                    sequence: sequence,
+                    downstreamRange: edge.downstreamRange
+                )
+            }
+
+            // Constant edges: FibreCoveringEncoder (prediction is exact, fibre won't change).
+            // Data-dependent edges: DownstreamPick selects at runtime based on actual fibre.
+            let downstream: any ComposableEncoder
+            if edge.isStructurallyConstant {
+                downstream = FibreCoveringEncoder()
+            } else {
+                downstream = DownstreamPick(alternatives: [
+                    // Exhaustive: small fibres (≤ 64 combinations).
+                    .init(
+                        encoder: FibreCoveringEncoder(),
+                        predicate: { totalSpace, _ in totalSpace <= FibreCoveringEncoder.exhaustiveThreshold }
+                    ),
+                    // Pairwise: medium fibres (2–20 parameters).
+                    .init(
+                        encoder: FibreCoveringEncoder(),
+                        predicate: { _, paramCount in paramCount >= 2 && paramCount <= 20 }
+                    ),
+                    // Zero-value: large fibres (> 20 params or overflow). Cheap structural
+                    // probe — the all-at-once zero discovers elimination-regime failures.
+                    .init(
+                        encoder: ZeroValueEncoder(),
+                        predicate: { _, _ in true }
+                    ),
+                ])
             }
 
             let composition = KleisliComposition(
                 upstream: BinarySearchToSemanticSimplestEncoder(),
-                downstream: FibreCoveringEncoder(),
+                downstream: downstream,
                 lift: GeneratorLift(gen: gen, mode: .guided(fallbackTree: fallbackTree ?? tree)),
                 rollback: .atomic,
                 upstreamRange: edge.upstreamRange,

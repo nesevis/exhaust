@@ -26,8 +26,11 @@ public struct ReductionStats: Sendable {
     /// Number of times ``FibreCoveringEncoder`` discovered a fibre > 64 at `start()` time (exhaustive selected but fibre was too large, fell back to pairwise or produced no probes).
     public var fibreExceededExhaustiveThreshold: Int
 
-    /// Number of times ``FibreCoveringEncoder`` ran in pairwise mode on a fibre ≤ 64 (pairwise selected but exhaustive would have worked — missed guaranteed coverage).
+    /// Number of downstream starts using exhaustive enumeration (fibre ≤ 64).
     public var pairwiseOnExhaustibleFibre: Int
+
+    /// Number of downstream starts using ZeroValue fallback (fibre too large for covering).
+    public var fibreZeroValueStarts: Int
 
     /// Number of times a ``KleisliComposition`` in the exploration leg produced zero accepted probes within budget (composition was futile for this edge).
     public var futileCompositions: Int
@@ -71,6 +74,7 @@ public struct ReductionStats: Sendable {
         totalValueCoordinatesAtPhaseTwoStart = 0
         fibreExceededExhaustiveThreshold = 0
         pairwiseOnExhaustibleFibre = 0
+        fibreZeroValueStarts = 0
         futileCompositions = 0
         compositionEdgesAttempted = 0
         convergenceTransfersAttempted = 0

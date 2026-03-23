@@ -1114,24 +1114,25 @@ extension ReductionState {
 
             // Harvest fibre telemetry from the composition's downstream encoder.
             if collectStats {
-                fibreExceededExhaustiveThreshold += compositionEdge.composition.fibrePairwiseStarts + compositionEdge.composition.fibreBailOuts
+                fibreExceededExhaustiveThreshold += compositionEdge.composition.fibrePairwiseStarts
                 pairwiseOnExhaustibleFibre += compositionEdge.composition.fibreExhaustiveStarts
+                fibreZeroValueStarts += compositionEdge.composition.fibreZeroValueStarts
 
                 // Compare prediction against ground truth.
                 // The prediction uses the current sequence; the ground truth uses the lifted sequences.
                 // "Correct" means the predicted mode matches the MAJORITY of actual downstream starts.
                 let actualMajorityMode: EncoderFactory.FibrePrediction.Mode
                 if compositionEdge.composition.fibreExhaustiveStarts >= compositionEdge.composition.fibrePairwiseStarts,
-                   compositionEdge.composition.fibreExhaustiveStarts >= compositionEdge.composition.fibreBailOuts
+                   compositionEdge.composition.fibreExhaustiveStarts >= compositionEdge.composition.fibreZeroValueStarts
                 {
                     actualMajorityMode = .exhaustive
-                } else if compositionEdge.composition.fibrePairwiseStarts >= compositionEdge.composition.fibreBailOuts {
+                } else if compositionEdge.composition.fibrePairwiseStarts >= compositionEdge.composition.fibreZeroValueStarts {
                     actualMajorityMode = .pairwise
                 } else {
                     actualMajorityMode = .tooLarge
                 }
 
-                let totalStarts = compositionEdge.composition.fibreExhaustiveStarts + compositionEdge.composition.fibrePairwiseStarts + compositionEdge.composition.fibreBailOuts
+                let totalStarts = compositionEdge.composition.fibreExhaustiveStarts + compositionEdge.composition.fibrePairwiseStarts + compositionEdge.composition.fibreZeroValueStarts
                 if totalStarts > 0 {
                     if prediction.predictedMode == actualMajorityMode {
                         fibrePredictionCorrect += 1
@@ -1145,7 +1146,7 @@ extension ReductionState {
             if isInstrumented {
                 let actualExhaustive = compositionEdge.composition.fibreExhaustiveStarts
                 let actualPairwise = compositionEdge.composition.fibrePairwiseStarts
-                let actualBail = compositionEdge.composition.fibreBailOuts
+                let actualBail = compositionEdge.composition.fibreZeroValueStarts
                 let predictionLabel: String = switch prediction.predictedMode {
                 case .exhaustive: "exhaustive"
                 case .pairwise: "pairwise"
