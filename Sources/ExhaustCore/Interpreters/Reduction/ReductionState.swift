@@ -161,6 +161,42 @@ final class ReductionState<Output> {
         return stats
     }
 
+    // MARK: - Fibre Descent Gating
+
+    /// Returns true when every value coordinate is either cached or already at its reduction target.
+    ///
+    /// Used by the fibre descent gate (signal 4): when all coordinates are effectively converged
+    /// AND base descent made no structural progress AND Phase 2 stalled last cycle, further
+    /// Phase 2 probes would only re-confirm floors — skip it.
+    ///
+    /// A coordinate is effectively converged if:
+    /// - It has a cached convergence floor (binary search ran and converged), OR
+    /// - Its current value equals its reduction target (nothing to reduce — binary search would skip it).
+    func allValueCoordinatesConverged() -> Bool {
+        var hasAnyValue = false
+        for index in 0 ..< sequence.count {
+            guard let value = sequence[index].value else { continue }
+            hasAnyValue = true
+            // A coordinate is converged if binary search has a cached floor at or below the current value.
+            if let origin = convergenceCache.convergedOrigin(at: index) {
+                if value.choice.bitPattern64 <= origin.bound {
+                    continue
+                }
+                return false
+            }
+            // No cache entry — check if the value is already at its reduction target.
+            let isWithinRecordedRange = value.isRangeExplicit && value.choice.fits(in: value.validRange)
+            let targetBitPattern = isWithinRecordedRange
+                ? value.choice.reductionTarget(in: value.validRange)
+                : value.choice.semanticSimplest.bitPattern64
+            if value.choice.bitPattern64 == targetBitPattern {
+                continue
+            }
+            return false
+        }
+        return hasAnyValue
+    }
+
     // MARK: - Snapshot
 
     /// A point-in-time copy of all mutable reduction state for rollback on fingerprint boundary crossing.

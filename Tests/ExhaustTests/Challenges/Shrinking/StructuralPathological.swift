@@ -222,4 +222,31 @@ struct StructuralPathologicalChallenge {
 
         #expect(output == [4, 4])
     }
+
+    // MARK: - Fibre Descent Gate
+
+    @Test("Fibre descent gate fires after Phase 2 convergence")
+    func fibreDescentGate() {
+        // Flat 10-element unsigned array, no bind. Phase 2 converges all coordinates,
+        // then stalls. No composition (edges=0) so the convergence cache stays stable across
+        // stall cycles. With .slow budget (maxStalls=8), the gate fires on stall cycle 2+,
+        // saving Phase 2's re-confirmation probes (ZeroValue all-at-once + individual probes).
+        let gen = #gen(.uint(in: 0...100)).array(length: 10)
+
+        var report: ExhaustReport?
+        let output = #exhaust(
+            gen,
+            .suppressIssueReporting,
+            .randomOnly,
+            .replay(1337),
+            .reductionBudget(.slow),
+            .onReport { report = $0 }
+        ) { arr in
+            arr.reduce(0, +) < 50
+        }
+        if let report { print("[PROFILE] FibreDescentGate: \(report.profilingSummary)") }
+
+        // Minimum: sum == 50 with smallest shortlex. All values at floor.
+        #expect(output?.reduce(0, +) == 50)
+    }
 }
