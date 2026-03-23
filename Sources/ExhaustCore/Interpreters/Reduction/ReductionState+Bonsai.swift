@@ -171,6 +171,13 @@ extension ReductionState {
             dominance.invalidate()
             let scopeDecoder = makeDeletionDecoder(at: scope.depth)
 
+            // Structural deletion uses per-encoder calls with restart-on-acceptance.
+            // Deletions change sequence length, invalidating span positions for remaining
+            // encoders. A descriptor chain would process stale spans — per-encoder restart
+            // ensures each encoder gets fresh spans.
+            let deletionContext = ReductionContext(bindIndex: bindIndex)
+            let fullRange = 0 ... max(0, sequence.count - 1)
+
             for slot in pruneOrder {
                 guard legBudget.isExhausted == false else { break }
                 let targets: [ChoiceSpan] = if let positionRange = scope.positionRange {
@@ -187,52 +194,26 @@ extension ReductionState {
                         bindIndex: bindIndex
                     )
                 }
-                let slotAccepted: Bool = switch slot {
-                case .randomRepairDelete:
-                    try runAdaptive(
-                        randomRepairDelete,
-                        decoder: makeSpeculativeDecoder(),
-                        targets: .spans(targets),
-                        structureChanged: true,
-                        budget: &legBudget
-                    )
-                case .containerSpans:
-                    try runAdaptive(
-                        deleteContainerSpans,
-                        decoder: scopeDecoder,
-                        targets: .spans(targets),
-                        structureChanged: true,
-                        budget: &legBudget
-                    )
-                case .sequenceElements:
-                    try runAdaptive(
-                        deleteSequenceElements,
-                        decoder: scopeDecoder,
-                        targets: .spans(targets),
-                        structureChanged: true,
-                        budget: &legBudget
-                    )
-                case .sequenceBoundaries:
-                    try runAdaptive(
-                        deleteSequenceBoundaries,
-                        decoder: scopeDecoder,
-                        targets: .spans(targets),
-                        structureChanged: true,
-                        budget: &legBudget
-                    )
-                case .freeStandingValues:
-                    try runAdaptive(
-                        deleteFreeStandingValues,
-                        decoder: scopeDecoder,
-                        targets: .spans(targets),
-                        structureChanged: true,
-                        budget: &legBudget
-                    )
-                case .alignedWindows:
-                    try runAdaptive(
+                let slotAccepted: Bool
+                if slot == .alignedWindows {
+                    // Aligned windows self-extracts sibling groups — don't skip on empty container spans.
+                    slotAccepted = try runComposable(
                         deleteAlignedWindowsEncoder,
                         decoder: scopeDecoder,
-                        targets: .spans(targets),
+                        positionRange: fullRange,
+                        context: deletionContext,
+                        structureChanged: true,
+                        budget: &legBudget
+                    )
+                } else {
+                    guard targets.isEmpty == false else { continue }
+                    let decoder = slot == .randomRepairDelete ? makeSpeculativeDecoder() : scopeDecoder
+                    let category = slot == .randomRepairDelete ? DeletionSpanCategory.mixed : slot.spanCategory
+                    slotAccepted = try runComposable(
+                        DeletionEncoder(spanCategory: category, spans: targets),
+                        decoder: decoder,
+                        positionRange: fullRange,
+                        context: deletionContext,
                         structureChanged: true,
                         budget: &legBudget
                     )

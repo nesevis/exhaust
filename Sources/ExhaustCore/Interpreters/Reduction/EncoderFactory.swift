@@ -336,6 +336,75 @@ struct EncoderFactory {
         }
     }
 
+    // MARK: - Structural deletion descriptors
+
+    /// Builds descriptors for structural deletion within a single scope.
+    ///
+    /// One descriptor per span category in the given ordering. The random repair variant
+    /// is expressed as a dominance chain: exact deletion dominates the repair fallback.
+    /// Spans are pre-extracted from the span cache and passed via ``ReductionContext/deletionSpans``.
+    static func structuralDeletionDescriptors(
+        ordering: [ReductionScheduler.DeletionEncoderSlot],
+        spansBySlot: [ReductionScheduler.DeletionEncoderSlot: [ChoiceSpan]],
+        scopeDecoder: SequenceDecoder,
+        speculativeDecoder: SequenceDecoder,
+        alignedWindowsEncoder: DeleteAlignedWindowsEncoder,
+        budgetCap: Int
+    ) -> [MorphismDescriptor] {
+        var descriptors = [MorphismDescriptor]()
+
+        for slot in ordering {
+            guard let spans = spansBySlot[slot], spans.isEmpty == false else { continue }
+
+            switch slot {
+            case .randomRepairDelete:
+                descriptors.append(MorphismDescriptor(
+                    encoder: DeletionEncoder(spanCategory: .mixed, spans: spans),
+                    decoderFactory: { speculativeDecoder },
+                    probeBudget: budgetCap,
+                    structureChanged: true
+                ))
+            case .containerSpans:
+                descriptors.append(MorphismDescriptor(
+                    encoder: DeletionEncoder(spanCategory: .containerSpans, spans: spans),
+                    decoderFactory: { scopeDecoder },
+                    probeBudget: budgetCap,
+                    structureChanged: true
+                ))
+            case .sequenceElements:
+                descriptors.append(MorphismDescriptor(
+                    encoder: DeletionEncoder(spanCategory: .sequenceElements, spans: spans),
+                    decoderFactory: { scopeDecoder },
+                    probeBudget: budgetCap,
+                    structureChanged: true
+                ))
+            case .sequenceBoundaries:
+                descriptors.append(MorphismDescriptor(
+                    encoder: DeletionEncoder(spanCategory: .sequenceBoundaries, spans: spans),
+                    decoderFactory: { scopeDecoder },
+                    probeBudget: budgetCap,
+                    structureChanged: true
+                ))
+            case .freeStandingValues:
+                descriptors.append(MorphismDescriptor(
+                    encoder: DeletionEncoder(spanCategory: .freeStandingValues, spans: spans),
+                    decoderFactory: { scopeDecoder },
+                    probeBudget: budgetCap,
+                    structureChanged: true
+                ))
+            case .alignedWindows:
+                descriptors.append(MorphismDescriptor(
+                    encoder: alignedWindowsEncoder,
+                    decoderFactory: { scopeDecoder },
+                    probeBudget: budgetCap,
+                    structureChanged: true
+                ))
+            }
+        }
+
+        return descriptors
+    }
+
     // MARK: - Types
 
     /// The four value minimization encoder instances, passed by the caller.

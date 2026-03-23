@@ -106,6 +106,7 @@ public struct ReductionContext {
     /// Used by the covariant depth sweep, where spans at a given depth may be non-contiguous across multiple bind regions. The encoder applies this filter during span extraction via ``ComposableEncoder/extractFilteredSpans(from:in:context:)``. When `nil`, all spans in the position range are eligible.
     public let depthFilter: Int?
 
+
     public init(
         bindIndex: BindSpanIndex? = nil,
         convergedOrigins: [Int: ConvergedOrigin]? = nil,

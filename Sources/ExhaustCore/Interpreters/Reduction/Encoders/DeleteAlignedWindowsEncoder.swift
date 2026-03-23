@@ -12,7 +12,7 @@
 ///    to find the largest contiguous batch of aligned slots that can be deleted.
 /// 2. **Beam search subset deletion** — bitmask-encoded non-contiguous subsets, evaluated
 ///    layer-by-layer with bounded beam width.
-struct DeleteAlignedWindowsEncoder: AdaptiveEncoder {
+struct DeleteAlignedWindowsEncoder: AdaptiveEncoder, ComposableEncoder {
     init(beamTuning: Interpreters.ReductionBudget.AlignedDeletionBeamSearchTuning) {
         self.beamTuning = beamTuning
     }
@@ -78,6 +78,28 @@ struct DeleteAlignedWindowsEncoder: AdaptiveEncoder {
     private var layerRepairBudget = 0
     private var beamEvaluationCount = 0
     private var lastRejectedCandidate = ChoiceSequence()
+
+    // MARK: - ComposableEncoder
+
+    var convergenceRecords: [Int: ConvergedOrigin] { [:] }
+
+    func estimatedCost(
+        sequence: ChoiceSequence,
+        tree: ChoiceTree,
+        positionRange: ClosedRange<Int>,
+        context: ReductionContext
+    ) -> Int? {
+        estimatedCost(sequence: sequence, bindIndex: context.bindIndex)
+    }
+
+    mutating func start(
+        sequence: ChoiceSequence,
+        tree: ChoiceTree,
+        positionRange: ClosedRange<Int>,
+        context: ReductionContext
+    ) {
+        start(sequence: sequence, targets: .wholeSequence, convergedOrigins: nil)
+    }
 
     // MARK: - AdaptiveEncoder
 
