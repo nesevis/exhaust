@@ -1141,7 +1141,57 @@ extension ReductionState {
             )
 
             var lastAccepted = false
-            while let probe = composed.nextProbe(lastAccepted: lastAccepted) {
+            while true {
+                // Warm-start validation: before the composition advances to the
+                // next upstream probe and initializes the downstream, validate any
+                // pending convergence transfer from the previous downstream.
+                if let pending = composed.pendingTransferOrigins,
+                   let delta = composed.upstreamDelta, delta == 1
+                {
+                    // Adjacent upstream values — validate each origin at floor - 1.
+                    var allValid = true
+                    for (index, origin) in pending {
+                        guard index < sequence.count,
+                              let value = sequence[index].value,
+                              let range = value.validRange,
+                              origin.bound > range.lowerBound
+                        else { continue }
+
+                        let probeBP = origin.bound - 1
+                        var candidate = sequence
+                        candidate[index] = .value(.init(
+                            choice: ChoiceValue(
+                                value.choice.tag.makeConvertible(bitPattern64: probeBP),
+                                tag: value.choice.tag
+                            ),
+                            validRange: value.validRange,
+                            isRangeExplicit: value.isRangeExplicit
+                        ))
+                        legBudget.recordMaterialization()
+
+                        let validationDecoder = SequenceDecoder.exact()
+                        if let result = try validationDecoder.decode(
+                            candidate: candidate,
+                            gen: gen,
+                            tree: tree,
+                            originalSequence: sequence,
+                            property: property
+                        ), result.sequence.shortLexPrecedes(sequence) {
+                            // Property fails at floor - 1: floor is stale.
+                            // Discard ALL pending origins and cold-start.
+                            allValid = false
+                            accept(result, structureChanged: false)
+                            anyAccepted = true
+                            break
+                        }
+                    }
+                    composed.setValidatedOrigins(allValid ? pending : nil)
+                } else {
+                    // First probe, delta > 1, or no pending origins: cold-start.
+                    composed.setValidatedOrigins(nil)
+                }
+
+                guard let probe = composed.nextProbe(lastAccepted: lastAccepted) else { break }
                 guard legBudget.isExhausted == false else { break }
                 if collectStats { kleisliProbes += 1 }
                 legBudget.recordMaterialization()

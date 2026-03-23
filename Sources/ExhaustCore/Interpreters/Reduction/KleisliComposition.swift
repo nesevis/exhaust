@@ -73,12 +73,26 @@ public struct KleisliComposition<Output>: AdaptiveEncoder {
     /// The lift report from the most recent successful lift.
     private var lastLiftReport: DecodingReport?
 
-    /// Downstream convergence records from the previous upstream iteration.
-    /// Carried forward when the lift report shows high coverage.
-    private var downstreamConvergenceTransfer: [Int: ConvergedOrigin] = [:]
+    /// Raw convergence records from the previous upstream iteration's downstream, unvalidated.
+    ///
+    /// Populated when the downstream exhausts. The driver (`runKleisliExploration`) reads this, validates each origin at `floor - 1`, and calls ``setValidatedOrigins(_:)`` with the validated subset (or nil for cold-start).
+    public private(set) var pendingTransferOrigins: [Int: ConvergedOrigin]?
+
+    /// Validated convergence origins, set by the driver after `floor - 1` validation.
+    ///
+    /// The downstream initialization uses these (not the raw pending origins). `nil` means cold-start.
+    private var validatedOrigins: [Int: ConvergedOrigin]?
 
     /// Upstream convergence records accumulated across all upstream iterations.
     private var upstreamConvergenceRecords: [Int: ConvergedOrigin] = [:]
+
+    /// Bit pattern of the previous upstream probe's value, for delta computation.
+    public private(set) var previousUpstreamBitPattern: UInt64?
+
+    /// User-value-space delta between the current and previous upstream probe.
+    ///
+    /// `nil` on the first probe (no previous). For signed integers, computed after zigzag decoding. The driver uses this to decide: delta == 1 → validate and potentially transfer; delta > 1 → cold-start immediately.
+    public private(set) var upstreamDelta: UInt64?
 
     /// Maximum upstream candidates to try.
     private var upstreamBudget = 15
@@ -137,8 +151,11 @@ public struct KleisliComposition<Output>: AdaptiveEncoder {
         liftedSequence = nil
         liftedTree = nil
         lastLiftReport = nil
-        downstreamConvergenceTransfer = [:]
+        pendingTransferOrigins = nil
+        validatedOrigins = nil
         upstreamConvergenceRecords = [:]
+        previousUpstreamBitPattern = nil
+        upstreamDelta = nil
         upstreamProbesUsed = 0
 
         upstream.start(
@@ -159,11 +176,10 @@ public struct KleisliComposition<Output>: AdaptiveEncoder {
             // Downstream exhausted
             downstreamActive = false
 
-            // Harvest downstream convergence records for potential transfer
+            // Harvest downstream convergence records as pending transfer (unvalidated).
+            // The driver validates these at floor - 1 before the next downstream initialization.
             let downRecords = downstream.convergenceRecords
-            if downRecords.isEmpty == false {
-                downstreamConvergenceTransfer = downRecords
-            }
+            pendingTransferOrigins = downRecords.isEmpty ? nil : downRecords
         }
 
         // Advance upstream to get the next candidate
@@ -177,6 +193,19 @@ public struct KleisliComposition<Output>: AdaptiveEncoder {
             }
             upstreamProbesUsed += 1
 
+            // Track upstream value for delta computation
+            if let upstreamValue = upstreamProbe[upstreamRange.lowerBound].value {
+                let currentBP = upstreamValue.choice.bitPattern64
+                if let previousBP = previousUpstreamBitPattern {
+                    // Delta in bit-pattern space (zigzag-encoded for signed integers).
+                    // For signed: zigzag(n) - zigzag(n-1) == 1 when user values differ by 1.
+                    upstreamDelta = currentBP > previousBP ? currentBP - previousBP : previousBP - currentBP
+                } else {
+                    upstreamDelta = nil // First probe — no previous
+                }
+                previousUpstreamBitPattern = currentBP
+            }
+
             // Lift the upstream probe — materialize without property check
             guard let liftResult = lift.lift(upstreamProbe) else {
                 // Lift rejected — upstream candidate was structurally invalid
@@ -187,19 +216,20 @@ public struct KleisliComposition<Output>: AdaptiveEncoder {
             liftedTree = liftResult.tree
             lastLiftReport = liftResult.liftReport
 
-            // Build downstream convergence origins from two sources:
-            // 1. The global convergence cache (same positions, potentially valid
-            //    warm starts from the standalone pipeline).
-            // 2. Convergence transfer from the previous upstream iteration's
-            //    downstream (gated by lift report coverage — only if the fibres
-            //    are similar enough that the stall points carry over).
-            // The transfer origins override the global cache at overlapping
+            // Build downstream convergence origins.
+            // The global cache provides warm starts from the standalone pipeline.
+            // Validated transfer origins (set by the driver via setValidatedOrigins
+            // after floor-1 validation) override the global cache at overlapping
             // positions — they are more recent and fibre-specific.
+            // When validatedOrigins is nil, the downstream cold-starts from the
+            // global cache only.
             var downstreamOrigins = context.convergedOrigins ?? [:]
-            if let transferOrigins = convergenceTransferOrigins(from: liftResult.liftReport) {
-                for (index, origin) in transferOrigins {
+            if let validated = validatedOrigins {
+                for (index, origin) in validated {
                     downstreamOrigins[index] = origin
                 }
+                // Consume the validated origins — one use per upstream probe
+                validatedOrigins = nil
             }
 
             // Initialize downstream on the lifted (sequence, tree)
@@ -236,26 +266,16 @@ public struct KleisliComposition<Output>: AdaptiveEncoder {
         upstreamConvergenceRecords
     }
 
-    // MARK: - Private Helpers
+    // MARK: - Driver Interface
 
-    /// Determines whether to transfer downstream convergence records from the previous upstream iteration, based on the lift report's coverage.
+    /// Sets the validated convergence origins for the next downstream initialization.
     ///
-    /// High coverage (most coordinates at tier 1) → transfer. The fibres are similar.
-    /// Low coverage (many coordinates at tier 2 or 3) → discard. The fibres differ.
-    private func convergenceTransferOrigins(
-        from liftReport: DecodingReport?
-    ) -> [Int: ConvergedOrigin]? {
-        guard let report = liftReport,
-              downstreamConvergenceTransfer.isEmpty == false
-        else { return nil }
-
-        // Transfer if fidelity is above threshold (most coordinates carried forward faithfully)
-        let coverageThreshold = 0.7
-        if report.fidelity >= coverageThreshold {
-            return downstreamConvergenceTransfer
-        }
-        return nil
+    /// Called by the driver (`runKleisliExploration`) after validating each pending origin at `floor - 1`. Pass `nil` for cold-start (no transfer). The composition uses these when initializing the downstream encoder — never the raw ``pendingTransferOrigins``.
+    public mutating func setValidatedOrigins(_ origins: [Int: ConvergedOrigin]?) {
+        validatedOrigins = origins
     }
+
+    // MARK: - Private Helpers
 
     /// Adjusts the downstream range for the lifted sequence.
     ///

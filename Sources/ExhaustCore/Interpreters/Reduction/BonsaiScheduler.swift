@@ -209,6 +209,117 @@ enum BonsaiScheduler {
             }
         }
 
+        // MARK: - Post-Termination Verification Sweep
+        //
+        // Detect stale convergence cache entries that produced a non-minimal
+        // counterexample. Probe floor - 1 for each cached coordinate. If any
+        // floor is stale (property fails at floor - 1), run one Phase-2-only
+        // cycle with the cache cleared. Re-enter the main loop if improvements
+        // found, guarded to one re-entry.
+
+        var verificationSweepCompleted = false
+        verificationSweep: do {
+            let staleness = try Self.detectStaleness(state: state, gen: gen, property: property)
+            if staleness.hasStaleFloors {
+                if isInstrumented {
+                    ExhaustLog.debug(
+                        category: .reducer,
+                        event: "verification_sweep_stale",
+                        metadata: ["probes_used": "\(staleness.probesUsed)"]
+                    )
+                }
+
+                // Run Phase-2-only cycle with cache cleared
+                let preVerificationBest = state.bestSequence
+                let savedCache = state.convergenceCache
+                state.convergenceCache.invalidateAll()
+
+                var verificationBudget = Self.computeVerificationBudget(
+                    state: state, config: config
+                )
+                let dag = state.hasBind
+                    ? ChoiceDependencyGraph.build(
+                        from: state.sequence,
+                        tree: state.tree,
+                        bindIndex: state.bindIndex ?? BindSpanIndex(from: state.sequence)
+                    )
+                    : nil
+                _ = try state.runFibreDescent(budget: &verificationBudget, dag: dag)
+
+                state.convergenceCache = savedCache
+
+                if state.bestSequence.shortLexPrecedes(preVerificationBest) {
+                    // Stall was false — cache was stale. Re-enter if first time.
+                    if verificationSweepCompleted == false {
+                        verificationSweepCompleted = true
+                        stallBudget = config.maxStalls
+
+                        if isInstrumented {
+                            ExhaustLog.debug(
+                                category: .reducer,
+                                event: "verification_sweep_reentry",
+                                metadata: ["seq_len": "\(state.sequence.count)"]
+                            )
+                        }
+
+                        // Re-enter the main reduction loop
+                        while stallBudget > 0 {
+                            cycles += 1
+                            state.currentCycle = cycles
+                            let cycleStartBest = state.bestSequence
+
+                            state.computeEncoderOrdering()
+
+                            var baseRemaining = Self.baseDescentBudget
+                            let (dag, baseProgress) = try state.runBaseDescent(
+                                budget: &baseRemaining, cycle: cycles
+                            )
+
+                            var fibreRemaining = Self.fibreDescentBudget
+                            let fibreProgress = try state.runFibreDescent(
+                                budget: &fibreRemaining, dag: dag
+                            )
+
+                            var cycleImproved = baseProgress || fibreProgress
+                            if cycleImproved == false {
+                                var kleisliRemaining = Self.relaxRoundBudget
+                                if try state.runKleisliExploration(
+                                    budget: &kleisliRemaining, dag: dag
+                                ) {
+                                    cycleImproved = true
+                                }
+
+                                if cycleImproved == false {
+                                    var relaxRemaining = Self.relaxRoundBudget
+                                    if try state.runRelaxRound(remaining: &relaxRemaining) {
+                                        cycleImproved = true
+                                    }
+                                }
+                            }
+
+                            if state.bestSequence.shortLexPrecedes(cycleStartBest) {
+                                stallBudget = config.maxStalls
+                            } else {
+                                stallBudget -= 1
+                            }
+                        }
+
+                        // Check for staleness again after re-entry
+                        let secondStaleness = try Self.detectStaleness(
+                            state: state, gen: gen, property: property
+                        )
+                        if secondStaleness.hasStaleFloors {
+                            ExhaustLog.debug(
+                                category: .reducer,
+                                event: "systematic_cache_staleness",
+                                metadata: ["probes_used": "\(secondStaleness.probesUsed)"]
+                            )
+                        }
+                    }
+                }
+            }
+        }
+
         if isInstrumented, let instrumentation = state.convergenceInstrumentation {
             let records = instrumentation.records
             let totalConvergences = instrumentation.totalEncoderConvergences
@@ -281,5 +392,83 @@ enum BonsaiScheduler {
         }
 
         return (reduced: (bestSequence, bestOutput), stats: state.extractStats())
+    }
+
+    // MARK: - Post-Termination Verification Helpers
+
+    /// Result of probing `floor - 1` for each cached convergence point.
+    struct StalenessCheck {
+        let hasStaleFloors: Bool
+        let probesUsed: Int
+    }
+
+    /// Probes `floor - 1` for each cached convergence point to detect stale floors.
+    ///
+    /// Returns on first stale detection (property fails at `floor - 1`). Skips trivially valid floors (at range minimum). Accepts the result if it shortLexPrecedes the current sequence.
+    static func detectStaleness<Output>(
+        state: ReductionState<Output>,
+        gen: ReflectiveGenerator<Output>,
+        property: @escaping (Output) -> Bool
+    ) throws -> StalenessCheck {
+        var probesUsed = 0
+        for index in 0 ..< state.sequence.count {
+            guard let value = state.sequence[index].value,
+                  let origin = state.convergenceCache.convergedOrigin(at: index),
+                  let range = value.validRange
+            else { continue }
+
+            let floorBP = origin.bound
+            guard floorBP > range.lowerBound else { continue }
+
+            let probeBP = floorBP - 1
+            var candidate = state.sequence
+            candidate[index] = .value(.init(
+                choice: ChoiceValue(
+                    value.choice.tag.makeConvertible(bitPattern64: probeBP),
+                    tag: value.choice.tag
+                ),
+                validRange: value.validRange,
+                isRangeExplicit: value.isRangeExplicit
+            ))
+
+            probesUsed += 1
+            let decoder = SequenceDecoder.exact()
+            if let result = try decoder.decode(
+                candidate: candidate,
+                gen: gen,
+                tree: state.tree,
+                originalSequence: state.sequence,
+                property: property
+            ) {
+                if result.sequence.shortLexPrecedes(state.sequence) {
+                    state.accept(result, structureChanged: false)
+                    return StalenessCheck(hasStaleFloors: true, probesUsed: probesUsed)
+                }
+            }
+        }
+        return StalenessCheck(hasStaleFloors: false, probesUsed: probesUsed)
+    }
+
+    /// Computes the verification cycle budget based on the user's reduction budget.
+    ///
+    /// `.fast` (maxStalls ≤ 1): standard Phase-2 budget (best-effort). `.slow`: expanded budget based on per-coordinate range sizes.
+    static func computeVerificationBudget<Output>(
+        state: ReductionState<Output>,
+        config: Interpreters.BonsaiReducerConfiguration
+    ) -> Int {
+        if config.maxStalls <= 1 {
+            return fibreDescentBudget
+        }
+        var budget = 0
+        for index in 0 ..< state.sequence.count {
+            guard let value = state.sequence[index].value,
+                  let range = value.validRange
+            else { continue }
+            let rangeSize = range.upperBound - range.lowerBound + 1
+            // ceil(log2(rangeSize)) via bit width — no floating-point
+            let bitsNeeded = UInt64.bitWidth - max(2, rangeSize - 1).leadingZeroBitCount
+            budget += bitsNeeded
+        }
+        return max(budget, fibreDescentBudget)
     }
 }
