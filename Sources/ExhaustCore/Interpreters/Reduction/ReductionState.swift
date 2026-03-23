@@ -217,8 +217,8 @@ final class ReductionState<Output> {
     }
 
     // Encoders
-    var promoteBranchesEncoder = DeleteByBranchPromotionEncoder()
-    var pivotBranchesEncoder = DeleteByBranchPivotEncoder()
+    var promoteBranchesEncoder = BranchSimplificationEncoder(strategy: .promote)
+    var pivotBranchesEncoder = BranchSimplificationEncoder(strategy: .pivot)
     var zeroValueEncoder = ZeroValueEncoder()
     var binarySearchToZeroEncoder = BinarySearchToSemanticSimplestEncoder()
     var binarySearchToTargetEncoder = BinarySearchToRangeMinimumEncoder()
@@ -313,71 +313,6 @@ extension ReductionState {
                 convergenceCache.invalidate(in: region.bindSpanRange)
             }
         }
-    }
-
-    /// Runs a batch encoder against a decoder, tracking materializations. Returns true if a candidate was accepted.
-    func runBatch(
-        _ encoder: some BatchEncoder,
-        decoder: SequenceDecoder,
-        targets: TargetSet,
-        structureChanged: Bool,
-        budget: inout ReductionScheduler.LegBudget
-    ) throws -> Bool {
-        guard budget.isExhausted == false else { return false }
-        if dominance.shouldSkip(encoder.name, phase: encoder.phase) { return false }
-        let startSeqLen = sequence.count
-        let cacheSalt = decoder.rejectCacheSalt
-        var probes = 0
-        let budgetBefore = budget.used
-        defer {
-            if collectStats {
-                encoderProbes[encoder.name, default: 0] += probes
-                totalMaterializations += (budget.used - budgetBefore)
-            }
-        }
-        for candidate in encoder.encode(sequence: sequence, targets: targets) {
-            guard budget.isExhausted == false else { break }
-            probes += 1
-            let cacheKey = ZobristHash.hash(of: candidate) &+ cacheSalt
-            if rejectCache.contains(cacheKey) {
-                budget.recordMaterialization()
-                continue
-            }
-            if let result = try decoder.decode(
-                candidate: candidate,
-                gen: gen,
-                tree: tree,
-                originalSequence: sequence,
-                property: property
-            ) {
-                budget.recordMaterialization()
-                accept(result, structureChanged: structureChanged)
-                dominance.recordSuccess(encoder.name)
-                if isInstrumented {
-                    ExhaustLog.debug(category: .reducer, event: "encoder_accepted", metadata: [
-                        "encoder": encoder.name.rawValue, "probes": "\(probes)",
-                        "seq_len": "\(startSeqLen)→\(sequence.count)",
-                        "output": "\(output)",
-                    ])
-                }
-                return true
-            }
-            budget.recordMaterialization()
-            rejectCache.insert(cacheKey)
-        }
-        if isInstrumented {
-            if probes > 0 {
-                ExhaustLog.debug(category: .reducer, event: "encoder_exhausted", metadata: [
-                    "encoder": encoder.name.rawValue, "probes": "\(probes)",
-                    "seq_len": "\(startSeqLen)",
-                ])
-            } else {
-                ExhaustLog.debug(category: .reducer, event: "encoder_no_probes", metadata: [
-                    "encoder": encoder.name.rawValue,
-                ])
-            }
-        }
-        return false
     }
 
     /// Runs an adaptive encoder against a decoder, tracking materializations. Returns true if any probe was accepted.

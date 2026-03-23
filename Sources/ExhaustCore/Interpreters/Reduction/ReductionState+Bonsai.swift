@@ -114,11 +114,13 @@ extension ReductionState {
             branchTreeDirty = false
         }
 
-        promoteBranchesEncoder.currentTree = tree
-        if try runBatch(
+        let branchReductionContext = ReductionContext(bindIndex: bindIndex)
+        let fullBranchRange = 0 ... max(0, sequence.count - 1)
+        if try runComposable(
             promoteBranchesEncoder,
             decoder: branchDecoder,
-            targets: .wholeSequence,
+            positionRange: fullBranchRange,
+            context: branchReductionContext,
             structureChanged: true,
             budget: &legBudget
         ) {
@@ -129,11 +131,11 @@ extension ReductionState {
             }
         }
 
-        pivotBranchesEncoder.currentTree = tree
-        if try runBatch(
+        if try runComposable(
             pivotBranchesEncoder,
             decoder: branchDecoder,
-            targets: .wholeSequence,
+            positionRange: fullBranchRange,
+            context: branchReductionContext,
             structureChanged: true,
             budget: &legBudget
         ) {
