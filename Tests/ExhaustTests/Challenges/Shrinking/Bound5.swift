@@ -114,7 +114,8 @@ struct Bound5ShrinkingChallenge {
         )
     
         let rep = try #require(report)
-        #expect(rep.propertyInvocations == 410)
+        // +1 property invocation from post-termination verification sweep (probes floor - 1)
+        #expect(rep.propertyInvocations == 411)
         #expect(rep.totalMaterializations == 489)
         
         #expect(output?.arr.count == 2)
