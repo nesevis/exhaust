@@ -1,5 +1,22 @@
 # Reduction Planning: Structural Prediction and Validation
 
+## Why Composition, Not Tactics
+
+The 20 existing encoders are hand-crafted tactics — each one embeds both a search strategy (binary search, exhaustive enumeration, lockstep redistribution) and the structural context where it applies (leaf values, branch selectors, container spans, sibling pairs). When a new generator shape exposes a reduction gap, the response is a round trip to the library maintainer: diagnose the gap, design a new encoder, implement it, add an `EncoderName` case, wire it into the slot rotation, define dominance rules, test it. Every novel reduction shape requires bespoke code.
+
+The compositional encoder algebra changes this by separating *where to search* from *how to search*. The CDG identifies structural positions (bind-inner nodes, fibre boundaries, dependency edges). The lift materializes candidate fibres without checking the property. The downstream encoder searches the fibre using a generic primitive — exhaustive enumeration, pairwise covering, binary search per coordinate. These are reusable components, not generator-specific tactics.
+
+A new generator shape — deeper nesting, conditional binds, non-monotonic fibres — does not require a new encoder type. The composition discovers the structure at runtime through the CDG, materializes candidate fibres through the lift, and searches them with whatever downstream is appropriate for the fibre's size and parameter count. The planning framework parametrizes this selection (domain ratio picks the downstream, leverage orders the edges, budget allocation funds them), but the underlying machinery is the same generic composition.
+
+This reframes the encoder design space. Instead of monolithic tactics, the primitives fall into two families:
+
+- **Horizontal encoders** (manipulations): reduce toward range minimum, set to semantic simplest, redistribute between siblings, promote a branch. These move between fibres — they change an upstream value, and the lift reindexes the downstream to match. Reusable across any upstream position, regardless of what lies downstream.
+- **Vertical encoders** (search methods): binary search, exhaustive enumeration, pairwise covering, random sampling. These move within a single fibre — they explore the downstream space at a fixed upstream value. Reusable across any fibre, regardless of which generator produced it.
+
+The composition wires horizontal encoders to upstream coordinates and vertical encoders to structural positions. A new reduction capability is a new horizontal encoder or a new vertical encoder — not a monolithic tactic that re-implements scheduling, convergence tracking, and dominance logic from scratch.
+
+The two families are orthogonal. Every reduction step decomposes into a horizontal move (manipulation + lift) followed by a vertical move (search). The existing encoders fuse these two moves into a single monolithic step, which is why each one is specific to a particular generator shape. Unfusing them is what makes the algebra composable. The formal structure behind this decomposition is a Grothendieck opfibration (see "Fibrational Structure of the Encoder Algebra" below). The terminology is deliberate: "horizontal" and "vertical" refer to the opcartesian and vertical components of that factorisation, and are chosen to avoid collision with the scheduler's existing "base descent" (Phase 1, structural) and "fibre descent" (Phase 2, value) phases.
+
 ## The Signals
 
 The CDG, ChoiceTree, and ChoiceSequence provide signals about the reduction landscape. The set is empirical — not derived from a completeness argument.
@@ -226,3 +243,112 @@ Symmetric corollary for demotion: demote when the prediction was confident and w
 **IPOG budget estimation vs exact computation.** The budget allocation uses `max_domain² × ceil(log₂(num_params))` as the required budget for pairwise covering. The actual IPOG array is almost always smaller (mixed domains, serendipitous coverage from greedy horizontal growth). The risk of under-allocation from over-estimation is low. The risk of over-allocation (wasted budget slots) is bounded by early termination.
 
 If the actual IPOG row count computation is cheap enough for the scoring pass, use it instead of the estimate. IPOG row count is O(parameters × domains × log(parameters)) — much cheaper than generating the array. The `CoveringArray` library already has the `generate` function with `rowBudget` for early abort. A lightweight "dry run" that computes row count without generating the array would eliminate the estimation gap entirely. If the dry run is too expensive, the estimate is conservative and the early-termination mechanism handles the rest.
+
+## Fibrational Structure of the Encoder Algebra
+
+The separation of search methods from manipulations has a precise categorical description as a Grothendieck opfibration. This section states the structure; it is not required for implementing the planning framework, but it clarifies why the decomposition is canonical rather than an arbitrary design choice.
+
+### Setup
+
+**Base category B.** Objects are upstream values (bind-inner positions in the choice sequence). For a bind-inner with range `lo...hi`, the objects are the integers in that range. A morphism n → k (where n ≥ k) represents a reduction of the upstream value. Horizontal encoders (manipulations — reduce toward range minimum, set to semantic simplest, redistribute between siblings) are morphisms in B.
+
+**Fibre F(n).** For a fixed upstream value n, the fibre is the category of valid downstream configurations: choice sequences where every bound entry is in range for the generator materialised at n. Vertical encoders (search methods — binary search steps, exhaustive enumeration probes, pairwise covering rows) are morphisms within F(n). They do not change the upstream value.
+
+**Reindexing F(n → k).** A base morphism n → k induces a functor F(n) → F(k): take a downstream configuration valid at n and materialise it at k, clamping or regenerating entries that fall out of range. This is the `GeneratorLift`. The reindexing is covariant (pushforward), making this an opfibration, not a fibration.
+
+### The total category
+
+The Grothendieck construction assembles B and the fibres into a total category ∫F. Objects are pairs (n, s) where s ∈ F(n). A morphism (n, s) → (k, t) in ∫F decomposes uniquely into:
+
+1. A **horizontal** (opcartesian, between-fibre) component: the base morphism n → k and the induced lift F(n) → F(k), producing an intermediate configuration s' ∈ F(k).
+2. A **vertical** (within-fibre) component: a morphism s' → t in F(k), the search step that finds the downstream configuration where the property fails.
+
+This is the standard opcartesian/vertical factorisation. Every reduction step in the Kleisli composition follows this decomposition: a horizontal encoder proposes a base morphism (manipulation), the `GeneratorLift` computes the opcartesian lift (materialisation without property check), and a vertical encoder performs the fibre step (search within the reindexed fibre, with property checks).
+
+### The materialisation monad
+
+The lift is partial — materialisation can fail when the downstream structure at k is incompatible with the configuration at n (entries out of range, structural changes from conditional binds). This partiality is absorbed by the Kleisli category over the materialisation monad M on ∫F. M's unit embeds a configuration into its materialised form; M's bind composes two materialisation-dependent steps. The `KleisliComposition` type is a morphism in the Kleisli category of M — its name is literal.
+
+### The cost boundary
+
+The horizontal/vertical factorisation aligns with the cost model. The horizontal component (lift) is internal cost: materialisation without property invocation, controllable per-call. The vertical component (fibre search) is external cost: each probe invokes the property, whose cost is unknown and uncontrollable. The `dec` boundary in the composition — where the property is checked — sits at the junction between the two components. This is not a convention; it is forced by the factorisation. The lift cannot check the property (it operates in B, not on the predicate over ∫F), and the search must check the property (it needs to distinguish failing from passing configurations in the fibre).
+
+### Why the existing encoders are hard to extend
+
+Each existing encoder is a specific path through ∫F that fuses the horizontal and vertical components into a single step. The encoder knows both what base morphism to apply and how to search the resulting fibre — but this knowledge is compiled into its implementation, not available as composable data. Adding a new generator shape requires a new fused path, because the factorisation was never exposed. The compositional algebra unfuses the paths into horizontal and vertical encoders, making each reusable across generator shapes. The planning framework's encoder selection (step 2) operates on this unfused representation: it selects a vertical encoder (search method) based on the fibre's structural properties, independently of the horizontal encoder (manipulation) that produced the fibre.
+
+## Addendum: Profiling Results (March 2026)
+
+Profiling instrumentation was added to all single shrinking challenge tests and a new structural pathological test suite. The results evaluate the decision tree in "Implementation Steps" above. All data collected with `.onReport` at default (`.fast`) budget.
+
+### Standard shrinking challenges
+
+| Test | cycles | probes | mats | reconfirm | edges | futile | transfers | sweep |
+|------|--------|--------|------|-----------|-------|--------|-----------|-------|
+| Deletion | 2 | 32 | 8 | 0% | 0 | 0 | 0/0/0 | 0p/ok |
+| Calculator | 2 | 17 | 53 | 0% | 0 | 0 | 0/0/0 | 0p/ok |
+| Reverse | 2 | 19 | 16 | 25% | 0 | 0 | 0/0/0 | 1p/ok |
+| Replacement | 2 | 87 | 82 | 0% | 0 | 0 | 0/0/0 | 2p/ok |
+| Distinct | 3 | 42 | 34 | 22% | 0 | 0 | 0/0/0 | 2p/ok |
+| DistinctReflected | 2 | 47 | 42 | 0% | 0 | 0 | 0/0/0 | 2p/ok |
+| Difference1 | 2 | 77 | 73 | 50% | 0 | 0 | 0/0/0 | 2p/ok |
+| Difference2 | 2 | 98 | 94 | 50% | 0 | 0 | 0/0/0 | 2p/ok |
+| Difference3 | 2 | 81 | 78 | 50% | 0 | 0 | 0/0/0 | 2p/ok |
+| LengthList | 2 | 30 | 21 | 50% | 0 | 0 | 0/0/0 | 1p/ok |
+| NestedLists | 2 | 77 | 70 | 0% | 0 | 0 | 0/0/0 | 0p/ok |
+| Parser | 2 | 84 | 338 | 0% | 0 | 0 | 0/0/0 | 0p/ok |
+| LargeUnionList | 3 | 300 | 275 | 27% | 0 | 0 | 0/0/0 | 4p/ok |
+| LargeUnionListPath1 | 4 | 656 | 649 | 40% | 0 | 0 | 0/0/0 | 4p/ok |
+| LargeUnionListPath2 | 3 | 602 | 595 | 27% | 0 | 0 | 0/0/0 | 4p/ok |
+| LargeUnionListPath3 | 3 | 298 | 291 | 27% | 0 | 0 | 0/0/0 | 4p/ok |
+| Bound5Single | 4 | 368 | 503 | 18% | 0 | 0 | 0/0/0 | 1p/ok |
+| Bound5Path1 | 4 | 389 | 688 | 17% | 0 | 0 | 0/0/0 | 1p/ok |
+| Bound5Path2 | 4 | 268 | 385 | 40% | 0 | 0 | 0/0/0 | 1p/ok |
+| Bound5Path4 | 17 | 912 | 1299 | 68% | 0 | 0 | 0/0/0 | 1p/ok |
+| Coupling | 3 | 165 | 242 | 23% | 2 | 2 | 0/0/0 | 2p/ok |
+| CouplingPath | 3 | 165 | 242 | 23% | 2 | 2 | 0/0/0 | 2p/ok |
+| BinaryHeap | 14 | 688 | 857 | 0% | 4 | 0 | 0/0/0 | 1p/ok |
+
+### Structural pathological tests
+
+Purpose-built generators exercising bind-dependent CDG topologies that the standard challenges lack.
+
+| Test | cycles | probes | mats | reconfirm | edges | futile | transfers | sweep |
+|------|--------|--------|------|-----------|-------|--------|-----------|-------|
+| FibreThreshold | 2 | 318 | 311 | 25% | 2 | 2 | 0/0/0 | 3p/ok |
+| CrossLevelSum | 3 | 187 | 180 | 33% | 2 | 1 | 0/0/0 | 3p/ok |
+| NestedBind2 | 2 | 195 | 191 | 62% | 2 | 2 | 0/0/0 | 4p/ok |
+| NestedBind3 | 2 | 142 | 122 | 38% | 3 | 1 | 0/0/0 | 2p/ok |
+| WideCDG | 2 | 222 | 212 | 75% | 2 | 2 | 0/0/0 | 4p/ok |
+| MultiParamFibre | 2 | 218 | 222 | 58% | 1 | 1 | 0/0/0 | 6p/ok |
+| NonMonotonicFibre | 2 | 130 | 125 | 67% | 1 | 1 | 0/0/0 | 3p/ok |
+
+### Decision tree evaluation
+
+**Branch 1: > 80% of wasted probes are floor re-confirmation → step 1 only.** Not triggered. The highest `reconfirm` is WideCDG at 75% and Bound5Path4 at 68%. The `reconfirm` metric is coordinate-weighted (fraction of value coordinates already converged at Phase 2 start), not probe-weighted. A converged coordinate costs ~1 re-confirmation probe; an unconverged coordinate costs ~log₂(range). The probe-weighted re-confirmation fraction is lower than the reported coordinate fraction.
+
+**Branch 2: > 30% of probe budget wasted on wrong encoder selection → steps 1 + 2 + 3.** Cannot evaluate. The `futile` field counts composition edges that produced no improvement — it does not distinguish "wrong encoder type" from "right encoder, unproductive edge." The missing telemetry is: fibre size at `start()` time, which encoder variant (exhaustive vs pairwise) was selected, and whether the selection was correct post-hoc. The document's profiling section describes how to measure this as a byproduct of `FibreCoveringEncoder.start()`, but the fields are not yet surfaced in `ExhaustReport`.
+
+**Branch 3: convergence transfer wasteful → steps 1 + 2 + 3 + 4/5.** Not triggered. Convergence transfer is 0/0/0 across every test. The transfer mechanism requires a search-based downstream encoder; the current downstream is always `FibreCoveringEncoder`, which cold-starts. This path is structurally dead until a search-based downstream exists.
+
+**Branch 4: not measurably wasteful → do nothing.** This is where the data currently points. The confidence in this conclusion is moderate: the structural pathological tests fill the CDG coverage gap (every test has edges ≥ 1, up to 3), but the encoder-type and transfer telemetry gaps remain.
+
+### Key observations
+
+**Composition edges.** The standard challenges had `edges=0` on 21 of 23 runs (only Coupling and BinaryHeap had edges). The structural pathological tests have edges on all seven runs: 1–3 edges per test, exercising single-bind, nested two-level, nested three-level, and wide independent topologies.
+
+**Productive composition.** CrossLevelSum is the first test in the suite where a composition edge produced an improvement (`edges=2, futile=1`). The composition found the global minimum [1, 1, 2] that Phase 2's per-coordinate search cannot reach — reducing any single coordinate of the Phase 2 result breaks the sum constraint. NestedBind3 also shows a productive edge (`edges=3, futile=1`).
+
+**Verification sweep.** Clean across all tests (0–6 probes, zero staleness detected). Negligible overhead.
+
+**Convergence transfer.** Dead in practice. The warm-start validation and transfer machinery exists but is never exercised because the only downstream encoder (`FibreCoveringEncoder`) always cold-starts. The structural pathological tests provide the generators that would exercise transfer (bind-dependent fibres with composition edges), but the search-based downstream encoder that would use transfer does not exist yet.
+
+**Local minima from per-coordinate search.** Three structural pathological tests (WideCDG, MultiParamFibre, NonMonotonicFibre) converge to local minima because the property's failure surface requires cross-coordinate redistribution that per-coordinate binary search cannot perform. WideCDG requires cross-edge coordination (simultaneously reducing one bind-inner while increasing another). MultiParamFibre and NonMonotonicFibre require within-fibre redistribution across sum-constrained coordinates. These are not bugs — they are the expected behaviour of greedy per-coordinate search on coupled constraints, and they define the gap that future encoder improvements (cross-edge redistribution, within-fibre redistribution via composition) would address.
+
+### Gaps remaining
+
+1. **Encoder-type telemetry.** The profiling fields do not surface fibre size at `start()` time or the encoder variant selected. Branch 2's threshold cannot be evaluated without this data.
+2. **Search-based downstream.** No search-based downstream encoder exists. Branch 3 and convergence transfer remain untestable.
+3. **Probe-weighted re-confirmation.** The `reconfirm` metric is coordinate-weighted. Branch 1's "> 80% of wasted probes" threshold requires probe-level attribution.
+4. **No `.slow` budget tests.** Steps 4 and 5 activate only at `.slow` budget (≥ 3 stall cycles). All tests run at default `.fast` budget.
+5. **No expensive-property tests.** All properties are trivial computations. The value proposition of probe savings scales with property cost; at sub-millisecond cost, the absolute savings from planning are negligible.
