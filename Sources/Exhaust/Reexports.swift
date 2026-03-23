@@ -16,6 +16,8 @@ public typealias ExhaustLog = ExhaustCore.ExhaustLog
 public typealias Interpreters = ExhaustCore.Interpreters
 public typealias TCRBudget = Interpreters.ReductionBudget
 public typealias GeneratorError = ExhaustCore.GeneratorError
+public typealias EncoderName = ExhaustCore.EncoderName
+public typealias ReductionStats = ExhaustCore.ReductionStats
 
 // MARK: - Internal typealiases
 

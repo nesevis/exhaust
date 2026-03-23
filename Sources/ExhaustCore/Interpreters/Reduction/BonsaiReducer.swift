@@ -101,6 +101,53 @@ public extension Interpreters {
         return result
     }
 
+    /// Bonsai reducer with statistics collection.
+    ///
+    /// Returns both the reduction result and accumulated per-encoder probe counts and materialization totals. The existing ``bonsaiReduce(gen:tree:output:config:humanOrderPostProcess:visualize:property:)`` signature is unchanged — only callers that need statistics use this variant.
+    static func bonsaiReduceCollectingStats<Output>(
+        gen: ReflectiveGenerator<Output>,
+        tree: ChoiceTree,
+        output: Output,
+        config: BonsaiReducerConfiguration,
+        humanOrderPostProcess: Bool = false,
+        visualize: Bool = false,
+        property: (Output) -> Bool
+    ) throws -> (reduced: (ChoiceSequence, Output)?, stats: ReductionStats) {
+        var bonsaiConfig = config
+        bonsaiConfig.humanOrderPostProcess = humanOrderPostProcess
+        bonsaiConfig.visualize = visualize
+
+        if visualize {
+            print("── Before reduction ──")
+            print(tree.visualization(width: 100))
+        }
+
+        let result = try withoutActuallyEscaping(property) { escapingProperty in
+            try BonsaiScheduler.runCollectingStats(
+                gen: gen,
+                initialTree: tree,
+                initialOutput: output,
+                config: bonsaiConfig,
+                property: escapingProperty
+            )
+        }
+
+        if visualize, let (resultSequence, _) = result.reduced {
+            let resultTree = ReductionMaterializer.materialize(
+                gen,
+                prefix: resultSequence,
+                mode: .exact,
+                fallbackTree: tree
+            )
+            if case let .success(_, resultChoiceTree, _) = resultTree {
+                print("── After reduction ──")
+                print(resultChoiceTree.visualization(width: 100))
+            }
+        }
+
+        return result
+    }
+
     /// Convenience overload that materializes the output from the tree.
     ///
     /// Use when the caller does not already have the generated value.

@@ -67,6 +67,23 @@ enum BonsaiScheduler {
         config: Interpreters.BonsaiReducerConfiguration,
         property: @escaping (Output) -> Bool
     ) throws -> (ChoiceSequence, Output)? {
+        try runCollectingStats(
+            gen: gen,
+            initialTree: initialTree,
+            initialOutput: initialOutput,
+            config: config,
+            property: property
+        ).reduced
+    }
+
+    /// Runs the reduction pipeline and returns both the result and accumulated statistics.
+    static func runCollectingStats<Output>(
+        gen: ReflectiveGenerator<Output>,
+        initialTree: ChoiceTree,
+        initialOutput: Output,
+        config: Interpreters.BonsaiReducerConfiguration,
+        property: @escaping (Output) -> Bool
+    ) throws -> (reduced: (ChoiceSequence, Output)?, stats: ReductionStats) {
         let sequence = ChoiceSequence.flatten(initialTree)
 
         let state = ReductionState(
@@ -243,6 +260,6 @@ enum BonsaiScheduler {
             }
         }
 
-        return (bestSequence, bestOutput)
+        return (reduced: (bestSequence, bestOutput), stats: state.extractStats())
     }
 }

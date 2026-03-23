@@ -114,6 +114,22 @@ final class ReductionState<Output> {
     /// Set on every acceptance. Cleared after ``runBranchSimplification(budget:)`` performs the materialization. Avoids redundant O(n) materializations when 1a is re-entered after 1b or 1c successes on an unchanged sequence.
     var branchTreeDirty = true
 
+    // MARK: - Stats Tracking (cumulative, not included in Snapshot)
+
+    /// Per-encoder probe counts accumulated across all cycles.
+    var encoderProbes: [EncoderName: Int] = [:]
+
+    /// Total materialization attempts (decoder invocations) during reduction.
+    var totalMaterializations: Int = 0
+
+    /// Extracts accumulated statistics from this reduction run.
+    func extractStats() -> ReductionStats {
+        var stats = ReductionStats()
+        stats.encoderProbes = encoderProbes.filter { $0.value > 0 }
+        stats.totalMaterializations = totalMaterializations
+        return stats
+    }
+
     // MARK: - Snapshot
 
     /// A point-in-time copy of all mutable reduction state for rollback on fingerprint boundary crossing.
@@ -248,6 +264,11 @@ extension ReductionState {
         let startSeqLen = sequence.count
         let cacheSalt = decoder.rejectCacheSalt
         var probes = 0
+        let budgetBefore = budget.used
+        defer {
+            encoderProbes[encoder.name, default: 0] += probes
+            totalMaterializations += (budget.used - budgetBefore)
+        }
         for candidate in encoder.encode(sequence: sequence, targets: targets) {
             guard budget.isExhausted == false else { break }
             probes += 1
@@ -317,6 +338,11 @@ extension ReductionState {
         var anyAccepted = false
         var probes = 0
         var accepted = 0
+        let budgetBefore = budget.used
+        defer {
+            encoderProbes[encoder.name, default: 0] += probes
+            totalMaterializations += (budget.used - budgetBefore)
+        }
         var lastDecodingReport: DecodingReport?
         while let probe = encoder.nextProbe(lastAccepted: lastAccepted) {
             guard budget.isExhausted == false else { break }
@@ -556,6 +582,9 @@ extension ReductionState {
                 lastAccepted = false
             }
         }
+
+        encoderProbes[.relaxRound, default: 0] += explorationProbes
+        totalMaterializations += explorationBudget.used
 
         if isInstrumented {
             ExhaustLog.debug(category: .reducer, event: "exploration_redistribute", metadata: [

@@ -1,5 +1,5 @@
 /// Typed identifier for a sequence encoder, used in dominance pruning and logging.
-public enum EncoderName: String, Hashable {
+public enum EncoderName: String, Hashable, Sendable {
     // Structural deletion
     case deleteByPromotingSimplestBranch
     case deleteByPivotingToAlternativeBranch
