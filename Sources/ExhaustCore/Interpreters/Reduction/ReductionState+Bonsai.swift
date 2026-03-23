@@ -1114,7 +1114,7 @@ extension ReductionState {
             guard budget > 0 else { break }
             compositionEdgesAttempted += 1
 
-            // Build fresh upstream and downstream point encoders.
+            // Build fresh upstream and downstream composable encoders.
             // Upstream: binary search toward simplest bind-inner value.
             // Downstream: fibre search — enumerates the downstream fibre
             // to find ANY failure, not minimize an existing one. After a lift,

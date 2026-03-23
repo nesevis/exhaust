@@ -153,7 +153,7 @@ struct KleisliCompositionTests {
 
         let fullRange = 0 ... max(0, sequence.count - 1)
         var composed = KleisliComposition(
-            upstream: IdentityPointEncoder(),
+            upstream: IdentityComposableEncoder(),
             downstream: LegacyEncoderAdapter(inner: ZeroValueEncoder()),
             lift: GeneratorLift(gen: gen, mode: .exact),
             rollback: .atomic,

@@ -1,8 +1,8 @@
-// MARK: - Point Encoder Protocol
+// MARK: - Composable Encoder Protocol
 
-/// Produces candidate mutations for a position (or range) in the choice sequence.
+/// Produces candidate mutations for a position range in the choice sequence.
 ///
-/// Point encoders are the composable primitives of the reduction algebra. Each targets a specific point in the total space — agnostic to whether that point is a base position (structural) or a fibre position (value). The categorical role (base morphism vs vertical morphism) is determined by the position's relationship in the ``ChoiceDependencyGraph``, not by the encoder itself.
+/// Composable encoders are the primitives of the horizontal/vertical reduction algebra. Each operates on a scoped position range — agnostic to whether that range represents a horizontal role (upstream of a composition, proposing base morphisms between fibres) or a vertical role (downstream, searching within a fibre). The role is determined by the position's relationship in the ``ChoiceDependencyGraph``, not by the encoder itself.
 ///
 /// ## Interface Changes from `AdaptiveEncoder`
 ///
@@ -13,8 +13,8 @@
 ///
 /// ## Composability
 ///
-/// A ``KleisliComposition`` composes two point encoders through a ``GeneratorLift``. The upstream encoder's output is lifted (materialized without property check) to produce a fresh `(sequence, tree)` for the downstream encoder. The property is checked only on the downstream's final output.
-public protocol PointEncoder {
+/// A ``KleisliComposition`` composes two composable encoders through a ``GeneratorLift``. The upstream encoder's output is lifted (materialized without property check) to produce a fresh `(sequence, tree)` for the downstream encoder. The property is checked only on the downstream's final output.
+public protocol ComposableEncoder {
     /// Typed identifier for dominance pruning and logging.
     var name: EncoderName { get }
 
@@ -53,7 +53,7 @@ public protocol PointEncoder {
     var convergenceRecords: [Int: ConvergedOrigin] { get }
 }
 
-public extension PointEncoder {
+public extension ComposableEncoder {
     /// Default implementation returning no convergence records.
     var convergenceRecords: [Int: ConvergedOrigin] {
         [:]
@@ -72,7 +72,7 @@ public extension PointEncoder {
 
 // MARK: - Reduction Context
 
-/// Shared state passed to point encoders without coupling to ``ReductionState``.
+/// Shared state passed to composable encoders without coupling to ``ReductionState``.
 public struct ReductionContext {
     /// The bind span index, or `nil` if the generator has no binds.
     public let bindIndex: BindSpanIndex?
@@ -94,12 +94,12 @@ public struct ReductionContext {
     }
 }
 
-// MARK: - Identity Point Encoder
+// MARK: - Identity Composable Encoder
 
-/// A point encoder that produces no probes — the identity element of the composition algebra.
+/// A composable encoder that produces no probes — the identity element of the composition algebra.
 ///
 /// Used in ``KleisliComposition`` to express standalone phases: `KleisliComposition(upstream: .identity, downstream: encoder, ...)` runs only the downstream encoder, and vice versa.
-public struct IdentityPointEncoder: PointEncoder {
+public struct IdentityComposableEncoder: ComposableEncoder {
     public let name: EncoderName
     public let phase: ReductionPhase
 
@@ -122,12 +122,12 @@ public struct IdentityPointEncoder: PointEncoder {
 
 // MARK: - Legacy Encoder Adapter
 
-/// Bridges an existing ``AdaptiveEncoder`` into the ``PointEncoder`` protocol.
+/// Bridges an existing ``AdaptiveEncoder`` into the ``ComposableEncoder`` protocol.
 ///
-/// Translates `positionRange` to `TargetSet` by extracting value spans within the range from the sequence. This lets existing encoders participate in ``KleisliComposition`` without internal changes.
+/// Translates `positionRange` to `TargetSet` by extracting value spans within the range from the sequence. This lets existing encoders participate in ``KleisliComposition`` without internal changes. Temporary — will be removed once all encoders conform to ``ComposableEncoder`` natively.
 ///
-/// Uses `any AdaptiveEncoder` (existential) — acceptable for the exploration leg (325 probes budget, not a hot path). Make generic if moved to a hotter path.
-public struct LegacyEncoderAdapter: PointEncoder {
+/// Uses `any AdaptiveEncoder` (existential) — acceptable for the exploration leg (325 probes budget, not a hot path).
+public struct LegacyEncoderAdapter: ComposableEncoder {
     public var inner: any AdaptiveEncoder
     public var name: EncoderName { inner.name }
     public var phase: ReductionPhase { inner.phase }

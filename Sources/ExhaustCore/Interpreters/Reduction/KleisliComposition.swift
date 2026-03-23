@@ -1,6 +1,6 @@
 // MARK: - Kleisli Composition
 
-/// Kleisli composition of two point encoders through a generator lift.
+/// Kleisli composition of two composable encoders through a generator lift.
 ///
 /// The upstream encoder proposes a mutation. The generator lift replays through the generator to produce a valid `(sequence, tree)` — the Kleisli bind. The downstream encoder operates in the lifted trace. The property checks only the final output.
 ///
@@ -19,18 +19,18 @@
 ///
 /// ## Conformance
 ///
-/// Conforms to ``AdaptiveEncoder`` so the scheduler can run it via the existing `runAdaptive` path or a manual loop (following the `runRelaxRound` pattern). Does NOT conform to ``PointEncoder`` — this is intentional to prevent nesting compositions, which would produce multiplicative budget explosion. Multi-hop composition uses topological iteration instead.
+/// Conforms to ``AdaptiveEncoder`` so the scheduler can run it via the existing `runAdaptive` path or a manual loop (following the `runRelaxRound` pattern). Does NOT conform to ``ComposableEncoder`` — this is intentional to prevent nesting compositions, which would produce multiplicative budget explosion. Multi-hop composition uses topological iteration instead.
 public struct KleisliComposition<Output>: AdaptiveEncoder {
     // MARK: - Configuration
 
     public let name: EncoderName
     public let phase: ReductionPhase
 
-    /// The upstream point encoder — proposes mutations at the controlling position.
-    var upstream: any PointEncoder
+    /// The upstream composable encoder — proposes mutations at the controlling position.
+    var upstream: any ComposableEncoder
 
-    /// The downstream point encoder — operates in the lifted fibre.
-    var downstream: any PointEncoder
+    /// The downstream composable encoder — operates in the lifted fibre.
+    var downstream: any ComposableEncoder
 
     /// The generator lift — the Kleisli bind between upstream and downstream.
     let lift: GeneratorLift<Output>
@@ -104,8 +104,8 @@ public struct KleisliComposition<Output>: AdaptiveEncoder {
     public init(
         name: EncoderName = .kleisliComposition,
         phase: ReductionPhase = .exploration,
-        upstream: any PointEncoder,
-        downstream: any PointEncoder,
+        upstream: any ComposableEncoder,
+        downstream: any ComposableEncoder,
         lift: GeneratorLift<Output>,
         rollback: RollbackPolicy,
         upstreamRange: ClosedRange<Int>,
