@@ -348,7 +348,6 @@ struct EncoderFactory {
         spansBySlot: [ReductionScheduler.DeletionEncoderSlot: [ChoiceSpan]],
         scopeDecoder: SequenceDecoder,
         speculativeDecoder: SequenceDecoder,
-        alignedWindowsEncoder: DeleteAlignedWindowsEncoder,
         budgetCap: Int
     ) -> [MorphismDescriptor] {
         var descriptors = [MorphismDescriptor]()
@@ -359,7 +358,7 @@ struct EncoderFactory {
             switch slot {
             case .randomRepairDelete:
                 descriptors.append(MorphismDescriptor(
-                    encoder: DeletionEncoder(spanCategory: .mixed, spans: spans),
+                    encoder: DeletionEncoder(spanCategory: .containerSpans, spans: spans),
                     decoderFactory: { speculativeDecoder },
                     probeBudget: budgetCap,
                     structureChanged: true
@@ -393,12 +392,8 @@ struct EncoderFactory {
                     structureChanged: true
                 ))
             case .alignedWindows:
-                descriptors.append(MorphismDescriptor(
-                    encoder: alignedWindowsEncoder,
-                    decoderFactory: { scopeDecoder },
-                    probeBudget: budgetCap,
-                    structureChanged: true
-                ))
+                // Handled inline as a contiguous + beam dominance chain, not through the factory.
+                continue
             }
         }
 

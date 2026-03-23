@@ -223,7 +223,8 @@ final class ReductionState<Output> {
     var binarySearchToZeroEncoder = BinarySearchToSemanticSimplestEncoder()
     var binarySearchToTargetEncoder = BinarySearchToRangeMinimumEncoder()
     var reduceFloatEncoder = ReduceFloatEncoder()
-    var deleteAlignedWindowsEncoder: DeleteAlignedWindowsEncoder
+    var contiguousWindowEncoder = ContiguousWindowDeletionEncoder()
+    var beamSearchEncoder: BeamSearchDeletionEncoder
     var tandemEncoder = RedistributeByTandemReductionEncoder()
     var redistributeEncoder = RedistributeAcrossValueContainersEncoder()
     var productSpaceBatchEncoder = ProductSpaceBatchEncoder()
@@ -267,7 +268,7 @@ final class ReductionState<Output> {
         bestOutput = output
         spanCache = SpanCache()
         dominance = EncoderDominance()
-        deleteAlignedWindowsEncoder = DeleteAlignedWindowsEncoder(
+        beamSearchEncoder = BeamSearchDeletionEncoder(
             beamTuning: config.alignedDeletionBeamSearchTuning
         )
         convergenceInstrumentation = isInstrumented ? ConvergenceInstrumentation() : nil

@@ -198,19 +198,33 @@ extension ReductionState {
                 }
                 let slotAccepted: Bool
                 if slot == .alignedWindows {
-                    // Aligned windows self-extracts sibling groups — don't skip on empty container spans.
-                    slotAccepted = try runComposable(
-                        deleteAlignedWindowsEncoder,
+                    // Contiguous window search dominates beam search.
+                    // Both self-extract sibling groups — don't skip on empty container spans.
+                    let contiguousAccepted = try runComposable(
+                        contiguousWindowEncoder,
                         decoder: scopeDecoder,
                         positionRange: fullRange,
                         context: deletionContext,
                         structureChanged: true,
                         budget: &legBudget
                     )
+                    if contiguousAccepted {
+                        slotAccepted = true
+                    } else {
+                        // Contiguous exhausted — try beam search fallback.
+                        slotAccepted = try runComposable(
+                            beamSearchEncoder,
+                            decoder: scopeDecoder,
+                            positionRange: fullRange,
+                            context: deletionContext,
+                            structureChanged: true,
+                            budget: &legBudget
+                        )
+                    }
                 } else {
                     guard targets.isEmpty == false else { continue }
                     let decoder = slot == .randomRepairDelete ? makeSpeculativeDecoder() : scopeDecoder
-                    let category = slot == .randomRepairDelete ? DeletionSpanCategory.mixed : slot.spanCategory
+                    let category = slot.spanCategory
                     slotAccepted = try runComposable(
                         DeletionEncoder(spanCategory: category, spans: targets),
                         decoder: decoder,

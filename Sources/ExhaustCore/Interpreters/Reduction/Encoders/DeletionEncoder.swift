@@ -24,8 +24,7 @@ struct DeletionEncoder: ComposableEncoder {
         case .sequenceElements: .deleteSequenceElements
         case .sequenceBoundaries: .deleteSequenceBoundaries
         case .freeStandingValues: .deleteFreeStandingValues
-        case .mixed: .deleteContainerSpansWithRandomRepair
-        case .siblingGroups: .deleteContainerSpans
+        case .mixed, .siblingGroups: .deleteContainerSpans
         }
     }
 

@@ -57,7 +57,7 @@ extension ReductionScheduler {
             case .sequenceBoundaries: .sequenceBoundaries
             case .freeStandingValues: .freeStandingValues
             case .alignedWindows: .containerSpans
-            case .randomRepairDelete: .mixed
+            case .randomRepairDelete: .containerSpans
             }
         }
     }
