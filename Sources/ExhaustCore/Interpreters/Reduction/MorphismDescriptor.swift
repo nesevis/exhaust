@@ -30,7 +30,7 @@ public struct MorphismDescriptor {
     public let encoder: any ComposableEncoder
 
     /// How to build the ``SequenceDecoder`` for this morphism's probes.
-    public let decoderFactory: @Sendable () -> SequenceDecoder
+    public let decoderFactory: () -> SequenceDecoder
 
     /// Maximum number of materializations for this morphism.
     public let probeBudget: Int
@@ -58,7 +58,7 @@ public struct MorphismDescriptor {
 
     public init(
         encoder: any ComposableEncoder,
-        decoderFactory: @escaping @Sendable () -> SequenceDecoder,
+        decoderFactory: @escaping () -> SequenceDecoder,
         probeBudget: Int,
         structureChanged: Bool,
         dominates: [Int] = [],

@@ -822,56 +822,62 @@ extension ReductionState {
                     convergedOrigins: cachedOrigins,
                     dag: dag
                 )
+                let guard_ = needsFingerprintGuard ? prePhaseFingerprint : nil
+                let hasFloats = floatSpans.isEmpty == false
 
-                for slot in trainOrder {
-                    guard legBudget.isExhausted == false else { break }
-                    var slotAccepted = false
-                    // Pass the guard into runComposable so the boundary fires per-acceptance, not after the full encoder run. Encoders capture seqIdx at start() time; a structural change mid-loop makes those indices stale before the encoder produces its next probe.
-                    let guard_ = needsFingerprintGuard ? prePhaseFingerprint : nil
+                // Build descriptors in trainOrder for this leaf range.
+                let descriptors: [MorphismDescriptor] = trainOrder.compactMap { slot in
+                    let encoder: any ComposableEncoder
                     switch slot {
                     case .zeroValue where leafSpans.isEmpty == false:
-                        slotAccepted = try runComposable(
-                            zeroValueEncoder, decoder: decoder,
-                            positionRange: leafRange, context: leafContext,
-                            structureChanged: structureChanged,
-                            budget: &legBudget,
-                            fingerprintGuard: guard_
-                        )
+                        encoder = zeroValueEncoder
                     case .binarySearchToZero where leafSpans.isEmpty == false:
-                        slotAccepted = try runComposable(
-                            binarySearchToZeroEncoder, decoder: decoder,
-                            positionRange: leafRange, context: leafContext,
-                            structureChanged: structureChanged,
-                            budget: &legBudget,
-                            fingerprintGuard: guard_
-                        )
+                        encoder = binarySearchToZeroEncoder
                     case .binarySearchToTarget where leafSpans.isEmpty == false:
-                        slotAccepted = try runComposable(
-                            binarySearchToTargetEncoder, decoder: decoder,
-                            positionRange: leafRange, context: leafContext,
-                            structureChanged: structureChanged,
-                            budget: &legBudget,
-                            fingerprintGuard: guard_
-                        )
-                    case .reduceFloat where floatSpans.isEmpty == false:
-                        slotAccepted = try runComposable(
-                            reduceFloatEncoder, decoder: decoder,
-                            positionRange: leafRange, context: leafContext,
-                            structureChanged: structureChanged,
-                            budget: &legBudget,
-                            fingerprintGuard: guard_
-                        )
+                        encoder = binarySearchToTargetEncoder
+                    case .reduceFloat where hasFloats:
+                        encoder = reduceFloatEncoder
                     default:
-                        break
+                        return nil
                     }
-                    guard slotAccepted else { continue }
+                    return MorphismDescriptor(
+                        encoder: encoder,
+                        decoderFactory: { decoder },
+                        probeBudget: legBudget.hardCap,
+                        structureChanged: structureChanged,
+                        fingerprintGuard: guard_
+                    )
+                }
 
+                let result = try runDescriptorChainDetailed(
+                    descriptors,
+                    positionRange: leafRange,
+                    context: leafContext,
+                    budget: &legBudget
+                )
+                if result.anyAccepted {
                     anyAccepted = true
-                    ReductionScheduler.moveToFront(slot, in: &trainOrder)
+                    // Promote the first accepted slot for the next leaf range.
+                    if let firstAccepted = result.acceptedIndices.first {
+                        // Map descriptor index back to the slot via trainOrder.
+                        // The descriptors were built from trainOrder via compactMap,
+                        // so we need to track which slots survived the filter.
+                        var survivingSlots = [ReductionScheduler.ValueEncoderSlot]()
+                        for slot in trainOrder {
+                            switch slot {
+                            case .zeroValue where leafSpans.isEmpty == false: survivingSlots.append(slot)
+                            case .binarySearchToZero where leafSpans.isEmpty == false: survivingSlots.append(slot)
+                            case .binarySearchToTarget where leafSpans.isEmpty == false: survivingSlots.append(slot)
+                            case .reduceFloat where hasFloats: survivingSlots.append(slot)
+                            default: break
+                            }
+                        }
+                        if firstAccepted < survivingSlots.count {
+                            ReductionScheduler.moveToFront(survivingSlots[firstAccepted], in: &trainOrder)
+                        }
+                    }
                     if needsFingerprintGuard {
-                        // A clean acceptance in a non-constant bind region means leafSpans and the decoder are stale (sequence changed). Restart the repeat loop to recompute both before the remaining slots run.
                         restartLeafRange = true
-                        break
                     }
                 }
             } while restartLeafRange && legBudget.isExhausted == false
@@ -899,87 +905,94 @@ extension ReductionState {
                     dag: dag,
                     depthFilter: depth
                 )
-                // Pre-check span availability for the where-guards (avoids encoder instantiation when empty).
                 let vSpans = spanCache.valueSpans(at: depth, from: sequence, bindIndex: bindIndex)
-                let fSpans = spanCache.floatSpans(at: depth, from: sequence, bindIndex: bindIndex)
+                let hasFloatsAtDepth = spanCache.floatSpans(at: depth, from: sequence, bindIndex: bindIndex).isEmpty == false
 
-                for slot in trainOrder {
-                    guard legBudget.isExhausted == false else { break }
-                    var slotAccepted = false
-                    // structureChanged: hasBind ensures accept() rebuilds bindIndex before the per-acceptance fingerprint guard recomputes the fingerprint. Without a fresh bindIndex, StructuralFingerprint.from uses stale depth information and may miss structural changes.
+                let depthDescriptors: [MorphismDescriptor] = trainOrder.compactMap { slot in
+                    let encoder: any ComposableEncoder
                     switch slot {
                     case .zeroValue where vSpans.isEmpty == false:
-                        slotAccepted = try runComposable(
-                            zeroValueEncoder, decoder: depthDecoder,
-                            positionRange: fullRange, context: depthContext,
-                            structureChanged: hasBind,
-                            budget: &legBudget,
-                            fingerprintGuard: prePhaseFingerprint
-                        )
+                        encoder = zeroValueEncoder
                     case .binarySearchToZero where vSpans.isEmpty == false:
-                        slotAccepted = try runComposable(
-                            binarySearchToZeroEncoder, decoder: depthDecoder,
-                            positionRange: fullRange, context: depthContext,
-                            structureChanged: hasBind,
-                            budget: &legBudget,
-                            fingerprintGuard: prePhaseFingerprint
-                        )
+                        encoder = binarySearchToZeroEncoder
                     case .binarySearchToTarget where vSpans.isEmpty == false:
-                        slotAccepted = try runComposable(
-                            binarySearchToTargetEncoder, decoder: depthDecoder,
-                            positionRange: fullRange, context: depthContext,
-                            structureChanged: hasBind,
-                            budget: &legBudget,
-                            fingerprintGuard: prePhaseFingerprint
-                        )
-                    case .reduceFloat where fSpans.isEmpty == false:
-                        slotAccepted = try runComposable(
-                            reduceFloatEncoder, decoder: depthDecoder,
-                            positionRange: fullRange, context: depthContext,
-                            structureChanged: hasBind,
-                            budget: &legBudget,
-                            fingerprintGuard: prePhaseFingerprint
-                        )
+                        encoder = binarySearchToTargetEncoder
+                    case .reduceFloat where hasFloatsAtDepth:
+                        encoder = reduceFloatEncoder
                     default:
-                        break
+                        return nil
                     }
-                    guard slotAccepted else { continue }
+                    return MorphismDescriptor(
+                        encoder: encoder,
+                        decoderFactory: { depthDecoder },
+                        probeBudget: legBudget.hardCap,
+                        structureChanged: hasBind,
+                        fingerprintGuard: prePhaseFingerprint
+                    )
+                }
+
+                let depthResult = try runDescriptorChainDetailed(
+                    depthDescriptors,
+                    positionRange: fullRange,
+                    context: depthContext,
+                    budget: &legBudget
+                )
+                if depthResult.anyAccepted {
                     anyAccepted = true
-                    ReductionScheduler.moveToFront(slot, in: &trainOrder)
+                    if let firstAccepted = depthResult.acceptedIndices.first {
+                        var survivingSlots = [ReductionScheduler.ValueEncoderSlot]()
+                        for slot in trainOrder {
+                            switch slot {
+                            case .zeroValue where vSpans.isEmpty == false: survivingSlots.append(slot)
+                            case .binarySearchToZero where vSpans.isEmpty == false: survivingSlots.append(slot)
+                            case .binarySearchToTarget where vSpans.isEmpty == false: survivingSlots.append(slot)
+                            case .reduceFloat where hasFloatsAtDepth: survivingSlots.append(slot)
+                            default: break
+                            }
+                        }
+                        if firstAccepted < survivingSlots.count {
+                            ReductionScheduler.moveToFront(survivingSlots[firstAccepted], in: &trainOrder)
+                        }
+                    }
                 }
             }
         }
 
         // Redistribution (once at end of fibre descent).
         if legBudget.isExhausted == false {
-            let redistContext = DecoderContext(
+            let redistDecoderContext = DecoderContext(
                 depth: .global,
                 bindIndex: bindIndex,
                 fallbackTree: fallbackTree,
                 strictness: .normal
             )
-            let redistDecoder = SequenceDecoder.for(redistContext)
-
-            // Tandem reduction on sibling groups.
-            let tandemContext = ReductionContext(bindIndex: bindIndex, dag: dag)
-            if try runComposable(
-                tandemEncoder, decoder: redistDecoder,
-                positionRange: fullRange, context: tandemContext,
-                structureChanged: hasBind, budget: &legBudget
-            ) {
-                anyAccepted = true
-            }
-
-            // Cross-stage redistribution.
-            let redistEncoderContext = ReductionContext(
+            let redistDecoder = SequenceDecoder.for(redistDecoderContext)
+            let redistContext = ReductionContext(
                 bindIndex: bindIndex,
                 convergedOrigins: cachedOrigins,
                 dag: dag
             )
-            if try runComposable(
-                redistributeEncoder, decoder: redistDecoder,
-                positionRange: fullRange, context: redistEncoderContext,
-                structureChanged: hasBind, budget: &legBudget
+
+            let redistDescriptors: [MorphismDescriptor] = [
+                MorphismDescriptor(
+                    encoder: tandemEncoder,
+                    decoderFactory: { redistDecoder },
+                    probeBudget: legBudget.hardCap,
+                    structureChanged: hasBind
+                ),
+                MorphismDescriptor(
+                    encoder: redistributeEncoder,
+                    decoderFactory: { redistDecoder },
+                    probeBudget: legBudget.hardCap,
+                    structureChanged: hasBind
+                ),
+            ]
+
+            if try runDescriptorChain(
+                redistDescriptors,
+                positionRange: fullRange,
+                context: redistContext,
+                budget: &legBudget
             ) {
                 anyAccepted = true
             }
