@@ -21,6 +21,7 @@ public enum EncoderName: String, Hashable, Sendable {
     case redistributeSiblingValuesInLockstep
     case redistributeArbitraryValuePairsAcrossContainers
     case redistributeInnerValuesBetweenBindRegions
+    case linearScan
     /// Exploration
     case relaxRound
     case kleisliComposition

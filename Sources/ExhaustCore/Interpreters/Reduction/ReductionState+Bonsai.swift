@@ -800,7 +800,8 @@ extension ReductionState {
                     hasFloatSpans: hasFloats,
                     structureChanged: structureChanged,
                     fingerprintGuard: guard_,
-                    budgetCap: legBudget.hardCap
+                    budgetCap: legBudget.hardCap,
+                    convergedOrigins: cachedOrigins
                 )
 
                 let result = try runDescriptorChainDetailed(
@@ -861,7 +862,8 @@ extension ReductionState {
                     hasFloatSpans: hasFloatsAtDepth,
                     structureChanged: hasBind,
                     fingerprintGuard: prePhaseFingerprint,
-                    budgetCap: legBudget.hardCap
+                    budgetCap: legBudget.hardCap,
+                    convergedOrigins: cachedOrigins
                 )
 
                 let depthResult = try runDescriptorChainDetailed(
@@ -993,6 +995,17 @@ extension ReductionState {
 
             let edge = compositionEdge.edge
             let prediction = compositionEdge.prediction
+
+            // Skip structurally constant edges where the prior cycle's downstream
+            // exhaustively searched the fibre and found no failure at this upstream value.
+            if edge.isStructurallyConstant,
+               let observation = edgeObservations[edge.regionIndex],
+               observation.signal == .exhaustedClean,
+               let currentUpstreamValue = sequence[edge.upstreamRange.lowerBound].value?.choice.bitPattern64,
+               observation.upstreamValue == currentUpstreamValue
+            {
+                continue
+            }
 
             // Run via manual loop (same pattern as runRelaxRound).
             var legBudget = ReductionScheduler.LegBudget(hardCap: min(budget, 100))
@@ -1166,6 +1179,33 @@ extension ReductionState {
                         "max_fibre": "\(compositionEdge.composition.maxObservedFibreSize)",
                     ]
                 )
+            }
+
+            // Record per-edge observation for cross-cycle factory decisions.
+            let totalDownstreamStarts = compositionEdge.composition.fibreExhaustiveStarts
+                + compositionEdge.composition.fibrePairwiseStarts
+                + compositionEdge.composition.fibreZeroValueStarts
+            let edgeSignal: FibreSignal
+            if totalDownstreamStarts == 0 {
+                edgeSignal = .bail(paramCount: edge.downstreamRange.count)
+            } else if lastAccepted {
+                edgeSignal = .exhaustedWithFailure
+            } else {
+                edgeSignal = .exhaustedClean
+            }
+            if let upstreamValue = compositionEdge.composition.previousUpstreamBitPattern {
+                edgeObservations[edge.regionIndex] = EdgeObservation(
+                    signal: edgeSignal,
+                    upstreamValue: upstreamValue,
+                    cycle: currentCycle
+                )
+            }
+            if collectStats {
+                switch edgeSignal {
+                case .exhaustedClean: fibreExhaustedCleanCount += 1
+                case .exhaustedWithFailure: fibreExhaustedWithFailureCount += 1
+                case .bail: fibreBailCount += 1
+                }
             }
 
             budget -= legBudget.used

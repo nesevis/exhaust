@@ -54,7 +54,7 @@ public protocol ComposableEncoder {
 
     /// Whether convergence records from the previous run are compatible with this run.
     ///
-    /// Returns `true` by default — the encoder's semantics haven't changed between runs.
+    /// Returns `true` by default — the encoder's semantics have not changed between runs.
     /// ``DownstreamPick`` overrides this to return `false` when a different alternative was
     /// selected, invalidating convergence records from the previous alternative.
     /// ``KleisliComposition`` checks this after ``start()`` and cold-starts the convergence
@@ -118,16 +118,21 @@ public struct ReductionContext {
     /// Used by the covariant depth sweep, where spans at a given depth may be non-contiguous across multiple bind regions. The encoder applies this filter during span extraction via ``ComposableEncoder/extractFilteredSpans(from:in:context:)``. When `nil`, all spans in the position range are eligible.
     public let depthFilter: Int?
 
+    /// The current reduction cycle number. Used by encoders to timestamp convergence records.
+    public let cycle: Int
+
     public init(
         bindIndex: BindSpanIndex? = nil,
         convergedOrigins: [Int: ConvergedOrigin]? = nil,
         dag: ChoiceDependencyGraph? = nil,
-        depthFilter: Int? = nil
+        depthFilter: Int? = nil,
+        cycle: Int = 0
     ) {
         self.bindIndex = bindIndex
         self.convergedOrigins = convergedOrigins
         self.dag = dag
         self.depthFilter = depthFilter
+        self.cycle = cycle
     }
 }
 

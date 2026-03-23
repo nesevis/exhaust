@@ -18,6 +18,7 @@ struct ReduceFloatEncoder: ComposableEncoder {
     init() {}
 
     var convergenceRecords: [Int: ConvergedOrigin] = [:]
+    private var currentCycle: Int = 0
 
     let name: EncoderName = .reduceFloat
     let phase = ReductionPhase.valueMinimization
@@ -46,6 +47,7 @@ struct ReduceFloatEncoder: ComposableEncoder {
         positionRange: ClosedRange<Int>,
         context: ReductionContext
     ) {
+        currentCycle = context.cycle
         let spans = Self.extractFilteredSpans(from: sequence, in: positionRange, context: context)
         start(sequence: sequence, targets: .spans(spans), convergedOrigins: context.convergedOrigins)
     }
@@ -372,7 +374,9 @@ struct ReduceFloatEncoder: ComposableEncoder {
             let target = targets[currentTargetIndex]
             convergenceRecords[target.seqIdx] = ConvergedOrigin(
                 bound: target.currentBitPattern,
-                direction: .downward
+                signal: .monotoneConvergence,
+                configuration: .binarySearchRangeMinimum,
+                cycle: currentCycle
             )
             return nil
         }
@@ -458,7 +462,9 @@ struct ReduceFloatEncoder: ComposableEncoder {
             let target = targets[currentTargetIndex]
             convergenceRecords[target.seqIdx] = ConvergedOrigin(
                 bound: target.currentBitPattern,
-                direction: .downward
+                signal: .monotoneConvergence,
+                configuration: .binarySearchRangeMinimum,
+                cycle: currentCycle
             )
             return nil
         }

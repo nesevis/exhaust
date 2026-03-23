@@ -1,24 +1,62 @@
+// MARK: - Convergence Signal
+
+/// Records what an encoder observed when it terminated, reported to the factory for cross-cycle decisions.
+///
+/// Each encoder produces a signal at convergence. The factory pattern-matches on the signal to select the recovery encoder for the next cycle. Signals are stored in ``ConvergedOrigin`` alongside the warm-start bound.
+public enum ConvergenceSignal: Hashable, Sendable {
+    /// Binary search converged normally. Monotonicity held throughout.
+    case monotoneConvergence
+
+    /// Binary search: the property passed at a value where the monotonicity assumption predicted failure. The failure surface has a gap — bounded scan below the convergence point may find a lower floor.
+    case nonMonotoneGap(remainingRange: Int)
+
+    /// Zero-value: batch zeroing failed but at least one individual zeroing succeeded. The coordinate has dependencies on other coordinates.
+    case zeroingDependency
+
+    /// Linear scan completed. The factory reverts to binary search on the next cycle.
+    case scanComplete(foundLowerFloor: Bool)
+}
+
+// MARK: - Encoder Configuration
+
+/// Identifies the encoder configuration that produced a convergence record.
+///
+/// The factory uses this to reject cache entries from a different configuration. When the factory switches from `.binarySearchSemanticSimplest` to `.binarySearchRangeMinimum` for the same position between cycles, the cached bound from the upward search is not meaningful as a downward starting point. The configuration discriminant catches this.
+public enum EncoderConfiguration: Hashable, Sendable {
+    case binarySearchRangeMinimum
+    case binarySearchSemanticSimplest
+    case linearScan
+    case zeroValue
+}
+
 // MARK: - Converged Origin
 
-/// Cached convergence bound from a prior binary search pass, used to narrow subsequent searches.
+/// Stores the convergence bound and observation from a prior encoder pass.
 ///
-/// When a binary search encoder converges at a coordinate, it records the convergence bound and direction. On the next cycle, the cache supplies this as a converged origin to skip the already-explored portion of the search range. A validation probe confirms the floor before committing.
+/// Carries warm-start data (`bound`), the encoder's observation (`signal`), the configuration that produced it (`configuration`), and the cycle number for staleness detection. Stored in the ``ConvergenceCache`` and supplied to encoders via ``ReductionContext/convergedOrigins``.
 public struct ConvergedOrigin: Sendable {
-    /// The bit-pattern value at which the prior search converged.
+    /// The bit-pattern value at which the search converged. Warm-start data.
     public let bound: UInt64
 
-    /// The direction of the prior search.
-    public let direction: Direction
+    /// Describes what the encoder observed at convergence. Factory decision data.
+    public let signal: ConvergenceSignal
 
-    /// The direction a binary search was traveling when it converged.
-    public enum Direction: Sendable {
-        case downward
-        case upward
-    }
+    /// Identifies which encoder configuration produced this entry. Staleness discriminant.
+    public let configuration: EncoderConfiguration
 
-    public init(bound: UInt64, direction: Direction) {
+    /// The cycle in which this observation was recorded. Staleness detection.
+    public let cycle: Int
+
+    public init(
+        bound: UInt64,
+        signal: ConvergenceSignal,
+        configuration: EncoderConfiguration,
+        cycle: Int
+    ) {
         self.bound = bound
-        self.direction = direction
+        self.signal = signal
+        self.configuration = configuration
+        self.cycle = cycle
     }
 }
 
@@ -62,6 +100,34 @@ struct ConvergenceCache {
     }
 }
 
+// MARK: - Edge Observation
+
+/// Describes what the downstream encoder observed about a composition edge's fibre.
+///
+/// Per-fibre signals from the downstream role. Stored per-edge on ``ReductionState``, keyed by region index. The factory reads these to skip fully-searched edges or adjust budgets.
+enum FibreSignal: Hashable, Sendable {
+    /// Exhaustive or pairwise search covered the full fibre. No failure found.
+    case exhaustedClean
+
+    /// Exhaustive or pairwise search covered the full fibre. At least one failure found.
+    case exhaustedWithFailure
+
+    /// The downstream encoder bailed before completing coverage.
+    case bail(paramCount: Int)
+}
+
+/// Records the downstream observation for a composition edge after the edge completes.
+struct EdgeObservation: Sendable {
+    /// Describes what the downstream encoder observed about the fibre.
+    let signal: FibreSignal
+
+    /// The upstream bit-pattern value that produced this fibre.
+    let upstreamValue: UInt64
+
+    /// The cycle in which this observation was recorded.
+    let cycle: Int
+}
+
 // MARK: - Convergence Instrumentation
 
 /// Measurement-only instrumentation for encoder convergence events.
@@ -71,7 +137,8 @@ struct ConvergenceInstrumentation {
     struct ConvergenceRecord {
         let coordinateIndex: Int
         let convergedValue: UInt64
-        let direction: ConvergedOrigin.Direction
+        let configuration: EncoderConfiguration
+        let signal: ConvergenceSignal
         let cycle: Int
     }
 
@@ -105,6 +172,7 @@ final class ReductionState<Output> {
     var dominance: EncoderDominance
     var rejectCache = Set<UInt64>(minimumCapacity: 512)
     var convergenceCache = ConvergenceCache()
+    var edgeObservations: [Int: EdgeObservation] = [:]
     var convergenceInstrumentation: ConvergenceInstrumentation?
 
     /// The current cycle number, set by the scheduler at the top of each cycle.
@@ -138,6 +206,10 @@ final class ReductionState<Output> {
     var verificationSweepFoundStaleness: Bool = false
     var fibrePredictionCorrect: Int = 0
     var fibrePredictionWrong: Int = 0
+    var zeroingDependencyCount: Int = 0
+    var fibreExhaustedCleanCount: Int = 0
+    var fibreExhaustedWithFailureCount: Int = 0
+    var fibreBailCount: Int = 0
     var statsCycles: Int = 0
 
     /// Extracts accumulated statistics from this reduction run.
@@ -160,6 +232,10 @@ final class ReductionState<Output> {
         stats.verificationSweepFoundStaleness = verificationSweepFoundStaleness
         stats.fibrePredictionCorrect = fibrePredictionCorrect
         stats.fibrePredictionWrong = fibrePredictionWrong
+        stats.zeroingDependencyCount = zeroingDependencyCount
+        stats.fibreExhaustedCleanCount = fibreExhaustedCleanCount
+        stats.fibreExhaustedWithFailureCount = fibreExhaustedWithFailureCount
+        stats.fibreBailCount = fibreBailCount
         return stats
     }
 
@@ -289,6 +365,7 @@ extension ReductionState {
         if structureChanged {
             spanCache.invalidate()
             convergenceCache.invalidateAll()
+            edgeObservations.removeAll(keepingCapacity: true)
             bindIndex = hasBind ? BindSpanIndex(from: sequence) : nil
         }
         if hasBind {
@@ -400,6 +477,9 @@ extension ReductionState {
             if cacheReliable {
                 convergenceCache.record(index: index, convergedOrigin: convergedOrigin)
             }
+            if convergedOrigin.signal == .zeroingDependency {
+                zeroingDependencyCount += 1
+            }
         }
         if convergenceInstrumentation != nil {
             for (index, convergedOrigin) in harvested {
@@ -407,7 +487,8 @@ extension ReductionState {
                     ConvergenceInstrumentation.ConvergenceRecord(
                         coordinateIndex: index,
                         convergedValue: convergedOrigin.bound,
-                        direction: convergedOrigin.direction,
+                        configuration: convergedOrigin.configuration,
+                        signal: convergedOrigin.signal,
                         cycle: currentCycle
                     )
                 )
@@ -526,6 +607,9 @@ extension ReductionState {
             if cacheReliable {
                 convergenceCache.record(index: index, convergedOrigin: convergedOrigin)
             }
+            if convergedOrigin.signal == .zeroingDependency {
+                zeroingDependencyCount += 1
+            }
         }
         if convergenceInstrumentation != nil {
             for (index, convergedOrigin) in harvested {
@@ -533,7 +617,8 @@ extension ReductionState {
                     ConvergenceInstrumentation.ConvergenceRecord(
                         coordinateIndex: index,
                         convergedValue: convergedOrigin.bound,
-                        direction: convergedOrigin.direction,
+                        configuration: convergedOrigin.configuration,
+                        signal: convergedOrigin.signal,
                         cycle: currentCycle
                     )
                 )

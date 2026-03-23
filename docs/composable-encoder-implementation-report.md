@@ -28,7 +28,7 @@ Leverage ordering scores edges by `leverage / requiredBudget`.
 
 **Leverage ordering (Step 3).** Composition edges ordered by structural impact per probe. One comparator change.
 
-**SearchMode.** `ReductionContext` carries `.reduceFromKnownFailure` (default) vs `.discoverFailure` — the semantic distinction between standalone/upstream roles and the downstream role in a composition. Infrastructure in place; not yet wired to the factory's downstream selection.
+**SearchMode — removed.** `SearchMode` (`reduceFromKnownFailure` vs `discoverFailure`) was introduced as infrastructure for the downstream role in compositions. Analysis showed no current encoder should consume it: `BinarySearchEncoder` assumes monotonic failure boundaries (a reduction morphism, not a discovery one); `RelaxRoundEncoder` and `ReduceFloatEncoder` are approximate reduction morphisms in the sense of Sepúlveda-Jiménez §11.2 — rounding toward simpler values has no semantic grounding when the failure status is unknown; `FibreCoveringEncoder` and `ZeroValueEncoder` are already inherently discovery-compatible. The reduce-vs-discover distinction is implicit in the composition structure itself (the outer decoder evaluates the composed probe, not the downstream's local improvement). Removed as premature infrastructure.
 
 **Structural pathological test suite.** Eight tests exercising bind-dependent CDG topologies: threshold crossing, cross-level sum (composition-required), nested binds (2 and 3 levels), wide CDG, multi-parameter fibre, non-monotonic fibre, fibre descent gate.
 
@@ -39,7 +39,7 @@ Leverage ordering scores edges by `leverage / requiredBudget`.
 | Step 1: Fibre descent gating (Signal 4) | Implemented | Gates on stall + convergence. Saves overhead, not probes. |
 | Step 2: Domain ratio / encoder selection (Signal 1) | Implemented | Constant edges: factory commits at construction time (100% accurate). Data-dependent edges: `DownstreamPick` selects at runtime from three alternatives (exhaustive/pairwise/ZeroValue). Discovery lift prediction used for leverage ordering (73% on data-dependent edges). |
 | Step 3: Structural leverage ordering (Signal 2) | Implemented | Edges ordered by leverage / requiredBudget. |
-| Steps 4+5: Fibre stability / prediction-validation loop (Signal 3) | Not implemented | Requires search-based downstream for convergence transfer. SearchMode infrastructure in place but not wired. |
+| Steps 4+5: Fibre stability / prediction-validation loop (Signal 3) | Not implemented | Requires search-based downstream for convergence transfer. |
 | Post-termination verification | Previously implemented | Unchanged. |
 | Warm-start validation | Previously implemented | Unchanged. |
 | Non-monotonicity detection (Signal 7) | Not implemented | Independent of composition framework. |
@@ -48,7 +48,7 @@ Leverage ordering scores edges by `leverage / requiredBudget`.
 
 **Downstream encoder selection.** Closed. Constant edges: factory commits to prediction at construction time. Data-dependent edges: `DownstreamPick` selects the downstream encoder at `start()` time based on actual fibre characteristics — exhaustive (≤ 64), pairwise (2–20 params), or ZeroValue (catchall). The runtime bail gap (fibre too large for covering, no downstream search) is closed: `DownstreamPick`'s ZeroValue alternative catches fibres that `FibreCoveringEncoder` would have bailed on.
 
-**Convergence transfer.** Still 0/0/0 across all tests. Requires a search-based downstream encoder that uses warm-start — `FibreCoveringEncoder` always cold-starts. `SearchMode.discoverFailure` is the infrastructure for this but wiring it triggered the CouplingScaling regression.
+**Convergence transfer.** Still 0/0/0 across all tests. Requires a search-based downstream encoder that uses warm-start — `FibreCoveringEncoder` always cold-starts.
 
 **`ReductionContext` as reference type.** Attempted `struct` → `final class` conversion to enable mid-chain span refresh for structural deletion. Caused snapshot/state issues. Reverted. Structural deletion uses per-encoder restart instead of descriptor chains (sequence length changes invalidate span positions). The reference-type context remains a future option for the closed-loop reducer.
 
@@ -61,7 +61,7 @@ Leverage ordering scores edges by `leverage / requiredBudget`.
 - **Incremental migration.** Dual conformance (both `AdaptiveEncoder` and `ComposableEncoder`) allowed per-encoder migration with 138-test gate after each step. No big-bang rewrite.
 - **Dominance chains.** The ProductSpaceBatch three-tier orchestration (170 lines of hand-coded control flow) became three declarative descriptors. The contiguous/beam split is a natural dominance pair.
 - **Parameterised encoders.** `BinarySearchEncoder(.rangeMinimum)` vs `(.semanticSimplest)` proved the pattern. `DeletionEncoder`, `BranchSimplificationEncoder` followed the same shape.
-- **Role-agnostic design.** The vocabulary correction (horizontal/vertical → upstream/downstream/standalone) clarified that encoders are probe strategies, not role-bound types. `SearchMode` extends this to the downstream role.
+- **Role-agnostic design.** The vocabulary correction (horizontal/vertical → upstream/downstream/standalone) clarified that encoders are probe strategies, not role-bound types. `DownstreamPick` is internal parameterisation — the S-J algebra does not allow branching compositions.
 
 ## What didn't work
 
@@ -71,7 +71,6 @@ Leverage ordering scores edges by `leverage / requiredBudget`.
 
 ## Next steps
 
-1. **Wire `SearchMode.discoverFailure`** to the composition's downstream context. Downstream encoder selection is resolved (`DownstreamPick`), but the search mode distinction (reduce vs discover) is not yet propagated to the downstream encoder's `ReductionContext`. CouplingScaling remains the canary.
-2. **Non-monotonicity detection** (Signal 7) — `sawUnexpectedResult` flag on binary search steppers, bounded exhaustive scan of remaining range. Independent of composition. Correctness improvement.
-3. **Delete dead code** — `runAdaptive`, `BatchEncoder` protocol, old `AdaptiveEncoder` `start()` methods kept for test compat.
-4. **Closed-loop integration** — the composable toolbox is the component library for the closed-loop reducer. Each encoder is independently schedulable, gatable, and budgetable. The factory assigns roles; the loop evaluates results and adapts.
+1. **Non-monotonicity detection** (Signal 7) — `sawUnexpectedResult` flag on binary search steppers, bounded exhaustive scan of remaining range. Independent of composition. Correctness improvement.
+2. **Delete dead code** — `runAdaptive`, `BatchEncoder` protocol, old `AdaptiveEncoder` `start()` methods kept for test compat.
+3. **Closed-loop integration** — the composable toolbox is the component library for the closed-loop reducer. Each encoder is independently schedulable, gatable, and budgetable. The factory assigns roles; the loop evaluates results and adapts.

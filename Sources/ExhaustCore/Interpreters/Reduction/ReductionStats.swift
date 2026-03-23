@@ -65,6 +65,20 @@ public struct ReductionStats: Sendable {
     /// Number of composition edges where the prediction disagreed with the actual encoder mode.
     public var fibrePredictionWrong: Int
 
+    // MARK: - Convergence Signal Counts
+
+    /// Number of coordinates where zero-value batch zeroing failed but individual zeroing succeeded.
+    public var zeroingDependencyCount: Int
+
+    /// Number of composition edges where the downstream exhaustively searched the fibre and found no failure.
+    public var fibreExhaustedCleanCount: Int
+
+    /// Number of composition edges where the downstream exhaustively searched the fibre and found a failure.
+    public var fibreExhaustedWithFailureCount: Int
+
+    /// Number of composition edges where the downstream bailed before completing coverage.
+    public var fibreBailCount: Int
+
     /// Creates an empty stats value.
     public init() {
         encoderProbes = [:]
@@ -84,5 +98,9 @@ public struct ReductionStats: Sendable {
         verificationSweepFoundStaleness = false
         fibrePredictionCorrect = 0
         fibrePredictionWrong = 0
+        zeroingDependencyCount = 0
+        fibreExhaustedCleanCount = 0
+        fibreExhaustedWithFailureCount = 0
+        fibreBailCount = 0
     }
 }

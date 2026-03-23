@@ -27,6 +27,9 @@ struct EncoderFactory {
     ///   - hasFloatSpans: Whether any float spans exist in the target range.
     ///   - structureChanged: Whether acceptances should trigger bind index rebuild.
     ///   - fingerprintGuard: Structural fingerprint guard for Phase 2 boundary enforcement.
+    /// Maximum remaining range size for which `LinearScanEncoder` is emitted.
+    static let linearScanThreshold = 64
+
     static func valueMinimizationDescriptors(
         ordering: [ReductionScheduler.ValueEncoderSlot],
         encoders: ValueEncoders,
@@ -35,12 +38,19 @@ struct EncoderFactory {
         hasFloatSpans: Bool,
         structureChanged: Bool,
         fingerprintGuard: StructuralFingerprint?,
-        budgetCap: Int
+        budgetCap: Int,
+        convergedOrigins: [Int: ConvergedOrigin]? = nil
     ) -> [MorphismDescriptor] {
-        ordering.compactMap { slot in
+        // Check for zeroingDependency: suppress ZeroValue when all cached coordinates report it.
+        let suppressZeroValue: Bool = {
+            guard let origins = convergedOrigins, origins.isEmpty == false else { return false }
+            return origins.values.allSatisfy { $0.signal == .zeroingDependency }
+        }()
+
+        var descriptors: [MorphismDescriptor] = ordering.compactMap { slot in
             let encoder: any ComposableEncoder
             switch slot {
-            case .zeroValue where hasValueSpans:
+            case .zeroValue where hasValueSpans && suppressZeroValue == false:
                 encoder = encoders.zeroValue
             case .binarySearchToZero where hasValueSpans:
                 encoder = encoders.binarySearchToZero
@@ -59,6 +69,33 @@ struct EncoderFactory {
                 fingerprintGuard: fingerprintGuard
             )
         }
+
+        // Append LinearScanEncoder descriptors for coordinates with nonMonotoneGap signals.
+        if let origins = convergedOrigins {
+            for (position, origin) in origins {
+                guard case let .nonMonotoneGap(remainingRange) = origin.signal,
+                      remainingRange <= linearScanThreshold,
+                      remainingRange > 0
+                else { continue }
+
+                let scanEncoder = LinearScanEncoder(
+                    targetPosition: position,
+                    scanRange: (origin.bound >= UInt64(remainingRange))
+                        ? (origin.bound - UInt64(remainingRange)) ... (origin.bound - 1)
+                        : 0 ... (origin.bound - 1),
+                    scanDirection: .upward
+                )
+                descriptors.append(MorphismDescriptor(
+                    encoder: scanEncoder,
+                    decoderFactory: { decoder },
+                    probeBudget: remainingRange,
+                    structureChanged: structureChanged,
+                    fingerprintGuard: fingerprintGuard
+                ))
+            }
+        }
+
+        return descriptors
     }
 
     /// Builds descriptors for the redistribution section (tandem + cross-stage).

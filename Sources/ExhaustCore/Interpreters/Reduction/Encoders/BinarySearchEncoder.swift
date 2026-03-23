@@ -33,6 +33,14 @@ public struct BinarySearchEncoder: ComposableEncoder {
 
     public let phase = ReductionPhase.valueMinimization
 
+    /// The encoder configuration as a convergence cache discriminant.
+    var encoderConfiguration: EncoderConfiguration {
+        switch configuration {
+        case .rangeMinimum: .binarySearchRangeMinimum
+        case .semanticSimplest: .binarySearchSemanticSimplest
+        }
+    }
+
     public init(configuration: Configuration) {
         self.configuration = configuration
     }
@@ -56,6 +64,7 @@ public struct BinarySearchEncoder: ComposableEncoder {
         positionRange: ClosedRange<Int>,
         context: ReductionContext
     ) {
+        currentCycle = context.cycle
         let spans = Self.extractFilteredSpans(from: sequence, in: positionRange, context: context)
         start(sequence: sequence, targets: .spans(spans), convergedOrigins: context.convergedOrigins)
     }
@@ -70,13 +79,6 @@ public struct BinarySearchEncoder: ComposableEncoder {
             switch self {
             case let .downward(stepper): stepper.bestAccepted
             case let .upward(stepper): stepper.bestAccepted
-            }
-        }
-
-        var direction: ConvergedOrigin.Direction {
-            switch self {
-            case .downward: .downward
-            case .upward: .upward
             }
         }
 
@@ -130,6 +132,7 @@ public struct BinarySearchEncoder: ComposableEncoder {
     private var needsFirstProbe = true
     private var searchPhase = SearchPhase.binarySearch
     private var savedEntry: ChoiceSequenceValue?
+    private var currentCycle: Int = 0
 
     private var costPerTarget: Int {
         switch configuration {
@@ -172,12 +175,12 @@ public struct BinarySearchEncoder: ComposableEncoder {
             let stepper: DirectionalStepper
 
             if currentBP > targetBP {
-                let validConvergedOrigin = (convergedOrigin?.direction == .downward) ? convergedOrigin : nil
+                let validConvergedOrigin = (convergedOrigin?.configuration == encoderConfiguration) ? convergedOrigin : nil
                 effectiveBound = validConvergedOrigin?.bound ?? targetBP
                 isConvergedOrigined = validConvergedOrigin != nil
                 stepper = .downward(BinarySearchStepper(lo: effectiveBound, hi: currentBP))
             } else {
-                let validConvergedOrigin = (convergedOrigin?.direction == .upward) ? convergedOrigin : nil
+                let validConvergedOrigin = (convergedOrigin?.configuration == encoderConfiguration) ? convergedOrigin : nil
                 effectiveBound = validConvergedOrigin?.bound ?? targetBP
                 isConvergedOrigined = validConvergedOrigin != nil
                 stepper = .upward(MaxBinarySearchStepper(lo: currentBP, hi: effectiveBound))
@@ -209,7 +212,9 @@ public struct BinarySearchEncoder: ComposableEncoder {
                 let convergedTarget = targets[currentIndex]
                 convergenceRecords[convergedTarget.seqIdx] = ConvergedOrigin(
                     bound: convergedTarget.stepper.bestAccepted,
-                    direction: convergedTarget.stepper.direction
+                    signal: .monotoneConvergence,
+                    configuration: encoderConfiguration,
+                    cycle: currentCycle
                 )
                 // Validation probe for warm-started downward search.
                 let state = targets[currentIndex]

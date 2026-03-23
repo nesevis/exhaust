@@ -1,7 +1,6 @@
-/// Sets each target value to its semantic simplest form (zero for numerics), or to the
-/// range's lower bound when zero falls outside an explicit valid range.
+/// Sets each target value to its semantic simplest form (zero for numerics), or to the range's lower bound when zero falls outside an explicit valid range.
 ///
-/// Two phases: first tries setting ALL values to simplest simultaneously (handles filter-coupled generators), then iterates individually. The 2-cell chain ZeroValue => BinarySearchToZero means that targets where ZeroValue succeeds can skip binary search entirely.
+/// Two phases: first tries setting all values to simplest simultaneously (handles filter-coupled generators), then iterates individually. The two-cell chain ZeroValue followed by BinarySearchToZero means that targets where ZeroValue succeeds can skip binary search entirely.
 public struct ZeroValueEncoder: ComposableEncoder {
     public let name: EncoderName = .zeroValue
     public let phase = ReductionPhase.valueMinimization
@@ -17,10 +16,25 @@ public struct ZeroValueEncoder: ComposableEncoder {
     private var filteredSpans: [(seqIdx: Int, target: ChoiceValue, validRange: ClosedRange<UInt64>?, isRangeExplicit: Bool)] = []
     private var zeroPhase = ZeroValuePhase.allAtOnce
     private var spanIndex = 0
+    private var batchRejected = false
+    private var individuallyAccepted: Set<Int> = []
+    private var currentCycle: Int = 0
 
-    // MARK: - Dual conformance disambiguation
+    // MARK: - Convergence
 
-    public var convergenceRecords: [Int: ConvergedOrigin] { [:] }
+    public var convergenceRecords: [Int: ConvergedOrigin] {
+        guard batchRejected, individuallyAccepted.isEmpty == false else { return [:] }
+        var records: [Int: ConvergedOrigin] = [:]
+        for entry in filteredSpans where individuallyAccepted.contains(entry.seqIdx) {
+            records[entry.seqIdx] = ConvergedOrigin(
+                bound: entry.target.bitPattern64,
+                signal: .zeroingDependency,
+                configuration: .zeroValue,
+                cycle: currentCycle
+            )
+        }
+        return records
+    }
 
     // MARK: - ComposableEncoder
 
@@ -41,6 +55,7 @@ public struct ZeroValueEncoder: ComposableEncoder {
         positionRange: ClosedRange<Int>,
         context: ReductionContext
     ) {
+        currentCycle = context.cycle
         let spans = Self.extractFilteredSpans(from: sequence, in: positionRange, context: context)
         start(sequence: sequence, targets: .spans(spans), convergedOrigins: context.convergedOrigins)
     }
@@ -52,6 +67,8 @@ public struct ZeroValueEncoder: ComposableEncoder {
         zeroPhase = .allAtOnce
         spanIndex = 0
         filteredSpans = []
+        batchRejected = false
+        individuallyAccepted = []
 
         guard case let .spans(spans) = targets else { return }
 
@@ -95,9 +112,15 @@ public struct ZeroValueEncoder: ComposableEncoder {
                         isRangeExplicit: entry.isRangeExplicit
                     ))
                 }
-            } else if lastAccepted, spanIndex > 0 {
-                // Update base sequence with the previously accepted value.
+            } else if lastAccepted == false, spanIndex == 0 {
+                // All-at-once probe was rejected — batch zeroing failed.
+                batchRejected = true
+            }
+
+            if lastAccepted, spanIndex > 0 {
+                // Individual probe was accepted.
                 let prev = filteredSpans[spanIndex - 1]
+                individuallyAccepted.insert(prev.seqIdx)
                 sequence[prev.seqIdx] = .value(.init(
                     choice: prev.target,
                     validRange: prev.validRange,
