@@ -27,26 +27,26 @@ struct KleisliCompositionTests {
             directProbes.append(probe)
         }
 
-        // Adapter call with full range
+        // ComposableEncoder call with full range
         let positionRange = 0 ... max(0, sequence.count - 1)
-        var adapter = LegacyEncoderAdapter(inner: ZeroValueEncoder())
-        adapter.start(
+        var composable = ZeroValueEncoder()
+        composable.start(
             sequence: sequence,
             tree: tree,
             positionRange: positionRange,
             context: ReductionContext()
         )
-        var adapterProbes: [ChoiceSequence] = []
-        while let probe = adapter.nextProbe(lastAccepted: false) {
-            adapterProbes.append(probe)
+        var composableProbes: [ChoiceSequence] = []
+        while let probe = composable.nextProbe(lastAccepted: false) {
+            composableProbes.append(probe)
         }
 
         #expect(
-            directProbes.count == adapterProbes.count,
-            "Probe count mismatch: direct=\(directProbes.count) adapter=\(adapterProbes.count)"
+            directProbes.count == composableProbes.count,
+            "Probe count mismatch: direct=\(directProbes.count) composable=\(composableProbes.count)"
         )
-        for (index, (direct, adapted)) in zip(directProbes, adapterProbes).enumerated() {
-            #expect(direct == adapted, "Probe \(index) differs")
+        for (index, (direct, composed)) in zip(directProbes, composableProbes).enumerated() {
+            #expect(direct == composed, "Probe \(index) differs")
         }
     }
 
@@ -65,7 +65,7 @@ struct KleisliCompositionTests {
 
         // Adapter with range covering only the first two value spans
         let restrictedRange = allSpans[0].range.lowerBound ... allSpans[1].range.upperBound
-        var adapter = LegacyEncoderAdapter(inner: ZeroValueEncoder())
+        var adapter = ZeroValueEncoder()
         adapter.start(
             sequence: sequence,
             tree: tree,
@@ -78,7 +78,7 @@ struct KleisliCompositionTests {
         }
 
         // Full-range adapter for comparison
-        var fullAdapter = LegacyEncoderAdapter(inner: ZeroValueEncoder())
+        var fullAdapter = ZeroValueEncoder()
         fullAdapter.start(
             sequence: sequence,
             tree: tree,
@@ -154,7 +154,7 @@ struct KleisliCompositionTests {
         let fullRange = 0 ... max(0, sequence.count - 1)
         var composed = KleisliComposition(
             upstream: IdentityComposableEncoder(),
-            downstream: LegacyEncoderAdapter(inner: ZeroValueEncoder()),
+            downstream: ZeroValueEncoder(),
             lift: GeneratorLift(gen: gen, mode: .exact),
             rollback: .atomic,
             upstreamRange: fullRange,

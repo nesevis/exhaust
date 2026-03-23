@@ -2,7 +2,7 @@
 /// range's lower bound when zero falls outside an explicit valid range.
 ///
 /// Two phases: first tries setting ALL values to simplest simultaneously (handles filter-coupled generators), then iterates individually. The 2-cell chain ZeroValue => BinarySearchToZero means that targets where ZeroValue succeeds can skip binary search entirely.
-public struct ZeroValueEncoder: AdaptiveEncoder, ComposableEncoder {
+public struct ZeroValueEncoder: ComposableEncoder {
     public let name: EncoderName = .zeroValue
     public let phase = ReductionPhase.valueMinimization
 
@@ -37,7 +37,7 @@ public struct ZeroValueEncoder: AdaptiveEncoder, ComposableEncoder {
         positionRange: ClosedRange<Int>,
         context: ReductionContext
     ) -> Int? {
-        let spans = Self.extractFilteredSpans(from: sequence, in: positionRange)
+        let spans = Self.extractFilteredSpans(from: sequence, in: positionRange, context: context)
         guard spans.isEmpty == false else { return nil }
         return 1 + spans.count
     }
@@ -48,13 +48,13 @@ public struct ZeroValueEncoder: AdaptiveEncoder, ComposableEncoder {
         positionRange: ClosedRange<Int>,
         context: ReductionContext
     ) {
-        let spans = Self.extractFilteredSpans(from: sequence, in: positionRange)
+        let spans = Self.extractFilteredSpans(from: sequence, in: positionRange, context: context)
         start(sequence: sequence, targets: .spans(spans), convergedOrigins: context.convergedOrigins)
     }
 
     // MARK: - AdaptiveEncoder
 
-    public mutating func start(sequence: ChoiceSequence, targets: TargetSet, convergedOrigins _: [Int: ConvergedOrigin]?) {
+    public mutating func start(sequence: ChoiceSequence, targets: TargetSet, convergedOrigins _: [Int: ConvergedOrigin]? = nil) {
         self.sequence = sequence
         zeroPhase = .allAtOnce
         spanIndex = 0

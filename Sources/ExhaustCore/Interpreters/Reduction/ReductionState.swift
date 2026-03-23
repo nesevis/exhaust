@@ -473,6 +473,127 @@ extension ReductionState {
         return anyAccepted
     }
 
+    // MARK: - ComposableEncoder runner
+
+    /// Runs a composable encoder against a decoder, tracking materializations.
+    ///
+    /// Equivalent to ``runAdaptive(_:decoder:targets:structureChanged:budget:fingerprintGuard:convergedOrigins:)`` but uses the ``ComposableEncoder`` interface: the encoder derives its own targets from `positionRange` rather than receiving a pre-extracted ``TargetSet``.
+    func runComposable(
+        _ encoder: some ComposableEncoder,
+        decoder: SequenceDecoder,
+        positionRange: ClosedRange<Int>,
+        context: ReductionContext,
+        structureChanged: Bool,
+        budget: inout ReductionScheduler.LegBudget,
+        fingerprintGuard: StructuralFingerprint? = nil
+    ) throws -> Bool {
+        guard budget.isExhausted == false else { return false }
+        if dominance.shouldSkip(encoder.name, phase: encoder.phase) { return false }
+        let startSeqLen = sequence.count
+        let startSequenceForCacheInvalidation = hasBind ? sequence : nil
+        var encoder = encoder
+        encoder.start(
+            sequence: sequence,
+            tree: tree,
+            positionRange: positionRange,
+            context: context
+        )
+        let cacheSalt = decoder.rejectCacheSalt
+        var lastAccepted = false
+        var anyAccepted = false
+        var probes = 0
+        var accepted = 0
+        let budgetBefore = budget.used
+        defer {
+            if collectStats {
+                encoderProbes[encoder.name, default: 0] += probes
+                totalMaterializations += (budget.used - budgetBefore)
+            }
+        }
+        var lastDecodingReport: DecodingReport?
+        while let probe = encoder.nextProbe(lastAccepted: lastAccepted) {
+            guard budget.isExhausted == false else { break }
+            probes += 1
+            let cacheKey = ZobristHash.hash(of: probe) &+ cacheSalt
+            if rejectCache.contains(cacheKey) {
+                lastAccepted = false
+                continue
+            }
+            if let result = try decoder.decode(
+                candidate: probe, gen: gen, tree: tree,
+                originalSequence: sequence, property: property
+            ) {
+                budget.recordMaterialization()
+                lastDecodingReport = result.decodingReport
+                if let guardPrint = fingerprintGuard {
+                    let snap = makeSnapshot()
+                    accept(result, structureChanged: structureChanged)
+                    if let currentBindIndex = bindIndex,
+                       StructuralFingerprint.from(sequence, bindIndex: currentBindIndex) != guardPrint
+                    {
+                        restoreSnapshot(snap)
+                        lastAccepted = false
+                        break
+                    }
+                } else {
+                    accept(result, structureChanged: structureChanged)
+                }
+                lastAccepted = true
+                anyAccepted = true
+                accepted += 1
+            } else {
+                budget.recordMaterialization()
+                lastAccepted = false
+                rejectCache.insert(cacheKey)
+            }
+        }
+        let harvested = encoder.convergenceRecords
+        let cacheReliable = lastDecodingReport?.isReliableForConvergenceCache ?? true
+        for (index, convergedOrigin) in harvested {
+            if cacheReliable {
+                convergenceCache.record(index: index, convergedOrigin: convergedOrigin)
+            }
+        }
+        if convergenceInstrumentation != nil {
+            for (index, convergedOrigin) in harvested {
+                convergenceInstrumentation?.records.append(
+                    ConvergenceInstrumentation.ConvergenceRecord(
+                        coordinateIndex: index,
+                        convergedValue: convergedOrigin.bound,
+                        direction: convergedOrigin.direction,
+                        cycle: currentCycle
+                    )
+                )
+            }
+            convergenceInstrumentation?.totalEncoderConvergences += harvested.count
+        }
+        if anyAccepted,
+           convergenceCache.isEmpty == false,
+           let startSeq = startSequenceForCacheInvalidation,
+           let index = bindIndex
+        {
+            invalidateConvergenceCacheSiblings(oldSequence: startSeq, newSequence: sequence, bindIndex: index)
+        }
+
+        if anyAccepted {
+            dominance.recordSuccess(encoder.name)
+        }
+        if isInstrumented {
+            if probes > 0 {
+                ExhaustLog.debug(category: .reducer, event: anyAccepted ? "encoder_accepted" : "encoder_exhausted", metadata: [
+                    "encoder": encoder.name.rawValue, "probes": "\(probes)", "accepted": "\(accepted)",
+                    "seq_len": "\(startSeqLen)→\(sequence.count)",
+                    "output": anyAccepted ? "\(output)" : "",
+                ])
+            } else {
+                ExhaustLog.debug(category: .reducer, event: "encoder_no_probes", metadata: [
+                    "encoder": encoder.name.rawValue,
+                ])
+            }
+        }
+        return anyAccepted
+    }
+
     func makeDeletionDecoder(at depth: Int) -> SequenceDecoder {
         let context = DecoderContext(depth: .specific(depth), bindIndex: bindIndex, fallbackTree: fallbackTree, strictness: .relaxed)
         return SequenceDecoder.for(context)
@@ -583,7 +704,13 @@ extension ReductionState {
         let speculativeDecoder: SequenceDecoder = .exact()
         var explorationBudget = ReductionScheduler.LegBudget(hardCap: remaining)
         var relaxEncoder = RelaxRoundEncoder()
-        relaxEncoder.start(sequence: sequence, targets: .wholeSequence)
+        let relaxRange = 0 ... max(0, sequence.count - 1)
+        relaxEncoder.start(
+            sequence: sequence,
+            tree: tree,
+            positionRange: relaxRange,
+            context: ReductionContext(bindIndex: bindIndex)
+        )
         var lastAccepted = false
         var redistributionAccepted = false
         var explorationProbes = 0

@@ -8,7 +8,7 @@
 /// Binary-searches each target value toward a specific reduction target.
 ///
 /// The reduction target for each value is determined by its recorded valid range (see ``ChoiceValue/reductionTarget(in:)``). Processes targets sequentially, converging each via ``BinarySearchStepper`` before moving to the next.
-public struct BinarySearchToRangeMinimumEncoder: AdaptiveEncoder, ComposableEncoder {
+public struct BinarySearchToRangeMinimumEncoder: ComposableEncoder {
     public init() {}
 
     public private(set) var convergenceRecords: [Int: ConvergedOrigin] = [:]
@@ -31,7 +31,7 @@ public struct BinarySearchToRangeMinimumEncoder: AdaptiveEncoder, ComposableEnco
         positionRange: ClosedRange<Int>,
         context: ReductionContext
     ) -> Int? {
-        let spans = Self.extractFilteredSpans(from: sequence, in: positionRange)
+        let spans = Self.extractFilteredSpans(from: sequence, in: positionRange, context: context)
         guard spans.isEmpty == false else { return nil }
         return spans.count * 64
     }
@@ -42,7 +42,7 @@ public struct BinarySearchToRangeMinimumEncoder: AdaptiveEncoder, ComposableEnco
         positionRange: ClosedRange<Int>,
         context: ReductionContext
     ) {
-        let spans = Self.extractFilteredSpans(from: sequence, in: positionRange)
+        let spans = Self.extractFilteredSpans(from: sequence, in: positionRange, context: context)
         start(sequence: sequence, targets: .spans(spans), convergedOrigins: context.convergedOrigins)
     }
 
@@ -70,7 +70,7 @@ public struct BinarySearchToRangeMinimumEncoder: AdaptiveEncoder, ComposableEnco
 
     // MARK: - AdaptiveEncoder
 
-    public mutating func start(sequence: ChoiceSequence, targets: TargetSet, convergedOrigins: [Int: ConvergedOrigin]?) {
+    public mutating func start(sequence: ChoiceSequence, targets: TargetSet, convergedOrigins: [Int: ConvergedOrigin]? = nil) {
         self.sequence = sequence
         self.targets = []
         currentIndex = 0

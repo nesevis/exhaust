@@ -14,7 +14,7 @@
 /// 3. `as_integer_ratio`-style integer-part minimization
 ///
 /// Each stage processes one float span at a time. On convergence or exhaustion, advances to the next stage or the next span.
-struct ReduceFloatEncoder: AdaptiveEncoder, ComposableEncoder {
+struct ReduceFloatEncoder: ComposableEncoder {
     init() {}
 
     var convergenceRecords: [Int: ConvergedOrigin] = [:]
@@ -42,7 +42,7 @@ struct ReduceFloatEncoder: AdaptiveEncoder, ComposableEncoder {
         positionRange: ClosedRange<Int>,
         context: ReductionContext
     ) -> Int? {
-        let spans = Self.extractFilteredSpans(from: sequence, in: positionRange)
+        let spans = Self.extractFilteredSpans(from: sequence, in: positionRange, context: context)
         let floatCount = spans.count(where: { span in
             let seqIdx = span.range.lowerBound
             guard let value = sequence[seqIdx].value else { return false }
@@ -58,7 +58,7 @@ struct ReduceFloatEncoder: AdaptiveEncoder, ComposableEncoder {
         positionRange: ClosedRange<Int>,
         context: ReductionContext
     ) {
-        let spans = Self.extractFilteredSpans(from: sequence, in: positionRange)
+        let spans = Self.extractFilteredSpans(from: sequence, in: positionRange, context: context)
         start(sequence: sequence, targets: .spans(spans), convergedOrigins: context.convergedOrigins)
     }
 
@@ -112,7 +112,7 @@ struct ReduceFloatEncoder: AdaptiveEncoder, ComposableEncoder {
 
     // MARK: - AdaptiveEncoder
 
-    mutating func start(sequence: ChoiceSequence, targets: TargetSet, convergedOrigins: [Int: ConvergedOrigin]?) {
+    mutating func start(sequence: ChoiceSequence, targets: TargetSet, convergedOrigins: [Int: ConvergedOrigin]? = nil) {
         self.sequence = sequence
         self.targets = []
         currentTargetIndex = 0

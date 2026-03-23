@@ -236,13 +236,21 @@ private func extractValueSpans(from seq: ChoiceSequence) -> [ChoiceSpan] {
 }
 
 private func countAllRejectedProbes(
-    _ encoder: some AdaptiveEncoder,
+    _ encoder: some ComposableEncoder,
     sequence: ChoiceSequence,
     spans: [ChoiceSpan],
     convergedOrigins: [Int: ConvergedOrigin]? = nil
 ) -> Int {
     var encoder = encoder
-    encoder.start(sequence: sequence, targets: .spans(spans), convergedOrigins: convergedOrigins)
+    let positionRange = spans.isEmpty
+        ? 0 ... 0
+        : spans.map(\.range.lowerBound).min()! ... spans.map(\.range.upperBound).max()!
+    encoder.start(
+        sequence: sequence,
+        tree: .just(""),
+        positionRange: positionRange,
+        context: ReductionContext(convergedOrigins: convergedOrigins)
+    )
     var count = 0
     while encoder.nextProbe(lastAccepted: false) != nil {
         count += 1

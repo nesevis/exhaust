@@ -740,50 +740,59 @@ extension ReductionState {
         let bindInnerSpans = buildBindInnerValueSpans(bindSpanIndex: currentBindSpanIndex)
         if bindInnerSpans.isEmpty == false {
             let trainDecoder = makeDepthZeroDecoder()
+            // Compute bounding range for bind-inner positions.
+            let innerMin = bindInnerSpans.map(\.range.lowerBound).min()!
+            let innerMax = bindInnerSpans.map(\.range.upperBound).max()!
+            let bindInnerRange = innerMin ... innerMax
+            // No depth filter — bind-inner positions are explicitly scoped by buildBindInnerValueSpans.
+            // The encoder sees all value spans in the bounding range; bind-inner positions are a subset.
+            // This is slightly broader than the pre-extracted spans but acceptable — extra spans
+            // are non-bind-inner values that the encoder will attempt to reduce (harmless, same decoder).
+            let bindInnerContext = ReductionContext(
+                bindIndex: bindIndex
+            )
             for slot in trainOrder {
                 guard legBudget.isExhausted == false else { break }
                 switch slot {
                 case .zeroValue:
-                    if try runAdaptive(
+                    if try runComposable(
                         zeroValueEncoder, decoder: trainDecoder,
-                        targets: .spans(bindInnerSpans), structureChanged: true,
+                        positionRange: bindInnerRange, context: bindInnerContext,
+                        structureChanged: true,
                         budget: &legBudget
                     ) {
                         accepted += 1
                         ReductionScheduler.moveToFront(.zeroValue, in: &trainOrder)
                     }
                 case .binarySearchToZero:
-                    if try runAdaptive(
+                    if try runComposable(
                         binarySearchToZeroEncoder, decoder: trainDecoder,
-                        targets: .spans(bindInnerSpans), structureChanged: true,
+                        positionRange: bindInnerRange, context: bindInnerContext,
+                        structureChanged: true,
                         budget: &legBudget
                     ) {
                         accepted += 1
                         ReductionScheduler.moveToFront(.binarySearchToZero, in: &trainOrder)
                     }
                 case .binarySearchToTarget:
-                    if try runAdaptive(
+                    if try runComposable(
                         binarySearchToTargetEncoder, decoder: trainDecoder,
-                        targets: .spans(bindInnerSpans), structureChanged: true,
+                        positionRange: bindInnerRange, context: bindInnerContext,
+                        structureChanged: true,
                         budget: &legBudget
                     ) {
                         accepted += 1
                         ReductionScheduler.moveToFront(.binarySearchToTarget, in: &trainOrder)
                     }
                 case .reduceFloat:
-                    let floatSpans = bindInnerSpans.filter { span in
-                        guard let value = sequence[span.range.lowerBound].value else { return false }
-                        return value.choice.tag == .double || value.choice.tag == .float
-                    }
-                    if floatSpans.isEmpty == false {
-                        if try runAdaptive(
-                            reduceFloatEncoder, decoder: trainDecoder,
-                            targets: .spans(floatSpans), structureChanged: true,
-                            budget: &legBudget
-                        ) {
-                            accepted += 1
-                            ReductionScheduler.moveToFront(.reduceFloat, in: &trainOrder)
-                        }
+                    if try runComposable(
+                        reduceFloatEncoder, decoder: trainDecoder,
+                        positionRange: bindInnerRange, context: bindInnerContext,
+                        structureChanged: true,
+                        budget: &legBudget
+                    ) {
+                        accepted += 1
+                        ReductionScheduler.moveToFront(.reduceFloat, in: &trainOrder)
                     }
                 }
             }
@@ -899,43 +908,49 @@ extension ReductionState {
                     ? .guided(fallbackTree: fallbackTree ?? tree)
                     : .exact()
 
+                let leafContext = ReductionContext(
+                    bindIndex: bindIndex,
+                    convergedOrigins: cachedOrigins,
+                    dag: dag
+                )
+
                 for slot in trainOrder {
                     guard legBudget.isExhausted == false else { break }
                     var slotAccepted = false
-                    // Pass the guard into runAdaptive so the boundary fires per-acceptance, not after the full encoder run. Adaptive encoders capture seqIdx at start() time; a structural change mid-loop makes those indices stale before the encoder produces its next probe.
+                    // Pass the guard into runComposable so the boundary fires per-acceptance, not after the full encoder run. Encoders capture seqIdx at start() time; a structural change mid-loop makes those indices stale before the encoder produces its next probe.
                     let guard_ = needsFingerprintGuard ? prePhaseFingerprint : nil
                     switch slot {
                     case .zeroValue where leafSpans.isEmpty == false:
-                        slotAccepted = try runAdaptive(
+                        slotAccepted = try runComposable(
                             zeroValueEncoder, decoder: decoder,
-                            targets: .spans(leafSpans), structureChanged: structureChanged,
+                            positionRange: leafRange, context: leafContext,
+                            structureChanged: structureChanged,
                             budget: &legBudget,
-                            fingerprintGuard: guard_,
-                            convergedOrigins: cachedOrigins
+                            fingerprintGuard: guard_
                         )
                     case .binarySearchToZero where leafSpans.isEmpty == false:
-                        slotAccepted = try runAdaptive(
+                        slotAccepted = try runComposable(
                             binarySearchToZeroEncoder, decoder: decoder,
-                            targets: .spans(leafSpans), structureChanged: structureChanged,
+                            positionRange: leafRange, context: leafContext,
+                            structureChanged: structureChanged,
                             budget: &legBudget,
-                            fingerprintGuard: guard_,
-                            convergedOrigins: cachedOrigins
+                            fingerprintGuard: guard_
                         )
                     case .binarySearchToTarget where leafSpans.isEmpty == false:
-                        slotAccepted = try runAdaptive(
+                        slotAccepted = try runComposable(
                             binarySearchToTargetEncoder, decoder: decoder,
-                            targets: .spans(leafSpans), structureChanged: structureChanged,
+                            positionRange: leafRange, context: leafContext,
+                            structureChanged: structureChanged,
                             budget: &legBudget,
-                            fingerprintGuard: guard_,
-                            convergedOrigins: cachedOrigins
+                            fingerprintGuard: guard_
                         )
                     case .reduceFloat where floatSpans.isEmpty == false:
-                        slotAccepted = try runAdaptive(
+                        slotAccepted = try runComposable(
                             reduceFloatEncoder, decoder: decoder,
-                            targets: .spans(floatSpans), structureChanged: structureChanged,
+                            positionRange: leafRange, context: leafContext,
+                            structureChanged: structureChanged,
                             budget: &legBudget,
-                            fingerprintGuard: guard_,
-                            convergedOrigins: cachedOrigins
+                            fingerprintGuard: guard_
                         )
                     default:
                         break
@@ -955,19 +970,27 @@ extension ReductionState {
 
         // Covariant value sweep: reduce bound-content values at intermediate bind depths.
         // DAG leaf positions miss values inside nested bind regions (for example, parent node values in a recursive bind generator like a binary heap). Shallow depths first so that deeper depths reduce in the correct context.
-        // vSpans at depth D can include nested bind-inner positions whose reduction changes the inner bound structure, which belongs in base descent. The fingerprintGuard in each runAdaptive call catches this per-acceptance and rolls back the structural probe while preserving any earlier clean value reductions.
+        // vSpans at depth D can include nested bind-inner positions whose reduction changes the inner bound structure, which belongs in base descent. The fingerprintGuard in each runComposable call catches this per-acceptance and rolls back the structural probe while preserving any earlier clean value reductions.
         let maxBindDepth = bindIndex?.maxBindDepth ?? 0
+        let fullRange = 0 ... max(0, sequence.count - 1)
         if maxBindDepth >= 1, legBudget.isExhausted == false {
             for depth in stride(from: 1, through: maxBindDepth, by: 1) {
                 guard legBudget.isExhausted == false else { break }
                 dominance.invalidate()
-                let depthContext = DecoderContext(
+                let depthDecoderContext = DecoderContext(
                     depth: .specific(depth),
                     bindIndex: bindIndex,
                     fallbackTree: fallbackTree,
                     strictness: .normal
                 )
-                let depthDecoder = SequenceDecoder.for(depthContext)
+                let depthDecoder = SequenceDecoder.for(depthDecoderContext)
+                let depthContext = ReductionContext(
+                    bindIndex: bindIndex,
+                    convergedOrigins: cachedOrigins,
+                    dag: dag,
+                    depthFilter: depth
+                )
+                // Pre-check span availability for the where-guards (avoids encoder instantiation when empty).
                 let vSpans = spanCache.valueSpans(at: depth, from: sequence, bindIndex: bindIndex)
                 let fSpans = spanCache.floatSpans(at: depth, from: sequence, bindIndex: bindIndex)
 
@@ -977,36 +1000,36 @@ extension ReductionState {
                     // structureChanged: hasBind ensures accept() rebuilds bindIndex before the per-acceptance fingerprint guard recomputes the fingerprint. Without a fresh bindIndex, StructuralFingerprint.from uses stale depth information and may miss structural changes.
                     switch slot {
                     case .zeroValue where vSpans.isEmpty == false:
-                        slotAccepted = try runAdaptive(
+                        slotAccepted = try runComposable(
                             zeroValueEncoder, decoder: depthDecoder,
-                            targets: .spans(vSpans), structureChanged: hasBind,
+                            positionRange: fullRange, context: depthContext,
+                            structureChanged: hasBind,
                             budget: &legBudget,
-                            fingerprintGuard: prePhaseFingerprint,
-                            convergedOrigins: cachedOrigins
+                            fingerprintGuard: prePhaseFingerprint
                         )
                     case .binarySearchToZero where vSpans.isEmpty == false:
-                        slotAccepted = try runAdaptive(
+                        slotAccepted = try runComposable(
                             binarySearchToZeroEncoder, decoder: depthDecoder,
-                            targets: .spans(vSpans), structureChanged: hasBind,
+                            positionRange: fullRange, context: depthContext,
+                            structureChanged: hasBind,
                             budget: &legBudget,
-                            fingerprintGuard: prePhaseFingerprint,
-                            convergedOrigins: cachedOrigins
+                            fingerprintGuard: prePhaseFingerprint
                         )
                     case .binarySearchToTarget where vSpans.isEmpty == false:
-                        slotAccepted = try runAdaptive(
+                        slotAccepted = try runComposable(
                             binarySearchToTargetEncoder, decoder: depthDecoder,
-                            targets: .spans(vSpans), structureChanged: hasBind,
+                            positionRange: fullRange, context: depthContext,
+                            structureChanged: hasBind,
                             budget: &legBudget,
-                            fingerprintGuard: prePhaseFingerprint,
-                            convergedOrigins: cachedOrigins
+                            fingerprintGuard: prePhaseFingerprint
                         )
                     case .reduceFloat where fSpans.isEmpty == false:
-                        slotAccepted = try runAdaptive(
+                        slotAccepted = try runComposable(
                             reduceFloatEncoder, decoder: depthDecoder,
-                            targets: .spans(fSpans), structureChanged: hasBind,
+                            positionRange: fullRange, context: depthContext,
+                            structureChanged: hasBind,
                             budget: &legBudget,
-                            fingerprintGuard: prePhaseFingerprint,
-                            convergedOrigins: cachedOrigins
+                            fingerprintGuard: prePhaseFingerprint
                         )
                     default:
                         break
@@ -1041,9 +1064,14 @@ extension ReductionState {
             }
 
             // Cross-stage redistribution.
-            if try runAdaptive(
+            let redistEncoderContext = ReductionContext(
+                bindIndex: bindIndex,
+                convergedOrigins: cachedOrigins,
+                dag: dag
+            )
+            if try runComposable(
                 redistributeEncoder, decoder: redistDecoder,
-                targets: .wholeSequence,
+                positionRange: fullRange, context: redistEncoderContext,
                 structureChanged: hasBind, budget: &legBudget
             ) {
                 anyAccepted = true

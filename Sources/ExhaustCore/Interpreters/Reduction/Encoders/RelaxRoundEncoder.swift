@@ -5,7 +5,7 @@
 /// Conforms to ``AdaptiveEncoder`` rather than ``BatchEncoder`` because ``ReductionState/runRelaxRound(remaining:)`` drives it through a manual loop that needs per-probe decoder access. The `lastAccepted` feedback is ignored — each relaxation is independent, so acceptance of one pair does not inform which pair to try next.
 ///
 /// Grade: `(.speculative, w)`. Requires pipeline acceptance — the caller must verify that the final state (after exploit passes) improves over the pre-relaxation checkpoint.
-public struct RelaxRoundEncoder: AdaptiveEncoder, ComposableEncoder {
+public struct RelaxRoundEncoder: ComposableEncoder {
     public init() {}
 
     public let name: EncoderName = .relaxRound
@@ -29,7 +29,7 @@ public struct RelaxRoundEncoder: AdaptiveEncoder, ComposableEncoder {
         positionRange: ClosedRange<Int>,
         context: ReductionContext
     ) -> Int? {
-        let valueCount = Self.extractFilteredSpans(from: sequence, in: positionRange).count
+        let valueCount = Self.extractFilteredSpans(from: sequence, in: positionRange, context: context).count
         guard valueCount >= 2 else { return nil }
         return valueCount * (valueCount - 1)
     }
@@ -51,7 +51,7 @@ public struct RelaxRoundEncoder: AdaptiveEncoder, ComposableEncoder {
 
     // MARK: - AdaptiveEncoder
 
-    public mutating func start(sequence: ChoiceSequence, targets: TargetSet, convergedOrigins _: [Int: ConvergedOrigin]?) {
+    public mutating func start(sequence: ChoiceSequence, targets: TargetSet, convergedOrigins _: [Int: ConvergedOrigin]? = nil) {
         self.sequence = sequence
         probes = []
         probeIndex = 0

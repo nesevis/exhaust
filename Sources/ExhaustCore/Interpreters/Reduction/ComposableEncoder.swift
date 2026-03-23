@@ -71,13 +71,20 @@ public extension ComposableEncoder {
 
     /// Extracts value spans from a choice sequence, filtered to those whose lower bound falls within the given position range.
     ///
-    /// Shared helper for ``ComposableEncoder`` conformers that derive their targets from a position range rather than a pre-extracted ``TargetSet``. Equivalent to the extraction logic in ``LegacyEncoderAdapter``.
+    /// When ``ReductionContext/depthFilter`` is non-nil, further restricts to spans at that bind depth (using ``BindSpanIndex/bindDepth(at:)``). This supports the covariant depth sweep, where spans at a given depth may be non-contiguous across multiple bind regions.
     static func extractFilteredSpans(
         from sequence: ChoiceSequence,
-        in positionRange: ClosedRange<Int>
+        in positionRange: ClosedRange<Int>,
+        context: ReductionContext = ReductionContext()
     ) -> [ChoiceSpan] {
-        ChoiceSequence.extractAllValueSpans(from: sequence)
-            .filter { positionRange.contains($0.range.lowerBound) }
+        let allSpans = ChoiceSequence.extractAllValueSpans(from: sequence)
+        if let depth = context.depthFilter, let bindIndex = context.bindIndex {
+            return allSpans.filter {
+                positionRange.contains($0.range.lowerBound)
+                    && bindIndex.bindDepth(at: $0.range.lowerBound) == depth
+            }
+        }
+        return allSpans.filter { positionRange.contains($0.range.lowerBound) }
     }
 }
 
@@ -94,14 +101,21 @@ public struct ReductionContext {
     /// The choice dependency graph, or `nil` if not available.
     public let dag: ChoiceDependencyGraph?
 
+    /// When non-nil, restricts the encoder to value spans at this bind depth.
+    ///
+    /// Used by the covariant depth sweep, where spans at a given depth may be non-contiguous across multiple bind regions. The encoder applies this filter during span extraction via ``ComposableEncoder/extractFilteredSpans(from:in:context:)``. When `nil`, all spans in the position range are eligible.
+    public let depthFilter: Int?
+
     public init(
         bindIndex: BindSpanIndex? = nil,
         convergedOrigins: [Int: ConvergedOrigin]? = nil,
-        dag: ChoiceDependencyGraph? = nil
+        dag: ChoiceDependencyGraph? = nil,
+        depthFilter: Int? = nil
     ) {
         self.bindIndex = bindIndex
         self.convergedOrigins = convergedOrigins
         self.dag = dag
+        self.depthFilter = depthFilter
     }
 }
 
