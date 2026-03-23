@@ -100,21 +100,6 @@ public extension ComposableEncoder {
     }
 }
 
-// MARK: - Search Mode
-
-/// Whether an encoder is searching from a known failure or probing for an unknown one.
-///
-/// In the standalone and upstream roles, the property fails on the current sequence — the
-/// encoder searches for a shortlex-smaller sequence that also fails. In the downstream role
-/// of a composition, the lifted sequence may pass the property (PRNG-filled content) — the
-/// encoder needs to discover ANY failure, not necessarily a smaller one.
-public enum SearchMode {
-    /// The property fails on the current sequence. Search for a shortlex-smaller failure.
-    case reduceFromKnownFailure
-    /// The property status is unknown. Search for any sequence that fails.
-    case discoverFailure
-}
-
 // MARK: - Reduction Context
 
 /// Shared state passed to composable encoders without coupling to ``ReductionState``.
@@ -133,24 +118,16 @@ public struct ReductionContext {
     /// Used by the covariant depth sweep, where spans at a given depth may be non-contiguous across multiple bind regions. The encoder applies this filter during span extraction via ``ComposableEncoder/extractFilteredSpans(from:in:context:)``. When `nil`, all spans in the position range are eligible.
     public let depthFilter: Int?
 
-    /// Whether the encoder is searching from a known failure or probing for an unknown one.
-    ///
-    /// - ``SearchMode/reduceFromKnownFailure``: the property fails on the current sequence. The encoder searches for a shortlex-smaller sequence that also fails. This is the default — standalone role, upstream role, and Phase 2 value reduction.
-    /// - ``SearchMode/discoverFailure``: the property status is unknown (for example, after a lift filled bound content with PRNG). The encoder searches for ANY sequence that fails, not necessarily smaller. This is the downstream role in a composition when the lift has low coverage.
-    public let searchMode: SearchMode
-
     public init(
         bindIndex: BindSpanIndex? = nil,
         convergedOrigins: [Int: ConvergedOrigin]? = nil,
         dag: ChoiceDependencyGraph? = nil,
-        depthFilter: Int? = nil,
-        searchMode: SearchMode = .reduceFromKnownFailure
+        depthFilter: Int? = nil
     ) {
         self.bindIndex = bindIndex
         self.convergedOrigins = convergedOrigins
         self.dag = dag
         self.depthFilter = depthFilter
-        self.searchMode = searchMode
     }
 }
 
