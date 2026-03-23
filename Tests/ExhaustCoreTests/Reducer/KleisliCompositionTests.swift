@@ -6,10 +6,10 @@ import Testing
 @Suite("KleisliComposition")
 struct KleisliCompositionTests {
 
-    // MARK: - LegacyEncoderAdapter
+    // MARK: - ComposableEncoder Interface
 
-    @Test("LegacyEncoderAdapter produces same probes as direct encoder call")
-    func legacyAdapterProbeEquivalence() throws {
+    @Test("ComposableEncoder start produces same probes as direct start call")
+    func composableEncoderProbeEquivalence() throws {
         let gen = Gen.arrayOf(
             Gen.choose(in: 0 ... 100 as ClosedRange<UInt64>),
             Gen.choose(in: 3 ... 3 as ClosedRange<UInt64>)
@@ -50,8 +50,8 @@ struct KleisliCompositionTests {
         }
     }
 
-    @Test("LegacyEncoderAdapter filters spans to position range")
-    func legacyAdapterFiltersToRange() throws {
+    @Test("ComposableEncoder filters spans to position range")
+    func composableEncoderFiltersToRange() throws {
         let gen = Gen.arrayOf(
             Gen.choose(in: 0 ... 100 as ClosedRange<UInt64>),
             Gen.choose(in: 5 ... 5 as ClosedRange<UInt64>)

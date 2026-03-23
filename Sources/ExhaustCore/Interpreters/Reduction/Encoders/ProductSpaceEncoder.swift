@@ -525,28 +525,6 @@ func extractAxes(
     return axes
 }
 
-// MARK: - PrecomputedBatchEncoder
-
-/// Wraps a pre-built array of candidate sequences as a ``BatchEncoder``.
-///
-/// Used by Tier 2 salted retries to iterate candidates in largest-fibre-first order instead of the encoder's default shortlex ordering.
-struct PrecomputedBatchEncoder: BatchEncoder {
-    let name: EncoderName
-    let phase: ReductionPhase
-    let candidates: [ChoiceSequence]
-
-    func estimatedCost(sequence _: ChoiceSequence, bindIndex _: BindSpanIndex?) -> Int? {
-        candidates.isEmpty ? nil : candidates.count
-    }
-
-    func encode(
-        sequence _: ChoiceSequence,
-        targets _: TargetSet
-    ) -> any Sequence<ChoiceSequence> {
-        candidates
-    }
-}
-
 // MARK: - PrecomputedComposableEncoder
 
 /// Wraps a pre-built array of candidate sequences as a ``ComposableEncoder``.
