@@ -91,6 +91,7 @@ final class ReductionState<Output> {
     let config: Interpreters.BonsaiReducerConfiguration
     let hasBind: Bool
     let isInstrumented: Bool
+    let collectStats: Bool
 
     // Mutable reduction state
     var sequence: ChoiceSequence
@@ -187,7 +188,8 @@ final class ReductionState<Output> {
         sequence: ChoiceSequence,
         tree: ChoiceTree,
         output: Output,
-        initialTree: ChoiceTree
+        initialTree: ChoiceTree,
+        collectStats: Bool = false
     ) {
         self.gen = gen
         self.property = property
@@ -197,6 +199,7 @@ final class ReductionState<Output> {
         self.output = output
         hasBind = initialTree.containsBind
         isInstrumented = ExhaustLog.isEnabled(.debug, for: .reducer)
+        self.collectStats = collectStats
         bindIndex = hasBind ? BindSpanIndex(from: sequence) : nil
         fallbackTree = hasBind ? tree : nil
         bestSequence = sequence
@@ -266,8 +269,10 @@ extension ReductionState {
         var probes = 0
         let budgetBefore = budget.used
         defer {
-            encoderProbes[encoder.name, default: 0] += probes
-            totalMaterializations += (budget.used - budgetBefore)
+            if collectStats {
+                encoderProbes[encoder.name, default: 0] += probes
+                totalMaterializations += (budget.used - budgetBefore)
+            }
         }
         for candidate in encoder.encode(sequence: sequence, targets: targets) {
             guard budget.isExhausted == false else { break }
@@ -340,8 +345,10 @@ extension ReductionState {
         var accepted = 0
         let budgetBefore = budget.used
         defer {
-            encoderProbes[encoder.name, default: 0] += probes
-            totalMaterializations += (budget.used - budgetBefore)
+            if collectStats {
+                encoderProbes[encoder.name, default: 0] += probes
+                totalMaterializations += (budget.used - budgetBefore)
+            }
         }
         var lastDecodingReport: DecodingReport?
         while let probe = encoder.nextProbe(lastAccepted: lastAccepted) {
@@ -583,8 +590,10 @@ extension ReductionState {
             }
         }
 
-        encoderProbes[.relaxRound, default: 0] += explorationProbes
-        totalMaterializations += explorationBudget.used
+        if collectStats {
+            encoderProbes[.relaxRound, default: 0] += explorationProbes
+            totalMaterializations += explorationBudget.used
+        }
 
         if isInstrumented {
             ExhaustLog.debug(category: .reducer, event: "exploration_redistribute", metadata: [

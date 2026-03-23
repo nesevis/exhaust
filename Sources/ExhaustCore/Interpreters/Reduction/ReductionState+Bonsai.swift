@@ -1143,7 +1143,7 @@ extension ReductionState {
             var lastAccepted = false
             while let probe = composed.nextProbe(lastAccepted: lastAccepted) {
                 guard legBudget.isExhausted == false else { break }
-                kleisliProbes += 1
+                if collectStats { kleisliProbes += 1 }
                 legBudget.recordMaterialization()
 
                 let decoder = SequenceDecoder.exact()
@@ -1178,11 +1178,13 @@ extension ReductionState {
             }
 
             budget -= legBudget.used
-            kleisliMaterializations += legBudget.used
+            if collectStats { kleisliMaterializations += legBudget.used }
         }
 
-        encoderProbes[.kleisliComposition, default: 0] += kleisliProbes
-        totalMaterializations += kleisliMaterializations
+        if collectStats {
+            encoderProbes[.kleisliComposition, default: 0] += kleisliProbes
+            totalMaterializations += kleisliMaterializations
+        }
 
         // Pipeline acceptance: net improvement check.
         if anyAccepted, sequence.shortLexPrecedes(checkpoint.sequence) {

@@ -67,11 +67,12 @@ enum BonsaiScheduler {
         config: Interpreters.BonsaiReducerConfiguration,
         property: @escaping (Output) -> Bool
     ) throws -> (ChoiceSequence, Output)? {
-        try runCollectingStats(
+        try runCore(
             gen: gen,
             initialTree: initialTree,
             initialOutput: initialOutput,
             config: config,
+            collectStats: false,
             property: property
         ).reduced
     }
@@ -84,6 +85,24 @@ enum BonsaiScheduler {
         config: Interpreters.BonsaiReducerConfiguration,
         property: @escaping (Output) -> Bool
     ) throws -> (reduced: (ChoiceSequence, Output)?, stats: ReductionStats) {
+        try runCore(
+            gen: gen,
+            initialTree: initialTree,
+            initialOutput: initialOutput,
+            config: config,
+            collectStats: true,
+            property: property
+        )
+    }
+
+    private static func runCore<Output>(
+        gen: ReflectiveGenerator<Output>,
+        initialTree: ChoiceTree,
+        initialOutput: Output,
+        config: Interpreters.BonsaiReducerConfiguration,
+        collectStats: Bool,
+        property: @escaping (Output) -> Bool
+    ) throws -> (reduced: (ChoiceSequence, Output)?, stats: ReductionStats) {
         let sequence = ChoiceSequence.flatten(initialTree)
 
         let state = ReductionState(
@@ -93,7 +112,8 @@ enum BonsaiScheduler {
             sequence: sequence,
             tree: initialTree,
             output: initialOutput,
-            initialTree: initialTree
+            initialTree: initialTree,
+            collectStats: collectStats
         )
 
         // Projection: zero structurally independent values.

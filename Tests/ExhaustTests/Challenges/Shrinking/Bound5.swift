@@ -95,7 +95,7 @@ struct Bound5ShrinkingChallenge {
     }
 
     @Test("Bound5, Pathological 3")
-    func bound5Pathological3() {
+    func bound5Pathological3() throws {
         let value: Bound5 = .init(
             a: [-11954, 25609, -21279],
             b: [20837, 6773, -1304, -13732, -2626, -3440, 15253, 28268, -31908, 30491],
@@ -103,14 +103,20 @@ struct Bound5ShrinkingChallenge {
             d: [-32635, 18394, -23954, 13750, 27692, 25639, 23372, -27650, 18759, 17794],
             e: [-6525, 2724, -30958, 28797, -2409, -1095, 2335, -14856]
         )
-        ExhaustLog.setConfiguration(.init(isEnabled: true, minimumLevel: .info, categoryMinimumLevels: [.reducer: .debug], format: .human))
+//        ExhaustLog.setConfiguration(.init(isEnabled: true, minimumLevel: .info, categoryMinimumLevels: [.reducer: .debug], format: .human))
+        var report: ExhaustReport?
         let output = #exhaust(
             Self.gen,
             .suppressIssueReporting,
             .reflecting(value),
+            .onReport { report = $0 },
             property: Self.property
         )
-
+    
+        let rep = try #require(report)
+        #expect(rep.propertyInvocations == 410)
+        #expect(rep.totalMaterializations == 489)
+        
         #expect(output?.arr.count == 2)
         #expect(output?.arr.sorted() == [-32768, -1])
     }
