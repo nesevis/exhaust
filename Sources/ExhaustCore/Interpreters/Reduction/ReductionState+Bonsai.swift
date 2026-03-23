@@ -996,6 +996,16 @@ extension ReductionState {
 
             var composed = compositions[edgeIndex]
 
+            // Predict fibre size at the upstream's reduction target via a discovery lift.
+            // One materialisation per edge — the "discovery budget" from the planning document.
+            let prediction = EncoderFactory.predictFibreSizeAtTarget(
+                sequence: sequence,
+                edge: edge,
+                gen: gen,
+                tree: tree,
+                fallbackTree: fallbackTree
+            )
+
             // Run via manual loop (same pattern as runRelaxRound).
             var legBudget = ReductionScheduler.LegBudget(hardCap: min(budget, 100))
 
@@ -1118,6 +1128,55 @@ extension ReductionState {
             if collectStats {
                 fibreExceededExhaustiveThreshold += composed.fibrePairwiseStarts + composed.fibreBailOuts
                 pairwiseOnExhaustibleFibre += composed.fibreExhaustiveStarts
+
+                // Compare prediction against ground truth.
+                // The prediction uses the current sequence; the ground truth uses the lifted sequences.
+                // "Correct" means the predicted mode matches the MAJORITY of actual downstream starts.
+                let actualMajorityMode: EncoderFactory.FibrePrediction.Mode
+                if composed.fibreExhaustiveStarts >= composed.fibrePairwiseStarts,
+                   composed.fibreExhaustiveStarts >= composed.fibreBailOuts
+                {
+                    actualMajorityMode = .exhaustive
+                } else if composed.fibrePairwiseStarts >= composed.fibreBailOuts {
+                    actualMajorityMode = .pairwise
+                } else {
+                    actualMajorityMode = .tooLarge
+                }
+
+                let totalStarts = composed.fibreExhaustiveStarts + composed.fibrePairwiseStarts + composed.fibreBailOuts
+                if totalStarts > 0 {
+                    if prediction.predictedMode == actualMajorityMode {
+                        fibrePredictionCorrect += 1
+                    } else {
+                        fibrePredictionWrong += 1
+                    }
+                }
+            }
+
+            // Log prediction vs ground truth for encoder selection accuracy measurement.
+            if isInstrumented {
+                let actualExhaustive = composed.fibreExhaustiveStarts
+                let actualPairwise = composed.fibrePairwiseStarts
+                let actualBail = composed.fibreBailOuts
+                let predictionLabel: String = switch prediction.predictedMode {
+                case .exhaustive: "exhaustive"
+                case .pairwise: "pairwise"
+                case .tooLarge: "too_large"
+                }
+                ExhaustLog.debug(
+                    category: .reducer,
+                    event: "fibre_prediction",
+                    metadata: [
+                        "region": "\(edge.regionIndex)",
+                        "predicted_mode": predictionLabel,
+                        "predicted_size": "\(prediction.predictedSize)",
+                        "predicted_params": "\(prediction.parameterCount)",
+                        "actual_exhaustive": "\(actualExhaustive)",
+                        "actual_pairwise": "\(actualPairwise)",
+                        "actual_bail": "\(actualBail)",
+                        "max_fibre": "\(composed.maxObservedFibreSize)",
+                    ]
+                )
             }
 
             budget -= legBudget.used

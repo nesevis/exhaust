@@ -54,6 +54,14 @@ public struct ReductionStats: Sendable {
     /// Whether the verification sweep detected cache staleness.
     public var verificationSweepFoundStaleness: Bool
 
+    // MARK: - Fibre Prediction Accuracy (Decision Tree: Step 2)
+
+    /// Number of composition edges where the pre-lift fibre size prediction matched the actual encoder mode.
+    public var fibrePredictionCorrect: Int
+
+    /// Number of composition edges where the prediction disagreed with the actual encoder mode.
+    public var fibrePredictionWrong: Int
+
     /// Creates an empty stats value.
     public init() {
         encoderProbes = [:]
@@ -70,5 +78,7 @@ public struct ReductionStats: Sendable {
         convergenceTransfersStale = 0
         verificationSweepProbes = 0
         verificationSweepFoundStaleness = false
+        fibrePredictionCorrect = 0
+        fibrePredictionWrong = 0
     }
 }

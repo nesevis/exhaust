@@ -135,6 +135,8 @@ final class ReductionState<Output> {
     var convergenceTransfersStale: Int = 0
     var verificationSweepProbes: Int = 0
     var verificationSweepFoundStaleness: Bool = false
+    var fibrePredictionCorrect: Int = 0
+    var fibrePredictionWrong: Int = 0
     var statsCycles: Int = 0
 
     /// Extracts accumulated statistics from this reduction run.
@@ -154,6 +156,8 @@ final class ReductionState<Output> {
         stats.convergenceTransfersStale = convergenceTransfersStale
         stats.verificationSweepProbes = verificationSweepProbes
         stats.verificationSweepFoundStaleness = verificationSweepFoundStaleness
+        stats.fibrePredictionCorrect = fibrePredictionCorrect
+        stats.fibrePredictionWrong = fibrePredictionWrong
         return stats
     }
 
