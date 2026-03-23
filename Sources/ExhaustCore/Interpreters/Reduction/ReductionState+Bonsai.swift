@@ -1120,13 +1120,11 @@ extension ReductionState {
             // to find ANY failure, not minimize an existing one. After a lift,
             // the bound content is PRNG-filled and likely passes the property.
             // The downstream needs to discover a failure, not minimize one.
-            let upstreamAdapter = LegacyEncoderAdapter(
-                inner: BinarySearchToSemanticSimplestEncoder()
-            )
+            let upstreamEncoder = BinarySearchToSemanticSimplestEncoder()
             let downstreamEncoder = FibreCoveringEncoder()
 
             var composed = KleisliComposition(
-                upstream: upstreamAdapter,
+                upstream: upstreamEncoder,
                 downstream: downstreamEncoder,
                 lift: GeneratorLift(gen: gen, mode: .guided(fallbackTree: fallbackTree ?? tree)),
                 rollback: .atomic,

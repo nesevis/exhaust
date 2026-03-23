@@ -10,7 +10,7 @@
 /// For each pair of numeric values in the sequence, tries to decrease one value (toward its reduction target) while increasing the other by the same amount. Supports same-tag integer pairs, same-tag float pairs (via rational arithmetic), and cross-type float+integer pairs (mixed redistribution).
 ///
 /// Uses ``FindIntegerStepper`` for feedback-driven delta search.
-public struct RedistributeAcrossValueContainersEncoder: AdaptiveEncoder {
+public struct RedistributeAcrossValueContainersEncoder: AdaptiveEncoder, ComposableEncoder {
     public init() {}
 
     public let name: EncoderName = .redistributeArbitraryValuePairsAcrossContainers
@@ -21,6 +21,32 @@ public struct RedistributeAcrossValueContainersEncoder: AdaptiveEncoder {
         guard t >= 2 else { return nil }
         // O(t²) pair orientations capped at 240 × ~20: FindIntegerStepper monotone search (~log(distance)) + non-monotonic fallback phase with ~5 targeted deltas per pair.
         return min(t * (t - 1), 240) * 20
+    }
+
+    // MARK: - Dual conformance disambiguation
+
+    public var convergenceRecords: [Int: ConvergedOrigin] { [:] }
+
+    // MARK: - ComposableEncoder
+
+    public func estimatedCost(
+        sequence: ChoiceSequence,
+        tree: ChoiceTree,
+        positionRange: ClosedRange<Int>,
+        context: ReductionContext
+    ) -> Int? {
+        let spanCount = Self.extractFilteredSpans(from: sequence, in: positionRange).count
+        guard spanCount >= 2 else { return nil }
+        return min(spanCount * (spanCount - 1), 240) * 20
+    }
+
+    public mutating func start(
+        sequence: ChoiceSequence,
+        tree: ChoiceTree,
+        positionRange: ClosedRange<Int>,
+        context: ReductionContext
+    ) {
+        start(sequence: sequence, targets: .wholeSequence, convergedOrigins: nil)
     }
 
     // MARK: - Internal types

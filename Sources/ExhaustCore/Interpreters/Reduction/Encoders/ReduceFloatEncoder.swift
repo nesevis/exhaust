@@ -14,7 +14,7 @@
 /// 3. `as_integer_ratio`-style integer-part minimization
 ///
 /// Each stage processes one float span at a time. On convergence or exhaustion, advances to the next stage or the next span.
-struct ReduceFloatEncoder: AdaptiveEncoder {
+struct ReduceFloatEncoder: AdaptiveEncoder, ComposableEncoder {
     init() {}
 
     var convergenceRecords: [Int: ConvergedOrigin] = [:]
@@ -32,6 +32,34 @@ struct ReduceFloatEncoder: AdaptiveEncoder {
         guard t > 0 else { return nil }
         // t float targets × ~94: four stages per target (special values, precision truncation, integral binary search, ratio binary search) with ~20 batch candidates + ~64 binary search steps + overhead.
         return t * 94
+    }
+
+    // MARK: - ComposableEncoder
+
+    func estimatedCost(
+        sequence: ChoiceSequence,
+        tree: ChoiceTree,
+        positionRange: ClosedRange<Int>,
+        context: ReductionContext
+    ) -> Int? {
+        let spans = Self.extractFilteredSpans(from: sequence, in: positionRange)
+        let floatCount = spans.count(where: { span in
+            let seqIdx = span.range.lowerBound
+            guard let value = sequence[seqIdx].value else { return false }
+            return value.choice.tag == .double || value.choice.tag == .float
+        })
+        guard floatCount > 0 else { return nil }
+        return floatCount * 94
+    }
+
+    mutating func start(
+        sequence: ChoiceSequence,
+        tree: ChoiceTree,
+        positionRange: ClosedRange<Int>,
+        context: ReductionContext
+    ) {
+        let spans = Self.extractFilteredSpans(from: sequence, in: positionRange)
+        start(sequence: sequence, targets: .spans(spans), convergedOrigins: context.convergedOrigins)
     }
 
     // MARK: - Types

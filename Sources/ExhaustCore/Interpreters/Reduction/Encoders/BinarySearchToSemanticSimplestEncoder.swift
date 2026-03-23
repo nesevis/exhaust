@@ -8,7 +8,7 @@
 /// Binary-searches each target value toward its semantic simplest form (zero for numerics).
 ///
 /// Processes targets sequentially, converging each via ``BinarySearchStepper`` before moving to the next. After bit-pattern binary search converges, a **cross-zero probe** phase walks down in shortlex key space to find simpler values that the bit-pattern search cannot reach. This is essential for signed integers: bit-pattern search from positive values toward zero stays on the positive side, missing negative values like -1 (shortlex key 1) which are simpler than 1 (shortlex key 2) in zigzag encoding.
-public struct BinarySearchToSemanticSimplestEncoder: AdaptiveEncoder {
+public struct BinarySearchToSemanticSimplestEncoder: AdaptiveEncoder, ComposableEncoder {
     public init() {}
 
     public private(set) var convergenceRecords: [Int: ConvergedOrigin] = [:]
@@ -21,6 +21,29 @@ public struct BinarySearchToSemanticSimplestEncoder: AdaptiveEncoder {
         guard t > 0 else { return nil }
         // t targets × ~80: DirectionalStepper binary search over the bit-pattern range converges in O(log(range)) steps (~64 for UInt64), plus up to 16 cross-zero shortlex-key probes.
         return t * 80
+    }
+
+    // MARK: - ComposableEncoder
+
+    public func estimatedCost(
+        sequence: ChoiceSequence,
+        tree: ChoiceTree,
+        positionRange: ClosedRange<Int>,
+        context: ReductionContext
+    ) -> Int? {
+        let spans = Self.extractFilteredSpans(from: sequence, in: positionRange)
+        guard spans.isEmpty == false else { return nil }
+        return spans.count * 80
+    }
+
+    public mutating func start(
+        sequence: ChoiceSequence,
+        tree: ChoiceTree,
+        positionRange: ClosedRange<Int>,
+        context: ReductionContext
+    ) {
+        let spans = Self.extractFilteredSpans(from: sequence, in: positionRange)
+        start(sequence: sequence, targets: .spans(spans), convergedOrigins: context.convergedOrigins)
     }
 
     // MARK: - State

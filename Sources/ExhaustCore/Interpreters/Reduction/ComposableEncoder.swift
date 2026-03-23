@@ -68,6 +68,17 @@ public extension ComposableEncoder {
     ) -> Int? {
         nil
     }
+
+    /// Extracts value spans from a choice sequence, filtered to those whose lower bound falls within the given position range.
+    ///
+    /// Shared helper for ``ComposableEncoder`` conformers that derive their targets from a position range rather than a pre-extracted ``TargetSet``. Equivalent to the extraction logic in ``LegacyEncoderAdapter``.
+    static func extractFilteredSpans(
+        from sequence: ChoiceSequence,
+        in positionRange: ClosedRange<Int>
+    ) -> [ChoiceSpan] {
+        ChoiceSequence.extractAllValueSpans(from: sequence)
+            .filter { positionRange.contains($0.range.lowerBound) }
+    }
 }
 
 // MARK: - Reduction Context

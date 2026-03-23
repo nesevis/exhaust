@@ -8,7 +8,7 @@
 /// Binary-searches each target value toward a specific reduction target.
 ///
 /// The reduction target for each value is determined by its recorded valid range (see ``ChoiceValue/reductionTarget(in:)``). Processes targets sequentially, converging each via ``BinarySearchStepper`` before moving to the next.
-public struct BinarySearchToRangeMinimumEncoder: AdaptiveEncoder {
+public struct BinarySearchToRangeMinimumEncoder: AdaptiveEncoder, ComposableEncoder {
     public init() {}
 
     public private(set) var convergenceRecords: [Int: ConvergedOrigin] = [:]
@@ -21,6 +21,29 @@ public struct BinarySearchToRangeMinimumEncoder: AdaptiveEncoder {
         guard t > 0 else { return nil }
         // t targets × ~64: BinarySearchStepper over [reductionTarget, currentBP] converges in O(log(range)) steps, bounded by the reduction target rather than zero.
         return t * 64
+    }
+
+    // MARK: - ComposableEncoder
+
+    public func estimatedCost(
+        sequence: ChoiceSequence,
+        tree: ChoiceTree,
+        positionRange: ClosedRange<Int>,
+        context: ReductionContext
+    ) -> Int? {
+        let spans = Self.extractFilteredSpans(from: sequence, in: positionRange)
+        guard spans.isEmpty == false else { return nil }
+        return spans.count * 64
+    }
+
+    public mutating func start(
+        sequence: ChoiceSequence,
+        tree: ChoiceTree,
+        positionRange: ClosedRange<Int>,
+        context: ReductionContext
+    ) {
+        let spans = Self.extractFilteredSpans(from: sequence, in: positionRange)
+        start(sequence: sequence, targets: .spans(spans), convergedOrigins: context.convergedOrigins)
     }
 
     // MARK: - State
