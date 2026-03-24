@@ -100,6 +100,12 @@ struct ReductionStateView {
 
     /// The current cycle number.
     let cycleNumber: Int
+
+    /// Whether any deletion encoder has applicable targets (non-empty `pruneOrder` after `computeEncoderOrdering()`).
+    let hasDeletionTargets: Bool
+
+    /// Whether the choice tree has branch nodes (picks) that branch simplification could operate on.
+    let hasBranchTargets: Bool
 }
 
 // MARK: - Static Strategy
@@ -205,13 +211,36 @@ struct AdaptiveStrategy: SchedulingStrategy {
     ) -> [PlannedPhase] {
         cycleImproved = false
         lastPriorOutcome = priorOutcome
-        return [
-            PlannedPhase(
+
+        // Skip Phase 1 when structural work is provably absent or empirically unproductive.
+        //
+        // Structural gate: span extraction (already computed by computeEncoderOrdering)
+        // shows no deletion targets and the tree has no branch nodes. Catches scalar
+        // generators from cycle 1.
+        //
+        // Behavioral gate: the preceding cycle's Phase 1 had zero structural acceptances.
+        // Catches array generators where deletion targets exist but no deletion preserves
+        // the property. Phase 2 cannot create structural work — the base point is
+        // invariant under value changes — so "no structural acceptances last cycle"
+        // means "no structural acceptances this cycle" with certainty.
+        let noTargets = state.hasDeletionTargets == false && state.hasBranchTargets == false
+        let priorBaseUnproductive: Bool = {
+            guard let prior = lastPriorOutcome else { return false }
+            if case let .ran(outcome) = prior.baseDescent {
+                return outcome.structuralAcceptances == 0
+            }
+            return true // gated last cycle — still no work
+        }()
+
+        if noTargets || priorBaseUnproductive {
+            return []
+        } else {
+            return [PlannedPhase(
                 phase: .baseDescent,
                 budget: Self.phaseBudgetCeiling,
                 configuration: PhaseConfiguration()
-            )
-        ]
+            )]
+        }
     }
 
     mutating func planSecondStage(
@@ -223,7 +252,10 @@ struct AdaptiveStrategy: SchedulingStrategy {
 
         var phases: [PlannedPhase] = []
 
-        // Fibre descent: same four-condition gate as StaticStrategy.
+        // Fibre descent: gated when base descent ran and found nothing, fibre descent
+        // found nothing in the prior cycle, all coordinates are converged, and it's not
+        // the first cycle. When Phase 1 was skipped (firstStageResult is nil),
+        // baseProgress is false — the gate still applies correctly.
         let fibreGated = baseProgress == false
             && previousFibreProgress == false
             && state.cycleNumber > 1

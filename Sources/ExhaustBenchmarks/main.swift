@@ -144,6 +144,30 @@ benchmark("Bound5, 100 iterations") {
     }
 }
 
+benchmark("Bound5, 100 iterations (adaptive)") {
+    let property: (Bound5) -> Bool = { b5 in
+        if b5.arr.isEmpty {
+            return true
+        }
+        return b5.arr.dropFirst().reduce(b5.arr[0], &+) < 5 * 256
+    }
+
+    do {
+        var iterator = ValueAndChoiceTreeInterpreter(b5Gen, seed: 1337, maxRuns: 1000)
+        var count = 0
+        while let (value, tree) = try iterator.next() {
+            guard property(value) == false else { continue }
+            count += 1
+            _ = try Interpreters.bonsaiReduce(gen: b5Gen, tree: tree, output: value, config: .fast, adaptiveScheduling: true, property: property)
+            if count >= 100 {
+                break
+            }
+        }
+    } catch {
+        print(error)
+    }
+}
+
 indirect enum Expr: Equatable, CustomDebugStringConvertible, CustomStringConvertible {
     case value(Int)
     case add(Expr, Expr)
@@ -269,6 +293,37 @@ benchmark("Calculator, 100 iterations") {
             guard property(value) == false else { continue }
             count += 1
             _ = try Interpreters.bonsaiReduce(gen: calculatorGen, tree: tree, output: value, config: .fast, property: property)
+            if count >= 100 {
+                break
+            }
+        }
+    } catch {
+        print(error)
+    }
+}
+
+benchmark("Calculator, 100 iterations (adaptive)") {
+    let property: (Expr) -> Bool = { expr in
+        guard containsLiteralDivisionByZero(expr) == false else {
+            return true
+        }
+        do {
+            _ = try eval(expr)
+            return true
+        } catch EvalError.divisionByZero {
+            return false
+        } catch {
+            return false
+        }
+    }
+
+    do {
+        var iterator = ValueAndChoiceTreeInterpreter(calculatorGen, seed: 1337, maxRuns: 1000)
+        var count = 0
+        while let (value, tree) = try iterator.next() {
+            guard property(value) == false else { continue }
+            count += 1
+            _ = try Interpreters.bonsaiReduce(gen: calculatorGen, tree: tree, output: value, config: .fast, adaptiveScheduling: true, property: property)
             if count >= 100 {
                 break
             }

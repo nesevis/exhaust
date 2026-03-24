@@ -385,7 +385,9 @@ final class ReductionState<Output> {
             hasBind: hasBind,
             allValueCoordinatesConverged: allValueCoordinatesConverged(),
             convergenceCacheIsEmpty: convergenceCache.isEmpty,
-            cycleNumber: currentCycle
+            cycleNumber: currentCycle,
+            hasDeletionTargets: pruneOrder.isEmpty == false,
+            hasBranchTargets: tree.containsPicks
         )
     }
 

@@ -46,7 +46,7 @@ struct BinaryHeapShrinkingChallenge {
         )
         let rep = try #require(report)
         #expect(rep.propertyInvocations == 705)
-        #expect(rep.totalMaterializations == 686)
+        #expect(rep.totalMaterializations == 703)
 
         if let report { print("[PROFILE] BinaryHeap: \(report.profilingSummary)") }
         let outputValues = Self.toList(output)

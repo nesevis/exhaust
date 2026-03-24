@@ -251,6 +251,10 @@ extension ReductionState {
         // MARK: - Antichain composition (k-way pushout law)
 
         // The sequential adaptive loop above finds the largest individually-accepted batch per
+        // Track materializations from antichain composition and mutation pool.
+        // These bypass runComposable and need manual accumulation into totalMaterializations.
+        let budgetBeforeDirectDecodes = legBudget.used
+
         // scope and slot. k independent batches that are each rejected individually may be jointly
         // accepted (property still fails when all k are deleted). The antichain of the CDG
         // identifies the maximum set of structurally independent nodes; delta-debugging over this
@@ -264,6 +268,9 @@ extension ReductionState {
                 budget: &legBudget
             )
             if antichainAccepted {
+                if collectStats {
+                    totalMaterializations += legBudget.used - budgetBeforeDirectDecodes
+                }
                 budget -= legBudget.used
                 return true
             }
@@ -293,8 +300,6 @@ extension ReductionState {
                     let candidate = entry.candidate
                     let cacheKey = ZobristHash.hash(of: candidate) &+ cacheSalt
                     if rejectCache.contains(cacheKey) {
-                        legBudget.recordMaterialization()
-                        phaseTracker.recordInvocation()
                         continue
                     }
                     if let result = try speculativeDecoder.decode(
@@ -317,6 +322,9 @@ extension ReductionState {
                                 ]
                             )
                         }
+                        if collectStats {
+                            totalMaterializations += legBudget.used - budgetBeforeDirectDecodes
+                        }
                         budget -= legBudget.used
                         return true
                     }
@@ -325,6 +333,14 @@ extension ReductionState {
                     rejectCache.insert(cacheKey)
                 }
             }
+        }
+
+        // Accumulate materializations from antichain composition and mutation pool.
+        // runComposable calls within this method already accumulate their share
+        // via their deferred blocks. Direct decode calls in the antichain and
+        // mutation pool bypass runComposable and need manual accumulation.
+        if collectStats {
+            totalMaterializations += legBudget.used - budgetBeforeDirectDecodes
         }
 
         budget -= legBudget.used
@@ -511,8 +527,6 @@ extension ReductionState {
 
         let cacheKey = ZobristHash.hash(of: candidate) &+ decoder.rejectCacheSalt
         if rejectCache.contains(cacheKey) {
-            budget.recordMaterialization()
-            phaseTracker.recordInvocation()
             return nil
         }
 
