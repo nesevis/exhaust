@@ -69,8 +69,15 @@ Leverage ordering scores edges by `leverage / requiredBudget`.
 - **`ReductionContext` as class.** The `structurallyStale` flag leaked across sections, corrupting reduction paths. Value type semantics (struct) are correct for context — each section gets its own copy. Shared mutable state needs explicit mechanisms (span cache, convergence cache), not implicit reference sharing.
 - **Aggressive downstream selection.** Selecting `ZeroValueEncoder` for pairwise/tooLarge fibres based on the discovery lift prediction failed on CouplingScaling. The prediction is from the target value; the actual fibre at intermediate values can be orders of magnitude larger. Resolved: structural-constancy split for predictions, `DownstreamPick` for runtime selection.
 
-## Next steps
+## Completed since initial report
 
-1. **Non-monotonicity detection** (Signal 7) — `sawUnexpectedResult` flag on binary search steppers, bounded exhaustive scan of remaining range. Independent of composition. Correctness improvement.
-2. **Delete dead code** — `runAdaptive`, `BatchEncoder` protocol, old `AdaptiveEncoder` `start()` methods kept for test compat.
-3. **Closed-loop integration** — the composable toolbox is the component library for the closed-loop reducer. Each encoder is independently schedulable, gatable, and budgetable. The factory assigns roles; the loop evaluates results and adapts.
+- **Dead code deleted.** `AdaptiveEncoder` protocol, `BatchEncoder` protocol, `runAdaptive()` method removed. Old `start(sequence:targets:convergedOrigins:)` methods inlined into `ComposableEncoder.start()`. All tests migrated to `ComposableEncoder` interface.
+- **Convergence signals.** `ConvergenceSignal` on `ConvergedOrigin` carries typed encoder observations across cycles. `EncoderConfiguration` replaces `Direction`. `ZeroValueEncoder` detects `zeroingDependency`. `LinearScanEncoder` for non-monotone gap recovery. Factory consumption wired. See `docs/convergence-signals-design.md`.
+- **Edge observations.** `FibreSignal` and `EdgeObservation` for per-edge downstream feedback. Structurally constant edge skip on `exhaustedClean`.
+- **Per-phase instrumentation.** Stack-based `PhaseTracker` attributes materializations and acceptances to phases. `CycleOutcome` collected per cycle, wired through `ExhaustReport`.
+- **Closed-loop scheduler.** `SchedulingStrategy` protocol with `StaticStrategy` (behavioral clone) and `AdaptiveStrategy` (signal-driven). Phase 1 skip, per-edge budget adaptation, signal-driven Phase 3 gating, `zeroingDependency` escalation. BinaryHeap: 17% fewer materializations, 36% faster. See `docs/closed-loop-reducer-design.md`.
+
+## Remaining
+
+1. **Non-monotonicity detection** (Signal 7). The signal infrastructure is implemented. The detection heuristic is deferred. See `docs/convergence-signals-design.md`.
+2. **Make `.adaptiveScheduling` the default.** The comparison data supports it.
