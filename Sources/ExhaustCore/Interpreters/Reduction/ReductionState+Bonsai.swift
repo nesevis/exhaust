@@ -17,6 +17,8 @@ extension ReductionState {
         budget: inout Int,
         cycle: Int = 0
     ) throws -> (dag: ChoiceDependencyGraph?, progress: Bool) {
+        phaseTracker.push(.baseDescent)
+        defer { phaseTracker.pop() }
         var anyProgress = false
 
         while budget > 0 {
@@ -292,6 +294,7 @@ extension ReductionState {
                     let cacheKey = ZobristHash.hash(of: candidate) &+ cacheSalt
                     if rejectCache.contains(cacheKey) {
                         legBudget.recordMaterialization()
+                        phaseTracker.recordInvocation()
                         continue
                     }
                     if let result = try speculativeDecoder.decode(
@@ -302,6 +305,7 @@ extension ReductionState {
                         property: property
                     ) {
                         legBudget.recordMaterialization()
+                        phaseTracker.recordInvocation()
                         accept(result, structureChanged: true)
                         if isInstrumented {
                             ExhaustLog.debug(
@@ -317,6 +321,7 @@ extension ReductionState {
                         return true
                     }
                     legBudget.recordMaterialization()
+                    phaseTracker.recordInvocation()
                     rejectCache.insert(cacheKey)
                 }
             }
@@ -507,6 +512,7 @@ extension ReductionState {
         let cacheKey = ZobristHash.hash(of: candidate) &+ decoder.rejectCacheSalt
         if rejectCache.contains(cacheKey) {
             budget.recordMaterialization()
+            phaseTracker.recordInvocation()
             return nil
         }
 
@@ -518,6 +524,7 @@ extension ReductionState {
             property: property
         )
         budget.recordMaterialization()
+        phaseTracker.recordInvocation()
 
         if result == nil {
             rejectCache.insert(cacheKey)
@@ -701,6 +708,8 @@ extension ReductionState {
         budget: inout Int,
         dag: ChoiceDependencyGraph?
     ) throws -> Bool {
+        phaseTracker.push(.fibreDescent)
+        defer { phaseTracker.pop() }
         let subBudget = min(budget, BonsaiScheduler.fibreDescentBudget)
         guard subBudget > 0 else { return false }
 
@@ -951,6 +960,8 @@ extension ReductionState {
         budget: inout Int,
         dag: ChoiceDependencyGraph?
     ) throws -> Bool {
+        phaseTracker.push(.exploration)
+        defer { phaseTracker.pop() }
         guard hasBind, let dag, let bindSpanIndex = bindIndex else { return false }
 
         let edges = dag.reductionEdges()
@@ -977,6 +988,8 @@ extension ReductionState {
         }
 
         let checkpoint = makeSnapshot()
+        let acceptancesAtCheckpoint = phaseTracker.counts[.exploration]?.acceptances ?? 0
+        let structuralAtCheckpoint = phaseTracker.counts[.exploration]?.structuralAcceptances ?? 0
         var anyAccepted = false
         var kleisliProbes = 0
         var kleisliMaterializations = 0
@@ -1057,6 +1070,7 @@ extension ReductionState {
                             isRangeExplicit: value.isRangeExplicit
                         ))
                         legBudget.recordMaterialization()
+                        phaseTracker.recordInvocation()
 
                         let validationDecoder = SequenceDecoder.exact()
                         if let result = try validationDecoder.decode(
@@ -1089,6 +1103,7 @@ extension ReductionState {
                 guard legBudget.isExhausted == false else { break }
                 if collectStats { kleisliProbes += 1 }
                 legBudget.recordMaterialization()
+                phaseTracker.recordInvocation()
 
                 let decoder = SequenceDecoder.exact()
                 if let result = try decoder.decode(
@@ -1237,7 +1252,8 @@ extension ReductionState {
             return true
         }
 
-        // Rollback: net result was not an improvement.
+        // Rollback: net result was not an improvement. Revert acceptances but keep invocations.
+        phaseTracker.restoreAcceptances(for: .exploration, acceptances: acceptancesAtCheckpoint, structuralAcceptances: structuralAtCheckpoint)
         restoreSnapshot(checkpoint)
         return false
     }
