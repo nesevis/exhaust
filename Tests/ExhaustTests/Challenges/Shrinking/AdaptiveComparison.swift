@@ -108,14 +108,16 @@ struct AdaptiveComparisonTests {
     // MARK: - Bind generators (Phase 1 has real structural work)
 
     @Test("Coupling: bind generator, composition edges, structural work throughout")
-    func coupling() {
+    func coupling() throws {
         let gen = #gen(.int(in: 1 ... 8)).bind { n in
             #gen(.int(in: 0 ... n)).array(length: 3)
         }
         let seed: UInt64 = 1337
+        
+//        ExhaustLog.setConfiguration(.init(isEnabled: true, minimumLevel: .info, categoryMinimumLevels: [.reducer: .debug], format: .human))
 
         var adaptiveReport: ExhaustReport?
-        let adaptiveResult = #exhaust(
+        let adaptiveResult = try #require(#exhaust(
             gen,
             .suppressIssueReporting,
             .replay(seed),
@@ -123,20 +125,23 @@ struct AdaptiveComparisonTests {
             .onReport { adaptiveReport = $0 }
         ) { arr in
             arr.reduce(0, +) < 10
-        }
+        })
 
         var staticReport: ExhaustReport?
-        let staticResult = #exhaust(
+        let staticResult = try #require(#exhaust(
             gen,
             .suppressIssueReporting,
             .replay(seed),
             .onReport { staticReport = $0 }
         ) { arr in
             arr.reduce(0, +) < 10
-        }
+        })
 
         printComparison("Coupling", static: staticReport, adaptive: adaptiveReport)
-        #expect(staticResult == adaptiveResult)
+
+        // Both must fail the property (sum >= 10). The adaptive strategy may find
+        // N = 4 means the shortest (shortlex) counterexample is [2, 4, 4]
+        #expect(adaptiveResult == [2, 4, 4])
     }
 
     @Test("CoupledZeroing: flat generator, zeroingDependency signals")

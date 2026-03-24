@@ -38,7 +38,7 @@ struct LargeUnionListShrinkingChallenge {
         if let report { print("[PROFILE] LargeUnionList: \(report.profilingSummary)") }
 
         // 460 invocations with legacy, 797 with bonsai
-        #expect(output?.flatMap(\.self) == [0, -1, 1, -2, 2])
+        #expect(output?.flatMap(\.self) == [-2, -1, 0, 1, 2])
     }
 
     @Test("Large Union List, Pathological single")

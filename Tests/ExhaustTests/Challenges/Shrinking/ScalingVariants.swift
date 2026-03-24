@@ -77,6 +77,7 @@ struct BinaryHeapScalingVariant {
                 gen,
                 .suppressIssueReporting,
                 .replay(10_128_299_447_377_935_498),
+                .adaptiveScheduling,
                 .onReport { report = $0 },
                 property: property
             )

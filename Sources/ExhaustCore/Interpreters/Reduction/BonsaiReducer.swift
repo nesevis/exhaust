@@ -19,6 +19,15 @@ public extension Interpreters {
         /// When `true`, uses the adaptive scheduling strategy with per-edge budget adaptation instead of the static strategy.
         public var useAdaptiveScheduling: Bool = false
 
+        /// Sub-budget for branch simplification within base descent.
+        var branchSimplificationBudget: Int = 200
+
+        /// Sub-budget for the structural deletion inner loop within base descent.
+        var structuralDeletionBudget: Int = 1200
+
+        /// Sub-budget for joint bind-inner reduction within base descent.
+        var bindInnerReductionBudget: Int = 600
+
         private init(
             maxStalls: Int,
             alignedDeletionBeamSearchTuning: ReductionBudget.AlignedDeletionBeamSearchTuning
@@ -65,7 +74,7 @@ public extension Interpreters {
         tree: ChoiceTree,
         output: Output,
         config: BonsaiReducerConfiguration,
-        humanOrderPostProcess: Bool = false,
+        humanOrderPostProcess: Bool = true,
         visualize: Bool = false,
         adaptiveScheduling: Bool = false,
         property: (Output) -> Bool
@@ -114,7 +123,7 @@ public extension Interpreters {
         tree: ChoiceTree,
         output: Output,
         config: BonsaiReducerConfiguration,
-        humanOrderPostProcess: Bool = false,
+        humanOrderPostProcess: Bool = true,
         visualize: Bool = false,
         adaptiveScheduling: Bool = false,
         property: (Output) -> Bool

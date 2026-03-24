@@ -38,7 +38,7 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
         var suppressIssueReporting = false
         var reflectingValue: Output?
         var useRandomOnly = false
-        var humanOrderPostProcess = false
+        var humanOrderPostProcess = true
         var visualize = false
         var adaptiveScheduling = false
         var onReportClosure: ((ExhaustReport) -> Void)?

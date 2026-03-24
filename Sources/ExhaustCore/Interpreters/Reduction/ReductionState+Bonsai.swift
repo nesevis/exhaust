@@ -73,6 +73,11 @@ extension ReductionState {
     /// Rebuilds the ``ChoiceDependencyGraph`` from the current sequence, tree, and bind index.
     ///
     /// Returns a DAG for bind generators and for bind-free generators that contain picks. Returns `nil` only when neither binds nor picks are present.
+    /// Builds a CDG from the current sequence and tree, or returns nil if neither binds nor picks are present.
+    func buildDAG() -> ChoiceDependencyGraph? {
+        rebuildDAGIfNeeded()
+    }
+
     private func rebuildDAGIfNeeded() -> ChoiceDependencyGraph? {
         if hasBind, let bindSpanIndex = bindIndex {
             return ChoiceDependencyGraph.build(from: sequence, tree: tree, bindIndex: bindSpanIndex)
@@ -90,7 +95,7 @@ extension ReductionState {
 
     /// Runs branch promotion and pivoting encoders.
     private func runBranchSimplification(budget: inout Int) throws -> Bool {
-        let subBudget = min(budget, 200)
+        let subBudget = min(budget, config.branchSimplificationBudget)
         guard subBudget > 0 else { return false }
 
         let branchContext = DecoderContext(
@@ -161,7 +166,7 @@ extension ReductionState {
         budget: inout Int,
         dag: ChoiceDependencyGraph?
     ) throws -> Bool {
-        let subBudget = min(budget, 1200)
+        let subBudget = min(budget, config.structuralDeletionBudget)
         guard subBudget > 0 else { return false }
 
         var legBudget = ReductionScheduler.LegBudget(hardCap: subBudget)
@@ -551,7 +556,7 @@ extension ReductionState {
     /// Runs product-space encoders and value encoders on bind-inner values.
     private func runJointBindInnerReduction(budget: inout Int, cycle: Int = 0) throws -> Bool {
         guard hasBind, let bindSpanIndex = bindIndex else { return false }
-        let subBudget = min(budget, 600)
+        let subBudget = min(budget, config.bindInnerReductionBudget)
         guard subBudget > 0 else { return false }
 
         var legBudget = ReductionScheduler.LegBudget(hardCap: subBudget)
@@ -1081,6 +1086,7 @@ extension ReductionState {
             )
 
             var lastAccepted = false
+            var anyAcceptedThisEdge = false
             while true {
                 // Warm-start validation: before the composition advances to the
                 // next upstream probe and initializes the downstream, validate any
@@ -1156,6 +1162,7 @@ extension ReductionState {
                         accept(result, structureChanged: true)
                         lastAccepted = true
                         anyAccepted = true
+                        anyAcceptedThisEdge = true
 
                         if isInstrumented {
                             ExhaustLog.debug(
@@ -1176,7 +1183,7 @@ extension ReductionState {
             }
 
             // Track futile compositions (zero accepted probes for this edge)
-            if legBudget.used > 0, lastAccepted == false {
+            if legBudget.used > 0, anyAcceptedThisEdge == false {
                 futileCompositions += 1
             }
 
@@ -1243,7 +1250,7 @@ extension ReductionState {
             let edgeSignal: FibreSignal
             if totalDownstreamStarts == 0 {
                 edgeSignal = .bail(paramCount: edge.downstreamRange.count)
-            } else if lastAccepted {
+            } else if anyAcceptedThisEdge {
                 edgeSignal = .exhaustedWithFailure
             } else {
                 edgeSignal = .exhaustedClean
@@ -1401,6 +1408,9 @@ extension ReductionState {
                     ))
 
                     // Lightweight replay to discover downstream domain.
+                    // These materializations are not budgeted — they are structural
+                    // discovery, not candidate evaluation. Tracked for profiling visibility.
+                    phaseTracker.recordInvocation()
                     let replayResult = ReductionMaterializer.materialize(
                         gen, prefix: modified, mode: .exact, fallbackTree: tree
                     )
