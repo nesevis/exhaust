@@ -46,19 +46,6 @@ public struct BoundaryDomainProfile: @unchecked Sendable {
         self.originalTree = originalTree
     }
 
-    /// True when the profile contains two or more `.sequenceLength` parameters,
-    /// indicating multiple independent sequence nodes (for example, a tuple of two arrays).
-    /// The per-length partitioned construction only handles a single sequence group.
-    public var hasMultipleSequenceLengths: Bool {
-        var count = 0
-        for param in parameters {
-            if case .sequenceLength = param.kind {
-                count += 1
-                if count >= 2 { return true }
-            }
-        }
-        return false
-    }
 }
 
 extension BoundaryDomainProfile: CoverageProfile {
