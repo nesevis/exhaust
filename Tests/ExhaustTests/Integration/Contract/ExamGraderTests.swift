@@ -55,7 +55,7 @@ struct ExamGraderTests {
 
         let counterExample = #exhaust(
             gen,
-            .samplingBudget(500),
+            .budget(.expensive),
             .suppressIssueReporting
         ) { exam, answers in
             let instance = ExamInstance(student: "student", exam: exam, answers: answers)

@@ -31,23 +31,17 @@ public func __runContractAsync<Spec: AsyncContractSpec>(
     line: UInt = #line,
     column: UInt = #column
 ) async -> ContractResult<Spec>? {
-    var samplingBudget: UInt64 = 2000
-    var coverageBudget: UInt64 = 200
+    var budget = ExhaustBudget.expensive
     var seed: UInt64?
-    var reductionConfig: TCRBudget = .fast
     var suppressIssueReporting = false
     var useRandomOnly = false
     var useArgumentAwareCoverage = false
     for setting in settings {
         switch setting {
-        case let .samplingBudget(n):
-            samplingBudget = n
-        case let .coverageBudget(n):
-            coverageBudget = n
+        case let .budget(b):
+            budget = b
         case let .replay(s):
             seed = s
-        case let .reductionBudget(config):
-            reductionConfig = config
         case .suppressIssueReporting:
             suppressIssueReporting = true
         case .randomOnly:
@@ -58,6 +52,10 @@ public func __runContractAsync<Spec: AsyncContractSpec>(
     }
 
     let commandGen = Spec.commandGenerator
+    let samplingBudget = budget.samplingBudget
+    let coverageBudget = budget.coverageBudget
+    let reductionConfig = budget.reducerBudget
+
     let seqGen: ReflectiveGenerator<[Spec.Command]> = commandGen.array(
         length: 0 ... commandLimit
     )

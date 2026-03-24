@@ -19,7 +19,7 @@ public enum ExploreSettings {
     case replay(UInt64)
 
     /// The test case reduction configuration to use when a counterexample is found.
-    case reductionBudget(TCRBudget)
+    case reductionBudget(ReducerBudget)
 
     /// Suppresses test-framework issue reporting (`reportIssue`) on failure.
     ///

@@ -10,7 +10,7 @@ struct StackTests {
         let result = #exhaust(
             StackSpec.self,
             commandLimit: 15,
-            .samplingBudget(50),
+            .budget(.custom(coverage: 500, sampling: 50, reduction: .fast)),
             .suppressIssueReporting
         )
         #expect(result == nil, "Stack spec should pass — model and SUT are identical")

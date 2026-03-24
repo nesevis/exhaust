@@ -329,14 +329,16 @@ struct StructuralPathologicalChallenge {
         // stall cycles. With .slow budget (maxStalls=8), the gate fires on stall cycle 2+,
         // saving Phase 2's re-confirmation probes (ZeroValue all-at-once + individual probes).
         let gen = #gen(.uint(in: 0...100)).array(length: 10)
+        
+//        ExhaustLog.setConfiguration(.init(isEnabled: true, minimumLevel: .info, categoryMinimumLevels: [.reducer: .debug], format: .human))
 
         var report: ExhaustReport?
         let output = #exhaust(
             gen,
             .suppressIssueReporting,
-            .randomOnly,
-            .replay(1337),
-            .reductionBudget(.slow),
+//            .randomOnly,
+            .replay(12791394592254154946),
+            .budget(.expedient),
             .onReport { report = $0 }
         ) { arr in
             arr.reduce(0, +) < 50

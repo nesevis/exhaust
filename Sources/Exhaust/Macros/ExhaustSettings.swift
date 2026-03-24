@@ -2,22 +2,68 @@
 //
 // Pass these as variadic arguments to `#exhaust` to control test behavior:
 // ```swift
-// #exhaust(personGen, .samplingBudget(1000), .replay(42)) { person in
+// #exhaust(personGen, .budget(.expensive)) { person in
 //     person.age >= 0
 // }
 // ```
 import ExhaustCore
 
+/// Controls the iteration budgets for coverage, random sampling, and reduction.
+///
+/// Three named presets cover common use cases. Use `.custom` for fine-grained control.
+///
+/// | Preset | Coverage | Sampling | Reduction |
+/// |---|---|---|---|
+/// | `.expedient` | 200 | 200 | `.fast` |
+/// | `.expensive` | 500 | 500 | `.fast` |
+/// | `.exorbitant` | 2000 | 2000 | `.slow` |
+public enum ExhaustBudget {
+    /// 200 coverage rows, 200 random samplings, fast reduction. The default for property tests.
+    case expedient
+    /// 500 coverage rows, 500 random samplings, fast reduction. The default for contract tests.
+    case expensive
+    /// 2000 coverage rows, 2000 random samplings, slow reduction.
+    case exorbitant
+    /// Explicit values for all budget aspects.
+    case custom(coverage: UInt64, sampling: UInt64, reduction: ReducerBudget)
+
+    /// The iteration budget for structured coverage analysis.
+    public var coverageBudget: UInt64 {
+        switch self {
+        case .expedient: 200
+        case .expensive: 500
+        case .exorbitant: 2000
+        case let .custom(coverage, _, _): coverage
+        }
+    }
+
+    /// The iteration budget for random sampling.
+    public var samplingBudget: UInt64 {
+        switch self {
+        case .expedient: 200
+        case .expensive: 500
+        case .exorbitant: 2000
+        case let .custom(_, sampling, _): sampling
+        }
+    }
+
+    /// The test case reduction configuration.
+    public var reducerBudget: ReducerBudget {
+        switch self {
+        case .expedient, .expensive: .fast
+        case .exorbitant: .slow
+        case let .custom(_, _, reduction): reduction
+        }
+    }
+}
+
 /// Configuration options for `#exhaust` property tests, passed as variadic arguments to control test behavior.
 public enum ExhaustSettings<Output> {
-    /// The upper bound on the number of randomly generated instances to test.
-    case samplingBudget(UInt64)
+    /// Controls iteration budgets for coverage, random sampling, and reduction. Defaults to `.expedient` (200 coverage rows, 200 random samplings, fast reduction).
+    case budget(ExhaustBudget)
 
     /// A fixed seed for deterministic replay (reproduction, benchmarking, regression).
     case replay(UInt64)
-
-    /// The test case reduction configuration to use when a counterexample is found.
-    case reductionBudget(TCRBudget)
 
     /// Suppresses test-framework issue reporting (`reportIssue`) on failure.
     ///
@@ -31,16 +77,9 @@ public enum ExhaustSettings<Output> {
     /// The value must fail the property — if it passes, an issue is reported.
     case reflecting(Output)
 
-    /// The iteration budget for structured coverage analysis (exhaustive enumeration, t-way covering arrays, boundary value covering arrays).
-    ///
-    /// This budget is *additive* with `samplingBudget` — structured coverage runs first, then random sampling runs for `samplingBudget` iterations. The default is 2000.
-    ///
-    /// When the generator's total space fits within this budget, `#exhaust` performs exhaustive enumeration and skips the random phase entirely.
-    case coverageBudget(UInt64)
-
     /// Disables automatic structured coverage analysis.
     ///
-    /// By default, `#exhaust` analyzes the generator's structure and selects a systematic coverage strategy: exhaustive enumeration for small finite domains, t-way covering arrays for larger finite domains, or boundary value covering arrays for generators with large explicit ranges. This runs before random sampling and uses its own budget (see ``coverageBudget``).
+    /// By default, `#exhaust` analyzes the generator's structure and selects a systematic coverage strategy: exhaustive enumeration for small finite domains, or pull-based pairwise covering for larger domains. This runs before random sampling and uses its own budget (see ``ExhaustBudget``).
     ///
     /// When `.randomOnly` is set, `#exhaust` skips this analysis and proceeds directly to random sampling. Useful for benchmarking, comparing coverage strategies, or when the analysis overhead is unwanted.
     case randomOnly

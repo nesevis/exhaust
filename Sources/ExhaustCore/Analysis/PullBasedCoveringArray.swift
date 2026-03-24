@@ -239,6 +239,8 @@ private struct ParameterOrdering {
 ///
 /// Uses a one-row-at-a-time greedy algorithm with left-to-right column fill (Bryce & Colbourn, 2007/2009). All C(k, t) coverage slices are allocated once at initialization. Each ``next()`` call fills a row column-by-column, evaluating only slices whose rightmost parameter equals the current column. The caller pulls rows until a property test fails or coverage is exhausted.
 ///
+/// The interaction strength is fixed at initialization and supports values 2, 3, or 4. It does not escalate during generation — all rows target the same strength throughout the generator's lifetime.
+///
 /// Parameters are reordered internally so that smallest domains come first. This means early columns have fewer completing slices and fewer candidate values, resolving quickly. Later columns have the most completing slices and the richest greedy signal. Rows are restored to the original parameter order before being returned.
 @_spi(ExhaustInternal)
 public struct PullBasedCoveringArrayGenerator {

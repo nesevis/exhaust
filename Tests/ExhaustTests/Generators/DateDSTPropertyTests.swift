@@ -112,7 +112,7 @@ struct DateDSTPropertyTests {
 
         // The specific Closure Library bug: two dates on the SAME calendar day
         // where the buggy formula says "tomorrow" instead of "today".
-        let counterExample = #exhaust(gen, .suppressIssueReporting, .coverageBudget(2000)) { now, target in
+        let counterExample = #exhaust(gen, .suppressIssueReporting, .budget(.exorbitant)) { now, target in
             var calendar = Calendar(identifier: .gregorian)
             calendar.timeZone = Self.usEastern
 
@@ -143,7 +143,7 @@ struct DateDSTPropertyTests {
         //
         // With .randomOnly, hitting this requires BOTH dates to land on the
         // fall-back day's ~1h window — roughly (1/672)^2 ≈ 0.0002% per sample.
-        let counterExample = #exhaust(gen, .suppressIssueReporting, .randomOnly, .samplingBudget(200)) { now, target in
+        let counterExample = #exhaust(gen, .suppressIssueReporting, .randomOnly) { now, target in
             var calendar = Calendar(identifier: .gregorian)
             calendar.timeZone = Self.usEastern
 

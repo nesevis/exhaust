@@ -27,23 +27,17 @@ public func __runContract<Spec: ContractSpec>(
     line: UInt = #line,
     column: UInt = #column
 ) -> ContractResult<Spec>? {
-    var samplingBudget: UInt64 = 2000
-    var coverageBudget: UInt64 = 200
+    var budget = ExhaustBudget.expensive
     var seed: UInt64?
-    var reductionConfig: TCRBudget = .fast
     var suppressIssueReporting = false
     var useRandomOnly = false
     var useArgumentAwareCoverage = false
     for setting in settings {
         switch setting {
-        case let .samplingBudget(n):
-            samplingBudget = n
-        case let .coverageBudget(n):
-            coverageBudget = n
+        case let .budget(b):
+            budget = b
         case let .replay(s):
             seed = s
-        case let .reductionBudget(config):
-            reductionConfig = config
         case .suppressIssueReporting:
             suppressIssueReporting = true
         case .randomOnly:
@@ -52,6 +46,9 @@ public func __runContract<Spec: ContractSpec>(
             useArgumentAwareCoverage = true
         }
     }
+    let samplingBudget = budget.samplingBudget
+    let coverageBudget = budget.coverageBudget
+    let reductionConfig = budget.reducerBudget
 
     // Build the sequence generator: an array of commands with bounded length. Use 0 as the lower bound so the reducer can shrink sequences below the user's minimum — the minimum is a generation hint, not a shrinking floor.
     let commandGen = Spec.commandGenerator
@@ -303,7 +300,7 @@ func runSCACoverage<Command>(
     commandGen: ReflectiveGenerator<Command>,
     commandLimit: Int,
     coverageBudget: UInt64,
-    reductionConfig: TCRBudget,
+    reductionConfig: ReducerBudget,
     argumentAware: Bool,
     property: @escaping @Sendable ([Command]) -> Bool
 ) -> SCAResult<Command>? {
@@ -431,14 +428,12 @@ func buildExhaustSettings<Output>(
     samplingBudget: UInt64,
     coverageBudget: UInt64,
     seed: UInt64?,
-    reductionConfig: TCRBudget,
+    reductionConfig: ReducerBudget,
     suppressIssueReporting: Bool,
     useRandomOnly: Bool
 ) -> [ExhaustSettings<Output>] {
     var settings: [ExhaustSettings<Output>] = [
-        .samplingBudget(samplingBudget),
-        .coverageBudget(coverageBudget),
-        .reductionBudget(reductionConfig),
+        .budget(.custom(coverage: coverageBudget, sampling: samplingBudget, reduction: reductionConfig)),
     ]
     if let seed {
         settings.append(.replay(seed))

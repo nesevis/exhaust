@@ -31,10 +31,8 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
         column: UInt = #column,
         property: @Sendable (Output) -> Bool
     ) -> Output? {
-        var samplingBudget: UInt64 = 100
-        var coverageBudget: UInt64 = 200
+        var budget = ExhaustBudget.expedient
         var seed: UInt64?
-        var reductionConfig: TCRBudget = .fast
         var suppressIssueReporting = false
         var reflectingValue: Output?
         var useRandomOnly = false
@@ -45,14 +43,10 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
 
         for setting in settings {
             switch setting {
-            case let .samplingBudget(n):
-                samplingBudget = n
-            case let .coverageBudget(n):
-                coverageBudget = n
+            case let .budget(b):
+                budget = b
             case let .replay(s):
                 seed = s
-            case let .reductionBudget(config):
-                reductionConfig = config
             case .suppressIssueReporting:
                 suppressIssueReporting = true
             case let .reflecting(value):
@@ -69,6 +63,10 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
                 onReportClosure = closure
             }
         }
+
+        let samplingBudget = budget.samplingBudget
+        let coverageBudget = budget.coverageBudget
+        let reductionConfig = budget.reducerBudget
 
         var report = ExhaustReport()
         defer { onReportClosure?(report) }
@@ -469,7 +467,7 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
     ) -> Output? {
         var samplingBudget: UInt64 = 10000
         var seed: UInt64?
-        var reductionConfig: TCRBudget = .fast
+        var reductionConfig: ReducerBudget = .fast
         var suppressIssueReporting = false
         var poolCapacity = 256
         var generateRatio = 0.2
@@ -684,7 +682,7 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
     private static func __reduceReflected<Output>(
         _ gen: ReflectiveGenerator<Output>,
         value: Output,
-        reductionConfig: TCRBudget,
+        reductionConfig: ReducerBudget,
         humanOrderPostProcess: Bool,
         visualize: Bool,
         adaptiveScheduling: Bool,
