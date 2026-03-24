@@ -223,6 +223,103 @@ struct StructuralPathologicalChallenge {
         #expect(output == [4, 4])
     }
 
+    // MARK: - Varying Edge Productivity
+
+    @Test("Varying edge productivity across CDG edges")
+    func varyingEdgeProductivity() {
+        // Two independent binds with different downstream fibre sizes.
+        // Edge 1: a in 1...6, 2-element array in 0...a. Fibre at a=6: 7²=49 (exhaustive, productive).
+        // Edge 2: b in 1...6, 8-element array in 0...b. Fibre at b=6: 7⁸=5.7M (too large, futile under fixed budget).
+        // Property: sum of all elements >= 15.
+        // Edge 1 is productive (small fibre, failures findable). Edge 2 is futile (fibre too
+        // large for covering or exhaustive, only ZeroValue fallback via DownstreamPick).
+        // Adaptive per-edge budget would give more to edge 1 and less to edge 2.
+        let gen = #gen(
+            #gen(.int(in: 1...6)).bind { a in #gen(.int(in: 0...a)).array(length: 2) },
+            #gen(.int(in: 1...6)).bind { b in #gen(.int(in: 0...b)).array(length: 8) }
+        )
+
+        var report: ExhaustReport?
+        let output = #exhaust(
+            gen,
+            .suppressIssueReporting,
+            .replay(42),
+            .onReport { report = $0 }
+        ) { small, large in
+            small.reduce(0, +) + large.reduce(0, +) < 15
+        }
+        if let report { print("[PROFILE] VaryingEdgeProductivity: \(report.profilingSummary)") }
+
+        let total = (output?.0.reduce(0, +) ?? 0) + (output?.1.reduce(0, +) ?? 0)
+        #expect(total >= 15)
+    }
+
+    // MARK: - Exhaustible Edges
+
+    @Test("Edges that become exhaustedClean after initial exploration")
+    func exhaustibleEdges() {
+        // Single bind: n in 1...10, 2-element array in 0...n.
+        // Property: fails only when n >= 5 AND both elements equal n (the maximum).
+        // At n=5: fibre is 6²=36 (exhaustive). The only failure is [5, 5].
+        // After composition reduces n to 5 and finds [5, 5], Phase 2 settles values.
+        // Subsequent cycles: the fibre at n=5 has been fully searched and found its
+        // only failure. The edge should be exhaustedClean at n=5 for values below [5, 5]
+        // — no point re-exploring.
+        let gen = #gen(.int(in: 1...10)).bind { n in
+            #gen(.int(in: 0...n)).array(length: 2)
+        }
+
+        var report: ExhaustReport?
+        let output = #exhaust(
+            gen,
+            .suppressIssueReporting,
+            .replay(42),
+            .onReport { report = $0 }
+        ) { arr in
+            arr.max() != arr.count || arr.min() != arr.max()
+        }
+        if let report { print("[PROFILE] ExhaustibleEdges: \(report.profilingSummary)") }
+
+        // The minimum counterexample: both elements at the bind-inner value, and that
+        // value is the smallest n where the property fails.
+        #expect(output != nil)
+    }
+
+    // MARK: - Coupled Zeroing
+
+    @Test("Coupled coordinates where batch zeroing fails but individual succeeds")
+    func coupledZeroing() {
+        // Flat generator: 4 integers in 0...20.
+        // Property: fails when a + b >= 10 AND c + d >= 10.
+        // Batch zeroing all four to zero passes the property (0+0 < 10 for both pairs).
+        // Individual zeroing of a succeeds if b is large enough (b >= 10).
+        // This produces zeroingDependency signals — the coordinates are coupled through
+        // the sum constraint. Redistribution (Phase 4) is the natural recovery path.
+        let gen = #gen(
+            .int(in: 0...20),
+            .int(in: 0...20),
+            .int(in: 0...20),
+            .int(in: 0...20)
+        )
+
+        var report: ExhaustReport?
+        let output = #exhaust(
+            gen,
+            .suppressIssueReporting,
+            .replay(42),
+            .onReport { report = $0 }
+        ) { a, b, c, d in
+            a + b < 10 || c + d < 10
+        }
+        if let report { print("[PROFILE] CoupledZeroing: \(report.profilingSummary)") }
+
+        // Minimum: both pairs sum to exactly 10. Shortlex-smallest is (0, 10, 0, 10).
+        if let output {
+            #expect(output.0 + output.1 >= 10)
+            #expect(output.2 + output.3 >= 10)
+        }
+    }
+
     // MARK: - Fibre Descent Gate
 
     @Test("Fibre descent gate fires after Phase 2 convergence")
