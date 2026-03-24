@@ -74,7 +74,7 @@ public extension Interpreters {
         tree: ChoiceTree,
         output: Output,
         config: BonsaiReducerConfiguration,
-        humanOrderPostProcess: Bool = false,
+        humanOrderPostProcess: Bool = true,
         visualize: Bool = false,
         adaptiveScheduling: Bool = false,
         property: (Output) -> Bool
@@ -123,7 +123,7 @@ public extension Interpreters {
         tree: ChoiceTree,
         output: Output,
         config: BonsaiReducerConfiguration,
-        humanOrderPostProcess: Bool = false,
+        humanOrderPostProcess: Bool = true,
         visualize: Bool = false,
         adaptiveScheduling: Bool = false,
         property: (Output) -> Bool

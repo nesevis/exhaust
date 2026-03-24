@@ -198,12 +198,16 @@ enum BonsaiScheduler {
                 )
             }
 
-            // Stage 1: phases that run unconditionally (base descent).
+            // Build the CDG at cycle start so it's available even if Phase 1 is skipped.
+            // Phase 1 rebuilds the CDG internally on structural acceptance; the skeleton's
+            // initial CDG serves Phases 2 and 3 when Phase 1 doesn't run.
+            var dag: ChoiceDependencyGraph? = state.buildDAG()
+
+            // Stage 1: phases that run unconditionally (structural minimization).
             let firstStagePhases = strategy.planFirstStage(
                 priorOutcome: lastOutcome,
                 state: state.view
             )
-            var dag: ChoiceDependencyGraph?
             var cycleImproved = false
             var phaseDispositions: [PlannedPhase.Phase: PhaseDisposition] = [:]
 
@@ -346,11 +350,11 @@ enum BonsaiScheduler {
                             let cycleStartBest = state.bestSequence
                             state.computeEncoderOrdering()
 
+                            var reentryDag: ChoiceDependencyGraph? = state.buildDAG()
                             let reentryFirstStage = strategy.planFirstStage(
                                 priorOutcome: lastOutcome,
                                 state: state.view
                             )
-                            var reentryDag: ChoiceDependencyGraph?
                             var reentryCycleImproved = false
                             var reentryFirstResult: PhaseOutcome?
                             for planned in reentryFirstStage {

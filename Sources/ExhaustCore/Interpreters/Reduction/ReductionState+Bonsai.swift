@@ -73,6 +73,11 @@ extension ReductionState {
     /// Rebuilds the ``ChoiceDependencyGraph`` from the current sequence, tree, and bind index.
     ///
     /// Returns a DAG for bind generators and for bind-free generators that contain picks. Returns `nil` only when neither binds nor picks are present.
+    /// Builds a CDG from the current sequence and tree, or returns nil if neither binds nor picks are present.
+    func buildDAG() -> ChoiceDependencyGraph? {
+        rebuildDAGIfNeeded()
+    }
+
     private func rebuildDAGIfNeeded() -> ChoiceDependencyGraph? {
         if hasBind, let bindSpanIndex = bindIndex {
             return ChoiceDependencyGraph.build(from: sequence, tree: tree, bindIndex: bindSpanIndex)
