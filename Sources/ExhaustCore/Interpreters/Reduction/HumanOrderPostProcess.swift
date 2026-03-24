@@ -14,10 +14,24 @@ extension ReductionScheduler {
         let groups = ChoiceSequence.extractSiblingGroups(from: sequence)
         guard groups.isEmpty == false else { return nil }
 
-        // Filter to type-homogeneous groups: all siblings must have the same number of
-        // ChoiceValues and the same TypeTag at each position.
+        // Build bind-inner ranges to exclude from reordering. Reordering siblings
+        // that contain bind-inner values corrupts the structural semantics — the
+        // bind-inner constrains the downstream generator, so swapping it with a
+        // sibling transposes the constraint and the bound content.
+        let bindIndex = BindSpanIndex(from: sequence)
+        let bindInnerRanges = bindIndex.regions.map(\.innerRange)
+
+        // Filter to type-homogeneous groups that do not contain bind-inner positions.
         let homogeneousGroups = groups.filter { group in
             guard group.ranges.count >= 2 else { return false }
+
+            // Exclude groups where any sibling range overlaps a bind-inner range.
+            for siblingRange in group.ranges {
+                for innerRange in bindInnerRanges {
+                    if siblingRange.overlaps(innerRange) { return false }
+                }
+            }
+
             let keys = group.ranges.map { ChoiceSequence.siblingComparisonKey(from: sequence, range: $0) }
             let firstLength = keys[0].count
             guard firstLength > 0 else { return false }
