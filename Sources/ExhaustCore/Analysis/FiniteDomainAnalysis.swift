@@ -32,3 +32,12 @@ public struct FiniteDomainProfile: @unchecked Sendable {
         self.originalTree = originalTree
     }
 }
+
+extension FiniteDomainProfile: CoverageProfile {
+    public var domainSizes: [UInt64] { parameters.map(\.domainSize) }
+    public var parameterCount: Int { parameters.count }
+
+    public func buildTree(from row: CoveringArrayRow) -> ChoiceTree? {
+        CoveringArrayReplay.buildTree(row: row, profile: self)
+    }
+}

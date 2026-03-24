@@ -1,27 +1,19 @@
 // Encapsulates the structured coverage phase of a property test.
 //
-// Implements the analysis hierarchy via CoverageStrategy protocol dispatch:
-// exhaustive → t-way → single-parameter (finite) and boundary (boundary).
-import ExhaustCore
+// Analyzes the generator, then pulls rows from a PullBasedCoveringArrayGenerator
+// one at a time, testing each against the property. Stops on first failure or budget.
+@_spi(ExhaustInternal) import ExhaustCore
 
 enum CoverageRunner {
     enum Result<Output> {
         /// Coverage found a counterexample.
-        case failure(value: Output, tree: ChoiceTree, iteration: Int, strength: Int, rows: Int, parameters: Int, totalSpace: UInt64, kind: CoverageKind)
+        case failure(value: Output, tree: ChoiceTree, iteration: Int, strength: Int, rows: Int, parameters: Int, totalSpace: UInt64, kind: String)
         /// Exhaustive coverage passed — entire space tested, skip random phase.
         case exhaustive(iterations: Int)
         /// Partial coverage completed — proceed to random phase.
-        case partial(iterations: Int, strength: Int, rows: Int, parameters: Int, totalSpace: UInt64, kind: CoverageKind)
+        case partial(iterations: Int, strength: Int, rows: Int, parameters: Int, totalSpace: UInt64, kind: String)
         /// Analysis found nothing to cover — skip to random.
         case notApplicable
-    }
-
-    enum CoverageKind {
-        case finiteDomain
-        case boundaryValue
-        /// Per-length partitioned boundary coverage. Pairwise coverage is within each
-        /// length partition, not across all parameters including length.
-        case perLengthBoundaryValue
     }
 
     static func run<Output>(
@@ -33,186 +25,115 @@ enum CoverageRunner {
             return .notApplicable
         }
 
+        let profile: any CoverageProfile
+        let kind: String
+        let isExhaustiveCandidate: Bool
+
         switch analysis {
-        case let .finite(profile):
-            return runFinite(gen, profile: profile, coverageBudget: coverageBudget, property: property)
+        case let .finite(finiteProfile):
+            profile = finiteProfile
+            kind = "finite"
+            // Exhaustive when the full space fits within budget and no binds.
+            isExhaustiveCandidate = finiteProfile.totalSpace <= coverageBudget
+                && finiteProfile.originalTree?.containsBind == false
 
         case let .boundary(boundaryProfile):
-            return runBoundary(gen, profile: boundaryProfile, coverageBudget: coverageBudget, property: property)
+            profile = boundaryProfile
+            kind = "boundary"
+            isExhaustiveCandidate = false
         }
-    }
 
-    private static func runFinite<Output>(
-        _ gen: ReflectiveGenerator<Output>,
-        profile: FiniteDomainProfile,
-        coverageBudget: UInt64,
-        property: (Output) -> Bool
-    ) -> Result<Output> {
-        let hasBinds = profile.originalTree?.containsBind ?? false
+        let domainSizes = profile.domainSizes
+        let paramCount = profile.parameterCount
+        let totalSpace = profile.totalSpace
+        let budget = Int(min(coverageBudget, UInt64(Int.max)))
 
-        // Build strategy chain ordered by phase (strongest first).
-        // The first strategy that returns a non-nil covering array wins.
-        let strategies: [any CoverageStrategy] = [
-            ExhaustiveCoverageStrategy(hasBinds: hasBinds),
-            TWayCoverageStrategy(),
-            SingleParameterCoverageStrategy(),
-        ]
+        guard paramCount >= 1 else { return .notApplicable }
 
-        var covering: CoveringArray?
-        var isExhaustive = false
-        for strategy in strategies {
-            if let result = strategy.generate(profile: profile, budget: coverageBudget) {
-                covering = result
-                isExhaustive = strategy.phase == .exhaustive
-                break
+        // Pull-based pairwise coverage for 2+ parameters.
+        if paramCount >= 2 {
+            // Use the highest strength the space can support for exhaustive candidates.
+            let strength = isExhaustiveCandidate ? min(paramCount, 4) : 2
+            var generator = PullBasedCoveringArrayGenerator(domainSizes: domainSizes, strength: strength)
+            defer { generator.deallocate() }
+
+            var iterations = 0
+            var rowIndex = 0
+            while rowIndex < budget, let row = generator.next() {
+                if let result = testRow(gen, row: row, rowIndex: rowIndex, profile: profile, property: property) {
+                    return .failure(
+                        value: result.value, tree: result.tree, iteration: iterations + 1,
+                        strength: strength, rows: rowIndex + 1,
+                        parameters: paramCount, totalSpace: totalSpace, kind: kind
+                    )
+                }
+                rowIndex += 1
+                iterations += 1
             }
+
+            // If the generator exhausted all tuples, the entire space was covered.
+            if generator.totalRemaining == 0, isExhaustiveCandidate {
+                return .exhaustive(iterations: iterations)
+            }
+
+            return .partial(
+                iterations: iterations, strength: strength, rows: rowIndex,
+                parameters: paramCount, totalSpace: totalSpace, kind: kind
+            )
         }
 
-        guard let covering, covering.strength >= 1 else {
-            return .notApplicable
-        }
-
+        // Single parameter: enumerate all values.
         var iterations = 0
-        for (rowIndex, row) in covering.rows.enumerated() {
-            guard let tree = CoveringArrayReplay.buildTree(row: row, profile: profile) else {
-                continue
-            }
-
-            let value: Output?
-            var materializerTree: ChoiceTree?
-            let prefix = ChoiceSequence(tree)
-            switch ReductionMaterializer.materialize(gen, prefix: prefix, mode: .guided(seed: UInt64(rowIndex), fallbackTree: nil)) {
-            case let .success(v, freshTree, _):
-                value = v
-                materializerTree = freshTree
-            case .rejected:
-                ExhaustLog.debug(
-                    category: .propertyTest,
-                    event: "coverage_row_rejected",
-                    metadata: ["row": "\(rowIndex)", "values": "\(row.values)"]
-                )
-                value = nil
-            case .failed:
-                ExhaustLog.debug(
-                    category: .propertyTest,
-                    event: "coverage_row_failed",
-                    metadata: ["row": "\(rowIndex)", "values": "\(row.values)"]
-                )
-                value = nil
-            }
-
-            guard let value, let materializerTree else { continue }
-            iterations += 1
-            if property(value) == false {
-                ExhaustLog.debug(
-                    category: .propertyTest,
-                    event: "coverage_counterexample",
-                    "Coverage found counterexample at row \(rowIndex): \(value)"
-                )
+        var rowIndex = 0
+        while rowIndex < budget, UInt64(rowIndex) < domainSizes[0] {
+            let row = CoveringArrayRow(values: [UInt64(rowIndex)])
+            if let result = testRow(gen, row: row, rowIndex: rowIndex, profile: profile, property: property) {
                 return .failure(
-                    value: value, tree: materializerTree, iteration: iterations,
-                    strength: covering.strength, rows: covering.rows.count,
-                    parameters: profile.parameters.count, totalSpace: profile.totalSpace,
-                    kind: .finiteDomain
+                    value: result.value, tree: result.tree, iteration: iterations + 1,
+                    strength: 1, rows: rowIndex + 1,
+                    parameters: paramCount, totalSpace: totalSpace, kind: kind
                 )
             }
+            rowIndex += 1
+            iterations += 1
         }
 
-        if isExhaustive, iterations == covering.rows.count {
+        if isExhaustiveCandidate, UInt64(iterations) >= domainSizes[0] {
             return .exhaustive(iterations: iterations)
         }
 
         return .partial(
-            iterations: iterations,
-            strength: covering.strength,
-            rows: covering.rows.count,
-            parameters: profile.parameters.count,
-            totalSpace: profile.totalSpace,
-            kind: .finiteDomain
+            iterations: iterations, strength: 1, rows: rowIndex,
+            parameters: paramCount, totalSpace: totalSpace, kind: kind
         )
     }
 
-    private static func runBoundary<Output>(
+    // MARK: - Row Testing
+
+    private struct RowFailure<Output> {
+        let value: Output
+        let tree: ChoiceTree
+    }
+
+    /// Builds a tree from a covering array row, materializes it, and tests the property.
+    private static func testRow<Output>(
         _ gen: ReflectiveGenerator<Output>,
-        profile: BoundaryDomainProfile,
-        coverageBudget: UInt64,
+        row: CoveringArrayRow,
+        rowIndex: Int,
+        profile: any CoverageProfile,
         property: (Output) -> Bool
-    ) -> Result<Output> {
-        let strategy = BoundaryValueCoverageStrategy()
-        guard let result = strategy.generate(profile: profile, budget: coverageBudget) else {
-            return .notApplicable
-        }
-        guard result.strength >= 1 else {
-            return .notApplicable
-        }
+    ) -> RowFailure<Output>? {
+        guard let tree = profile.buildTree(from: row) else { return nil }
 
-        let totalRows = result.totalRows
-
-        // Build the list of (rows, profile) segments to iterate.
-        // For flat results, there's one segment using the original profile.
-        // For per-length results, each sub-array has its own profile with only accessible element params.
-        let segments: [(rows: [CoveringArrayRow], profile: BoundaryDomainProfile)]
-        let strength: Int
-        let totalSpace: UInt64
-        let kind: CoverageKind
-
-        switch result {
-        case let .flat(covering):
-            segments = [(rows: covering.rows, profile: profile)]
-            strength = covering.strength
-            totalSpace = covering.profile.totalSpace
-            kind = .boundaryValue
-
-        case let .perLength(subArrays):
-            segments = subArrays
-            strength = result.strength
-            totalSpace = UInt64(totalRows)
-            kind = .perLengthBoundaryValue
-        }
-
-        var iterations = 0
-        var globalRowIndex = 0
-        for segment in segments {
-            for row in segment.rows {
-                guard let tree = BoundaryCoveringArrayReplay.buildTree(
-                    row: row, profile: segment.profile
-                ) else {
-                    globalRowIndex += 1
-                    continue
-                }
-
-                let value: Output?
-                var materializerTree: ChoiceTree?
-                let prefix = ChoiceSequence(tree)
-                switch ReductionMaterializer.materialize(gen, prefix: prefix, mode: .guided(seed: UInt64(globalRowIndex), fallbackTree: nil)) {
-                case let .success(v, freshTree, _):
-                    value = v
-                    materializerTree = freshTree
-                case .rejected, .failed:
-                    value = nil
-                }
-
-                globalRowIndex += 1
-                guard let value, let materializerTree else { continue }
-                iterations += 1
-                if property(value) == false {
-                    return .failure(
-                        value: value, tree: materializerTree, iteration: iterations,
-                        strength: strength, rows: totalRows,
-                        parameters: profile.parameters.count, totalSpace: totalSpace,
-                        kind: kind
-                    )
-                }
+        let prefix = ChoiceSequence(tree)
+        switch ReductionMaterializer.materialize(gen, prefix: prefix, mode: .guided(seed: UInt64(rowIndex), fallbackTree: nil)) {
+        case let .success(value, freshTree, _):
+            if property(value) == false {
+                return RowFailure(value: value, tree: freshTree)
             }
+            return nil
+        case .rejected, .failed:
+            return nil
         }
-
-        return .partial(
-            iterations: iterations,
-            strength: strength,
-            rows: totalRows,
-            parameters: profile.parameters.count,
-            totalSpace: totalSpace,
-            kind: kind
-        )
     }
 }

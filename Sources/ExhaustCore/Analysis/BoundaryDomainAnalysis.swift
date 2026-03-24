@@ -61,6 +61,22 @@ public struct BoundaryDomainProfile: @unchecked Sendable {
     }
 }
 
+extension BoundaryDomainProfile: CoverageProfile {
+    public var domainSizes: [UInt64] { parameters.map(\.domainSize) }
+    public var parameterCount: Int { parameters.count }
+
+    public var totalSpace: UInt64 {
+        domainSizes.reduce(UInt64(1)) { result, domain in
+            let (product, overflow) = result.multipliedReportingOverflow(by: domain)
+            return overflow ? .max : product
+        }
+    }
+
+    public func buildTree(from row: CoveringArrayRow) -> ChoiceTree? {
+        BoundaryCoveringArrayReplay.buildTree(row: row, profile: self)
+    }
+}
+
 // MARK: - Boundary Value Computation
 
 /// Boundary value selection functions used by `ChoiceTreeAnalysis`.

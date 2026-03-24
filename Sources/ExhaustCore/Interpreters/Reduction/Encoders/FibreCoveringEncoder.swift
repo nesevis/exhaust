@@ -6,7 +6,7 @@
 ///
 /// Two regimes based on the fibre's total domain size:
 /// - **Small fibres** (total space ≤ ``exhaustiveThreshold``): exhaustive enumeration of all value assignments via mixed-radix counting.
-/// - **Large fibres**: pairwise covering array (strength 2) via IPOG, reusing the existing ``CoveringArray.bestFitting(budget:profile:)`` infrastructure. Guarantees every pair of parameter values appears in at least one probe.
+/// - **Large fibres** (2 to 20 parameters): pull-based pairwise covering (strength 2) via ``PullBasedCoveringArrayGenerator``. Each ``nextProbe(lastAccepted:)`` call pulls the next greedy row — no upfront batch build.
 public struct FibreCoveringEncoder: ComposableEncoder {
     public let name: EncoderName = .kleisliComposition
     public let phase: ReductionPhase = .exploration
@@ -15,21 +15,31 @@ public struct FibreCoveringEncoder: ComposableEncoder {
     public static let exhaustiveThreshold: UInt64 = 128
 
     /// Maximum probes for the covering array regime.
-    public static let coveringBudget: UInt64 = 128
+    public static let coveringBudget: Int = 128
 
     // MARK: - State
 
     private var baseSequence: ChoiceSequence = .init([])
     private var valuePositions: [ValuePosition] = []
-    private var probes: [CoveringArrayRow] = []
-    private var probeIndex = 0
-    private var isExhaustive = false
+
+    /// Pre-built probes for the exhaustive regime. Empty when using pull-based.
+    private var exhaustiveProbes: [CoveringArrayRow] = []
+    private var exhaustiveProbeIndex = 0
+
+    /// Pull-based generator for the pairwise regime. Nil when using exhaustive.
+    private var generator: PullBasedCoveringArrayGenerator?
+    private var pullProbeCount = 0
 
     /// The total fibre space computed at `start()` time. Used by the driver for profiling (fibre size vs exhaustive threshold).
     public private(set) var lastComputedFibreSize: UInt64 = 0
 
-    /// The number of probes generated at `start()` time. Zero means the fibre was too large or had too few parameters for pairwise.
-    public var probeCount: Int { probes.count }
+    /// The number of probes emitted so far.
+    public var probeCount: Int {
+        if generator != nil {
+            return pullProbeCount
+        }
+        return exhaustiveProbeIndex
+    }
 
     private struct ValuePosition {
         let index: Int
@@ -56,9 +66,7 @@ public struct FibreCoveringEncoder: ComposableEncoder {
         if totalSpace <= Self.exhaustiveThreshold {
             return Int(totalSpace)
         }
-        // Covering array size is hard to predict without building it.
-        // Conservative estimate: min(budget, totalSpace).
-        return Int(min(Self.coveringBudget, totalSpace))
+        return min(Self.coveringBudget, Int(min(totalSpace, UInt64(Int.max))))
     }
 
     public mutating func start(
@@ -69,9 +77,11 @@ public struct FibreCoveringEncoder: ComposableEncoder {
     ) {
         baseSequence = sequence
         valuePositions = collectValuePositions(in: positionRange, from: sequence)
-        probeIndex = 0
-        probes = []
-        isExhaustive = false
+        exhaustiveProbeIndex = 0
+        exhaustiveProbes = []
+        generator?.deallocate()
+        generator = nil
+        pullProbeCount = 0
 
         guard valuePositions.isEmpty == false else {
             lastComputedFibreSize = 0
@@ -82,56 +92,36 @@ public struct FibreCoveringEncoder: ComposableEncoder {
         lastComputedFibreSize = totalSpace
 
         if totalSpace <= Self.exhaustiveThreshold {
-            // Exhaustive: generate all combinations as rows
-            isExhaustive = true
-            probes = buildExhaustiveRows(count: Int(totalSpace))
+            exhaustiveProbes = buildExhaustiveRows(count: Int(totalSpace))
         } else if valuePositions.count >= 2, valuePositions.count <= 20 {
-            // Covering array: pairwise coverage via IPOG.
-            // Cap at 20 parameters — beyond that the fibre is too large for
-            // the covering encoder to add value. The structural encoders
-            // (deletion, branch simplification) have more work to do before
-            // the fibre is small enough to search.
-            let parameters = valuePositions.enumerated().map { offset, position in
-                FiniteParameter(
-                    index: offset,
-                    domainSize: position.domainSize,
-                    kind: .chooseBits(
-                        range: 0 ... max(position.domainSize, 1) - 1,
-                        tag: position.tag
-                    )
-                )
-            }
-            let profile = FiniteDomainProfile(
-                parameters: parameters,
-                totalSpace: totalSpace
+            // Pull-based pairwise coverage. Rows are generated lazily in nextProbe().
+            generator = PullBasedCoveringArrayGenerator(
+                domainSizes: valuePositions.map(\.domainSize),
+                strength: 2
             )
-            if let covering = CoveringArray.generate(
-                profile: profile,
-                strength: 2,
-                rowBudget: Int(Self.coveringBudget)
-            ) {
-                // Sort covering array rows in shortlex order so the composition
-                // finds the shortlex-smallest failure first.
-                probes = covering.rows.sorted { lhs, rhs in
-                    lhs.values.lexicographicallyPrecedes(rhs.values)
-                }
-            }
-        } else {
-            // Too few parameters for a covering array, too large for exhaustive.
-            // Return early — structural encoders have more work to do.
-            return
         }
     }
 
     public mutating func nextProbe(lastAccepted: Bool) -> ChoiceSequence? {
-        guard probeIndex < probes.count else { return nil }
+        let row: CoveringArrayRow?
 
-        let row = probes[probeIndex]
-        probeIndex += 1
+        if generator != nil {
+            guard pullProbeCount < Self.coveringBudget else { return nil }
+            row = generator?.next()
+            if row != nil { pullProbeCount += 1 }
+        } else {
+            guard exhaustiveProbeIndex < exhaustiveProbes.count else { return nil }
+            row = exhaustiveProbes[exhaustiveProbeIndex]
+            exhaustiveProbeIndex += 1
+        }
+
+        guard let row else { return nil }
 
         var candidate = baseSequence
-        for (offset, position) in valuePositions.enumerated() {
+        var offset = 0
+        while offset < valuePositions.count {
             guard offset < row.values.count else { break }
+            let position = valuePositions[offset]
             let valueIndex = row.values[offset]
             let bitPattern = position.domainLower + valueIndex
 
@@ -143,6 +133,7 @@ public struct FibreCoveringEncoder: ComposableEncoder {
                 validRange: position.validRange,
                 isRangeExplicit: position.isRangeExplicit
             ))
+            offset += 1
         }
 
         return candidate
@@ -186,18 +177,13 @@ public struct FibreCoveringEncoder: ComposableEncoder {
         return product
     }
 
-    /// Builds exhaustive rows as ``CoveringArrayRow`` values using mixed-radix decomposition.
     /// Builds exhaustive rows in shortlex order (leftmost coordinate changes slowest).
-    ///
-    /// The first failure found by the composition is the shortlex-smallest, because
-    /// the composition accepts the first probe that fails the property.
     private func buildExhaustiveRows(count: Int) -> [CoveringArrayRow] {
         var rows: [CoveringArrayRow] = []
         rows.reserveCapacity(count)
         for combinationIndex in 0 ..< count {
             var values = [UInt64](repeating: 0, count: valuePositions.count)
             var remaining = combinationIndex
-            // Decompose rightmost-first so the leftmost coordinate changes slowest.
             for offset in (0 ..< valuePositions.count).reversed() {
                 let domainSize = Int(valuePositions[offset].domainSize)
                 values[offset] = UInt64(remaining % domainSize)

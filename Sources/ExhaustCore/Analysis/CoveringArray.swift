@@ -3,16 +3,6 @@
 //  Exhaust
 //
 
-/// A single row in the covering array, mapping parameter indices to value indices.
-public struct CoveringArrayRow: @unchecked Sendable {
-    /// `values[i]` is a value index in `0..<parameters[i].domainSize`.
-    public var values: [UInt64]
-
-    public init(values: [UInt64]) {
-        self.values = values
-    }
-}
-
 /// A t-way covering array guaranteeing that every t-tuple of parameter values appears in at least one row.
 ///
 /// Generated using a FIPOG-style IPOG algorithm with bit-vector coverage tracking, column-major storage, and strength-specialized hot loops for t=2, 3, and 4 (Kleine & Simos, "An efficient design and implementation of the in-parameter-order algorithm", Math. Comput. Sci. 12(1), 2018). Rows are returned in shortlex order.
@@ -78,7 +68,7 @@ public struct CoveringArray: @unchecked Sendable {
             return exhaustive(profile: profile)
         }
 
-        let budget = rowBudget ?? 2000
+        let budget = rowBudget ?? 200
 
         // Strength 1: each parameter value appears at least once. max(domains) rows.
         if strength == 1 {
@@ -562,7 +552,7 @@ private struct FIPOGBuilder {
         rowCount = seedSize
         columns.reserveCapacity(paramCount)
 
-        for param in 0 ..< strength {
+        for _ in 0 ..< strength {
             columns.append(ContiguousArray<UInt16>(repeating: 0, count: seedSize))
         }
 
@@ -655,90 +645,109 @@ private struct FIPOGBuilder {
     // MARK: - Horizontal Growth (strength-specialized)
 
     private mutating func horizontalGrowth2(paramIndex: Int, slices: inout ContiguousArray<CoverageSlice>) {
-        let domain = Int(domainSizes[paramIndex])
+        let domain = UInt16(domainSizes[paramIndex])
         let sliceCount = slices.count
 
         columns.append(ContiguousArray<UInt16>(repeating: 0, count: rowCount))
 
-        for row in 0 ..< rowCount {
+        var row = 0
+        while row < rowCount {
             var bestValue: UInt16 = 0
             var bestCount = 0
 
-            for candidate: UInt16 in 0 ..< UInt16(domain) {
+            var candidate: UInt16 = 0
+            while candidate < domain {
                 var count = 0
-                for slice in 0 ..< sliceCount {
+                var slice = 0
+                while slice < sliceCount {
                     let partner = columns[Int(slices[slice].partnerParams.0)][row]
                     let index = slices[slice].flatIndex2(partner, candidate)
                     if slices[slice].isSet(index) == false {
                         count &+= 1
                     }
+                    slice &+= 1
                 }
                 if count > bestCount {
                     bestCount = count
                     bestValue = candidate
                 }
+                candidate &+= 1
             }
 
             columns[paramIndex][row] = bestValue
 
-            for slice in 0 ..< sliceCount {
-                let partner = columns[Int(slices[slice].partnerParams.0)][row]
-                let index = slices[slice].flatIndex2(partner, bestValue)
-                _ = slices[slice].mark(index)
+            var markSlice = 0
+            while markSlice < sliceCount {
+                let partner = columns[Int(slices[markSlice].partnerParams.0)][row]
+                let index = slices[markSlice].flatIndex2(partner, bestValue)
+                _ = slices[markSlice].mark(index)
+                markSlice &+= 1
             }
+            row &+= 1
         }
     }
 
     private mutating func horizontalGrowth3(paramIndex: Int, slices: inout ContiguousArray<CoverageSlice>) {
-        let domain = Int(domainSizes[paramIndex])
+        let domain = UInt16(domainSizes[paramIndex])
         let sliceCount = slices.count
 
         columns.append(ContiguousArray<UInt16>(repeating: 0, count: rowCount))
 
-        for row in 0 ..< rowCount {
+        var row = 0
+        while row < rowCount {
             var bestValue: UInt16 = 0
             var bestCount = 0
 
-            for candidate: UInt16 in 0 ..< UInt16(domain) {
+            var candidate: UInt16 = 0
+            while candidate < domain {
                 var count = 0
-                for slice in 0 ..< sliceCount {
+                var slice = 0
+                while slice < sliceCount {
                     let partner0 = columns[Int(slices[slice].partnerParams.0)][row]
                     let partner1 = columns[Int(slices[slice].partnerParams.1)][row]
                     let index = slices[slice].flatIndex3(partner0, partner1, candidate)
                     if slices[slice].isSet(index) == false {
                         count &+= 1
                     }
+                    slice &+= 1
                 }
                 if count > bestCount {
                     bestCount = count
                     bestValue = candidate
                 }
+                candidate &+= 1
             }
 
             columns[paramIndex][row] = bestValue
 
-            for slice in 0 ..< sliceCount {
-                let partner0 = columns[Int(slices[slice].partnerParams.0)][row]
-                let partner1 = columns[Int(slices[slice].partnerParams.1)][row]
-                let index = slices[slice].flatIndex3(partner0, partner1, bestValue)
-                _ = slices[slice].mark(index)
+            var markSlice = 0
+            while markSlice < sliceCount {
+                let partner0 = columns[Int(slices[markSlice].partnerParams.0)][row]
+                let partner1 = columns[Int(slices[markSlice].partnerParams.1)][row]
+                let index = slices[markSlice].flatIndex3(partner0, partner1, bestValue)
+                _ = slices[markSlice].mark(index)
+                markSlice &+= 1
             }
+            row &+= 1
         }
     }
 
     private mutating func horizontalGrowth4(paramIndex: Int, slices: inout ContiguousArray<CoverageSlice>) {
-        let domain = Int(domainSizes[paramIndex])
+        let domain = UInt16(domainSizes[paramIndex])
         let sliceCount = slices.count
 
         columns.append(ContiguousArray<UInt16>(repeating: 0, count: rowCount))
 
-        for row in 0 ..< rowCount {
+        var row = 0
+        while row < rowCount {
             var bestValue: UInt16 = 0
             var bestCount = 0
 
-            for candidate: UInt16 in 0 ..< UInt16(domain) {
+            var candidate: UInt16 = 0
+            while candidate < domain {
                 var count = 0
-                for slice in 0 ..< sliceCount {
+                var slice = 0
+                while slice < sliceCount {
                     let partner0 = columns[Int(slices[slice].partnerParams.0)][row]
                     let partner1 = columns[Int(slices[slice].partnerParams.1)][row]
                     let partner2 = columns[Int(slices[slice].partnerParams.2)][row]
@@ -746,22 +755,27 @@ private struct FIPOGBuilder {
                     if slices[slice].isSet(index) == false {
                         count &+= 1
                     }
+                    slice &+= 1
                 }
                 if count > bestCount {
                     bestCount = count
                     bestValue = candidate
                 }
+                candidate &+= 1
             }
 
             columns[paramIndex][row] = bestValue
 
-            for slice in 0 ..< sliceCount {
-                let partner0 = columns[Int(slices[slice].partnerParams.0)][row]
-                let partner1 = columns[Int(slices[slice].partnerParams.1)][row]
-                let partner2 = columns[Int(slices[slice].partnerParams.2)][row]
-                let index = slices[slice].flatIndex4(partner0, partner1, partner2, bestValue)
-                _ = slices[slice].mark(index)
+            var markSlice = 0
+            while markSlice < sliceCount {
+                let partner0 = columns[Int(slices[markSlice].partnerParams.0)][row]
+                let partner1 = columns[Int(slices[markSlice].partnerParams.1)][row]
+                let partner2 = columns[Int(slices[markSlice].partnerParams.2)][row]
+                let index = slices[markSlice].flatIndex4(partner0, partner1, partner2, bestValue)
+                _ = slices[markSlice].mark(index)
+                markSlice &+= 1
             }
+            row &+= 1
         }
     }
 
@@ -787,9 +801,11 @@ private struct FIPOGBuilder {
             let tupleValues = decompose(flatIndex: flatIndex, slice: slices[sliceIndex])
 
             // Reset row to zeros and clear fixed flags.
-            for position in 0 ... paramIndex {
-                newRow[position] = 0
-                isFixed[position] = false
+            var resetPos = 0
+            while resetPos <= paramIndex {
+                newRow[resetPos] = 0
+                isFixed[resetPos] = false
+                resetPos &+= 1
             }
 
             // Fix the positions dictated by the uncovered tuple.
@@ -803,25 +819,31 @@ private struct FIPOGBuilder {
             )
 
             // Greedily fill free positions to maximize additional coverage.
-            for position in 0 ... paramIndex {
-                if isFixed[position] { continue }
+            var position = 0
+            while position <= paramIndex {
+                if isFixed[position] { position &+= 1; continue }
                 var bestValue: UInt16 = 0
                 var bestCount = 0
 
-                for candidate: UInt16 in 0 ..< domainSizes[position] {
+                var candidate: UInt16 = 0
+                while candidate < domainSizes[position] {
                     newRow[position] = candidate
                     let count = countUncoveredInRow(newRow, paramIndex: paramIndex, slices: slices)
                     if count > bestCount {
                         bestCount = count
                         bestValue = candidate
                     }
+                    candidate &+= 1
                 }
                 newRow[position] = bestValue
+                position &+= 1
             }
 
             // Append row to all active columns.
-            for position in 0 ... paramIndex {
-                columns[position].append(newRow[position])
+            var appendPos = 0
+            while appendPos <= paramIndex {
+                columns[appendPos].append(newRow[appendPos])
+                appendPos &+= 1
             }
             rowCount &+= 1
 
@@ -874,11 +896,14 @@ private struct FIPOGBuilder {
     private func findFirstUncovered(
         in slices: ContiguousArray<CoverageSlice>
     ) -> (sliceIndex: Int, flatIndex: UInt32)? {
-        for sliceIndex in 0 ..< slices.count {
-            if slices[sliceIndex].remaining == 0 { continue }
-            if let bit = slices[sliceIndex].bits.firstUnsetBit(below: slices[sliceIndex].totalTuples) {
+        var sliceIndex = 0
+        while sliceIndex < slices.count {
+            if slices[sliceIndex].remaining > 0,
+               let bit = slices[sliceIndex].bits.firstUnsetBit(below: slices[sliceIndex].totalTuples)
+            {
                 return (sliceIndex, bit)
             }
+            sliceIndex &+= 1
         }
         return nil
     }
@@ -915,8 +940,10 @@ private struct FIPOGBuilder {
     ) -> Int {
         var count = 0
         let newValue = row[paramIndex]
+        let sliceCount = slices.count
 
-        for sliceIndex in 0 ..< slices.count {
+        var sliceIndex = 0
+        while sliceIndex < sliceCount {
             let slice = slices[sliceIndex]
             let index: UInt32
             switch strength {
@@ -936,11 +963,13 @@ private struct FIPOGBuilder {
                     newValue
                 )
             default:
+                sliceIndex &+= 1
                 continue
             }
             if slice.isSet(index) == false {
                 count &+= 1
             }
+            sliceIndex &+= 1
         }
         return count
     }
@@ -952,8 +981,10 @@ private struct FIPOGBuilder {
         slices: inout ContiguousArray<CoverageSlice>
     ) {
         let newValue = row[paramIndex]
+        let sliceCount = slices.count
 
-        for sliceIndex in 0 ..< slices.count {
+        var sliceIndex = 0
+        while sliceIndex < sliceCount {
             let index: UInt32
             switch strength {
             case 2:
@@ -975,9 +1006,11 @@ private struct FIPOGBuilder {
                     newValue
                 )
             default:
+                sliceIndex &+= 1
                 continue
             }
             _ = slices[sliceIndex].mark(index)
+            sliceIndex &+= 1
         }
     }
 }
