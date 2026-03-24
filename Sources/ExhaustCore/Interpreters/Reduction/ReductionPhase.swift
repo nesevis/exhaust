@@ -6,8 +6,6 @@ public enum ReductionPhase: Int, Comparable, CaseIterable, Sendable {
     case structuralDeletion
     /// Encoder `.exact`; morphism `.exact` or `.bounded` via decoder.
     case valueMinimization
-    /// Encoder `.exact`; morphism `.exact` or `.bounded` via decoder.
-    case reordering
     /// Encoder `.bounded`.
     case redistribution
     /// Encoder `.speculative`.

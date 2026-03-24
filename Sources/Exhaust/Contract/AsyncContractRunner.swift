@@ -32,7 +32,7 @@ public func __runContractAsync<Spec: AsyncContractSpec>(
     column: UInt = #column
 ) async -> ContractResult<Spec>? {
     var samplingBudget: UInt64 = 2000
-    var coverageBudget: UInt64 = 2000
+    var coverageBudget: UInt64 = 200
     var seed: UInt64?
     var reductionConfig: TCRBudget = .fast
     var suppressIssueReporting = false

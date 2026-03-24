@@ -18,7 +18,7 @@ import ExhaustCore
 /// ## Settings
 ///
 /// - `.samplingBudget(_)`: upper bound on random sampling iterations (default 100). Additive with the coverage budget.
-/// - `.coverageBudget(_)`: maximum test cases for structured coverage (default 2000).
+/// - `.coverageBudget(_)`: maximum test cases for structured coverage (default 200).
 /// - `.replay(_)`: fixed seed for deterministic reproduction. Skips structured coverage.
 /// - `.reductionBudget(_)`: controls test case reduction aggressiveness (`.fast` or `.slow`).
 /// - `.reflecting(_)`: skips generation, reflects an existing value through the generator, and reduces it.
@@ -67,7 +67,7 @@ public macro exhaust<T>(
 /// ## Settings
 ///
 /// - `.samplingBudget(_)`: upper bound on random sampling iterations (default 100).
-/// - `.coverageBudget(_)`: maximum test cases for structured coverage (default 2000).
+/// - `.coverageBudget(_)`: maximum test cases for structured coverage (default 200).
 /// - `.replay(_)`: fixed seed for deterministic reproduction.
 /// - `.reductionBudget(_)`: controls reduction aggressiveness.
 /// - `.randomOnly`: disables structured coverage analysis.

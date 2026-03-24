@@ -79,7 +79,7 @@ Two encoders can be composed through a `GeneratorLift` via `KleisliComposition`:
 |---------|-------------|
 | `KleisliComposition` | Composes an upstream and downstream encoder through a `GeneratorLift`. The upstream proposes a base change; the lift materializes the fibre; the downstream searches within it. |
 | `DownstreamPick` | Runtime strategy selection for the downstream role. Selects exhaustive (≤ 64), pairwise (2-20 params), or `ZeroValueEncoder` (fallback) based on fibre characteristics. |
-| `FibreCoveringEncoder` | Searches a fibre via exhaustive enumeration or IPOG pairwise covering arrays. Used as a downstream within `DownstreamPick`. |
+| `FibreCoveringEncoder` | Searches a fibre via exhaustive enumeration or pull-based pairwise covering (Bryce & Colbourn density algorithm). Each `nextProbe()` call lazily pulls the next greedy row. Used as a downstream within `DownstreamPick`. |
 | `RelaxRoundEncoder` | Speculative value redistribution — proposes one-for-one value transfers between coordinates. Accepted only if the subsequent exploitation pipeline (full structural + value minimization) produces a net shortlex improvement. |
 
 ## The scheduler's main loop
@@ -170,7 +170,7 @@ The CDG identifies this structure at runtime: one bind-inner node (controlling `
 
 **Cross-level minimization** runs because neither structural nor value minimization made progress (`cycleImproved == false`). The composition framework builds a `KleisliComposition` for the CDG edge: upstream is `BinarySearchEncoder(.semanticSimplest)` operating on `n`, downstream is `DownstreamPick`.
 
-The upstream binary-searches `n` downward. The first probe is `n = 4` (floor of the midpoint: `lo + (hi - lo) / 2` where `lo = 2, hi = 7`). The `GeneratorLift` materializes the array at `n = 4` — the fibre is `{0, ..., 4}³ = 125` values. `DownstreamPick` selects pairwise covering (three parameters, five values each). The covering array explores combinations but doesn't find a failure satisfying the sum constraint at this `n` value.
+The upstream binary-searches `n` downward. The first probe is `n = 4` (floor of the midpoint: `lo + (hi - lo) / 2` where `lo = 2, hi = 7`). The `GeneratorLift` materializes the array at `n = 4` — the fibre is `{0, ..., 4}³ = 125` values. `DownstreamPick` selects pairwise covering (three parameters, five values each). The pull-based generator lazily produces rows exploring pairwise combinations but doesn't find a failure satisfying the sum constraint at this `n` value.
 
 The upstream continues searching. At `n = 2`, the lift materializes a fibre of `{0, ..., 2}³ = 27` values. `DownstreamPick` selects exhaustive search (≤ 64). The exhaustive search finds `[1, 1, 2]` — the property fails. The composition accepts: the entire composed sequence (upstream `n = 2` + downstream `[1, 1, 2]`) replaces the current sequence in one atomic step, validated by the shortlex invariant.
 

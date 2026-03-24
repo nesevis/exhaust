@@ -32,7 +32,7 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
         property: @Sendable (Output) -> Bool
     ) -> Output? {
         var samplingBudget: UInt64 = 100
-        var coverageBudget: UInt64 = 2000
+        var coverageBudget: UInt64 = 200
         var seed: UInt64?
         var reductionConfig: TCRBudget = .fast
         var suppressIssueReporting = false
@@ -123,6 +123,7 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
         }
         if !useRandomOnly, seed == nil {
             let coverageResult = CoverageRunner.run(gen, coverageBudget: coverageBudget, property: property)
+            coveragePhaseEndTime = clock_gettime_nsec_np(CLOCK_UPTIME_RAW)
             switch coverageResult {
             case let .failure(value, tree, iteration, strength, rows, parameters, totalSpace, kind):
                 ExhaustLog.notice(
@@ -134,7 +135,7 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
                         "covering_rows": "\(rows)",
                         "parameters": "\(parameters)",
                         "total_space": "\(totalSpace)",
-                        "kind": kind == .finiteDomain ? "finite" : "boundary",
+                        "kind": kind,
                     ]
                 )
                 // Reflect to get a structurally correct tree with materialized picks,
@@ -278,7 +279,7 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
                         "total_space": "\(totalSpace)",
                         "parameters": "\(parameters)",
                         "exhaustive": "false",
-                        "kind": kind == .finiteDomain ? "finite" : "boundary",
+                        "kind": kind,
                     ]
                 )
 

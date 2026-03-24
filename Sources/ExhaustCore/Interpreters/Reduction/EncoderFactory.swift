@@ -273,8 +273,8 @@ struct EncoderFactory {
         // impact per probe. Leverage is the downstream range size; required budget is the
         // predicted fibre size (capped at the covering budget for pairwise).
         result.sort { lhs, rhs in
-            let lhsBudget = max(1, min(lhs.prediction.predictedSize, FibreCoveringEncoder.coveringBudget))
-            let rhsBudget = max(1, min(rhs.prediction.predictedSize, FibreCoveringEncoder.coveringBudget))
+            let lhsBudget = max(1, min(lhs.prediction.predictedSize, UInt64(FibreCoveringEncoder.coveringBudget)))
+            let rhsBudget = max(1, min(rhs.prediction.predictedSize, UInt64(FibreCoveringEncoder.coveringBudget)))
             let lhsLeverage = UInt64(lhs.edge.downstreamRange.count)
             let rhsLeverage = UInt64(rhs.edge.downstreamRange.count)
             // leverage / budget — higher is better. Cross-multiply to avoid division.

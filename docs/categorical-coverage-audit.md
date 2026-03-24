@@ -4,8 +4,8 @@
 
 Both the BonsaiReducer and CoverageRunner instantiate the paper's base
 reduce-solve-recover pipeline (Sections 3-5). In CoverageRunner, the pipeline
-is `Generator ->[analyze] Profile ->[IPOG] CoveringArray ->[replay] TestCases`
--- one encoding, one solve, one decoding. In BonsaiReducer, the pipeline is
+is `Generator ->[analyze] Profile ->[pull-based greedy] Row ->[replay] TestCase`
+-- one encoding, one solve per row, one decoding. Rows are pulled lazily until failure or budget exhaustion. In BonsaiReducer, the pipeline is
 iterated: each V-cycle leg encodes candidate mutations, solves via property
 evaluation, and decodes via materialization, composing legs into cycles and
 cycles into a convergent reduction run. Both are clean instantiations of the
@@ -168,15 +168,15 @@ the paper.
 
 | Role | Implementation |
 |------|----------------|
-| **enc** | `ChoiceTreeAnalysis.analyze` transforms a generator into a `FiniteDomainProfile` / `BoundaryDomainProfile` -- the "reduced" representation that IPOG can solve. |
-| **dec** | `CoveringArrayReplay.buildTree` / `BoundaryCoveringArrayReplay.buildTree` decodes covering array rows back into `ChoiceTree`s that can be replayed through the original generator. |
+| **enc** | `ChoiceTreeAnalysis.analyze` transforms a generator into a `FiniteDomainProfile` / `BoundaryDomainProfile` -- the "reduced" representation that the pull-based generator can solve. Both conform to `CoverageProfile`. |
+| **dec** | `CoverageProfile.buildTree(from:)` decodes covering array rows back into `ChoiceTree`s that can be replayed through the original generator. Dispatches to `CoveringArrayReplay` (finite) or `BoundaryCoveringArrayReplay` (boundary). |
 
-The enc/dec structure exists but is not reified as protocols. The pipeline
-`Generator ->[analyze] Profile ->[IPOG] CoveringArray ->[replay] TestCases`
+The enc/dec structure exists but is not reified as certified pairs. The pipeline
+`Generator ->[analyze] Profile ->[pull-based greedy] Row ->[replay] TestCase`
 has the same shape as `P ->[enc] Q ->[solve] Sol(Q) ->[dec] Sol(P)`, but the
 certification is implicit: analysis is faithful for analyzable generators, and
-replay is exact for well-formed rows. The new `CoverageStrategy` protocol
-begins to formalize the enc side (each strategy wraps a distinct encoding
+replay is exact for well-formed rows. The `CoverageProfile` protocol
+formalizes the enc/dec boundary (each profile type wraps a distinct encoding
 path), but dec remains a set of static methods.
 
 ## 3. Category Structure: Composition and Identity
