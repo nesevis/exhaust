@@ -29,6 +29,18 @@ struct SpanCache {
         cachedDeletionTargetsByDepth.removeAll(keepingCapacity: true)
     }
 
+    // MARK: - Public cached counts
+
+    /// Returns the count of all value spans, populating the cache if needed.
+    mutating func allValueSpanCount(from sequence: ChoiceSequence) -> Int {
+        allValueSpans(from: sequence).count
+    }
+
+    /// Returns the count of all container spans, populating the cache if needed.
+    mutating func allContainerSpanCount(from sequence: ChoiceSequence) -> Int {
+        allContainerSpans(from: sequence).count
+    }
+
     // MARK: - Raw cached extractions
 
     private mutating func allValueSpans(from sequence: ChoiceSequence) -> [ChoiceSpan] {

@@ -325,6 +325,11 @@ final class ReductionState<Output> {
     var encoderProbes: [EncoderName: Int] = [:]
 
     /// Total materialization attempts (decoder invocations) during reduction.
+    ///
+    /// Accumulated by `runComposable` (deferred block), `runStructuralDeletion` (manual delta
+    /// for antichain and mutation pool direct decodes), `runKleisliExploration` (manual
+    /// accumulation), and `runRelaxRound` (manual accumulation). Any new direct `decoder.decode()`
+    /// call outside `runComposable` must manually accumulate into this field.
     var totalMaterializations: Int = 0
 
     // Decision tree profiling counters
@@ -444,6 +449,8 @@ final class ReductionState<Output> {
         let spanCache: SpanCache
         let dominance: EncoderDominance
         let convergenceCache: ConvergenceCache
+        let rejectCache: Set<UInt64>
+        let edgeObservations: [Int: EdgeObservation]
     }
 
     // Encoders
@@ -820,7 +827,9 @@ extension ReductionState {
             branchTreeDirty: branchTreeDirty,
             spanCache: spanCache,
             dominance: dominance,
-            convergenceCache: convergenceCache
+            convergenceCache: convergenceCache,
+            rejectCache: rejectCache,
+            edgeObservations: edgeObservations
         )
     }
 
@@ -837,6 +846,8 @@ extension ReductionState {
         spanCache = snapshot.spanCache
         dominance = snapshot.dominance
         convergenceCache = snapshot.convergenceCache
+        rejectCache = snapshot.rejectCache
+        edgeObservations = snapshot.edgeObservations
     }
 }
 
@@ -859,10 +870,10 @@ extension ReductionState {
         }
 
         var deletionCosts = [ReductionScheduler.DeletionEncoderSlot: Int]()
-        // Global span count across all depths — matches the old per-encoder estimatedCost
-        // which used ChoiceSequence.extractContainerSpans (all depths, not depth-filtered).
-        let containerCount = ChoiceSequence.extractContainerSpans(from: sequence).count
-        let allSpanCount = ChoiceSequence.extractAllValueSpans(from: sequence).count
+        // Global span count across all depths, routed through SpanCache to avoid
+        // redundant O(n) walks when subsequent phases also extract spans.
+        let containerCount = spanCache.allContainerSpanCount(from: sequence)
+        let allSpanCount = spanCache.allValueSpanCount(from: sequence)
         for slot in ReductionScheduler.DeletionEncoderSlot.allCases {
             let spanCount: Int = switch slot {
             case .containerSpans, .alignedWindows, .randomRepairDelete: containerCount
