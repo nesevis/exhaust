@@ -10,9 +10,16 @@ EVOLUTION_FLAGS=(-Xswiftc -enable-library-evolution -Xswiftc -emit-module-interf
 IOS_SIM_SDK="$(xcrun --sdk iphonesimulator --show-sdk-path)"
 IOS_DEPLOYMENT_TARGET="18.0"
 
-echo "==> Cleaning staging area"
+echo "==> Cleaning staging area and stale build products"
 rm -rf "${BUILD_DIR}"
 mkdir -p "${BUILD_DIR}"
+
+# Remove stale .o files from SPM's incremental build cache.
+# Without this, object files from deleted source files survive and
+# get archived into the static library by the ar glob below.
+for triple in arm64-apple-macosx arm64-apple-ios-simulator x86_64-apple-ios-simulator; do
+    rm -rf "${PACKAGE_DIR}/.build/${triple}/release/ExhaustCore.build"
+done
 
 # Pre-resolve so parallel builds don't race on the workspace lock
 swift package resolve --package-path "${PACKAGE_DIR}"
