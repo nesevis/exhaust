@@ -33,7 +33,7 @@ struct ParserShrinkingChallenge {
         let output = try #require(
             #exhaust(
                 Self.langGen,
-                .randomOnly, // coverage takes a long time
+//                .randomOnly, // coverage takes a long time
                 .suppressIssueReporting,
                 .onReport { report = $0 }
             ) { lang in

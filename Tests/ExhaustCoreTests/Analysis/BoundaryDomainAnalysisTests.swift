@@ -98,35 +98,6 @@ struct BoundaryDomainAnalysisTests {
         #expect(result == nil)
     }
 
-    @Test("Generator with too many parameters returns nil")
-    func tooManyParametersReturnsNil() {
-        let gen = Gen.zip(
-            Gen.choose(in: 0 ... 10000),
-            Gen.choose(in: 0 ... 10000),
-            Gen.choose(in: 0 ... 10000),
-            Gen.choose(in: 0 ... 10000),
-            Gen.choose(in: 0 ... 10000),
-            Gen.choose(in: 0 ... 10000),
-            Gen.choose(in: 0 ... 10000),
-            Gen.choose(in: 0 ... 10000),
-            Gen.choose(in: 0 ... 10000),
-            Gen.choose(in: 0 ... 10000),
-            Gen.choose(in: 0 ... 10000),
-            Gen.choose(in: 0 ... 10000),
-            Gen.choose(in: 0 ... 10000),
-            Gen.choose(in: 0 ... 10000),
-            Gen.choose(in: 0 ... 10000),
-            Gen.choose(in: 0 ... 10000),
-            Gen.choose(in: 0 ... 10000),
-            Gen.choose(in: 0 ... 10000),
-            Gen.choose(in: 0 ... 10000),
-            Gen.choose(in: 0 ... 10000),
-            Gen.choose(in: 0 ... 10000)
-        )
-        let result = ChoiceTreeAnalysis.analyze(gen)
-        #expect(result == nil)
-    }
-
     @Test("Finite-domain generator returns finite result")
     func finiteReturnsFinite() {
         let gen = Gen.zip(Gen.choose(from: [true, false]), Gen.choose(from: [true, false]))
@@ -276,21 +247,6 @@ struct ChoiceTreeAnalysisTests {
     @Test("Sequence with size-scaled length returns nil")
     func sizeScaledSequenceReturnsNil() {
         let gen = Gen.arrayOf(Gen.choose(in: 0 ... 1000), within: 0 ... 10)
-        let result = ChoiceTreeAnalysis.analyze(gen)
-        #expect(result == nil)
-    }
-
-    @Test("Too many parameters returns nil")
-    func tooManyParametersReturnsNil() {
-        let gen = Gen.zip(
-            Gen.choose(in: 0 ... 10000), Gen.choose(in: 0 ... 10000), Gen.choose(in: 0 ... 10000),
-            Gen.choose(in: 0 ... 10000), Gen.choose(in: 0 ... 10000), Gen.choose(in: 0 ... 10000),
-            Gen.choose(in: 0 ... 10000), Gen.choose(in: 0 ... 10000), Gen.choose(in: 0 ... 10000),
-            Gen.choose(in: 0 ... 10000), Gen.choose(in: 0 ... 10000), Gen.choose(in: 0 ... 10000),
-            Gen.choose(in: 0 ... 10000), Gen.choose(in: 0 ... 10000), Gen.choose(in: 0 ... 10000),
-            Gen.choose(in: 0 ... 10000), Gen.choose(in: 0 ... 10000), Gen.choose(in: 0 ... 10000),
-            Gen.choose(in: 0 ... 10000), Gen.choose(in: 0 ... 10000), Gen.choose(in: 0 ... 10000)
-        )
         let result = ChoiceTreeAnalysis.analyze(gen)
         #expect(result == nil)
     }

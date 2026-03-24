@@ -6,7 +6,7 @@
 ///
 /// Two regimes based on the fibre's total domain size:
 /// - **Small fibres** (total space ≤ ``exhaustiveThreshold``): exhaustive enumeration of all value assignments via mixed-radix counting.
-/// - **Large fibres** (2 to 20 parameters): pull-based pairwise covering (strength 2) via ``PullBasedCoveringArrayGenerator``. Each ``nextProbe(lastAccepted:)`` call pulls the next greedy row — no upfront batch build.
+/// - **Large fibres** (2 or more parameters): pull-based pairwise covering (strength 2) via ``PullBasedCoveringArrayGenerator``. Each ``nextProbe(lastAccepted:)`` call pulls the next greedy row — no upfront batch build.
 public struct FibreCoveringEncoder: ComposableEncoder {
     public let name: EncoderName = .kleisliComposition
     public let phase: ReductionPhase = .exploration
@@ -93,7 +93,7 @@ public struct FibreCoveringEncoder: ComposableEncoder {
 
         if totalSpace <= Self.exhaustiveThreshold {
             exhaustiveProbes = buildExhaustiveRows(count: Int(totalSpace))
-        } else if valuePositions.count >= 2, valuePositions.count <= 20 {
+        } else if valuePositions.count >= 2 {
             // Pull-based pairwise coverage. Rows are generated lazily in nextProbe().
             generator = PullBasedCoveringArrayGenerator(
                 domainSizes: valuePositions.map(\.domainSize),
