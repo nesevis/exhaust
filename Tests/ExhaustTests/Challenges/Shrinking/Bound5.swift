@@ -123,8 +123,8 @@ struct Bound5ShrinkingChallenge {
         )
     
         let rep = try #require(report)
-        #expect(rep.propertyInvocations == 485)
-        #expect(rep.totalMaterializations == 584)
+        #expect(rep.propertyInvocations == 467)
+        #expect(rep.totalMaterializations == 566)
         
         #expect(output?.arr.count == 2)
         #expect(output?.arr.sorted() == [-32768, -1])
@@ -153,6 +153,23 @@ struct Bound5ShrinkingChallenge {
         #expect(output?.arr.count == 2)
         #expect(output?.arr.sorted() == [-32768, -1])
     }
+    
+    @Test("Bound5, pathological 5")
+    func bound5Pathological5() {
+        ExhaustLog.setConfiguration(.init(isEnabled: true, minimumLevel: .info, categoryMinimumLevels: [.reducer: .debug], format: .human))
+
+        let output = #exhaust(
+            Self.gen,
+            .suppressIssueReporting,
+            .replay(12394678611125950626),
+            .adaptiveScheduling,
+            .randomOnly,
+            property: Self.property
+        )
+        
+        #expect(output?.arr.count == 2)
+        #expect(output?.arr.sorted() == [-32768, -1])
+    }
 
     @Test("Bound5, 52")
     func bound5Many() {
@@ -165,9 +182,11 @@ struct Bound5ShrinkingChallenge {
                 Self.gen,
                 .suppressIssueReporting,
                 .reflecting(bound5),
+                .adaptiveScheduling,
+                .randomOnly,
                 property: Self.property
             )
-
+            
             #expect(output?.arr.count == 2)
             #expect(output?.arr.sorted() == [-32768, -1])
         }

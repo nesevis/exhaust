@@ -204,6 +204,7 @@ struct AdaptiveStrategy: SchedulingStrategy {
     private var previousFibreProgress: Bool = true
     private var cycleImproved: Bool = false
     private var lastPriorOutcome: CycleOutcome?
+    private var structuralMinimisationWasSkipped: Bool = false
 
     mutating func planFirstStage(
         priorOutcome: CycleOutcome?,
@@ -233,8 +234,10 @@ struct AdaptiveStrategy: SchedulingStrategy {
         }()
 
         if noTargets || priorBaseUnproductive {
+            structuralMinimisationWasSkipped = true
             return []
         } else {
+            structuralMinimisationWasSkipped = false
             return [PlannedPhase(
                 phase: .baseDescent,
                 budget: Self.phaseBudgetCeiling,
@@ -299,6 +302,18 @@ struct AdaptiveStrategy: SchedulingStrategy {
             configuration: PhaseConfiguration(),
             requiresStall: hasZeroingDependency == false
         ))
+
+        // Deletion probe: when structural minimisation was skipped, value minimisation
+        // may have reduced a value to zero or a no-op, making a previously-failed
+        // deletion now viable. Run a lightweight structural pass at the end of the
+        // cycle to catch this. Small budget — just enough for element deletions.
+        if structuralMinimisationWasSkipped, state.hasDeletionTargets {
+            phases.append(PlannedPhase(
+                phase: .baseDescent,
+                budget: 100,
+                configuration: PhaseConfiguration()
+            ))
+        }
 
         return phases
     }

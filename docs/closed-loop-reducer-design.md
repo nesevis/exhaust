@@ -119,7 +119,7 @@ Small tests show warm-cache bias (whoever runs second is faster). BinaryHeap is 
 
 **Budget split adjustment: dropped.** The profiling data showed no phase hits its budget cap as the binding constraint. Unused Phase 1 budget doesn't starve Phase 2. A unified 2000-materialization ceiling replaced the 1950/975/325 split.
 
-**Adaptive phase ordering: implemented as Phase 1 skip.** The reverse-dependency case (Phase 2 before Phase 1) never appeared in the test suite. Instead, the data showed that Phase 1 wastes materializations on flat generators where no structural deletion is possible. Skipping Phase 1 via span extraction + behavioral gate is simpler and more effective than reordering.
+**Adaptive phase ordering: implemented as Phase 1 skip with deletion probe.** The reverse-dependency case (Phase 2 before Phase 1) never appeared in the test suite. Instead, the data showed that Phase 1 wastes materializations on flat generators where no structural deletion is possible. Skipping Phase 1 via span extraction + behavioral gate is simpler and more effective than reordering. A lightweight deletion probe (budget: 100) runs at the end of cycles where Phase 1 was skipped, catching deletions that value minimization enabled (for example, reducing an element to zero makes it deletable). The probe closed a real gap on Bound5 and reduced materialisation counts on BinaryHeap and Bound5Path3.
 
 **Verification sweep: stays post-termination.** Per-cycle floor probing would spend the verification budget every cycle instead of once at termination.
 
