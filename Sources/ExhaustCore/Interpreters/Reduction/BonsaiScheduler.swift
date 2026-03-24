@@ -137,7 +137,42 @@ enum BonsaiScheduler {
         }
 
         let isInstrumented = state.isInstrumented
-        var strategy: some SchedulingStrategy = StaticStrategy()
+
+        if config.useAdaptiveScheduling {
+            var strategy = AdaptiveStrategy()
+            return try runWithStrategy(
+                &strategy,
+                state: state,
+                config: config,
+                gen: gen,
+                property: property,
+                isInstrumented: isInstrumented,
+                collectStats: collectStats
+            )
+        } else {
+            var strategy = StaticStrategy()
+            return try runWithStrategy(
+                &strategy,
+                state: state,
+                config: config,
+                gen: gen,
+                property: property,
+                isInstrumented: isInstrumented,
+                collectStats: collectStats
+            )
+        }
+    }
+
+    /// Runs the reduction cycle loop with the given strategy.
+    private static func runWithStrategy<Output, Strategy: SchedulingStrategy>(
+        _ strategy: inout Strategy,
+        state: ReductionState<Output>,
+        config: Interpreters.BonsaiReducerConfiguration,
+        gen: ReflectiveGenerator<Output>,
+        property: @escaping (Output) -> Bool,
+        isInstrumented: Bool,
+        collectStats: Bool
+    ) throws -> (reduced: (ChoiceSequence, Output)?, stats: ReductionStats) {
         var stallBudget = config.maxStalls
         var cycles = 0
         var lastOutcome: CycleOutcome?
@@ -457,7 +492,11 @@ enum BonsaiScheduler {
 
         case .exploration:
             var budget = planned.budget
-            _ = try state.runKleisliExploration(budget: &budget, dag: dag)
+            _ = try state.runKleisliExploration(
+                budget: &budget,
+                dag: dag,
+                edgeBudgetPolicy: planned.configuration.edgeBudgetPolicy
+            )
             return (state.phaseTracker.outcome(for: .exploration, budgetAllocated: planned.budget), nil)
 
         case .relaxRound:

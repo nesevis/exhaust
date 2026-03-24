@@ -958,7 +958,8 @@ extension ReductionState {
     /// Returns `true` if the exploration found a net improvement.
     func runKleisliExploration(
         budget: inout Int,
-        dag: ChoiceDependencyGraph?
+        dag: ChoiceDependencyGraph?,
+        edgeBudgetPolicy: EdgeBudgetPolicy = .fixed(100)
     ) throws -> Bool {
         phaseTracker.push(.exploration)
         defer { phaseTracker.pop() }
@@ -1021,7 +1022,31 @@ extension ReductionState {
             }
 
             // Run via manual loop (same pattern as runRelaxRound).
-            var legBudget = ReductionScheduler.LegBudget(hardCap: min(budget, 100))
+            let edgeSubBudget: Int = {
+                switch edgeBudgetPolicy {
+                case let .fixed(cap):
+                    return min(budget, cap)
+                case .adaptive:
+                    let baseBudget = 100
+                    guard let observation = edgeObservations[edge.regionIndex] else {
+                        return min(budget, baseBudget)
+                    }
+                    switch observation.signal {
+                    case .exhaustedWithFailure:
+                        // Productive edge — increase budget by 50%.
+                        return min(budget, baseBudget + baseBudget / 2)
+                    case .exhaustedClean:
+                        // Clean edge not caught by the skip above (data-dependent edge, or
+                        // upstream value changed). Reduce budget by 50%.
+                        return min(budget, baseBudget / 2)
+                    case .bail:
+                        // Bail — DownstreamPick should prevent this, but if it persists,
+                        // reduce budget.
+                        return min(budget, baseBudget / 2)
+                    }
+                }
+            }()
+            var legBudget = ReductionScheduler.LegBudget(hardCap: edgeSubBudget)
 
             let context = ReductionContext(
                 bindIndex: bindSpanIndex,

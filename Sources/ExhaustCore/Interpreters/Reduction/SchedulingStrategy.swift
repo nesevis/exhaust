@@ -182,3 +182,77 @@ struct StaticStrategy: SchedulingStrategy {
     }
 }
 
+// MARK: - Adaptive Strategy
+
+/// Signal-driven scheduling strategy with per-edge budget adaptation.
+///
+/// Identical to ``StaticStrategy`` for phase ordering, gating, and inter-phase budgets. The difference: composition edges receive observation-driven sub-budgets instead of a fixed 100-materialisation cap. Productive edges (prior `exhaustedWithFailure`) get 50% more budget. Clean or bailed edges get 50% less.
+struct AdaptiveStrategy: SchedulingStrategy {
+    private var previousFibreProgress: Bool = true
+    private var cycleImproved: Bool = false
+
+    mutating func planFirstStage(
+        priorOutcome: CycleOutcome?,
+        state: ReductionStateView
+    ) -> [PlannedPhase] {
+        cycleImproved = false
+        return [
+            PlannedPhase(
+                phase: .baseDescent,
+                budget: BonsaiScheduler.baseDescentBudget,
+                configuration: PhaseConfiguration()
+            )
+        ]
+    }
+
+    mutating func planSecondStage(
+        firstStageResult: PhaseOutcome?,
+        state: ReductionStateView
+    ) -> [PlannedPhase] {
+        let baseProgress = (firstStageResult?.acceptances ?? 0) > 0
+        if baseProgress { cycleImproved = true }
+
+        var phases: [PlannedPhase] = []
+
+        let fibreGated = baseProgress == false
+            && previousFibreProgress == false
+            && state.cycleNumber > 1
+            && state.allValueCoordinatesConverged
+        if fibreGated == false {
+            phases.append(PlannedPhase(
+                phase: .fibreDescent,
+                budget: BonsaiScheduler.fibreDescentBudget,
+                configuration: PhaseConfiguration()
+            ))
+        }
+
+        // Exploration with adaptive per-edge budget.
+        phases.append(PlannedPhase(
+            phase: .exploration,
+            budget: BonsaiScheduler.relaxRoundBudget,
+            configuration: PhaseConfiguration(edgeBudgetPolicy: .adaptive),
+            requiresStall: true
+        ))
+        phases.append(PlannedPhase(
+            phase: .relaxRound,
+            budget: BonsaiScheduler.relaxRoundBudget,
+            configuration: PhaseConfiguration(),
+            requiresStall: true
+        ))
+
+        return phases
+    }
+
+    mutating func phaseCompleted(
+        phase: PlannedPhase.Phase,
+        outcome: PhaseOutcome
+    ) {
+        if outcome.acceptances > 0 {
+            cycleImproved = true
+        }
+        if phase == .fibreDescent {
+            previousFibreProgress = outcome.acceptances > 0
+        }
+    }
+}
+
