@@ -186,16 +186,21 @@ struct StaticStrategy: SchedulingStrategy {
 
 /// Signal-driven scheduling strategy with per-edge budget adaptation.
 ///
-/// Identical to ``StaticStrategy`` for phase ordering, gating, and inter-phase budgets. The difference: composition edges receive observation-driven sub-budgets instead of a fixed 100-materialisation cap. Productive edges (prior `exhaustedWithFailure`) get 50% more budget. Clean or bailed edges get 50% less.
+/// Differences from ``StaticStrategy``:
+/// - Composition edges receive observation-driven sub-budgets (productive +50%, clean/bail -50%).
+/// - Phase 3 (exploration) is skipped when all edges were `exhaustedClean` in the prior cycle.
+/// - Phase 4 (relax-round) runs even when prior phases made progress if the prior cycle had `zeroingDependency` signals — coupled coordinates need redistribution regardless of per-coordinate progress.
 struct AdaptiveStrategy: SchedulingStrategy {
     private var previousFibreProgress: Bool = true
     private var cycleImproved: Bool = false
+    private var lastPriorOutcome: CycleOutcome?
 
     mutating func planFirstStage(
         priorOutcome: CycleOutcome?,
         state: ReductionStateView
     ) -> [PlannedPhase] {
         cycleImproved = false
+        lastPriorOutcome = priorOutcome
         return [
             PlannedPhase(
                 phase: .baseDescent,
@@ -214,6 +219,7 @@ struct AdaptiveStrategy: SchedulingStrategy {
 
         var phases: [PlannedPhase] = []
 
+        // Fibre descent: same four-condition gate as StaticStrategy.
         let fibreGated = baseProgress == false
             && previousFibreProgress == false
             && state.cycleNumber > 1
@@ -226,18 +232,36 @@ struct AdaptiveStrategy: SchedulingStrategy {
             ))
         }
 
-        // Exploration with adaptive per-edge budget.
-        phases.append(PlannedPhase(
-            phase: .exploration,
-            budget: BonsaiScheduler.relaxRoundBudget,
-            configuration: PhaseConfiguration(edgeBudgetPolicy: .adaptive),
-            requiresStall: true
-        ))
+        // Signal-driven Phase 3 gating: skip exploration when all edges
+        // were exhaustedClean in the prior cycle. More precise than the
+        // binary "no progress" gate — avoids re-exploring fibres that
+        // were fully searched and found no failure.
+        let allEdgesClean: Bool = {
+            guard let prior = lastPriorOutcome,
+                  prior.totalEdges > 0
+            else { return false }
+            return prior.exhaustedCleanEdges == prior.totalEdges
+        }()
+
+        if allEdgesClean == false {
+            phases.append(PlannedPhase(
+                phase: .exploration,
+                budget: BonsaiScheduler.relaxRoundBudget,
+                configuration: PhaseConfiguration(edgeBudgetPolicy: .adaptive),
+                requiresStall: true
+            ))
+        }
+
+        // zeroingDependency escalation: run relax-round even when prior phases
+        // made progress, if the prior cycle detected coupled coordinates where
+        // batch zeroing failed but individual zeroing succeeded. Redistribution
+        // is the natural recovery path for coupled coordinates.
+        let hasZeroingDependency = (lastPriorOutcome?.zeroingDependencyCount ?? 0) > 0
         phases.append(PlannedPhase(
             phase: .relaxRound,
             budget: BonsaiScheduler.relaxRoundBudget,
             configuration: PhaseConfiguration(),
-            requiresStall: true
+            requiresStall: hasZeroingDependency == false
         ))
 
         return phases
