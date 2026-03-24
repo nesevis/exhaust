@@ -123,6 +123,7 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
         }
         if !useRandomOnly, seed == nil {
             let coverageResult = CoverageRunner.run(gen, coverageBudget: coverageBudget, property: property)
+            coveragePhaseEndTime = clock_gettime_nsec_np(CLOCK_UPTIME_RAW)
             switch coverageResult {
             case let .failure(value, tree, iteration, strength, rows, parameters, totalSpace, kind):
                 ExhaustLog.notice(
