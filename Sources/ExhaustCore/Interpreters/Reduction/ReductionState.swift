@@ -128,6 +128,140 @@ struct EdgeObservation: Sendable {
     let cycle: Int
 }
 
+// MARK: - Phase Tracker
+
+/// Identifies a reduction phase for per-phase outcome tracking.
+public enum ReducerPhaseIdentifier: Hashable, Sendable {
+    case baseDescent
+    case fibreDescent
+    case exploration
+    case relaxRound
+}
+
+/// Attributes property invocations and acceptances to the outermost active reduction phase.
+///
+/// Stack-based: each phase method pushes on entry and pops on exit. When relax-round (Phase 4) calls `runBaseDescent` and `runFibreDescent` internally, the stack is `[.relaxRound, .baseDescent]` — attributions go to `.relaxRound` (the outermost phase that initiated the work). Invocations from rolled-back phases are kept (they consumed real budget); acceptances from rolled-back phases are reverted (the improvements were undone).
+struct PhaseTracker {
+    typealias Phase = ReducerPhaseIdentifier
+
+    struct PhaseCounts {
+        var propertyInvocations: Int = 0
+        var acceptances: Int = 0
+        var structuralAcceptances: Int = 0
+    }
+
+    private var stack: [Phase] = []
+    private(set) var counts: [Phase: PhaseCounts] = [:]
+
+    /// The outermost active phase, used for attribution.
+    var activePhase: Phase? { stack.first }
+
+    mutating func push(_ phase: Phase) { stack.append(phase) }
+
+    mutating func pop() {
+        guard stack.isEmpty == false else { return }
+        stack.removeLast()
+    }
+
+    mutating func recordInvocation() {
+        guard let phase = stack.first else { return }
+        counts[phase, default: PhaseCounts()].propertyInvocations += 1
+    }
+
+    mutating func recordAcceptance(structural: Bool) {
+        guard let phase = stack.first else { return }
+        counts[phase, default: PhaseCounts()].acceptances += 1
+        if structural {
+            counts[phase, default: PhaseCounts()].structuralAcceptances += 1
+        }
+    }
+
+    mutating func revertAcceptance(structural: Bool) {
+        guard let phase = stack.first else { return }
+        counts[phase, default: PhaseCounts()].acceptances -= 1
+        if structural {
+            counts[phase, default: PhaseCounts()].structuralAcceptances -= 1
+        }
+    }
+
+    /// Restores acceptance counts for a phase to a prior checkpoint.
+    mutating func restoreAcceptances(for phase: Phase, acceptances: Int, structuralAcceptances: Int) {
+        counts[phase, default: PhaseCounts()].acceptances = acceptances
+        counts[phase, default: PhaseCounts()].structuralAcceptances = structuralAcceptances
+    }
+
+    /// Builds a ``PhaseOutcome`` for the given phase with its accumulated counts.
+    func outcome(for phase: Phase, budgetAllocated: Int) -> PhaseOutcome {
+        let phaseCounts = counts[phase] ?? PhaseCounts()
+        return PhaseOutcome(
+            propertyInvocations: phaseCounts.propertyInvocations,
+            acceptances: phaseCounts.acceptances,
+            structuralAcceptances: phaseCounts.structuralAcceptances,
+            budgetAllocated: budgetAllocated
+        )
+    }
+
+    mutating func reset() {
+        stack = []
+        counts = [:]
+    }
+}
+
+// MARK: - Cycle Outcome
+
+/// Captures per-phase outcome data for one reduction cycle.
+///
+/// Collected by the scheduler at the end of each cycle. Phase-level summaries drive budget and ordering decisions in the adaptive strategy. Fine-grained decisions (per-coordinate, per-edge) bypass this struct and read the convergence cache and edge observations directly.
+public struct CycleOutcome: Sendable {
+    public var baseDescent: PhaseDisposition
+    public var fibreDescent: PhaseDisposition
+    public var exploration: PhaseDisposition
+    public var relaxRound: PhaseDisposition
+
+    public var zeroingDependencyCount: Int
+    public var monotoneConvergenceCount: Int
+
+    public var exhaustedCleanEdges: Int
+    public var exhaustedWithFailureEdges: Int
+    public var totalEdges: Int
+
+    public var improved: Bool
+    public var cycle: Int
+}
+
+/// Distinguishes "the scheduler chose not to run this phase" from "the scheduler ran this phase and it produced nothing."
+public enum PhaseDisposition: Sendable {
+    case ran(PhaseOutcome)
+    case gated(reason: GateReason)
+}
+
+/// Reason a phase was not dispatched.
+public enum GateReason: Sendable {
+    case allCoordinatesConverged
+    case noProgress
+    case allEdgesClean
+}
+
+/// Per-phase outcome from a single cycle.
+public struct PhaseOutcome: Sendable {
+    /// Property invocations consumed by this phase (including rolled-back invocations).
+    public var propertyInvocations: Int
+
+    /// Net acceptances that survived rollback.
+    public var acceptances: Int
+
+    /// Of the net acceptances, how many were structural (changed sequence length or bind structure).
+    public var structuralAcceptances: Int
+
+    /// Budget allocated to this phase by the scheduler.
+    public var budgetAllocated: Int
+
+    /// Fraction of allocated budget consumed.
+    public var utilization: Double {
+        budgetAllocated > 0 ? Double(propertyInvocations) / Double(budgetAllocated) : 0
+    }
+}
+
 // MARK: - Convergence Instrumentation
 
 /// Measurement-only instrumentation for encoder convergence events.
@@ -173,6 +307,8 @@ final class ReductionState<Output> {
     var rejectCache = Set<UInt64>(minimumCapacity: 512)
     var convergenceCache = ConvergenceCache()
     var edgeObservations: [Int: EdgeObservation] = [:]
+    var phaseTracker = PhaseTracker()
+    var statsCycleOutcomes: [CycleOutcome] = []
     var convergenceInstrumentation: ConvergenceInstrumentation?
 
     /// The current cycle number, set by the scheduler at the top of each cycle.
@@ -236,7 +372,23 @@ final class ReductionState<Output> {
         stats.fibreExhaustedCleanCount = fibreExhaustedCleanCount
         stats.fibreExhaustedWithFailureCount = fibreExhaustedWithFailureCount
         stats.fibreBailCount = fibreBailCount
+        stats.cycleOutcomes = statsCycleOutcomes
         return stats
+    }
+
+    // MARK: - State View
+
+    /// Builds a read-only view of this state for strategy planning decisions.
+    var view: ReductionStateView {
+        ReductionStateView(
+            sequenceCount: sequence.count,
+            hasBind: hasBind,
+            allValueCoordinatesConverged: allValueCoordinatesConverged(),
+            convergenceCacheIsEmpty: convergenceCache.isEmpty,
+            cycleNumber: currentCycle,
+            hasDeletionTargets: pruneOrder.isEmpty == false,
+            hasBranchTargets: tree.containsPicks
+        )
     }
 
     // MARK: - Fibre Descent Gating
@@ -357,6 +509,7 @@ final class ReductionState<Output> {
 
 extension ReductionState {
     func accept(_ result: ReductionResult<Output>, structureChanged: Bool) {
+        phaseTracker.recordAcceptance(structural: structureChanged)
         sequence = result.sequence
         tree = result.tree
         output = result.output
@@ -446,6 +599,7 @@ extension ReductionState {
                 originalSequence: sequence, property: property
             ) {
                 budget.recordMaterialization()
+                phaseTracker.recordInvocation()
                 lastDecodingReport = result.decodingReport
                 if let guardPrint = fingerprintGuard {
                     let snap = makeSnapshot()
@@ -453,6 +607,7 @@ extension ReductionState {
                     if let currentBindIndex = bindIndex,
                        StructuralFingerprint.from(sequence, bindIndex: currentBindIndex) != guardPrint
                     {
+                        phaseTracker.revertAcceptance(structural: structureChanged)
                         restoreSnapshot(snap)
                         lastAccepted = false
                         break
@@ -465,6 +620,7 @@ extension ReductionState {
                 accepted += 1
             } else {
                 budget.recordMaterialization()
+                phaseTracker.recordInvocation()
                 lastAccepted = false
                 rejectCache.insert(cacheKey)
             }
@@ -739,9 +895,13 @@ extension ReductionState {
     ///
     /// Pipeline acceptance: final state must shortlex-precede the pre-relaxation checkpoint. ``bestSequence`` and ``bestOutput`` only update if the full pipeline passes — intermediate results are discarded on rollback.
     func runRelaxRound(remaining: inout Int) throws -> Bool {
+        phaseTracker.push(.relaxRound)
+        defer { phaseTracker.pop() }
         // Checkpoint all mutable state so rollback restores everything atomically,
         // including convergenceCache, spanCache, dominance, and branchTreeDirty.
         let checkpoint = makeSnapshot()
+        let acceptancesAtCheckpoint = phaseTracker.counts[.relaxRound]?.acceptances ?? 0
+        let structuralAtCheckpoint = phaseTracker.counts[.relaxRound]?.structuralAcceptances ?? 0
 
         // Run RelaxRoundEncoder with exact decoder — no fallback, no shortlex check.
         // Exact mode validates values against their explicit ranges, avoiding
@@ -771,6 +931,7 @@ extension ReductionState {
                 originalSequence: sequence, property: property
             ) {
                 explorationBudget.recordMaterialization()
+                phaseTracker.recordInvocation()
                 // Reject results that grow the sequence — the redistribution should
                 // only change values, not add structure. Growth happens when the
                 // redistributed values violate a filter, causing PRNG fallback.
@@ -784,6 +945,7 @@ extension ReductionState {
                 explorationAccepted += 1
             } else {
                 explorationBudget.recordMaterialization()
+                phaseTracker.recordInvocation()
                 lastAccepted = false
             }
         }
@@ -803,6 +965,8 @@ extension ReductionState {
 
         guard redistributionAccepted else {
             // No speculative move found — restore all state atomically.
+            // Revert acceptances but keep invocations (they consumed real budget).
+            phaseTracker.restoreAcceptances(for: .relaxRound, acceptances: acceptancesAtCheckpoint, structuralAcceptances: structuralAtCheckpoint)
             restoreSnapshot(checkpoint)
             remaining -= explorationBudget.used
             return false
@@ -829,7 +993,8 @@ extension ReductionState {
             return true
         }
 
-        // Rollback all state atomically.
+        // Rollback all state atomically. Revert acceptances but keep invocations.
+        phaseTracker.restoreAcceptances(for: .relaxRound, acceptances: acceptancesAtCheckpoint, structuralAcceptances: structuralAtCheckpoint)
         restoreSnapshot(checkpoint)
         remaining -= explorationBudget.used
         return false

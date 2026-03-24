@@ -91,6 +91,35 @@ public struct ExhaustReport: Sendable {
     /// Composition edges where the downstream bailed before completing coverage.
     public var fibreBailCount: Int = 0
 
+    /// Per-cycle phase outcome data.
+    public var cycleOutcomes: [CycleOutcome] = []
+
+    /// One-line summary of per-phase invocations and acceptances aggregated across all cycles.
+    public var phaseSummary: String {
+        var phaseInvocations: [ReducerPhaseIdentifier: Int] = [:]
+        var phaseAcceptances: [ReducerPhaseIdentifier: Int] = [:]
+        var phaseStructural: [ReducerPhaseIdentifier: Int] = [:]
+        for outcome in cycleOutcomes {
+            for (phase, disposition) in [(ReducerPhaseIdentifier.baseDescent, outcome.baseDescent), (.fibreDescent, outcome.fibreDescent), (.exploration, outcome.exploration), (.relaxRound, outcome.relaxRound)] {
+                if case let .ran(phaseOutcome) = disposition {
+                    phaseInvocations[phase, default: 0] += phaseOutcome.propertyInvocations
+                    phaseAcceptances[phase, default: 0] += phaseOutcome.acceptances
+                    phaseStructural[phase, default: 0] += phaseOutcome.structuralAcceptances
+                }
+            }
+        }
+        func label(_ phase: ReducerPhaseIdentifier, _ tag: String) -> String {
+            let invocations = phaseInvocations[phase, default: 0]
+            let structural = phaseStructural[phase, default: 0]
+            let value = phaseAcceptances[phase, default: 0] - structural
+            guard invocations > 0 else { return "" }
+            return " \(tag):\(invocations)/\(structural)s+\(value)v"
+        }
+        let parts = [label(.baseDescent, "B"), label(.fibreDescent, "F"), label(.exploration, "E"), label(.relaxRound, "R")]
+        let joined = parts.joined()
+        return joined.isEmpty ? "" : "phases=\(joined.dropFirst())"
+    }
+
     /// One-line summary of profiling data for the reduction planning decision tree.
     public var profilingSummary: String {
         let reconfirmRatio = totalValueCoordinatesAtPhaseTwoStart > 0
@@ -103,7 +132,8 @@ public struct ExhaustReport: Sendable {
         let signalLabel = (zeroingDependencyCount > 0 || fibreExhaustedCleanCount > 0 || fibreBailCount > 0)
             ? " signals=\(zeroingDependencyCount)dep/\(fibreExhaustedCleanCount)clean/\(fibreExhaustedWithFailureCount)fail/\(fibreBailCount)bail"
             : ""
-        return "cycles=\(cycles) probes=\(propertyInvocations) mats=\(totalMaterializations) reconfirm=\(reconfirmRatio) edges=\(compositionEdgesAttempted) futile=\(futileCompositions) fibre=\(pairwiseOnExhaustibleFibre)e/\(fibreExceededExhaustiveThreshold)p/\(fibreZeroValueStarts)z predict=\(predictionLabel) transfers=\(convergenceTransfersAttempted)/\(convergenceTransfersValidated)/\(convergenceTransfersStale) sweep=\(verificationSweepProbes)p/\(verificationSweepFoundStaleness ? "stale" : "ok")\(signalLabel)"
+        let phaseLabel = phaseSummary.isEmpty ? "" : " \(phaseSummary)"
+        return "cycles=\(cycles) probes=\(propertyInvocations) mats=\(totalMaterializations) reconfirm=\(reconfirmRatio) edges=\(compositionEdgesAttempted) futile=\(futileCompositions) fibre=\(pairwiseOnExhaustibleFibre)e/\(fibreExceededExhaustiveThreshold)p/\(fibreZeroValueStarts)z predict=\(predictionLabel) transfers=\(convergenceTransfersAttempted)/\(convergenceTransfersValidated)/\(convergenceTransfersStale) sweep=\(verificationSweepProbes)p/\(verificationSweepFoundStaleness ? "stale" : "ok")\(signalLabel)\(phaseLabel)"
     }
 
     /// Populates reduction statistics from a ``ReductionStats`` value.
@@ -129,5 +159,6 @@ public struct ExhaustReport: Sendable {
         fibreExhaustedCleanCount = stats.fibreExhaustedCleanCount
         fibreExhaustedWithFailureCount = stats.fibreExhaustedWithFailureCount
         fibreBailCount = stats.fibreBailCount
+        cycleOutcomes = stats.cycleOutcomes
     }
 }

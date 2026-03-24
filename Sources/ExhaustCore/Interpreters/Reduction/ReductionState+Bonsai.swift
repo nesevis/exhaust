@@ -17,6 +17,8 @@ extension ReductionState {
         budget: inout Int,
         cycle: Int = 0
     ) throws -> (dag: ChoiceDependencyGraph?, progress: Bool) {
+        phaseTracker.push(.baseDescent)
+        defer { phaseTracker.pop() }
         var anyProgress = false
 
         while budget > 0 {
@@ -249,6 +251,10 @@ extension ReductionState {
         // MARK: - Antichain composition (k-way pushout law)
 
         // The sequential adaptive loop above finds the largest individually-accepted batch per
+        // Track materializations from antichain composition and mutation pool.
+        // These bypass runComposable and need manual accumulation into totalMaterializations.
+        let budgetBeforeDirectDecodes = legBudget.used
+
         // scope and slot. k independent batches that are each rejected individually may be jointly
         // accepted (property still fails when all k are deleted). The antichain of the CDG
         // identifies the maximum set of structurally independent nodes; delta-debugging over this
@@ -262,6 +268,9 @@ extension ReductionState {
                 budget: &legBudget
             )
             if antichainAccepted {
+                if collectStats {
+                    totalMaterializations += legBudget.used - budgetBeforeDirectDecodes
+                }
                 budget -= legBudget.used
                 return true
             }
@@ -291,7 +300,6 @@ extension ReductionState {
                     let candidate = entry.candidate
                     let cacheKey = ZobristHash.hash(of: candidate) &+ cacheSalt
                     if rejectCache.contains(cacheKey) {
-                        legBudget.recordMaterialization()
                         continue
                     }
                     if let result = try speculativeDecoder.decode(
@@ -302,6 +310,7 @@ extension ReductionState {
                         property: property
                     ) {
                         legBudget.recordMaterialization()
+                        phaseTracker.recordInvocation()
                         accept(result, structureChanged: true)
                         if isInstrumented {
                             ExhaustLog.debug(
@@ -313,13 +322,25 @@ extension ReductionState {
                                 ]
                             )
                         }
+                        if collectStats {
+                            totalMaterializations += legBudget.used - budgetBeforeDirectDecodes
+                        }
                         budget -= legBudget.used
                         return true
                     }
                     legBudget.recordMaterialization()
+                    phaseTracker.recordInvocation()
                     rejectCache.insert(cacheKey)
                 }
             }
+        }
+
+        // Accumulate materializations from antichain composition and mutation pool.
+        // runComposable calls within this method already accumulate their share
+        // via their deferred blocks. Direct decode calls in the antichain and
+        // mutation pool bypass runComposable and need manual accumulation.
+        if collectStats {
+            totalMaterializations += legBudget.used - budgetBeforeDirectDecodes
         }
 
         budget -= legBudget.used
@@ -506,7 +527,6 @@ extension ReductionState {
 
         let cacheKey = ZobristHash.hash(of: candidate) &+ decoder.rejectCacheSalt
         if rejectCache.contains(cacheKey) {
-            budget.recordMaterialization()
             return nil
         }
 
@@ -518,6 +538,7 @@ extension ReductionState {
             property: property
         )
         budget.recordMaterialization()
+        phaseTracker.recordInvocation()
 
         if result == nil {
             rejectCache.insert(cacheKey)
@@ -701,6 +722,8 @@ extension ReductionState {
         budget: inout Int,
         dag: ChoiceDependencyGraph?
     ) throws -> Bool {
+        phaseTracker.push(.fibreDescent)
+        defer { phaseTracker.pop() }
         let subBudget = min(budget, BonsaiScheduler.fibreDescentBudget)
         guard subBudget > 0 else { return false }
 
@@ -949,8 +972,11 @@ extension ReductionState {
     /// Returns `true` if the exploration found a net improvement.
     func runKleisliExploration(
         budget: inout Int,
-        dag: ChoiceDependencyGraph?
+        dag: ChoiceDependencyGraph?,
+        edgeBudgetPolicy: EdgeBudgetPolicy = .fixed(100)
     ) throws -> Bool {
+        phaseTracker.push(.exploration)
+        defer { phaseTracker.pop() }
         guard hasBind, let dag, let bindSpanIndex = bindIndex else { return false }
 
         let edges = dag.reductionEdges()
@@ -977,6 +1003,8 @@ extension ReductionState {
         }
 
         let checkpoint = makeSnapshot()
+        let acceptancesAtCheckpoint = phaseTracker.counts[.exploration]?.acceptances ?? 0
+        let structuralAtCheckpoint = phaseTracker.counts[.exploration]?.structuralAcceptances ?? 0
         var anyAccepted = false
         var kleisliProbes = 0
         var kleisliMaterializations = 0
@@ -1008,7 +1036,31 @@ extension ReductionState {
             }
 
             // Run via manual loop (same pattern as runRelaxRound).
-            var legBudget = ReductionScheduler.LegBudget(hardCap: min(budget, 100))
+            let edgeSubBudget: Int = {
+                switch edgeBudgetPolicy {
+                case let .fixed(cap):
+                    return min(budget, cap)
+                case .adaptive:
+                    let baseBudget = 100
+                    guard let observation = edgeObservations[edge.regionIndex] else {
+                        return min(budget, baseBudget)
+                    }
+                    switch observation.signal {
+                    case .exhaustedWithFailure:
+                        // Productive edge — increase budget by 50%.
+                        return min(budget, baseBudget + baseBudget / 2)
+                    case .exhaustedClean:
+                        // Clean edge not caught by the skip above (data-dependent edge, or
+                        // upstream value changed). Reduce budget by 50%.
+                        return min(budget, baseBudget / 2)
+                    case .bail:
+                        // Bail — DownstreamPick should prevent this, but if it persists,
+                        // reduce budget.
+                        return min(budget, baseBudget / 2)
+                    }
+                }
+            }()
+            var legBudget = ReductionScheduler.LegBudget(hardCap: edgeSubBudget)
 
             let context = ReductionContext(
                 bindIndex: bindSpanIndex,
@@ -1057,6 +1109,7 @@ extension ReductionState {
                             isRangeExplicit: value.isRangeExplicit
                         ))
                         legBudget.recordMaterialization()
+                        phaseTracker.recordInvocation()
 
                         let validationDecoder = SequenceDecoder.exact()
                         if let result = try validationDecoder.decode(
@@ -1089,6 +1142,7 @@ extension ReductionState {
                 guard legBudget.isExhausted == false else { break }
                 if collectStats { kleisliProbes += 1 }
                 legBudget.recordMaterialization()
+                phaseTracker.recordInvocation()
 
                 let decoder = SequenceDecoder.exact()
                 if let result = try decoder.decode(
@@ -1237,7 +1291,8 @@ extension ReductionState {
             return true
         }
 
-        // Rollback: net result was not an improvement.
+        // Rollback: net result was not an improvement. Revert acceptances but keep invocations.
+        phaseTracker.restoreAcceptances(for: .exploration, acceptances: acceptancesAtCheckpoint, structuralAcceptances: structuralAtCheckpoint)
         restoreSnapshot(checkpoint)
         return false
     }

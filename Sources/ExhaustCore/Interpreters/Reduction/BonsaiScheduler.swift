@@ -137,9 +137,45 @@ enum BonsaiScheduler {
         }
 
         let isInstrumented = state.isInstrumented
+
+        if config.useAdaptiveScheduling {
+            var strategy = AdaptiveStrategy()
+            return try runWithStrategy(
+                &strategy,
+                state: state,
+                config: config,
+                gen: gen,
+                property: property,
+                isInstrumented: isInstrumented,
+                collectStats: collectStats
+            )
+        } else {
+            var strategy = StaticStrategy()
+            return try runWithStrategy(
+                &strategy,
+                state: state,
+                config: config,
+                gen: gen,
+                property: property,
+                isInstrumented: isInstrumented,
+                collectStats: collectStats
+            )
+        }
+    }
+
+    /// Runs the reduction cycle loop with the given strategy.
+    private static func runWithStrategy<Output, Strategy: SchedulingStrategy>(
+        _ strategy: inout Strategy,
+        state: ReductionState<Output>,
+        config: Interpreters.BonsaiReducerConfiguration,
+        gen: ReflectiveGenerator<Output>,
+        property: @escaping (Output) -> Bool,
+        isInstrumented: Bool,
+        collectStats: Bool
+    ) throws -> (reduced: (ChoiceSequence, Output)?, stats: ReductionStats) {
         var stallBudget = config.maxStalls
         var cycles = 0
-        var previousFibreProgress = true // assume progress before cycle 1
+        var lastOutcome: CycleOutcome?
 
         // MARK: - Alternating Minimisation Loop
 
@@ -162,49 +198,47 @@ enum BonsaiScheduler {
                 )
             }
 
-            // Base descent: simplify the trace structure.
-            var baseRemaining = Self.baseDescentBudget
-            let (dag, baseProgress) = try state.runBaseDescent(budget: &baseRemaining, cycle: cycles)
+            // Stage 1: phases that run unconditionally (base descent).
+            let firstStagePhases = strategy.planFirstStage(
+                priorOutcome: lastOutcome,
+                state: state.view
+            )
+            var dag: ChoiceDependencyGraph?
+            var cycleImproved = false
+            var phaseDispositions: [PlannedPhase.Phase: PhaseDisposition] = [:]
 
-            // Fibre descent gating (signal 4): skip when all value coordinates are at
-            // cached floors, base descent made no structural progress, AND Phase 2 made
-            // no progress in the previous cycle. The stall condition prevents skipping
-            // when cross-zero or ZeroValue can still improve beyond cached binary search floors.
-            let fibreProgress: Bool
-            if baseProgress == false,
-               previousFibreProgress == false,
-               cycles > 1,
-               state.allValueCoordinatesConverged()
-            {
-                fibreProgress = false
-                if state.isInstrumented {
-                    ExhaustLog.debug(
-                        category: .reducer,
-                        event: "fibre_descent_gated",
-                        metadata: ["cycle": "\(cycles)"]
-                    )
-                }
-            } else {
-                var fibreRemaining = Self.fibreDescentBudget
-                fibreProgress = try state.runFibreDescent(budget: &fibreRemaining, dag: dag)
+            var firstStageResult: PhaseOutcome?
+            for planned in firstStagePhases {
+                let (outcome, producedDag) = try Self.dispatchPhase(planned, state: state, dag: dag)
+                dag = producedDag ?? dag
+                if outcome.acceptances > 0 { cycleImproved = true }
+                strategy.phaseCompleted(phase: planned.phase, outcome: outcome)
+                firstStageResult = outcome
+                phaseDispositions[planned.phase] = .ran(outcome)
             }
-            previousFibreProgress = fibreProgress
 
-            // Exploration: if neither descent made progress, try cross-level and same-level minima.
-            var cycleImproved = baseProgress || fibreProgress
-            if cycleImproved == false {
-                // Kleisli exploration: cross-level minima via dependency edge composition.
-                var kleisliRemaining = Self.relaxRoundBudget
-                if try state.runKleisliExploration(budget: &kleisliRemaining, dag: dag) {
-                    cycleImproved = true
+            // Stage 2: phases that depend on stage 1 results (fibre descent, exploration, relax-round).
+            let secondStagePhases = strategy.planSecondStage(
+                firstStageResult: firstStageResult,
+                state: state.view
+            )
+            for planned in secondStagePhases {
+                // requiresStall: skip if any prior phase in this cycle accepted.
+                if planned.requiresStall, cycleImproved {
+                    phaseDispositions[planned.phase] = .gated(reason: .noProgress)
+                    continue
                 }
 
-                // Relax-round: same-level minima via value redistribution.
-                if cycleImproved == false {
-                    var relaxRemaining = Self.relaxRoundBudget
-                    if try state.runRelaxRound(remaining: &relaxRemaining) {
-                        cycleImproved = true
-                    }
+                let (outcome, _) = try Self.dispatchPhase(planned, state: state, dag: dag)
+                if outcome.acceptances > 0 { cycleImproved = true }
+                strategy.phaseCompleted(phase: planned.phase, outcome: outcome)
+                phaseDispositions[planned.phase] = .ran(outcome)
+            }
+
+            // Mark phases that were not in either stage as gated.
+            for phase in [PlannedPhase.Phase.baseDescent, .fibreDescent, .exploration, .relaxRound] {
+                if phaseDispositions[phase] == nil {
+                    phaseDispositions[phase] = .gated(reason: phase == .fibreDescent ? .allCoordinatesConverged : .noProgress)
                 }
             }
 
@@ -215,6 +249,26 @@ enum BonsaiScheduler {
                 stallBudget -= 1
             }
 
+            // Collect per-phase outcome data.
+            let outcome = CycleOutcome(
+                baseDescent: phaseDispositions[.baseDescent] ?? .gated(reason: .noProgress),
+                fibreDescent: phaseDispositions[.fibreDescent] ?? .gated(reason: .noProgress),
+                exploration: phaseDispositions[.exploration] ?? .gated(reason: .noProgress),
+                relaxRound: phaseDispositions[.relaxRound] ?? .gated(reason: .noProgress),
+                zeroingDependencyCount: state.zeroingDependencyCount,
+                monotoneConvergenceCount: 0,
+                exhaustedCleanEdges: state.fibreExhaustedCleanCount,
+                exhaustedWithFailureEdges: state.fibreExhaustedWithFailureCount,
+                totalEdges: state.compositionEdgesAttempted,
+                improved: state.bestSequence.shortLexPrecedes(cycleStartBest),
+                cycle: cycles
+            )
+            lastOutcome = outcome
+            if state.collectStats {
+                state.statsCycleOutcomes.append(outcome)
+                state.phaseTracker.reset()
+            }
+
             if isInstrumented {
                 ExhaustLog.debug(
                     category: .reducer,
@@ -222,8 +276,6 @@ enum BonsaiScheduler {
                     metadata: [
                         "cycle": "\(cycles)",
                         "improved": "\(cycleImproved)",
-                        "base_descent": "\(baseProgress)",
-                        "fibre_descent": "\(fibreProgress)",
                         "seq_len": "\(state.sequence.count)",
                     ]
                 )
@@ -287,39 +339,37 @@ enum BonsaiScheduler {
                             )
                         }
 
-                        // Re-enter the main reduction loop
+                        // Re-enter the main reduction loop using the same strategy.
                         while stallBudget > 0 {
                             cycles += 1
                             state.currentCycle = cycles
                             let cycleStartBest = state.bestSequence
-
                             state.computeEncoderOrdering()
 
-                            var baseRemaining = Self.baseDescentBudget
-                            let (dag, baseProgress) = try state.runBaseDescent(
-                                budget: &baseRemaining, cycle: cycles
+                            let reentryFirstStage = strategy.planFirstStage(
+                                priorOutcome: lastOutcome,
+                                state: state.view
                             )
+                            var reentryDag: ChoiceDependencyGraph?
+                            var reentryCycleImproved = false
+                            var reentryFirstResult: PhaseOutcome?
+                            for planned in reentryFirstStage {
+                                let (outcome, producedDag) = try Self.dispatchPhase(planned, state: state, dag: reentryDag)
+                                reentryDag = producedDag ?? reentryDag
+                                if outcome.acceptances > 0 { reentryCycleImproved = true }
+                                strategy.phaseCompleted(phase: planned.phase, outcome: outcome)
+                                reentryFirstResult = outcome
+                            }
 
-                            var fibreRemaining = Self.fibreDescentBudget
-                            let fibreProgress = try state.runFibreDescent(
-                                budget: &fibreRemaining, dag: dag
+                            let reentrySecondStage = strategy.planSecondStage(
+                                firstStageResult: reentryFirstResult,
+                                state: state.view
                             )
-
-                            var cycleImproved = baseProgress || fibreProgress
-                            if cycleImproved == false {
-                                var kleisliRemaining = Self.relaxRoundBudget
-                                if try state.runKleisliExploration(
-                                    budget: &kleisliRemaining, dag: dag
-                                ) {
-                                    cycleImproved = true
-                                }
-
-                                if cycleImproved == false {
-                                    var relaxRemaining = Self.relaxRoundBudget
-                                    if try state.runRelaxRound(remaining: &relaxRemaining) {
-                                        cycleImproved = true
-                                    }
-                                }
+                            for planned in reentrySecondStage {
+                                if planned.requiresStall, reentryCycleImproved { continue }
+                                let (outcome, _) = try Self.dispatchPhase(planned, state: state, dag: reentryDag)
+                                if outcome.acceptances > 0 { reentryCycleImproved = true }
+                                strategy.phaseCompleted(phase: planned.phase, outcome: outcome)
                             }
 
                             if state.bestSequence.shortLexPrecedes(cycleStartBest) {
@@ -417,6 +467,43 @@ enum BonsaiScheduler {
         }
 
         return (reduced: (bestSequence, bestOutput), stats: state.extractStats())
+    }
+
+    // MARK: - Phase Dispatch
+
+    /// Dispatches a single planned phase to the appropriate ``ReductionState`` method.
+    ///
+    /// Returns the phase outcome and optionally the CDG produced by base descent (other phases return nil for the DAG).
+    private static func dispatchPhase<Output>(
+        _ planned: PlannedPhase,
+        state: ReductionState<Output>,
+        dag: ChoiceDependencyGraph?
+    ) throws -> (outcome: PhaseOutcome, dag: ChoiceDependencyGraph?) {
+        switch planned.phase {
+        case .baseDescent:
+            var budget = planned.budget
+            let (producedDag, _) = try state.runBaseDescent(budget: &budget, cycle: state.currentCycle)
+            return (state.phaseTracker.outcome(for: .baseDescent, budgetAllocated: planned.budget), producedDag)
+
+        case .fibreDescent:
+            var budget = planned.budget
+            _ = try state.runFibreDescent(budget: &budget, dag: dag)
+            return (state.phaseTracker.outcome(for: .fibreDescent, budgetAllocated: planned.budget), nil)
+
+        case .exploration:
+            var budget = planned.budget
+            _ = try state.runKleisliExploration(
+                budget: &budget,
+                dag: dag,
+                edgeBudgetPolicy: planned.configuration.edgeBudgetPolicy
+            )
+            return (state.phaseTracker.outcome(for: .exploration, budgetAllocated: planned.budget), nil)
+
+        case .relaxRound:
+            var budget = planned.budget
+            _ = try state.runRelaxRound(remaining: &budget)
+            return (state.phaseTracker.outcome(for: .relaxRound, budgetAllocated: planned.budget), nil)
+        }
     }
 
     // MARK: - Post-Termination Verification Helpers

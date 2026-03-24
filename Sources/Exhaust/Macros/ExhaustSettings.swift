@@ -52,6 +52,11 @@ public enum ExhaustSettings<Output> {
     /// Prints the choice tree before and after reduction as a bottom-up Unicode visualization.
     case visualize
 
+    /// Uses the adaptive scheduling strategy with per-edge budget adaptation.
+    ///
+    /// When set, composition edges receive observation-driven sub-budgets instead of a fixed cap. Productive edges (prior failure found) get more budget; clean or bailed edges get less. All other scheduling decisions (phase ordering, inter-phase budgets, gating) are unchanged.
+    case adaptiveScheduling
+
     /// Registers a closure that receives an ``ExhaustReport`` with run statistics after the test completes.
     ///
     /// The closure fires synchronously before `#exhaust` returns, on every exit path (pass, fail, error, reflecting). Not `@Sendable` — executes on the calling task.

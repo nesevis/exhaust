@@ -116,8 +116,9 @@ enum FibreSignal: Hashable, Sendable {
     /// Floor is exact for the downstream coordinates.
     case exhaustedWithFailure
 
-    /// The downstream encoder bailed before completing coverage.
-    /// The fibre was too large for the budget or the selected mode.
+    /// The composition attempt produced zero downstream probes.
+    /// The upstream exhausted its budget before the downstream started,
+    /// or the lift failed for all upstream candidates.
     /// - `paramCount`: number of value positions in the fibre.
     case bail(paramCount: Int)
 }

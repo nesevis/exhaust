@@ -40,6 +40,7 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
         var useRandomOnly = false
         var humanOrderPostProcess = false
         var visualize = false
+        var adaptiveScheduling = false
         var onReportClosure: ((ExhaustReport) -> Void)?
 
         for setting in settings {
@@ -62,6 +63,8 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
                 humanOrderPostProcess = true
             case .visualize:
                 visualize = true
+            case .adaptiveScheduling:
+                adaptiveScheduling = true
             case let .onReport(closure):
                 onReportClosure = closure
             }
@@ -78,6 +81,7 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
                     reductionConfig: reductionConfig,
                     humanOrderPostProcess: humanOrderPostProcess,
                     visualize: visualize,
+                    adaptiveScheduling: adaptiveScheduling,
                     suppressIssueReporting: suppressIssueReporting,
                     sourceCode: sourceCode,
                     fileID: fileID,
@@ -149,6 +153,7 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
                         config: .init(from: reductionConfig),
                         humanOrderPostProcess: humanOrderPostProcess,
                         visualize: visualize,
+                        adaptiveScheduling: adaptiveScheduling,
                         property: countingProperty
                     )
                     report.applyReductionStats(reduceResult.stats)
@@ -314,6 +319,7 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
                         config: .init(from: reductionConfig),
                         humanOrderPostProcess: humanOrderPostProcess,
                         visualize: visualize,
+                        adaptiveScheduling: adaptiveScheduling,
                         property: countingProperty
                     )
                     report.applyReductionStats(reduceResult.stats)
@@ -680,6 +686,7 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
         reductionConfig: TCRBudget,
         humanOrderPostProcess: Bool,
         visualize: Bool,
+        adaptiveScheduling: Bool,
         suppressIssueReporting: Bool,
         sourceCode: String?,
         fileID: StaticString,
@@ -745,6 +752,7 @@ public enum __ExhaustRuntime { // swiftlint:disable:this type_name
             config: .init(from: reductionConfig),
             humanOrderPostProcess: humanOrderPostProcess,
             visualize: visualize,
+            adaptiveScheduling: adaptiveScheduling,
             property: countingProperty
         )
         report.applyReductionStats(reduceResult.stats)
