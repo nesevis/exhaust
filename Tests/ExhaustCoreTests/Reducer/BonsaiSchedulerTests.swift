@@ -114,7 +114,7 @@ struct BonsaiSchedulerTests {
 
         state.computeEncoderOrdering()
         let initialLength = state.sequence.count
-        var budget = BonsaiScheduler.baseDescentBudget
+        var budget = 2000
         let (_, progress) = try state.runBaseDescent(budget: &budget)
 
         #expect(progress, "Base descent should make progress on a deletable bind tree")

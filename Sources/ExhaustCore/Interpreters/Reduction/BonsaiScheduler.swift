@@ -17,24 +17,6 @@
 /// - **Fibre descent** simplifies values within the fixed structure: smaller numbers, simpler floats.
 /// - **Relax-round** escapes local minima by temporarily worsening the sequence, then recovering via base and fibre descent.
 enum BonsaiScheduler {
-    // MARK: - Budget Constants
-
-    // Empirically tuned on the shrinking challenge suite (March 2026).
-    // Ratio 6:3:1 reflects that structural changes (base descent) unlock
-    // more downstream value reduction than value changes alone, while
-    // the relax-round is speculative and should consume minimal budget.
-    // The total per-cycle budget (~3250 evaluations) balances reduction
-    // quality against wall-clock time for typical generators.
-
-    /// Per-round budget for base descent (structural minimization).
-    static let baseDescentBudget = 1950
-
-    /// Per-round budget for fibre descent (value minimization).
-    static let fibreDescentBudget = 975
-
-    /// Per-round budget for the relax-round when neither descent phase makes progress.
-    static let relaxRoundBudget = 325
-
     // MARK: - Entry Point
 
     /// Convenience overload that materializes the output from the tree.
@@ -138,29 +120,16 @@ enum BonsaiScheduler {
 
         let isInstrumented = state.isInstrumented
 
-        if config.useAdaptiveScheduling {
-            var strategy = AdaptiveStrategy()
-            return try runWithStrategy(
-                &strategy,
-                state: state,
-                config: config,
-                gen: gen,
-                property: property,
-                isInstrumented: isInstrumented,
-                collectStats: collectStats
-            )
-        } else {
-            var strategy = StaticStrategy()
-            return try runWithStrategy(
-                &strategy,
-                state: state,
-                config: config,
-                gen: gen,
-                property: property,
-                isInstrumented: isInstrumented,
-                collectStats: collectStats
-            )
-        }
+        var strategy = AdaptiveStrategy()
+        return try runWithStrategy(
+            &strategy,
+            state: state,
+            config: config,
+            gen: gen,
+            property: property,
+            isInstrumented: isInstrumented,
+            collectStats: collectStats
+        )
     }
 
     /// Runs the reduction cycle loop with the given strategy.
@@ -565,15 +534,18 @@ enum BonsaiScheduler {
         return StalenessCheck(hasStaleFloors: false, probesUsed: probesUsed)
     }
 
+    /// Default budget for the verification cycle's value minimization pass.
+    static let verificationBudget = 975
+
     /// Computes the verification cycle budget based on the user's reduction budget.
     ///
-    /// `.fast` (maxStalls ≤ 1): standard Phase-2 budget (best-effort). `.slow`: expanded budget based on per-coordinate range sizes.
+    /// `.fast` (maxStalls ≤ 1): standard budget (best-effort). `.slow`: expanded budget based on per-coordinate range sizes.
     static func computeVerificationBudget<Output>(
         state: ReductionState<Output>,
         config: Interpreters.BonsaiReducerConfiguration
     ) -> Int {
         if config.maxStalls <= 1 {
-            return fibreDescentBudget
+            return verificationBudget
         }
         var budget = 0
         for index in 0 ..< state.sequence.count {
@@ -585,6 +557,6 @@ enum BonsaiScheduler {
             let bitsNeeded = UInt64.bitWidth - max(2, rangeSize - 1).leadingZeroBitCount
             budget += bitsNeeded
         }
-        return max(budget, fibreDescentBudget)
+        return max(budget, verificationBudget)
     }
 }

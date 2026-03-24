@@ -2,7 +2,7 @@
 
 /// Provides scheduling decisions for the reduction cycle loop.
 ///
-/// The orchestration skeleton in ``BonsaiScheduler`` dispatches phases in the order returned by the strategy. The strategy controls budget allocation, phase ordering, gating conditions, and per-phase configuration. Two conformers: ``StaticStrategy`` (behavioral clone of the current fixed scheduler) and ``AdaptiveStrategy`` (signal-driven, future).
+/// The orchestration skeleton in ``BonsaiScheduler`` dispatches phases in the order returned by the strategy. The strategy controls budget allocation, phase ordering, gating conditions, and per-phase configuration. The sole conformer is ``AdaptiveStrategy`` (signal-driven scheduling with per-edge budget adaptation).
 ///
 /// Planning is split into two stages because the fibre descent gate depends on the current cycle's base descent outcome, which is not known at cycle start:
 /// - ``planFirstStage(priorOutcome:state:)`` returns phases that run unconditionally (typically base descent).
@@ -61,7 +61,7 @@ struct PlannedPhase {
 
 /// Per-phase configuration provided by the strategy.
 ///
-/// Each phase reads its relevant fields. ``StaticStrategy`` provides default values. ``AdaptiveStrategy`` provides observation-driven values.
+/// Each phase reads its relevant fields. ``AdaptiveStrategy`` provides observation-driven values; the defaults serve as fallbacks.
 struct PhaseConfiguration {
     /// How to allocate budget to composition edges in the exploration phase.
     var edgeBudgetPolicy: EdgeBudgetPolicy = .fixed(100)
@@ -108,95 +108,15 @@ struct ReductionStateView {
     let hasBranchTargets: Bool
 }
 
-// MARK: - Static Strategy
-
-/// Reproduces the current ``BonsaiScheduler`` behavior exactly.
-///
-/// Fixed phase ordering (base descent → fibre descent → exploration → relax-round), static budgets (1950/975/325), four-condition fibre descent gate, binary Phases 3+4 gating. This is the regression baseline — it must produce byte-identical results to the pre-extraction scheduler.
-struct StaticStrategy: SchedulingStrategy {
-    /// Tracks Phase 2 progress across cycles for the fibre descent gate.
-    private var previousFibreProgress: Bool = true
-
-    /// Whether the current cycle has seen any improvement from dispatched phases.
-    private var cycleImproved: Bool = false
-
-    mutating func planFirstStage(
-        priorOutcome: CycleOutcome?,
-        state: ReductionStateView
-    ) -> [PlannedPhase] {
-        cycleImproved = false
-        // Base descent always runs.
-        return [
-            PlannedPhase(
-                phase: .baseDescent,
-                budget: BonsaiScheduler.baseDescentBudget,
-                configuration: PhaseConfiguration()
-            )
-        ]
-    }
-
-    mutating func planSecondStage(
-        firstStageResult: PhaseOutcome?,
-        state: ReductionStateView
-    ) -> [PlannedPhase] {
-        let baseProgress = (firstStageResult?.acceptances ?? 0) > 0
-        if baseProgress { cycleImproved = true }
-
-        var phases: [PlannedPhase] = []
-
-        // Fibre descent: gated by four-condition check.
-        let fibreGated = baseProgress == false
-            && previousFibreProgress == false
-            && state.cycleNumber > 1
-            && state.allValueCoordinatesConverged
-        if fibreGated == false {
-            phases.append(PlannedPhase(
-                phase: .fibreDescent,
-                budget: BonsaiScheduler.fibreDescentBudget,
-                configuration: PhaseConfiguration()
-            ))
-        }
-
-        // Phases 3+4: gated on stall — the skeleton skips these if any prior
-        // phase in the cycle accepted probes.
-        phases.append(PlannedPhase(
-            phase: .exploration,
-            budget: BonsaiScheduler.relaxRoundBudget,
-            configuration: PhaseConfiguration(),
-            requiresStall: true
-        ))
-        phases.append(PlannedPhase(
-            phase: .relaxRound,
-            budget: BonsaiScheduler.relaxRoundBudget,
-            configuration: PhaseConfiguration(),
-            requiresStall: true
-        ))
-
-        return phases
-    }
-
-    mutating func phaseCompleted(
-        phase: PlannedPhase.Phase,
-        outcome: PhaseOutcome
-    ) {
-        if outcome.acceptances > 0 {
-            cycleImproved = true
-        }
-        if phase == .fibreDescent {
-            previousFibreProgress = outcome.acceptances > 0
-        }
-    }
-}
-
 // MARK: - Adaptive Strategy
 
 /// Signal-driven scheduling strategy with per-edge budget adaptation.
 ///
-/// Differences from ``StaticStrategy``:
-/// - No per-phase budget allocation. Each phase receives a generous ceiling (2000) and runs to exhaustion. No phase in the current test suite exceeds 1100 invocations — the ceiling is a safety limit, not a budget allocation decision.
+/// - Each phase receives a generous ceiling (2000 materializations) and runs to exhaustion. No phase in the current test suite exceeds 1100 invocations — the ceiling is a safety limit, not a budget allocation decision.
 /// - Composition edges receive observation-driven sub-budgets (productive +50%, clean/bail -50%).
-/// - Phase 3 (exploration) is skipped when all edges were `exhaustedClean` in the prior cycle.
-/// - Phase 4 (relax-round) runs even when prior phases made progress if the prior cycle had `zeroingDependency` signals — coupled coordinates need redistribution regardless of per-coordinate progress.
+/// - Structural minimization is skipped when span extraction shows no deletion targets and the prior cycle had zero structural acceptances.
+/// - Cross-level minimization is skipped when all edges were `exhaustedClean` in the prior cycle.
+/// - Speculative redistribution runs even when prior phases made progress if the prior cycle had `zeroingDependency` signals — coupled coordinates need redistribution regardless of per-coordinate progress.
 struct AdaptiveStrategy: SchedulingStrategy {
     /// Generous per-phase ceiling. No phase in the current suite exceeds 1100 invocations.
     private static let phaseBudgetCeiling = 2000

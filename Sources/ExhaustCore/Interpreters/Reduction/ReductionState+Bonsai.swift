@@ -729,7 +729,7 @@ extension ReductionState {
     ) throws -> Bool {
         phaseTracker.push(.fibreDescent)
         defer { phaseTracker.pop() }
-        let subBudget = min(budget, BonsaiScheduler.fibreDescentBudget)
+        let subBudget = min(budget, BonsaiScheduler.verificationBudget)
         guard subBudget > 0 else { return false }
 
         var legBudget = ReductionScheduler.LegBudget(hardCap: subBudget)

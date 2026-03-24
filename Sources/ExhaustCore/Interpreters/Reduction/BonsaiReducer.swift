@@ -16,9 +16,6 @@ public extension Interpreters {
         /// When `true`, prints the choice tree before and after reduction as a bottom-up Unicode visualization.
         public var visualize: Bool = false
 
-        /// When `true`, uses the adaptive scheduling strategy with per-edge budget adaptation instead of the static strategy.
-        public var useAdaptiveScheduling: Bool = false
-
         /// Sub-budget for branch simplification within base descent.
         var branchSimplificationBudget: Int = 200
 
@@ -76,13 +73,11 @@ public extension Interpreters {
         config: BonsaiReducerConfiguration,
         humanOrderPostProcess: Bool = true,
         visualize: Bool = false,
-        adaptiveScheduling: Bool = false,
         property: (Output) -> Bool
     ) throws -> (ChoiceSequence, Output)? {
         var bonsaiConfig = config
         bonsaiConfig.humanOrderPostProcess = humanOrderPostProcess
         bonsaiConfig.visualize = visualize
-        bonsaiConfig.useAdaptiveScheduling = adaptiveScheduling
 
         if visualize {
             print("── Before reduction ──")
@@ -125,13 +120,11 @@ public extension Interpreters {
         config: BonsaiReducerConfiguration,
         humanOrderPostProcess: Bool = true,
         visualize: Bool = false,
-        adaptiveScheduling: Bool = false,
         property: (Output) -> Bool
     ) throws -> (reduced: (ChoiceSequence, Output)?, stats: ReductionStats) {
         var bonsaiConfig = config
         bonsaiConfig.humanOrderPostProcess = humanOrderPostProcess
         bonsaiConfig.visualize = visualize
-        bonsaiConfig.useAdaptiveScheduling = adaptiveScheduling
 
         if visualize {
             print("── Before reduction ──")

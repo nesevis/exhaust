@@ -158,7 +158,7 @@ benchmark("Bound5, 100 iterations (adaptive)") {
         while let (value, tree) = try iterator.next() {
             guard property(value) == false else { continue }
             count += 1
-            _ = try Interpreters.bonsaiReduce(gen: b5Gen, tree: tree, output: value, config: .fast, adaptiveScheduling: true, property: property)
+            _ = try Interpreters.bonsaiReduce(gen: b5Gen, tree: tree, output: value, config: .fast, property: property)
             if count >= 100 {
                 break
             }
@@ -323,7 +323,7 @@ benchmark("Calculator, 100 iterations (adaptive)") {
         while let (value, tree) = try iterator.next() {
             guard property(value) == false else { continue }
             count += 1
-            _ = try Interpreters.bonsaiReduce(gen: calculatorGen, tree: tree, output: value, config: .fast, adaptiveScheduling: true, property: property)
+            _ = try Interpreters.bonsaiReduce(gen: calculatorGen, tree: tree, output: value, config: .fast, property: property)
             if count >= 100 {
                 break
             }
