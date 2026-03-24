@@ -156,19 +156,30 @@ struct Bound5ShrinkingChallenge {
     
     @Test("Bound5, pathological 5")
     func bound5Pathological5() {
-        ExhaustLog.setConfiguration(.init(isEnabled: true, minimumLevel: .info, categoryMinimumLevels: [.reducer: .debug], format: .human))
+//        ExhaustLog.setConfiguration(.init(isEnabled: true, minimumLevel: .info, categoryMinimumLevels: [.reducer: .debug], format: .human))
 
         let output = #exhaust(
             Self.gen,
             .suppressIssueReporting,
             .replay(12394678611125950626),
             .adaptiveScheduling,
-            .randomOnly,
             property: Self.property
         )
         
         #expect(output?.arr.count == 2)
         #expect(output?.arr.sorted() == [-32768, -1])
+    }
+    
+    @Test("Bound5, covering array time")
+    func bound5CoveringArray() {
+//        ExhaustLog.setConfiguration(.init(isEnabled: true, minimumLevel: .info, categoryMinimumLevels: [.reducer: .debug], format: .human))
+
+        let output = #exhaust(
+            Self.gen,
+            .suppressIssueReporting,
+            .adaptiveScheduling,
+            property: Self.property
+        )
     }
 
     @Test("Bound5, 52")
