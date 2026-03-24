@@ -11,7 +11,7 @@ public extension Interpreters {
         let alignedDeletionBeamSearchTuning: ReductionBudget.AlignedDeletionBeamSearchTuning
         /// When `true`, run a one-shot post-processing pass after reduction stalls that reorders
         /// elements within type-homogeneous sibling groups into natural numeric order.
-        public var humanOrderPostProcess: Bool = false
+        public var humanOrderPostProcess: Bool = true
 
         /// When `true`, prints the choice tree before and after reduction as a bottom-up Unicode visualization.
         public var visualize: Bool = false
