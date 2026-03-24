@@ -12,10 +12,10 @@ public struct FibreCoveringEncoder: ComposableEncoder {
     public let phase: ReductionPhase = .exploration
 
     /// Maximum number of combinations for exhaustive enumeration.
-    public static let exhaustiveThreshold: UInt64 = 64
+    public static let exhaustiveThreshold: UInt64 = 128
 
     /// Maximum probes for the covering array regime.
-    public static let coveringBudget: UInt64 = 64
+    public static let coveringBudget: UInt64 = 128
 
     // MARK: - State
 
@@ -110,7 +110,11 @@ public struct FibreCoveringEncoder: ComposableEncoder {
                 strength: 2,
                 rowBudget: Int(Self.coveringBudget)
             ) {
-                probes = covering.rows
+                // Sort covering array rows in shortlex order so the composition
+                // finds the shortlex-smallest failure first.
+                probes = covering.rows.sorted { lhs, rhs in
+                    lhs.values.lexicographicallyPrecedes(rhs.values)
+                }
             }
         } else {
             // Too few parameters for a covering array, too large for exhaustive.
@@ -183,14 +187,19 @@ public struct FibreCoveringEncoder: ComposableEncoder {
     }
 
     /// Builds exhaustive rows as ``CoveringArrayRow`` values using mixed-radix decomposition.
+    /// Builds exhaustive rows in shortlex order (leftmost coordinate changes slowest).
+    ///
+    /// The first failure found by the composition is the shortlex-smallest, because
+    /// the composition accepts the first probe that fails the property.
     private func buildExhaustiveRows(count: Int) -> [CoveringArrayRow] {
         var rows: [CoveringArrayRow] = []
         rows.reserveCapacity(count)
         for combinationIndex in 0 ..< count {
             var values = [UInt64](repeating: 0, count: valuePositions.count)
             var remaining = combinationIndex
-            for (offset, position) in valuePositions.enumerated() {
-                let domainSize = Int(position.domainSize)
+            // Decompose rightmost-first so the leftmost coordinate changes slowest.
+            for offset in (0 ..< valuePositions.count).reversed() {
+                let domainSize = Int(valuePositions[offset].domainSize)
                 values[offset] = UInt64(remaining % domainSize)
                 remaining /= domainSize
             }
