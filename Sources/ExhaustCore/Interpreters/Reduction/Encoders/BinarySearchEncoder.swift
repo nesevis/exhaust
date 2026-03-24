@@ -216,9 +216,25 @@ public struct BinarySearchEncoder: ComposableEncoder {
                     return candidate
                 }
                 let convergedTarget = targets[currentIndex]
+                let bestAccepted = convergedTarget.stepper.bestAccepted
+                let signal: ConvergenceSignal = {
+                    // If binary search didn't reach the target and the remaining
+                    // range is small enough to scan, flag it for LinearScanEncoder.
+                    // The scan resolves whether a lower floor exists (non-monotone
+                    // gap) or the binary search floor is correct. One-time cost,
+                    // bounded at linearScanThreshold probes.
+                    guard bestAccepted > convergedTarget.targetBP else {
+                        return .monotoneConvergence
+                    }
+                    let remaining = bestAccepted - convergedTarget.targetBP
+                    if remaining <= UInt64(EncoderFactory.linearScanThreshold) {
+                        return .nonMonotoneGap(remainingRange: Int(remaining))
+                    }
+                    return .monotoneConvergence
+                }()
                 convergenceRecords[convergedTarget.seqIdx] = ConvergedOrigin(
-                    bound: convergedTarget.stepper.bestAccepted,
-                    signal: .monotoneConvergence,
+                    bound: bestAccepted,
+                    signal: signal,
                     configuration: encoderConfiguration,
                     cycle: currentCycle
                 )
