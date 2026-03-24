@@ -44,7 +44,6 @@ public enum ChoiceTreeAnalysis {
         case boundary(BoundaryDomainProfile)
     }
 
-    private static let maxParameterCount = 20
     private static let finiteDomainThreshold: UInt64 = 256
 
     private static let seeds: [UInt64] = [
@@ -99,10 +98,6 @@ public enum ChoiceTreeAnalysis {
         guard let parameters = bestParameters, !parameters.isEmpty else {
             return nil
         }
-        guard parameters.count <= maxParameterCount else {
-            return nil
-        }
-
         let allFinite = parameters.allSatisfy { param in
             switch param.kind {
             case .finiteChooseBits, .pick:
@@ -176,13 +171,16 @@ public enum ChoiceTreeAnalysis {
 
         case .getSize:
             // getSize reads the current size parameter — a fixed value during
-            // any given generation run. Not a choice point. The internal
-            // representation wraps getSize in a comap { _ in 100 } bind,
-            // making the tree deterministic at the configured size.
+            // any given generation run. Not a choice point.
             return true
 
-        case .resize:
-            return false
+        case let .resize(_, children):
+            // resize changes the size context for its subtree. The children
+            // contain concrete choices that can be walked normally.
+            for child in children {
+                guard walkTree(child, parameters: &parameters) else { return false }
+            }
+            return true
 
         case .branch:
             return false
