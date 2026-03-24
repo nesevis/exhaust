@@ -1,12 +1,11 @@
 /// Caches span extractions to avoid redundant O(n) walks of the choice sequence.
 ///
-/// Span extraction functions (`extractAllValueSpans`, `extractSiblingGroups`, etc.)
+/// Span extraction functions (`extractAllValueSpans`, `extractContainerSpans`, etc.)
 /// are called multiple times per leg with identical inputs. The cache lazily stores
 /// each extraction's result and is invalidated when the sequence structure changes
 /// (via `accept(structureChanged: true)`) or at leg boundaries.
 struct SpanCache {
     private var cachedAllValueSpans: [ChoiceSpan]?
-    private var cachedSiblingGroups: [SiblingGroup]?
     private var cachedContainerSpans: [ChoiceSpan]?
     private var cachedSequenceElementSpans: [ChoiceSpan]?
     private var cachedSequenceBoundarySpans: [ChoiceSpan]?
@@ -14,18 +13,15 @@ struct SpanCache {
 
     // Per-depth caches for filtered accessors, avoiding repeated O(n) .filter calls.
     private var cachedValueSpansByDepth: [Int: [ChoiceSpan]] = [:]
-    private var cachedSiblingGroupsByDepth: [Int: [SiblingGroup]] = [:]
     private var cachedDeletionTargetsByDepth: [DeletionDepthKey: [ChoiceSpan]] = [:]
 
     mutating func invalidate() {
         cachedAllValueSpans = nil
-        cachedSiblingGroups = nil
         cachedContainerSpans = nil
         cachedSequenceElementSpans = nil
         cachedSequenceBoundarySpans = nil
         cachedFreeStandingValueSpans = nil
         cachedValueSpansByDepth.removeAll(keepingCapacity: true)
-        cachedSiblingGroupsByDepth.removeAll(keepingCapacity: true)
         cachedDeletionTargetsByDepth.removeAll(keepingCapacity: true)
     }
 
@@ -47,13 +43,6 @@ struct SpanCache {
         if let cached = cachedAllValueSpans { return cached }
         let result = ChoiceSequence.extractAllValueSpans(from: sequence)
         cachedAllValueSpans = result
-        return result
-    }
-
-    private mutating func allSiblingGroups(from sequence: ChoiceSequence) -> [SiblingGroup] {
-        if let cached = cachedSiblingGroups { return cached }
-        let result = ChoiceSequence.extractSiblingGroups(from: sequence)
-        cachedSiblingGroups = result
         return result
     }
 
@@ -104,26 +93,6 @@ struct SpanCache {
             return result
         }
         cachedValueSpansByDepth[depth] = all
-        return all
-    }
-
-    mutating func siblingGroups(
-        at depth: Int, from sequence: ChoiceSequence, bindIndex: BindSpanIndex?
-    ) -> [SiblingGroup] {
-        if let cached = cachedSiblingGroupsByDepth[depth] { return cached }
-        let all = allSiblingGroups(from: sequence)
-        if let bi = bindIndex {
-            var result = [SiblingGroup]()
-            result.reserveCapacity(all.count)
-            for i in 0 ..< all.count {
-                if bi.bindDepth(at: all[i].ranges[0].lowerBound) == depth {
-                    result.append(all[i])
-                }
-            }
-            cachedSiblingGroupsByDepth[depth] = result
-            return result
-        }
-        cachedSiblingGroupsByDepth[depth] = all
         return all
     }
 

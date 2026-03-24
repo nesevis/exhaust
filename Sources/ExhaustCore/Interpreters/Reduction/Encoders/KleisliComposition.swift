@@ -11,7 +11,7 @@
 /// The composition drives an outer-inner loop:
 /// - **Outer loop**: iterate upstream probes. For each, lift to get a fresh tree.
 /// - **Inner loop**: iterate downstream probes on the fresh tree. Yield each as a composed probe.
-/// - **On downstream exhaustion**: roll back or keep the upstream change depending on ``RollbackPolicy``.
+/// - **On downstream exhaustion**: advance to the next upstream probe.
 ///
 /// ## Convergence Transfer
 ///
@@ -35,27 +35,14 @@ public struct KleisliComposition<Output>: ComposableEncoder {
     /// The generator lift — the Kleisli bind between upstream and downstream.
     let lift: GeneratorLift<Output>
 
-    /// Controls rollback when the downstream encoder exhausts without finding a failure.
-    let rollback: RollbackPolicy
-
     /// The controlling position — the upstream encoder operates here.
     let upstreamRange: ClosedRange<Int>
 
     /// The controlled subtree — the downstream encoder operates here.
     let downstreamRange: ClosedRange<Int>
 
-    /// Controls what happens when the downstream encoder exhausts without finding a failure.
-    public enum RollbackPolicy {
-        /// Roll back the upstream change. The composition is atomic.
-        case atomic
-        /// Keep the upstream change. Partial success — upstream improved, downstream did not.
-        case partial
-    }
-
     // MARK: - Internal State
 
-    /// The base sequence before any upstream mutation.
-    private var baseSequence: ChoiceSequence = .init([])
     /// The base tree before any upstream mutation.
     private var baseTree: ChoiceTree = .just("")
     /// The reduction context passed to both encoders.
@@ -65,13 +52,6 @@ public struct KleisliComposition<Output>: ComposableEncoder {
     private var upstreamStarted = false
     /// Whether the downstream encoder is currently active (iterating).
     private var downstreamActive = false
-
-    /// The lifted sequence from the most recent successful lift.
-    private var liftedSequence: ChoiceSequence?
-    /// The lifted tree from the most recent successful lift.
-    private var liftedTree: ChoiceTree?
-    /// The lift report from the most recent successful lift.
-    private var lastLiftReport: DecodingReport?
 
     // MARK: - Fibre telemetry
 
@@ -118,7 +98,6 @@ public struct KleisliComposition<Output>: ComposableEncoder {
         upstream: any ComposableEncoder,
         downstream: any ComposableEncoder,
         lift: GeneratorLift<Output>,
-        rollback: RollbackPolicy,
         upstreamRange: ClosedRange<Int>,
         downstreamRange: ClosedRange<Int>
     ) {
@@ -127,7 +106,6 @@ public struct KleisliComposition<Output>: ComposableEncoder {
         self.upstream = upstream
         self.downstream = downstream
         self.lift = lift
-        self.rollback = rollback
         self.upstreamRange = upstreamRange
         self.downstreamRange = downstreamRange
     }
@@ -169,15 +147,11 @@ public struct KleisliComposition<Output>: ComposableEncoder {
         tree: ChoiceTree,
         convergedOrigins: [Int: ConvergedOrigin]?
     ) {
-        baseSequence = sequence
         baseTree = tree
         context = ReductionContext(convergedOrigins: convergedOrigins)
 
         upstreamStarted = false
         downstreamActive = false
-        liftedSequence = nil
-        liftedTree = nil
-        lastLiftReport = nil
         pendingTransferOrigins = nil
         validatedOrigins = nil
         upstreamConvergenceRecords = [:]
@@ -242,10 +216,6 @@ public struct KleisliComposition<Output>: ComposableEncoder {
                 // Lift rejected — upstream candidate was structurally invalid
                 continue
             }
-
-            liftedSequence = liftResult.sequence
-            liftedTree = liftResult.tree
-            lastLiftReport = liftResult.liftReport
 
             // Build downstream convergence origins.
             // The global cache provides warm starts from the standalone pipeline.

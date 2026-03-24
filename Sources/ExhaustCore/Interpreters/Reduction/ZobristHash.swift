@@ -59,16 +59,6 @@ public enum ZobristHash {
         return bits
     }
 
-    /// Updates a Zobrist hash in O(1) after replacing the element at `position`.
-    static func updating(
-        _ hash: UInt64,
-        at position: Int,
-        replacing oldValue: ChoiceSequenceValue,
-        with newValue: ChoiceSequenceValue
-    ) -> UInt64 {
-        hash ^ contribution(at: position, oldValue) ^ contribution(at: position, newValue)
-    }
-
     private static func tagBits(_ tag: TypeTag) -> UInt64 {
         switch tag {
         case .uint: 0

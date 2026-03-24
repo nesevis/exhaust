@@ -291,15 +291,6 @@ extension ChoiceDependencyGraph {
         return result
     }
 
-    /// Returns whether the node at `source` can reach the node at `target` via directed dependency edges.
-    ///
-    /// - Parameters:
-    ///   - source: Index into ``nodes`` of the upstream node.
-    ///   - target: Index into ``nodes`` of the downstream node.
-    func reachable(from source: Int, to target: Int) -> Bool {
-        reachability[source].contains(target)
-    }
-
     /// Computes a maximal antichain of the dependency DAG.
     ///
     /// A maximal antichain is a set of node indices with no directed path between any pair, to which no further node can be added without violating independence. Uses greedy construction: iterates nodes by ``DependencyNode/scopeRange`` size descending (largest scopes first), adding each node to the antichain if it is independent of all existing members. Excludes nodes with no scope range (branch selectors with empty subtrees).

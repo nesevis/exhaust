@@ -131,7 +131,6 @@ struct ReduceFloatEncoder: ComposableEncoder {
     private var binarySearchCurrentInt: Int64 = 0
 
     // Stage 3 context
-    private var ratioNumerator: Int64 = 0
     private var ratioDenominator: Int64 = 0
     private var ratioRemainder: Int64 = 0
     private var ratioIntegerPart: Int64 = 0

@@ -29,13 +29,6 @@ protocol SchedulingStrategy {
     )
 }
 
-// MARK: - Cycle Plan
-
-/// The schedule for one reduction cycle: which phases run, in what order, with what budgets.
-struct CyclePlan {
-    var phases: [PlannedPhase]
-}
-
 /// A single phase to dispatch within a cycle.
 struct PlannedPhase {
     /// Which phase to run.
@@ -86,17 +79,8 @@ enum EdgeBudgetPolicy {
 ///
 /// Exposes the signals the strategy needs without giving it mutable access to the reducer state.
 struct ReductionStateView {
-    /// Number of entries in the current choice sequence.
-    let sequenceCount: Int
-
-    /// Whether the generator has bind operations.
-    let hasBind: Bool
-
     /// Whether all value coordinates are at cached convergence floors or reduction targets.
     let allValueCoordinatesConverged: Bool
-
-    /// Whether the convergence cache has any entries.
-    let convergenceCacheIsEmpty: Bool
 
     /// The current cycle number.
     let cycleNumber: Int

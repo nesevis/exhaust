@@ -146,7 +146,7 @@ struct ContiguousWindowDeletionEncoder: ComposableEncoder {
         return nil
     }
 
-    private mutating func nextNonMonotonicProbe(lastAccepted: Bool, ranges: AlignedDeletionCohortRanges) -> ChoiceSequence? {
+    private mutating func nextNonMonotonicProbe(lastAccepted _: Bool, ranges: AlignedDeletionCohortRanges) -> ChoiceSequence? {
         while nonMonotonicIndex < nonMonotonicSizes.count {
             let size = nonMonotonicSizes[nonMonotonicIndex]
             nonMonotonicIndex += 1

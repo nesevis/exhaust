@@ -50,9 +50,6 @@ struct BinarySearchLadder {
 ///
 /// Computes per-axis ``BinarySearchLadder`` midpoints and builds their Cartesian product (or dependent product for nested binds), sorted shortlex. The caller wraps the result in a ``PrecomputedComposableEncoder`` for evaluation via descriptor chains.
 struct ProductSpaceBatchEncoder {
-    let name: EncoderName = .productSpaceBatch
-    let phase = ReductionPhase.valueMinimization
-
     /// Set by the caller before invocation.
     var bindIndex: BindSpanIndex?
 

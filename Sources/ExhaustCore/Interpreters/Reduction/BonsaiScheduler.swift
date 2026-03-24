@@ -127,8 +127,7 @@ enum BonsaiScheduler {
             config: config,
             gen: gen,
             property: property,
-            isInstrumented: isInstrumented,
-            collectStats: collectStats
+            isInstrumented: isInstrumented
         )
     }
 
@@ -139,8 +138,7 @@ enum BonsaiScheduler {
         config: Interpreters.BonsaiReducerConfiguration,
         gen: ReflectiveGenerator<Output>,
         property: @escaping (Output) -> Bool,
-        isInstrumented: Bool,
-        collectStats: Bool
+        isInstrumented: Bool
     ) throws -> (reduced: (ChoiceSequence, Output)?, stats: ReductionStats) {
         var stallBudget = config.maxStalls
         var cycles = 0

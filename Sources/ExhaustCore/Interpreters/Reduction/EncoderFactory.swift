@@ -257,7 +257,6 @@ struct EncoderFactory {
                 upstream: BinarySearchToSemanticSimplestEncoder(),
                 downstream: downstream,
                 lift: GeneratorLift(gen: gen, mode: .guided(fallbackTree: fallbackTree ?? tree)),
-                rollback: .atomic,
                 upstreamRange: edge.upstreamRange,
                 downstreamRange: edge.downstreamRange
             )
@@ -416,70 +415,6 @@ struct EncoderFactory {
             // Fall back to the naive prediction from the current sequence.
             return predictFibreSize(sequence: sequence, downstreamRange: edge.downstreamRange)
         }
-    }
-
-    // MARK: - Structural deletion descriptors
-
-    /// Builds descriptors for structural deletion within a single scope.
-    ///
-    /// One descriptor per span category in the given ordering. The random repair variant
-    /// is expressed as a dominance chain: exact deletion dominates the repair fallback.
-    /// Spans are pre-extracted from the span cache and passed via ``ReductionContext/deletionSpans``.
-    static func structuralDeletionDescriptors(
-        ordering: [ReductionScheduler.DeletionEncoderSlot],
-        spansBySlot: [ReductionScheduler.DeletionEncoderSlot: [ChoiceSpan]],
-        scopeDecoder: SequenceDecoder,
-        speculativeDecoder: SequenceDecoder,
-        budgetCap: Int
-    ) -> [MorphismDescriptor] {
-        var descriptors = [MorphismDescriptor]()
-
-        for slot in ordering {
-            guard let spans = spansBySlot[slot], spans.isEmpty == false else { continue }
-
-            switch slot {
-            case .randomRepairDelete:
-                descriptors.append(MorphismDescriptor(
-                    encoder: DeletionEncoder(spanCategory: .containerSpans, spans: spans),
-                    decoderFactory: { speculativeDecoder },
-                    probeBudget: budgetCap,
-                    structureChanged: true
-                ))
-            case .containerSpans:
-                descriptors.append(MorphismDescriptor(
-                    encoder: DeletionEncoder(spanCategory: .containerSpans, spans: spans),
-                    decoderFactory: { scopeDecoder },
-                    probeBudget: budgetCap,
-                    structureChanged: true
-                ))
-            case .sequenceElements:
-                descriptors.append(MorphismDescriptor(
-                    encoder: DeletionEncoder(spanCategory: .sequenceElements, spans: spans),
-                    decoderFactory: { scopeDecoder },
-                    probeBudget: budgetCap,
-                    structureChanged: true
-                ))
-            case .sequenceBoundaries:
-                descriptors.append(MorphismDescriptor(
-                    encoder: DeletionEncoder(spanCategory: .sequenceBoundaries, spans: spans),
-                    decoderFactory: { scopeDecoder },
-                    probeBudget: budgetCap,
-                    structureChanged: true
-                ))
-            case .freeStandingValues:
-                descriptors.append(MorphismDescriptor(
-                    encoder: DeletionEncoder(spanCategory: .freeStandingValues, spans: spans),
-                    decoderFactory: { scopeDecoder },
-                    probeBudget: budgetCap,
-                    structureChanged: true
-                ))
-            case .alignedWindows:
-                // Handled inline as a contiguous + beam dominance chain, not through the factory.
-                continue
-            }
-        }
-
-        return descriptors
     }
 
     // MARK: - Types

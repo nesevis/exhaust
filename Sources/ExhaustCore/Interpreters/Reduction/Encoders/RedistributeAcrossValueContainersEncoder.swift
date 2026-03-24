@@ -115,8 +115,6 @@ public struct RedistributeAcrossValueContainersEncoder: ComposableEncoder {
         let intStepSize: UInt64
         let lhsMovesUpward: Bool
         let distanceInSteps: UInt64
-        let lhsTag: TypeTag
-        let rhsTag: TypeTag
     }
 
     /// One orientation of a pair: lhs is the value being moved toward its target,
@@ -670,9 +668,7 @@ public struct RedistributeAcrossValueContainersEncoder: ComposableEncoder {
             denominator: denominator,
             intStepSize: intStepSize,
             lhsMovesUpward: lhsMovesUpward,
-            distanceInSteps: distanceInSteps,
-            lhsTag: lhs.tag,
-            rhsTag: rhs.tag
+            distanceInSteps: distanceInSteps
         )
     }
 

@@ -621,6 +621,5 @@ extension Interpreters {
     enum ReplayError: LocalizedError {
         case wrongInputChoice
         case noSuccessfulBranch
-        case mismatchInChoicesAndGenerators
     }
 }

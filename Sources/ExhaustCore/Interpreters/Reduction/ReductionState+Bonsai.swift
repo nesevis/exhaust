@@ -1258,8 +1258,7 @@ extension ReductionState {
             if let upstreamValue = compositionEdge.composition.previousUpstreamBitPattern {
                 edgeObservations[edge.regionIndex] = EdgeObservation(
                     signal: edgeSignal,
-                    upstreamValue: upstreamValue,
-                    cycle: currentCycle
+                    upstreamValue: upstreamValue
                 )
             }
             if collectStats {

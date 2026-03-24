@@ -156,7 +156,6 @@ private struct PullCoverageSlice {
     /// All t parameter indices (in reordered space, sorted ascending). Only the first `strength` entries are meaningful.
     let paramIndices: (UInt16, UInt16, UInt16, UInt16)
 
-    let totalTuples: Int
     var remaining: Int
 
     @inline(__always)
@@ -298,7 +297,6 @@ public struct PullBasedCoveringArrayGenerator {
                         bits: PullBitVector(bitCount: tupleCount),
                         strides: (d1, 1, 0, 0),
                         paramIndices: (UInt16(first), UInt16(second), 0, 0),
-                        totalTuples: tupleCount,
                         remaining: tupleCount
                     ))
                     byColumn[second].append(allSlices.count &- 1)
@@ -327,7 +325,6 @@ public struct PullBasedCoveringArrayGenerator {
                             bits: PullBitVector(bitCount: tupleCount),
                             strides: (s0, d2, 1, 0),
                             paramIndices: (UInt16(first), UInt16(second), UInt16(third), 0),
-                            totalTuples: tupleCount,
                             remaining: tupleCount
                         ))
                         byColumn[third].append(allSlices.count &- 1)
@@ -362,7 +359,6 @@ public struct PullBasedCoveringArrayGenerator {
                                 bits: PullBitVector(bitCount: tupleCount),
                                 strides: (s0, s1, d3, 1),
                                 paramIndices: (UInt16(first), UInt16(second), UInt16(third), UInt16(fourth)),
-                                totalTuples: tupleCount,
                                 remaining: tupleCount
                             ))
                             byColumn[fourth].append(allSlices.count &- 1)
@@ -478,31 +474,6 @@ public struct PullBasedCoveringArrayGenerator {
             refPos &+= 1
         }
         return density
-    }
-
-    /// Fills a column that has no completing slices using partial coverage density.
-    private mutating func fillColumnPartial(col: Int) {
-        let domain = ordering.reorderedDomainSizes[col]
-        let partialRefs = partialSlicesByColumn[col]
-
-        if partialRefs.isEmpty {
-            rowBuffer[col] = 0
-            return
-        }
-
-        var bestValue: UInt16 = 0
-        var bestDensity = -1.0
-
-        var candidate: UInt16 = 0
-        while candidate < domain {
-            let density = evaluatePartialCoverage(col: col, candidate: candidate)
-            if density > bestDensity {
-                bestDensity = density
-                bestValue = candidate
-            }
-            candidate &+= 1
-        }
-        rowBuffer[col] = bestValue
     }
 
     // MARK: - Strength-Specialized Row Fill

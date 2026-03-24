@@ -156,7 +156,6 @@ struct KleisliCompositionTests {
             upstream: IdentityComposableEncoder(),
             downstream: ZeroValueEncoder(),
             lift: GeneratorLift(gen: gen, mode: .exact),
-            rollback: .atomic,
             upstreamRange: fullRange,
             downstreamRange: fullRange
         )

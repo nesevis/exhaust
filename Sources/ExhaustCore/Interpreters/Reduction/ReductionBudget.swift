@@ -36,33 +36,6 @@ public extension Interpreters {
 
         case fast
         case slow
-
-        var maxStalls: Int {
-            switch self {
-            case .fast:
-                3
-            case .slow:
-                8
-            }
-        }
-
-        var recentCycleWindow: Int {
-            switch self {
-            case .fast:
-                6
-            case .slow:
-                12
-            }
-        }
-
-        var alignedDeletionBeamSearchTuning: AlignedDeletionBeamSearchTuning {
-            switch self {
-            case .fast:
-                .fast
-            case .slow:
-                .slow
-            }
-        }
     }
 
     /// Backward-compatibility alias for ``ReductionBudget``.

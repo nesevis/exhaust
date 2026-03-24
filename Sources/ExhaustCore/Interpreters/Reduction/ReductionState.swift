@@ -123,9 +123,6 @@ struct EdgeObservation: Sendable {
 
     /// The upstream bit-pattern value that produced this fibre.
     let upstreamValue: UInt64
-
-    /// The cycle in which this observation was recorded.
-    let cycle: Int
 }
 
 // MARK: - Phase Tracker
@@ -152,9 +149,6 @@ struct PhaseTracker {
 
     private var stack: [Phase] = []
     private(set) var counts: [Phase: PhaseCounts] = [:]
-
-    /// The outermost active phase, used for attribution.
-    var activePhase: Phase? { stack.first }
 
     mutating func push(_ phase: Phase) { stack.append(phase) }
 
@@ -271,8 +265,6 @@ struct ConvergenceInstrumentation {
     struct ConvergenceRecord {
         let coordinateIndex: Int
         let convergedValue: UInt64
-        let configuration: EncoderConfiguration
-        let signal: ConvergenceSignal
         let cycle: Int
     }
 
@@ -386,10 +378,7 @@ final class ReductionState<Output> {
     /// Builds a read-only view of this state for strategy planning decisions.
     var view: ReductionStateView {
         ReductionStateView(
-            sequenceCount: sequence.count,
-            hasBind: hasBind,
             allValueCoordinatesConverged: allValueCoordinatesConverged(),
-            convergenceCacheIsEmpty: convergenceCache.isEmpty,
             cycleNumber: currentCycle,
             hasDeletionTargets: pruneOrder.isEmpty == false,
             hasBranchTargets: tree.containsPicks
@@ -648,8 +637,6 @@ extension ReductionState {
                     ConvergenceInstrumentation.ConvergenceRecord(
                         coordinateIndex: index,
                         convergedValue: convergedOrigin.bound,
-                        configuration: convergedOrigin.configuration,
-                        signal: convergedOrigin.signal,
                         cycle: currentCycle
                     )
                 )
