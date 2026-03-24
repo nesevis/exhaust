@@ -130,16 +130,19 @@ struct EdgeObservation: Sendable {
 
 // MARK: - Phase Tracker
 
+/// Identifies a reduction phase for per-phase outcome tracking.
+public enum ReducerPhaseIdentifier: Hashable, Sendable {
+    case baseDescent
+    case fibreDescent
+    case exploration
+    case relaxRound
+}
+
 /// Attributes property invocations and acceptances to the outermost active reduction phase.
 ///
 /// Stack-based: each phase method pushes on entry and pops on exit. When relax-round (Phase 4) calls `runBaseDescent` and `runFibreDescent` internally, the stack is `[.relaxRound, .baseDescent]` — attributions go to `.relaxRound` (the outermost phase that initiated the work). Invocations from rolled-back phases are kept (they consumed real budget); acceptances from rolled-back phases are reverted (the improvements were undone).
 struct PhaseTracker {
-    enum Phase: Hashable, Sendable {
-        case baseDescent
-        case fibreDescent
-        case exploration
-        case relaxRound
-    }
+    typealias Phase = ReducerPhaseIdentifier
 
     struct PhaseCounts {
         var propertyInvocations: Int = 0
@@ -209,52 +212,52 @@ struct PhaseTracker {
 /// Captures per-phase outcome data for one reduction cycle.
 ///
 /// Collected by the scheduler at the end of each cycle. Phase-level summaries drive budget and ordering decisions in the adaptive strategy. Fine-grained decisions (per-coordinate, per-edge) bypass this struct and read the convergence cache and edge observations directly.
-struct CycleOutcome: Sendable {
-    var baseDescent: PhaseDisposition
-    var fibreDescent: PhaseDisposition
-    var exploration: PhaseDisposition
-    var relaxRound: PhaseDisposition
+public struct CycleOutcome: Sendable {
+    public var baseDescent: PhaseDisposition
+    public var fibreDescent: PhaseDisposition
+    public var exploration: PhaseDisposition
+    public var relaxRound: PhaseDisposition
 
-    var zeroingDependencyCount: Int
-    var monotoneConvergenceCount: Int
+    public var zeroingDependencyCount: Int
+    public var monotoneConvergenceCount: Int
 
-    var exhaustedCleanEdges: Int
-    var exhaustedWithFailureEdges: Int
-    var totalEdges: Int
+    public var exhaustedCleanEdges: Int
+    public var exhaustedWithFailureEdges: Int
+    public var totalEdges: Int
 
-    var improved: Bool
-    var cycle: Int
+    public var improved: Bool
+    public var cycle: Int
 }
 
 /// Distinguishes "the scheduler chose not to run this phase" from "the scheduler ran this phase and it produced nothing."
-enum PhaseDisposition: Sendable {
+public enum PhaseDisposition: Sendable {
     case ran(PhaseOutcome)
     case gated(reason: GateReason)
 }
 
 /// Reason a phase was not dispatched.
-enum GateReason: Sendable {
+public enum GateReason: Sendable {
     case allCoordinatesConverged
     case noProgress
     case allEdgesClean
 }
 
 /// Per-phase outcome from a single cycle.
-struct PhaseOutcome: Sendable {
+public struct PhaseOutcome: Sendable {
     /// Property invocations consumed by this phase (including rolled-back invocations).
-    var propertyInvocations: Int
+    public var propertyInvocations: Int
 
     /// Net acceptances that survived rollback.
-    var acceptances: Int
+    public var acceptances: Int
 
     /// Of the net acceptances, how many were structural (changed sequence length or bind structure).
-    var structuralAcceptances: Int
+    public var structuralAcceptances: Int
 
     /// Budget allocated to this phase by the scheduler.
-    var budgetAllocated: Int
+    public var budgetAllocated: Int
 
     /// Fraction of allocated budget consumed.
-    var utilization: Double {
+    public var utilization: Double {
         budgetAllocated > 0 ? Double(propertyInvocations) / Double(budgetAllocated) : 0
     }
 }
@@ -369,6 +372,7 @@ final class ReductionState<Output> {
         stats.fibreExhaustedCleanCount = fibreExhaustedCleanCount
         stats.fibreExhaustedWithFailureCount = fibreExhaustedWithFailureCount
         stats.fibreBailCount = fibreBailCount
+        stats.cycleOutcomes = statsCycleOutcomes
         return stats
     }
 

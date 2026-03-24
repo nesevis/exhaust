@@ -79,6 +79,11 @@ public struct ReductionStats: Sendable {
     /// Number of composition edges where the downstream bailed before completing coverage.
     public var fibreBailCount: Int
 
+    // MARK: - Per-Phase Outcomes
+
+    /// Per-cycle phase outcome data, collected when stats collection is enabled.
+    public var cycleOutcomes: [CycleOutcome] = []
+
     /// Creates an empty stats value.
     public init() {
         encoderProbes = [:]

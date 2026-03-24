@@ -171,12 +171,14 @@ enum BonsaiScheduler {
             // no progress in the previous cycle. The stall condition prevents skipping
             // when cross-zero or ZeroValue can still improve beyond cached binary search floors.
             let fibreProgress: Bool
+            var fibreGated = false
             if baseProgress == false,
                previousFibreProgress == false,
                cycles > 1,
                state.allValueCoordinatesConverged()
             {
                 fibreProgress = false
+                fibreGated = true
                 if state.isInstrumented {
                     ExhaustLog.debug(
                         category: .reducer,
@@ -192,8 +194,11 @@ enum BonsaiScheduler {
 
             // Exploration: if neither descent made progress, try cross-level and same-level minima.
             var cycleImproved = baseProgress || fibreProgress
+            var kleisliRan = false
+            var relaxRan = false
             if cycleImproved == false {
                 // Kleisli exploration: cross-level minima via dependency edge composition.
+                kleisliRan = true
                 var kleisliRemaining = Self.relaxRoundBudget
                 if try state.runKleisliExploration(budget: &kleisliRemaining, dag: dag) {
                     cycleImproved = true
@@ -201,6 +206,7 @@ enum BonsaiScheduler {
 
                 // Relax-round: same-level minima via value redistribution.
                 if cycleImproved == false {
+                    relaxRan = true
                     var relaxRemaining = Self.relaxRoundBudget
                     if try state.runRelaxRound(remaining: &relaxRemaining) {
                         cycleImproved = true
@@ -213,6 +219,30 @@ enum BonsaiScheduler {
                 stallBudget = config.maxStalls
             } else {
                 stallBudget -= 1
+            }
+
+            // Collect per-phase outcome data.
+            if state.collectStats {
+                state.statsCycleOutcomes.append(CycleOutcome(
+                    baseDescent: .ran(state.phaseTracker.outcome(for: .baseDescent, budgetAllocated: Self.baseDescentBudget)),
+                    fibreDescent: fibreGated
+                        ? .gated(reason: .allCoordinatesConverged)
+                        : .ran(state.phaseTracker.outcome(for: .fibreDescent, budgetAllocated: Self.fibreDescentBudget)),
+                    exploration: kleisliRan
+                        ? .ran(state.phaseTracker.outcome(for: .exploration, budgetAllocated: Self.relaxRoundBudget))
+                        : .gated(reason: .noProgress),
+                    relaxRound: relaxRan
+                        ? .ran(state.phaseTracker.outcome(for: .relaxRound, budgetAllocated: Self.relaxRoundBudget))
+                        : .gated(reason: .noProgress),
+                    zeroingDependencyCount: state.zeroingDependencyCount,
+                    monotoneConvergenceCount: 0,
+                    exhaustedCleanEdges: state.fibreExhaustedCleanCount,
+                    exhaustedWithFailureEdges: state.fibreExhaustedWithFailureCount,
+                    totalEdges: state.compositionEdgesAttempted,
+                    improved: state.bestSequence.shortLexPrecedes(cycleStartBest),
+                    cycle: cycles
+                ))
+                state.phaseTracker.reset()
             }
 
             if isInstrumented {
