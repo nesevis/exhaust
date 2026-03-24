@@ -376,6 +376,19 @@ final class ReductionState<Output> {
         return stats
     }
 
+    // MARK: - State View
+
+    /// Builds a read-only view of this state for strategy planning decisions.
+    var view: ReductionStateView {
+        ReductionStateView(
+            sequenceCount: sequence.count,
+            hasBind: hasBind,
+            allValueCoordinatesConverged: allValueCoordinatesConverged(),
+            convergenceCacheIsEmpty: convergenceCache.isEmpty,
+            cycleNumber: currentCycle
+        )
+    }
+
     // MARK: - Fibre Descent Gating
 
     /// Returns true when every value coordinate is either cached or already at its reduction target.
