@@ -187,10 +187,14 @@ struct StaticStrategy: SchedulingStrategy {
 /// Signal-driven scheduling strategy with per-edge budget adaptation.
 ///
 /// Differences from ``StaticStrategy``:
+/// - No per-phase budget allocation. Each phase receives a generous ceiling (2000) and runs to exhaustion. No phase in the current test suite exceeds 1100 invocations — the ceiling is a safety limit, not a budget allocation decision.
 /// - Composition edges receive observation-driven sub-budgets (productive +50%, clean/bail -50%).
 /// - Phase 3 (exploration) is skipped when all edges were `exhaustedClean` in the prior cycle.
 /// - Phase 4 (relax-round) runs even when prior phases made progress if the prior cycle had `zeroingDependency` signals — coupled coordinates need redistribution regardless of per-coordinate progress.
 struct AdaptiveStrategy: SchedulingStrategy {
+    /// Generous per-phase ceiling. No phase in the current suite exceeds 1100 invocations.
+    private static let phaseBudgetCeiling = 2000
+
     private var previousFibreProgress: Bool = true
     private var cycleImproved: Bool = false
     private var lastPriorOutcome: CycleOutcome?
@@ -204,7 +208,7 @@ struct AdaptiveStrategy: SchedulingStrategy {
         return [
             PlannedPhase(
                 phase: .baseDescent,
-                budget: BonsaiScheduler.baseDescentBudget,
+                budget: Self.phaseBudgetCeiling,
                 configuration: PhaseConfiguration()
             )
         ]
@@ -227,7 +231,7 @@ struct AdaptiveStrategy: SchedulingStrategy {
         if fibreGated == false {
             phases.append(PlannedPhase(
                 phase: .fibreDescent,
-                budget: BonsaiScheduler.fibreDescentBudget,
+                budget: Self.phaseBudgetCeiling,
                 configuration: PhaseConfiguration()
             ))
         }
@@ -246,7 +250,7 @@ struct AdaptiveStrategy: SchedulingStrategy {
         if allEdgesClean == false {
             phases.append(PlannedPhase(
                 phase: .exploration,
-                budget: BonsaiScheduler.relaxRoundBudget,
+                budget: Self.phaseBudgetCeiling,
                 configuration: PhaseConfiguration(edgeBudgetPolicy: .adaptive),
                 requiresStall: true
             ))
@@ -259,7 +263,7 @@ struct AdaptiveStrategy: SchedulingStrategy {
         let hasZeroingDependency = (lastPriorOutcome?.zeroingDependencyCount ?? 0) > 0
         phases.append(PlannedPhase(
             phase: .relaxRound,
-            budget: BonsaiScheduler.relaxRoundBudget,
+            budget: Self.phaseBudgetCeiling,
             configuration: PhaseConfiguration(),
             requiresStall: hasZeroingDependency == false
         ))
