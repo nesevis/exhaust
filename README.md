@@ -60,6 +60,7 @@ Exhaust found a five-element counterexample and reduced it to two elements — t
 - [Composing Generators](#composing-generators)
 - [Recursive Generators](#recursive-generators)
 - [Running Properties](#running-properties)
+  - [Run Statistics](#run-statistics)
 - [Reflecting and Reducing Known Values](#reflecting-and-reducing-known-values)
 - [Quick Examples](#quick-examples)
 - [Filters and Classification](#filters-and-classification)
@@ -178,6 +179,21 @@ Configure behavior with settings:
 | `.randomOnly` | off | Skip structured coverage, use only random sampling |
 | `.replay(seed)` | — | Deterministic reproduction of a specific run |
 | `.reflecting(value)` | — | Skip generation; reflect the given value and reduce it (see [Reflecting and Reducing Known Values](#reflecting-and-reducing-known-values)) |
+| `.reductionBudget(.fast\|.slow)` | `.fast` | Controls how aggressively reduction searches for a smaller counterexample. `.slow` widens beam search and allows more stalls before terminating. |
+| `.visualize` | off | Prints the choice tree before and after reduction as a Unicode visualization — useful for understanding how Exhaust represents and shrinks your generator. |
+| `.onReport(closure)` | — | Registers a closure that receives an `ExhaustReport` after the test completes. See [Run Statistics](#run-statistics). |
+
+### Run Statistics
+
+The `.onReport` setting delivers an `ExhaustReport` with timing and invocation data for each phase of the test run. It includes per-phase wall-clock times (coverage, generation, reduction, reflection), total property invocations, materialization counts during reduction, and per-encoder probe breakdowns. Use it to understand where time is spent and whether coverage or reduction budgets need tuning.
+
+```swift
+#exhaust(gen, .onReport { report in
+    print(report.phaseSummary)
+}) { value in
+    value.isValid
+}
+```
 
 ## Reflecting and Reducing Known Values
 

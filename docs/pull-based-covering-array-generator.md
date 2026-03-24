@@ -1,5 +1,7 @@
 # Pull-Based Covering Array Generator — Implementation Specification
 
+> **Status: Implemented.** `PullBasedCoveringArrayGenerator` in `Sources/ExhaustCore/Analysis/PullBasedCoveringArray.swift` is the active covering array generator for both finite and boundary domain coverage. `CoverageRunner` pulls rows via `next()` and tests each against the property, stopping on first failure. The `FibreCoveringEncoder` in the BonsaiReducer also uses this generator for downstream fibre search.
+
 ## 1. Purpose
 
 A pull-based (lazy) covering array generator for use in a property-based testing framework. Each call to `next()` returns a single row (test case) that greedily maximises new t-tuple coverage. The caller pulls rows until a property test fails, then stops. The generator never builds the full covering array — it emits only as many rows as needed to find a failure.

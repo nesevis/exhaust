@@ -190,8 +190,28 @@ The paper defines the algebra; Exhaust supplies:
 
 ### What Exhaust takes
 
-- The **IPOG algorithm** for constructing t-way covering arrays. When `ChoiceTreeAnalysis` identifies a finite or boundary-value domain, IPOG produces a compact test suite guaranteeing every t-tuple of parameter values appears in at least one test case.
-- The **incremental parameter extension** strategy — IPOG builds the covering array one parameter at a time, which scales better than generating all t-tuples upfront.
+- The foundational theory of **t-way covering arrays** for systematic combinatorial testing. When `ChoiceTreeAnalysis` identifies a finite or boundary-value domain, a covering array generator produces a compact test suite guaranteeing every t-tuple of parameter values appears in at least one test case.
+- IPOG (via the FIPOG-style builder in `CoveringArray.swift`) remains in the codebase for the contract-testing (SCA) pipeline where batch construction is appropriate.
+
+**Bryce & Colbourn, "A density-based greedy algorithm for higher strength covering arrays" (STVR 2009)**
+
+### What Exhaust takes
+
+- The **one-test-at-a-time density algorithm** for lazy covering array generation. `PullBasedCoveringArrayGenerator` emits one row per `next()` call, greedily maximising new t-tuple coverage. `CoverageRunner` pulls rows until a property failure is found, avoiding the cost of building the full array.
+- **Unrestricted density** for level selection (Section 2, Theorem 2.2): when choosing a value for a factor, the contribution from non-completing slices (where some other factors are still free) is weighted by 1/|V_f| — the probability that a random assignment to the free factors would cover an uncovered tuple. This preserves the paper's O(log k) row-count guarantee.
+- **Bit-vector coverage tracking** with `slicesByCompletingColumn` for efficient per-column evaluation: completing slices give exact coverage (0-restricted density), non-completing slices give density-weighted partial coverage.
+
+### What Exhaust does not take
+
+- **Multiple candidates per row** (Layer 2): the paper shows 10 candidates reduce array size by ~5–10%, but at 10x the per-row cost. Early-stop PBT makes this uneconomical.
+- **Density-driven factor ordering** (Layer 3): Exhaust uses a fixed left-to-right ordering after sorting by domain size ascending. The paper finds density-based ordering produces modestly smaller arrays, but the effect diminishes with unrestricted density.
+- **Best (t-1)-tuple seeding**: fixing the first t-1 factors to the values of the most common uncovered (t-1)-tuple before density fill.
+- **Repetitions** (Layer 1): Exhaust generates one deterministic suite. Reproducibility requires no random tie-breaking.
+- **Seeding from an existing array** (Section 4, p. 52): pre-marking tuples from an orthogonal array seed.
+
+### How it fits
+
+The density algorithm is a natural match for PBT because the deliverable is the *failure*, not the covering array. The O(log k) guarantee means most t-way interactions are covered within the first few dozen rows; if a bug is triggered by any specific interaction, it is typically found long before the full array is constructed. The pull-based interface integrates cleanly with `CoverageRunner`'s row-by-row materialization loop, which matches the paper's stated design goal that "tests in the test suite must be generated one test at a time" (Section 1, p. 39).
 
 **Kuhn, Wallace & Gallo, "Software Fault Interactions and Implications for Software Testing" (IEEE TSE 2004)**
 
@@ -207,7 +227,7 @@ This paper — co-authored by Goldstein and John Hughes (QuickCheck) — general
 
 Exhaust deliberately does not adopt the paper's *combinatorial thinning* (fanout) approach. The paper's cost model assumes that *generating* test suites is cheap while *running* tests is expensive — thinning amortises the generation cost across many CI runs. In Exhaust's cost model, materialisation (running the generator to produce a value from a choice sequence) dominates property evaluation, so the fanout argument doesn't hold: generating N covering-array candidates costs N materialisations regardless of whether the property is cheap or expensive.
 
-**What Exhaust does take** is the broader insight that combinatorial coverage and PBT can be unified. Exhaust's `ChoiceTreeAnalysis` achieves this from the opposite direction: instead of thinning a random generator's output, it analyses the generator's choice structure to *construct* a covering array directly. The freer monad's inspectability (which the paper does not exploit — it works with opaque QuickCheck generators) enables this: VACTI walks the generator to extract finite/boundary parameters, then IPOG builds the covering array, and `Interpreters.replay` materialises each row.
+**What Exhaust does take** is the broader insight that combinatorial coverage and PBT can be unified. Exhaust's `ChoiceTreeAnalysis` achieves this from the opposite direction: instead of thinning a random generator's output, it analyses the generator's choice structure to *construct* a covering array directly. The freer monad's inspectability (which the paper does not exploit — it works with opaque QuickCheck generators) enables this: VACTI walks the generator to extract finite/boundary parameters, then a pull-based greedy generator produces rows on demand, and `Interpreters.replay` materialises each row.
 
 **Bind-awareness is the key divergence.** The paper treats generators as opaque and operates on their output distribution. Exhaust's `ChoiceTreeAnalysis` sees through bind chains via the `ChoiceTree.bind(inner:, bound:)` node and treats bound subtrees as opaque (Option B from [transform-reification-next-steps.md](transform-reification-next-steps.md)). This collapses the parameter count for dependent generators — the inner subtree contributes its parameters to the covering array, but the bound subtree (whose parameters are meaningless without the correct inner value) is exercised through random generation. Without this, a length-dependent array generator would fan out into N element parameters per possible length, producing an intractably large covering array.
 
@@ -215,14 +235,14 @@ Exhaust deliberately does not adopt the paper's *combinatorial thinning* (fanout
 
 Exhaust's coverage system leverages the inspectability of the freer monad in a way neither Goldstein's dissertation nor the ESOP 2021 paper explores. `ChoiceTreeAnalysis` runs a forward interpretation (VACTI with `materializePicks = true`) to extract a parameter model from the generator's choice structure, then dispatches based on domain size:
 
-- **Finite domains** (all parameters have ≤256 values): exhaustive enumeration if the total space fits within the coverage budget, otherwise IPOG t-way coverage over the full value sets.
-- **Boundary domains** (some parameters have large ranges): IPOG t-way coverage over **synthesised boundary values** rather than the full domain. For integers, boundary representatives are `{min, min+1, midpoint, max-1, max, 0 if in range}`. For floats, they include IEEE 754 special values (±0, ±∞, NaN, subnormals). For dates, boundary values include domain edges with BVA ±1 neighbours, calendar boundaries (start/end of day, month, year), epoch points, and DST transition moments with their ±1-second neighbours — the kind of values that have historically been bug-prone and that random sampling is unlikely to hit within a reasonable budget. The covering array then guarantees that every t-tuple of these boundary values across parameters appears in at least one test case.
+- **Finite domains** (all parameters have small value sets): exhaustive enumeration if the total space fits within the coverage budget, otherwise pull-based pairwise coverage over the full value sets.
+- **Boundary domains** (some parameters have large ranges): pull-based pairwise coverage over **synthesised boundary values** rather than the full domain. For integers, boundary representatives are `{min, min+1, midpoint, max-1, max, 0 if in range}`. For floats, they include IEEE 754 special values (±0, ±∞, NaN, subnormals). For dates, boundary values include domain edges with BVA ±1 neighbours, calendar boundaries (start/end of day, month, year), epoch points, and DST transition moments with their ±1-second neighbours — the kind of values that have historically been bug-prone and that random sampling is unlikely to hit within a reasonable budget. The covering array then guarantees that every t-tuple of these boundary values across parameters appears in at least one test case.
 
 The covering array rows are replayed through the existing `Interpreters.replay` infrastructure. The coverage budget is separate from and additive with `maxIterations` — structured coverage runs first, then random sampling runs for the full random budget.
 
 ### Covering arrays in the reducer: FibreCoveringEncoder
 
-The IPOG covering array infrastructure is also reused inside the BonsaiReducer. `FibreCoveringEncoder` — a `PointEncoder` used as the downstream leg of `KleisliComposition` (Section 3) — searches a fibre for *any* failure-preserving candidate rather than minimising toward a target. It operates in two regimes: exhaustive mixed-radix enumeration for small fibres (total space ≤ 64), and pairwise (strength-2) IPOG covering for larger ones. This connects the combinatorial testing infrastructure (Section 4) with the fibration theory (Section 8): the upstream mutation selects a point in the base (trace structure), and `FibreCoveringEncoder` systematically explores the fibre above it.
+The covering array infrastructure is also reused inside the BonsaiReducer. `FibreCoveringEncoder` — a `ComposableEncoder` used as the downstream leg of `KleisliComposition` (Section 3) — searches a fibre for *any* failure-preserving candidate rather than minimising toward a target. It operates in two regimes: exhaustive mixed-radix enumeration for small fibres (total space ≤ 128), and pull-based pairwise covering (strength 2) for larger ones. Each `nextProbe()` call pulls the next greedy row from a `PullBasedCoveringArrayGenerator` — no upfront batch build. This connects the combinatorial testing infrastructure (Section 4) with the fibration theory (Section 8): the upstream mutation selects a point in the base (trace structure), and `FibreCoveringEncoder` lazily explores the fibre above it.
 
 ### Key files
 

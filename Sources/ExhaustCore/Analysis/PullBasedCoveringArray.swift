@@ -3,10 +3,63 @@
 //  Exhaust
 //
 
-// MARK: - Pull-Based Bit Vector
+// MARK: - Academic Provenance
+//
+// This file implements a one-test-at-a-time greedy covering array generator
+// based on the density algorithm from:
+//
+//   Bryce, R.C. & Colbourn, C.J. (2009). "A density-based greedy algorithm
+//   for higher strength covering arrays." Softw. Test. Verif. Reliab.,
+//   19(1), 37–53. DOI: 10.1002/stvr.393
+//
+// The paper defines a four-layer framework for greedy covering array
+// construction: (1) test suite repetitions, (2) multiple candidates per row,
+// (3) factor ordering, and (4) level selection via density. Exhaust
+// instantiates this framework with the following choices:
+//
+// Layer 1 — Repetitions: 1 (deterministic, no randomness). The paper shows
+//   that more repetitions reduce array size, but Exhaust stops on first
+//   property failure so minimizing total array size is secondary to fast
+//   time-to-first-row.
+//
+// Layer 2 — Multiple candidates: 1 candidate per row. The paper's Table V
+//   shows 10 candidates can reduce array size by ~5–10%, but at 10x the
+//   per-row cost. Not worthwhile for early-stop property-based testing.
+//
+// Layer 3 — Factor ordering: Fixed left-to-right after sorting parameters
+//   by domain size ascending (smallest first). This is a static heuristic,
+//   not the paper's density-driven ordering. The paper finds density-based
+//   ordering produces modestly smaller arrays, but the effect diminishes
+//   with unrestricted density (Section 3, p. 47).
+//
+// Layer 4 — Level selection: Unrestricted density (Section 2, Theorem 2.2).
+//   For completing slices (all other factors fixed), the contribution is
+//   exact: 1 if the tuple is uncovered, 0 otherwise. For non-completing
+//   slices (some factors still free), the contribution is the count of
+//   compatible uncovered tuples divided by the product of unfilled domain
+//   sizes — matching the paper's 1/|V_f| weighting. This preserves the
+//   O(log k) row-count guarantee from Theorem 2.2.
+//
+// The slicesByCompletingColumn optimization (only evaluate completing slices
+// at each column) is augmented with partialSlicesByColumn for non-completing
+// slices. The completing evaluation is the 0-restricted case; the partial
+// evaluation adds the unrestricted density signal from free factors.
+//
+// What Exhaust does NOT implement from the paper:
+//   - Best (t-1)-tuple seeding (Section 3): fixing the first t-1 factors to
+//     the values of the most common uncovered (t-1)-tuple before density fill.
+//   - Density-driven factor ordering (Section 3): choosing the factor with
+//     highest factor density at each step instead of a fixed left-to-right order.
+//   - Multiple candidates or repetitions (Layers 1–2).
+//   - Seeding from an existing array (Section 4, p. 52): pre-marking tuples
+//     from a seed array (for example, an orthogonal array) before generating
+//     additional rows.
+//
+// These omissions are deliberate: Exhaust's use case is property-based testing
+// where the first failure matters more than the total array size, and
+// determinism (no random tie-breaking) is required for reproducibility.
 
-// Duplicate of BitVector from CoveringArray.swift. Kept separate so the two
-// implementations can be compared independently.
+// MARK: - Pull-Based Bit Vector
 
 /// Bit-vector with unsafe pointer storage for coverage tracking.
 private struct PullBitVector {
@@ -391,13 +444,15 @@ public struct PullBasedCoveringArrayGenerator {
 
     // MARK: - Partial Coverage Evaluation
 
-    /// Evaluates partial coverage potential for a candidate value at a column with no completing slices. Counts how many uncovered tuples across non-completing slices are compatible with the candidate.
-    private func evaluatePartialCoverage(col: Int, candidate: UInt16) -> Int {
+    /// Evaluates partial coverage density for a candidate value across non-completing slices.
+    ///
+    /// Each non-completing slice's contribution is the count of compatible uncovered tuples divided by the range size (the product of unfilled domain sizes). This matches Bryce & Colbourn's unrestricted density: free factors are weighted by 1/|V_f|, so the contribution represents the *probability* that a random assignment to the unfilled factors would cover an uncovered tuple.
+    private func evaluatePartialCoverage(col: Int, candidate: UInt16) -> Double {
         let partialRefs = partialSlicesByColumn[col]
         let partialCount = partialRefs.count
         if partialCount == 0 { return 0 }
 
-        var gain = 0
+        var density = 0.0
         var refPos = 0
         while refPos < partialCount {
             let ref = partialRefs[refPos]
@@ -416,13 +471,14 @@ public struct PullBasedCoveringArrayGenerator {
             }
 
             let start = baseIdx &+ UInt32(candidate) &* ref.rangeSize
-            gain &+= slice.bits.countUnsetInRange(from: start, count: Int(ref.rangeSize))
+            let uncovered = slice.bits.countUnsetInRange(from: start, count: Int(ref.rangeSize))
+            density += Double(uncovered) / Double(ref.rangeSize)
             refPos &+= 1
         }
-        return gain
+        return density
     }
 
-    /// Fills a column that has no completing slices using partial coverage potential.
+    /// Fills a column that has no completing slices using partial coverage density.
     private mutating func fillColumnPartial(col: Int) {
         let domain = ordering.reorderedDomainSizes[col]
         let partialRefs = partialSlicesByColumn[col]
@@ -433,13 +489,13 @@ public struct PullBasedCoveringArrayGenerator {
         }
 
         var bestValue: UInt16 = 0
-        var bestGain = 0
+        var bestDensity = -1.0
 
         var candidate: UInt16 = 0
         while candidate < domain {
-            let gain = evaluatePartialCoverage(col: col, candidate: candidate)
-            if gain > bestGain {
-                bestGain = gain
+            let density = evaluatePartialCoverage(col: col, candidate: candidate)
+            if density > bestDensity {
+                bestDensity = density
                 bestValue = candidate
             }
             candidate &+= 1
@@ -456,12 +512,12 @@ public struct PullBasedCoveringArrayGenerator {
             let relevantCount = relevantSlices.count
             let domain = ordering.reorderedDomainSizes[col]
             var bestValue: UInt16 = 0
-            var bestGain = 0
+            var bestGain = -1.0
 
             var candidate: UInt16 = 0
             while candidate < domain {
                 rowBuffer[col] = candidate
-                var gain = 0
+                var gain = 0.0
 
                 // Exact gain from completing slices (tuples fully determined at this column).
                 var slicePos = 0
@@ -472,13 +528,13 @@ public struct PullBasedCoveringArrayGenerator {
                     let v1 = rowBuffer[Int(slice.paramIndices.1)]
                     let flatIdx = slice.flatIndex2(v0, v1)
                     if slice.isSet(flatIdx) == false {
-                        gain &+= 1
+                        gain += 1
                     }
                     slicePos &+= 1
                 }
 
-                // Partial gain from non-completing slices (compatible uncovered tuples).
-                gain &+= evaluatePartialCoverage(col: col, candidate: candidate)
+                // Density-weighted partial gain from non-completing slices.
+                gain += evaluatePartialCoverage(col: col, candidate: candidate)
 
                 if gain > bestGain {
                     bestGain = gain
@@ -499,12 +555,12 @@ public struct PullBasedCoveringArrayGenerator {
             let relevantCount = relevantSlices.count
             let domain = ordering.reorderedDomainSizes[col]
             var bestValue: UInt16 = 0
-            var bestGain = 0
+            var bestGain = -1.0
 
             var candidate: UInt16 = 0
             while candidate < domain {
                 rowBuffer[col] = candidate
-                var gain = 0
+                var gain = 0.0
 
                 var slicePos = 0
                 while slicePos < relevantCount {
@@ -515,12 +571,12 @@ public struct PullBasedCoveringArrayGenerator {
                     let v2 = rowBuffer[Int(slice.paramIndices.2)]
                     let flatIdx = slice.flatIndex3(v0, v1, v2)
                     if slice.isSet(flatIdx) == false {
-                        gain &+= 1
+                        gain += 1
                     }
                     slicePos &+= 1
                 }
 
-                gain &+= evaluatePartialCoverage(col: col, candidate: candidate)
+                gain += evaluatePartialCoverage(col: col, candidate: candidate)
 
                 if gain > bestGain {
                     bestGain = gain
@@ -541,12 +597,12 @@ public struct PullBasedCoveringArrayGenerator {
             let relevantCount = relevantSlices.count
             let domain = ordering.reorderedDomainSizes[col]
             var bestValue: UInt16 = 0
-            var bestGain = 0
+            var bestGain = -1.0
 
             var candidate: UInt16 = 0
             while candidate < domain {
                 rowBuffer[col] = candidate
-                var gain = 0
+                var gain = 0.0
 
                 var slicePos = 0
                 while slicePos < relevantCount {
@@ -558,12 +614,12 @@ public struct PullBasedCoveringArrayGenerator {
                     let v3 = rowBuffer[Int(slice.paramIndices.3)]
                     let flatIdx = slice.flatIndex4(v0, v1, v2, v3)
                     if slice.isSet(flatIdx) == false {
-                        gain &+= 1
+                        gain += 1
                     }
                     slicePos &+= 1
                 }
 
-                gain &+= evaluatePartialCoverage(col: col, candidate: candidate)
+                gain += evaluatePartialCoverage(col: col, candidate: candidate)
 
                 if gain > bestGain {
                     bestGain = gain

@@ -1,5 +1,7 @@
 # Deterministic FIPOG-Style IPOG for Covering Array Generation
 
+> **Historical note.** This document describes the batch FIPOG-style IPOG builder (`FIPOGBuilder` in `CoveringArray.swift`). As of March 2026, property-testing coverage uses the **pull-based density algorithm** (`PullBasedCoveringArrayGenerator` in `PullBasedCoveringArray.swift`), which emits rows lazily via `next()` and stops on first failure. FIPOG remains in the codebase for the contract-testing (SCA) pipeline. See `docs/pull-based-covering-array-generator.md` for the current design.
+
 ## Design Goals
 
 | Constraint | Value |
