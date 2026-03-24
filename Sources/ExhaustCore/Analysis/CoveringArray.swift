@@ -15,11 +15,7 @@ public struct CoveringArrayRow: @unchecked Sendable {
 
 /// A t-way covering array guaranteeing that every t-tuple of parameter values appears in at least one row.
 ///
-/// Generated using the IPOG (In-Parameter-Order-General) algorithm from:
-/// Lei & Kacker, "IPOG: A General Strategy for T-Way Software Testing",
-/// 14th Annual IEEE International Conference and Workshops on the Engineering of Computer-Based Systems (ECBS 2007).
-///
-/// The architecture accommodates future extension to ordered t-way coverage via concatenated covering arrays, as described by Kuhn, Raunak & Kacker in "Ordered t-way Combinations for Testing State-based Systems".
+/// Generated using a FIPOG-style IPOG algorithm with bit-vector coverage tracking, column-major storage, and strength-specialized hot loops for t=2, 3, and 4 (Kleine & Simos, "An efficient design and implementation of the in-parameter-order algorithm", Math. Comput. Sci. 12(1), 2018). Rows are returned in shortlex order.
 public struct CoveringArray: @unchecked Sendable {
     public let strength: Int
     public let rows: [CoveringArrayRow]
@@ -27,60 +23,81 @@ public struct CoveringArray: @unchecked Sendable {
 
     /// Returns the strongest covering array that fits within `budget` rows, or `nil` if even t=2 doesn't fit.
     ///
-    /// Searches bottom-up (t=2, 3, …) so it can stop as soon as a strength exceeds the budget, avoiding unnecessary IPOG runs at high strengths.
-    /// Also skips strengths whose initial seed rows alone exceed the budget (the seed is the exhaustive product of the first `t` parameters).
+    /// Searches bottom-up (t=2, 3, …) so it can stop as soon as a strength exceeds the budget, avoiding unnecessary IPOG runs at high strengths. Also skips strengths whose initial seed rows alone exceed the budget (the seed is the exhaustive product of the first `t` parameters). The budget is threaded into `generate()` so the FIPOG builder can abort mid-generation instead of building a full array only to discard it.
     ///
-    /// - Parameter maxStrength: Upper bound on the interaction strength to try. Defaults to 6. Callers with large per-parameter domains (for example, SCA with argument-aware domains) should pass a lower cap to avoid combinatorially expensive IPOG runs at high strengths.
+    /// - Parameters:
+    ///   - budget: Maximum number of rows the covering array may contain.
+    ///   - profile: The finite domain profile describing all parameters.
+    ///   - maxStrength: Upper bound on the interaction strength to try. Capped internally at 4 (the maximum the FIPOG builder supports). Defaults to 6 for API compatibility.
     public static func bestFitting(budget: UInt64, profile: FiniteDomainProfile, maxStrength: Int = 6) -> CoveringArray? {
         let paramCount = profile.parameters.count
         guard paramCount >= 2 else { return nil }
 
+        let effectiveMax = min(paramCount, maxStrength, 4)
+        guard effectiveMax >= 2 else { return nil }
+
+        let rowBudget = Int(min(budget, UInt64(Int.max)))
         var best: CoveringArray?
-        for t in 2 ... min(paramCount, maxStrength) {
+        for strength in 2 ... effectiveMax {
             // Quick reject: the initial seed is the product of the first t domains.
             // If that alone exceeds the budget, higher strengths will only be worse.
             var seedSize: UInt64 = 1
             var tooBig = false
-            for i in 0 ..< t {
-                let (product, overflow) = seedSize.multipliedReportingOverflow(by: profile.parameters[i].domainSize)
+            for index in 0 ..< strength {
+                let (product, overflow) = seedSize.multipliedReportingOverflow(by: profile.parameters[index].domainSize)
                 if overflow || product > budget { tooBig = true; break }
                 seedSize = product
             }
             if tooBig { break }
 
-            guard let covering = generate(profile: profile, strength: t) else { continue }
-            if UInt64(covering.rows.count) <= budget {
-                best = covering
-            } else {
-                break // higher strengths will only produce more rows
+            guard let covering = generate(profile: profile, strength: strength, rowBudget: rowBudget) else {
+                break
             }
+            best = covering
         }
         return best
     }
 
-    /// Generates a covering array using the IPOG algorithm (Lei & Kacker, ECBS 2007).
+    /// Generates a covering array using the FIPOG-style IPOG algorithm.
     ///
-    /// IPOG builds the array incrementally: it starts with an exhaustive enumeration of the first `t` parameters, then extends one parameter at a time via *horizontal growth* (greedily choosing the best value for each existing row) followed by *vertical growth* (adding new rows for any uncovered tuples).
+    /// Builds the array incrementally: starts with an exhaustive enumeration of the first `t` parameters, then extends one parameter at a time via *horizontal growth* (greedily choosing the best value for each existing row) followed by *vertical growth* (adding new rows for any uncovered tuples). Uses bit-vector coverage tracking and strength-specialized hot loops for t=2, 3, and 4.
+    ///
+    /// Rows are returned in shortlex order (lexicographic, since all rows are equal width).
     ///
     /// - Parameters:
     ///   - profile: The finite domain profile describing all parameters.
-    ///   - strength: The interaction strength `t` (typically 2 or 3).
-    /// - Returns: A covering array, or `nil` if generation fails.
+    ///   - strength: The interaction strength `t`. Supported values: 1 through 4, or equal to the parameter count (exhaustive). Values above 4 return `nil`.
+    ///   - rowBudget: Maximum number of rows. Defaults to 2000.
+    /// - Returns: A covering array, or `nil` if generation fails or exceeds the budget.
     public static func generate(profile: FiniteDomainProfile, strength: Int, rowBudget: Int? = nil) -> CoveringArray? {
         let params = profile.parameters
-        let n = params.count
-        guard strength >= 1, strength <= n else { return nil }
+        let paramCount = params.count
+        guard strength >= 1, strength <= paramCount else { return nil }
 
-        if strength == n {
+        if strength == paramCount {
             return exhaustive(profile: profile)
         }
 
-        var builder = IPOGBuilder(params: params, strength: strength)
-        if let budget = rowBudget {
-            guard builder.run(rowBudget: budget) else { return nil }
-        } else {
-            builder.runUnbounded()
+        let budget = rowBudget ?? 2000
+
+        // Strength 1: each parameter value appears at least once. max(domains) rows.
+        if strength == 1 {
+            let maxDomain = params.map(\.domainSize).max() ?? 1
+            if maxDomain > UInt64(budget) { return nil }
+            var rows: [CoveringArrayRow] = []
+            rows.reserveCapacity(Int(maxDomain))
+            for row in 0 ..< Int(maxDomain) {
+                let values = params.map { UInt64(row) % $0.domainSize }
+                rows.append(CoveringArrayRow(values: values))
+            }
+            rows.sort { $0.values.lexicographicallyPrecedes($1.values) }
+            return CoveringArray(strength: 1, rows: rows, profile: profile)
         }
+
+        guard strength <= 4 else { return nil }
+
+        var builder = FIPOGBuilder(domainSizes: params.map(\.domainSize), strength: strength)
+        guard builder.run(rowBudget: budget) else { return nil }
 
         let rows = builder.finalize()
         return CoveringArray(strength: strength, rows: rows, profile: profile)
@@ -338,431 +355,629 @@ public struct CoveringArray: @unchecked Sendable {
     }
 }
 
-// MARK: - Packed Key Types
+// MARK: - FIPOG Builder
 
-/// Packs up to 8 parameter indices (each < 256) into a single `UInt64`, 8 bits per index.
-private struct ComboKey: Hashable {
-    let packed: UInt64
+// FIPOG-style IPOG implementation for covering array generation.
+//
+// Based on Kleine & Simos (2018) "An efficient design and implementation
+// of the in-parameter-order algorithm". Uses bit-vector coverage tracking,
+// column-major storage, and strength-specialized hot loops for t=2, 3, 4.
+//
+// Key differences from the prior hash-based IPOGBuilder:
+// - Coverage tracked as one bit per value-tuple (flat integer index) instead of Set<ValueKey>.
+// - Column-major UInt16 storage instead of row-major [[UInt64?]].
+// - Active-frontier allocation: only slices involving the current parameter are live.
+// - Iterative vertical growth with greedy don't-care resolution instead of batch.
 
-    init(_ indices: [Int]) {
-        var p: UInt64 = 0
-        var i = 0
-        while i < indices.count {
-            p |= UInt64(indices[i]) << (i &* 8)
-            i &+= 1
-        }
-        packed = p
+/// Bit-vector with unsafe pointer storage for coverage tracking.
+///
+/// The abstraction boundary for swapping between unsafe and safe storage implementations. All bit operations use wrapping arithmetic for speed.
+private struct BitVector {
+    private let storage: UnsafeMutablePointer<UInt64>
+    let wordCount: Int
+
+    init(bitCount: Int) {
+        let words = max((bitCount &+ 63) >> 6, 1)
+        wordCount = words
+        storage = .allocate(capacity: words)
+        storage.initialize(repeating: 0, count: words)
     }
-}
 
-/// Packs up to 8 domain values (each < 65536) into two `UInt64`s, 16 bits per value.
-private struct ValueKey: Hashable {
-    let lo: UInt64
-    let hi: UInt64
-}
+    /// Returns `true` if the bit at `index` is set.
+    @inline(__always)
+    func isSet(_ index: UInt32) -> Bool {
+        let word = Int(index &>> 6)
+        let bit = index & 63
+        return (storage[word] &>> bit) & 1 != 0
+    }
 
-// MARK: - IPOG Builder
+    /// Sets the bit at `index`. Returns `true` if the bit was previously unset (newly covered).
+    @inline(__always)
+    mutating func set(_ index: UInt32) -> Bool {
+        let word = Int(index &>> 6)
+        let bit = index & 63
+        let mask: UInt64 = 1 &<< bit
+        let old = storage[word]
+        if old & mask != 0 { return false }
+        storage[word] = old | mask
+        return true
+    }
 
-/// Internal builder implementing the IPOG algorithm (Lei & Kacker, ECBS 2007).
-///
-/// Uses `Optional<UInt64>` for don't-care tracking during vertical growth, which the paper denotes as wildcard positions that can be freely assigned.
-///
-/// Performance optimizations:
-/// - Combinations and their packed ComboKeys are pre-computed once in `init` instead of regenerated per call.
-/// - "Must-include" combos are generated directly (e.g. for t=2, combos including i are `{(j,i) | j<i}`) instead of filtering all C(n,t) combos.
-/// - Dictionary keys use packed inline value types instead of heap-allocated arrays.
-/// - Hot-path loops use index-based iteration to avoid iterator overhead.
-private struct IPOGBuilder {
-    let params: [FiniteParameter]
-    let strength: Int
-    let n: Int
+    /// Returns the index of the first unset bit below `limit`, or `nil` if all are set.
+    func firstUnsetBit(below limit: Int) -> UInt32? {
+        let fullWords = limit >> 6
+        let remainderBits = limit & 63
 
-    /// Working rows with Optional values (nil = don't care).
-    var rows: [[UInt64?]]
-
-    /// Tracks covered t-way combinations.
-    var covered: CoveredSet
-
-    /// Pre-computed: `allCombos[upToParam]` = all combinations(of: upToParam, choose: strength).
-    let allCombos: [[[Int]]]
-
-    /// Pre-computed ComboKeys parallel to `allCombos`.
-    let allComboKeys: [[ComboKey]]
-
-    /// Pre-computed: `combosIncluding[i]` = t-combos from `0..<(i+1)` that contain `i`.
-    /// Generated directly as (t-1)-combos from `0..<i` with `i` appended.
-    let combosIncluding: [[[Int]]]
-
-    /// Pre-computed ComboKeys parallel to `combosIncluding`.
-    let combosIncludingKeys: [[ComboKey]]
-
-    init(params: [FiniteParameter], strength: Int) {
-        self.params = params
-        self.strength = strength
-        n = params.count
-        rows = []
-        covered = CoveredSet()
-
-        var allCombos = Array(repeating: [[Int]](), count: n + 1)
-        var allComboKeys = Array(repeating: [ComboKey](), count: n + 1)
-        for upTo in strength ... n {
-            let combos = combinations(of: upTo, choose: strength)
-            allComboKeys[upTo] = combos.map { ComboKey($0) }
-            allCombos[upTo] = combos
-        }
-        self.allCombos = allCombos
-        self.allComboKeys = allComboKeys
-
-        var combosIncluding = Array(repeating: [[Int]](), count: n)
-        var combosIncludingKeys = Array(repeating: [ComboKey](), count: n)
-        for i in (strength - 1) ..< n {
-            let combos: [[Int]] = if strength == 1 {
-                [[i]]
-            } else {
-                combinationsAppending(of: i, choose: strength - 1, trailing: i)
+        for word in 0 ..< fullWords {
+            let value = storage[word]
+            if value != UInt64.max {
+                let bit = UInt32(word &* 64 &+ (~value).trailingZeroBitCount)
+                return bit
             }
-            combosIncludingKeys[i] = combos.map { ComboKey($0) }
-            combosIncluding[i] = combos
         }
-        self.combosIncluding = combosIncluding
-        self.combosIncludingKeys = combosIncludingKeys
+
+        // Check partial last word if limit is not word-aligned.
+        if remainderBits > 0, fullWords < wordCount {
+            let value = storage[fullWords]
+            let mask: UInt64 = (1 &<< remainderBits) &- 1
+            let uncovered = ~value & mask
+            if uncovered != 0 {
+                return UInt32(fullWords &* 64 &+ uncovered.trailingZeroBitCount)
+            }
+        }
+
+        return nil
     }
 
-    /// Runs IPOG without a row budget.
-    mutating func runUnbounded() {
-        seedInitialRows()
-        for i in strength ..< n {
-            horizontalGrowth(paramIndex: i)
-            verticalGrowth(paramIndex: i)
-        }
+    func deallocate() {
+        storage.deinitialize(count: wordCount)
+        storage.deallocate()
+    }
+}
+
+/// Tracks coverage for one specific t-tuple of parameter indices.
+///
+/// Each slice owns a ``BitVector`` where bit `i` represents the `i`-th value combination (packed via precomputed strides). The new parameter occupies the last stride position (stride = 1) for optimal horizontal growth iteration.
+private struct CoverageSlice {
+    var bits: BitVector
+
+    /// Precomputed strides for flat index computation. Only the first `strength` entries are meaningful. The last meaningful entry is always 1 (the new parameter).
+    let strides: (UInt32, UInt32, UInt32, UInt32)
+
+    /// The (t-1) partner parameter indices. Only the first `strength - 1` entries are meaningful.
+    let partnerParams: (UInt16, UInt16, UInt16)
+
+    let totalTuples: Int
+    var remaining: Int
+
+    @inline(__always)
+    func flatIndex2(_ value0: UInt16, _ value1: UInt16) -> UInt32 {
+        UInt32(value0) &* strides.0 &+ UInt32(value1)
     }
 
-    /// Runs IPOG with a row budget. Returns `false` (and aborts) if the row
-    /// count exceeds the budget at any point during growth.
+    @inline(__always)
+    func flatIndex3(_ value0: UInt16, _ value1: UInt16, _ value2: UInt16) -> UInt32 {
+        UInt32(value0) &* strides.0 &+ UInt32(value1) &* strides.1 &+ UInt32(value2)
+    }
+
+    @inline(__always)
+    func flatIndex4(_ value0: UInt16, _ value1: UInt16, _ value2: UInt16, _ value3: UInt16) -> UInt32 {
+        UInt32(value0) &* strides.0 &+ UInt32(value1) &* strides.1 &+ UInt32(value2) &* strides.2 &+ UInt32(value3)
+    }
+
+    /// Marks the tuple at `index` as covered. Returns `true` if newly covered.
+    @inline(__always)
+    mutating func mark(_ index: UInt32) -> Bool {
+        if bits.set(index) {
+            remaining &-= 1
+            return true
+        }
+        return false
+    }
+
+    @inline(__always)
+    func isSet(_ index: UInt32) -> Bool {
+        bits.isSet(index)
+    }
+
+    mutating func deallocate() {
+        bits.deallocate()
+    }
+}
+
+/// FIPOG-style IPOG builder using bit-vector coverage and column-major storage.
+///
+/// Implements the In-Parameter-Order-General algorithm with bit-vector coverage tracking (one bit per value-tuple) instead of hash sets, column-major `UInt16` storage instead of row-major `Optional<UInt64>` arrays, strength-specialized hot loops for t=2, 3, and 4, active-frontier allocation (only slices involving the current parameter are live), and iterative vertical growth with greedy don't-care resolution.
+private struct FIPOGBuilder {
+    private var domainSizes: ContiguousArray<UInt16>
+    private let strength: Int
+    private let paramCount: Int
+    private var columns: ContiguousArray<ContiguousArray<UInt16>>
+    private var rowCount: Int
+
+    init(domainSizes: [UInt64], strength: Int) {
+        self.domainSizes = ContiguousArray(domainSizes.map { UInt16(clamping: $0) })
+        self.strength = strength
+        self.paramCount = domainSizes.count
+        self.columns = ContiguousArray()
+        self.rowCount = 0
+    }
+
+    /// Runs the FIPOG builder with a row budget. Returns `false` if the budget is exceeded at any point.
     mutating func run(rowBudget: Int) -> Bool {
-        seedInitialRows()
-        if rows.count > rowBudget { return false }
-        for i in strength ..< n {
-            horizontalGrowth(paramIndex: i)
-            verticalGrowth(paramIndex: i)
-            if rows.count > rowBudget { return false }
+        guard seedInitialRows(rowBudget: rowBudget) else { return false }
+
+        for paramIndex in strength ..< paramCount {
+            var slices = allocateSlices(forParameter: paramIndex)
+
+            switch strength {
+            case 2: horizontalGrowth2(paramIndex: paramIndex, slices: &slices)
+            case 3: horizontalGrowth3(paramIndex: paramIndex, slices: &slices)
+            case 4: horizontalGrowth4(paramIndex: paramIndex, slices: &slices)
+            default: break
+            }
+
+            let succeeded = verticalGrowth(paramIndex: paramIndex, slices: &slices, rowBudget: rowBudget)
+
+            for index in slices.indices {
+                slices[index].deallocate()
+            }
+
+            if succeeded == false { return false }
         }
         return true
     }
 
-    /// Convert working rows to final CoveringArrayRow, filling don't-cares with 0.
+    /// Converts column-major storage to shortlex-sorted ``CoveringArrayRow`` output.
     func finalize() -> [CoveringArrayRow] {
-        rows.map { row in
-            CoveringArrayRow(values: row.map { $0 ?? 0 })
+        var rows = [CoveringArrayRow]()
+        rows.reserveCapacity(rowCount)
+
+        for row in 0 ..< rowCount {
+            var values = [UInt64]()
+            values.reserveCapacity(paramCount)
+            for param in 0 ..< paramCount {
+                values.append(UInt64(columns[param][row]))
+            }
+            rows.append(CoveringArrayRow(values: values))
         }
+
+        // Shortlex sort — all rows are equal width so shortlex reduces to lexicographic.
+        rows.sort { $0.values.lexicographicallyPrecedes($1.values) }
+
+        return rows
     }
 
-    // MARK: - Initial Seed
+    // MARK: - Seed
 
-    private mutating func seedInitialRows() {
-        var totalCombinations: UInt64 = 1
-        for idx in 0 ..< strength {
-            totalCombinations *= params[idx].domainSize
+    /// Generates the full factorial of the first `strength` parameters as the initial seed.
+    private mutating func seedInitialRows(rowBudget: Int) -> Bool {
+        var seedSize = 1
+        for index in 0 ..< strength {
+            let (product, overflow) = seedSize.multipliedReportingOverflow(by: Int(domainSizes[index]))
+            if overflow || product > rowBudget { return false }
+            seedSize = product
         }
 
-        rows.reserveCapacity(Int(totalCombinations))
+        rowCount = seedSize
+        columns.reserveCapacity(paramCount)
 
-        for combo in 0 ..< totalCombinations {
-            var row = [UInt64?](repeating: nil, count: n)
+        for param in 0 ..< strength {
+            columns.append(ContiguousArray<UInt16>(repeating: 0, count: seedSize))
+        }
+
+        // Rightmost-fastest decomposition for shortlex-biased row ordering.
+        for combo in 0 ..< seedSize {
             var remainder = combo
-            for idx in (0 ..< strength).reversed() {
-                let domain = params[idx].domainSize
-                row[idx] = remainder % domain
+            for param in (0 ..< strength).reversed() {
+                let domain = Int(domainSizes[param])
+                columns[param][combo] = UInt16(remainder % domain)
                 remainder /= domain
             }
-            rows.append(row)
         }
 
-        // Register all t-way combos from initial rows
-        let combos = allCombos[strength]
-        let keys = allComboKeys[strength]
-        for row in rows {
-            covered.addAll(row: row, combos: combos, comboKeys: keys)
-        }
+        return true
     }
 
-    // MARK: - Horizontal Growth
+    // MARK: - Slice Allocation
 
-    private mutating func horizontalGrowth(paramIndex i: Int) {
-        let domainI = params[i].domainSize
-        let combos = combosIncluding[i]
-        let keys = combosIncludingKeys[i]
+    /// Allocates coverage slices for all C(`paramIndex`, `strength`-1) combinations involving `paramIndex`.
+    ///
+    /// Each slice tracks one specific combination of `strength` parameters where the last is `paramIndex` (stride = 1). Previous step's slices are deallocated by the caller after growth completes.
+    private func allocateSlices(forParameter paramIndex: Int) -> ContiguousArray<CoverageSlice> {
+        var slices = ContiguousArray<CoverageSlice>()
+        let newDomain = UInt32(domainSizes[paramIndex])
 
-        for rowIdx in rows.indices {
-            // Choose value for parameter i that covers the most new combinations
-            var bestValue: UInt64 = 0
-            var bestCount = 0
+        switch strength {
+        case 2:
+            slices.reserveCapacity(paramIndex)
+            for partner in 0 ..< paramIndex {
+                let partnerDomain = UInt32(domainSizes[partner])
+                let total = Int(partnerDomain) * Int(newDomain)
+                slices.append(CoverageSlice(
+                    bits: BitVector(bitCount: total),
+                    strides: (newDomain, 1, 0, 0),
+                    partnerParams: (UInt16(partner), 0, 0),
+                    totalTuples: total,
+                    remaining: total
+                ))
+            }
 
-            for v in 0 ..< domainI {
-                rows[rowIdx][i] = v
-                let count = covered.countUncovered(row: rows[rowIdx], combos: combos, comboKeys: keys)
-                if count > bestCount {
-                    bestCount = count
-                    bestValue = v
+        case 3:
+            slices.reserveCapacity(paramIndex * (paramIndex - 1) / 2)
+            for first in 0 ..< paramIndex {
+                for second in (first + 1) ..< paramIndex {
+                    let domFirst = UInt32(domainSizes[first])
+                    let domSecond = UInt32(domainSizes[second])
+                    let total = Int(domFirst) * Int(domSecond) * Int(newDomain)
+                    let stride0 = domSecond &* newDomain
+                    let stride1 = newDomain
+                    slices.append(CoverageSlice(
+                        bits: BitVector(bitCount: total),
+                        strides: (stride0, stride1, 1, 0),
+                        partnerParams: (UInt16(first), UInt16(second), 0),
+                        totalTuples: total,
+                        remaining: total
+                    ))
                 }
             }
 
-            rows[rowIdx][i] = bestValue
-            covered.addAll(row: rows[rowIdx], combos: combos, comboKeys: keys)
+        case 4:
+            slices.reserveCapacity(paramIndex * (paramIndex - 1) * (paramIndex - 2) / 6)
+            for first in 0 ..< paramIndex {
+                for second in (first + 1) ..< paramIndex {
+                    for third in (second + 1) ..< paramIndex {
+                        let domFirst = UInt32(domainSizes[first])
+                        let domSecond = UInt32(domainSizes[second])
+                        let domThird = UInt32(domainSizes[third])
+                        let total = Int(domFirst) * Int(domSecond) * Int(domThird) * Int(newDomain)
+                        let stride0 = domSecond &* domThird &* newDomain
+                        let stride1 = domThird &* newDomain
+                        let stride2 = newDomain
+                        slices.append(CoverageSlice(
+                            bits: BitVector(bitCount: total),
+                            strides: (stride0, stride1, stride2, 1),
+                            partnerParams: (UInt16(first), UInt16(second), UInt16(third)),
+                            totalTuples: total,
+                            remaining: total
+                        ))
+                    }
+                }
+            }
+
+        default:
+            break
+        }
+
+        return slices
+    }
+
+    // MARK: - Horizontal Growth (strength-specialized)
+
+    private mutating func horizontalGrowth2(paramIndex: Int, slices: inout ContiguousArray<CoverageSlice>) {
+        let domain = Int(domainSizes[paramIndex])
+        let sliceCount = slices.count
+
+        columns.append(ContiguousArray<UInt16>(repeating: 0, count: rowCount))
+
+        for row in 0 ..< rowCount {
+            var bestValue: UInt16 = 0
+            var bestCount = 0
+
+            for candidate: UInt16 in 0 ..< UInt16(domain) {
+                var count = 0
+                for slice in 0 ..< sliceCount {
+                    let partner = columns[Int(slices[slice].partnerParams.0)][row]
+                    let index = slices[slice].flatIndex2(partner, candidate)
+                    if slices[slice].isSet(index) == false {
+                        count &+= 1
+                    }
+                }
+                if count > bestCount {
+                    bestCount = count
+                    bestValue = candidate
+                }
+            }
+
+            columns[paramIndex][row] = bestValue
+
+            for slice in 0 ..< sliceCount {
+                let partner = columns[Int(slices[slice].partnerParams.0)][row]
+                let index = slices[slice].flatIndex2(partner, bestValue)
+                _ = slices[slice].mark(index)
+            }
+        }
+    }
+
+    private mutating func horizontalGrowth3(paramIndex: Int, slices: inout ContiguousArray<CoverageSlice>) {
+        let domain = Int(domainSizes[paramIndex])
+        let sliceCount = slices.count
+
+        columns.append(ContiguousArray<UInt16>(repeating: 0, count: rowCount))
+
+        for row in 0 ..< rowCount {
+            var bestValue: UInt16 = 0
+            var bestCount = 0
+
+            for candidate: UInt16 in 0 ..< UInt16(domain) {
+                var count = 0
+                for slice in 0 ..< sliceCount {
+                    let partner0 = columns[Int(slices[slice].partnerParams.0)][row]
+                    let partner1 = columns[Int(slices[slice].partnerParams.1)][row]
+                    let index = slices[slice].flatIndex3(partner0, partner1, candidate)
+                    if slices[slice].isSet(index) == false {
+                        count &+= 1
+                    }
+                }
+                if count > bestCount {
+                    bestCount = count
+                    bestValue = candidate
+                }
+            }
+
+            columns[paramIndex][row] = bestValue
+
+            for slice in 0 ..< sliceCount {
+                let partner0 = columns[Int(slices[slice].partnerParams.0)][row]
+                let partner1 = columns[Int(slices[slice].partnerParams.1)][row]
+                let index = slices[slice].flatIndex3(partner0, partner1, bestValue)
+                _ = slices[slice].mark(index)
+            }
+        }
+    }
+
+    private mutating func horizontalGrowth4(paramIndex: Int, slices: inout ContiguousArray<CoverageSlice>) {
+        let domain = Int(domainSizes[paramIndex])
+        let sliceCount = slices.count
+
+        columns.append(ContiguousArray<UInt16>(repeating: 0, count: rowCount))
+
+        for row in 0 ..< rowCount {
+            var bestValue: UInt16 = 0
+            var bestCount = 0
+
+            for candidate: UInt16 in 0 ..< UInt16(domain) {
+                var count = 0
+                for slice in 0 ..< sliceCount {
+                    let partner0 = columns[Int(slices[slice].partnerParams.0)][row]
+                    let partner1 = columns[Int(slices[slice].partnerParams.1)][row]
+                    let partner2 = columns[Int(slices[slice].partnerParams.2)][row]
+                    let index = slices[slice].flatIndex4(partner0, partner1, partner2, candidate)
+                    if slices[slice].isSet(index) == false {
+                        count &+= 1
+                    }
+                }
+                if count > bestCount {
+                    bestCount = count
+                    bestValue = candidate
+                }
+            }
+
+            columns[paramIndex][row] = bestValue
+
+            for slice in 0 ..< sliceCount {
+                let partner0 = columns[Int(slices[slice].partnerParams.0)][row]
+                let partner1 = columns[Int(slices[slice].partnerParams.1)][row]
+                let partner2 = columns[Int(slices[slice].partnerParams.2)][row]
+                let index = slices[slice].flatIndex4(partner0, partner1, partner2, bestValue)
+                _ = slices[slice].mark(index)
+            }
         }
     }
 
     // MARK: - Vertical Growth
 
-    private mutating func verticalGrowth(paramIndex i: Int) {
-        let combos = combosIncluding[i]
-        let keys = combosIncludingKeys[i]
-        let uncoveredTuples = covered.findUncovered(combos: combos, comboKeys: keys, params: params)
+    /// Adds new rows to cover remaining uncovered tuples, one at a time.
+    ///
+    /// For each uncovered tuple: creates a new row with the tuple's values fixed and free positions filled greedily (try all values, pick coverage-maximizing with smallest-value tiebreak). Returns `false` if the row budget is exceeded.
+    private mutating func verticalGrowth(
+        paramIndex: Int,
+        slices: inout ContiguousArray<CoverageSlice>,
+        rowBudget: Int
+    ) -> Bool {
+        var newRow = ContiguousArray<UInt16>(repeating: 0, count: paramIndex + 1)
+        var isFixed = ContiguousArray<Bool>(repeating: false, count: paramIndex + 1)
 
-        rows.reserveCapacity(rows.count + uncoveredTuples.count)
+        while true {
+            guard let (sliceIndex, flatIndex) = findFirstUncovered(in: slices) else {
+                break
+            }
+            if rowCount >= rowBudget { return false }
 
-        for tuple in uncoveredTuples {
-            // Try to fit into an existing row
-            var fitted = false
-            var rowIdx = 0
-            while rowIdx < rows.indices.endIndex {
-                if canFit(rowIdx: rowIdx, tuple: tuple) {
-                    applyTuple(rowIdx: rowIdx, tuple: tuple)
-                    covered.addTuple(tuple)
-                    fitted = true
-                    break
+            let tupleValues = decompose(flatIndex: flatIndex, slice: slices[sliceIndex])
+
+            // Reset row to zeros and clear fixed flags.
+            for position in 0 ... paramIndex {
+                newRow[position] = 0
+                isFixed[position] = false
+            }
+
+            // Fix the positions dictated by the uncovered tuple.
+            fixTuplePositions(
+                sliceIndex: sliceIndex,
+                tupleValues: tupleValues,
+                paramIndex: paramIndex,
+                slices: slices,
+                row: &newRow,
+                fixed: &isFixed
+            )
+
+            // Greedily fill free positions to maximize additional coverage.
+            for position in 0 ... paramIndex {
+                if isFixed[position] { continue }
+                var bestValue: UInt16 = 0
+                var bestCount = 0
+
+                for candidate: UInt16 in 0 ..< domainSizes[position] {
+                    newRow[position] = candidate
+                    let count = countUncoveredInRow(newRow, paramIndex: paramIndex, slices: slices)
+                    if count > bestCount {
+                        bestCount = count
+                        bestValue = candidate
+                    }
                 }
-                rowIdx += 1
+                newRow[position] = bestValue
             }
 
-            if !fitted {
-                var newRow = [UInt64?](repeating: nil, count: n)
-                let tupleCount = tuple.paramIndices.count
-                var j = 0
-                while j < tupleCount {
-                    newRow[tuple.paramIndices[j]] = tuple.values[j]
-                    j &+= 1
-                }
-                covered.addAll(row: newRow, combos: allCombos[i + 1], comboKeys: allComboKeys[i + 1])
-                rows.append(newRow)
+            // Append row to all active columns.
+            for position in 0 ... paramIndex {
+                columns[position].append(newRow[position])
             }
-        }
-    }
+            rowCount &+= 1
 
-    /// Can the tuple be applied without conflicting with existing non-nil values?
-    private func canFit(rowIdx: Int, tuple: IndexedTuple) -> Bool {
-        let row = rows[rowIdx]
-        let count = tuple.paramIndices.count
-        var j = 0
-        while j < count {
-            if let existing = row[tuple.paramIndices[j]], existing != tuple.values[j] {
-                return false
-            }
-            j &+= 1
+            markRowCoverage(newRow, paramIndex: paramIndex, slices: &slices)
         }
+
         return true
     }
 
-    private mutating func applyTuple(rowIdx: Int, tuple: IndexedTuple) {
-        let count = tuple.paramIndices.count
-        var j = 0
-        while j < count {
-            rows[rowIdx][tuple.paramIndices[j]] = tuple.values[j]
-            j &+= 1
+    // MARK: - Vertical Growth Helpers
+
+    /// Sets the fixed positions in a new row from the uncovered tuple's values.
+    private func fixTuplePositions(
+        sliceIndex: Int,
+        tupleValues: (UInt16, UInt16, UInt16, UInt16),
+        paramIndex: Int,
+        slices: ContiguousArray<CoverageSlice>,
+        row: inout ContiguousArray<UInt16>,
+        fixed: inout ContiguousArray<Bool>
+    ) {
+        let slice = slices[sliceIndex]
+
+        row[Int(slice.partnerParams.0)] = tupleValues.0
+        fixed[Int(slice.partnerParams.0)] = true
+
+        if strength >= 3 {
+            row[Int(slice.partnerParams.1)] = tupleValues.1
+            fixed[Int(slice.partnerParams.1)] = true
         }
-    }
-}
-
-// MARK: - Covered Combination Tracking
-
-private struct CoveredSet {
-    private var sets: [ComboKey: Set<ValueKey>] = [:]
-
-    mutating func addTuple(_ tuple: IndexedTuple) {
-        let key = ComboKey(tuple.paramIndices)
-        var lo: UInt64 = 0
-        var hi: UInt64 = 0
-        var i = 0
-        while i < tuple.values.count {
-            let v = tuple.values[i]
-            if i < 4 {
-                lo |= v << (i &* 16)
-            } else {
-                hi |= v << ((i &- 4) &* 16)
-            }
-            i &+= 1
+        if strength >= 4 {
+            row[Int(slice.partnerParams.2)] = tupleValues.2
+            fixed[Int(slice.partnerParams.2)] = true
         }
-        sets[key, default: []].insert(ValueKey(lo: lo, hi: hi))
-    }
 
-    mutating func addAll(row: [UInt64?], combos: [[Int]], comboKeys: [ComboKey]) {
-        var ci = 0
-        while ci < combos.count {
-            let combo = combos[ci]
-            // Pack values inline to avoid temporary array allocation
-            var lo: UInt64 = 0
-            var hi: UInt64 = 0
-            var allPresent = true
-            var i = 0
-            while i < combo.count {
-                guard let v = row[combo[i]] else { allPresent = false; break }
-                if i < 4 {
-                    lo |= v << (i &* 16)
-                } else {
-                    hi |= v << ((i &- 4) &* 16)
-                }
-                i &+= 1
-            }
-            if allPresent {
-                sets[comboKeys[ci], default: []].insert(ValueKey(lo: lo, hi: hi))
-            }
-            ci &+= 1
+        // The new parameter's value is always the last in the tuple.
+        switch strength {
+        case 2:
+            row[paramIndex] = tupleValues.1
+        case 3:
+            row[paramIndex] = tupleValues.2
+        case 4:
+            row[paramIndex] = tupleValues.3
+        default:
+            break
         }
+        fixed[paramIndex] = true
     }
 
-    func countUncovered(row: [UInt64?], combos: [[Int]], comboKeys: [ComboKey]) -> Int {
+    /// Finds the first uncovered tuple across all slices by scanning bit vectors in order.
+    private func findFirstUncovered(
+        in slices: ContiguousArray<CoverageSlice>
+    ) -> (sliceIndex: Int, flatIndex: UInt32)? {
+        for sliceIndex in 0 ..< slices.count {
+            if slices[sliceIndex].remaining == 0 { continue }
+            if let bit = slices[sliceIndex].bits.firstUnsetBit(below: slices[sliceIndex].totalTuples) {
+                return (sliceIndex, bit)
+            }
+        }
+        return nil
+    }
+
+    /// Decomposes a flat index back into per-parameter values using the slice's strides.
+    private func decompose(flatIndex: UInt32, slice: CoverageSlice) -> (UInt16, UInt16, UInt16, UInt16) {
+        var remainder = flatIndex
+        let value0 = UInt16(remainder / slice.strides.0)
+        remainder = remainder % slice.strides.0
+
+        switch strength {
+        case 2:
+            return (value0, UInt16(remainder), 0, 0)
+        case 3:
+            let value1 = UInt16(remainder / slice.strides.1)
+            let value2 = UInt16(remainder % slice.strides.1)
+            return (value0, value1, value2, 0)
+        case 4:
+            let value1 = UInt16(remainder / slice.strides.1)
+            remainder = remainder % slice.strides.1
+            let value2 = UInt16(remainder / slice.strides.2)
+            let value3 = UInt16(remainder % slice.strides.2)
+            return (value0, value1, value2, value3)
+        default:
+            return (0, 0, 0, 0)
+        }
+    }
+
+    /// Counts how many uncovered tuples the given row would cover across all active slices.
+    private func countUncoveredInRow(
+        _ row: ContiguousArray<UInt16>,
+        paramIndex: Int,
+        slices: ContiguousArray<CoverageSlice>
+    ) -> Int {
         var count = 0
-        var ci = 0
-        while ci < combos.count {
-            let combo = combos[ci]
-            // Pack values inline to avoid temporary array allocation
-            var lo: UInt64 = 0
-            var hi: UInt64 = 0
-            var allPresent = true
-            var i = 0
-            while i < combo.count {
-                guard let v = row[combo[i]] else { allPresent = false; break }
-                if i < 4 {
-                    lo |= v << (i &* 16)
-                } else {
-                    hi |= v << ((i &- 4) &* 16)
-                }
-                i &+= 1
+        let newValue = row[paramIndex]
+
+        for sliceIndex in 0 ..< slices.count {
+            let slice = slices[sliceIndex]
+            let index: UInt32
+            switch strength {
+            case 2:
+                index = slice.flatIndex2(row[Int(slice.partnerParams.0)], newValue)
+            case 3:
+                index = slice.flatIndex3(
+                    row[Int(slice.partnerParams.0)],
+                    row[Int(slice.partnerParams.1)],
+                    newValue
+                )
+            case 4:
+                index = slice.flatIndex4(
+                    row[Int(slice.partnerParams.0)],
+                    row[Int(slice.partnerParams.1)],
+                    row[Int(slice.partnerParams.2)],
+                    newValue
+                )
+            default:
+                continue
             }
-            if allPresent {
-                if sets[comboKeys[ci]]?.contains(ValueKey(lo: lo, hi: hi)) != true {
-                    count += 1
-                }
+            if slice.isSet(index) == false {
+                count &+= 1
             }
-            ci &+= 1
         }
         return count
     }
 
-    func findUncovered(combos: [[Int]], comboKeys: [ComboKey], params: [FiniteParameter]) -> [IndexedTuple] {
-        var result: [IndexedTuple] = []
-        var domainBuffer = [UInt64](repeating: 0, count: 8)
-        var valueBuffer = [UInt64](repeating: 0, count: 8)
+    /// Marks all tuples covered by the given row across all active slices.
+    private func markRowCoverage(
+        _ row: ContiguousArray<UInt16>,
+        paramIndex: Int,
+        slices: inout ContiguousArray<CoverageSlice>
+    ) {
+        let newValue = row[paramIndex]
 
-        var ci = 0
-        while ci < combos.count {
-            let combo = combos[ci]
-            let comboCount = combo.count
-            let coveredValues = sets[comboKeys[ci]] ?? []
-
-            var total: UInt64 = 1
-            var di = 0
-            while di < comboCount {
-                let d = params[combo[di]].domainSize
-                domainBuffer[di] = d
-                let (product, overflow) = total.multipliedReportingOverflow(by: d)
-                if overflow { total = .max; break }
-                total = product
-                di &+= 1
+        for sliceIndex in 0 ..< slices.count {
+            let index: UInt32
+            switch strength {
+            case 2:
+                index = slices[sliceIndex].flatIndex2(
+                    row[Int(slices[sliceIndex].partnerParams.0)],
+                    newValue
+                )
+            case 3:
+                index = slices[sliceIndex].flatIndex3(
+                    row[Int(slices[sliceIndex].partnerParams.0)],
+                    row[Int(slices[sliceIndex].partnerParams.1)],
+                    newValue
+                )
+            case 4:
+                index = slices[sliceIndex].flatIndex4(
+                    row[Int(slices[sliceIndex].partnerParams.0)],
+                    row[Int(slices[sliceIndex].partnerParams.1)],
+                    row[Int(slices[sliceIndex].partnerParams.2)],
+                    newValue
+                )
+            default:
+                continue
             }
-
-            for idx in 0 ..< total {
-                // Decompose mixed-radix index forward into valueBuffer
-                var remainder = idx
-                var vi = comboCount &- 1
-                while vi >= 0 {
-                    let d = domainBuffer[vi]
-                    valueBuffer[vi] = remainder % d
-                    remainder /= d
-                    vi &-= 1
-                }
-
-                // Build ValueKey inline
-                var lo: UInt64 = 0
-                var hi: UInt64 = 0
-                var ki = 0
-                while ki < comboCount {
-                    let v = valueBuffer[ki]
-                    if ki < 4 {
-                        lo |= v << (ki &* 16)
-                    } else {
-                        hi |= v << ((ki &- 4) &* 16)
-                    }
-                    ki &+= 1
-                }
-
-                let valueKey = ValueKey(lo: lo, hi: hi)
-                if !coveredValues.contains(valueKey) {
-                    result.append(IndexedTuple(
-                        paramIndices: combo,
-                        values: Array(valueBuffer[0 ..< comboCount])
-                    ))
-                }
-            }
-            ci &+= 1
-        }
-        return result
-    }
-}
-
-private struct IndexedTuple {
-    let paramIndices: [Int]
-    let values: [UInt64]
-}
-
-/// Generates all `choose`-sized combinations of indices from `0..<n`.
-private func combinations(of n: Int, choose k: Int) -> [[Int]] {
-    guard k <= n, k > 0 else { return [] }
-    var result: [[Int]] = []
-    var current: [Int] = []
-    current.reserveCapacity(k)
-
-    func build(start: Int) {
-        if current.count == k {
-            result.append(current)
-            return
-        }
-        let remaining = k - current.count
-        for i in start ... (n - remaining) {
-            current.append(i)
-            build(start: i + 1)
-            current.removeLast()
+            _ = slices[sliceIndex].mark(index)
         }
     }
-
-    build(start: 0)
-    return result
-}
-
-/// Generates all `choose`-sized combinations of indices from `0..<n`, each with `trailing` appended.
-///
-/// Avoids the intermediate allocation of `combinations(of:choose:).map { $0 + [trailing] }`.
-private func combinationsAppending(of n: Int, choose k: Int, trailing: Int) -> [[Int]] {
-    guard k <= n, k > 0 else { return [[trailing]] }
-    var result: [[Int]] = []
-    var current: [Int] = []
-    current.reserveCapacity(k + 1)
-
-    func build(start: Int) {
-        if current.count == k {
-            var combo = current
-            combo.append(trailing)
-            result.append(combo)
-            return
-        }
-        let remaining = k - current.count
-        for i in start ... (n - remaining) {
-            current.append(i)
-            build(start: i + 1)
-            current.removeLast()
-        }
-    }
-
-    build(start: 0)
-    return result
 }
