@@ -13,13 +13,15 @@ public struct RelaxRoundEncoder: ComposableEncoder {
 
     // MARK: - Dual conformance disambiguation
 
-    public var convergenceRecords: [Int: ConvergedOrigin] { [:] }
+    public var convergenceRecords: [Int: ConvergedOrigin] {
+        [:]
+    }
 
     // MARK: - ComposableEncoder
 
     public func estimatedCost(
         sequence: ChoiceSequence,
-        tree: ChoiceTree,
+        tree _: ChoiceTree,
         positionRange: ClosedRange<Int>,
         context: ReductionContext
     ) -> Int? {
@@ -30,9 +32,9 @@ public struct RelaxRoundEncoder: ComposableEncoder {
 
     public mutating func start(
         sequence: ChoiceSequence,
-        tree: ChoiceTree,
-        positionRange: ClosedRange<Int>,
-        context: ReductionContext
+        tree _: ChoiceTree,
+        positionRange _: ClosedRange<Int>,
+        context _: ReductionContext
     ) {
         self.sequence = sequence
         probes = []

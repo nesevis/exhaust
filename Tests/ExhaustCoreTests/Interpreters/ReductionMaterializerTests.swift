@@ -375,8 +375,6 @@ struct ReductionMaterializerTests {
         }
     }
 
-
-
     // MARK: - Guided mode: fallback tree
 
     @Test("Guided mode uses fallback tree when prefix exhausted")

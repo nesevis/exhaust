@@ -49,7 +49,7 @@ public struct BinarySearchEncoder: ComposableEncoder {
 
     public func estimatedCost(
         sequence: ChoiceSequence,
-        tree: ChoiceTree,
+        tree _: ChoiceTree,
         positionRange: ClosedRange<Int>,
         context: ReductionContext
     ) -> Int? {
@@ -60,13 +60,13 @@ public struct BinarySearchEncoder: ComposableEncoder {
 
     public mutating func start(
         sequence: ChoiceSequence,
-        tree: ChoiceTree,
+        tree _: ChoiceTree,
         positionRange: ClosedRange<Int>,
         context: ReductionContext
     ) {
         currentCycle = context.cycle
         self.sequence = sequence
-        self.targets = []
+        targets = []
         currentIndex = 0
         needsFirstProbe = true
         searchPhase = .binarySearch
@@ -90,7 +90,7 @@ public struct BinarySearchEncoder: ComposableEncoder {
             let currentBP = value.choice.bitPattern64
             let isWithinRecordedRange =
                 value.isRangeExplicit
-                && value.choice.fits(in: value.validRange)
+                    && value.choice.fits(in: value.validRange)
             let targetBP = isWithinRecordedRange
                 ? value.choice.reductionTarget(in: value.validRange)
                 : value.choice.semanticSimplest.bitPattern64
@@ -113,20 +113,20 @@ public struct BinarySearchEncoder: ComposableEncoder {
             if currentBP > targetBP {
                 let validConvergedOrigin =
                     (convergedOrigin?.configuration == encoderConfiguration)
-                    ? convergedOrigin : nil
+                        ? convergedOrigin : nil
                 effectiveBound = validConvergedOrigin?.bound ?? targetBP
                 isConvergedOrigined = validConvergedOrigin != nil
                 stepper = .downward(BinarySearchStepper(lo: effectiveBound, hi: currentBP))
             } else {
                 let validConvergedOrigin =
                     (convergedOrigin?.configuration == encoderConfiguration)
-                    ? convergedOrigin : nil
+                        ? convergedOrigin : nil
                 effectiveBound = validConvergedOrigin?.bound ?? targetBP
                 isConvergedOrigined = validConvergedOrigin != nil
                 stepper = .upward(MaxBinarySearchStepper(lo: currentBP, hi: effectiveBound))
             }
 
-            self.targets.append(TargetState(
+            targets.append(TargetState(
                 seqIdx: seqIdx,
                 validRange: value.validRange,
                 isRangeExplicit: value.isRangeExplicit,
@@ -251,7 +251,7 @@ public struct BinarySearchEncoder: ComposableEncoder {
                    state.convergedOriginBound > state.targetBP,
                    state.convergedOriginBound > 0,
                    state.convergedOriginBound
-                    < sequence[state.seqIdx].value?.choice.bitPattern64 ?? 0
+                   < sequence[state.seqIdx].value?.choice.bitPattern64 ?? 0
                 {
                     searchPhase = .validatingFloor(
                         floor: state.convergedOriginBound,

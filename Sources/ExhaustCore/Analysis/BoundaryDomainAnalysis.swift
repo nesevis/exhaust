@@ -45,12 +45,16 @@ public struct BoundaryDomainProfile: @unchecked Sendable {
         self.parameters = parameters
         self.originalTree = originalTree
     }
-
 }
 
 extension BoundaryDomainProfile: CoverageProfile {
-    public var domainSizes: [UInt64] { parameters.map(\.domainSize) }
-    public var parameterCount: Int { parameters.count }
+    public var domainSizes: [UInt64] {
+        parameters.map(\.domainSize)
+    }
+
+    public var parameterCount: Int {
+        parameters.count
+    }
 
     public var totalSpace: UInt64 {
         domainSizes.reduce(UInt64(1)) { result, domain in

@@ -234,7 +234,7 @@ public struct ReductionEdge: Sendable {
     public let isStructurallyConstant: Bool
 }
 
-extension ChoiceDependencyGraph {
+public extension ChoiceDependencyGraph {
     /// Returns the dependency edges where ``KleisliComposition`` instances are meaningful.
     ///
     /// Each edge connects a bind-inner node (controlling position) to its scope
@@ -244,7 +244,7 @@ extension ChoiceDependencyGraph {
     ///
     /// Ordered by topological sort (roots first), so that upstream encoders for
     /// shallower edges run before downstream encoders that depend on their results.
-    public func reductionEdges() -> [ReductionEdge] {
+    func reductionEdges() -> [ReductionEdge] {
         var edges: [ReductionEdge] = []
         for nodeIndex in topologicalOrder {
             let node = nodes[nodeIndex]

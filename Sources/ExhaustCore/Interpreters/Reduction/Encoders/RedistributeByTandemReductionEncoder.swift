@@ -18,13 +18,15 @@ public struct RedistributeByTandemReductionEncoder: ComposableEncoder {
 
     // MARK: - ComposableEncoder
 
-    public var convergenceRecords: [Int: ConvergedOrigin] { [:] }
+    public var convergenceRecords: [Int: ConvergedOrigin] {
+        [:]
+    }
 
     public func estimatedCost(
         sequence: ChoiceSequence,
-        tree: ChoiceTree,
-        positionRange: ClosedRange<Int>,
-        context: ReductionContext
+        tree _: ChoiceTree,
+        positionRange _: ClosedRange<Int>,
+        context _: ReductionContext
     ) -> Int? {
         let groupCount = ChoiceSequence.extractSiblingGroups(from: sequence).count
         guard groupCount > 0 else { return nil }
@@ -33,9 +35,9 @@ public struct RedistributeByTandemReductionEncoder: ComposableEncoder {
 
     public mutating func start(
         sequence: ChoiceSequence,
-        tree: ChoiceTree,
-        positionRange: ClosedRange<Int>,
-        context: ReductionContext
+        tree _: ChoiceTree,
+        positionRange _: ClosedRange<Int>,
+        context _: ReductionContext
     ) {
         let groups = ChoiceSequence.extractSiblingGroups(from: sequence)
         startInternal(sequence: sequence, groups: groups)

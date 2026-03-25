@@ -26,7 +26,7 @@ public struct ContractDeclarationMacro: MemberMacro, ExtensionMacro {
         let invariants = extractInvariants(from: members)
         let hasAnyAsync =
             commands.contains(where: \.isAsync)
-            || invariants.contains(where: \.isAsync)
+                || invariants.contains(where: \.isAsync)
 
         let proto = hasAnyAsync ? "AsyncContractSpec" : "ContractSpec"
         let ext: DeclSyntax = "extension \(type.trimmed): \(raw: proto) {}"
@@ -64,7 +64,7 @@ public struct ContractDeclarationMacro: MemberMacro, ExtensionMacro {
 
         let hasAnyAsync =
             commands.contains(where: \.isAsync)
-            || invariants.contains(where: \.isAsync)
+                || invariants.contains(where: \.isAsync)
 
         var decls: [DeclSyntax] = []
 

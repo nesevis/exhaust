@@ -17,9 +17,17 @@ public struct BinarySearchToSemanticSimplestEncoder: ComposableEncoder {
         inner = BinarySearchEncoder(configuration: .semanticSimplest)
     }
 
-    public var name: EncoderName { inner.name }
-    public var phase: ReductionPhase { inner.phase }
-    public var convergenceRecords: [Int: ConvergedOrigin] { inner.convergenceRecords }
+    public var name: EncoderName {
+        inner.name
+    }
+
+    public var phase: ReductionPhase {
+        inner.phase
+    }
+
+    public var convergenceRecords: [Int: ConvergedOrigin] {
+        inner.convergenceRecords
+    }
 
     public func estimatedCost(
         sequence: ChoiceSequence,

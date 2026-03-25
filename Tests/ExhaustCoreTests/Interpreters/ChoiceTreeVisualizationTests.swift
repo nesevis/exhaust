@@ -8,9 +8,8 @@ import Testing
 
 @Suite("ChoiceTree Visualization")
 struct ChoiceTreeVisualizationTests {
-
-    private let meta100 = ChoiceMetadata(validRange: 0...100)
-    private let meta256 = ChoiceMetadata(validRange: 0...255)
+    private let meta100 = ChoiceMetadata(validRange: 0 ... 100)
+    private let meta256 = ChoiceMetadata(validRange: 0 ... 255)
 
     @Test("Single choice renders centered symbol")
     func singleChoice() {
@@ -150,7 +149,7 @@ struct ChoiceTreeVisualizationTests {
         // Should have multiple levels
         #expect(lines.count >= 5)
     }
-    
+
     @Test("Deep tree with three groups")
     func deepTree3() {
         let tree = ChoiceTree.group([
@@ -169,7 +168,7 @@ struct ChoiceTreeVisualizationTests {
                 .choice(.unsigned(20, .uint), meta100),
                 .choice(.unsigned(50, .uint), meta100),
                 .choice(.unsigned(90, .uint), meta100),
-            ])
+            ]),
         ])
         let result = tree.visualization(width: 60)
         print("--- Deep tree ---")
@@ -215,7 +214,7 @@ struct ChoiceTreeVisualizationTests {
     @Test("Bar endpoints align with leaves above")
     func barEndpointsAlignWithLeaves() {
         // Build a wide tree that triggers scaling
-        let meta = ChoiceMetadata(validRange: 0...100)
+        let meta = ChoiceMetadata(validRange: 0 ... 100)
         let makeGroup: ([UInt64]) -> ChoiceTree = { values in
             .group(values.map { .choice(.unsigned($0, .uint), meta) })
         }
@@ -235,7 +234,7 @@ struct ChoiceTreeVisualizationTests {
 
         // Check: every ╰ and ╯ on a bar row should have a non-space character
         // directly above it (a leaf symbol or another connector)
-        for row in 1..<lines.count {
+        for row in 1 ..< lines.count {
             let line = Array(lines[row])
             let above = row > 0 ? Array(lines[row - 1]) : []
             for (col, char) in line.enumerated() where char == "╰" || char == "╯" {

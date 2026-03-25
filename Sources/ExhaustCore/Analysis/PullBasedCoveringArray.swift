@@ -4,6 +4,7 @@
 //
 
 // MARK: - Academic Provenance
+
 //
 // This file implements a one-test-at-a-time greedy covering array generator
 // based on the density algorithm from:
@@ -223,8 +224,8 @@ private struct ParameterOrdering {
             inverse.append(indexed[index].offset)
             index &+= 1
         }
-        self.reorderedDomainSizes = reordered
-        self.inversePermutation = inverse
+        reorderedDomainSizes = reordered
+        inversePermutation = inverse
     }
 
     /// Restores a row from reordered space to original parameter order.
@@ -278,10 +279,10 @@ public struct PullBasedCoveringArrayGenerator {
         precondition(domainSizes.count >= strength)
 
         self.strength = strength
-        self.paramCount = domainSizes.count
+        paramCount = domainSizes.count
 
         let rawDomains = ContiguousArray(domainSizes.map { UInt16(clamping: $0) })
-        self.ordering = ParameterOrdering(domainSizes: rawDomains)
+        ordering = ParameterOrdering(domainSizes: rawDomains)
 
         var allSlices = ContiguousArray<PullCoverageSlice>()
         var byColumn = ContiguousArray<ContiguousArray<Int>>(
@@ -420,11 +421,11 @@ public struct PullBasedCoveringArrayGenerator {
             sliceIdx &+= 1
         }
 
-        self.slices = allSlices
-        self.slicesByColumn = byColumn
-        self.partialSlicesByColumn = partialByColumn
-        self.totalRemaining = total
-        self.rowBuffer = ContiguousArray<UInt16>(repeating: 0, count: domainSizes.count)
+        slices = allSlices
+        slicesByColumn = byColumn
+        partialSlicesByColumn = partialByColumn
+        totalRemaining = total
+        rowBuffer = ContiguousArray<UInt16>(repeating: 0, count: domainSizes.count)
     }
 
     /// Returns the next row that greedily maximises new t-tuple coverage, or `nil` if all t-tuples are already covered.

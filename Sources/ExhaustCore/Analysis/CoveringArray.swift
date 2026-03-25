@@ -242,8 +242,7 @@ private struct BitVector {
         for word in 0 ..< fullWords {
             let value = storage[word]
             if value != UInt64.max {
-                let bit = UInt32(word &* 64 &+ (~value).trailingZeroBitCount)
-                return bit
+                return UInt32(word &* 64 &+ (~value).trailingZeroBitCount)
             }
         }
 
@@ -337,9 +336,9 @@ private struct FIPOGBuilder {
     init(domainSizes: [UInt64], strength: Int) {
         self.domainSizes = ContiguousArray(domainSizes.map { UInt16(clamping: $0) })
         self.strength = strength
-        self.paramCount = domainSizes.count
-        self.columns = ContiguousArray()
-        self.rowCount = 0
+        paramCount = domainSizes.count
+        columns = ContiguousArray()
+        rowCount = 0
     }
 
     /// Runs the FIPOG builder with a row budget. Returns `false` if the budget is exceeded at any point.

@@ -18,13 +18,15 @@ public struct RedistributeAcrossValueContainersEncoder: ComposableEncoder {
 
     // MARK: - Dual conformance disambiguation
 
-    public var convergenceRecords: [Int: ConvergedOrigin] { [:] }
+    public var convergenceRecords: [Int: ConvergedOrigin] {
+        [:]
+    }
 
     // MARK: - ComposableEncoder
 
     public func estimatedCost(
         sequence: ChoiceSequence,
-        tree: ChoiceTree,
+        tree _: ChoiceTree,
         positionRange: ClosedRange<Int>,
         context: ReductionContext
     ) -> Int? {
@@ -39,9 +41,9 @@ public struct RedistributeAcrossValueContainersEncoder: ComposableEncoder {
 
     public mutating func start(
         sequence: ChoiceSequence,
-        tree: ChoiceTree,
-        positionRange: ClosedRange<Int>,
-        context: ReductionContext
+        tree _: ChoiceTree,
+        positionRange _: ClosedRange<Int>,
+        context _: ReductionContext
     ) {
         self.sequence = sequence
         semanticStats = SequenceSemanticStats(sequence: sequence)
@@ -576,11 +578,11 @@ public struct RedistributeAcrossValueContainersEncoder: ComposableEncoder {
             denominator: context.denominator,
             original: lhs
         ),
-              let newChoice2 = choiceFromNumerator(
+            let newChoice2 = choiceFromNumerator(
                 newRhsNum,
                 denominator: context.denominator,
                 original: rhs
-              )
+            )
         else { return nil }
 
         return (newChoice1, newChoice2)
@@ -617,12 +619,12 @@ public struct RedistributeAcrossValueContainersEncoder: ComposableEncoder {
               let rhsRatio = FloatShrink.integerRatio(for: rhsValue, tag: tag),
               let targetRatio = FloatShrink.integerRatio(for: targetValue, tag: tag),
               let lhsAndRhsDenominator = leastCommonMultiple(
-                lhsRatio.denominator,
-                rhsRatio.denominator
+                  lhsRatio.denominator,
+                  rhsRatio.denominator
               ),
               let denominator = leastCommonMultiple(
-                lhsAndRhsDenominator,
-                targetRatio.denominator
+                  lhsAndRhsDenominator,
+                  targetRatio.denominator
               ),
               denominator > 0
         else { return nil }
@@ -666,12 +668,12 @@ public struct RedistributeAcrossValueContainersEncoder: ComposableEncoder {
               let rhsRatio = rationalForChoice(rhs),
               let targetRatio = rationalForTarget(lhs, targetBitPattern: lhsTargetBitPattern),
               let lhsAndRhsDenominator = leastCommonMultiple(
-                lhsRatio.denominator,
-                rhsRatio.denominator
+                  lhsRatio.denominator,
+                  rhsRatio.denominator
               ),
               let denominator = leastCommonMultiple(
-                lhsAndRhsDenominator,
-                targetRatio.denominator
+                  lhsAndRhsDenominator,
+                  targetRatio.denominator
               ),
               denominator > 0
         else { return nil }

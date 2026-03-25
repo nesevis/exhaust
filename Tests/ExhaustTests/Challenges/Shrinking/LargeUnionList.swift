@@ -91,7 +91,7 @@ struct LargeUnionListShrinkingChallenge {
     @Test("Large Union List, Pathological single 3")
     func largeUnionListPathological3() {
         let value = [[76132], [-61180, -48610, 71763], [-25593]]
-
+        
         var report: ExhaustReport?
         let output = #exhaust(
             Self.gen,
@@ -102,7 +102,7 @@ struct LargeUnionListShrinkingChallenge {
             property: Self.property
         )
         if let report { print("[PROFILE] LargeUnionListPath3: \(report.profilingSummary)") }
-
+        
         // 507 invocation with legacy (17ms), 460 with bonsai (11ms)
         // 299 invocations with Bonsai 2 (12ms)
         #expect(output?.flatMap(\.self) == [-2, -1, 0, 1, 2])
@@ -125,7 +125,8 @@ struct LargeUnionListShrinkingChallenge {
             )
 
             // ~650–750 invocations with legacy in 1112ms
-            // 846ms with Bonsai 2
+            // 846ms with Bonsai 2, same invocations
+            // ~323-689 invocations with bonsai adaptive in ~960ms
 //            #expect(output?.flatMap(\.self) == [-2, -1, 0, 1, 2])
         }
     }

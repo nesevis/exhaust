@@ -194,7 +194,7 @@ public struct ValueAndChoiceTreeInterpreter<FinalOutput>: ~Copyable, ExhaustIter
             case .getSize:
                 let size =
                     context.sizeOverride
-                    ?? GenerationContext.scaledSize(forRun: context.runs)
+                        ?? GenerationContext.scaledSize(forRun: context.runs)
                 context.sizeOverride = nil // getSize consumes the `sizeOverride`
                 return try runContinuation(
                     result: size,

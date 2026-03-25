@@ -36,7 +36,7 @@ public extension ChoiceTree {
         let naturalWidth = layout.subtreeRight - layout.subtreeLeft
 
         // Re-layout with tighter spacing if the tree overflows the frame
-        if naturalWidth > Double(width - 1) && naturalWidth > 0 {
+        if naturalWidth > Double(width - 1), naturalWidth > 0 {
             let reducedSpacing = max(minimumSpacing, preferredSpacing * Double(width - 1) / naturalWidth)
             layout = TreeVisualization.computeLayout(renderTree, minSpacing: reducedSpacing)
         }
@@ -49,7 +49,6 @@ public extension ChoiceTree {
 
 /// Namespace for tree visualization internals.
 private enum TreeVisualization {
-
     // MARK: Complexity Tier
 
     /// Maps a choice value's shortlex distance from zero to one of five visual tiers.
@@ -62,10 +61,10 @@ private enum TreeVisualization {
 
         var symbol: Character {
             switch self {
-            case .minimal: "·"  // U+00B7
-            case .low:     "∘"  // U+2218
+            case .minimal: "·" // U+00B7
+            case .low: "∘" // U+2218
             case .moderate: "✦" // U+2726
-            case .high:    "✳" // U+2733
+            case .high: "✳" // U+2733
             case .extreme: "❋" // U+274B
             }
         }
@@ -101,17 +100,17 @@ private enum TreeVisualization {
             case ..<0.05: .low
             case ..<0.25: .moderate
             case ..<0.75: .high
-            default:      .extreme
+            default: .extreme
             }
         }
 
         private static func absoluteTier(_ key: UInt64) -> ComplexityTier {
             switch key {
-            case 0:            .minimal
-            case 1...10:       .low
-            case 11...100:     .moderate
-            case 101...10_000: .high
-            default:           .extreme
+            case 0: .minimal
+            case 1 ... 10: .low
+            case 11 ... 100: .moderate
+            case 101 ... 10000: .high
+            default: .extreme
             }
         }
     }
@@ -139,7 +138,7 @@ private enum TreeVisualization {
             return RenderTree(symbol: tier.symbol, children: [])
 
         case .just:
-            return RenderTree(symbol: "✿", children: [])  // U+273F
+            return RenderTree(symbol: "✿", children: []) // U+273F
 
         case .getSize:
             return RenderTree(symbol: nil, children: [])
@@ -178,7 +177,7 @@ private enum TreeVisualization {
     /// Collapses single-child invisible chains so the tree has minimal depth.
     private static func collapseChain(_ node: RenderTree) -> RenderTree {
         var current = node
-        while current.symbol == nil && current.children.count == 1 {
+        while current.symbol == nil, current.children.count == 1 {
             current = current.children[0]
         }
         return current
@@ -278,7 +277,7 @@ private enum TreeVisualization {
 
         // Scale columns proportionally if the tree still overflows after spacing reduction
         let fitted: LayoutNode
-        if naturalWidth > Double(frameWidth - 1) && naturalWidth > 0 {
+        if naturalWidth > Double(frameWidth - 1), naturalWidth > 0 {
             let ratio = Double(frameWidth - 1) / naturalWidth
             fitted = scaleColumns(normalized, ratio: ratio)
         } else {
@@ -346,8 +345,12 @@ private enum TreeVisualization {
 
         // Remove leading and trailing blank lines
         var result = lines
-        while result.last?.isEmpty == true { result.removeLast() }
-        while result.first?.isEmpty == true { result.removeFirst() }
+        while result.last?.isEmpty == true {
+            result.removeLast()
+        }
+        while result.first?.isEmpty == true {
+            result.removeFirst()
+        }
 
         // Bonsai pot: find the trunk column from the last line, then replace it with the pot
         if let lastLine = result.last,
@@ -361,7 +364,7 @@ private enum TreeVisualization {
 
             // Rim: ━━━━┷━━━━
             var rim = String(repeating: " ", count: rimLeft)
-            for col in rimLeft..<(rimLeft + potWidth) {
+            for col in rimLeft ..< (rimLeft + potWidth) {
                 rim.append(col == trunkCol ? "┷" : "━")
             }
             result.append(rim)
@@ -397,7 +400,7 @@ private enum TreeVisualization {
 
         // Single child: vertical stem only, no branch bar
         if spec.childCols.count == 1 {
-            for row in (spec.childRow + 1)..<spec.parentRow {
+            for row in (spec.childRow + 1) ..< spec.parentRow {
                 placeChar(&grid, row: row, col: spec.parentCol, char: "│", width: spec.width)
             }
             return
@@ -412,32 +415,31 @@ private enum TreeVisualization {
         let rightmost = sortedCols.last!
         let childColSet = Set(sortedCols)
 
-        for col in leftmost...rightmost {
+        for col in leftmost ... rightmost {
             let isChild = childColSet.contains(col)
             let isParent = col == spec.parentCol
             let isLeftmost = col == leftmost
             let isRightmost = col == rightmost
 
-            let char: Character
-            if isChild && isParent {
-                char = "┼"
-            } else if isLeftmost && isChild {
-                char = "╰"
-            } else if isRightmost && isChild {
-                char = "╯"
+            let char: Character = if isChild, isParent {
+                "┼"
+            } else if isLeftmost, isChild {
+                "╰"
+            } else if isRightmost, isChild {
+                "╯"
             } else if isChild {
-                char = "┴"
+                "┴"
             } else if isParent {
-                char = "┬"
+                "┬"
             } else {
-                char = "─"
+                "─"
             }
 
             placeChar(&grid, row: barRow, col: col, char: char, width: spec.width)
         }
 
         // 3. Parent stem (from bar down to parent row)
-        for row in (barRow + 1)..<spec.parentRow {
+        for row in (barRow + 1) ..< spec.parentRow {
             placeChar(&grid, row: row, col: spec.parentCol, char: "│", width: spec.width)
         }
     }
@@ -451,7 +453,7 @@ private enum TreeVisualization {
         char: Character,
         width: Int
     ) {
-        guard row >= 0 && row < grid.count && col >= 0 && col < width else { return }
+        guard row >= 0, row < grid.count, col >= 0, col < width else { return }
         if grid[row][col] == " " {
             grid[row][col] = char
         }
@@ -503,21 +505,21 @@ private extension ChoiceTree {
     var hasVisibleContent: Bool {
         switch self {
         case .choice, .just:
-            return true
+            true
         case .getSize:
-            return false
+            false
         case let .selected(inner):
-            return inner.hasVisibleContent
+            inner.hasVisibleContent
         case let .branch(_, _, _, _, choice):
-            return choice.hasVisibleContent
+            choice.hasVisibleContent
         case let .group(children, _):
-            return children.contains(where: \.hasVisibleContent)
+            children.contains(where: \.hasVisibleContent)
         case let .sequence(_, elements, _):
-            return elements.isEmpty || elements.contains(where: \.hasVisibleContent)
+            elements.isEmpty || elements.contains(where: \.hasVisibleContent)
         case let .bind(inner, bound):
-            return inner.hasVisibleContent || bound.hasVisibleContent
+            inner.hasVisibleContent || bound.hasVisibleContent
         case let .resize(_, choices):
-            return choices.contains(where: \.hasVisibleContent)
+            choices.contains(where: \.hasVisibleContent)
         }
     }
 }

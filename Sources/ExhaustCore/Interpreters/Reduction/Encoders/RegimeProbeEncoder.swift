@@ -19,9 +19,9 @@ struct RegimeProbeEncoder: ComposableEncoder {
 
     mutating func start(
         sequence: ChoiceSequence,
-        tree: ChoiceTree,
-        positionRange: ClosedRange<Int>,
-        context: ReductionContext
+        tree _: ChoiceTree,
+        positionRange _: ClosedRange<Int>,
+        context _: ReductionContext
     ) {
         emitted = false
         var candidate = sequence
@@ -44,7 +44,7 @@ struct RegimeProbeEncoder: ComposableEncoder {
         probe = needsRun ? candidate : nil
     }
 
-    mutating func nextProbe(lastAccepted: Bool) -> ChoiceSequence? {
+    mutating func nextProbe(lastAccepted _: Bool) -> ChoiceSequence? {
         guard emitted == false, let candidate = probe else { return nil }
         emitted = true
         return candidate

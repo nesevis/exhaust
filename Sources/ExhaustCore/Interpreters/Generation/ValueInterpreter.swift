@@ -271,9 +271,9 @@ public struct ValueInterpreter<Element>: ~Copyable, ExhaustIterator {
                         swap(&context.prng, &vactiContext.prng)
                         let vactiResult = try ValueAndChoiceTreeInterpreter<Any>
                             .generateRecursive(
-                              gen,
-                              with: inputValue,
-                              context: &vactiContext
+                                gen,
+                                with: inputValue,
+                                context: &vactiContext
                             )
                         guard let (result, tree) = vactiResult else {
                             swap(&context.prng, &vactiContext.prng)

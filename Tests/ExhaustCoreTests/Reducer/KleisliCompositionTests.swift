@@ -5,7 +5,6 @@ import Testing
 
 @Suite("KleisliComposition")
 struct KleisliCompositionTests {
-
     // MARK: - ComposableEncoder Interface
 
     @Test("ComposableEncoder start produces same probes as direct start call")

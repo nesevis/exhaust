@@ -262,9 +262,9 @@ struct ProductSpaceAdaptiveEncoder: ComposableEncoder {
     // MARK: - ComposableEncoder
 
     func estimatedCost(
-        sequence: ChoiceSequence,
-        tree: ChoiceTree,
-        positionRange: ClosedRange<Int>,
+        sequence _: ChoiceSequence,
+        tree _: ChoiceTree,
+        positionRange _: ClosedRange<Int>,
         context: ReductionContext
     ) -> Int? {
         guard let bindIndex = context.bindIndex, bindIndex.regions.count > 3 else { return nil }
@@ -275,14 +275,16 @@ struct ProductSpaceAdaptiveEncoder: ComposableEncoder {
 
     mutating func start(
         sequence: ChoiceSequence,
-        tree: ChoiceTree,
-        positionRange: ClosedRange<Int>,
+        tree _: ChoiceTree,
+        positionRange _: ClosedRange<Int>,
         context: ReductionContext
     ) {
         startInternal(sequence: sequence, bindIndex: context.bindIndex)
     }
 
-    var convergenceRecords: [Int: ConvergedOrigin] { [:] }
+    var convergenceRecords: [Int: ConvergedOrigin] {
+        [:]
+    }
 
     // MARK: - State
 
@@ -505,7 +507,7 @@ func extractAxes(
             guard let value = sequence[index].value else { continue }
             let isWithinRecordedRange =
                 value.isRangeExplicit
-                && value.choice.fits(in: value.validRange)
+                    && value.choice.fits(in: value.validRange)
             let targetBitPattern: UInt64 = if isWithinRecordedRange {
                 value.choice.reductionTarget(in: value.validRange)
             } else {
@@ -558,15 +560,15 @@ struct PrecomputedComposableEncoder: ComposableEncoder {
     }
 
     mutating func start(
-        sequence: ChoiceSequence,
-        tree: ChoiceTree,
-        positionRange: ClosedRange<Int>,
-        context: ReductionContext
+        sequence _: ChoiceSequence,
+        tree _: ChoiceTree,
+        positionRange _: ClosedRange<Int>,
+        context _: ReductionContext
     ) {
         index = 0
     }
 
-    mutating func nextProbe(lastAccepted: Bool) -> ChoiceSequence? {
+    mutating func nextProbe(lastAccepted _: Bool) -> ChoiceSequence? {
         guard index < candidates.count else { return nil }
         let candidate = candidates[index]
         index += 1

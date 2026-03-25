@@ -39,7 +39,10 @@ struct DownstreamPick: ComposableEncoder {
         self.alternatives = alternatives
     }
 
-    var name: EncoderName { selectedEncoder?.name ?? .kleisliComposition }
+    var name: EncoderName {
+        selectedEncoder?.name ?? .kleisliComposition
+    }
+
     let phase = ReductionPhase.exploration
 
     // MARK: - State

@@ -121,11 +121,11 @@ struct Bound5ShrinkingChallenge {
             .onReport { report = $0 },
             property: Self.property
         )
-    
+
         let rep = try #require(report)
         #expect(rep.propertyInvocations == 467)
         #expect(rep.totalMaterializations == 566)
-        
+
         #expect(output?.arr.count == 2)
         #expect(output?.arr.sorted() == [-32768, -1])
     }
@@ -153,7 +153,7 @@ struct Bound5ShrinkingChallenge {
         #expect(output?.arr.count == 2)
         #expect(output?.arr.sorted() == [-32768, -1])
     }
-    
+
     @Test("Bound5, pathological 5")
     func bound5Pathological5() {
 //        ExhaustLog.setConfiguration(.init(isEnabled: true, minimumLevel: .info, categoryMinimumLevels: [.reducer: .debug], format: .human))
@@ -161,14 +161,14 @@ struct Bound5ShrinkingChallenge {
         let output = #exhaust(
             Self.gen,
             .suppressIssueReporting,
-            .replay(12394678611125950626),
+            .replay(12_394_678_611_125_950_626),
             property: Self.property
         )
-        
+
         #expect(output?.arr.count == 2)
         #expect(output?.arr.sorted() == [-32768, -1])
     }
-    
+
     @Test("Bound5, covering array time")
     func bound5CoveringArray() {
 //        ExhaustLog.setConfiguration(.init(isEnabled: true, minimumLevel: .info, categoryMinimumLevels: [.reducer: .debug], format: .human))
@@ -184,7 +184,7 @@ struct Bound5ShrinkingChallenge {
     func bound5Many() {
         let bound5s = #example(Self.gen, count: 100, seed: 1337)
             .filter { Self.property($0) == false }
-        //ExhaustLog.setConfiguration(.init(isEnabled: true, minimumLevel: .info, categoryMinimumLevels: [.reducer: .debug], format: .human))
+        // ExhaustLog.setConfiguration(.init(isEnabled: true, minimumLevel: .info, categoryMinimumLevels: [.reducer: .debug], format: .human))
 
         for bound5 in bound5s {
             let output = #exhaust(
@@ -194,7 +194,7 @@ struct Bound5ShrinkingChallenge {
                 .randomOnly,
                 property: Self.property
             )
-            
+
             #expect(output?.arr.count == 2)
             #expect(output?.arr.sorted() == [-32768, -1])
         }

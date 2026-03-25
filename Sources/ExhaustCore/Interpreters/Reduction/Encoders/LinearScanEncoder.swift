@@ -50,10 +50,10 @@ struct LinearScanEncoder: ComposableEncoder {
     // MARK: - ComposableEncoder
 
     func estimatedCost(
-        sequence: ChoiceSequence,
-        tree: ChoiceTree,
-        positionRange: ClosedRange<Int>,
-        context: ReductionContext
+        sequence _: ChoiceSequence,
+        tree _: ChoiceTree,
+        positionRange _: ClosedRange<Int>,
+        context _: ReductionContext
     ) -> Int? {
         let count = Int(clamping: scanRange.upperBound - scanRange.lowerBound + 1)
         return count > 0 ? count : nil
@@ -61,8 +61,8 @@ struct LinearScanEncoder: ComposableEncoder {
 
     mutating func start(
         sequence: ChoiceSequence,
-        tree: ChoiceTree,
-        positionRange: ClosedRange<Int>,
+        tree _: ChoiceTree,
+        positionRange _: ClosedRange<Int>,
         context: ReductionContext
     ) {
         self.sequence = sequence
@@ -168,7 +168,7 @@ struct LinearScanEncoder: ComposableEncoder {
                 signal: .scanComplete(foundLowerFloor: foundLowerFloor),
                 configuration: .linearScan,
                 cycle: currentCycle
-            )
+            ),
         ]
     }
 }

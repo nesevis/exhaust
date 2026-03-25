@@ -118,7 +118,7 @@ public func __runContract<Spec: ContractSpec>(
         // If SCA wasn't applicable, __exhaust's generic coverage runs.
         let skipGenericCoverage =
             !useRandomOnly && seed == nil
-            && extractPickChoices(from: commandGen) != nil
+                && extractPickChoices(from: commandGen) != nil
         failingSequence = __ExhaustRuntime.__exhaust(
             seqGen,
             settings: buildExhaustSettings(

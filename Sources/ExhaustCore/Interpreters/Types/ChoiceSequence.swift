@@ -86,7 +86,7 @@ public extension ChoiceSequence {
         case let .group(array, _):
             if array.allSatisfy({ $0.isBranch || $0.isSelected }),
                case let .selected(.branch(_, _, id, branchIDs, choice)) =
-                    array.first(where: \.isSelected)
+               array.first(where: \.isSelected)
             {
                 output.append(.group(true))
                 output.append(.branch(.init(id: id, validIDs: branchIDs)))
@@ -542,15 +542,14 @@ public extension ChoiceSequence {
         let close = sequence[containerRange.upperBound]
         let isGroupContainer =
             (open == .group(true) && close == .group(false))
-            || (open == .bind(true) && close == .bind(false))
+                || (open == .bind(true) && close == .bind(false))
         let isSequenceContainer =
             if case .sequence(true, isLengthExplicit: _) = open,
-               case .sequence(false, isLengthExplicit: _) = close
-            {
-            true
-        } else {
-            false
-        }
+            case .sequence(false, isLengthExplicit: _) = close {
+                true
+            } else {
+                false
+            }
         guard isGroupContainer || isSequenceContainer else { return [] }
 
         var children = [(range: ClosedRange<Int>, kind: SiblingChildKind)]()

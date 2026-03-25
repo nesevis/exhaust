@@ -114,8 +114,8 @@ public struct KleisliComposition<Output>: ComposableEncoder {
 
     public func estimatedCost(
         sequence: ChoiceSequence,
-        tree: ChoiceTree,
-        positionRange: ClosedRange<Int>,
+        tree _: ChoiceTree,
+        positionRange _: ClosedRange<Int>,
         context: ReductionContext
     ) -> Int? {
         guard let upCost = upstream.estimatedCost(
@@ -132,8 +132,8 @@ public struct KleisliComposition<Output>: ComposableEncoder {
     public mutating func start(
         sequence: ChoiceSequence,
         tree: ChoiceTree,
-        positionRange: ClosedRange<Int>,
-        context: ReductionContext
+        positionRange _: ClosedRange<Int>,
+        context _: ReductionContext
     ) {
         // Do not pass converged origins to the composition — the convergence cache records
         // floors from the standalone pipeline. The composition re-explores those values WITH

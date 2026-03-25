@@ -861,14 +861,13 @@ private extension ReductionMaterializer {
         calleeFallback: ChoiceTree? = nil,
         continuationFallback: ChoiceTree? = nil
     ) throws -> (Output, ChoiceTree)? {
-        let innerFallback: ChoiceTree?
-        if let calleeFallback,
-           case let .resize(_, choices) = calleeFallback,
-           let inner = choices.first
+        let innerFallback: ChoiceTree? = if let calleeFallback,
+                                            case let .resize(_, choices) = calleeFallback,
+                                            let inner = choices.first
         {
-            innerFallback = inner
+            inner
         } else {
-            innerFallback = nil
+            nil
         }
         context.sizeOverride = newSize
         guard let result = try generateRecursive(

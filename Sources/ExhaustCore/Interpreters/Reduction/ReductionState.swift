@@ -150,7 +150,9 @@ struct PhaseTracker {
     private var stack: [Phase] = []
     private(set) var counts: [Phase: PhaseCounts] = [:]
 
-    mutating func push(_ phase: Phase) { stack.append(phase) }
+    mutating func push(_ phase: Phase) {
+        stack.append(phase)
+    }
 
     mutating func pop() {
         guard stack.isEmpty == false else { return }
@@ -415,7 +417,7 @@ final class ReductionState<Output> {
             // No cache entry — check if the value is already at its reduction target.
             let isWithinRecordedRange =
                 value.isRangeExplicit
-                && value.choice.fits(in: value.validRange)
+                    && value.choice.fits(in: value.validRange)
             let targetBitPattern = isWithinRecordedRange
                 ? value.choice.reductionTarget(in: value.validRange)
                 : value.choice.semanticSimplest.bitPattern64
@@ -611,7 +613,7 @@ extension ReductionState {
                     accept(result, structureChanged: structureChanged)
                     if let currentBindIndex = bindIndex,
                        StructuralFingerprint.from(
-                         sequence, bindIndex: currentBindIndex
+                           sequence, bindIndex: currentBindIndex
                        ) != guardPrint
                     {
                         phaseTracker.revertAcceptance(structural: structureChanged)

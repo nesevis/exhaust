@@ -34,9 +34,9 @@ struct ContiguousWindowDeletionEncoder: ComposableEncoder {
 
     func estimatedCost(
         sequence: ChoiceSequence,
-        tree: ChoiceTree,
-        positionRange: ClosedRange<Int>,
-        context: ReductionContext
+        tree _: ChoiceTree,
+        positionRange _: ClosedRange<Int>,
+        context _: ReductionContext
     ) -> Int? {
         let containerCount = ChoiceSequence.extractContainerSpans(from: sequence).count
         guard containerCount > 0 else { return nil }
@@ -45,9 +45,9 @@ struct ContiguousWindowDeletionEncoder: ComposableEncoder {
 
     mutating func start(
         sequence: ChoiceSequence,
-        tree: ChoiceTree,
-        positionRange: ClosedRange<Int>,
-        context: ReductionContext
+        tree _: ChoiceTree,
+        positionRange _: ClosedRange<Int>,
+        context _: ReductionContext
     ) {
         self.sequence = sequence
         cohortIndex = 0

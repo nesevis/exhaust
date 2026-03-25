@@ -141,8 +141,8 @@ public struct ExhaustReport: Sendable {
             : "n/a"
         let hasSignals =
             zeroingDependencyCount > 0
-            || fibreExhaustedCleanCount > 0
-            || fibreBailCount > 0
+                || fibreExhaustedCleanCount > 0
+                || fibreBailCount > 0
         let signalLabel = hasSignals
             ? " signals=\(zeroingDependencyCount)dep/\(fibreExhaustedCleanCount)clean/\(fibreExhaustedWithFailureCount)fail/\(fibreBailCount)bail"
             : ""

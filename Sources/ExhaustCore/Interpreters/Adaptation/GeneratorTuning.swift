@@ -294,9 +294,9 @@ public enum GeneratorTuning {
         // since ~Copyable Xoshiro256 can't be stored in Array), accumulators, cache
         var choiceRngStates: [(seed: UInt64, state: Xoshiro256.StateType)] =
             (0 ..< choiceCount).map {
-            let rng = context.rng.spawned(streamID: UInt64($0))
-            return (rng.seed, rng.currentState)
-        }
+                let rng = context.rng.spawned(streamID: UInt64($0))
+                return (rng.seed, rng.currentState)
+            }
         var successCounts = Array(repeating: UInt64(0), count: choiceCount)
         var outputFrequencies = Array(repeating: [AnyHashable: UInt64](), count: choiceCount)
         var continuationCaches = Array(repeating: [AnyHashable: Bool](), count: choiceCount)
@@ -592,8 +592,8 @@ public enum GeneratorTuning {
         // (only if we haven't already subdivided)
         if !insideSubdividedChooseBits,
            case let .impure(
-            .chooseBits(lower, upper, tag, isRangeExplicit),
-            lengthContinuation
+               .chooseBits(lower, upper, tag, isRangeExplicit),
+               lengthContinuation
            ) = lengthGen
         {
             context.depth += 1

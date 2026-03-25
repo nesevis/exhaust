@@ -42,10 +42,10 @@ struct DeletionEncoder: ComposableEncoder {
     // MARK: - ComposableEncoder
 
     func estimatedCost(
-        sequence: ChoiceSequence,
-        tree: ChoiceTree,
-        positionRange: ClosedRange<Int>,
-        context: ReductionContext
+        sequence _: ChoiceSequence,
+        tree _: ChoiceTree,
+        positionRange _: ClosedRange<Int>,
+        context _: ReductionContext
     ) -> Int? {
         guard spans.isEmpty == false else { return nil }
         return spans.count * 10
@@ -53,9 +53,9 @@ struct DeletionEncoder: ComposableEncoder {
 
     mutating func start(
         sequence: ChoiceSequence,
-        tree: ChoiceTree,
-        positionRange: ClosedRange<Int>,
-        context: ReductionContext
+        tree _: ChoiceTree,
+        positionRange _: ClosedRange<Int>,
+        context _: ReductionContext
     ) {
         driver.start(sequence: sequence, sortedSpans: spans)
     }

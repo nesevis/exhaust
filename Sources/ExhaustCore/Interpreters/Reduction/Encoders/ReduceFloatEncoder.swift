@@ -27,7 +27,7 @@ struct ReduceFloatEncoder: ComposableEncoder {
 
     func estimatedCost(
         sequence: ChoiceSequence,
-        tree: ChoiceTree,
+        tree _: ChoiceTree,
         positionRange: ClosedRange<Int>,
         context: ReductionContext
     ) -> Int? {
@@ -43,7 +43,7 @@ struct ReduceFloatEncoder: ComposableEncoder {
 
     mutating func start(
         sequence: ChoiceSequence,
-        tree: ChoiceTree,
+        tree _: ChoiceTree,
         positionRange: ClosedRange<Int>,
         context: ReductionContext
     ) {
@@ -52,7 +52,7 @@ struct ReduceFloatEncoder: ComposableEncoder {
         let convergedOrigins = context.convergedOrigins
 
         self.sequence = sequence
-        self.targets = []
+        targets = []
         currentTargetIndex = 0
         stage = .specialValues
         batchCandidates = []
@@ -77,7 +77,7 @@ struct ReduceFloatEncoder: ComposableEncoder {
                 nil
             }
 
-            self.targets.append(FloatTarget(
+            targets.append(FloatTarget(
                 seqIdx: seqIdx,
                 tag: choiceTag,
                 validRange: v.validRange,

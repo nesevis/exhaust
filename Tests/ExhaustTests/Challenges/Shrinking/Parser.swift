@@ -658,8 +658,8 @@ struct ParserShrinkingChallenge {
         case let .not(inner):
             1 + size(inner)
         case let .add(lhs, rhs), let .sub(lhs, rhs),
-            let .mul(lhs, rhs), let .div(lhs, rhs),
-            let .and(lhs, rhs), let .or(lhs, rhs):
+             let .mul(lhs, rhs), let .div(lhs, rhs),
+             let .and(lhs, rhs), let .or(lhs, rhs):
             1 + size(lhs) + size(rhs)
         }
     }

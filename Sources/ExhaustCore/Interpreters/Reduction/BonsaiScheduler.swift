@@ -132,8 +132,8 @@ enum BonsaiScheduler {
     }
 
     /// Runs the reduction cycle loop with the given strategy.
-    private static func runWithStrategy<Output, Strategy: SchedulingStrategy>(
-        _ strategy: inout Strategy,
+    private static func runWithStrategy<Output>(
+        _ strategy: inout some SchedulingStrategy,
         state: ReductionState<Output>,
         config: Interpreters.BonsaiReducerConfiguration,
         gen: ReflectiveGenerator<Output>,
@@ -263,6 +263,7 @@ enum BonsaiScheduler {
         state.statsCycles = cycles
 
         // MARK: - Post-Termination Verification Sweep
+
         //
         // Detect stale convergence cache entries that produced a non-minimal
         // counterexample. Probe floor - 1 for each cached coordinate. If any
@@ -460,9 +461,9 @@ enum BonsaiScheduler {
     /// Dispatches a single planned phase to the appropriate ``ReductionState`` method.
     ///
     /// Returns the phase outcome and optionally the CDG produced by base descent (other phases return nil for the DAG).
-    private static func dispatchPhase<Output>(
+    private static func dispatchPhase(
         _ planned: PlannedPhase,
-        state: ReductionState<Output>,
+        state: ReductionState<some Any>,
         dag: ChoiceDependencyGraph?
     ) throws -> (outcome: PhaseOutcome, dag: ChoiceDependencyGraph?) {
         switch planned.phase {
@@ -567,8 +568,8 @@ enum BonsaiScheduler {
     /// Computes the verification cycle budget based on the user's reduction budget.
     ///
     /// `.fast` (maxStalls ≤ 1): standard budget (best-effort). `.slow`: expanded budget based on per-coordinate range sizes.
-    static func computeVerificationBudget<Output>(
-        state: ReductionState<Output>,
+    static func computeVerificationBudget(
+        state: ReductionState<some Any>,
         config: Interpreters.BonsaiReducerConfiguration
     ) -> Int {
         if config.maxStalls <= 1 {

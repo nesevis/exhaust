@@ -45,7 +45,7 @@ public struct ZeroValueEncoder: ComposableEncoder {
 
     public func estimatedCost(
         sequence: ChoiceSequence,
-        tree: ChoiceTree,
+        tree _: ChoiceTree,
         positionRange: ClosedRange<Int>,
         context: ReductionContext
     ) -> Int? {
@@ -56,7 +56,7 @@ public struct ZeroValueEncoder: ComposableEncoder {
 
     public mutating func start(
         sequence: ChoiceSequence,
-        tree: ChoiceTree,
+        tree _: ChoiceTree,
         positionRange: ClosedRange<Int>,
         context: ReductionContext
     ) {

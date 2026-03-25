@@ -42,9 +42,9 @@ struct BranchSimplificationEncoder: ComposableEncoder {
 
     func estimatedCost(
         sequence: ChoiceSequence,
-        tree: ChoiceTree,
-        positionRange: ClosedRange<Int>,
-        context: ReductionContext
+        tree _: ChoiceTree,
+        positionRange _: ClosedRange<Int>,
+        context _: ReductionContext
     ) -> Int? {
         guard sequence.isEmpty == false else { return nil }
         return switch strategy {
@@ -56,8 +56,8 @@ struct BranchSimplificationEncoder: ComposableEncoder {
     mutating func start(
         sequence: ChoiceSequence,
         tree: ChoiceTree,
-        positionRange: ClosedRange<Int>,
-        context: ReductionContext
+        positionRange _: ClosedRange<Int>,
+        context _: ReductionContext
     ) {
         candidateIndex = 0
         switch strategy {
@@ -68,7 +68,7 @@ struct BranchSimplificationEncoder: ComposableEncoder {
         }
     }
 
-    mutating func nextProbe(lastAccepted: Bool) -> ChoiceSequence? {
+    mutating func nextProbe(lastAccepted _: Bool) -> ChoiceSequence? {
         guard candidateIndex < candidates.count else { return nil }
         let candidate = candidates[candidateIndex]
         candidateIndex += 1

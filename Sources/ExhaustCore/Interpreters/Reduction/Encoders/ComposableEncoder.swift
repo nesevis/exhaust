@@ -69,14 +69,16 @@ public extension ComposableEncoder {
     }
 
     /// Default: convergence transfer is always safe (same encoder semantics across runs).
-    var isConvergenceTransferSafe: Bool { true }
+    var isConvergenceTransferSafe: Bool {
+        true
+    }
 
     /// Default cost estimate: nil (no work to do). Conformers should override.
     func estimatedCost(
-        sequence: ChoiceSequence,
-        tree: ChoiceTree,
-        positionRange: ClosedRange<Int>,
-        context: ReductionContext
+        sequence _: ChoiceSequence,
+        tree _: ChoiceTree,
+        positionRange _: ClosedRange<Int>,
+        context _: ReductionContext
     ) -> Int? {
         nil
     }
@@ -151,14 +153,13 @@ public struct IdentityComposableEncoder: ComposableEncoder {
     }
 
     public mutating func start(
-        sequence: ChoiceSequence,
-        tree: ChoiceTree,
-        positionRange: ClosedRange<Int>,
-        context: ReductionContext
+        sequence _: ChoiceSequence,
+        tree _: ChoiceTree,
+        positionRange _: ClosedRange<Int>,
+        context _: ReductionContext
     ) {}
 
-    public mutating func nextProbe(lastAccepted: Bool) -> ChoiceSequence? {
+    public mutating func nextProbe(lastAccepted _: Bool) -> ChoiceSequence? {
         nil
     }
 }
-

@@ -804,10 +804,10 @@ extension ReductionState {
         // Capture skeleton fingerprint before fibre descent starts.
         let prePhaseFingerprint: StructuralFingerprint? =
             if hasBind, let bindSpanIndex = bindIndex {
-            StructuralFingerprint.from(sequence, bindIndex: bindSpanIndex)
-        } else {
-            nil
-        }
+                StructuralFingerprint.from(sequence, bindIndex: bindSpanIndex)
+            } else {
+                nil
+            }
 
         // Per-leaf-range value minimization pass.
         for leafRange in leafRanges {
@@ -865,18 +865,17 @@ extension ReductionState {
                 var firstAcceptedSlot: ReductionScheduler.ValueEncoderSlot?
                 for slot in trainOrder {
                     guard legBudget.isExhausted == false else { break }
-                    let encoder: (any ComposableEncoder)?
-                    switch slot {
+                    let encoder: (any ComposableEncoder)? = switch slot {
                     case .zeroValue where leafSpans.isEmpty == false && suppressZeroValue == false:
-                        encoder = zeroValueEncoder
+                        zeroValueEncoder
                     case .binarySearchToZero where leafSpans.isEmpty == false:
-                        encoder = binarySearchToZeroEncoder
+                        binarySearchToZeroEncoder
                     case .binarySearchToTarget where leafSpans.isEmpty == false:
-                        encoder = binarySearchToTargetEncoder
+                        binarySearchToTargetEncoder
                     case .reduceFloat where floatSpans.isEmpty == false:
-                        encoder = reduceFloatEncoder
+                        reduceFloatEncoder
                     default:
-                        encoder = nil
+                        nil
                     }
                     guard let encoder else { continue }
                     if try runComposable(
@@ -965,18 +964,17 @@ extension ReductionState {
                 var firstAcceptedDepthSlot: ReductionScheduler.ValueEncoderSlot?
                 for slot in trainOrder {
                     guard legBudget.isExhausted == false else { break }
-                    let encoder: (any ComposableEncoder)?
-                    switch slot {
+                    let encoder: (any ComposableEncoder)? = switch slot {
                     case .zeroValue where hasValueSpansAtDepth && depthSuppressZeroValue == false:
-                        encoder = zeroValueEncoder
+                        zeroValueEncoder
                     case .binarySearchToZero where hasValueSpansAtDepth:
-                        encoder = binarySearchToZeroEncoder
+                        binarySearchToZeroEncoder
                     case .binarySearchToTarget where hasValueSpansAtDepth:
-                        encoder = binarySearchToTargetEncoder
+                        binarySearchToTargetEncoder
                     case .reduceFloat where hasFloatsAtDepth:
-                        encoder = reduceFloatEncoder
+                        reduceFloatEncoder
                     default:
-                        encoder = nil
+                        nil
                     }
                     guard let encoder else { continue }
                     if try runComposable(
@@ -1305,15 +1303,14 @@ extension ReductionState {
                 // Compare prediction against ground truth.
                 // The prediction uses the current sequence; the ground truth uses the lifted sequences.
                 // "Correct" means the predicted mode matches the MAJORITY of actual downstream starts.
-                let actualMajorityMode: FibrePrediction.Mode
-                if comp.fibreExhaustiveStarts >= comp.fibrePairwiseStarts,
-                   comp.fibreExhaustiveStarts >= comp.fibreZeroValueStarts
+                let actualMajorityMode: FibrePrediction.Mode = if comp.fibreExhaustiveStarts >= comp.fibrePairwiseStarts,
+                                                                  comp.fibreExhaustiveStarts >= comp.fibreZeroValueStarts
                 {
-                    actualMajorityMode = .exhaustive
+                    .exhaustive
                 } else if comp.fibrePairwiseStarts >= comp.fibreZeroValueStarts {
-                    actualMajorityMode = .pairwise
+                    .pairwise
                 } else {
-                    actualMajorityMode = .tooLarge
+                    .tooLarge
                 }
 
                 let totalStarts = comp.fibreExhaustiveStarts
@@ -1333,7 +1330,7 @@ extension ReductionState {
                 let actualExhaustive = compositionEdge.composition.fibreExhaustiveStarts
                 let actualPairwise = compositionEdge.composition.fibrePairwiseStarts
                 let actualBail = compositionEdge.composition.fibreZeroValueStarts
-                let predictionLabel: String = switch prediction.predictedMode {
+                let predictionLabel = switch prediction.predictedMode {
                 case .exhaustive: "exhaustive"
                 case .pairwise: "pairwise"
                 case .tooLarge: "too_large"
@@ -1358,13 +1355,12 @@ extension ReductionState {
             let totalDownstreamStarts = compositionEdge.composition.fibreExhaustiveStarts
                 + compositionEdge.composition.fibrePairwiseStarts
                 + compositionEdge.composition.fibreZeroValueStarts
-            let edgeSignal: FibreSignal
-            if totalDownstreamStarts == 0 {
-                edgeSignal = .bail(paramCount: edge.downstreamRange.count)
+            let edgeSignal: FibreSignal = if totalDownstreamStarts == 0 {
+                .bail(paramCount: edge.downstreamRange.count)
             } else if anyAcceptedThisEdge {
-                edgeSignal = .exhaustedWithFailure
+                .exhaustedWithFailure
             } else {
-                edgeSignal = .exhaustedClean
+                .exhaustedClean
             }
             if let upstreamValue = compositionEdge.composition.previousUpstreamBitPattern {
                 edgeObservations[edge.regionIndex] = EdgeObservation(
@@ -1634,9 +1630,9 @@ struct FibrePrediction {
     let predictedMode: Mode
 
     enum Mode: Equatable {
-        case exhaustive    // predictedSize <= 64
-        case pairwise      // predictedSize > 64, parameterCount <= 20
-        case tooLarge      // parameterCount > 20 or overflow
+        case exhaustive // predictedSize <= 64
+        case pairwise // predictedSize > 64, parameterCount <= 20
+        case tooLarge // parameterCount > 20 or overflow
     }
 }
 
@@ -1689,11 +1685,10 @@ extension ReductionState {
 
             // Constant edges: FibreCoveringEncoder (prediction is exact, fibre won't change).
             // Data-dependent edges: DownstreamPick selects at runtime based on actual fibre.
-            let downstream: any ComposableEncoder
-            if edge.isStructurallyConstant {
-                downstream = FibreCoveringEncoder()
+            let downstream: any ComposableEncoder = if edge.isStructurallyConstant {
+                FibreCoveringEncoder()
             } else {
-                downstream = DownstreamPick(alternatives: [
+                DownstreamPick(alternatives: [
                     // Exhaustive: small fibres (<= 64 combinations).
                     .init(
                         encoder: FibreCoveringEncoder(),
@@ -1774,13 +1769,12 @@ extension ReductionState {
         }
 
         let predictedSize = overflowed ? UInt64.max : product
-        let mode: FibrePrediction.Mode
-        if overflowed || parameterCount > 20 {
-            mode = .tooLarge
+        let mode: FibrePrediction.Mode = if overflowed || parameterCount > 20 {
+            .tooLarge
         } else if predictedSize <= FibreCoveringEncoder.exhaustiveThreshold {
-            mode = .exhaustive
+            .exhaustive
         } else {
-            mode = .pairwise
+            .pairwise
         }
 
         return FibrePrediction(
@@ -1812,7 +1806,7 @@ extension ReductionState {
 
         let isWithinRecordedRange =
             upstreamValue.isRangeExplicit
-            && upstreamValue.choice.fits(in: upstreamValue.validRange)
+                && upstreamValue.choice.fits(in: upstreamValue.validRange)
         let targetBitPattern = isWithinRecordedRange
             ? upstreamValue.choice.reductionTarget(in: upstreamValue.validRange)
             : upstreamValue.choice.semanticSimplest.bitPattern64

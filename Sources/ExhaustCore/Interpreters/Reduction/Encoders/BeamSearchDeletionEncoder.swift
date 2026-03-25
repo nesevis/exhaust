@@ -58,9 +58,9 @@ struct BeamSearchDeletionEncoder: ComposableEncoder {
 
     func estimatedCost(
         sequence: ChoiceSequence,
-        tree: ChoiceTree,
-        positionRange: ClosedRange<Int>,
-        context: ReductionContext
+        tree _: ChoiceTree,
+        positionRange _: ClosedRange<Int>,
+        context _: ReductionContext
     ) -> Int? {
         let containerCount = ChoiceSequence.extractContainerSpans(from: sequence).count
         guard containerCount > 0 else { return nil }
@@ -69,9 +69,9 @@ struct BeamSearchDeletionEncoder: ComposableEncoder {
 
     mutating func start(
         sequence: ChoiceSequence,
-        tree: ChoiceTree,
-        positionRange: ClosedRange<Int>,
-        context: ReductionContext
+        tree _: ChoiceTree,
+        positionRange _: ClosedRange<Int>,
+        context _: ReductionContext
     ) {
         structurallyStalled = (previousSequenceLength == sequence.count)
         previousSequenceLength = sequence.count
@@ -83,7 +83,7 @@ struct BeamSearchDeletionEncoder: ComposableEncoder {
             from: sequence,
             siblingGroups: siblingGroups
         )
-            .filter { $0.isEmpty == false }
+        .filter { $0.isEmpty == false }
 
         if cohorts.isEmpty == false {
             prepareCohort()

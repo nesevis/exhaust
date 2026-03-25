@@ -125,7 +125,7 @@ public func __runContractAsync<Spec: AsyncContractSpec>(
             } else {
                 let skipGenericCoverage =
                     !randomOnly && replaySeed == nil
-                    && extractPickChoices(from: commandGen) != nil
+                        && extractPickChoices(from: commandGen) != nil
                 let exhaustResult = __ExhaustRuntime.__exhaust(
                     seqGen,
                     settings: buildExhaustSettings(

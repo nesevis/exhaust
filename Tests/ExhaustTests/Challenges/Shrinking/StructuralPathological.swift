@@ -31,8 +31,8 @@ struct StructuralPathologicalChallenge {
         // Fibre sizes: n=3 → 4³=64 (exhaustive boundary), n=4 → 5³=125 (pairwise).
         // Property passes when max element < 5; fails when max >= 5 AND sum >= 10.
         // Smallest n where failure is possible: n=5 (elements can reach 5, and 0+5+5=10).
-        let gen = #gen(.int(in: 1...8)).bind { n in
-            #gen(.int(in: 0...n)).array(length: 3)
+        let gen = #gen(.int(in: 1 ... 8)).bind { n in
+            #gen(.int(in: 0 ... n)).array(length: 3)
         }
 
         var report: ExhaustReport?
@@ -58,8 +58,8 @@ struct StructuralPathologicalChallenge {
         // Phase 2 gets stuck: reducing any single coordinate breaks the sum constraint.
         // Composition jointly reduces n and searches the fibre at n=2 (fibre=3³=27,
         // exhaustive): the only failing case is [1, 1, 2].
-        let gen = #gen(.int(in: 2...10)).bind { n in
-            #gen(.int(in: 0...n)).array(length: 3)
+        let gen = #gen(.int(in: 2 ... 10)).bind { n in
+            #gen(.int(in: 0 ... n)).array(length: 3)
         }
 
         var report: ExhaustReport?
@@ -84,9 +84,9 @@ struct StructuralPathologicalChallenge {
         // CDG has 2 edges in topological order (outer before inner).
         // Property: sum < 8. Fails when sum >= 8.
         // Smallest (a, b): a=2, b=2 → range 0...4, [4, 4]=8.
-        let gen = #gen(.int(in: 1...6)).bind { a in
-            #gen(.int(in: 1...a)).bind { b in
-                #gen(.int(in: 0...(a * b))).array(length: 2)
+        let gen = #gen(.int(in: 1 ... 6)).bind { a in
+            #gen(.int(in: 1 ... a)).bind { b in
+                #gen(.int(in: 0 ... (a * b))).array(length: 2)
             }
         }
 
@@ -112,10 +112,10 @@ struct StructuralPathologicalChallenge {
         // CDG has 3 edges. Deepest nesting in the test suite.
         // Property: value < 6. Fails when value >= 6.
         // Smallest (a, b, c) with a+b+c >= 6: (2, 2, 2) → range 0...6, value=6.
-        let gen = #gen(.int(in: 1...4)).bind { a in
-            #gen(.int(in: 1...a)).bind { b in
-                #gen(.int(in: 1...b)).bind { c in
-                    #gen(.int(in: 0...(a + b + c)))
+        let gen = #gen(.int(in: 1 ... 4)).bind { a in
+            #gen(.int(in: 1 ... a)).bind { b in
+                #gen(.int(in: 1 ... b)).bind { c in
+                    #gen(.int(in: 0 ... (a + b + c)))
                 }
             }
         }
@@ -146,8 +146,8 @@ struct StructuralPathologicalChallenge {
         // (which clamps x) requires increasing b to compensate — cross-edge coordination
         // that the current reducer does not perform.
         let gen = #gen(
-            #gen(.int(in: 1...8)).bind { a in #gen(.int(in: 0...a)) },
-            #gen(.int(in: 1...8)).bind { b in #gen(.int(in: 0...b)) }
+            #gen(.int(in: 1 ... 8)).bind { a in #gen(.int(in: 0 ... a)) },
+            #gen(.int(in: 1 ... 8)).bind { b in #gen(.int(in: 0 ... b)) }
         )
 
         var report: ExhaustReport?
@@ -176,8 +176,8 @@ struct StructuralPathologicalChallenge {
         // Smallest n where failure possible: n=3. Per-coordinate reduction converges to a
         // local minimum where each element is at its floor — sum equals 12 but the
         // distribution across elements is seed-dependent.
-        let gen = #gen(.int(in: 1...5)).bind { n in
-            #gen(.int(in: 0...n)).array(length: 5)
+        let gen = #gen(.int(in: 1 ... 5)).bind { n in
+            #gen(.int(in: 0 ... n)).array(length: 5)
         }
 
         var report: ExhaustReport?
@@ -205,8 +205,8 @@ struct StructuralPathologicalChallenge {
         // Smallest n where failure possible: n=2 (range 0...6).
         // Per-coordinate reduction converges to equal-valued pair [4, 4] — the global
         // minimum [2, 6] requires cross-coordinate redistribution.
-        let gen = #gen(.int(in: 0...8)).bind { n in
-            #gen(.int(in: 0...(n < 4 ? n * 3 : 12 - n))).array(length: 2)
+        let gen = #gen(.int(in: 0 ... 8)).bind { n in
+            #gen(.int(in: 0 ... (n < 4 ? n * 3 : 12 - n))).array(length: 2)
         }
 
         var report: ExhaustReport?
@@ -235,8 +235,8 @@ struct StructuralPathologicalChallenge {
         // large for covering or exhaustive, only ZeroValue fallback via DownstreamPick).
         // Adaptive per-edge budget would give more to edge 1 and less to edge 2.
         let gen = #gen(
-            #gen(.int(in: 1...6)).bind { a in #gen(.int(in: 0...a)).array(length: 2) },
-            #gen(.int(in: 1...6)).bind { b in #gen(.int(in: 0...b)).array(length: 8) }
+            #gen(.int(in: 1 ... 6)).bind { a in #gen(.int(in: 0 ... a)).array(length: 2) },
+            #gen(.int(in: 1 ... 6)).bind { b in #gen(.int(in: 0 ... b)).array(length: 8) }
         )
 
         var report: ExhaustReport?
@@ -265,8 +265,8 @@ struct StructuralPathologicalChallenge {
         // Subsequent cycles: the fibre at n=5 has been fully searched and found its
         // only failure. The edge should be exhaustedClean at n=5 for values below [5, 5]
         // — no point re-exploring.
-        let gen = #gen(.int(in: 1...10)).bind { n in
-            #gen(.int(in: 0...n)).array(length: 2)
+        let gen = #gen(.int(in: 1 ... 10)).bind { n in
+            #gen(.int(in: 0 ... n)).array(length: 2)
         }
 
         var report: ExhaustReport?
@@ -296,10 +296,10 @@ struct StructuralPathologicalChallenge {
         // This produces zeroingDependency signals — the coordinates are coupled through
         // the sum constraint. Redistribution (Phase 4) is the natural recovery path.
         let gen = #gen(
-            .int(in: 0...20),
-            .int(in: 0...20),
-            .int(in: 0...20),
-            .int(in: 0...20)
+            .int(in: 0 ... 20),
+            .int(in: 0 ... 20),
+            .int(in: 0 ... 20),
+            .int(in: 0 ... 20)
         )
 
         var report: ExhaustReport?
@@ -328,8 +328,8 @@ struct StructuralPathologicalChallenge {
         // then stalls. No composition (edges=0) so the convergence cache stays stable across
         // stall cycles. With .slow budget (maxStalls=8), the gate fires on stall cycle 2+,
         // saving Phase 2's re-confirmation probes (ZeroValue all-at-once + individual probes).
-        let gen = #gen(.uint(in: 0...100)).array(length: 10)
-        
+        let gen = #gen(.uint(in: 0 ... 100)).array(length: 10)
+
 //        ExhaustLog.setConfiguration(.init(isEnabled: true, minimumLevel: .info, categoryMinimumLevels: [.reducer: .debug], format: .human))
 
         var report: ExhaustReport?
@@ -337,7 +337,7 @@ struct StructuralPathologicalChallenge {
             gen,
             .suppressIssueReporting,
 //            .randomOnly,
-            .replay(12791394592254154946),
+            .replay(12_791_394_592_254_154_946),
             .budget(.expedient),
             .onReport { report = $0 }
         ) { arr in

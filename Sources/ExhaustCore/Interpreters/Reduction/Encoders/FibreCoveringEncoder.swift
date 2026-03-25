@@ -56,9 +56,9 @@ public struct FibreCoveringEncoder: ComposableEncoder {
 
     public func estimatedCost(
         sequence: ChoiceSequence,
-        tree: ChoiceTree,
+        tree _: ChoiceTree,
         positionRange: ClosedRange<Int>,
-        context: ReductionContext
+        context _: ReductionContext
     ) -> Int? {
         let positions = collectValuePositions(in: positionRange, from: sequence)
         guard positions.isEmpty == false else { return nil }
@@ -71,9 +71,9 @@ public struct FibreCoveringEncoder: ComposableEncoder {
 
     public mutating func start(
         sequence: ChoiceSequence,
-        tree: ChoiceTree,
+        tree _: ChoiceTree,
         positionRange: ClosedRange<Int>,
-        context: ReductionContext
+        context _: ReductionContext
     ) {
         baseSequence = sequence
         valuePositions = collectValuePositions(in: positionRange, from: sequence)
@@ -102,7 +102,7 @@ public struct FibreCoveringEncoder: ComposableEncoder {
         }
     }
 
-    public mutating func nextProbe(lastAccepted: Bool) -> ChoiceSequence? {
+    public mutating func nextProbe(lastAccepted _: Bool) -> ChoiceSequence? {
         let row: CoveringArrayRow?
 
         if generator != nil {

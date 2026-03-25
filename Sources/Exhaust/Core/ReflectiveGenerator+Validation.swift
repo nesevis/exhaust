@@ -310,7 +310,7 @@ private extension ReflectiveGenerator where Operation == ReflectiveOperation {
         let elapsed = ContinuousClock.now - startTime
         let elapsedSeconds =
             Double(elapsed.components.seconds)
-            + Double(elapsed.components.attoseconds) * 1e-18
+                + Double(elapsed.components.attoseconds) * 1e-18
 
         if valuesGenerated == 0 {
             failures.append(.noValuesGenerated)

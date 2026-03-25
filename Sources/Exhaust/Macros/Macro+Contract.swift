@@ -70,8 +70,8 @@ import ExhaustCore
 /// }
 /// ```
 @attached(
-  member,
-  names:
+    member,
+    names:
     named(Command),
     named(SystemUnderTest),
     named(commandGenerator),
