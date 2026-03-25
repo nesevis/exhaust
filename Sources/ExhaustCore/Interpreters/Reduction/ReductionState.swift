@@ -150,6 +150,9 @@ struct PhaseTracker {
     private var stack: [Phase] = []
     private(set) var counts: [Phase: PhaseCounts] = [:]
 
+    /// Property invocations from ``ReductionPass`` passes that run outside the phase stack (structural isolation, oscillation damping, human-order post-processing).
+    private(set) var reductionPassInvocations: Int = 0
+
     mutating func push(_ phase: Phase) {
         stack.append(phase)
     }
@@ -162,6 +165,16 @@ struct PhaseTracker {
     mutating func recordInvocation() {
         guard let phase = stack.first else { return }
         counts[phase, default: PhaseCounts()].propertyInvocations += 1
+    }
+
+    mutating func recordInvocations(_ count: Int) {
+        guard let phase = stack.first else { return }
+        counts[phase, default: PhaseCounts()].propertyInvocations += count
+    }
+
+    /// Records property invocations from a ``ReductionPass`` pass. Tracked separately from phase-attributed invocations but included in the reported total.
+    mutating func recordReductionPassInvocations(_ count: Int) {
+        reductionPassInvocations += count
     }
 
     mutating func recordAcceptance(structural: Bool) {
@@ -356,6 +369,8 @@ final class ReductionState<Output> {
         var stats = ReductionStats()
         stats.encoderProbes = encoderProbes.filter { $0.value > 0 }
         stats.totalMaterializations = totalMaterializations
+            + phaseTracker.reductionPassInvocations
+        stats.reductionPassInvocations = phaseTracker.reductionPassInvocations
         stats.cycles = statsCycles
         stats.convergedCoordinatesAtPhaseTwoStart = convergedCoordinatesAtPhaseTwoStart
         stats.totalValueCoordinatesAtPhaseTwoStart = totalValueCoordinatesAtPhaseTwoStart
@@ -450,6 +465,10 @@ final class ReductionState<Output> {
         let edgeObservations: [Int: EdgeObservation]
     }
 
+    // Closed reductions
+    var freeCoordinateProjectionPass = FreeCoordinateProjectionPass()
+    var humanReadableOrderingPass = HumanReadableOrderingPass()
+
     // Encoders
     var promoteBranchesEncoder = BranchSimplificationEncoder(strategy: .promote)
     var pivotBranchesEncoder = BranchSimplificationEncoder(strategy: .pivot)
@@ -460,6 +479,7 @@ final class ReductionState<Output> {
     var contiguousWindowEncoder = ContiguousWindowDeletionEncoder()
     var beamSearchEncoder: BeamSearchDeletionEncoder
     var shortlexReorderEncoder = ShortlexReorderEncoder()
+    var oscillationDampingPass = OscillationDampingPass()
     var tandemEncoder = RedistributeByTandemReductionEncoder()
     var redistributeEncoder = RedistributeAcrossValueContainersEncoder()
     var productSpaceBatchEncoder = ProductSpaceBatchEncoder()

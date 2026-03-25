@@ -1,3 +1,10 @@
+//
+//  ShortlexReorderEncoderTests.swift
+//  Exhaust
+//
+//  Created by Chris Kolbu on 25/3/2026.
+//
+
 import Testing
 @testable import ExhaustCore
 

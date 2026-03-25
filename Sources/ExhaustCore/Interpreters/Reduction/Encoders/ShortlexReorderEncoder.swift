@@ -1,3 +1,10 @@
+//
+//  ShortlexReorderEncoder.swift
+//  Exhaust
+//
+//  Created by Chris Kolbu on 25/3/2026.
+//
+
 /// Sorts sibling elements within sequence containers by shortlex order.
 ///
 /// Array elements produced by `Gen.array` appear as siblings in the choice sequence. When siblings are out of shortlex order — for example `[5, 0, 3]` in raw choice values — sorting them to `[0, 3, 5]` produces a shortlex-smaller overall sequence, which is a genuine shrink. This encoder finds such groups and proposes sorted candidates.

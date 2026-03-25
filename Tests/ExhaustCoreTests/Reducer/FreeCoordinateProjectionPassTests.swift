@@ -1,6 +1,8 @@
 //
-//  StructuralIsolatorTests.swift
+//  FreeCoordinateProjectionPassTests.swift
 //  Exhaust
+//
+//  Created by Chris Kolbu on 25/3/2026.
 //
 
 import Testing
@@ -18,7 +20,7 @@ struct StructuralIsolatorTests {
         let sequence = ChoiceSequence(tree)
         let bindIndex = BindSpanIndex(from: sequence)
 
-        let result = StructuralIsolator.project(
+        let result = FreeCoordinateProjectionPass().encode(
             gen: gen,
             sequence: sequence,
             bindIndex: bindIndex,
@@ -45,7 +47,7 @@ struct StructuralIsolatorTests {
         let bindIndex = BindSpanIndex(from: sequence)
 
         // Dummy generator — isolate returns nil before materialization.
-        let result = StructuralIsolator.project(
+        let result = FreeCoordinateProjectionPass().encode(
             gen: Gen.just(0 as UInt64),
             sequence: sequence,
             bindIndex: bindIndex,
@@ -68,7 +70,7 @@ struct StructuralIsolatorTests {
 
         // Property passes when the independent value is 0.
         // Zeroing it makes the property pass → isolation returns nil.
-        let result = StructuralIsolator.project(
+        let result = FreeCoordinateProjectionPass().encode(
             gen: gen,
             sequence: sequence,
             bindIndex: bindIndex,
@@ -91,7 +93,7 @@ struct StructuralIsolatorTests {
         let sequence = ChoiceSequence(tree)
         let bindIndex = BindSpanIndex(from: sequence)
 
-        let result = StructuralIsolator.project(
+        let result = FreeCoordinateProjectionPass().encode(
             gen: gen,
             sequence: sequence,
             bindIndex: bindIndex,
@@ -122,7 +124,7 @@ struct StructuralIsolatorTests {
 
         // All positions are inside the branch group — no independent positions.
         // Dummy generator — isolate returns nil before materialization.
-        let result = StructuralIsolator.project(
+        let result = FreeCoordinateProjectionPass().encode(
             gen: Gen.just(0 as UInt64),
             sequence: sequence,
             bindIndex: bindIndex,

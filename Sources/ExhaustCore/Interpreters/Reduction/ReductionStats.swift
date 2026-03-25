@@ -79,6 +79,11 @@ public struct ReductionStats: Sendable {
     /// Number of composition edges where the downstream bailed before completing coverage.
     public var fibreBailCount: Int
 
+    // MARK: - Closed Reduction Invocations
+
+    /// Property invocations from ``ReductionPass`` passes (structural isolation, oscillation damping, human-order post-processing). Logged separately from phase-attributed invocations but included in the reported total.
+    public var reductionPassInvocations: Int
+
     // MARK: - Per-Phase Outcomes
 
     /// Per-cycle phase outcome data, collected when stats collection is enabled.
@@ -107,5 +112,6 @@ public struct ReductionStats: Sendable {
         fibreExhaustedCleanCount = 0
         fibreExhaustedWithFailureCount = 0
         fibreBailCount = 0
+        reductionPassInvocations = 0
     }
 }

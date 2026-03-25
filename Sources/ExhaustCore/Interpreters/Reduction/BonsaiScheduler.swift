@@ -99,13 +99,17 @@ enum BonsaiScheduler {
         )
 
         // Projection: zero structurally independent values.
-        if let result = StructuralIsolator.project(
+        if let result = state.freeCoordinateProjectionPass.encode(
             gen: gen,
             sequence: state.sequence,
             bindIndex: state.bindIndex,
             property: property,
             isInstrumented: state.isInstrumented
         ) {
+            if state.collectStats {
+                state.phaseTracker.recordReductionPassInvocations(1)
+                state.encoderProbes[.structuralIsolation, default: 0] += 1
+            }
             state.accept(
                 ReductionResult(
                     sequence: result.sequence,
@@ -439,14 +443,21 @@ enum BonsaiScheduler {
         var bestOutput = state.bestOutput
 
         if config.humanOrderPostProcess {
-            if let humanResult = ReductionScheduler.humanOrderPostProcess(
+            if let humanResult = state.humanReadableOrderingPass.encode(
                 gen: gen,
                 sequence: bestSequence,
                 tree: state.tree,
                 property: property
             ) {
-                bestSequence = humanResult.sequence
-                bestOutput = humanResult.output
+                if state.collectStats {
+                    state.phaseTracker.recordReductionPassInvocations(
+                        humanResult.materializations
+                    )
+                    state.encoderProbes[.humanOrderReorder, default: 0] +=
+                        humanResult.materializations
+                }
+                bestSequence = humanResult.result.sequence
+                bestOutput = humanResult.result.output
                 if isInstrumented {
                     ExhaustLog.notice(category: .reducer, event: "human_order_accepted")
                 }

@@ -28,6 +28,7 @@ public struct ExhaustReport: Sendable {
     /// Per-encoder probe counts from the reduction phase.
     ///
     /// Each key is an ``EncoderName`` identifying a reduction encoder, and the value is the total number of probes that encoder generated across all cycles.
+    /// **Includes cache rejections that did not lead to a materialization**
     public var encoderProbes: [EncoderName: Int] = [:]
 
     /// Total reduction cycles completed.
@@ -90,6 +91,9 @@ public struct ExhaustReport: Sendable {
 
     /// Composition edges where the downstream bailed before completing coverage.
     public var fibreBailCount: Int = 0
+
+    /// Property invocations from ``ReductionPass`` passes (structural isolation, oscillation damping, human-order post-processing). Tracked separately from phase-attributed invocations but included in ``totalMaterializations``.
+    public var reductionPassInvocations: Int = 0
 
     /// Per-cycle phase outcome data.
     public var cycleOutcomes: [CycleOutcome] = []
@@ -173,6 +177,7 @@ public struct ExhaustReport: Sendable {
         fibreExhaustedCleanCount = stats.fibreExhaustedCleanCount
         fibreExhaustedWithFailureCount = stats.fibreExhaustedWithFailureCount
         fibreBailCount = stats.fibreBailCount
+        reductionPassInvocations = stats.reductionPassInvocations
         cycleOutcomes = stats.cycleOutcomes
     }
 }

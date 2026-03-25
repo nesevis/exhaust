@@ -1043,6 +1043,42 @@ extension ReductionState {
             }
         }
 
+        // Oscillation damping: detect coupled coordinates with slow convergence
+        // and propose joint moves. Uses current convergence cache (post-value-encoder)
+        // compared against the encoder's internally cached previous cycle bounds.
+        if legBudget.isExhausted == false {
+            var dampingBudget = legBudget.hardCap - legBudget.used
+            let dampingStart = dampingBudget
+            if let result = try oscillationDampingPass.encode(
+                gen: gen,
+                sequence: sequence,
+                tree: tree,
+                currentOrigins: convergenceCache.allEntries,
+                fallbackTree: fallbackTree,
+                property: property,
+                budget: &dampingBudget
+            ) {
+                sequence = result.sequence
+                tree = result.tree
+                anyAccepted = true
+            }
+            let dampingProbes = dampingStart - dampingBudget
+            if collectStats {
+                phaseTracker.recordReductionPassInvocations(dampingProbes)
+                encoderProbes[.oscillationDamping, default: 0] += dampingProbes
+            }
+            if isInstrumented, dampingProbes > 0 {
+                ExhaustLog.debug(
+                    category: .reducer,
+                    event: "oscillation_damping",
+                    metadata: [
+                        "probes": "\(dampingProbes)",
+                        "accepted": "\(anyAccepted)",
+                    ]
+                )
+            }
+        }
+
         // Redistribution (once at end of fibre descent).
         if legBudget.isExhausted == false {
             if try runComposable(
