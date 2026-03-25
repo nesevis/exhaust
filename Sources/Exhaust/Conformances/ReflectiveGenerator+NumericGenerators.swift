@@ -11,33 +11,33 @@ import ExhaustCore
 // MARK: - Floating-point generators
 
 #if arch(arm64) || arch(arm64_32)
-public extension ReflectiveGenerator {
-    /// Generates arbitrary `Float16` values within the given range.
-    ///
-    /// When no range is specified, generates across the full finite half-precision range with size scaling.
-    ///
-    /// ```swift
-    /// let gen = #gen(.float16(in: Float16(-1.0)...Float16(1.0)))
-    /// ```
-    static func float16(
-        in range: ClosedRange<Float16>? = nil,
-        scaling: SizeScaling<Float16>? = nil
-    ) -> ReflectiveGenerator<Float16> {
-        if let range {
-            if let scaling {
-                Gen.choose(in: range, scaling: scaling)
+    public extension ReflectiveGenerator {
+        /// Generates arbitrary `Float16` values within the given range.
+        ///
+        /// When no range is specified, generates across the full finite half-precision range with size scaling.
+        ///
+        /// ```swift
+        /// let gen = #gen(.float16(in: Float16(-1.0)...Float16(1.0)))
+        /// ```
+        static func float16(
+            in range: ClosedRange<Float16>? = nil,
+            scaling: SizeScaling<Float16>? = nil
+        ) -> ReflectiveGenerator<Float16> {
+            if let range {
+                if let scaling {
+                    Gen.choose(in: range, scaling: scaling)
+                } else {
+                    Gen.choose(in: range)
+                }
             } else {
-                Gen.choose(in: range)
+                Gen.choose(
+                    in: -Float16.greatestFiniteMagnitude
+                        ... Float16.greatestFiniteMagnitude,
+                    scaling: scaling ?? Float16.defaultScaling
+                )
             }
-        } else {
-            Gen.choose(
-                in: -Float16.greatestFiniteMagnitude
-                    ... Float16.greatestFiniteMagnitude,
-                scaling: scaling ?? Float16.defaultScaling
-            )
         }
     }
-}
 #endif
 
 public extension ReflectiveGenerator {

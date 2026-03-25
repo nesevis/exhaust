@@ -36,11 +36,13 @@ public extension Interpreters {
         /// Maps a ``ReductionBudget`` preset to the corresponding configuration.
         public init(from config: ReductionBudget) {
             switch config {
-            case .fast: self = Self(
+            case .fast:
+                self = Self(
                     maxStalls: 1,
                     alignedDeletionBeamSearchTuning: .fast
                 )
-            case .slow: self = Self(
+            case .slow:
+                self = Self(
                     maxStalls: 8,
                     alignedDeletionBeamSearchTuning: .slow
                 )

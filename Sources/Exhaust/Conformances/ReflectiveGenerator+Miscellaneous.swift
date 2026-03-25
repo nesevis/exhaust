@@ -65,7 +65,8 @@ public extension ReflectiveGenerator {
         success: ReflectiveGenerator<Success>,
         failure: ReflectiveGenerator<Failure>
     ) -> ReflectiveGenerator<Result<Success, Failure>>
-    where Value == Result<Success, Failure> {
+        where Value == Result<Success, Failure>
+    {
         Gen.pick(choices: [
             (1, Gen.contramap(
                 { (result: Result<Success, Failure>) throws -> Success in

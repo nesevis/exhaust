@@ -155,14 +155,14 @@ public enum BoundaryDomainAnalysis {
             }
         case .float16:
             #if arch(arm64) || arch(arm64_32)
-            for c: Float16 in [
-                -Float16.greatestFiniteMagnitude, -1.0, -Float16.leastNonzeroMagnitude,
-                -0.0, 0.0, Float16.leastNonzeroMagnitude,
-                1.0, Float16.greatestFiniteMagnitude,
-                Float16.nan, Float16.infinity, -Float16.infinity,
-            ] {
-                values.insert(c.bitPattern64)
-            }
+                for c: Float16 in [
+                    -Float16.greatestFiniteMagnitude, -1.0, -Float16.leastNonzeroMagnitude,
+                    -0.0, 0.0, Float16.leastNonzeroMagnitude,
+                    1.0, Float16.greatestFiniteMagnitude,
+                    Float16.nan, Float16.infinity, -Float16.infinity,
+                ] {
+                    values.insert(c.bitPattern64)
+                }
             #endif
         default:
             break

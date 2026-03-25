@@ -6,6 +6,7 @@
 import Foundation
 
 // MARK: - IEEE 754 Binary16 Emulation
+
 //
 // Provides Double ↔ UInt64 (order-preserving encoded Float16 bit pattern) conversion
 // without requiring the Float16 type, which is only available on ARM64.

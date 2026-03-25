@@ -144,125 +144,19 @@ enum BonsaiScheduler {
         property: @escaping (Output) -> Bool,
         isInstrumented: Bool
     ) throws -> (reduced: (ChoiceSequence, Output)?, stats: ReductionStats) {
-        var stallBudget = config.maxStalls
         var cycles = 0
         var lastOutcome: CycleOutcome?
 
         // MARK: - Alternating Minimisation Loop
 
-        while stallBudget > 0 {
-            cycles += 1
-            state.currentCycle = cycles
-            let cycleStartBest = state.bestSequence
-
-            state.computeEncoderOrdering()
-
-            if isInstrumented {
-                ExhaustLog.debug(
-                    category: .reducer,
-                    event: "bonsai_cycle_start",
-                    metadata: [
-                        "cycle": "\(cycles)",
-                        "stall_budget": "\(stallBudget)",
-                        "seq_len": "\(state.sequence.count)",
-                    ]
-                )
-            }
-
-            // Build the CDG at cycle start so it's available even if Phase 1 is skipped.
-            // Phase 1 rebuilds the CDG internally on structural acceptance; the skeleton's
-            // initial CDG serves Phases 2 and 3 when Phase 1 doesn't run.
-            var dag: ChoiceDependencyGraph? = state.buildDAG()
-
-            // Stage 1: phases that run unconditionally (structural minimization).
-            let firstStagePhases = strategy.planFirstStage(
-                priorOutcome: lastOutcome,
-                state: state.view
-            )
-            var cycleImproved = false
-            var phaseDispositions: [PlannedPhase.Phase: PhaseDisposition] = [:]
-
-            var firstStageResult: PhaseOutcome?
-            for planned in firstStagePhases {
-                let (outcome, producedDag) = try Self.dispatchPhase(planned, state: state, dag: dag)
-                dag = producedDag ?? dag
-                if outcome.acceptances > 0 { cycleImproved = true }
-                strategy.phaseCompleted(phase: planned.phase, outcome: outcome)
-                firstStageResult = outcome
-                phaseDispositions[planned.phase] = .ran(outcome)
-            }
-
-            // Stage 2: phases that depend on stage 1 results (fibre descent, exploration, relax-round).
-            let secondStagePhases = strategy.planSecondStage(
-                firstStageResult: firstStageResult,
-                state: state.view
-            )
-            for planned in secondStagePhases {
-                // requiresStall: skip if any prior phase in this cycle accepted.
-                if planned.requiresStall, cycleImproved {
-                    phaseDispositions[planned.phase] = .gated(reason: .noProgress)
-                    continue
-                }
-
-                let (outcome, _) = try Self.dispatchPhase(planned, state: state, dag: dag)
-                if outcome.acceptances > 0 { cycleImproved = true }
-                strategy.phaseCompleted(phase: planned.phase, outcome: outcome)
-                phaseDispositions[planned.phase] = .ran(outcome)
-            }
-
-            // Mark phases that were not in either stage as gated.
-            let allPhases: [PlannedPhase.Phase] = [
-                .baseDescent, .fibreDescent, .exploration, .relaxRound,
-            ]
-            for phase in allPhases {
-                if phaseDispositions[phase] == nil {
-                    let reason: GateReason =
-                        phase == .fibreDescent
-                            ? .allCoordinatesConverged
-                            : .noProgress
-                    phaseDispositions[phase] = .gated(reason: reason)
-                }
-            }
-
-            // Stall detection.
-            if state.bestSequence.shortLexPrecedes(cycleStartBest) {
-                stallBudget = config.maxStalls
-            } else {
-                stallBudget -= 1
-            }
-
-            // Collect per-phase outcome data.
-            let outcome = CycleOutcome(
-                baseDescent: phaseDispositions[.baseDescent] ?? .gated(reason: .noProgress),
-                fibreDescent: phaseDispositions[.fibreDescent] ?? .gated(reason: .noProgress),
-                exploration: phaseDispositions[.exploration] ?? .gated(reason: .noProgress),
-                relaxRound: phaseDispositions[.relaxRound] ?? .gated(reason: .noProgress),
-                zeroingDependencyCount: state.zeroingDependencyCount,
-                monotoneConvergenceCount: 0,
-                exhaustedCleanEdges: state.fibreExhaustedCleanCount,
-                exhaustedWithFailureEdges: state.fibreExhaustedWithFailureCount,
-                totalEdges: state.compositionEdgesAttempted,
-                improved: state.bestSequence.shortLexPrecedes(cycleStartBest),
-                cycle: cycles
-            )
-            lastOutcome = outcome
-            if state.collectStats {
-                state.statsCycleOutcomes.append(outcome)
-                state.phaseTracker.reset()
-            }
-
-            if isInstrumented {
-                ExhaustLog.debug(
-                    category: .reducer,
-                    event: "bonsai_cycle_end",
-                    metadata: [
-                        "cycle": "\(cycles)",
-                        "improved": "\(cycleImproved)",
-                        "seq_len": "\(state.sequence.count)",
-                    ]
-                )
-            }
-        }
+        try runCycleLoop(
+            &strategy,
+            state: state,
+            config: config,
+            cycles: &cycles,
+            lastOutcome: &lastOutcome,
+            isInstrumented: isInstrumented
+        )
 
         state.statsCycles = cycles
 
@@ -312,7 +206,6 @@ enum BonsaiScheduler {
                     // Stall was false — cache was stale. Re-enter if first time.
                     if verificationSweepCompleted == false {
                         verificationSweepCompleted = true
-                        stallBudget = config.maxStalls
 
                         if isInstrumented {
                             ExhaustLog.debug(
@@ -323,48 +216,14 @@ enum BonsaiScheduler {
                         }
 
                         // Re-enter the main reduction loop using the same strategy.
-                        while stallBudget > 0 {
-                            cycles += 1
-                            state.currentCycle = cycles
-                            let cycleStartBest = state.bestSequence
-                            state.computeEncoderOrdering()
-
-                            var reentryDag: ChoiceDependencyGraph? = state.buildDAG()
-                            let reentryFirstStage = strategy.planFirstStage(
-                                priorOutcome: lastOutcome,
-                                state: state.view
-                            )
-                            var reentryCycleImproved = false
-                            var reentryFirstResult: PhaseOutcome?
-                            for planned in reentryFirstStage {
-                                let (outcome, producedDag) = try Self.dispatchPhase(
-                                    planned, state: state, dag: reentryDag
-                                )
-                                reentryDag = producedDag ?? reentryDag
-                                if outcome.acceptances > 0 { reentryCycleImproved = true }
-                                strategy.phaseCompleted(phase: planned.phase, outcome: outcome)
-                                reentryFirstResult = outcome
-                            }
-
-                            let reentrySecondStage = strategy.planSecondStage(
-                                firstStageResult: reentryFirstResult,
-                                state: state.view
-                            )
-                            for planned in reentrySecondStage {
-                                if planned.requiresStall, reentryCycleImproved { continue }
-                                let (outcome, _) = try Self.dispatchPhase(
-                                    planned, state: state, dag: reentryDag
-                                )
-                                if outcome.acceptances > 0 { reentryCycleImproved = true }
-                                strategy.phaseCompleted(phase: planned.phase, outcome: outcome)
-                            }
-
-                            if state.bestSequence.shortLexPrecedes(cycleStartBest) {
-                                stallBudget = config.maxStalls
-                            } else {
-                                stallBudget -= 1
-                            }
-                        }
+                        try runCycleLoop(
+                            &strategy,
+                            state: state,
+                            config: config,
+                            cycles: &cycles,
+                            lastOutcome: &lastOutcome,
+                            isInstrumented: isInstrumented
+                        )
 
                         // Check for staleness again after re-entry
                         let secondStaleness = try Self.detectStaleness(
@@ -518,6 +377,142 @@ enum BonsaiScheduler {
         }
     }
 
+    // MARK: - Cycle Execution
+
+    /// Runs a single reduction cycle: encoder ordering, first stage, second stage, outcome collection.
+    ///
+    /// Returns the cycle outcome with per-phase disposition data for strategy feedback and statistics.
+    private static func runSingleCycle(
+        _ strategy: inout some SchedulingStrategy,
+        state: ReductionState<some Any>,
+        lastOutcome: CycleOutcome?,
+        isInstrumented: Bool
+    ) throws -> CycleOutcome {
+        let cycleStartBest = state.bestSequence
+        state.computeEncoderOrdering()
+
+        if isInstrumented {
+            ExhaustLog.debug(
+                category: .reducer,
+                event: "bonsai_cycle_start",
+                metadata: [
+                    "cycle": "\(state.currentCycle)",
+                    "seq_len": "\(state.sequence.count)",
+                ]
+            )
+        }
+
+        var dag: ChoiceDependencyGraph? = state.buildDAG()
+
+        // Stage 1: phases that run unconditionally (structural minimization).
+        let firstStagePhases = strategy.planFirstStage(
+            priorOutcome: lastOutcome,
+            state: state.view
+        )
+        var cycleImproved = false
+        var phaseDispositions: [PlannedPhase.Phase: PhaseDisposition] = [:]
+
+        var firstStageResult: PhaseOutcome?
+        for planned in firstStagePhases {
+            let (outcome, producedDag) = try Self.dispatchPhase(planned, state: state, dag: dag)
+            dag = producedDag ?? dag
+            if outcome.acceptances > 0 { cycleImproved = true }
+            strategy.phaseCompleted(phase: planned.phase, outcome: outcome)
+            firstStageResult = outcome
+            phaseDispositions[planned.phase] = .ran(outcome)
+        }
+
+        // Stage 2: phases that depend on stage 1 results (fibre descent, exploration, relax-round).
+        let secondStagePhases = strategy.planSecondStage(
+            firstStageResult: firstStageResult,
+            state: state.view
+        )
+        for planned in secondStagePhases {
+            if planned.requiresStall, cycleImproved {
+                phaseDispositions[planned.phase] = .gated(reason: .noProgress)
+                continue
+            }
+
+            let (outcome, _) = try Self.dispatchPhase(planned, state: state, dag: dag)
+            if outcome.acceptances > 0 { cycleImproved = true }
+            strategy.phaseCompleted(phase: planned.phase, outcome: outcome)
+            phaseDispositions[planned.phase] = .ran(outcome)
+        }
+
+        // Mark phases that were not in either stage as gated.
+        let allPhases: [PlannedPhase.Phase] = [
+            .baseDescent, .fibreDescent, .exploration, .relaxRound,
+        ]
+        for phase in allPhases where phaseDispositions[phase] == nil {
+            let reason: GateReason =
+                phase == .fibreDescent
+                    ? .allCoordinatesConverged
+                    : .noProgress
+            phaseDispositions[phase] = .gated(reason: reason)
+        }
+
+        let outcome = CycleOutcome(
+            baseDescent: phaseDispositions[.baseDescent] ?? .gated(reason: .noProgress),
+            fibreDescent: phaseDispositions[.fibreDescent] ?? .gated(reason: .noProgress),
+            exploration: phaseDispositions[.exploration] ?? .gated(reason: .noProgress),
+            relaxRound: phaseDispositions[.relaxRound] ?? .gated(reason: .noProgress),
+            zeroingDependencyCount: state.zeroingDependencyCount,
+            monotoneConvergenceCount: 0,
+            exhaustedCleanEdges: state.fibreExhaustedCleanCount,
+            exhaustedWithFailureEdges: state.fibreExhaustedWithFailureCount,
+            totalEdges: state.compositionEdgesAttempted,
+            improved: state.bestSequence.shortLexPrecedes(cycleStartBest),
+            cycle: state.currentCycle
+        )
+
+        if state.collectStats {
+            state.statsCycleOutcomes.append(outcome)
+            state.phaseTracker.reset()
+        }
+
+        if isInstrumented {
+            ExhaustLog.debug(
+                category: .reducer,
+                event: "bonsai_cycle_end",
+                metadata: [
+                    "cycle": "\(state.currentCycle)",
+                    "improved": "\(cycleImproved)",
+                    "seq_len": "\(state.sequence.count)",
+                ]
+            )
+        }
+
+        return outcome
+    }
+
+    /// Runs reduction cycles until stall budget is exhausted.
+    private static func runCycleLoop(
+        _ strategy: inout some SchedulingStrategy,
+        state: ReductionState<some Any>,
+        config: Interpreters.BonsaiReducerConfiguration,
+        cycles: inout Int,
+        lastOutcome: inout CycleOutcome?,
+        isInstrumented: Bool
+    ) throws {
+        var stallBudget = config.maxStalls
+        while stallBudget > 0 {
+            cycles += 1
+            state.currentCycle = cycles
+            let outcome = try runSingleCycle(
+                &strategy,
+                state: state,
+                lastOutcome: lastOutcome,
+                isInstrumented: isInstrumented
+            )
+            lastOutcome = outcome
+            if outcome.improved {
+                stallBudget = config.maxStalls
+            } else {
+                stallBudget -= 1
+            }
+        }
+    }
+
     // MARK: - Post-Termination Verification Helpers
 
     /// Result of probing `floor - 1` for each cached convergence point.
@@ -541,14 +536,14 @@ enum BonsaiScheduler {
                   let range = value.validRange
             else { continue }
 
-            let floorBP = origin.bound
-            guard floorBP > range.lowerBound else { continue }
+            let floorBitPattern = origin.bound
+            guard floorBitPattern > range.lowerBound else { continue }
 
-            let probeBP = floorBP - 1
+            let probeBitPattern = floorBitPattern - 1
             var candidate = state.sequence
             candidate[index] = .value(.init(
                 choice: ChoiceValue(
-                    value.choice.tag.makeConvertible(bitPattern64: probeBP),
+                    value.choice.tag.makeConvertible(bitPattern64: probeBitPattern),
                     tag: value.choice.tag
                 ),
                 validRange: value.validRange,

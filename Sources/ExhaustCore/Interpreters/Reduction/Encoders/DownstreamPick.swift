@@ -31,7 +31,7 @@ struct DownstreamPick: ComposableEncoder {
         ///   - totalSpace: product of domain sizes across downstream value positions.
         ///   - parameterCount: number of value positions in the downstream range.
         let predicate: (UInt64, Int) -> Bool
-        
+
         init(encoder: some ComposableEncoder, predicate: @escaping (UInt64, Int) -> Bool) {
             self.encoder = encoder
             self.predicate = predicate

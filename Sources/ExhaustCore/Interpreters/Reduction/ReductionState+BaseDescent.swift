@@ -194,20 +194,18 @@ extension ReductionState {
 
             for slot in pruneOrder {
                 guard legBudget.isExhausted == false else { break }
-                let targets: [ChoiceSpan] = if let positionRange = scope.positionRange {
+                let targets = scope.positionRange.map { positionRange in
                     spanCache.deletionTargets(
                         category: slot.spanCategory,
                         inRange: positionRange,
                         from: sequence
                     )
-                } else {
-                    spanCache.deletionTargets(
-                        category: slot.spanCategory,
-                        depth: scope.depth,
-                        from: sequence,
-                        bindIndex: bindIndex
-                    )
-                }
+                } ?? spanCache.deletionTargets(
+                    category: slot.spanCategory,
+                    depth: scope.depth,
+                    from: sequence,
+                    bindIndex: bindIndex
+                )
                 let slotAccepted: Bool
                 if slot == .alignedWindows {
                     // Contiguous window search dominates beam search.

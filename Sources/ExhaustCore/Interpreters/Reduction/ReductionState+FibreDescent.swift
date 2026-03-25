@@ -52,16 +52,22 @@ extension ReductionState {
         // though cross-zero at that value was never attempted by the second encoder.
         let cachedOrigins = convergenceCache.allEntries
 
+        let suppressZeroValue: Bool = {
+            guard let origins = cachedOrigins,
+                  origins.isEmpty == false
+            else { return false }
+            return origins.values.allSatisfy {
+                $0.signal == .zeroingDependency
+            }
+        }()
+
         // Compute target leaf ranges.
         let leafRanges = computeLeafRanges(dag: dag)
 
         // Capture skeleton fingerprint before fibre descent starts.
-        let prePhaseFingerprint: StructuralFingerprint? =
-            if hasBind, let bindSpanIndex = bindIndex {
-                StructuralFingerprint.from(sequence, bindIndex: bindSpanIndex)
-            } else {
-                nil
-            }
+        let prePhaseFingerprint = bindIndex.map {
+            StructuralFingerprint.from(sequence, bindIndex: $0)
+        }
 
         // Per-leaf-range value minimization pass.
         for leafRange in leafRanges {
@@ -105,16 +111,7 @@ extension ReductionState {
                     convergedOrigins: cachedOrigins,
                     dag: dag
                 )
-                let guard_ = needsFingerprintGuard ? prePhaseFingerprint : nil
-                // Check for zeroingDependency suppression.
-                let suppressZeroValue: Bool = {
-                    guard let origins = cachedOrigins,
-                          origins.isEmpty == false
-                    else { return false }
-                    return origins.values.allSatisfy {
-                        $0.signal == .zeroingDependency
-                    }
-                }()
+                let activeFingerprint = needsFingerprintGuard ? prePhaseFingerprint : nil
 
                 var firstAcceptedSlot: ReductionScheduler.ValueEncoderSlot?
                 for slot in trainOrder {
@@ -135,7 +132,7 @@ extension ReductionState {
                     if try runComposable(
                         encoder, decoder: decoder, positionRange: leafRange,
                         context: leafContext, structureChanged: structureChanged,
-                        budget: &legBudget, fingerprintGuard: guard_
+                        budget: &legBudget, fingerprintGuard: activeFingerprint
                     ) {
                         if firstAcceptedSlot == nil { firstAcceptedSlot = slot }
                     }
@@ -143,26 +140,16 @@ extension ReductionState {
 
                 // LinearScanEncoder for nonMonotoneGap signals.
                 if let origins = cachedOrigins {
-                    for (position, origin) in origins {
-                        guard legBudget.isExhausted == false else { break }
-                        guard case let .nonMonotoneGap(remainingRange) = origin.signal,
-                              remainingRange <= linearScanThreshold,
-                              remainingRange > 0
-                        else { continue }
-                        let scanEncoder = LinearScanEncoder(
-                            targetPosition: position,
-                            scanRange: (origin.bound >= UInt64(remainingRange))
-                                ? (origin.bound - UInt64(remainingRange)) ... (origin.bound - 1)
-                                : 0 ... (origin.bound - 1),
-                            scanDirection: .upward
-                        )
-                        if try runComposable(
-                            scanEncoder, decoder: decoder, positionRange: leafRange,
-                            context: leafContext, structureChanged: structureChanged,
-                            budget: &legBudget, fingerprintGuard: guard_
-                        ) {
-                            anyAccepted = true
-                        }
+                    if try runLinearScans(
+                        origins: origins,
+                        decoder: decoder,
+                        positionRange: leafRange,
+                        context: leafContext,
+                        structureChanged: structureChanged,
+                        budget: &legBudget,
+                        fingerprintGuard: activeFingerprint
+                    ) {
+                        anyAccepted = true
                     }
                 }
 
@@ -205,21 +192,11 @@ extension ReductionState {
                     at: depth, from: sequence, bindIndex: bindIndex
                 ).isEmpty == false
 
-                // Check for zeroingDependency suppression.
-                let depthSuppressZeroValue: Bool = {
-                    guard let origins = cachedOrigins,
-                          origins.isEmpty == false
-                    else { return false }
-                    return origins.values.allSatisfy {
-                        $0.signal == .zeroingDependency
-                    }
-                }()
-
                 var firstAcceptedDepthSlot: ReductionScheduler.ValueEncoderSlot?
                 for slot in trainOrder {
                     guard legBudget.isExhausted == false else { break }
                     let encoder: (any ComposableEncoder)? = switch slot {
-                    case .zeroValue where hasValueSpansAtDepth && depthSuppressZeroValue == false:
+                    case .zeroValue where hasValueSpansAtDepth && suppressZeroValue == false:
                         zeroValueEncoder
                     case .binarySearchToZero where hasValueSpansAtDepth:
                         binarySearchToZeroEncoder
@@ -242,26 +219,16 @@ extension ReductionState {
 
                 // LinearScanEncoder for nonMonotoneGap signals.
                 if let origins = cachedOrigins {
-                    for (position, origin) in origins {
-                        guard legBudget.isExhausted == false else { break }
-                        guard case let .nonMonotoneGap(remainingRange) = origin.signal,
-                              remainingRange <= linearScanThreshold,
-                              remainingRange > 0
-                        else { continue }
-                        let scanEncoder = LinearScanEncoder(
-                            targetPosition: position,
-                            scanRange: (origin.bound >= UInt64(remainingRange))
-                                ? (origin.bound - UInt64(remainingRange)) ... (origin.bound - 1)
-                                : 0 ... (origin.bound - 1),
-                            scanDirection: .upward
-                        )
-                        if try runComposable(
-                            scanEncoder, decoder: depthDecoder, positionRange: fullRange,
-                            context: depthContext, structureChanged: hasBind,
-                            budget: &legBudget, fingerprintGuard: prePhaseFingerprint
-                        ) {
-                            anyAccepted = true
-                        }
+                    if try runLinearScans(
+                        origins: origins,
+                        decoder: depthDecoder,
+                        positionRange: fullRange,
+                        context: depthContext,
+                        structureChanged: hasBind,
+                        budget: &legBudget,
+                        fingerprintGuard: prePhaseFingerprint
+                    ) {
+                        anyAccepted = true
                     }
                 }
 
@@ -402,5 +369,40 @@ extension ReductionState {
     private func extractValueSpans(in range: ClosedRange<Int>) -> [ChoiceSpan] {
         let allSpans = spanCache.valueSpans(at: 0, from: sequence, bindIndex: bindIndex)
         return allSpans.filter { range.contains($0.range.lowerBound) }
+    }
+
+    /// Runs ``LinearScanEncoder`` probes for all `nonMonotoneGap` convergence signals within budget.
+    private func runLinearScans(
+        origins: [Int: ConvergedOrigin],
+        decoder: SequenceDecoder,
+        positionRange: ClosedRange<Int>,
+        context: ReductionContext,
+        structureChanged: Bool,
+        budget: inout ReductionScheduler.LegBudget,
+        fingerprintGuard: StructuralFingerprint?
+    ) throws -> Bool {
+        var anyAccepted = false
+        for (position, origin) in origins {
+            guard budget.isExhausted == false else { break }
+            guard case let .nonMonotoneGap(remainingRange) = origin.signal,
+                  remainingRange <= linearScanThreshold,
+                  remainingRange > 0
+            else { continue }
+            let scanEncoder = LinearScanEncoder(
+                targetPosition: position,
+                scanRange: (origin.bound >= UInt64(remainingRange))
+                    ? (origin.bound - UInt64(remainingRange)) ... (origin.bound - 1)
+                    : 0 ... (origin.bound - 1),
+                scanDirection: .upward
+            )
+            if try runComposable(
+                scanEncoder, decoder: decoder, positionRange: positionRange,
+                context: context, structureChanged: structureChanged,
+                budget: &budget, fingerprintGuard: fingerprintGuard
+            ) {
+                anyAccepted = true
+            }
+        }
+        return anyAccepted
     }
 }

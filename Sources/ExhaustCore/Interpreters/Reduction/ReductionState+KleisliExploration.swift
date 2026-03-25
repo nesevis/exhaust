@@ -146,11 +146,11 @@ extension ReductionState {
                               origin.bound > range.lowerBound
                         else { continue }
 
-                        let probeBP = origin.bound - 1
+                        let probeBitPattern = origin.bound - 1
                         var candidate = sequence
                         candidate[index] = .value(.init(
                             choice: ChoiceValue(
-                                value.choice.tag.makeConvertible(bitPattern64: probeBP),
+                                value.choice.tag.makeConvertible(bitPattern64: probeBitPattern),
                                 tag: value.choice.tag
                             ),
                             validRange: value.validRange,
@@ -243,15 +243,17 @@ extension ReductionState {
                 // Compare prediction against ground truth.
                 // The prediction uses the current sequence; the ground truth uses the lifted sequences.
                 // "Correct" means the predicted mode matches the MAJORITY of actual downstream starts.
-                let actualMajorityMode: FibrePrediction.Mode = if comp.fibreExhaustiveStarts >= comp.fibrePairwiseStarts,
-                                                                  comp.fibreExhaustiveStarts >= comp.fibreZeroValueStarts
-                {
-                    .exhaustive
-                } else if comp.fibrePairwiseStarts >= comp.fibreZeroValueStarts {
-                    .pairwise
-                } else {
-                    .tooLarge
-                }
+                let actualMajorityMode: FibrePrediction.Mode = {
+                    if comp.fibreExhaustiveStarts >= comp.fibrePairwiseStarts,
+                       comp.fibreExhaustiveStarts >= comp.fibreZeroValueStarts
+                    {
+                        return .exhaustive
+                    }
+                    if comp.fibrePairwiseStarts >= comp.fibreZeroValueStarts {
+                        return .pairwise
+                    }
+                    return .tooLarge
+                }()
 
                 let totalStarts = comp.fibreExhaustiveStarts
                     + comp.fibrePairwiseStarts
@@ -295,13 +297,12 @@ extension ReductionState {
             let totalDownstreamStarts = compositionEdge.composition.fibreExhaustiveStarts
                 + compositionEdge.composition.fibrePairwiseStarts
                 + compositionEdge.composition.fibreZeroValueStarts
-            let edgeSignal: FibreSignal = if totalDownstreamStarts == 0 {
-                .bail(paramCount: edge.downstreamRange.count)
-            } else if anyAcceptedThisEdge {
-                .exhaustedWithFailure
-            } else {
-                .exhaustedClean
-            }
+            let edgeSignal: FibreSignal = {
+                if totalDownstreamStarts == 0 {
+                    return .bail(paramCount: edge.downstreamRange.count)
+                }
+                return anyAcceptedThisEdge ? .exhaustedWithFailure : .exhaustedClean
+            }()
             if let upstreamValue = compositionEdge.composition.previousUpstreamBitPattern {
                 edgeObservations[edge.regionIndex] = EdgeObservation(
                     signal: edgeSignal,
@@ -433,10 +434,11 @@ extension ReductionState {
 
             // Constant edges: FibreCoveringEncoder (prediction is exact, fibre won't change).
             // Data-dependent edges: DownstreamPick selects at runtime based on actual fibre.
-            let downstream: any ComposableEncoder = if edge.isStructurallyConstant {
-                FibreCoveringEncoder()
-            } else {
-                DownstreamPick(alternatives: [
+            let downstream: any ComposableEncoder = {
+                guard edge.isStructurallyConstant == false else {
+                    return FibreCoveringEncoder()
+                }
+                return DownstreamPick(alternatives: [
                     // Exhaustive: small fibres (<= 64 combinations).
                     .init(
                         encoder: FibreCoveringEncoder(),
@@ -456,7 +458,7 @@ extension ReductionState {
                         predicate: { _, _ in true }
                     ),
                 ])
-            }
+            }()
 
             let composition = KleisliComposition(
                 upstream: BinarySearchToSemanticSimplestEncoder(),
@@ -517,13 +519,11 @@ extension ReductionState {
         }
 
         let predictedSize = overflowed ? UInt64.max : product
-        let mode: FibrePrediction.Mode = if overflowed || parameterCount > 20 {
-            .tooLarge
-        } else if predictedSize <= FibreCoveringEncoder.exhaustiveThreshold {
-            .exhaustive
-        } else {
-            .pairwise
-        }
+        let mode: FibrePrediction.Mode = {
+            if overflowed || parameterCount > 20 { return .tooLarge }
+            if predictedSize <= FibreCoveringEncoder.exhaustiveThreshold { return .exhaustive }
+            return .pairwise
+        }()
 
         return FibrePrediction(
             predictedSize: predictedSize,
