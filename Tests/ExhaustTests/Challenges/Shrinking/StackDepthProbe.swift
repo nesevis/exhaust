@@ -20,7 +20,10 @@ struct BindBoundMaterializationProbe {
         let leafGen = #gen(.int(in: 0 ... 10))
             .mapped(
                 forward: { SimpleExp.leaf($0) },
-                backward: { if case let .leaf(n) = $0 { return n }; return 0 }
+                backward: {
+                    if case let .leaf(n) = $0 { return n }
+                    return 0
+                }
             )
 
         guard depth > 0 else {
@@ -36,7 +39,10 @@ struct BindBoundMaterializationProbe {
             #gen(child, child)
                 .mapped(
                     forward: { lhs, rhs in SimpleExp.add(lhs, rhs) },
-                    backward: { if case let .add(lhs, rhs) = $0 { return (lhs, rhs) }; return (.leaf(0), .leaf(0)) }
+                    backward: {
+                        if case let .add(lhs, rhs) = $0 { return (lhs, rhs) }
+                        return (.leaf(0), .leaf(0))
+                    }
                 )
         }
 

@@ -366,7 +366,8 @@ public enum ChoiceGradientTuner<FinalOutput> {
         }
 
         func makeID() -> UInt64 {
-            defer { nextID &+= 1 }; return nextID
+            defer { nextID &+= 1 }
+            return nextID
         }
     }
 

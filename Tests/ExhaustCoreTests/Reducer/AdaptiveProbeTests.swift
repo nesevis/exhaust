@@ -140,13 +140,19 @@ struct BinarySearchWithGuessTests {
 
         var closeCallCount = 0
         let closeResult = AdaptiveProbe.binarySearchWithGuess(
-            { k in closeCallCount += 1; return k <= threshold },
+            { k in
+                closeCallCount += 1
+                return k <= threshold
+            },
             low: 0, high: 1000, guess: 495
         )
 
         var farCallCount = 0
         let farResult = AdaptiveProbe.binarySearchWithGuess(
-            { k in farCallCount += 1; return k <= threshold },
+            { k in
+                farCallCount += 1
+                return k <= threshold
+            },
             low: 0, high: 1000, guess: 10
         )
 

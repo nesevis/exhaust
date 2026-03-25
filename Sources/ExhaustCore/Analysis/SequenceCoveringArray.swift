@@ -52,7 +52,10 @@ public enum SequenceCoveringArray {
         var totalSpace: UInt64 = 1
         for _ in 0 ..< sequenceLength {
             let (product, overflow) = totalSpace.multipliedReportingOverflow(by: domainSize)
-            if overflow { totalSpace = .max; break }
+            if overflow {
+                totalSpace = .max
+                break
+            }
             totalSpace = product
         }
 
@@ -188,7 +191,10 @@ public enum SequenceCoveringArray {
         var totalSpace: UInt64 = 1
         for _ in 0 ..< sequenceLength {
             let (product, overflow) = totalSpace.multipliedReportingOverflow(by: totalDomainSize)
-            if overflow { totalSpace = .max; break }
+            if overflow {
+                totalSpace = .max
+                break
+            }
             totalSpace = product
         }
 

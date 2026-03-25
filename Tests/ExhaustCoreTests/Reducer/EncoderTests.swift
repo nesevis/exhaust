@@ -480,7 +480,10 @@ struct DeleteByBranchPromotionEncoderTests {
 
         var encoder = BranchSimplificationEncoder(strategy: .promote)
         encoder.start(sequence: seq, tree: tree, positionRange: 0 ... max(0, seq.count - 1), context: ReductionContext())
-        var candidates: [ChoiceSequence] = []; while let probe = encoder.nextProbe(lastAccepted: false) { candidates.append(probe) }
+        var candidates: [ChoiceSequence] = []
+        while let probe = encoder.nextProbe(lastAccepted: false) {
+            candidates.append(probe)
+        }
         #expect(candidates.isEmpty)
     }
 
@@ -512,7 +515,10 @@ struct DeleteByBranchPromotionEncoderTests {
 
         var encoder = BranchSimplificationEncoder(strategy: .promote)
         encoder.start(sequence: seq, tree: tree, positionRange: 0 ... max(0, seq.count - 1), context: ReductionContext())
-        var candidates: [ChoiceSequence] = []; while let probe = encoder.nextProbe(lastAccepted: false) { candidates.append(probe) }
+        var candidates: [ChoiceSequence] = []
+        while let probe = encoder.nextProbe(lastAccepted: false) {
+            candidates.append(probe)
+        }
         // Only one branch group (one .group node whose children are all branches),
         // but promoteBranches needs >= 2 branch groups to cross-promote.
         // With exactly 1 group containing 2 branches, it should produce candidates
@@ -540,7 +546,10 @@ struct DeleteByBranchPromotionEncoderTests {
                 let seq = ChoiceSequence(tree)
                 var encoder = BranchSimplificationEncoder(strategy: .promote)
                 encoder.start(sequence: seq, tree: tree, positionRange: 0 ... max(0, seq.count - 1), context: ReductionContext())
-                var candidates: [ChoiceSequence] = []; while let probe = encoder.nextProbe(lastAccepted: false) { candidates.append(probe) }
+                var candidates: [ChoiceSequence] = []
+                while let probe = encoder.nextProbe(lastAccepted: false) {
+                    candidates.append(probe)
+                }
                 if candidates.isEmpty == false {
                     #expect(candidates.count >= 1)
                     return
@@ -560,7 +569,11 @@ struct DeleteByBranchPromotionEncoderTests {
                 let seq = ChoiceSequence(tree)
                 var encoder = BranchSimplificationEncoder(strategy: .promote)
                 encoder.start(sequence: seq, tree: tree, positionRange: 0 ... max(0, seq.count - 1), context: ReductionContext())
-                var candidates: [ChoiceSequence] = []; while let probe = encoder.nextProbe(lastAccepted: false) { candidates.append(probe) }; for candidate in candidates {
+                var candidates: [ChoiceSequence] = []
+                while let probe = encoder.nextProbe(lastAccepted: false) {
+                    candidates.append(probe)
+                }
+                for candidate in candidates {
                     #expect(candidate.shortLexPrecedes(seq))
                 }
             }
@@ -579,7 +592,10 @@ struct DeleteByBranchPromotionEncoderTests {
                 let seq = ChoiceSequence(tree)
                 var encoder = BranchSimplificationEncoder(strategy: .promote)
                 encoder.start(sequence: seq, tree: tree, positionRange: 0 ... max(0, seq.count - 1), context: ReductionContext())
-                var candidates: [ChoiceSequence] = []; while let probe = encoder.nextProbe(lastAccepted: false) { candidates.append(probe) }
+                var candidates: [ChoiceSequence] = []
+                while let probe = encoder.nextProbe(lastAccepted: false) {
+                    candidates.append(probe)
+                }
                 if candidates.isEmpty == false {
                     // Each candidate must be different from the original.
                     for candidate in candidates {

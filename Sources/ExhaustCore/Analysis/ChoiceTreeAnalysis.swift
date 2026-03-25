@@ -121,7 +121,10 @@ public enum ChoiceTreeAnalysis {
             var totalSpace: UInt64 = 1
             for param in finiteParams {
                 let (product, overflow) = totalSpace.multipliedReportingOverflow(by: param.domainSize)
-                if overflow { totalSpace = .max; break }
+                if overflow {
+                    totalSpace = .max
+                    break
+                }
                 totalSpace = product
             }
             return .finite(FiniteDomainProfile(parameters: finiteParams, totalSpace: totalSpace, originalTree: bestTree))

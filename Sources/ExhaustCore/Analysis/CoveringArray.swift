@@ -35,7 +35,10 @@ public struct CoveringArray: @unchecked Sendable {
             var tooBig = false
             for index in 0 ..< strength {
                 let (product, overflow) = seedSize.multipliedReportingOverflow(by: profile.parameters[index].domainSize)
-                if overflow || product > budget { tooBig = true; break }
+                if overflow || product > budget {
+                    tooBig = true
+                    break
+                }
                 seedSize = product
             }
             if tooBig { break }
@@ -105,7 +108,10 @@ public struct CoveringArray: @unchecked Sendable {
         var totalSpace: UInt64 = 1
         for param in syntheticParams {
             let (product, overflow) = totalSpace.multipliedReportingOverflow(by: param.domainSize)
-            if overflow { totalSpace = .max; break }
+            if overflow {
+                totalSpace = .max
+                break
+            }
             totalSpace = product
         }
         let syntheticProfile = FiniteDomainProfile(
@@ -631,7 +637,10 @@ private struct FIPOGBuilder {
             // Greedily fill free positions to maximize additional coverage.
             var position = 0
             while position <= paramIndex {
-                if isFixed[position] { position &+= 1; continue }
+                if isFixed[position] {
+                    position &+= 1
+                    continue
+                }
                 var bestValue: UInt16 = 0
                 var bestCount = 0
 
