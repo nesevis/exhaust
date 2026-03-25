@@ -83,7 +83,7 @@ public struct BinarySearchEncoder: ComposableEncoder {
                 index += 1
                 continue
             }
-            if value.choice.tag == .float || value.choice.tag == .double {
+            if value.choice.tag.isFloatingPoint {
                 index += 1
                 continue
             }

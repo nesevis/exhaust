@@ -5,9 +5,40 @@
 //  Created by Chris Kolbu on 22/2/2026.
 //
 
+import CoreGraphics
 import ExhaustCore
 
 // MARK: - Floating-point generators
+
+#if arch(arm64) || arch(arm64_32)
+public extension ReflectiveGenerator {
+    /// Generates arbitrary `Float16` values within the given range.
+    ///
+    /// When no range is specified, generates across the full finite half-precision range with size scaling.
+    ///
+    /// ```swift
+    /// let gen = #gen(.float16(in: Float16(-1.0)...Float16(1.0)))
+    /// ```
+    static func float16(
+        in range: ClosedRange<Float16>? = nil,
+        scaling: SizeScaling<Float16>? = nil
+    ) -> ReflectiveGenerator<Float16> {
+        if let range {
+            if let scaling {
+                Gen.choose(in: range, scaling: scaling)
+            } else {
+                Gen.choose(in: range)
+            }
+        } else {
+            Gen.choose(
+                in: -Float16.greatestFiniteMagnitude
+                    ... Float16.greatestFiniteMagnitude,
+                scaling: scaling ?? Float16.defaultScaling
+            )
+        }
+    }
+}
+#endif
 
 public extension ReflectiveGenerator {
     /// Generates arbitrary `Double` values within the given range.
@@ -68,6 +99,25 @@ public extension ReflectiveGenerator {
         scaling: SizeScaling<Float>? = nil
     ) -> ReflectiveGenerator<Float> {
         float(in: Float(range.lowerBound) ... Float(range.upperBound), scaling: scaling)
+    }
+
+    /// Generates arbitrary `CGFloat` values within the given range.
+    ///
+    /// Delegates to the `Double` generator — on 64-bit Apple platforms `CGFloat` is a typealias for `Double`.
+    ///
+    /// ```swift
+    /// let gen = #gen(.cgfloat(in: 0.0...320.0))
+    /// ```
+    static func cgfloat(
+        in range: ClosedRange<CGFloat>? = nil,
+        scaling: SizeScaling<Double>? = nil
+    ) -> ReflectiveGenerator<CGFloat> {
+        let doubleRange = range.map { Double($0.lowerBound) ... Double($0.upperBound) }
+        return ReflectiveGenerator<Double>.double(in: doubleRange, scaling: scaling)
+            .mapped(
+                forward: { CGFloat($0) },
+                backward: { Double($0) }
+            )
     }
 }
 

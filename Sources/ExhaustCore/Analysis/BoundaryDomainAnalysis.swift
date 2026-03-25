@@ -74,7 +74,7 @@ extension BoundaryDomainProfile: CoverageProfile {
 public enum BoundaryDomainAnalysis {
     public static func computeBoundaryValues(min: UInt64, max: UInt64, tag: TypeTag) -> [UInt64] {
         switch tag {
-        case .double, .float:
+        case _ where tag.isFloatingPoint:
             computeFloatBoundaryValues(min: min, max: max, tag: tag)
         case let .date(lowerSeconds, intervalSeconds, timeZoneID):
             computeDateBoundaryValues(
@@ -119,6 +119,8 @@ public enum BoundaryDomainAnalysis {
             min == UInt64.min && max == UInt64.max
         case .float:
             min == UInt64(UInt32.min) && max == UInt64(UInt32.max)
+        case .float16:
+            min == UInt64(UInt16.min) && max == UInt64(UInt16.max)
         default:
             false
         }
@@ -151,6 +153,17 @@ public enum BoundaryDomainAnalysis {
             ] {
                 values.insert(c.bitPattern64)
             }
+        case .float16:
+            #if arch(arm64) || arch(arm64_32)
+            for c: Float16 in [
+                -Float16.greatestFiniteMagnitude, -1.0, -Float16.leastNonzeroMagnitude,
+                -0.0, 0.0, Float16.leastNonzeroMagnitude,
+                1.0, Float16.greatestFiniteMagnitude,
+                Float16.nan, Float16.infinity, -Float16.infinity,
+            ] {
+                values.insert(c.bitPattern64)
+            }
+            #endif
         default:
             break
         }
@@ -176,6 +189,8 @@ public enum BoundaryDomainAnalysis {
             Double(0.0).bitPattern64
         case .float:
             Float(0.0).bitPattern64
+        case .float16:
+            Float16Emulation.encodedBitPattern(from: 0.0)
         case .date:
             0 // Step index 0 = lowerSeconds
         case .bits:

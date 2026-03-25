@@ -59,6 +59,12 @@ public enum ChoiceValue: Comparable, Hashable, Equatable, Sendable {
                 value.bitPattern64,
                 .float
             )
+        case .float16:
+            self = .floating(
+                Float16Emulation.doubleValue(fromEncoded: value.bitPattern64),
+                value.bitPattern64,
+                .float16
+            )
         case .date:
             self = .signed(Int64(bitPattern64: value.bitPattern64), value.bitPattern64, tag)
         }
@@ -85,6 +91,7 @@ public enum ChoiceValue: Comparable, Hashable, Equatable, Sendable {
         case let .floating(_, _, tag):
             let zeroBitPattern: UInt64 = switch tag {
             case .float: Float(0).bitPattern64
+            case .float16: Float16Emulation.encodedBitPattern(from: 0.0)
             case .double: Double(0).bitPattern64
             default: fatalError("Unexpected tag \(tag) for floating ChoiceValue")
             }

@@ -31,6 +31,8 @@ public enum TypeTag: Equatable, Hashable, Sendable {
     case double
     /// Single-precision floating point.
     case float
+    /// Half-precision floating point (ARM64 only).
+    case float16
     /// Date steps: the underlying integer represents step indices, where each step is `intervalSeconds` seconds offset from `lowerSeconds`. Used by boundary analysis to compute calendar-meaningful boundary values (month/year boundaries, DST transitions). The `timeZoneID` limits DST boundary values to a single timezone.
     case date(lowerSeconds: Int64, intervalSeconds: Int64, timeZoneID: String)
     /// Raw bit storage used by composite generators (UUID, Int128, UInt128). Boundary analysis produces only all-low / all-high values.
@@ -81,6 +83,16 @@ public extension TypeTag {
         }
     }
 
+    /// Whether this tag represents a floating-point type.
+    var isFloatingPoint: Bool {
+        switch self {
+        case .double, .float, .float16:
+            true
+        default:
+            false
+        }
+    }
+
     /// Creates a ``BitPatternConvertible`` value from a raw bit pattern using this tag's type.
     func makeConvertible(bitPattern64: UInt64) -> any BitPatternConvertible {
         switch self {
@@ -96,6 +108,11 @@ public extension TypeTag {
         case .int8: Int8(bitPattern64: bitPattern64)
         case .double: Double(bitPattern64: bitPattern64)
         case .float: Float(bitPattern64: bitPattern64)
+        #if arch(arm64) || arch(arm64_32)
+        case .float16: Float16(bitPattern64: bitPattern64)
+        #else
+        case .float16: Float(Float16Emulation.doubleValue(fromEncoded: bitPattern64))
+        #endif
         case .date: Int64(bitPattern64: bitPattern64)
         case .bits: UInt64(bitPattern64: bitPattern64)
         }
@@ -117,6 +134,7 @@ extension TypeTag: CustomStringConvertible {
         case .int8: "Int8"
         case .double: "Double"
         case .float: "Float"
+        case .float16: "Float16"
         case .date: "Date"
         case .bits: "Bits"
         }

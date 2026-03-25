@@ -44,3 +44,47 @@ public extension ReflectiveGenerator where Operation == ReflectiveOperation {
         ])
     }
 }
+
+public extension ReflectiveGenerator {
+    /// Generates arbitrary `Result` values by choosing between a success and a failure generator with equal weight.
+    ///
+    /// Both branches are fully reflective — the backward pass extracts the inner value from the matching `Result` case and signals a mismatch for the other case, allowing `pick` to select the correct branch during reflection.
+    ///
+    /// ```swift
+    /// let gen = #gen(.result(
+    ///     success: .int(in: 0...100),
+    ///     failure: .element(from: [MyError.notFound, MyError.timeout])
+    /// ))
+    /// ```
+    ///
+    /// - Parameters:
+    ///   - success: Generator for the success value.
+    ///   - failure: Generator for the failure value.
+    /// - Returns: A generator producing `Result` values.
+    static func result<Success, Failure: Error>(
+        success: ReflectiveGenerator<Success>,
+        failure: ReflectiveGenerator<Failure>
+    ) -> ReflectiveGenerator<Result<Success, Failure>>
+    where Value == Result<Success, Failure> {
+        Gen.pick(choices: [
+            (1, Gen.contramap(
+                { (result: Result<Success, Failure>) throws -> Success in
+                    guard case let .success(value) = result else {
+                        throw Interpreters.ReflectionError.contramapWasWrongType
+                    }
+                    return value
+                },
+                success._map { Result<Success, Failure>.success($0) }
+            )),
+            (1, Gen.contramap(
+                { (result: Result<Success, Failure>) throws -> Failure in
+                    guard case let .failure(error) = result else {
+                        throw Interpreters.ReflectionError.contramapWasWrongType
+                    }
+                    return error
+                },
+                failure._map { Result<Success, Failure>.failure($0) }
+            )),
+        ])
+    }
+}

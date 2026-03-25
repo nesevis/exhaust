@@ -28,12 +28,16 @@ public enum FloatShrink {
     public static let maxPreciseIntegerFloat = 16_777_216.0 // 2^24
 
     /// Returns the cutoff above which `x + 1 == x` for a given float tag.
+    public static let maxPreciseIntegerFloat16 = Float16Emulation.maxPreciseInteger // 2^11
+
     public static func maxPreciseInteger(for tag: TypeTag) -> Double {
         switch tag {
         case .double:
             maxPreciseIntegerDouble
         case .float:
             maxPreciseIntegerFloat
+        case .float16:
+            maxPreciseIntegerFloat16
         default:
             0
         }
@@ -46,6 +50,8 @@ public enum FloatShrink {
             [Double.greatestFiniteMagnitude, Double.infinity, Double.nan]
         case .float:
             [Double(Float.greatestFiniteMagnitude), Double(Float.infinity), Double(Float.nan)]
+        case .float16:
+            Float16Emulation.specialValues
         default:
             []
         }
@@ -59,7 +65,7 @@ public enum FloatShrink {
         switch tag {
         case .double:
             return integerRatio(value)
-        case .float:
+        case .float, .float16:
             let narrowed = Float(value)
             guard narrowed.isFinite else { return nil }
             return integerRatio(narrowed)

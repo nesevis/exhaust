@@ -73,8 +73,9 @@ public enum ZobristHash {
         case .int8: 9
         case .double: 10
         case .float: 11
-        case .date: 12
-        case .bits: 13
+        case .float16: 12
+        case .date: 13
+        case .bits: 14
         }
     }
 }

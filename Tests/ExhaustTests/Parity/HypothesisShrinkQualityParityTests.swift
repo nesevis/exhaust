@@ -6,6 +6,7 @@
 //  tests/quality/test_shrink_quality.py.
 //
 
+import ExhaustCore
 import Testing
 @testable import Exhaust
 
@@ -256,3 +257,153 @@ struct HypothesisShrinkQualityParityTests {
         }
     }
 }
+
+// MARK: - Float16 Parity
+
+#if arch(arm64) || arch(arm64_32)
+@Suite("Hypothesis Shrink Quality Parity — Float16")
+struct ShrinkQualityFloat16ParityTests { // swiftlint:disable:this type_name
+    private func reduce<Output>(
+        _ gen: ReflectiveGenerator<Output>,
+        startingAt value: Output,
+        config: Interpreters.BonsaiReducerConfiguration = .fast,
+        property: (Output) -> Bool
+    ) throws -> Output {
+        let tree = try #require(try Interpreters.reflect(gen, with: value))
+        let (_, output) = try #require(
+            try Interpreters.bonsaiReduce(gen: gen, tree: tree, config: config, property: property)
+        )
+        return output
+    }
+
+    @Test("Float16::test_sum_of_pair_mixed")
+    func sumOfPairMixed() throws {
+        let floatIntGen = #gen(
+            .float16(in: Float16(0) ... Float16(100)),
+            .int(in: 0 ... 100)
+        )
+        let floatIntProperty: ((Float16, Int)) -> Bool = { pair in
+            guard pair.0 >= 0, pair.0 <= 100,
+                  pair.1 >= 0, pair.1 <= 100
+            else {
+                return true
+            }
+            return Double(pair.0) + Double(pair.1) <= 100.0
+        }
+        let floatIntOutput = try reduce(
+            floatIntGen,
+            startingAt: (Float16(70), 40),
+            property: floatIntProperty
+        )
+        #expect(floatIntProperty(floatIntOutput) == false)
+        #expect(floatIntOutput == (Float16(1.0), 100))
+
+        let intFloatGen = #gen(
+            .int(in: 0 ... 100),
+            .float16(in: Float16(0) ... Float16(100))
+        )
+        let intFloatProperty: ((Int, Float16)) -> Bool = { pair in
+            guard pair.0 >= 0, pair.0 <= 100,
+                  pair.1 >= 0, pair.1 <= 100
+            else {
+                return true
+            }
+            return Double(pair.0) + Double(pair.1) <= 100.0
+        }
+        let intFloatOutput = try reduce(
+            intFloatGen,
+            startingAt: (40, Float16(70)),
+            property: intFloatProperty
+        )
+        #expect(intFloatProperty(intFloatOutput) == false)
+        #expect(intFloatOutput == (1, Float16(100)))
+    }
+
+    @Test("Float16::test_sum_of_pair_separated_float")
+    func sumOfPairSeparatedFloat() throws {
+        let separatedFloatGen = #gen(
+            .float16(in: Float16(0) ... Float16(100)),
+            .asciiString(),
+            .bool(),
+            .int(),
+            .float16(in: Float16(0) ... Float16(100))
+        )
+        .mapped(
+            forward: { tuple in
+                (tuple.0, tuple.4)
+            },
+            backward: { pair in
+                (pair.0, "seed", false, 123, pair.1)
+            }
+        )
+
+        let property: ((Float16, Float16)) -> Bool = { pair in
+            Double(pair.0) + Double(pair.1) <= 100.0
+        }
+        let output = try reduce(
+            separatedFloatGen,
+            startingAt: (Float16(80), Float16(30)),
+            property: property
+        )
+
+        #expect(property(output) == false)
+        #expect(output == (Float16(1.0), Float16(100)))
+    }
+
+    @Test("Float16::test_perfectly_shrinks")
+    func perfectlyShrinks() throws {
+        let gen = #gen(.float16())
+        let cases: [Float16] = [
+            -100, -1, 0, 1, 100,
+        ]
+
+        for target in cases {
+            let start: Float16 = if target >= 0 {
+                min(target + 500, Float16.greatestFiniteMagnitude)
+            } else {
+                max(target - 500, -Float16.greatestFiniteMagnitude)
+            }
+
+            let property: (Float16) -> Bool = if target >= 0 {
+                { $0 < target }
+            } else {
+                { $0 > target }
+            }
+
+            let output = try reduce(gen, startingAt: start, property: property)
+            #expect(property(output) == false)
+            #expect(output == target)
+        }
+    }
+
+    @Test("Float16::test_lowering_together_with_gap")
+    func loweringTogetherWithGap() throws {
+        let gen = #gen(
+            .int(in: -10 ... 10),
+            .asciiString(),
+            .float16(in: Float16(-100) ... Float16(100)),
+            .int(in: -10 ... 10)
+        )
+
+        for gap in -10 ... 10 {
+            let lhs = min(10, max(-10, 10 - gap))
+            let rhs = lhs + gap
+            guard (-10 ... 10).contains(rhs) else { continue }
+            let property: ((Int, String, Float16, Int)) -> Bool = { tuple in
+                tuple.0 + gap != tuple.3
+            }
+            let output = try reduce(
+                gen,
+                startingAt: (lhs, "seed", Float16(12.5), rhs),
+                property: property
+            )
+
+            #expect(property(output) == false)
+            #expect(output.0 == 0)
+            #expect(output.1 == "")
+            #expect(output.2 == Float16(0.0))
+            #expect(output.3 == gap)
+        }
+    }
+}
+#endif

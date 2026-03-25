@@ -5,6 +5,58 @@
 //  Created by Chris Kolbu on 15/2/2026.
 //
 
+#if arch(arm64) || arch(arm64_32)
+extension Float16: BitPatternConvertible {
+    public static var tag: TypeTag {
+        .float16
+    }
+
+    public static var defaultScaling: SizeScaling<Self> {
+        .exponentialFrom(origin: 0)
+    }
+
+    private static let signBitMask: UInt16 = 0x8000
+
+    /// A `Float16` can use the entire `UInt16` space for its bit pattern.
+    public static var bitPatternRanges: [ClosedRange<UInt64>] {
+        [
+            UInt64(UInt16.min) ... UInt64(UInt16.max),
+        ]
+    }
+
+    /// Creates a `Float16` from a `UInt64` with ordering-preserving encoding.
+    public init(bitPattern64: UInt64) {
+        let bitPattern16 = UInt16(clamping: bitPattern64)
+        let rawBitPattern: UInt16
+            // Negative numbers were encoded with ~rawBitPattern, so their encoded values have sign bit clear
+            // Positive numbers were encoded with rawBitPattern ^ signBitMask, so their encoded values have sign bit set
+            = if bitPattern16 & Self.signBitMask == 0
+        {
+            // This was a negative number: flip all bits back
+            ~bitPattern16
+        } else {
+            // This was a positive number: flip sign bit back
+            bitPattern16 ^ Self.signBitMask
+        }
+        self = Float16(bitPattern: rawBitPattern)
+    }
+
+    /// The underlying IEEE 754 bits with ordering-preserving encoding, promoted to a `UInt64`.
+    /// Positive numbers have sign bit flipped, negative numbers have all bits flipped.
+    /// This ensures that the natural UInt64 ordering matches the Float16 ordering.
+    public var bitPattern64: UInt64 {
+        let rawBitPattern = bitPattern
+        if rawBitPattern & Self.signBitMask == 0 {
+            // Positive numbers: flip sign bit
+            return UInt64(rawBitPattern ^ Self.signBitMask)
+        } else {
+            // Negative numbers: flip all bits
+            return UInt64(~rawBitPattern)
+        }
+    }
+}
+#endif
+
 extension Float: BitPatternConvertible {
     public static var tag: TypeTag {
         .float
