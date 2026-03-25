@@ -11,76 +11,76 @@ import Testing
 // MARK: - Float16 Generator
 
 #if arch(arm64) || arch(arm64_32)
-@Suite("Float16 Generator")
-struct Float16GeneratorTests {
-    @Test("Generated values are within range")
-    func valuesWithinRange() {
-        let gen = #gen(.float16(in: Float16(-1.0) ... Float16(1.0)))
-        let values = #example(gen, count: 50, seed: 42)
+    @Suite("Float16 Generator")
+    struct Float16GeneratorTests {
+        @Test("Generated values are within range")
+        func valuesWithinRange() {
+            let gen = #gen(.float16(in: Float16(-1.0) ... Float16(1.0)))
+            let values = #example(gen, count: 50, seed: 42)
 
-        for value in values {
-            #expect(value >= Float16(-1.0))
-            #expect(value <= Float16(1.0))
-            #expect(value.isFinite)
+            for value in values {
+                #expect(value >= Float16(-1.0))
+                #expect(value <= Float16(1.0))
+                #expect(value.isFinite)
+            }
         }
-    }
 
-    @Test("Full-range generation excludes NaN and infinity")
-    func fullRangeFinite() {
-        let gen = #gen(.float16())
-        let values = #example(gen, count: 100, seed: 42)
+        @Test("Full-range generation excludes NaN and infinity")
+        func fullRangeFinite() {
+            let gen = #gen(.float16())
+            let values = #example(gen, count: 100, seed: 42)
 
-        for value in values {
-            #expect(value.isFinite)
+            for value in values {
+                #expect(value.isFinite)
+            }
         }
-    }
 
-    @Test("Deterministic: same seed produces same values")
-    func deterministic() {
-        let gen = #gen(.float16(in: Float16(0) ... Float16(100)))
+        @Test("Deterministic: same seed produces same values")
+        func deterministic() {
+            let gen = #gen(.float16(in: Float16(0) ... Float16(100)))
 
-        let values1 = #example(gen, count: 20, seed: 99)
-        let values2 = #example(gen, count: 20, seed: 99)
-        #expect(values1 == values2)
-    }
+            let values1 = #example(gen, count: 20, seed: 99)
+            let values2 = #example(gen, count: 20, seed: 99)
+            #expect(values1 == values2)
+        }
 
-    @Test("Shrinks toward threshold")
-    func shrinksTowardThreshold() throws {
-        let gen = #gen(.float16(in: Float16(0) ... Float16(100)))
+        @Test("Shrinks toward threshold")
+        func shrinksTowardThreshold() throws {
+            let gen = #gen(.float16(in: Float16(0) ... Float16(100)))
 
-        let output = try #require(
-            #exhaust(gen, .suppressIssueReporting) { value in value < Float16(50) }
-        )
-
-        #expect(output == Float16(50))
-    }
-
-    @Test("Emulation round-trips match actual Float16")
-    func emulationRoundTrip() {
-        let testValues: [Float16] = [
-            0, -0.0, 1.0, -1.0, 0.5, -0.5,
-            Float16.greatestFiniteMagnitude,
-            -Float16.greatestFiniteMagnitude,
-            Float16.leastNonzeroMagnitude,
-            Float16.leastNormalMagnitude,
-            42.0, -100.0,
-        ]
-        for value in testValues {
-            let encoded = value.bitPattern64
-            let emulated = Float16Emulation.doubleValue(fromEncoded: encoded)
-            #expect(
-                emulated == Double(value),
-                "Emulation mismatch for \(value): emulated=\(emulated), actual=\(Double(value))"
+            let output = try #require(
+                #exhaust(gen, .suppressIssueReporting) { value in value < Float16(50) }
             )
 
-            let reencoded = Float16Emulation.encodedBitPattern(from: Double(value))
-            #expect(
-                reencoded == encoded,
-                "Re-encoding mismatch for \(value): reencoded=\(reencoded), actual=\(encoded)"
-            )
+            #expect(output == Float16(50))
+        }
+
+        @Test("Emulation round-trips match actual Float16")
+        func emulationRoundTrip() {
+            let testValues: [Float16] = [
+                0, -0.0, 1.0, -1.0, 0.5, -0.5,
+                Float16.greatestFiniteMagnitude,
+                -Float16.greatestFiniteMagnitude,
+                Float16.leastNonzeroMagnitude,
+                Float16.leastNormalMagnitude,
+                42.0, -100.0,
+            ]
+            for value in testValues {
+                let encoded = value.bitPattern64
+                let emulated = Float16Emulation.doubleValue(fromEncoded: encoded)
+                #expect(
+                    emulated == Double(value),
+                    "Emulation mismatch for \(value): emulated=\(emulated), actual=\(Double(value))"
+                )
+
+                let reencoded = Float16Emulation.encodedBitPattern(from: Double(value))
+                #expect(
+                    reencoded == encoded,
+                    "Re-encoding mismatch for \(value): reencoded=\(reencoded), actual=\(encoded)"
+                )
+            }
         }
     }
-}
 #endif
 
 // MARK: - CGFloat Generator
@@ -155,7 +155,7 @@ struct DataGeneratorTests {
     func byteValueRange() {
         let gen = #gen(.data(length: 256))
         let values = #example(gen, count: 10, seed: 42)
-        let allBytes = Set(values.flatMap { $0 })
+        let allBytes = Set(values.flatMap(\.self))
 
         // With 2560 random bytes, we should cover most of 0...255
         #expect(allBytes.count > 200)
