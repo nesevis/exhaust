@@ -6,8 +6,8 @@
 // MARK: - Academic Provenance
 
 //
-// This file implements a one-test-at-a-time greedy covering array generator
-// based on the density algorithm from:
+// This file implements the "density method" — a one-test-at-a-time greedy
+// covering array generator — from:
 //
 //   Bryce, R.C. & Colbourn, C.J. (2009). "A density-based greedy algorithm
 //   for higher strength covering arrays." Softw. Test. Verif. Reliab.,

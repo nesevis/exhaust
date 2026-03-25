@@ -15,6 +15,12 @@ struct SpanCache {
     private var cachedValueSpansByDepth: [Int: [ChoiceSpan]] = [:]
     private var cachedDeletionTargetsByDepth: [DeletionDepthKey: [ChoiceSpan]] = [:]
 
+    // Aligned deletion caches — shared between ContiguousWindowDeletionEncoder and
+    // BeamSearchDeletionEncoder to avoid duplicate O(n) sibling group extraction and
+    // cohort construction within the same structural deletion pass.
+    private var cachedSiblingGroups: [SiblingGroup]?
+    private var cachedAlignedDeletionCohorts: [[AlignedDeletionSlot]]?
+
     mutating func invalidate() {
         cachedAllValueSpans = nil
         cachedContainerSpans = nil
@@ -23,6 +29,8 @@ struct SpanCache {
         cachedFreeStandingValueSpans = nil
         cachedValueSpansByDepth.removeAll(keepingCapacity: true)
         cachedDeletionTargetsByDepth.removeAll(keepingCapacity: true)
+        cachedSiblingGroups = nil
+        cachedAlignedDeletionCohorts = nil
     }
 
     // MARK: - Public cached counts
@@ -150,6 +158,26 @@ struct SpanCache {
                 result.append(spans[i])
             }
         }
+        return result
+    }
+
+    // MARK: - Aligned Deletion Cohorts
+
+    /// Returns cached sibling groups, extracting from the sequence on first access.
+    mutating func siblingGroups(from sequence: ChoiceSequence) -> [SiblingGroup] {
+        if let cached = cachedSiblingGroups { return cached }
+        let result = ChoiceSequence.extractSiblingGroups(from: sequence)
+        cachedSiblingGroups = result
+        return result
+    }
+
+    /// Returns cached aligned deletion cohorts, building from sibling groups on first access.
+    mutating func alignedDeletionCohorts(from sequence: ChoiceSequence) -> [[AlignedDeletionSlot]] {
+        if let cached = cachedAlignedDeletionCohorts { return cached }
+        let groups = siblingGroups(from: sequence)
+        let result = AlignedDeletionCohortBuilder.buildCohorts(from: sequence, siblingGroups: groups)
+            .filter { $0.isEmpty == false }
+        cachedAlignedDeletionCohorts = result
         return result
     }
 

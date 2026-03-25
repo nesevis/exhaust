@@ -21,6 +21,9 @@ struct ContiguousWindowDeletionEncoder: ComposableEncoder {
     private var sequence = ChoiceSequence()
     private var cohorts: [[AlignedDeletionSlot]] = []
     private var cohortIndex = 0
+    /// Pre-computed cohorts injected by the orchestrator to avoid duplicate extraction.
+    /// Consumed once by ``start(sequence:tree:positionRange:context:)`` and reset to `nil`.
+    var precomputedCohorts: [[AlignedDeletionSlot]]?
     private var cohortRanges: AlignedDeletionCohortRanges?
     private var slotPosition = 0
     private var stepper = FindIntegerStepper()
@@ -54,12 +57,17 @@ struct ContiguousWindowDeletionEncoder: ComposableEncoder {
         needsFirstProbe = true
         anyAccepted = false
 
-        let siblingGroups = ChoiceSequence.extractSiblingGroups(from: sequence)
-        cohorts = AlignedDeletionCohortBuilder.buildCohorts(
-            from: sequence,
-            siblingGroups: siblingGroups
-        )
-        .filter { $0.isEmpty == false }
+        if let precomputed = precomputedCohorts {
+            cohorts = precomputed
+            precomputedCohorts = nil
+        } else {
+            let siblingGroups = ChoiceSequence.extractSiblingGroups(from: sequence)
+            cohorts = AlignedDeletionCohortBuilder.buildCohorts(
+                from: sequence,
+                siblingGroups: siblingGroups
+            )
+            .filter { $0.isEmpty == false }
+        }
 
         if cohorts.isEmpty == false {
             prepareCohort()

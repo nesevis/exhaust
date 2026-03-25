@@ -1,10 +1,10 @@
-# Pull-Based Covering Array Generator — Implementation Specification
+# Density Method Covering Array Generator — Implementation Specification
 
-> **Status: Implemented.** `PullBasedCoveringArrayGenerator` in `Sources/ExhaustCore/Analysis/PullBasedCoveringArray.swift` is the active covering array generator for both finite and boundary domain coverage. `CoverageRunner` pulls rows via `next()` and tests each against the property, stopping on first failure. The `FibreCoveringEncoder` in the BonsaiReducer also uses this generator for downstream fibre search.
+> **Status: Implemented.** `PullBasedCoveringArrayGenerator` in `Sources/ExhaustCore/Analysis/PullBasedCoveringArray.swift` is the active covering array generator for both finite and boundary domain coverage. It implements the "density method" from Bryce & Colbourn (2009) with a pull-based (lazy) interface. `CoverageRunner` pulls rows via `next()` and tests each against the property, stopping on first failure. The `FibreCoveringEncoder` in the BonsaiReducer also uses this generator for downstream fibre search.
 
 ## 1. Purpose
 
-A pull-based (lazy) covering array generator for use in a property-based testing framework. Each call to `next()` returns a single row (test case) that greedily maximises new t-tuple coverage. The caller pulls rows until a property test fails, then stops. The generator never builds the full covering array — it emits only as many rows as needed to find a failure.
+A pull-based (lazy) implementation of the density method (Bryce & Colbourn 2009) for covering array generation in a property-based testing framework. Each call to `next()` returns a single row (test case) that greedily maximises new t-tuple coverage using unrestricted density as the level-selection heuristic. The caller pulls rows until a property test fails, then stops. The generator never builds the full covering array — it emits only as many rows as needed to find a failure.
 
 This design is motivated by the observation that in PBT, the covering array is not the deliverable — the _failure_ is. Most bugs triggered by a t-way interaction will be found within the first O(vᵗ · t · log k) rows, far fewer than the complete array.
 

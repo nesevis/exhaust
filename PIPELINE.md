@@ -33,7 +33,7 @@ flowchart TD
         direction TB
         SCHED["Schedule reduction"] --> PROJ
 
-        PROJ["Phase 0, structural isolation: zero out all positions that the property does not depend on"] --> BD
+        PROJ["Phase 0, free coordinate projection: zero out all positions that no structural decision depends on"] --> BD
 
         subgraph CYCLE ["Cycle loop, until stall budget exhausted"]
             direction TB
@@ -42,7 +42,9 @@ flowchart TD
 
             BD_RUN["Phase 1, structural minimization: promote and reorder branches, delete contiguous spans, reduce bind-inner values"] --> FD
 
-            FD["Phase 2, value minimization: coordinate descent over dependency graph, binary search, linear scan, zero-value encoders per position"] --> EXP_GATE
+            FD["Phase 2, value minimization: coordinate descent over dependency graph, binary search, linear scan, zero-value encoders, shortlex sibling reordering"] --> DAMP
+
+            DAMP["Oscillation damping: detect coupled coordinates with slow cross-cycle convergence, joint binary search to break zigzag patterns"] --> EXP_GATE
 
             EXP_GATE{"Prior cycle edges not all exhausted clean, and no earlier phase accepted?"} -->|"Yes"| EXP
             EXP_GATE -->|"No, skip"| RLX_GATE
@@ -66,7 +68,7 @@ flowchart TD
             STALL2 -->|"Yes"| DONE
         end
 
-        DONE["Reorder elements into human-readable order"]
+        DONE["Human-readable ordering: reorder elements into natural numeric order"]
     end
 
     DONE --> REPORT

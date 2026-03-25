@@ -95,8 +95,8 @@ public struct KleisliComposition<Output>: ComposableEncoder {
     public init(
         name: EncoderName = .kleisliComposition,
         phase: ReductionPhase = .exploration,
-        upstream: any ComposableEncoder,
-        downstream: any ComposableEncoder,
+        upstream: some ComposableEncoder,
+        downstream: some ComposableEncoder,
         lift: GeneratorLift<Output>,
         upstreamRange: ClosedRange<Int>,
         downstreamRange: ClosedRange<Int>

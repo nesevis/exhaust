@@ -79,7 +79,7 @@ public enum ExhaustSettings<Output> {
 
     /// Disables automatic structured coverage analysis.
     ///
-    /// By default, `#exhaust` analyzes the generator's structure and selects a systematic coverage strategy: exhaustive enumeration for small finite domains, or pull-based pairwise covering for larger domains. This runs before random sampling and uses its own budget (see ``ExhaustBudget``).
+    /// By default, `#exhaust` analyzes the generator's structure and selects a systematic coverage strategy: exhaustive enumeration for small finite domains, or greedy pairwise covering via the density method (Bryce & Colbourn 2009) for larger domains. This runs before random sampling and uses its own budget (see ``ExhaustBudget``).
     ///
     /// When `.randomOnly` is set, `#exhaust` skips this analysis and proceeds directly to random sampling. Useful for benchmarking, comparing coverage strategies, or when the analysis overhead is unwanted.
     case randomOnly
