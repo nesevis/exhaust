@@ -104,7 +104,7 @@ struct SpanCache {
         result.reserveCapacity(spans.count)
         for i in 0 ..< spans.count {
             if let value = sequence[spans[i].range.lowerBound].value,
-               value.choice.tag == .double || value.choice.tag == .float
+               value.choice.tag.isFloatingPoint
             {
                 result.append(spans[i])
             }

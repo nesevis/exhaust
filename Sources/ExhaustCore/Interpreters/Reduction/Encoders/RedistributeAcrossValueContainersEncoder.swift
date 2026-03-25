@@ -600,7 +600,7 @@ public struct RedistributeAcrossValueContainersEncoder: ComposableEncoder {
         lhsTargetBitPattern: UInt64
     ) -> FloatRedistributionContext? {
         let tag = lhs.tag
-        guard tag == rhs.tag, tag == .double || tag == .float else { return nil }
+        guard tag == rhs.tag, tag.isFloatingPoint else { return nil }
         guard case let .floating(lhsValue, _, _) = lhs,
               case let .floating(rhsValue, _, _) = rhs,
               lhsValue.isFinite,
@@ -659,10 +659,7 @@ public struct RedistributeAcrossValueContainersEncoder: ComposableEncoder {
         lhsTargetBitPattern: UInt64
     ) -> MixedRedistributionContext? {
         // Only applies to cross-tag pairs where at least one is floating-point.
-        guard lhs.tag != rhs.tag else { return nil }
-        let lhsIsFloat = lhs.tag == .double || lhs.tag == .float
-        let rhsIsFloat = rhs.tag == .double || rhs.tag == .float
-        guard lhsIsFloat || rhsIsFloat else { return nil }
+        guard lhs.tag != rhs.tag, lhs.tag.isFloatingPoint || rhs.tag.isFloatingPoint else { return nil }
 
         guard let lhsRatio = rationalForChoice(lhs),
               let rhsRatio = rationalForChoice(rhs),
@@ -829,6 +826,11 @@ public struct RedistributeAcrossValueContainersEncoder: ComposableEncoder {
             let narrowed = Float(value)
             guard narrowed.isFinite else { return nil }
             return ChoiceValue(narrowed, tag: .float)
+        case .float16:
+            let encoded = Float16Emulation.encodedBitPattern(from: value)
+            let reconstructed = Float16Emulation.doubleValue(fromEncoded: encoded)
+            guard reconstructed.isFinite else { return nil }
+            return .floating(reconstructed, encoded, .float16)
         default:
             return nil
         }

@@ -35,7 +35,7 @@ struct ReduceFloatEncoder: ComposableEncoder {
         let floatCount = spans.count(where: { span in
             let seqIdx = span.range.lowerBound
             guard let value = sequence[seqIdx].value else { return false }
-            return value.choice.tag == .double || value.choice.tag == .float
+            return value.choice.tag.isFloatingPoint
         })
         guard floatCount > 0 else { return nil }
         return floatCount * 94
@@ -64,7 +64,7 @@ struct ReduceFloatEncoder: ComposableEncoder {
             let seqIdx = span.range.lowerBound
             guard let v = sequence[seqIdx].value else { continue }
             let choiceTag = v.choice.tag
-            guard choiceTag == .double || choiceTag == .float else { continue }
+            guard choiceTag.isFloatingPoint else { continue }
             guard case let .floating(floatingValue, _, _) = v.choice else { continue }
 
             // Stage-skip: if the warm start bound matches the current bit pattern,
@@ -262,7 +262,7 @@ struct ReduceFloatEncoder: ComposableEncoder {
         let currentULP: Double = switch target.tag {
         case .double:
             target.currentValue.ulp
-        case .float:
+        case .float, .float16:
             Double(Float(target.currentValue).ulp)
         default:
             1.0
@@ -623,6 +623,11 @@ struct ReduceFloatEncoder: ComposableEncoder {
             let narrowed = Float(value)
             guard allowNonFinite || narrowed.isFinite else { return nil }
             return ChoiceValue(narrowed, tag: .float)
+        case .float16:
+            let encoded = Float16Emulation.encodedBitPattern(from: value)
+            let reconstructed = Float16Emulation.doubleValue(fromEncoded: encoded)
+            guard allowNonFinite || reconstructed.isFinite else { return nil }
+            return .floating(reconstructed, encoded, .float16)
         default:
             return nil
         }

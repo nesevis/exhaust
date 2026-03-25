@@ -303,7 +303,7 @@ public struct RedistributeByTandemReductionEncoder: ComposableEncoder {
         let targetBP = firstValue.choice.reductionTarget(in: firstValue.validRange)
         guard currentBP != targetBP else { return nil }
 
-        let usesFloatingSteps = tag == .double || tag == .float
+        let usesFloatingSteps = tag.isFloatingPoint
         let searchUpward: Bool
         let distance: UInt64
         if usesFloatingSteps {
@@ -568,7 +568,7 @@ public struct RedistributeByTandemReductionEncoder: ComposableEncoder {
         switch tag {
         case .int, .int64, .int32, .int16, .int8,
              .uint, .uint64, .uint32, .uint16, .uint8,
-             .double, .float, .date, .bits:
+             .double, .float, .float16, .date, .bits:
             true
         }
     }
@@ -591,6 +591,11 @@ public struct RedistributeByTandemReductionEncoder: ComposableEncoder {
             let narrowed = Float(value)
             guard narrowed.isFinite else { return nil }
             return ChoiceValue(narrowed, tag: .float)
+        case .float16:
+            let encoded = Float16Emulation.encodedBitPattern(from: value)
+            let reconstructed = Float16Emulation.doubleValue(fromEncoded: encoded)
+            guard reconstructed.isFinite else { return nil }
+            return .floating(reconstructed, encoded, .float16)
         default:
             return nil
         }

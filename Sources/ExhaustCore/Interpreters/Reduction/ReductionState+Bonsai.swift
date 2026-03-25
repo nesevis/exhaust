@@ -840,7 +840,7 @@ extension ReductionState {
 
                 let floatSpans = leafSpans.filter { span in
                     guard let value = sequence[span.range.lowerBound].value else { return false }
-                    return value.choice.tag == .double || value.choice.tag == .float
+                    return value.choice.tag.isFloatingPoint
                 }
                 let decoder: SequenceDecoder = isInBound
                     ? .guided(fallbackTree: fallbackTree ?? tree)

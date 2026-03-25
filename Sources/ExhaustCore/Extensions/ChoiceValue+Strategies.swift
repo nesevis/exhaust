@@ -154,6 +154,7 @@ public extension ChoiceValue {
         switch tag {
         case .double: Double(Double(bitPattern64: bitPattern))
         case .float: Double(Float(bitPattern64: bitPattern))
+        case .float16: Float16Emulation.doubleValue(fromEncoded: bitPattern)
         default: nil
         }
     }
@@ -165,6 +166,7 @@ public extension ChoiceValue {
         switch tag {
         case .double: Double(value).bitPattern64
         case .float: Float(value).bitPattern64
+        case .float16: Float16Emulation.encodedBitPattern(from: value)
         default: nil
         }
     }
